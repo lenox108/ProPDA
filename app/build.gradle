@@ -1,0 +1,189 @@
+import java.text.DateFormat
+import java.text.SimpleDateFormat
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'kotlin-kapt'
+    id 'realm-android'
+}
+
+static def getDateTime() {
+    DateFormat df = new SimpleDateFormat("dd MMMMM yyyy")
+    return df.format(new Date()) + " г."
+}
+
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+
+android {
+    namespace 'forpdateam.ru.forpda'
+    compileSdk 36
+
+    def versionNumber = 223
+    def versionMajor = "1"
+    def versionMinor = "0"
+    def versionPatch = "0"
+
+    def versionBuild = 1
+    def versionPropsFile = file('version.properties')
+    if (versionPropsFile.canRead()) {
+        Properties versionProps = new Properties()
+        versionProps.load(new FileInputStream(versionPropsFile))
+        def vb = versionProps['VERSION_BUILD']
+        if (vb != null) {
+            versionBuild = vb.toString().toInteger()
+        }
+    }
+
+    defaultConfig {
+        applicationId "ru.forpdateam.forpda"
+        versionCode versionNumber
+        versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild})"
+        minSdk 24
+        targetSdk 36
+        vectorDrawables.useSupportLibrary = true
+        multiDexEnabled true
+        buildConfigField "String", 'BUILD_DATE', '"' + getDateTime() + '"'
+        ndk {
+            abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile rootProject.file(keystoreProperties['DEBUG_STORE_FILE'])
+            storePassword keystoreProperties['DEBUG_STORE_PASSWORD']
+            keyAlias keystoreProperties['DEBUG_KEY_ALIAS']
+            keyPassword keystoreProperties['DEBUG_KEY_PASSWORD']
+        }
+        release {
+            storeFile rootProject.file(keystoreProperties['DEBUG_STORE_FILE'])
+            storePassword keystoreProperties['DEBUG_STORE_PASSWORD']
+            keyAlias keystoreProperties['DEBUG_KEY_ALIAS']
+            keyPassword keystoreProperties['DEBUG_KEY_PASSWORD']
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    flavorDimensions += "channel"
+    productFlavors {
+        stable {
+            dimension "channel"
+        }
+        beta {
+            dimension "channel"
+            applicationId 'ru.forpdateam.forpda.beta'
+            versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild}) beta"
+        }
+        dev {
+            dimension "channel"
+            applicationId 'ru.forpdateam.forpda.debug'
+            versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild}) dev"
+        }
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    packaging {
+        resources {
+            pickFirsts += ['META-INF/rxjava.properties']
+            excludes += [
+                    'META-INF/DEPENDENCIES.txt',
+                    'META-INF/LICENSE.txt',
+                    'META-INF/NOTICE.txt',
+                    'META-INF/NOTICE',
+                    'META-INF/LICENSE',
+                    'META-INF/DEPENDENCIES',
+                    'META-INF/notice.txt',
+                    'META-INF/license.txt',
+                    'META-INF/dependencies.txt'
+            ]
+        }
+    }
+
+    lint {
+        disable 'RestrictedApi'
+        checkReleaseBuilds false
+    }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach { output ->
+            output.outputFileName = "ForPDA-${versionMajor}.${versionMinor}.${versionPatch}-${variant.name}.apk"
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.activity:activity-ktx:1.9.3'
+    implementation 'androidx.fragment:fragment-ktx:1.8.5'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'androidx.cardview:cardview:1.0.0'
+    implementation 'androidx.preference:preference-ktx:1.2.1'
+    implementation 'androidx.palette:palette-ktx:1.0.0'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.viewpager:viewpager:1.0.0'
+    implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'androidx.work:work-runtime:2.9.1'
+
+    implementation 'com.google.android.material:material:1.12.0'
+
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
+    implementation 'io.reactivex.rxjava2:rxjava:2.2.21'
+
+    implementation 'io.coil-kt:coil:2.6.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    implementation 'com.github.rahatarmanahmed:circularprogressview:2.5.0'
+    implementation 'de.hdodenhof:circleimageview:3.1.0'
+    implementation 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
+    implementation 'org.bsc.util:minitemplator-repackaged:1.2'
+    implementation 'com.github.bmelnychuk:atv:1.2.9'
+    implementation 'com.afollestad:sectioned-recyclerview:0.5.0'
+
+    implementation 'com.github.chrisbanes:PhotoView:2.3.0'
+    implementation 'com.thebluealliance:spectrum:0.7.1'
+    implementation 'com.github.douglasjunior:android-simple-tooltip:0.2.0'
+
+    implementation 'com.github.moxy-community:moxy:2.2.2'
+    implementation 'com.github.moxy-community:moxy-androidx:2.2.2'
+    kapt 'com.github.moxy-community:moxy-compiler:2.2.2'
+
+    implementation 'com.jakewharton.rxrelay2:rxrelay:2.1.0'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlin_version}"
+
+    implementation 'com.github.terrakok:cicerone:6.6'
+    implementation 'com.hannesdorfmann:adapterdelegates3:3.1.0'
+    implementation 'com.f2prateek.rx.preferences2:rx-preferences:2.0.1'
+
+    implementation 'io.appmetrica.analytics:analytics:6.5.0'
+
+    implementation 'com.makeramen:roundedimageview:2.3.0'
+}

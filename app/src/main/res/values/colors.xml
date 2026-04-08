@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#ffffffff</color>
+    <!-- Material palette (раньше из wada811:android-material-design-colors) -->
+    <color name="md_red_400">#EF5350</color>
+    <color name="md_green_400">#66BB6A</color>
+    <!-- PagerBullet (вендор из robohorse/PagerBullet) -->
+    <color name="pager_bullet_active">#836556</color>
+    <color name="pager_bullet_inactive">#219382</color>
+    <color name="pager_bullet_text_indicator">#ffffff</color>
+    <!-- FOR SIMPLE TOOLTIP LIBRARY -->
+    <color name="colorAccent">#000000</color>
+
+
+    <!-- LIGHT -->
+    <color name="light_colorPrimary">#ffffff</color>
+    <color name="light_colorPrimaryDark">#aaaaaa</color>
+    <color name="light_colorAccent">#000000</color>
+    <color name="light_status_bar_color">#33000000</color>
+    <color name="light_navigation_bar_color">@color/light_colorPrimary</color>
+
+    <color name="light_link_color">#2177af</color>
+    <color name="light_link_color_contrast">#ffffff</color>
+
+    <color name="light_default_text_color">#212121</color>
+    <color name="light_contrast_text_color">@color/dark_default_text_color</color>
+    <color name="light_second_text_color">#757575</color>
+    <color name="light_drawer_item_text">@color/light_default_text_color</color>
+    <color name="light_drawer_item_text_selected">@color/light_default_text_color</color>
+
+    <color name="light_background_base">#fafafa</color>
+    <color name="light_background_for_cards">#eeeeee</color>
+    <color name="light_background_for_lists">#ffffff</color>
+
+    <color name="light_divider_line">#e0e0e0</color>
+    <color name="light_divider_line_bottom_nav">#dddddd</color>
+
+    <color name="light_attachment_overlay_bg">#21000000</color>
+    <color name="light_attachment_description_bg">#44000000</color>
+    <color name="light_attachment_text">@color/light_contrast_text_color</color>
+    <color name="light_msg_panel_tooltip_bg">#eeffffff</color>
+    <color name="light_profile_overlay_bg">#44000000</color>
+    <color name="light_img_viewer_toolbar">#33000000</color>
+
+    <color name="light_icon_base">#757575</color>
+    <color name="light_icon_base_inverse">@color/dark_icon_base</color>
+    <color name="light_icon_toolbar">#212121</color>
+    <color name="light_icon_toolbar_inverse">@color/dark_icon_toolbar</color>
+
+    <color name="light_card_background">#ffffff</color>
+
+    <color name="light_item_tab_close">@color/md_red_400</color>
+
+
+    <!-- DARK -->
+    <color name="dark_colorPrimary">#212121</color>
+    <color name="dark_colorPrimaryDark">#121212</color>
+    <color name="dark_colorAccent">#ffffff</color>
+    <color name="dark_status_bar_color">#00000000</color>
+    <color name="dark_navigation_bar_color">@color/dark_colorPrimary</color>
+
+    <color name="dark_link_color">#2177af</color>
+    <color name="dark_link_color_contrast">#ffffff</color>
+
+    <color name="dark_default_text_color">#ffffff</color>
+    <color name="dark_contrast_text_color">@color/light_default_text_color</color>
+    <color name="dark_second_text_color">#b2b2b2</color>
+    <color name="dark_drawer_item_text">@color/dark_default_text_color</color>
+    <color name="dark_drawer_item_text_selected">@color/dark_default_text_color</color>
+
+    <color name="dark_background_base">#141414</color>
+    <color name="dark_background_for_cards">#0a0a0a</color>
+    <color name="dark_background_for_lists">@color/dark_background_base</color>
+
+    <color name="dark_divider_line">#1fffffff</color>
+    <color name="dark_divider_line_bottom_nav">#333</color>
+
+    <color name="dark_attachment_overlay_bg">#21000000</color>
+    <color name="dark_attachment_description_bg">#44000000</color>
+    <color name="dark_attachment_text">@color/dark_default_text_color</color>
+    <color name="dark_msg_panel_tooltip_bg">#ee000000</color>
+    <color name="dark_profile_overlay_bg">#44000000</color>
+    <color name="dark_img_viewer_toolbar">#33000000</color>
+
+    <color name="dark_icon_base">#b2b2b2</color>
+    <color name="dark_icon_base_inverse">@color/light_icon_base</color>
+    <color name="dark_icon_toolbar">#ffffff</color>
+    <color name="dark_icon_toolbar_inverse">@color/light_icon_toolbar</color>
+
+    <color name="dark_card_background">#212121</color>
+
+    <color name="dark_item_tab_close">#8b2d26</color>
+    
+
+    <!-- OTHERS -->
+    <color name="dislike_color">#f44336</color>
+
+    <color name="contact_site">@color/light_link_color</color>
+    <color name="contact_icq">#539e37</color>
+    <color name="contact_twitter">#1da1f2</color>
+    <color name="contact_jabber">#cc0000</color>
+    <color name="contact_vk">#45668e</color>
+    <color name="contact_google_plus">#dd4b39</color>
+    <color name="contact_facebook">#3b5998</color>
+    <color name="contact_instagram">#833ab4</color>
+    <color name="contact_mail_ru">#ffa930</color>
+
+    <array name="md_colors">
+        <item>#f44336</item>
+        <item>#e91e63</item>
+        <item>#9c27b0</item>
+        <item>#673ab7</item>
+        <item>#3f51b5</item>
+        <item>#2196f3</item>
+        <item>#03a9f4</item>
+        <item>#00bcd4</item>
+        <item>#009688</item>
+        <item>#4caf50</item>
+        <item>#8bc34a</item>
+        <item>#cddc39</item>
+        <item>#ffeb3b</item>
+        <item>#ffc107</item>
+        <item>#ff9800</item>
+        <item>#ff5722</item>
+        <item>#795548</item>
+        <item>#9e9e9e</item>
+        <item>#607d8b</item>
+        <item>#ffffff</item>
+    </array>
+    <array name="forum_colors">
+        <item>#000000</item>
+        <item>#FFFFFF</item>
+        <item>#82CEE8</item>
+        <item>#426AE6</item>
+        <item>#0000FF</item>
+        <item>#07008C</item>
+        <item>#FDA500</item>
+        <item>#FF4300</item>
+        <item>#E1133A</item>
+        <item>#FF0000</item>
+        <item>#8C0000</item>
+        <item>#008000</item>
+        <item>#41A317</item>
+        <item>#4E8975</item>
+        <item>#F52887</item>
+        <item>#FF6245</item>
+        <item>#F76541</item>
+        <item>#800080</item>
+        <item>#440087</item>
+        <item>#E3B382</item>
+        <item>#EE9A4D</item>
+        <item>#C35817</item>
+        <item>#C85A17</item>
+        <item>#037F81</item>
+        <item>#C0C0C0</item>
+        <item>#808080</item>
+    </array>
+
+</resources>

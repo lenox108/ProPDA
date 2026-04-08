@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>${topic_title}</title>
+     <script type="text/javascript">
+        var PageInfo = {
+            bodyType: "${body_type}",
+
+            enableAvatars: ${enable_avatars_bool},
+            avatarType: "${avatar_type}",
+
+            allPagesCount: ${all_pages_int},
+            postsOnPageCount: ${posts_on_page_int},
+            currentPage: ${current_page_int},
+
+            authorized: ${authorized_bool},
+            memberId: ${member_id_int}
+        }
+        function setPaddingBottom(newPadding){
+            document.getElementById("padding_for_message_panel").style.paddingBottom = Number(newPadding)+"px";
+        }
+
+    </script>
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/main.js"></script>
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/modules/search.js"></script>
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/modules/posts_functions.js"></script>
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/attach_transformer.js"></script>
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/blocks.js"></script>
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/md_colors.css">
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/fonts/roboto/import_mono.css">
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/fonts/fontello/import.css">
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/${style_type}/${style_type}_main.css">
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/${style_type}/${style_type}_themes.css">
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/z_emoticons.js"></script>
+</head>
+
+<body id="${body_type}" class="${enable_avatars} ${avatar_type}">
+    <div class="posts_list">
+        <!-- $BeginBlock post -->
+        <div name="entry${post_id}" class="post_container ${user_online} close" data-post-id="${post_id}" data-user-id="${user_id}" data-nick="${nick}">
+            <div class="post_title"><a href="https://4pda.to/forum/index.php?showtopic=${topic_id}&view=findpost&p=${post_id}">${post_title}</a></div>
+            <div class="post_header">
+                <div tabindex="-1" class="accessibility_anchor"></div>
+                <div class="header_wrapper">
+                    <div class="avatar ${none_avatar} aec">
+                        <b class="letter" onclick="IThemePresenter.showUserMenu('${post_id}')">${nick_letter}</b>
+                        <div class="img" style="background-image:url(${avatar});" onclick="IThemePresenter.showUserMenu('${post_id}')" role="button" aria-label="${res_s_avatar}"></div>
+                        <div class="reputation" onclick="IThemePresenter.showReputationMenu('${post_id}')" role="button" aria-label="${res_s_reputation} ${reputation}"><span>${reputation}</span></div>
+                    </div>
+                    <span class="inf nick">
+                        <span class="aec" onclick="IThemePresenter.showUserMenu('${post_id}')"><b>${nick}</b></span>
+                            <span class="group aec" style="color:${group_color};" onclick="IThemePresenter.toast('${res_s_group}: ${group}')" role="button" aria-label="${res_s_group} ${group}"><span>${group}</span></span>
+                            </span>
+                    <span class="inf date"><span>${date}</span></span>
+                    <a class="btn inf menu aec" onclick="IThemePresenter.showPostMenu('${post_id}')" role="button" aria-label="${res_s_menu}"><span>${res_s_menu}</span></a>
+                </div>
+            </div>
+            <a class="btn hat_button aec" onclick="toggleButton(this, 'hat_content', 'search')" role="button" aria-label="${res_s_hat}"><span>Содержимое поста</span><i class="icon"></i></a>
+            <div class="hat_content close">
+                <div class="post_body emoticons">${body}</div>
+            </div>
+        </div>
+        <!-- $EndBlock post -->
+    </div>
+    <div class="navigation ${navigation_disable}">
+        <span class="button first ${first_disable}" onclick="IThemePresenter.firstPage()" role="button" aria-label="${res_s_first}"><i class="icon"></i></span>
+        <span class="button prev ${prev_disable}" onclick="IThemePresenter.prevPage()" role="button" aria-label="${res_s_prev}"><i class="icon"></i></span>
+        <span class="button page" onclick="IThemePresenter.selectPage()" role="button" aria-label="${res_s_select_desc}"><b>${res_s_select}</b><i class="icon"></i></span>
+        <span class="button next ${next_disable}" onclick="IThemePresenter.nextPage()" role="button" aria-label="${res_s_next}"><i class="icon"></i></span>
+        <span class="button last ${last_disable}" onclick="IThemePresenter.lastPage()" role="button" aria-label="${res_s_last}"><i class="icon"></i></span>
+    </div>
+    <!--<div id="padding_for_message_panel" style="padding-bottom: 4em;"></div>-->
+    <script type="text/javascript">
+        jsEmoticons.parseAll("file:///android_asset/smiles/")
+
+    </script>
+</body>
+
+</html>

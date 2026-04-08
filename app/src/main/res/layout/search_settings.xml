@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/search_settings_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?attr/background_for_lists"
+        android:orientation="vertical"
+        android:paddingTop="@dimen/dp16">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/search_nick_block"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingEnd="@dimen/dp12"
+            android:paddingStart="@dimen/dp12">
+
+            <androidx.appcompat.widget.AppCompatEditText
+                android:id="@+id/search_nick_field"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:hint="@string/search_settings_hint_nick"
+                android:maxLines="1"
+                android:textSize="16sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <LinearLayout
+            android:id="@+id/search_resource_block"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/dp8"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingEnd="@dimen/dp16"
+                android:paddingStart="@dimen/dp16"
+                android:text="@string/search_settings_resource"
+                android:textColor="?attr/second_text_color" />
+
+            <androidx.appcompat.widget.AppCompatSpinner
+                android:id="@+id/search_resource_spinner"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp48"
+                android:paddingEnd="@dimen/dp8"
+                android:paddingStart="@dimen/dp8" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/search_result_block"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/dp8"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingEnd="@dimen/dp16"
+                android:paddingStart="@dimen/dp16"
+                android:text="@string/search_settings_result"
+                android:textColor="?attr/second_text_color" />
+
+            <androidx.appcompat.widget.AppCompatSpinner
+                android:id="@+id/search_result_spinner"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp48"
+                android:paddingEnd="@dimen/dp8"
+                android:paddingStart="@dimen/dp8" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/search_sort_block"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/dp8"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingEnd="@dimen/dp16"
+                android:paddingStart="@dimen/dp16"
+                android:text="@string/search_settings_sorting"
+                android:textColor="?attr/second_text_color" />
+
+            <androidx.appcompat.widget.AppCompatSpinner
+                android:id="@+id/search_sort_spinner"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp48"
+                android:paddingEnd="@dimen/dp8"
+                android:paddingStart="@dimen/dp8" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/search_source_block"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/dp8"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingEnd="@dimen/dp16"
+                android:paddingStart="@dimen/dp16"
+                android:text="@string/search_settings_source"
+                android:textColor="?attr/second_text_color" />
+
+            <androidx.appcompat.widget.AppCompatSpinner
+                android:id="@+id/search_source_spinner"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp48"
+                android:paddingEnd="@dimen/dp8"
+                android:paddingStart="@dimen/dp8" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:orientation="horizontal"
+            android:paddingEnd="8dp"
+            android:paddingStart="8dp">
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/search_save_settings"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="@string/search_settings_btn_save" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/search_submit"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/search_settings_btn_search" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

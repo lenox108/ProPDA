@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+    <title>${details_title}</title>
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/main.js"></script>
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/modules/news.js"></script>
+    <!--<script type="text/javascript" src="file:///android_asset/forpda/scripts/blocks.js"></script>-->
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/md_colors.css">
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/fonts/roboto/import_mono.css">
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/fonts/fontello/import.css">
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/${style_type}/${style_type}_main.css">
+    <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/${style_type}/${style_type}_news.css">
+    <script type="text/javascript" src="file:///android_asset/forpda/scripts/z_emoticons.js"></script>
+</head>
+
+<body id="news">
+<div class="content">
+    ${details_content}
+</div>
+<div class="materials">
+    <div class="materials_list">
+    <!-- $BeginBlock material -->
+        <a class="material_item" href="https://4pda.to/index.php?p=${material_id}">
+            <span class="image" style="background-image: url(${material_image})"></span>
+            <span class="title">${material_title}</span>
+        </a>
+    <!-- $EndBlock material -->
+    </div>
+</div>
+<div class="comments" onclick="INews.toComments();" role="button">
+    <div class="title">${res_s_comments}</div>
+    <div class="content">${res_s_comments_do_swipe}</div>
+</div>
+
+<script type="text/javascript">
+        jsEmoticons.parseAll("file:///android_asset/smiles/")
+    </script>
+</body>
+</html>

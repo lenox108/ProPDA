@@ -1,0 +1,13 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.3'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.25'
+        classpath 'io.realm:realm-gradle-plugin:10.19.0'
+    }
+}
+
+ext.kotlin_version = '1.9.25'

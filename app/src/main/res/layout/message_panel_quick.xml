@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center_vertical"
+    android:paddingBottom="2dp">
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/button_advanced_input"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp40"
+        android:layout_below="@+id/message_wrapper"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/codes_and_smiles"
+        app:srcCompat="@drawable/ic_add" />
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/button_attachments"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp40"
+        android:layout_below="@+id/message_wrapper"
+        android:layout_marginStart="-8dp"
+        android:layout_toEndOf="@+id/button_advanced_input"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/attachments"
+        app:srcCompat="@drawable/ic_attachment" />
+
+    <TextView
+        android:id="@+id/attachment_counter"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignTop="@+id/button_attachments"
+        android:layout_alignEnd="@id/button_attachments"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="4dp"
+        android:background="@drawable/notify_dot_menu"
+        android:gravity="center"
+        android:maxLines="1"
+        android:minWidth="16dp"
+        android:minHeight="16dp"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:text="1"
+        android:textColor="@color/white"
+        android:textSize="10sp"
+        android:visibility="visible" />
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/button_full"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp40"
+        android:layout_below="@+id/message_wrapper"
+        android:layout_marginStart="-8dp"
+        android:layout_toEndOf="@+id/button_attachments"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:srcCompat="@drawable/ic_fullscreen"
+        android:contentDescription="@string/full_form"
+        android:visibility="gone"/>
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/button_hide"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp40"
+        android:layout_below="@+id/message_wrapper"
+        android:layout_marginStart="-8dp"
+        android:layout_toEndOf="@+id/button_full"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:srcCompat="@drawable/ic_transcribe_close"
+        android:contentDescription="@string/hide_form"
+        android:visibility="gone"/>
+
+
+    <ScrollView
+        android:id="@+id/message_wrapper"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <forpdateam.ru.forpda.ui.views.CodeEditor
+                android:id="@+id/message_field"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center_vertical"
+                android:hint="@string/msg_panel_hint_message"
+                android:imeOptions="flagNoFullscreen"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="4"
+                android:minHeight="@dimen/dp40"
+                android:paddingBottom="0dp"
+                android:paddingEnd="@dimen/dp16"
+                android:paddingStart="@dimen/dp16"
+                android:paddingTop="@dimen/dp8"
+                android:textSize="16sp" />
+
+        </FrameLayout>
+    </ScrollView>
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/button_clear_message"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp40"
+        android:layout_below="@+id/message_wrapper"
+        android:layout_toStartOf="@+id/send_container"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/msg_panel_clear_message"
+        app:srcCompat="@drawable/ic_clear" />
+
+    <FrameLayout
+        android:id="@+id/send_container"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp40"
+        android:layout_alignParentEnd="true"
+        android:layout_below="@+id/message_wrapper">
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/button_send"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp40"
+            android:contentDescription="@string/send_message"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            app:srcCompat="@drawable/ic_send" />
+
+        <ProgressBar
+            android:id="@+id/send_progress"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp40"
+            android:clickable="false"
+            android:padding="@dimen/dp8"
+            android:visibility="gone" />
+    </FrameLayout>
+</RelativeLayout>

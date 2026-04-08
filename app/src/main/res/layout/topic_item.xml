@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:paddingBottom="@dimen/dp12"
+    android:paddingEnd="@dimen/dp16"
+    android:paddingStart="@dimen/dp16"
+    android:paddingTop="@dimen/dp12">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/topic_item_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:layout_alignParentStart="true"
+        android:layout_toStartOf="@+id/icons_block"
+        android:textSize="16sp"
+        tools:text="@string/test_topic_title"/>
+
+    <LinearLayout
+        android:id="@+id/icons_block"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:paddingTop="2dp"
+        android:orientation="horizontal">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/topic_item_poll_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_poll" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/topic_item_forum_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_forum" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/topic_item_lock_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_lock" />
+        <View
+            android:id="@+id/topic_item_dot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="4dp"
+            android:layout_marginBottom="4dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/notify_dot"
+            android:visibility="gone"/>
+    </LinearLayout>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/topic_item_desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/topic_item_title"
+        android:textColor="?attr/second_text_color"
+        android:textSize="14sp"
+        tools:text="@string/test_topic_description"/>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/topic_item_last_nick"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/topic_item_desc"
+        android:textColor="?attr/second_text_color"
+        tools:text="@string/test_topic_last_nick"
+        android:contentDescription="@string/user"/>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/topic_item_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_below="@+id/topic_item_desc"
+        android:textColor="?attr/second_text_color"
+        tools:text="@string/test_topic_date"/>
+
+</RelativeLayout>

@@ -1,0 +1,185 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="TreeNodeStyleCustom">
+        <item name="android:paddingLeft">16dp</item>
+    </style>
+
+    <style name="SplashTheme" parent="DayNightAppTheme.NoActionBar">
+        <item name="android:windowBackground">@drawable/bg_splash_light</item>
+    </style>
+
+    <!--
+        LIGHT THEME
+    -->
+    <style name="DayNightAppTheme" parent="Theme.Material3.DayNight">
+        <!-- Base color settings (Material 3 + совместимость с существующими attr) -->
+        <item name="colorPrimary">@color/light_colorPrimary</item>
+        <item name="colorPrimaryDark">@color/light_colorPrimaryDark</item>
+        <item name="colorAccent">@color/light_colorAccent</item>
+        <item name="colorSecondary">@color/light_link_color</item>
+        <item name="colorOnSecondary">@android:color/white</item>
+        <item name="colorSurface">@color/light_card_background</item>
+        <item name="colorOnSurface">@color/light_default_text_color</item>
+
+        <!-- Colors attr settings-->
+        <item name="status_bar_color">@color/light_status_bar_color</item>
+        <item name="link_color">@color/light_link_color</item>
+        <item name="link_color_contrast">@color/light_link_color_contrast</item>
+        <item name="default_text_color">@color/light_default_text_color</item>
+        <item name="contrast_text_color">@color/light_contrast_text_color</item>
+        <item name="second_text_color">@color/light_second_text_color</item>
+        <item name="drawer_item_text">@color/light_drawer_item_text</item>
+        <item name="drawer_item_text_selected">@color/light_drawer_item_text_selected</item>
+        <item name="background_base">@color/light_background_base</item>
+        <item name="background_for_cards">@color/light_background_for_cards</item>
+        <item name="background_for_lists">@color/light_background_for_lists</item>
+        <item name="divider_line">@color/light_divider_line</item>
+        <item name="attachment_overlay_bg">@color/light_attachment_overlay_bg</item>
+        <item name="attachment_description_bg">@color/light_attachment_description_bg</item>
+        <item name="attachment_text">@color/light_attachment_text</item>
+        <item name="msg_panel_tooltip_bg">@color/light_msg_panel_tooltip_bg</item>
+        <item name="profile_overlay_bg">@color/light_profile_overlay_bg</item>
+        <item name="img_viewer_toolbar">@color/light_img_viewer_toolbar</item>
+        <item name="icon_base">@color/light_icon_base</item>
+        <item name="icon_base_inverse">@color/light_icon_base_inverse</item>
+        <item name="icon_toolbar">@color/light_icon_toolbar</item>
+        <item name="icon_toolbar_inverse">@color/light_icon_toolbar_inverse</item>
+        <item name="count_background">@drawable/count_background_light</item>
+        <item name="cards_background">@color/light_card_background</item>
+        <item name="divider_line_bottom_nav">@color/light_divider_line_bottom_nav</item>
+        <item name="notify_dot_tab">@drawable/notify_dot_tab_light</item>
+        <item name="is_use_light_status_bar">true</item>
+        <item name="item_tab_close_color">@color/light_item_tab_close</item>
+
+        <!-- Styles settings-->
+        <item name="app_bar_overlay">@style/DayNightAppTheme.AppBarOverlay</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.PopupOverlay</item>
+        <item name="bottom_sheet_dialog_theme">@style/DayNightAppTheme.BottomSheetDialog</item>
+
+        <!-- Other settings -->
+        <item name="ProfileToolbarTextStyle">@style/ProfileToolbarTextStyle</item>
+        <item name="android:textViewStyle">@style/MyTextViewStyle</item>
+        <item name="windowActionModeOverlay">true</item>
+        <!--<item name="actionModeStyle">@style/ActionModeStyle</item>-->
+        <item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
+
+        <item name="actionModeBackground">@color/light_colorPrimary</item>
+        <item name="actionModeCloseButtonStyle">@style/actionModeCloseButtonStyle</item>
+        <item name="actionOverflowButtonStyle">@style/OverFlow</item>
+        <item name="alertDialogTheme">@style/DayNightAppTheme.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.BottomSheetDialog</item>
+        <item name="android:windowBackground">@color/light_background_base</item>
+        <item name="android:navigationBarColor">@color/light_navigation_bar_color</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+        <!-- <item name="android:windowTranslucentStatus">true</item>-->
+    </style>
+
+    <style name="DayNightAppTheme.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:colorBackground">@color/light_card_background</item>
+        <item name="colorAccent">@color/light_colorAccent</item>
+        <item name="colorPrimary">@color/light_link_color</item>
+        <item name="colorOnSurface">@color/light_default_text_color</item>
+        <item name="android:textColorPrimary">@color/light_default_text_color</item>
+        <item name="android:textColorSecondary">@color/light_second_text_color</item>
+    </style>
+
+    <style name="DayNightAppTheme.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <!--<item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:background">@color/light_card_background</item>-->
+    </style>
+
+    <style name="DayNightAppTheme.NoActionBarBase" parent="DayNightAppTheme">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/light_navigation_bar_color</item>
+    </style>
+
+    <style name="DayNightAppTheme.NoActionBar" parent="DayNightAppTheme.NoActionBarBase" />
+
+    <style name="DayNightAppTheme.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
+        <item name="android:singleLine">true</item>
+    </style>
+
+    <style name="DayNightAppTheme.PopupOverlay" parent="ThemeOverlay.Material3">
+        <item name="elevation">0dp</item>
+    </style>
+
+    <style name="DayNightPreferenceTheme" parent="DayNightAppTheme">
+        <!--<item name="textAppearanceListItem">@style/CodeFont</item>
+        <item name="android:textAppearanceListItem">@style/CodeFont</item>
+        <item name="textAppearanceListItemSmall">@style/CodeFont</item>
+        <item name="android:textAppearanceListItemSmall">@style/CodeFont</item>-->
+        <!--<item name="android:listDivider">@color/md_amber_800</item>
+        <item name="android:dividerHeight">1dp</item>-->
+    </style>
+
+
+    <!-- OTHER -->
+    <style name="CodeFont">
+        <item name="android:textColor">#00FF00</item>
+        <item name="android:typeface">monospace</item>
+        <item name="android:textSize">10sp</item>
+    </style>
+
+    <style name="OverFlow" parent="Widget.AppCompat.ActionButton.Overflow">
+        <item name="android:tint">?icon_toolbar</item>
+    </style>
+
+    <style name="actionModeCloseButtonStyle" parent="Widget.AppCompat.Light.ActionButton.CloseMode">
+        <item name="android:tint">?icon_toolbar</item>
+    </style>
+
+    <style name="MyTextViewStyle" parent="android:Widget.TextView">
+        <item name="android:textColor">?default_text_color</item>
+    </style>
+
+    <style name="ProfileToolbarTextStyle">
+        <item name="android:textColorLink">?link_color_contrast</item>
+        <item name="android:textColor">?link_color_contrast</item>
+        <item name="android:shadowDy">1</item>
+        <item name="android:shadowRadius">5</item>
+        <item name="android:shadowColor">#4c000000</item>
+        <!--<item name="android:textAlignment" tools:ignore="NewApi">center</item>-->
+    </style>
+
+
+    <style name="CardStyle.Item" parent="CardView">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/card_elevation</item>
+        <item name="cardBackgroundColor">?cards_background</item>
+        <item name="cardUseCompatPadding">true</item>
+    </style>
+
+    <style name="CardStyle.Item.Wide" parent="CardStyle.Item">
+        <item name="android:layout_marginLeft">@dimen/card_margin_horizontal</item>
+        <item name="android:layout_marginRight">@dimen/card_margin_horizontal</item>
+        <item name="cardCornerRadius">0dp</item>
+    </style>
+
+    <style name="CardStyle.Wide" parent="CardStyle.Item.Wide">
+        <item name="android:layout_marginBottom">@dimen/dp8</item>
+    </style>
+
+
+    <!--<style name="ButtonsOnWhite">
+        <item name="colorControlNormal">#757575</item>
+        <item name="colorControlActivated">@color/light_colorAccent</item>
+    </style>-->
+
+
+    <style name="ImageViewTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowTranslucentStatus" tools:ignore="NewApi">true</item>
+        <item name="android:windowTranslucentNavigation" tools:ignore="NewApi">true</item>
+    </style>
+
+    <style name="ImageViewTheme.AppBarOverlay" parent="ThemeOverlay.Material3.Dark.ActionBar">
+        <item name="android:singleLine">true</item>
+        <item name="elevation">0dp</item>
+    </style>
+
+    <style name="ImageViewTheme.PopupOverlay" parent="ThemeOverlay.Material3.Dark">
+        <item name="elevation">0dp</item>
+        <item name="android:background">@android:color/transparent</item>
+    </style>
+</resources>

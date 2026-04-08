@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/news_full_item_root"
+    style="@style/CardStyle.Item.Wide"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?cards_background"
+    android:foreground="?attr/selectableItemBackground">
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/dp20"
+        android:layout_marginTop="@dimen/dp12"
+        android:layout_marginEnd="@dimen/dp20"
+        android:layout_marginBottom="@dimen/dp12"
+        android:orientation="vertical">
+
+        <forpdateam.ru.forpda.ui.views.RoundAspectRatioImageView
+            android:id="@+id/news_full_item_cover"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:adjustViewBounds="true"
+            android:scaleType="centerCrop"
+            app:aspectRatio="0.56"
+            app:riv_corner_radius="@dimen/dp8"
+            tools:src="@drawable/test_img" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/dp12"
+            android:layout_marginBottom="@dimen/dp8"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/news_full_item_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/dp8"
+                android:layout_weight="1"
+                android:lineSpacingMultiplier="0.9"
+                android:textAppearance="@style/TextAppearance.AppCompat.Title"
+                android:textSize="20sp"
+                tools:text="Самая крутая новость на сегодня. Завезли новости. Наконец-то, бля.\nasdasd\n " />
+
+            <FrameLayout
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:visibility="gone">
+
+
+                <LinearLayout
+                    android:id="@+id/news_full_item_new_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center|bottom"
+                    android:background="@color/cardview_light_background"
+                    android:minHeight="20dp"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <TextView
+                        android:id="@+id/news_full_item_news_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_horizontal"
+                        android:text="new"
+                        android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                        tools:ignore="HardcodedText"
+                        tools:text="new" />
+
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/news_full_item_description"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/dp8"
+            android:ellipsize="end"
+            android:maxLines="3"
+            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+            tools:text="Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала Олала" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <de.hdodenhof.circleimageview.CircleImageView
+                android:id="@+id/articleAvatar"
+                android:layout_width="24dp"
+                android:layout_height="24dp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/dp8"
+                android:layout_marginEnd="@dimen/dp16"
+                android:layout_weight="1"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/news_full_item_username"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="?default_text_color"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                    tools:text="Вася в разносе" />
+
+                <TextView
+                    android:id="@+id/news_full_item_category"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                    android:visibility="gone"
+                    tools:text="обзор" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/news_full_item_comments_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/dp16"
+                android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                tools:text="2560" />
+
+            <TextView
+                android:id="@+id/news_full_item_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                tools:text="20.09.1985" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_gravity="bottom"
+        android:background="?attr/divider_line" />
+</FrameLayout>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingTop="@dimen/dp16"
+    android:paddingStart="@dimen/dp24"
+    android:paddingEnd="@dimen/dp24">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/reputation_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:paddingBottom="@dimen/dp16"/>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/reputation_text_field"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ems="10"
+            android:hint="@string/reputation_reason"
+            android:inputType="text|textCapSentences|textMultiLine"
+            android:scrollHorizontally="true"/>
+
+    </com.google.android.material.textfield.TextInputLayout>
+</LinearLayout>
