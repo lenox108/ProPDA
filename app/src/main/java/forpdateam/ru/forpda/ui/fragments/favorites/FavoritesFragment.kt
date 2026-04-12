@@ -18,8 +18,7 @@ import android.widget.Button
 import android.widget.Spinner
 import android.widget.Toast
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 
 import java.util.Arrays
 
@@ -29,8 +28,8 @@ import forpdateam.ru.forpda.entity.remote.favorites.FavData
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.model.data.remote.api.favorites.Sorting
-import forpdateam.ru.forpda.presentation.favorites.FavoritesPresenter
 import forpdateam.ru.forpda.presentation.favorites.FavoritesView
+import forpdateam.ru.forpda.presentation.favorites.FavoritesViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.views.ContentController
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
@@ -56,6 +55,18 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
     private lateinit var sortApply: Button
     private lateinit var sortReset: Button
 
+    private val presenter: FavoritesViewModel by viewModels {
+        FavoritesViewModel.Factory(
+                App.get().Di().favoritesRepository,
+                App.get().Di().eventsRepository,
+                App.get().Di().listsPreferencesHolder,
+                App.get().Di().crossScreenInteractor,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
+
     private val paginationListener = object : PaginationHelper.PaginationListener {
         override fun onTabSelected(tab: TabLayout.Tab): Boolean {
             return refreshLayout.isRefreshing
@@ -75,25 +86,6 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
             presenter.onItemLongClick(item)
             return false
         }
-    }
-
-    @InjectPresenter
-    lateinit var presenter: FavoritesPresenter
-
-    @ProvidePresenter
-    internal fun providePresenter(): FavoritesPresenter {
-        return FavoritesPresenter(
-                App.get().Di().favoritesRepository,
-                App.get().Di().forumRepository,
-                App.get().Di().eventsRepository,
-                App.get().Di().listsPreferencesHolder,
-                App.get().Di().notificationPreferencesHolder,
-                App.get().Di().crossScreenInteractor,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().countersHolder,
-                App.get().Di().errorHandler
-        )
     }
 
     init {
@@ -182,7 +174,14 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
             dialog.dismiss()
         }
 
+        presenter.attachView(this)
+        presenter.start()
         presenter.refresh()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun isShadowVisible(): Boolean {
@@ -191,6 +190,15 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
+        menu.add(Menu.NONE, R.id.menu_fav_mark_all_read, Menu.NONE, "")
+                .setIcon(R.drawable.ic_toolbar_done)
+                .setContentDescription(getString(R.string.fav_mark_all_read))
+                .setOnMenuItemClickListener {
+                    hideKeyboard()
+                    openMarkAllFavoritesReadConfirmDialog()
+                    false
+                }
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
         menu.add(R.string.sorting_title)
                 .setIcon(R.drawable.ic_toolbar_sort)
                 .setOnMenuItemClickListener {
@@ -203,6 +211,17 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
                     false
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+    }
+
+    private fun openMarkAllFavoritesReadConfirmDialog() {
+        val ctx = context ?: return
+        AlertDialog.Builder(ctx)
+                .setMessage(getString(R.string.fav_mark_all_read) + "?")
+                .setPositiveButton(R.string.ok) { _, _ ->
+                    presenter.markAllFavoritesRead()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
     }
 
     override fun onMarkAllRead() {

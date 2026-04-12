@@ -5,13 +5,12 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.news.NewsItem
-import forpdateam.ru.forpda.presentation.articles.list.ArticlesListPresenter
 import forpdateam.ru.forpda.presentation.articles.list.ArticlesListView
+import forpdateam.ru.forpda.presentation.articles.list.ArticlesListViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
@@ -25,19 +24,17 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener, 
     private lateinit var adapter: NewsListAdapter
     private val dialogMenu = DynamicDialogMenu<NewsMainFragment, NewsItem>()
 
-    @InjectPresenter
-    lateinit var presenter: ArticlesListPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): ArticlesListPresenter = ArticlesListPresenter(
-            App.get().Di().newsRepository,
-            App.get().Di().avatarRepository,
-            App.get().Di().authHolder,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler,
-            App.get().Di().schedulers
-    )
+    private val presenter: ArticlesListViewModel by viewModels {
+        ArticlesListViewModel.Factory(
+                App.get().Di().newsRepository,
+                App.get().Di().avatarRepository,
+                App.get().Di().authHolder,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler,
+                App.get().Di().schedulers
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_news_list)
@@ -67,6 +64,13 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener, 
             }
         }
 
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {

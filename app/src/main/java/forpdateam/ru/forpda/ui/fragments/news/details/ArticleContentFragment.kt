@@ -6,19 +6,21 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 
-import moxy.MvpAppCompatFragment
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
 import forpdateam.ru.forpda.common.webview.DialogsHelper
 import forpdateam.ru.forpda.entity.remote.news.DetailsPage
-import forpdateam.ru.forpda.model.interactors.news.ArticleInteractor
-import forpdateam.ru.forpda.presentation.articles.detail.content.ArticleContentPresenter
-import forpdateam.ru.forpda.presentation.articles.detail.content.ArticleContentView
-import forpdateam.ru.forpda.ui.activities.MainActivity
+import forpdateam.ru.forpda.presentation.articles.detail.content.ArticleContentViewModel
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
 import forpdateam.ru.forpda.ui.fragments.WebViewTopScroller
 import forpdateam.ru.forpda.ui.views.ExtendedWebView
@@ -27,21 +29,19 @@ import forpdateam.ru.forpda.ui.views.ExtendedWebView
  * Created by radiationx on 03.09.17.
  */
 
-class ArticleContentFragment : MvpAppCompatFragment(), ArticleContentView, TabTopScroller {
+class ArticleContentFragment : Fragment(), TabTopScroller {
 
     private lateinit var webView: ExtendedWebView
     private lateinit var topScroller: WebViewTopScroller
 
-    @InjectPresenter
-    lateinit var presenter: ArticleContentPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): ArticleContentPresenter = ArticleContentPresenter(
-            (parentFragment as NewsDetailsFragment).provideChildInteractor(),
-            App.get().Di().mainPreferencesHolder,
-            App.get().Di().templateManager,
-            App.get().Di().errorHandler
-    )
+    private val viewModel: ArticleContentViewModel by viewModels {
+        ArticleContentViewModel.Factory(
+                (parentFragment as NewsDetailsFragment).provideChildInteractor(),
+                App.get().Di().mainPreferencesHolder,
+                App.get().Di().templateManager,
+                App.get().Di().errorHandler
+        )
+    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         webView = ExtendedWebView(context)
@@ -60,22 +60,32 @@ class ArticleContentFragment : MvpAppCompatFragment(), ArticleContentView, TabTo
         return webView
     }
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        var lastArticle: DetailsPage? = null
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    val article = state.article
+                    if (article != null && article !== lastArticle) {
+                        lastArticle = article
+                        webView.loadDataWithBaseURL(
+                                "https://4pda.to/forum/",
+                                article.html ?: "",
+                                "text/html",
+                                "utf-8",
+                                null
+                        )
+                    }
+                    webView.evalJs("changeStyleType(\"${state.styleType}\")")
+                    webView.setRelativeFontSize(state.fontSize)
+                }
+            }
+        }
+    }
+
     override fun toggleScrollTop() {
         topScroller.toggleScrollTop()
-    }
-
-    override fun setRefreshing(isRefreshing: Boolean) {}
-
-    override fun showData(article: DetailsPage) {
-        webView.loadDataWithBaseURL("https://4pda.to/forum/", article.html ?: "", "text/html", "utf-8", null)
-    }
-
-    override fun setStyleType(type: String) {
-        webView.evalJs("changeStyleType(\"$type\")")
-    }
-
-    override fun setFontSize(size: Int) {
-        webView.setRelativeFontSize(size)
     }
 
     @JavascriptInterface
@@ -96,7 +106,7 @@ class ArticleContentFragment : MvpAppCompatFragment(), ArticleContentView, TabTo
             for (i in answers.indices) {
                 answersId[i] = Integer.parseInt(answers[i])
             }
-            presenter.sendPoll(from, pollId, answersId)
+            viewModel.sendPoll(from, pollId, answersId)
         }
     }
 

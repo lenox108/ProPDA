@@ -40,7 +40,16 @@ public class MessagePanelBehavior extends CoordinatorLayout.Behavior<CardView> {
     @Override
     public boolean onDependentViewChanged(CoordinatorLayout parent, CardView child, View dependency) {
         if (!canScrolling) return false;
-        float percent = 1.0f - ((float) -dependency.getTop() / (float) dependency.getMeasuredHeight());
+        int depH = dependency.getMeasuredHeight();
+        if (depH <= 0) {
+            child.setTranslationY(0);
+            return false;
+        }
+        // Без clamp при смене layout (IME, edge-to-edge) top/height дают percent < 0 или > 1 —
+        // панель уезжает к верху экрана, а клавиатура остаётся внизу.
+        float percent = 1.0f - ((float) -dependency.getTop() / (float) depH);
+        if (percent < 0f) percent = 0f;
+        else if (percent > 1f) percent = 1f;
         int scrolled = (int) ((child.getMeasuredHeight() + (2 * App.px8)) * percent);
         child.setTranslationY(scrolled);
         return true;

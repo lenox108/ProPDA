@@ -15,15 +15,14 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.RelativeLayout
 import android.widget.TextView
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.common.ForPdaCoil
 import com.robohorse.pagerbullet.PagerBullet
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.devdb.Device
-import forpdateam.ru.forpda.presentation.devdb.device.DevicePresenter
 import forpdateam.ru.forpda.presentation.devdb.device.DeviceView
+import forpdateam.ru.forpda.presentation.devdb.device.DeviceViewModel
 import forpdateam.ru.forpda.ui.DimensionHelper
 import forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
 import forpdateam.ru.forpda.ui.fragments.TabFragment
@@ -56,16 +55,14 @@ class DeviceFragment : TabFragment(), DeviceView {
 
     private var appBarOffset = 0
 
-    @InjectPresenter
-    lateinit var presenter: DevicePresenter
-
-    @ProvidePresenter
-    fun providePresenter(): DevicePresenter = DevicePresenter(
-            App.get().Di().devDbRepository,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
+    private val presenter: DeviceViewModel by viewModels {
+        DeviceViewModel.Factory(
+                App.get().Di().devDbRepository,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_device)
@@ -149,6 +146,14 @@ class DeviceFragment : TabFragment(), DeviceView {
                             }
             )
         }
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun isShadowVisible(): Boolean {

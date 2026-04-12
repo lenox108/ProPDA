@@ -4,26 +4,31 @@ import android.os.Bundle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.ItemTouchHelper
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.CloseableInfo
 import forpdateam.ru.forpda.entity.app.other.AppMenuItem
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
-import forpdateam.ru.forpda.presentation.other.OtherPresenter
-import forpdateam.ru.forpda.presentation.other.OtherView
+import forpdateam.ru.forpda.presentation.other.OtherViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.views.drawers.adapters.DrawerMenuItem
 
 /**
  * Created by radiationx on 16.12.17.
  */
-class OtherFragment : TabFragment(), OtherView {
+class OtherFragment : TabFragment() {
 
     private val otherAdapter by lazy {
         OtherAdapter(
@@ -38,12 +43,8 @@ class OtherFragment : TabFragment(), OtherView {
     private var listScrollY = 0
     private lateinit var listRecycler: RecyclerView
 
-    @InjectPresenter
-    lateinit var presenter: OtherPresenter
-
-    @ProvidePresenter
-    fun provideOtherPresenter(): OtherPresenter {
-        return OtherPresenter(
+    private val viewModel: OtherViewModel by viewModels {
+        OtherViewModel.Factory(
                 App.get().Di().router,
                 App.get().Di().authRepository,
                 App.get().Di().profileRepository,
@@ -84,45 +85,44 @@ class OtherFragment : TabFragment(), OtherView {
                 }
             })
         }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    otherAdapter.bindItems(state.profileItem, state.infoList, state.menu)
+                }
+            }
+        }
     }
 
     override fun isShadowVisible(): Boolean {
         return listScrollY != 0
     }
 
-    override fun showItems(profileItem: ProfileModel?, infoList: List<CloseableInfo>, menu: List<List<AppMenuItem>>) {
-        otherAdapter.bindItems(profileItem, infoList, menu)
-    }
-
-    override fun updateProfile() {
-        otherAdapter.notifyDataSetChanged()
-    }
-
     override fun setRefreshing(isRefreshing: Boolean) {}
 
     private val profileClickListener: (ProfileModel?) -> Unit = { _: ProfileModel? ->
-        presenter.onProfileClick()
+        viewModel.onProfileClick()
     }
 
-    private val logoutClickListener = { presenter.signOut() }
+    private val logoutClickListener = { viewModel.signOut() }
 
-    private val menuClickListener = { item: DrawerMenuItem -> presenter.onMenuClick(item.appItem) }
+    private val menuClickListener = { item: DrawerMenuItem -> viewModel.onMenuClick(item.appItem) }
 
-    private val infoCloseClickListener = { item: CloseableInfo -> presenter.onCloseInfo(item) }
+    private val infoCloseClickListener = { item: CloseableInfo -> viewModel.onCloseInfo(item) }
 
     private val menuSequenceListener = { items: List<AppMenuItem> ->
-        presenter.onChangeMenuSequence(items)
-        Log.e("lplplp", "sequence ${items.joinToString { it.screen?.getKey().orEmpty() }}")
+        viewModel.onChangeMenuSequence(items)
         Unit
     }
 
     private val itemDragListener = object : OtherItemDragCallback.ItemTouchHelperListener {
         override fun onDragStart() {
-            presenter.onMenuDragModeChange(true)
+            viewModel.onMenuDragModeChange(true)
         }
 
         override fun onDragEnd() {
-            presenter.onMenuDragModeChange(false)
+            viewModel.onMenuDragModeChange(false)
         }
 
         override fun onItemMove(fromPosition: Int, toPosition: Int) {

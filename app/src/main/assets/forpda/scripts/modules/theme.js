@@ -2,6 +2,8 @@ console.log("LOAD JS SOURCE theme.js");
 const BACK_ACTION = "0";
 const REFRESH_ACTION = "1";
 const NORMAL_ACTION = "2";
+/** Задержки (мс) для повторного scrollToElement — вёрстка/картинки подгружаются после первого кадра. */
+var SCROLL_ANCHOR_RETRY_DELAYS_MS = [1, 120, 400, 900];
 window.loadAction = NORMAL_ACTION;
 window.loadScrollY = 0;
 var anchorElem, elemToActivation;
@@ -49,6 +51,8 @@ function getScrollTop() {
 
 function scrollToElement(name) {
     console.log("scrollToElement " + name);
+    // Явный якорь из Java (ссылка на пост, жест «Назад» по истории якорей) — всегда крутим к посту, не к loadScrollY при BACK.
+    var explicitAnchor = (arguments.length > 0 && typeof name === 'string' && name.length > 0);
     if (typeof name != 'string') {
         name = PageInfo.elemToScroll;
     }
@@ -76,14 +80,18 @@ function scrollToElement(name) {
             toggler("close", "open", block);
             block = block.parentNode;
         }
-        //Открытие шапки
-        block = anchorElem;
-        while (block.classList && !block.classList.contains('post_container')) {
-            block = block.parentNode;
-        }
-        if (block.classList.contains("close")) {
-            var button = block.querySelector(".hat_button");
-            toggleButton(button, "hat_content");
+        // Открытие шапки при скролле к якорю — только если в настройках включено «Открытая шапка темы».
+        // Иначе якорь на первый пост/шапку не должен разворачивать шапку (пользователь оставил её скрытой).
+        var mayOpenHatForAnchor = (typeof PageInfo.hatOpenedPref === 'undefined' || PageInfo.hatOpenedPref);
+        if (mayOpenHatForAnchor) {
+            block = anchorElem;
+            while (block.classList && !block.classList.contains('post_container')) {
+                block = block.parentNode;
+            }
+            if (block.classList.contains("close")) {
+                var button = block.querySelector(".hat_button");
+                toggleButton(button, "hat_content");
+            }
         }
     } else {
         anchorElem = document.documentElement;
@@ -91,7 +99,7 @@ function scrollToElement(name) {
     console.log("ANCHOR " + name);
     console.log("loadAction " + window.loadAction);
     console.log("loadScrollY " + window.loadScrollY);
-    if (window.loadAction == BACK_ACTION || window.loadAction == REFRESH_ACTION) {
+    if (!explicitAnchor && (window.loadAction == BACK_ACTION || window.loadAction == REFRESH_ACTION)) {
         setTimeout(function () {
             window.scrollTo(0, window.loadScrollY);
         }, 1);
@@ -100,21 +108,82 @@ function scrollToElement(name) {
                 window.scrollTo(0, window.loadScrollY);
             //}, 1);
         });
-    } else if (window.loadAction == NORMAL_ACTION) {
+    } else if (window.loadAction == NORMAL_ACTION || explicitAnchor) {
+        var scrollIntoTarget = resolveThemeScrollIntoTarget(anchorElem);
         setTimeout(function () {
-            doScroll(anchorElem);
+            doScroll(anchorElem, scrollIntoTarget);
         }, 1);
         nativeEvents.addEventListener(nativeEvents.PAGE, function () {
-            //setTimeout(function () {
-                doScroll(anchorElem);
-            //}, 1);
+                doScroll(anchorElem, scrollIntoTarget);
         });
     }
 }
 
-function doScroll(tAnchorElem) {
+/** При свёрнутой шапке и выключенной настройке «открытая шапка» — скролл к шапке поста, а не к якорю внутри скрытого тела. */
+function resolveThemeScrollIntoTarget(anchorEl) {
+    if (!anchorEl || typeof PageInfo === 'undefined' || PageInfo.bodyType !== 'topic') {
+        return anchorEl;
+    }
+    var mayOpenHat = (typeof PageInfo.hatOpenedPref === 'undefined' || PageInfo.hatOpenedPref);
+    if (mayOpenHat) return anchorEl;
+    var pc = anchorEl;
+    while (pc && (!pc.classList || !pc.classList.contains('post_container'))) {
+        pc = pc.parentElement;
+    }
+    if (!pc) return anchorEl;
+    var hat = pc.querySelector('.hat_content');
+    if (!hat || !hat.classList.contains('close')) return anchorEl;
+    var header = pc.querySelector('.post_header');
+    return header || anchorEl;
+}
+
+/**
+ * Повторы после сдвига вёрстки (картинки, шрифты): один вызов scrollToElement часто оставляет верх страницы.
+ */
+function scrollToElementWithRetries(name) {
+    if (typeof name !== 'string' || !name.length) return;
+    for (var i = 0; i < SCROLL_ANCHOR_RETRY_DELAYS_MS.length; i++) {
+        (function (ms) {
+            setTimeout(function () {
+                scrollToElement(name);
+            }, ms);
+        })(SCROLL_ANCHOR_RETRY_DELAYS_MS[i]);
+    }
+    if (window.__themeScrollAnchorDiag) {
+        var maxMs = SCROLL_ANCHOR_RETRY_DELAYS_MS[SCROLL_ANCHOR_RETRY_DELAYS_MS.length - 1];
+        setTimeout(function () {
+            logScrollAnchorDiag(name);
+        }, maxMs + 150);
+    }
+}
+
+/** После последнего retry: найден ли элемент и положение (Android: window.__themeScrollAnchorDiag). */
+function logScrollAnchorDiag(name) {
     try {
-        tAnchorElem.focus();
+        var el = anchorElem;
+        if (!el && typeof name === 'string') {
+            var anchorData = /([^-]*)-([\d]*)-(\d+)/g.exec(name);
+            if (anchorData) {
+                anchorData[1] = anchorData[1].toLowerCase();
+                if (anchorData[1] === "spoiler") anchorData[1] = "spoil";
+                if (anchorData[1] === "hide") anchorData[1] = "hidden";
+                el = document.querySelector('[name="entry' + anchorData[2] + '"]');
+                if (el) el = el.querySelectorAll(".post-block." + anchorData[1])[Number(anchorData[3]) - 1];
+            } else {
+                el = document.querySelector('[name="' + name + '"]');
+            }
+        }
+        var top = el ? el.getBoundingClientRect().top : null;
+        console.log("[ThemeScrollDiag] anchor=" + name + " found=" + !!el + " rectTop=" + top + " scrollY=" + (window.pageYOffset || 0));
+    } catch (ex) {
+        console.log("[ThemeScrollDiag] error " + ex);
+    }
+}
+
+function doScroll(tAnchorElem, scrollIntoElem) {
+    var toScroll = scrollIntoElem || tAnchorElem;
+    try {
+        toScroll.focus();
         var access_anchor = tAnchorElem.querySelector(".accessibility_anchor");
         if (access_anchor) {
             access_anchor.focus();
@@ -123,7 +192,7 @@ function doScroll(tAnchorElem) {
         console.error(ex);
     }
 
-    tAnchorElem.scrollIntoView();
+    toScroll.scrollIntoView();
 
     //Активация элементов, убирается класс active с уже активированных
     if (elemToActivation)
@@ -142,9 +211,32 @@ function doScroll(tAnchorElem) {
 
 function selectionToQuote() {
     var selObj = window.getSelection();
-    var selectedText = selObj.toString();
+    if (selObj.rangeCount === 0) {
+        IThemePresenter.toast("Для этого действия необходимо выбрать текст сообщения");
+        return;
+    }
+    var range = selObj.getRangeAt(0);
+    var fragment = range.cloneContents();
+    var div = document.createElement("div");
+    div.appendChild(fragment);
+    var nestedQuotes = div.querySelectorAll(".post-block.quote");
+    for (var i = nestedQuotes.length - 1; i >= 0; i--) {
+        var q = nestedQuotes[i];
+        if (q.parentNode) q.parentNode.removeChild(q);
+    }
+    var nestedBq = div.querySelectorAll("blockquote");
+    for (var j = nestedBq.length - 1; j >= 0; j--) {
+        var b = nestedBq[j];
+        if (b.parentNode) b.parentNode.removeChild(b);
+    }
+    var scripts = div.querySelectorAll("script,style");
+    for (var k = scripts.length - 1; k >= 0; k--) {
+        var sc = scripts[k];
+        if (sc.parentNode) sc.parentNode.removeChild(sc);
+    }
+    // innerText теряет спойлеры/теги — в цитату нужен HTML, Kotlin переведёт в BBCode ([spoiler], [img]).
+    var selectedText = div.innerHTML || div.textContent || "";
     IBase.onActionModeComplete();
-
 
     var p = selObj.anchorNode.parentNode;
     while (p.classList && !p.classList.contains('post_container')) {
@@ -156,7 +248,7 @@ function selectionToQuote() {
     }
     var postId = p.dataset.postId;
     if (selectedText != null && postId != null) {
-        IThemePresenter.quotePost(selectedText, "" + postId);
+        IThemePresenter.quotePost(selectedText.trim(), "" + postId);
     } else {
         IThemePresenter.toast("Ошибка создания цитаты: [" + selectedText + ", " + postId + "]");
         return;

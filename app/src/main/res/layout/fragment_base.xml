@@ -5,30 +5,28 @@
     android:id="@+id/fragment_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?colorPrimary"
-    android:fitsSystemWindows="true">
+    android:background="?colorPrimary">
 
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:id="@+id/coordinator_layout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:fitsSystemWindows="true"
         android:background="?attr/background_for_lists">
 
+        <!-- Верхний inset даёт activity (fragments_container fitsSystemWindows), иначе двойной отступ. -->
         <com.google.android.material.appbar.AppBarLayout
             android:id="@+id/appbar_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fitsSystemWindows="true"
+            android:fitsSystemWindows="false"
             android:theme="?attr/app_bar_overlay"
-            app:elevation="0dp">
+            app:elevation="@dimen/dp0">
 
             <com.google.android.material.appbar.CollapsingToolbarLayout
                 android:id="@+id/toolbar_layout"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:fitsSystemWindows="true"
-                app:contentScrim="?attr/colorPrimary"
+                app:contentScrim="?attr/colorSurface"
                 app:layout_scrollFlags="scroll|exitUntilCollapsed"
                 app:statusBarScrim="@android:color/transparent"
                 app:titleEnabled="false">
@@ -48,8 +46,7 @@
                 <ViewStub
                     android:id="@+id/toolbar_content"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:fitsSystemWindows="true"/>
+                    android:layout_height="match_parent"/>
 
 
                 <androidx.appcompat.widget.Toolbar
@@ -70,9 +67,9 @@
 
                         <de.hdodenhof.circleimageview.CircleImageView
                             android:id="@+id/toolbar_image_icon"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:layout_marginEnd="16dp"
+                            android:layout_width="@dimen/toolbar_avatar_size"
+                            android:layout_height="@dimen/toolbar_avatar_size"
+                            android:layout_marginEnd="@dimen/content_padding_horizontal"
                             android:visibility="gone"/>
 
                         <LinearLayout
@@ -94,16 +91,15 @@
                                     android:layout_height="wrap_content"
                                     android:ellipsize="end"
                                     android:maxLines="1"
-                                    android:textColor="?attr/default_text_color"
-                                    android:textSize="18sp"
-                                    android:textStyle="bold"/>
+                                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                                    android:textColor="?attr/default_text_color"/>
 
                                 <androidx.appcompat.widget.AppCompatTextView
                                     android:id="@+id/toolbar_subtitle"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
+                                    android:textAppearance="?attr/textAppearanceBodySmall"
                                     android:textColor="?attr/second_text_color"
-                                    android:textSize="12sp"
                                     android:visibility="gone"/>
                             </LinearLayout>
 
@@ -136,6 +132,8 @@
             android:id="@+id/fragment_content"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
 
         <FrameLayout
@@ -146,8 +144,8 @@
 
             <ProgressBar
                 android:id="@+id/content_progress"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
                 android:layout_gravity="center"
                 android:visibility="gone"/>
 
@@ -156,7 +154,7 @@
         <View
             android:id="@+id/toolbar_shadow_prelp"
             android:layout_width="match_parent"
-            android:layout_height="2dp"
+            android:layout_height="@dimen/dp2"
             android:background="@drawable/toolbar_shadow_prelp"
             android:visibility="gone"
             app:layout_behavior="@string/appbar_scrolling_view_behavior"/>

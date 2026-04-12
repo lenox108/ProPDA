@@ -4,10 +4,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingBottom="@dimen/dp16"
-    android:paddingEnd="@dimen/dp16"
-    android:paddingStart="@dimen/dp16"
-    android:paddingTop="56dp"
+    android:paddingBottom="@dimen/content_block_padding_vertical"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/toolbar_overlay_top_padding"
     android:animateLayoutChanges="true">
 
     <com.google.android.material.textfield.TextInputLayout

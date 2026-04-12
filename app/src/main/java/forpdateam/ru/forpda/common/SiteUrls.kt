@@ -1,17 +1,13 @@
 package forpdateam.ru.forpda.common
 
-/**
- * Основной домен сайта — 4pda.to (зеркало 4pda.ru).
- */
+/** Домен сайта — только 4pda.to. */
 object SiteUrls {
     const val HOST_PRIMARY = "4pda.to"
     const val BASE_HTTPS = "https://4pda.to"
 
     private val KNOWN_HOSTS = setOf(
             "4pda.to",
-            "www.4pda.to",
-            "4pda.ru",
-            "www.4pda.ru"
+            "www.4pda.to"
     )
 
     @JvmStatic

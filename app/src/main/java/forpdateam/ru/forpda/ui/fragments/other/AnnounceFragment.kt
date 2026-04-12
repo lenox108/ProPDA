@@ -16,10 +16,15 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 
 import java.util.ArrayList
+
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -27,8 +32,7 @@ import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
 import forpdateam.ru.forpda.common.webview.DialogsHelper
 import forpdateam.ru.forpda.entity.remote.forum.Announce
-import forpdateam.ru.forpda.presentation.announce.AnnouncePresenter
-import forpdateam.ru.forpda.presentation.announce.AnnounceView
+import forpdateam.ru.forpda.presentation.announce.AnnounceViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
 import forpdateam.ru.forpda.ui.fragments.WebViewTopScroller
@@ -38,33 +42,26 @@ import forpdateam.ru.forpda.ui.views.ExtendedWebView
  * Created by radiationx on 16.10.17.
  */
 
-class AnnounceFragment : TabFragment(), AnnounceView, TabTopScroller {
+class AnnounceFragment : TabFragment(), TabTopScroller {
 
     private var searchViewTag = 0
     private lateinit var webView: ExtendedWebView
     private lateinit var topScroller: WebViewTopScroller
 
-    @InjectPresenter
-    lateinit var presenter: AnnouncePresenter
-
-    @ProvidePresenter
-    fun providePresenter(): AnnouncePresenter = AnnouncePresenter(
-            App.get().Di().forumRepository,
-            App.get().Di().announceTemplate,
-            App.get().Di().templateManager,
-            App.get().Di().errorHandler
-    )
+    private val viewModel: AnnounceViewModel by viewModels {
+        val args = arguments ?: Bundle()
+        AnnounceViewModel.Factory(
+                args.getInt(ARG_ANNOUNCE_ID),
+                args.getInt(ARG_FORUM_ID),
+                App.get().Di().forumRepository,
+                App.get().Di().announceTemplate,
+                App.get().Di().templateManager,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = "Объявление"
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        arguments?.apply {
-            presenter.id = getInt(ARG_ANNOUNCE_ID)
-            presenter.forumId = getInt(ARG_FORUM_ID)
-        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -97,24 +94,38 @@ class AnnounceFragment : TabFragment(), AnnounceView, TabTopScroller {
             }
         })
         topScroller = WebViewTopScroller(webView, appBarLayout)
+
+        var lastAnnounce: Announce? = null
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    setRefreshing(state.loading)
+                    val data = state.announce
+                    if (data != null && data !== lastAnnounce) {
+                        lastAnnounce = data
+                        setTitle(data.title)
+                        webView.loadDataWithBaseURL(
+                                "https://4pda.to/forum/",
+                                data.html ?: "",
+                                "text/html",
+                                "utf-8",
+                                null
+                        )
+                    }
+                    webView.evalJs("changeStyleType(\"${state.styleType}\")")
+                }
+            }
+        }
     }
 
     override fun toggleScrollTop() {
+        if (!::topScroller.isInitialized) return
         topScroller.toggleScrollTop()
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
         addSearchOnPageItem(menu)
-    }
-
-    override fun showData(data: Announce) {
-        setTitle(data.title)
-        webView.loadDataWithBaseURL("https://4pda.to/forum/", data.html ?: "", "text/html", "utf-8", null)
-    }
-
-    override fun setStyleType(type: String) {
-        webView.evalJs("changeStyleType(\"$type\")")
     }
 
     private fun addSearchOnPageItem(menu: Menu) {

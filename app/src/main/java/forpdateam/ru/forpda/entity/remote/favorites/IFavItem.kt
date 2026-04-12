@@ -26,6 +26,8 @@ interface IFavItem {
     var isPin: Boolean
     var isForum: Boolean
     var isNew: Boolean
+    /** Сколько новых постов не прочитано (из разметки +N у темы; иначе минимум 1 при isNew). */
+    var unreadPostCount: Int
     var isPoll: Boolean
     var isClosed: Boolean
 }

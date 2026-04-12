@@ -71,6 +71,10 @@ fun normalizeEditPostBodyForEditor(text: String): String {
     // Остатки UI спойлера из WebView (если HTML не разобрался до [spoiler])
     s = s.replace(Regex("(?m)^\\s*Закрыть спойлер\\s*$"), "")
     s = s.replace(Regex("(?m)^\\s*Спойлер\\s*$"), "")
+    // Заголовок блока вложений из DOM (attach_transformer / спойлер «Прикреплённые файлы»)
+    s = s.replace(Regex("(?m)^\\s*Прикреплённые файлы\\s*$"), "")
+    s = s.replace(Regex("(?m)^\\s*Прикрепленные файлы\\s*$"), "")
+    s = s.replace(Regex("(?im)^\\s*Attached files\\s*$"), "")
     s = fixBbcodeBracketQuoteTypos(s)
     // 4PDA иногда отдаёт цитату в textarea как литерал "автор, …текст…" или "…"1 без [quote]
     s = convertOuterDoubleQuotedLiteralToBbcodeIfNeeded(s)
@@ -80,10 +84,19 @@ fun normalizeEditPostBodyForEditor(text: String): String {
 
 private fun stripIpbEditFooterPlain(s: String): String {
     var t = s
-    t = t.replace(Regex("(?is)Сообщение отредактировал[^\\n]*"), "")
-    t = t.replace(Regex("(?is)Причина редактирования\\s*:\\s*[^\\n]*"), "")
+    // Служебный хвост IPB/4PDA часто без class=edit в DOM; бывает сразу после [/img] без перевода строки.
+    t = t.replace(
+            Regex(
+                    "(?is)(\\[/[a-zA-Z][a-zA-Z0-9]*\\])" +
+                            "\\s*(?:Сообщение[\\s\\u00A0]+отредактировал|Message[\\s\\u00A0]+edited[\\s\\u00A0]+by)\\b[^\\n]*" +
+                            "(?:\\R\\s*(?:Причина[\\s\\u00A0]+редактирования\\s*:|Reason[\\s\\u00A0]+for[\\s\\u00A0]+edit\\s*:)[^\\n]*)?"
+            )
+    ) { m -> m.groupValues[1] }
+    t = t.replace(Regex("(?im)^\\s*Сообщение[\\s\\u00A0]+отредактировал.*$"), "")
+    t = t.replace(Regex("(?im)^\\s*Причина[\\s\\u00A0]+редактирования\\s*:.*$"), "")
+    t = t.replace(Regex("(?im)^\\s*Message[\\s\\u00A0]+edited[\\s\\u00A0]+by.*$"), "")
+    t = t.replace(Regex("(?im)^\\s*Reason[\\s\\u00A0]+for[\\s\\u00A0]+edit\\s*:.*$"), "")
     t = t.replace(Regex("(?im)^\\s*default_edit_reason\\s*$"), "")
-    t = t.replace(Regex("(?is)\\n\\s*Причина редактирования\\s*:\\s*\\n[^\\n]*"), "")
     return t.trim()
 }
 
@@ -105,16 +118,14 @@ private fun fixBbcodeBracketQuoteTypos(s: String): String {
 }
 
 /**
- * Сервер может вернуть целиком обёртку в ASCII-кавычках без BBCode, например
- * `"fox malder, \n…текст…"1` или `""fox malder, …"1` (двойная кавычка в начале в DOM) —
- * превращаем в `[quote]…[/quote]`, хвост из цифр отбрасываем.
- * Если уже есть `[`, обработку оставляем [stripOuterQuotesIfBbcodeContent].
+ * IPB иногда отдаёт литерал цитаты как `"текст…"123` (хвост — только цифры) без `[quote]`.
+ * Нельзя оборачивать любой текст в кавычках: фразы вроде "Привет" превращались в ложную цитату.
+ * Срабатываем только при хвосте-цифрах или явной «шапке» автора (запятая + перенос строки внутри).
  */
 private fun convertOuterDoubleQuotedLiteralToBbcodeIfNeeded(s: String): String {
     val t = s.trim().trimStart('\uFEFF')
     if (t.contains('[')) return s
     if (!t.startsWith('"')) return s
-    // Снимаем все ведущие " — иначе при ""… остаётся лишняя " внутри [quote]
     var body = t
     var guard = 0
     while (body.startsWith('"') && guard++ < 32) {
@@ -125,6 +136,11 @@ private fun convertOuterDoubleQuotedLiteralToBbcodeIfNeeded(s: String): String {
     if (lastQuote < 0) return s
     val inner = body.substring(0, lastQuote)
     val after = body.substring(lastQuote + 1).trim()
+    val trailingDigitArtifact = after.isNotEmpty() && after.all { it.isDigit() }
+    val looksLikeForumQuoteHeader = Regex(",\\s*\\R").containsMatchIn(inner)
+    if (!trailingDigitArtifact && !looksLikeForumQuoteHeader) {
+        return s
+    }
     return if (after.isEmpty() || after.all { it.isDigit() }) {
         "[quote]$inner[/quote]"
     } else {
@@ -164,6 +180,8 @@ fun stripOuterQuotesIfBbcodeContent(text: String): String {
  */
 fun normalizeEditPostBodyFromDomHtml(html: String): String {
     var h = html.replace("\\\"", "\"")
+    h = stripEmbeddedAttachmentsUiFromPostHtml(h)
+    h = stripAttachmentSpoilerBlocksFromPostHtml(h)
     h = stripSpoilerUiControlsFromPostHtml(h)
     h = preprocessHtmlMentionsAndBoldForBbcodeEdit(h)
     h = preprocessHtmlQuoteBlocksForBbcodeEdit(h)
@@ -182,6 +200,23 @@ private fun stripIpbEditFooterHtml(html: String): String {
     h = h.replace(Regex("(?is)<p[^>]*class=\"[^\"]*edit[^\"]*\"[^>]*>[\\s\\S]*?</p>"), "")
     h = h.replace(Regex("(?is)<div[^>]*class=\"[^\"]*edit[^\"]*\"[^>]*>[\\s\\S]*?</div>"), "")
     h = h.replace(Regex("(?is)<span[^>]*class=\"[^\"]*edit[^\"]*\"[^>]*>[\\s\\S]*?</span>"), "")
+    // IPS/IP.B без class=edit: обычно <p> или <div class="ipsType_light|…"> — не матчим голый <div> (риск съесть весь post_body).
+    val ipsish = """[^"]*(?:ipsType_light|ipsFaded|ipsType_reset|post-edit-reason)[^"]*"""
+    val sp = "(?:\\s|&nbsp;|&#160;|\u00A0)+"
+    // Не использовать [\s\S]* внутри <p> — иначе матч «выползает» через </p> и съедает предыдущие абзацы.
+    val inOneP = """(?:(?!</p>).)*"""
+    h = h.replace(Regex("(?is)<p\\b[^>]*>$inOneP?Сообщение${sp}отредактировал$inOneP</p>"), "")
+    h = h.replace(Regex("(?is)<div\\b[^>]*class=\"$ipsish\"[^>]*>[\\s\\S]*?Сообщение${sp}отредактировал[\\s\\S]*?</div>"), "")
+    h = h.replace(Regex("(?is)<span\\b[^>]*class=\"$ipsish\"[^>]*>[\\s\\S]*?Сообщение${sp}отредактировал[\\s\\S]*?</span>"), "")
+    h = h.replace(Regex("(?is)<p\\b[^>]*>$inOneP?Message${sp}edited${sp}by\\b$inOneP</p>"), "")
+    h = h.replace(Regex("(?is)<div\\b[^>]*class=\"$ipsish\"[^>]*>[\\s\\S]*?Message${sp}edited${sp}by\\b[\\s\\S]*?</div>"), "")
+    h = h.replace(Regex("(?is)<span\\b[^>]*class=\"$ipsish\"[^>]*>[\\s\\S]*?Message${sp}edited${sp}by\\b[\\s\\S]*?</span>"), "")
+    h = h.replace(Regex("(?is)<p\\b[^>]*>$inOneP?Причина${sp}редактирования\\s*:$inOneP</p>"), "")
+    h = h.replace(Regex("(?is)<div\\b[^>]*class=\"$ipsish\"[^>]*>[\\s\\S]*?Причина${sp}редактирования\\s*:[\\s\\S]*?</div>"), "")
+    h = h.replace(Regex("(?is)<span\\b[^>]*class=\"$ipsish\"[^>]*>[\\s\\S]*?Причина${sp}редактирования\\s*:[\\s\\S]*?</span>"), "")
+    h = h.replace(Regex("(?is)<p\\b[^>]*>$inOneP?Reason${sp}for${sp}edit\\s*:$inOneP</p>"), "")
+    h = h.replace(Regex("(?is)<div\\b[^>]*class=\"$ipsish\"[^>]*>[\\s\\S]*?Reason${sp}for${sp}edit\\s*:[\\s\\S]*?</div>"), "")
+    h = h.replace(Regex("(?is)<span\\b[^>]*class=\"$ipsish\"[^>]*>[\\s\\S]*?Reason${sp}for${sp}edit\\s*:[\\s\\S]*?</span>"), "")
     return h
 }
 
@@ -211,6 +246,23 @@ private val mentionBoldBbcode = Regex("""\[(?i)b\][^\[]+?,\s*\[\s*/\s*b\]""")
  * Текст из `<textarea name="Post">` — основной источник BBCode.
  * Сервер иногда отдаёт упоминания без `[b]…[/b]`, тогда как [normalizeEditPostBodyFromDomHtml] уже восстановила их из DOM — не затирать.
  */
+private val outerSingleBbcodeQuote = Regex("""(?is)^\[quote[^\]]*\]([\s\S]*)\[/quote\]\s*$""")
+
+private fun roughPlainForMerge(s: String): String {
+    var t = s
+    var prev: String
+    do {
+        prev = t
+        t = t.replace(Regex("""(?is)\[[^\]]*\]"""), "")
+    } while (t != prev)
+    return t.replace(Regex("\\s+"), " ").trim()
+}
+
+private fun singleOuterQuoteInner(text: String): String? {
+    val m = outerSingleBbcodeQuote.find(text.trim()) ?: return null
+    return m.groupValues[1].trim()
+}
+
 fun mergeEditPostMessage(serverMessage: String, prefilledFromDom: String): String {
     val server = normalizeEditPostBodyForEditor(serverMessage)
     val dom = normalizeEditPostBodyForEditor(prefilledFromDom)
@@ -218,13 +270,28 @@ fun mergeEditPostMessage(serverMessage: String, prefilledFromDom: String): Strin
     if (dom.isBlank()) return server
     val serverHasBracket = server.contains('[')
     val domLooksLikeBbcode = dom.contains('[') && dom.contains(']')
+    val serverHasQuote = server.contains("[quote", ignoreCase = true)
+    val domHasQuote = dom.contains("[quote", ignoreCase = true)
     // Страница редактирования иногда отдаёт «голый» текст без [, а из WebView уже собран нормальный BBCode.
     if (!serverHasBracket && domLooksLikeBbcode) {
+        // DOM часто даёт ложные [quote] из blockquote/обёрток 4PDA — для правки поста приоритет у textarea с сервера.
+        if (domHasQuote && !serverHasQuote && server.isNotBlank()) {
+            return server
+        }
         return dom
+    }
+    // DOM: одна ложная обёртка [quote]… вокруг того же текста, что и в BBCode с сервера (есть [b] и т.д., но нет цитаты).
+    if (serverHasBracket && !serverHasQuote && domHasQuote) {
+        singleOuterQuoteInner(dom)?.let { inner ->
+            val innerN = normalizeEditPostBodyForEditor(inner)
+            if (innerN.isNotBlank() && roughPlainForMerge(server) == roughPlainForMerge(innerN)) {
+                return server
+            }
+        }
     }
     if (mentionBoldBbcode.containsMatchIn(dom) && !mentionBoldBbcode.containsMatchIn(server)) {
         // Не терять цитаты с сервера, если из DOM цитата не попала в нормализацию.
-        if (server.contains("[quote") && !dom.contains("[quote")) {
+        if (server.contains("[quote", ignoreCase = true) && !dom.contains("[quote", ignoreCase = true)) {
             return server
         }
         return dom

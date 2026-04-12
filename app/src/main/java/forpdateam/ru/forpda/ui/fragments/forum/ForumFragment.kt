@@ -10,8 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import com.unnamed.b.atv.model.TreeNode
 import com.unnamed.b.atv.view.AndroidTreeView
 
@@ -19,8 +18,8 @@ import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.forum.ForumItemTree
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
-import forpdateam.ru.forpda.presentation.forum.ForumPresenter
 import forpdateam.ru.forpda.presentation.forum.ForumView
+import forpdateam.ru.forpda.presentation.forum.ForumViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
@@ -40,6 +39,15 @@ class ForumFragment : TabFragment(), ForumView {
 
     private var listScrollY = 0
     private var appBarOffset = 0
+
+    private val presenter: ForumViewModel by viewModels {
+        ForumViewModel.Factory(
+                App.get().Di().forumRepository,
+                App.get().Di().favoritesRepository,
+                App.get().Di().router,
+                App.get().Di().errorHandler
+        )
+    }
 
     private val nodeClickListener = TreeNode.TreeNodeClickListener { _, value ->
         val item = value as ForumItemTree
@@ -66,17 +74,6 @@ class ForumFragment : TabFragment(), ForumView {
 
         false
     }
-
-    @InjectPresenter
-    lateinit var presenter: ForumPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): ForumPresenter = ForumPresenter(
-            App.get().Di().forumRepository,
-            App.get().Di().favoritesRepository,
-            App.get().Di().router,
-            App.get().Di().errorHandler
-    )
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_forum)
@@ -130,6 +127,13 @@ class ForumFragment : TabFragment(), ForumView {
             }
         }
 
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun isShadowVisible(): Boolean {

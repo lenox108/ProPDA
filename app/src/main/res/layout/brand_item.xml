@@ -11,7 +11,7 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_margin="@dimen/dp8"
+        android:layout_margin="@dimen/content_spacing"
         android:clickable="false"
         android:orientation="vertical">
 
@@ -23,7 +23,7 @@
             <ImageView
                 android:id="@+id/item_image"
                 android:layout_width="match_parent"
-                android:layout_height="144dp"
+                android:layout_height="@dimen/device_grid_card_image_height"
                 android:clickable="false"
                 android:scaleType="fitCenter" />
 
@@ -40,7 +40,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/image_wrapper"
-            android:layout_marginTop="@dimen/dp16"
+            android:layout_marginTop="@dimen/content_padding_horizontal"
             android:clickable="false"
             tools:text="@string/test_nick"
             android:textColor="?attr/default_text_color" />
@@ -48,12 +48,12 @@
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/item_rating"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_height="@dimen/dp32"
             android:layout_alignParentEnd="true"
             android:gravity="center"
-            android:minWidth="32dp"
-            android:paddingEnd="6dp"
-            android:paddingStart="6dp"
+            android:minWidth="@dimen/dp32"
+            android:paddingEnd="@dimen/bottom_tab_badge_padding_horizontal"
+            android:paddingStart="@dimen/bottom_tab_badge_padding_horizontal"
             android:text="10"
             android:textColor="@color/white"
             android:textStyle="bold"

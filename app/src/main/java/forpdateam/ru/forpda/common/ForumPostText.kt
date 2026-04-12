@@ -21,6 +21,18 @@ fun stripHtmlQuoteBlocks(html: String): String {
     while (ipbQuoteMarkers.containsMatchIn(s)) {
         s = s.replace(ipbQuoteMarkers, "")
     }
+    // Разметка темы в WebView: .post-block.quote (вложенные div — через баланс, как у спойлеров)
+    val postBlockQuoteOpen = Regex(
+        "(?is)<div[^>]*class=\"[^\"]*(?:post-block\\s+quote|quote\\s+post-block)[^\"]*\"[^>]*>"
+    )
+    var guard = 0
+    while (postBlockQuoteOpen.containsMatchIn(s) && guard++ < 256) {
+        val m = postBlockQuoteOpen.find(s) ?: break
+        val gt = s.indexOf('>', m.range.first)
+        if (gt < 0) break
+        val endPair = extractDivInnerUntilMatchingClose(s, gt + 1) ?: break
+        s = s.removeRange(m.range.first, endPair.second)
+    }
     return s
 }
 
@@ -233,6 +245,64 @@ fun preprocessHtmlForPlainExtraction(html: String): String {
         val tag = m.value
         val alt = Regex("""(?i)alt\s*=\s*["']([^"']*)["']""").find(tag)?.groupValues?.getOrNull(1).orEmpty()
         alt
+    }
+    return s
+}
+
+/**
+ * Блок вложений ForPDA ([attach_transformer.js]) и превью файлов оказываются внутри `.post_body` —
+ * без удаления в редактор попадает «Прикрепленные файлы» и разметка вместо [attachment=…].
+ */
+fun stripEmbeddedAttachmentsUiFromPostHtml(html: String): String {
+    var s = html
+    s = stripOuterDivByClassName(s, "attachments")
+    s = stripOuterDivByClassName(s, "btns_container")
+    return s
+}
+
+/**
+ * Спойлер с заголовком «Прикреплённые файлы» (оригинальная разметка форума), если трансформер не вычистил.
+ */
+fun stripAttachmentSpoilerBlocksFromPostHtml(html: String): String {
+    val blockStart = Regex(
+        "(?is)<div\\b[^>]*class=\"[^\"]*(?:post-block\\s+spoil|spoil\\s+post-block)[^\"]*\"[^>]*>"
+    )
+    val titleHasAttach = Regex("(?is)Прикреплен|Attached\\s+files")
+    var s = html
+    var searchStart = 0
+    var guard = 0
+    while (guard++ < 64) {
+        val m = blockStart.find(s, searchStart) ?: break
+        val gt = s.indexOf('>', m.range.first)
+        if (gt < 0) break
+        val blockSnippet = s.substring(m.range.first, minOf(m.range.first + 800, s.length))
+        if (!titleHasAttach.containsMatchIn(blockSnippet)) {
+            searchStart = m.range.first + 1
+            continue
+        }
+        val endPair = extractDivInnerUntilMatchingClose(s, gt + 1)
+        if (endPair == null) {
+            searchStart = m.range.first + 1
+            continue
+        }
+        s = s.removeRange(m.range.first, endPair.second)
+        searchStart = m.range.first
+    }
+    return s
+}
+
+private fun stripOuterDivByClassName(html: String, classToken: String): String {
+    var s = html
+    val open = Regex(
+        "(?is)<div\\b[^>]*\\bclass\\s*=\\s*[\"'][^\"']*\\b${Regex.escape(classToken)}\\b[^\"']*[\"'][^>]*>"
+    )
+    var guard = 0
+    while (guard++ < 64) {
+        val m = open.find(s) ?: break
+        val gt = s.indexOf('>', m.range.first)
+        if (gt < 0) break
+        val endPair = extractDivInnerUntilMatchingClose(s, gt + 1) ?: break
+        s = s.removeRange(m.range.first, endPair.second)
     }
     return s
 }

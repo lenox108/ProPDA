@@ -8,14 +8,14 @@
         android:id="@+id/poll_choice_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/dp16"
+        android:layout_marginStart="@dimen/content_padding_horizontal"
         android:layout_toStartOf="@+id/poll_choice_delete"
         android:hint="@string/poll_answer">
 
         <androidx.appcompat.widget.AppCompatEditText
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="16sp" />
+            android:textSize="@dimen/list_topic_title_text_size" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <ImageButton

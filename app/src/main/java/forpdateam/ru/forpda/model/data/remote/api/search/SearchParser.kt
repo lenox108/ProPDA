@@ -7,12 +7,36 @@ import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import java.util.regex.Matcher
 
 class SearchParser(
         private val patternProvider: IPatternProvider
 ) : BaseParser() {
 
     private val scope = ParserPatterns.Search
+
+    companion object {
+        private val FORUM_POST_TOPIC_IN_MATCH = Regex("""showtopic=(\d+)""")
+        private val FORUM_POST_P_IN_MATCH = Regex("""[?&]p=(\d+)""")
+    }
+
+    /**
+     * В [patterns.json] для forum_posts первая ветка — только &lt;a name="entry…"&gt;; тогда группы showtopic/p пусты,
+     * но topic и номер поста можно взять из всего совпадения (cat_name, ссылки в теле).
+     */
+    private fun Matcher.resolveForumPostTopicIdAndPostId(): Pair<Int, Int> {
+        val g2 = group(2)
+        val g3 = group(3)
+        if (g2 != null && g3 != null) {
+            return g2.toInt() to g3.toInt()
+        }
+        val block = group(0) ?: return 0 to 0
+        val topicFromBlock = FORUM_POST_TOPIC_IN_MATCH.find(block)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val postFromP = FORUM_POST_P_IN_MATCH.find(block)?.groupValues?.get(1)?.toIntOrNull()
+        val entryPostId = group(1)?.toIntOrNull()
+        val postId = postFromP ?: entryPostId ?: 0
+        return topicFromBlock to postId
+    }
 
     fun parse(response: String, settings: SearchSettings): SearchResult = SearchResult().also { result ->
         val isNews = settings.resourceType == SearchSettings.RESOURCE_NEWS.first
@@ -55,9 +79,10 @@ class SearchParser(
                         .matcher(response)
                         .findAll { matcher ->
                             result.items.add(SearchItem().apply {
-                                topicId = matcher.group(2).toInt()
-                                id = matcher.group(3).toInt()
-                                title = matcher.group(4).fromHtml()
+                                val (tid, pid) = matcher.resolveForumPostTopicIdAndPostId()
+                                topicId = tid
+                                id = pid
+                                title = matcher.group(4)?.fromHtml()
                                 date = matcher.group(5)
                                 //setNumber(matcher.group(6).toInt());
                                 isOnline = matcher.group(7).contains("green")

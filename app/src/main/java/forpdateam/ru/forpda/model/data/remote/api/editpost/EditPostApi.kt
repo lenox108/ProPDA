@@ -49,6 +49,13 @@ class EditPostApi(
         )
         val form = editPostParser.parseForm(body)
         form.poll = editPostParser.parsePoll(response.body)
+        // Вложения на странице редактирования часто есть только в HTML формы, а не в ответе attach init —
+        // иначе список в панели пустой и удалить файлы нельзя.
+        val fromEditPage = attachmentsParser.parseAttachments(body)
+        if (fromEditPage.isNotEmpty()) {
+            form.attachments.addAll(fromEditPage)
+            Log.d(EDIT_POST_DIAG, "loadForm postId=$postId attachmentsFromEditPage=${fromEditPage.size}")
+        }
         return form
     }
 
@@ -58,7 +65,7 @@ class EditPostApi(
         return attachmentsParser.parseAttachments(response.body)
     }
 
-    fun sendPost(form: EditPostForm): ThemePage {
+    fun sendPost(form: EditPostForm, scrollTraceId: String? = null): ThemePage {
         val url = "https://4pda.to/forum/index.php"
         val headers = HashMap<String, String>()
 
@@ -119,7 +126,14 @@ class EditPostApi(
 
         val response = webClient.request(builder.build())
         val redirectUrl = response.redirect ?: url
-        return themeParser.parsePage(response.body, redirectUrl, false, false)
+        val effectiveUrl = if (redirectUrl.contains("showtopic=", ignoreCase = true)) {
+            redirectUrl
+        } else {
+            "https://4pda.to/forum/index.php?showtopic=${form.topicId}&st=${form.st}"
+        }
+        val page = themeParser.parsePage(response.body, effectiveUrl, false, false, initialRequestUrl = effectiveUrl)
+        ThemeApi.ensureScrollAnchorForPostedPage(page, response.body, scrollTraceId)
+        return page
     }
 
 }

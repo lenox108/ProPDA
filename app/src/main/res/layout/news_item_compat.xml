@@ -15,7 +15,7 @@
         <LinearLayout
             android:id="@+id/news_list_item_click_container"
             android:layout_width="match_parent"
-            android:layout_height="116dp"
+            android:layout_height="@dimen/news_list_compat_row_height"
             android:orientation="horizontal"
             tools:ignore="UselessParent">
             <LinearLayout
@@ -28,8 +28,8 @@
                     android:id="@+id/news_list_item_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/dp16"
-                    android:layout_marginTop="@dimen/dp16"
+                    android:layout_marginStart="@dimen/content_padding_horizontal"
+                    android:layout_marginTop="@dimen/content_padding_horizontal"
                     android:layout_marginEnd="@dimen/dp8"
                     android:layout_marginBottom="@dimen/dp4"
                     android:textStyle="bold"
@@ -42,12 +42,12 @@
                     android:id="@+id/news_list_item_description"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/dp16"
+                    android:layout_marginStart="@dimen/content_padding_horizontal"
                     android:layout_marginEnd="@dimen/dp8"
                     android:layout_marginBottom="@dimen/dp8"
                     android:maxLines="3"
                     android:ellipsize="end"
-                    android:textSize="12sp"
+                    android:textSize="@dimen/list_section_header_text_size"
                     tools:text="First test title news. First test title news. First test title news. First test title news.First test title news."
                     tools:ignore="RtlCompat"/>
 
@@ -55,12 +55,12 @@
 
             <ImageView
                 android:id="@+id/news_list_item_cover"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
+                android:layout_width="@dimen/news_list_compat_thumb_size"
+                android:layout_height="@dimen/news_list_compat_thumb_size"
                 android:scaleType="centerCrop"
-                android:layout_marginTop="@dimen/dp16"
-                android:layout_marginEnd="@dimen/dp16"
-                android:layout_marginStart="@dimen/dp16"
+                android:layout_marginTop="@dimen/content_padding_horizontal"
+                android:layout_marginEnd="@dimen/content_padding_horizontal"
+                android:layout_marginStart="@dimen/content_padding_horizontal"
                 android:layout_marginBottom="@dimen/dp8"
                 tools:src="@drawable/test_img"/>
         </LinearLayout>
@@ -70,11 +70,11 @@
             android:orientation="horizontal">
             <de.hdodenhof.circleimageview.CircleImageView
                 android:id="@+id/news_list_item_user_avatar"
-                android:layout_width="25dp"
-                android:layout_height="25dp"
+                android:layout_width="@dimen/news_list_compat_avatar_size"
+                android:layout_height="@dimen/news_list_compat_avatar_size"
                 android:layout_gravity="center_vertical"
-                android:layout_marginStart="@dimen/dp16"
-                android:padding="2dp"
+                android:layout_marginStart="@dimen/content_padding_horizontal"
+                android:padding="@dimen/dp2"
                 android:visibility="invisible"
                 tools:src="@drawable/test_img"
                 tools:visibility="visible"
@@ -93,7 +93,7 @@
                     android:maxLength="20"
                     android:layout_marginStart="@dimen/dp6"
                     android:layout_marginTop="@dimen/dp6"
-                    android:textSize="10sp"
+                    android:textSize="@dimen/news_list_compat_meta_text_size"
                     tools:ignore="RtlCompat"/>
 
                 <TextView
@@ -102,7 +102,7 @@
                     android:layout_height="wrap_content"
                     tools:text="20.05.2017"
                     android:layout_marginStart="@dimen/dp8"
-                    android:textSize="10sp"
+                    android:textSize="@dimen/news_list_compat_meta_text_size"
                     tools:ignore="RtlCompat"/>
             </LinearLayout>
 
@@ -132,8 +132,8 @@
     </LinearLayout>
     <View
         android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginStart="@dimen/dp16"
-        android:layout_marginEnd="@dimen/dp16"
+        android:layout_height="@dimen/divider_thin"
+        android:layout_marginStart="@dimen/content_padding_horizontal"
+        android:layout_marginEnd="@dimen/content_padding_horizontal"
         android:background="@color/cardview_dark_background"/>
 </LinearLayout>

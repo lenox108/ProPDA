@@ -18,9 +18,9 @@ import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.RelativeLayout
 
-import moxy.MvpAppCompatFragment
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.core.view.ViewCompat
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -29,8 +29,8 @@ import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.entity.remote.news.Comment
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.interactors.news.ArticleInteractor
-import forpdateam.ru.forpda.presentation.articles.detail.comments.ArticleCommentPresenter
 import forpdateam.ru.forpda.presentation.articles.detail.comments.ArticleCommentView
+import forpdateam.ru.forpda.presentation.articles.detail.comments.ArticleCommentViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerTopScroller
 import com.google.android.material.R as MaterialR
 import forpdateam.ru.forpda.ui.tuneForListPerformance
@@ -43,7 +43,7 @@ import forpdateam.ru.forpda.ui.views.FunnyContent
  * Created by radiationx on 03.09.17.
  */
 
-class ArticleCommentsFragment : MvpAppCompatFragment(), ArticleCommentView, ArticleCommentsAdapter.ClickListener, TabTopScroller {
+class ArticleCommentsFragment : Fragment(), ArticleCommentView, ArticleCommentsAdapter.ClickListener, TabTopScroller {
     private lateinit var refreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout
     private lateinit var recyclerView: androidx.recyclerview.widget.RecyclerView
     private lateinit var messageField: EditText
@@ -54,19 +54,19 @@ class ArticleCommentsFragment : MvpAppCompatFragment(), ArticleCommentView, Arti
     private val adapter = ArticleCommentsAdapter(authHolder)
     private var currentReplyComment: Comment? = null
     private lateinit var contentController: ContentController
+    private lateinit var additionalContentFrame: ViewGroup
     private lateinit var topScroller: RecyclerTopScroller
 
-    @InjectPresenter
-    lateinit var presenter: ArticleCommentPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): ArticleCommentPresenter = ArticleCommentPresenter(
-            (parentFragment as NewsDetailsFragment).provideChildInteractor(),
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().authHolder,
-            App.get().Di().errorHandler
-    )
+    private val presenter: ArticleCommentViewModel by viewModels {
+        val parent = parentFragment as NewsDetailsFragment
+        ArticleCommentViewModel.Factory(
+                parent.provideChildInteractor(),
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().authHolder,
+                App.get().Di().errorHandler
+        )
+    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         val view = inflater.inflate(R.layout.article_comments, container, false)
@@ -77,8 +77,8 @@ class ArticleCommentsFragment : MvpAppCompatFragment(), ArticleCommentView, Arti
         //val sendContainer = view.findViewById<View>(R.id.send_container) as FrameLayout
         buttonSend = view.findViewById<View>(R.id.button_send) as AppCompatImageButton
         progressBarSend = view.findViewById<View>(R.id.send_progress) as ProgressBar
-        val additionalContent = view.findViewById<View>(R.id.additional_content) as ViewGroup
-        contentController = ContentController(null, additionalContent, refreshLayout)
+        additionalContentFrame = view.findViewById(R.id.additional_content)
+        contentController = ContentController(null, additionalContentFrame, refreshLayout)
 
         refreshLayout.setProgressBackgroundColorSchemeColor(App.getColorFromAttr(context, R.attr.colorPrimary))
         refreshLayout.setColorSchemeColors(
@@ -110,11 +110,23 @@ class ArticleCommentsFragment : MvpAppCompatFragment(), ArticleCommentView, Arti
         return view
     }
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
+    }
+
     override fun toggleScrollTop() {
         topScroller.toggleScrollTop()
     }
 
     private fun createFunny(comments: List<Comment>) {
+        val density = resources.displayMetrics.density
         if (comments.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
                 val funnyContent = FunnyContent(context)
@@ -123,8 +135,18 @@ class ArticleCommentsFragment : MvpAppCompatFragment(), ArticleCommentView, Arti
                 contentController.addContent(funnyContent, ContentController.TAG_NO_DATA)
             }
             contentController.showContent(ContentController.TAG_NO_DATA)
+            additionalContentFrame.visibility = View.VISIBLE
+            ViewCompat.setElevation(additionalContentFrame, 12f * density)
+            ViewCompat.setElevation(refreshLayout, 0f)
+            additionalContentFrame.bringToFront()
+            writePanel.bringToFront()
         } else {
             contentController.hideContent(ContentController.TAG_NO_DATA)
+            additionalContentFrame.visibility = View.GONE
+            ViewCompat.setElevation(additionalContentFrame, 0f)
+            ViewCompat.setElevation(refreshLayout, 0f)
+            refreshLayout.bringToFront()
+            writePanel.bringToFront()
         }
     }
 

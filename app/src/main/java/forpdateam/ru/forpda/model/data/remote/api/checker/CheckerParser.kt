@@ -18,9 +18,9 @@ class CheckerParser() {
         resData.name = jsonUpdate.optString("version_name")
         resData.date = jsonUpdate.optString("build_date")
 
-        jsonUpdate.getJSONArray("links")?.let {
-            for (i in 0 until it.length()) {
-                it.optJSONObject(i)?.let { linkJson ->
+        jsonUpdate.optJSONArray("links")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                arr.optJSONObject(i)?.let { linkJson ->
                     resData.links.add(UpdateData.UpdateLink(
                             linkJson.optString("name", "Unknown"),
                             linkJson.optString("url", ""),
@@ -30,7 +30,7 @@ class CheckerParser() {
             }
         }
 
-        jsonUpdate.getJSONArray("important")?.let { importantJson ->
+        jsonUpdate.optJSONArray("important")?.let { importantJson ->
             for (i in 0 until importantJson.length()) {
                 importantJson.optString(i, null)?.let {
                     resData.important.add(it)
@@ -38,7 +38,7 @@ class CheckerParser() {
             }
         }
 
-        jsonUpdate.getJSONArray("added")?.let { addedJson ->
+        jsonUpdate.optJSONArray("added")?.let { addedJson ->
             for (i in 0 until addedJson.length()) {
                 addedJson.optString(i, null)?.let {
                     resData.added.add(it)
@@ -46,7 +46,7 @@ class CheckerParser() {
             }
         }
 
-        jsonUpdate.getJSONArray("fixed")?.let { fixedJson ->
+        jsonUpdate.optJSONArray("fixed")?.let { fixedJson ->
             for (i in 0 until fixedJson.length()) {
                 fixedJson.optString(i, null)?.let {
                     resData.fixed.add(it)
@@ -54,7 +54,7 @@ class CheckerParser() {
             }
         }
 
-        jsonUpdate.getJSONArray("changed")?.let { changedJson ->
+        jsonUpdate.optJSONArray("changed")?.let { changedJson ->
             for (i in 0 until changedJson.length()) {
                 changedJson.optString(i, null)?.let {
                     resData.changed.add(it)

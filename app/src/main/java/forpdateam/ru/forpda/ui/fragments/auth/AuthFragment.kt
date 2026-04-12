@@ -29,17 +29,16 @@ import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.entity.remote.auth.AuthForm
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
-import forpdateam.ru.forpda.presentation.auth.AuthPresenter
-import forpdateam.ru.forpda.presentation.auth.AuthView
+import androidx.fragment.app.viewModels
+import forpdateam.ru.forpda.presentation.auth.AuthFragmentCallbacks
+import forpdateam.ru.forpda.presentation.auth.AuthViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
 
 /**
  * Created by radiationx on 29.07.16.
  */
-class AuthFragment : TabFragment(), AuthView {
+class AuthFragment : TabFragment(), AuthFragmentCallbacks {
 
     private lateinit var nick: EditText
     private lateinit var password: EditText
@@ -59,26 +58,24 @@ class AuthFragment : TabFragment(), AuthView {
     private lateinit var progressView: CircularProgressView
     private lateinit var authTopButtons: View
 
+    private val presenter: AuthViewModel by viewModels {
+        AuthViewModel.Factory(
+                App.get().Di().authRepository,
+                App.get().Di().profileRepository,
+                App.get().Di().router,
+                App.get().Di().schedulers,
+                App.get().Di().authHolder,
+                App.get().Di().errorHandler,
+                App.get().Di().systemLinkHandler
+        )
+    }
+
     private val loginTextWatcher = object : SimpleTextWatcher() {
         override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
             val filled = !nick.text.toString().isEmpty() && !password.text.toString().isEmpty() && captcha.text.toString().length == 4
             presenter.setFieldsFilled(filled)
         }
     }
-
-    @InjectPresenter
-    lateinit var presenter: AuthPresenter
-
-    @ProvidePresenter
-    internal fun providePresenter(): AuthPresenter = AuthPresenter(
-            App.get().Di().authRepository,
-            App.get().Di().profileRepository,
-            App.get().Di().router,
-            App.get().Di().schedulers,
-            App.get().Di().authHolder,
-            App.get().Di().errorHandler,
-            App.get().Di().systemLinkHandler
-    )
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_auth)
@@ -140,6 +137,14 @@ class AuthFragment : TabFragment(), AuthView {
             }
             false
         })
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun setSendEnabled(isEnabled: Boolean) {

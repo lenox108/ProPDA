@@ -12,6 +12,7 @@ import io.realm.DynamicRealm;
 import io.realm.RealmMigration;
 import io.realm.RealmObjectSchema;
 import io.realm.RealmSchema;
+import forpdateam.ru.forpda.BuildConfig;
 
 /**
  * Created by isanechek on 29.08.16.
@@ -66,7 +67,9 @@ public class DbMigration implements RealmMigration {
                             } catch (ParseException e) {
                                 e.printStackTrace();
                             }
-                            Log.d("SUKA", "DATES " + dateString + " : " + newDateFormat.format(date));
+                            if (BuildConfig.DEBUG) {
+                                Log.d("DbMigration", "DATES " + dateString + " : " + newDateFormat.format(date));
+                            }
                             dynamicRealmObject.setString("date", newDateFormat.format(date));
                         });
             }
@@ -83,6 +86,14 @@ public class DbMigration implements RealmMigration {
                         .addField("subType", String.class);
             }
 
+            oldVersion++;
+        }
+
+        if (oldVersion == 4) {
+            RealmObjectSchema favSchema = schema.get("FavItemBd");
+            if (favSchema != null && !favSchema.hasField("unreadPostCount")) {
+                favSchema.addField("unreadPostCount", int.class);
+            }
             oldVersion++;
         }
     }

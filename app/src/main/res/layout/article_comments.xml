@@ -6,27 +6,34 @@
                 android:layout_height="match_parent"
                 android:orientation="vertical">
 
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipe_refresh_list"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_above="@+id/comment_write_panel"
-        android:layout_alignParentTop="true">
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/base_list"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scrollbars="vertical"/>
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-
+    <!-- Слой «нет данных» под списком по z-order, иначе пустой FrameLayout перекрывал
+         SwipeRefresh/RecyclerView и комментарии нельзя было скроллить/читать. -->
     <FrameLayout
         android:id="@+id/additional_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@+id/comment_write_panel"
         android:layout_alignParentTop="true"
-        android:clickable="false"/>
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone"/>
+
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe_refresh_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@+id/comment_write_panel"
+        android:layout_alignParentTop="true"
+        android:clipChildren="false">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/base_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:scrollbars="vertical"/>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <RelativeLayout
         android:id="@+id/comment_write_panel"
@@ -38,7 +45,7 @@
 
         <View
             android:layout_width="match_parent"
-            android:layout_height="1dp"
+            android:layout_height="@dimen/divider_thin"
             android:background="?divider_line"/>
 
         <EditText
@@ -53,11 +60,11 @@
             android:inputType="textCapSentences|textMultiLine"
             android:maxLines="4"
             android:minHeight="@dimen/dp48"
-            android:paddingBottom="8dp"
-            android:paddingEnd="@dimen/dp16"
-            android:paddingStart="@dimen/dp16"
-            android:paddingTop="@dimen/dp8"
-            android:textSize="16sp"
+            android:paddingBottom="@dimen/content_spacing"
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingTop="@dimen/content_spacing"
+            android:textSize="@dimen/list_topic_title_text_size"
             tools:text="jdkal;dsasd\n\n\njdklasjdlkas"/>
 
         <FrameLayout

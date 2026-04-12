@@ -3,16 +3,16 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingTop="@dimen/dp16"
-    android:paddingStart="@dimen/dp24"
-    android:paddingEnd="@dimen/dp24">
+    android:paddingTop="@dimen/content_padding_horizontal"
+    android:paddingStart="@dimen/activity_horizontal_margin"
+    android:paddingEnd="@dimen/activity_horizontal_margin">
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/reputation_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:paddingBottom="@dimen/dp16"/>
+        android:textSize="@dimen/list_topic_title_text_size"
+        android:paddingBottom="@dimen/content_padding_horizontal"/>
 
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"

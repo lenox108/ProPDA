@@ -36,7 +36,9 @@ class ThemeTemplate(
 
             setVariableOpt("topic_title", ApiUtils.htmlEncode(page.title))
             setVariableOpt("topic_description", ApiUtils.htmlEncode(page.desc))
-            setVariableOpt("topic_url", page.url)
+            val topicUrl = page.url?.takeIf { it.contains("showtopic=", ignoreCase = true) }
+                    ?: "https://4pda.to/forum/index.php?showtopic=${page.id}"
+            setVariableOpt("topic_url", topicUrl)
 
             setVariableOpt("all_pages_int", page.pagination.all)
             setVariableOpt("posts_on_page_int", page.pagination.perPage)
@@ -45,7 +47,7 @@ class ThemeTemplate(
             setVariableOpt("authorized_bool", authorized.toString())
             setVariableOpt("is_curator_bool", false.toString())
             setVariableOpt("member_id_int", memberId)
-            setVariableOpt("elem_to_scroll", page.anchor)
+            setVariableOpt("elem_to_scroll", page.anchor ?: "")
             setVariableOpt("body_type", "topic")
 
             setVariableOpt("navigation_disable", TempHelper.getDisableStr(prevDisabled && nextDisabled))
@@ -59,6 +61,8 @@ class ThemeTemplate(
             setVariableOpt("enable_avatars_bool", java.lang.Boolean.toString(isEnableAvatars))
             setVariableOpt("enable_avatars", if (isEnableAvatars) "show_avatar" else "hide_avatar")
             setVariableOpt("avatar_type", if (topicPreferencesHolder.getCircleAvatars()) "circle_avatar" else "square_avatar")
+            // theme.hat_opened: при false не разворачиваем шапку из JS при скролле к якорю (см. theme.js).
+            setVariableOpt("hat_opened_pref_bool", java.lang.Boolean.toString(topicPreferencesHolder.getHatOpened()))
 
 
             var hatPostId = 0

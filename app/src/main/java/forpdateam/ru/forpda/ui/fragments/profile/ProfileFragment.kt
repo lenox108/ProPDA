@@ -14,16 +14,15 @@ import android.view.animation.AlphaAnimation
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import com.github.rahatarmanahmed.cpv.CircularProgressView
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.BitmapUtils
 import forpdateam.ru.forpda.common.LinkMovementMethod
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
-import forpdateam.ru.forpda.presentation.profile.ProfilePresenter
 import forpdateam.ru.forpda.presentation.profile.ProfileView
+import forpdateam.ru.forpda.presentation.profile.ProfileViewModel
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.profile.adapters.ProfileAdapter
@@ -60,17 +59,15 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener, ProfileView
     private var lastBlurWidth = 0
     private var lastBlurHeight = 0
 
-    @InjectPresenter
-    lateinit var presenter: ProfilePresenter
-
-    @ProvidePresenter
-    fun providePresenter(): ProfilePresenter = ProfilePresenter(
-            App.get().Di().profileRepository,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler,
-            App.get().Di().schedulers
-    )
+    private val presenter: ProfileViewModel by viewModels {
+        ProfileViewModel.Factory(
+                App.get().Di().profileRepository,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler,
+                App.get().Di().schedulers
+        )
+    }
 
     init {
         configuration.isFitSystemWindow = true
@@ -136,6 +133,14 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener, ProfileView
 
         toolbar.navigationIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
         toolbar.overflowIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun isShadowVisible(): Boolean {

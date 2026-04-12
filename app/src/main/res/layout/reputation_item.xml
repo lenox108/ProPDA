@@ -5,10 +5,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:background="?attr/selectableItemBackground"
     android:clickable="true"
-    android:paddingBottom="@dimen/dp12"
-    android:paddingEnd="@dimen/dp16"
-    android:paddingStart="@dimen/dp16"
-    android:paddingTop="@dimen/dp12">
+    android:paddingBottom="@dimen/content_padding_vertical"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/content_padding_vertical">
 
 
     <androidx.appcompat.widget.AppCompatTextView
@@ -18,13 +18,13 @@
         android:layout_height="wrap_content"
         android:layout_alignParentStart="true"
         android:layout_toStartOf="@+id/rep_item_image"
-        android:textSize="16sp"
+        android:textSize="@dimen/list_topic_title_text_size"
         tools:text="@string/test_topic_title"/>
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/rep_item_image"
-        android:layout_width="16dp"
-        android:layout_height="16dp"
+        android:layout_width="@dimen/dp16"
+        android:layout_height="@dimen/dp16"
         android:layout_alignParentEnd="true" />
 
     <androidx.appcompat.widget.AppCompatTextView
@@ -33,7 +33,7 @@
         android:layout_height="wrap_content"
         android:layout_below="@+id/rep_item_title"
         android:textColor="?attr/second_text_color"
-        android:textSize="14sp"
+        android:textSize="@dimen/list_topic_meta_text_size"
         tools:text="@string/test_topic_description"/>
 
     <androidx.appcompat.widget.AppCompatTextView

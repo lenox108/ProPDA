@@ -57,6 +57,21 @@ public class ExtendedWebView extends NestedWebView implements IBase {
 
     private DialogsHelper dialogsHelper;
 
+    // Batch frequent JS calls (padding/scroll/insets) to reduce overhead.
+    private final Object jsBatchLock = new Object();
+    private final StringBuilder pendingJs = new StringBuilder(256);
+    private boolean jsFlushPosted = false;
+    private final Runnable jsFlushRunnable = () -> {
+        final String script;
+        synchronized (jsBatchLock) {
+            jsFlushPosted = false;
+            if (pendingJs.length() == 0) return;
+            script = pendingJs.toString();
+            pendingJs.setLength(0);
+        }
+        evalJsImmediate(script);
+    };
+
     public interface OnDirectionListener {
         void onDirectionChanged(int direction);
     }
@@ -226,7 +241,7 @@ public class ExtendedWebView extends NestedWebView implements IBase {
     }
 
     public void setPaddingBottom(int padding) {
-        Log.e("kokosina", "setPaddingBottom " + padding + " : " + fontScale + " : " + ((paddingBottom / getResources().getDisplayMetrics().density) * (1 / fontScale)));
+        // Avoid noisy logs; this method is called very часто (scroll/insets/IME).
         paddingBottom = padding;
 
         evalJs("setPaddingBottom(" + ((paddingBottom / getResources().getDisplayMetrics().density) * (1 / fontScale)) + ");");
@@ -234,10 +249,37 @@ public class ExtendedWebView extends NestedWebView implements IBase {
 
     @TargetApi(Build.VERSION_CODES.KITKAT)
     public void evalJs(String script) {
-        //Log.d("EWV", "evalJs: " + script);
+        enqueueEvalJs(script);
+
+    }
+
+    @TargetApi(Build.VERSION_CODES.KITKAT)
+    public void evalJs(String script, ValueCallback<String> resultCallback) {
+        syncWithJs(() -> evaluateJavascript(script, resultCallback));
+    }
+
+    private void enqueueEvalJs(String script) {
+        if (script == null || script.length() == 0) return;
+        synchronized (jsBatchLock) {
+            pendingJs.append(script);
+            // Иначе склеивается «updateTypeAvatarState(true)onProgressChanged()» → SyntaxError, не отрабатывают DOM/load и скролл к посту.
+            String t = script.trim();
+            if (!t.endsWith(";")) {
+                pendingJs.append(';');
+            }
+            if (!jsFlushPosted) {
+                jsFlushPosted = true;
+                // Next frame-ish.
+                mHandler.postDelayed(jsFlushRunnable, 16);
+            }
+        }
+    }
+
+    private void evalJsImmediate(String script) {
+        //Log.d("EWV", "evalJsImmediate: " + script);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             try {
-                evalJs(script, null);
+                syncWithJs(() -> evaluateJavascript(script, null));
             } catch (Exception error) {
                 error.printStackTrace();
                 loadUrl("javascript:" + script);
@@ -245,12 +287,6 @@ public class ExtendedWebView extends NestedWebView implements IBase {
         } else {
             loadUrl("javascript:" + script);
         }
-
-    }
-
-    @TargetApi(Build.VERSION_CODES.KITKAT)
-    public void evalJs(String script, ValueCallback<String> resultCallback) {
-        syncWithJs(() -> evaluateJavascript(script, resultCallback));
     }
 
     /*
@@ -289,11 +325,11 @@ public class ExtendedWebView extends NestedWebView implements IBase {
             }
             actions.add("nativeEvents.onNativeDomComplete();");
 
-            String script = "";
+            StringBuilder sb = new StringBuilder(actions.size() * 64);
             for (String action : actions) {
-                script += action;
+                sb.append(action);
             }
-            evalJs(script);
+            evalJs(sb.toString());
         });
     }
 
@@ -312,11 +348,11 @@ public class ExtendedWebView extends NestedWebView implements IBase {
             }
             actions.add("nativeEvents.onNativePageComplete();");
 
-            String script = "";
+            StringBuilder sb = new StringBuilder(actions.size() * 64);
             for (String action : actions) {
-                script += action;
+                sb.append(action);
             }
-            evalJs(script);
+            evalJs(sb.toString());
         });
     }
 

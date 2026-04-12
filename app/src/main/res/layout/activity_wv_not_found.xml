@@ -12,8 +12,8 @@
         android:padding="@dimen/dp32">
 
         <ImageView
-            android:layout_width="128dp"
-            android:layout_height="128dp"
+            android:layout_width="@dimen/profile_toolbar_avatar_size"
+            android:layout_height="@dimen/profile_toolbar_avatar_size"
             android:layout_gravity="center_horizontal"
             android:src="@drawable/icon_webview" />
 
@@ -23,7 +23,7 @@
             android:layout_marginTop="@dimen/dp24"
             android:gravity="center"
             android:text="Компонент Android System Webview не найден"
-            android:textSize="24sp"
+            android:textSize="@dimen/profile_stat_value_text_size"
             android:textStyle="bold" />
 
         <TextView
@@ -46,12 +46,12 @@
             android:layout_height="wrap_content"
             android:gravity="center"
             android:text="или"
-            android:textSize="20sp" />
+            android:textSize="@dimen/empty_state_title_text_size" />
 
         <ImageView
             android:id="@+id/get_in_gp"
-            android:layout_width="164dp"
-            android:layout_height="64dp"
+            android:layout_width="@dimen/webview_not_found_gp_badge_width"
+            android:layout_height="@dimen/dp64"
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="@dimen/dp16"
             android:src="@drawable/icon_get_in_gp" />
@@ -61,12 +61,12 @@
             android:layout_height="wrap_content"
             android:gravity="center"
             android:text="или"
-            android:textSize="20sp" />
+            android:textSize="@dimen/empty_state_title_text_size" />
 
         <ImageView
             android:id="@+id/get_in_4pda"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
+            android:layout_width="@dimen/dp64"
+            android:layout_height="@dimen/dp64"
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="@dimen/dp16"
             android:src="@drawable/icon_4pda" />

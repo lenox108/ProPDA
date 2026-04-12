@@ -12,6 +12,9 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.ItemTouchHelper
 import android.util.Log
 import android.view.View
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.other.AppMenuItem
@@ -67,6 +70,14 @@ class BottomDrawer(
 
     private val bottomSheetBehavior: BottomSheetBehaviorFixed<View>
 
+    /** Секция «Открытые вкладки» не должна участвовать в высоте COLLAPSED (peek = панель + inset навбара). */
+    private fun setOpenTabsSectionVisible(expanded: Boolean) {
+        val v = if (expanded) View.VISIBLE else View.GONE
+        binding.bottomMenuViewTabs.visibility = v
+        binding.bottomTabsRecycler.visibility = v
+        binding.bottomCloseAllTabs.visibility = v
+    }
+
     private val otherMenuItem = MenuMapper.mapToDrawer(AppMenuItem(MenuRepository.item_other_menu, Screen.OtherMenu()))
     private var localItems = listOf(otherMenuItem)
 
@@ -77,7 +88,10 @@ class BottomDrawer(
             val behavior = BottomSheetBehaviorFixed.from<View>(bottomSheet2).apply {
                 isHideable = false
                 state = BottomSheetBehaviorFixed.STATE_COLLAPSED
-                peekHeight = activity.resources.getDimensionPixelSize(R.dimen.dp48)
+                val basePeek = activity.resources.getDimensionPixelSize(R.dimen.dp52)
+                peekHeight = basePeek
+                // Иначе max(peek, mandatoryGestureInset) даёт лишнюю «пустую» высоту поверх nav bar.
+                setGestureInsetBottomIgnored(true)
 
                 setBottomSheetCallback(object : BottomSheetBehaviorFixed.BottomSheetCallback() {
                     private val colorDrawable = ColorDrawable(Color.TRANSPARENT)
@@ -96,7 +110,7 @@ class BottomDrawer(
 
                     @SuppressLint("SwitchIntDef")
                     override fun onStateChanged(bottomSheet: View, newState: Int) {
-
+                        setOpenTabsSectionVisible(newState == BottomSheetBehaviorFixed.STATE_EXPANDED)
 
                         when (newState) {
                             BottomSheetBehaviorFixed.STATE_EXPANDED -> {
@@ -118,6 +132,14 @@ class BottomDrawer(
                 })
             }
             bottomSheetBehavior = behavior
+
+            val basePeekPx = activity.resources.getDimensionPixelSize(R.dimen.dp52)
+            ViewCompat.setOnApplyWindowInsetsListener(bottomSheet2) { _, insets ->
+                val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+                behavior.setPeekHeight(basePeekPx + nav, false)
+                insets
+            }
+            bottomSheet2.post { ViewCompat.requestApplyInsets(bottomSheet2) }
 
             bottomToggleArrow.setOnClickListener {
                 toggle()
@@ -211,19 +233,18 @@ class BottomDrawer(
                     tabNavigator
                             .observeSubscribers()
                             .subscribe({
-                                Log.e("lalala", "Menu subscribe")
                                 tabsAdapter.setCurrentFragmentTag(tabNavigator.getCurrentFragment()?.tag)
                                 tabsAdapter.addAll(it)
                                 it.firstOrNull { tabNavigator.tabController.isCurrent(it.tag) }?.also {
-                                    Log.e("lalala", "Menu activetab: $it")
                                     val screen = TabHelper.findScreenByFragment(it)
-                                    Log.e("lalala", "Menu activescreen: $screen")
                                     findMenuItem(screen)?.also {
                                         selectMenuItem(it)
                                     }
                                 }
                             }, {
-                                Log.d("lalala", "menu error: ${it.message}")
+                                if (BuildConfig.DEBUG) {
+                                    Log.d("BottomDrawer", "menu error: ${it.message}")
+                                }
                             })
             )
         }

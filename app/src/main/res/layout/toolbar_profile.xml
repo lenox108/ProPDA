@@ -11,20 +11,20 @@
 
     <de.hdodenhof.circleimageview.CircleImageView
         android:id="@+id/profile_avatar"
-        android:layout_width="128dp"
-        android:layout_height="128dp"
+        android:layout_width="@dimen/profile_toolbar_avatar_size"
+        android:layout_height="@dimen/profile_toolbar_avatar_size"
         android:layout_gravity="center_horizontal"
-        android:layout_marginTop="72dp"
+        android:layout_marginTop="@dimen/profile_toolbar_avatar_margin_top"
         android:scaleType="centerCrop"
         app:civ_border_color="#00000000"
-        app:civ_border_width="0dp" />
+        app:civ_border_width="@dimen/dp0" />
 
     <com.github.rahatarmanahmed.cpv.CircularProgressView
         android:id="@+id/profile_progress"
-        android:layout_width="132dp"
-        android:layout_height="132dp"
+        android:layout_width="@dimen/profile_toolbar_progress_ring_size"
+        android:layout_height="@dimen/profile_toolbar_progress_ring_size"
         android:layout_gravity="center_horizontal"
-        android:layout_marginTop="70dp"
+        android:layout_marginTop="@dimen/profile_toolbar_progress_margin_top"
         android:scaleType="centerCrop"
         app:cpv_animAutostart="true"
         app:cpv_color="#ffffffff"
@@ -34,19 +34,19 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="32dp"
-        android:layout_marginTop="216dp"
+        android:layout_marginBottom="@dimen/profile_toolbar_text_block_margin_bottom"
+        android:layout_marginTop="@dimen/profile_toolbar_text_block_margin_top"
         android:gravity="center"
         android:orientation="vertical"
-        android:paddingEnd="16dp"
-        android:paddingStart="16dp">
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingStart="@dimen/content_padding_horizontal">
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/profile_nick"
             style="?ProfileToolbarTextStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="24sp"
+            android:textSize="@dimen/profile_stat_value_text_size"
             android:gravity="center"
             android:textStyle="bold" />
 
@@ -55,8 +55,8 @@
             style="?ProfileToolbarTextStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textSize="16sp"
+            android:layout_marginTop="@dimen/content_spacing"
+            android:textSize="@dimen/list_topic_title_text_size"
             android:textStyle="bold"
             android:gravity="center"/>
 
@@ -65,8 +65,8 @@
             style="?ProfileToolbarTextStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:textSize="14sp"
+            android:layout_marginTop="@dimen/dp24"
+            android:textSize="@dimen/list_topic_meta_text_size"
             android:singleLine="false"
             android:visibility="gone"
             android:gravity="center"/>

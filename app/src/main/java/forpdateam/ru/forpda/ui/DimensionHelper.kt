@@ -23,11 +23,13 @@ class DimensionHelper(
     private var lastNb = 0
     private var lastCh = 0
     private var lastKh = 0
+    private var lastImeForNotify = 0
 
     /** Insets с decor/content root — источник правды при edge-to-edge. */
     private var lastImeBottom = 0
     private var lastStatusTop = 0
     private var lastNavBottom = 0
+    private var notifyScheduled = false
 
     init {
         dimension.also {
@@ -39,13 +41,23 @@ class DimensionHelper(
             lastImeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
             lastStatusTop = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
             lastNavBottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-            applyMergedKeyboardAndNotify()
+            scheduleApplyMergedKeyboardAndNotify()
             insets
         }
         measurer.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            applyMergedKeyboardAndNotify()
+            scheduleApplyMergedKeyboardAndNotify()
         }
         container.post { ViewCompat.requestApplyInsets(container) }
+    }
+
+    /** Дебаунсим частые insets/layout события в один проход UI. */
+    private fun scheduleApplyMergedKeyboardAndNotify() {
+        if (notifyScheduled) return
+        notifyScheduled = true
+        container.post {
+            notifyScheduled = false
+            applyMergedKeyboardAndNotify()
+        }
     }
 
     private fun applyMergedKeyboardAndNotify() {
@@ -57,6 +69,7 @@ class DimensionHelper(
         val layoutKh = container.height - dimension.contentHeight - dimension.statusBar - dimension.navigationBar
         val mergedKh = maxOf(maxOf(0, layoutKh), lastImeBottom)
         dimension.keyboardHeight = mergedKh
+        dimension.imeInsetBottom = lastImeBottom
         if (mergedKh > 100) {
             dimension.savedKeyboardHeight = mergedKh
         }
@@ -64,12 +77,14 @@ class DimensionHelper(
             if (it.statusBar != lastSb
                     || it.navigationBar != lastNb
                     || it.contentHeight != lastCh
-                    || it.keyboardHeight != lastKh) {
+                    || it.keyboardHeight != lastKh
+                    || it.imeInsetBottom != lastImeForNotify) {
 
                 lastSb = it.statusBar
                 lastNb = it.navigationBar
                 lastCh = it.contentHeight
                 lastKh = it.keyboardHeight
+                lastImeForNotify = it.imeInsetBottom
                 listener.onDimensionsChange(it)
             }
         }
@@ -80,13 +95,19 @@ class DimensionHelper(
         var navigationBar = 0
         var contentHeight = 0
         var keyboardHeight = 0
+        /** Нижний inset IME с WindowInsets — надёжный признак при компактной клавиатуре / OEM. */
+        var imeInsetBottom = 0
         var savedKeyboardHeight = 0
         var isFakeKeyboardShow = false
 
-        fun isKeyboardShow(): Boolean = keyboardHeight > 100
+        /**
+         * Раньше порог 100px давал ложное «клавиатура закрыта» при kh 50–99px — тогда MainActivity
+         * оставлял padding под нижнее меню и между IME и панелью ответа появлялся лишний зазор ~48dp.
+         */
+        fun isKeyboardShow(): Boolean = imeInsetBottom > 0 || keyboardHeight > 64
 
         override fun toString(): String {
-            return "Dimensions: to=$statusBar, bo=$navigationBar, ch=$contentHeight, kh=$keyboardHeight, skh=$savedKeyboardHeight, ifks=$isFakeKeyboardShow, iks=${isKeyboardShow()}"
+            return "Dimensions: to=$statusBar, bo=$navigationBar, ch=$contentHeight, kh=$keyboardHeight, ime=$imeInsetBottom, skh=$savedKeyboardHeight, ifks=$isFakeKeyboardShow, iks=${isKeyboardShow()}"
         }
     }
 

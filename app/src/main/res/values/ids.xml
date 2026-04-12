@@ -19,4 +19,6 @@
     <item name="action_mode_item_select_all" type="id" />
     <item name="action_mode_item_share" type="id" />
 
+    <item name="menu_fav_mark_all_read" type="id" />
+
 </resources>

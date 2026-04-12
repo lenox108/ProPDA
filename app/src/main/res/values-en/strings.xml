@@ -24,6 +24,7 @@
     <string name="close">Close</string>
     <string name="send">Send</string>
     <string name="retry">Retry</string>
+    <string name="clear_failed">Clear failed</string>
     <string name="delete">Delete</string>
     <string name="save">Save</string>
     <string name="insert">Paste</string>
@@ -103,11 +104,13 @@
     <string name="msg_panel_hint_message">Type a message</string>
     <string name="msg_panel_advanced_bbcode_desc">BBCode and smiles — tags like when quoting</string>
     <string name="msg_panel_clear_message">Clear text</string>
+    <string name="msg_panel_delete_last_char">Delete last character</string>
     <string name="no_updates">No update available</string>
     <string name="updater_current_info" formatted="false">Version %s\nBuild from %s</string>
     <string name="updater_notification_title">ForPDA update available</string>
     <string name="updater_notification_content_VerName">New version: %s</string>
     <string name="close_other_tabs">Close other tabs</string>
+    <string name="bottom_nav_open_tabs_section">Open tabs</string>
     <string name="your_profile">Your profile</string>
     <string name="open_link">Open the link</string>
     <string name="apply">Apply</string>
@@ -262,10 +265,12 @@
     <string name="fav_pin">Pin</string>
     <string name="fav_sort_last_post">Last post</string>
     <string name="fav_sort_title">Title</string>
+    <string name="fav_mark_all_read">Mark all topics read</string>
     <string name="fav_unreaded_pinned">Unread pinned topics</string>
     <string name="fav_unreaded">Unread topics</string>
     <string name="fav_pinned">Pinned topics</string>
     <string name="fav_themes">Topics</string>
+    <string name="fav_new_posts_dot_cd">New posts in this topic</string>
     <string name="fav_change_subscribe_type">Change subscription type</string>
     <string name="add_to_favorites">Add to favorites</string>
     <string name="favorites_added">Added to favorites</string>
@@ -392,6 +397,10 @@
     <string name="pref_value_theme_mode_light">Light</string>
     <string name="pref_value_theme_mode_dark">Dark</string>
     <string name="pref_value_theme_mode_system">System</string>
+    <string name="pref_title_ui_palette">Interface colors</string>
+    <string name="pref_summary_ui_palette">System (iOS-like) or classic ForPDA teal palette</string>
+    <string name="pref_value_ui_palette_system">System style</string>
+    <string name="pref_value_ui_palette_classic">Classic 4PDA colors</string>
     <string name="pref_title_show_bottom_arrow">Bottom menu button</string>
     <string name="pref_summary_show_bottom_arrow">Enable if system has gesture at bottom of screen</string>
     <string name="pref_title_text_size">Text size</string>
@@ -465,5 +474,6 @@
 
     <!-- Menu item -->
     <string name="menu_item_my_messages">My messages</string>
+    <string name="search_post_btn">post</string>
 
 </resources>

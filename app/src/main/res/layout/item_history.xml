@@ -6,19 +6,19 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:background="?attr/selectableItemBackground"
     android:clickable="true"
-    android:paddingBottom="@dimen/dp12"
-    android:paddingEnd="@dimen/dp16"
-    android:paddingStart="@dimen/dp16"
-    android:paddingTop="@dimen/dp12">
+    android:paddingBottom="@dimen/content_padding_vertical"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/content_padding_vertical">
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/item_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentStart="true"
-        android:layout_marginBottom="4dp"
+        android:layout_marginBottom="@dimen/content_spacing_half"
         tools:text="@string/test_topic_title"
-        android:textSize="16sp"
+        android:textSize="@dimen/list_topic_title_text_size"
         android:textStyle="bold"/>
 
     <androidx.appcompat.widget.AppCompatTextView

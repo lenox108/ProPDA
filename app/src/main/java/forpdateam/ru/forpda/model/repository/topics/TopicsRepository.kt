@@ -18,6 +18,8 @@ class TopicsRepository(
 
     fun getTopics(id: Int, st: Int): Single<TopicsData> = Single
             .fromCallable { topicsApi.getTopics(id, st) }
+            .withNetworkTimeout(30)
+            .withNetworkRetry()
             .runInIoToUi()
 
 }

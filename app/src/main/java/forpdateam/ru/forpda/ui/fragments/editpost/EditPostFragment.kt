@@ -11,8 +11,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.Toast
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -23,8 +22,8 @@ import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.common.normalizeEditPostBodyForEditor
 import forpdateam.ru.forpda.common.normalizeEditPostBodyFromDomHtml
-import forpdateam.ru.forpda.presentation.editpost.EditPostPresenter
 import forpdateam.ru.forpda.presentation.editpost.EditPostView
+import forpdateam.ru.forpda.presentation.editpost.EditPostViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.views.CodeEditor
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
@@ -47,18 +46,18 @@ class EditPostFragment : TabFragment(), EditPostView {
 
     private lateinit var messagePanel: MessagePanel
     private lateinit var attachmentsPopup: AttachmentsPopup
+    private val uploadQueue: ArrayDeque<Pair<List<RequestFile>, List<AttachmentItem>>> = ArrayDeque()
+    private var uploadInProgress = false
     private var pollPopup: EditPollPopup? = null
 
-    @InjectPresenter
-    lateinit var presenter: EditPostPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): EditPostPresenter = EditPostPresenter(
-            App.get().Di().editPostRepository,
-            App.get().Di().themeTemplate,
-            App.get().Di().router,
-            App.get().Di().errorHandler
-    )
+    private val presenter: EditPostViewModel by viewModels {
+        EditPostViewModel.Factory(
+                App.get().Di().editPostRepository,
+                App.get().Di().themeTemplate,
+                App.get().Di().router,
+                App.get().Di().errorHandler
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,8 +86,11 @@ class EditPostFragment : TabFragment(), EditPostView {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        messagePanel = MessagePanel(context, fragmentContainer, fragmentContent, true)
+        // Как в ThemeFragment/QmsChat: панель — дочерний элемент coordinator, иначе WRAP/MATCH + gravity
+        // с CoordinatorLayout.LayoutParams внутри FrameLayout даёт неверный layout при IME (adjustResize).
+        messagePanel = MessagePanel(context, fragmentContainer, coordinatorLayout, true)
         attachmentsPopup = messagePanel.attachmentsPopup
+        presenter.attachMessageSource { messagePanel.getMessage() }
         return viewFragment
     }
 
@@ -97,6 +99,11 @@ class EditPostFragment : TabFragment(), EditPostView {
         messagePanel.addSendOnClickListener { presenter.onSendClick() }
         attachmentsPopup.setAddOnClickListener { tryPickFile() }
         attachmentsPopup.setDeleteOnClickListener { removeFiles() }
+        attachmentsPopup.setRetryUploadListener(object : AttachmentsPopup.OnRetryUploadListener {
+            override fun onRetry(files: List<RequestFile>, pending: List<AttachmentItem>) {
+                enqueueUpload(files, pending)
+            }
+        })
         arguments?.apply {
             val title = getString(ARG_THEME_NAME, "")
             setTitle("${App.get().getString(if (formType == EditPostForm.TYPE_NEW_POST) R.string.editpost_title_answer else R.string.editpost_title_edit)} $title")
@@ -107,6 +114,15 @@ class EditPostFragment : TabFragment(), EditPostView {
         messagePanel.editPollButton.setOnClickListener {
             pollPopup?.show()
         }
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.attachMessageSource(null)
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun onResumeOrShow() {
@@ -151,8 +167,26 @@ class EditPostFragment : TabFragment(), EditPostView {
         pickFileLauncher.launch(FilePickHelper.pickFile(false))
     }
 
+    override fun showEditLoadPlaceholder() {
+        hideKeyboard()
+        messagePanel.messageField.clearFocus()
+        messagePanel.setText("")
+        (messagePanel.messageField as? CodeEditor)?.updateHighlighting()
+        messagePanel.editPollButton.visibility = View.GONE
+        attachmentsPopup.onLoadAttachments(EditPostForm())
+    }
+
+    override fun showEditLoadingDraft(form: EditPostForm) {
+        hideKeyboard()
+        messagePanel.messageField.clearFocus()
+        messagePanel.setText(form.message)
+        (messagePanel.messageField as? CodeEditor)?.updateHighlighting()
+        messagePanel.editPollButton.visibility = View.GONE
+        attachmentsPopup.onLoadAttachments(form)
+        messagePanel.messageField.visibility = View.VISIBLE
+    }
+
     override fun showForm(form: EditPostForm) {
-        messagePanel.formProgress.visibility = View.GONE
         messagePanel.messageField.visibility = View.VISIBLE
 
         if (form.errorCode != EditPostForm.ERROR_NONE) {
@@ -176,12 +210,11 @@ class EditPostFragment : TabFragment(), EditPostView {
         (messagePanel.messageField as? CodeEditor)?.updateHighlighting()
         messagePanel.messageField.requestFocus()
         showKeyboard(messagePanel.messageField)
-        messagePanel.post { messagePanel.formProgress.visibility = View.GONE }
     }
 
     override fun setRefreshing(isRefreshing: Boolean) {
-        messagePanel.formProgress.visibility = if (isRefreshing) View.VISIBLE else View.GONE
-        // Поле не скрываем: иначе при сбое/долгой загрузке остаётся только кружок без текста.
+        // Кружок в поле редактирования отключён: текст/черновик виден сразу, догрузка BBCode без «мигания».
+        messagePanel.formProgress.visibility = View.GONE
         messagePanel.messageField.visibility = View.VISIBLE
     }
 
@@ -200,7 +233,19 @@ class EditPostFragment : TabFragment(), EditPostView {
 
     fun uploadFiles(files: List<RequestFile>) {
         val pending = attachmentsPopup.preUploadFiles(files)
-        presenter.uploadFiles(files, pending)
+        enqueueUpload(files, pending)
+    }
+
+    private fun enqueueUpload(files: List<RequestFile>, pending: List<AttachmentItem>) {
+        uploadQueue.addLast(files to pending)
+        pumpUploadQueue()
+    }
+
+    private fun pumpUploadQueue() {
+        if (uploadInProgress) return
+        val next = uploadQueue.firstOrNull() ?: return
+        uploadInProgress = true
+        presenter.uploadFiles(next.first, next.second)
     }
 
     private fun removeFiles() {
@@ -211,12 +256,18 @@ class EditPostFragment : TabFragment(), EditPostView {
 
     override fun onUploadFiles(items: List<AttachmentItem>) {
         attachmentsPopup.onUploadFiles(items)
+        uploadInProgress = false
+        if (uploadQueue.isNotEmpty()) uploadQueue.removeFirst()
+        pumpUploadQueue()
     }
 
     override fun onDeleteFiles(items: List<AttachmentItem>) {
         attachmentsPopup.onDeleteFiles(items)
     }
 
+    override fun onAttachmentDeleteProgressFinished() {
+        attachmentsPopup.endDeleteProgress()
+    }
 
     override fun showReasonDialog(form: EditPostForm) {
         val view = View.inflate(context, R.layout.edit_post_reason, null)

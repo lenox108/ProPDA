@@ -10,22 +10,25 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.databinding.ActivityUpdaterBinding
 import forpdateam.ru.forpda.entity.remote.checker.UpdateData
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
-import forpdateam.ru.forpda.presentation.checker.CheckerPresenter
-import forpdateam.ru.forpda.presentation.checker.CheckerView
+import forpdateam.ru.forpda.presentation.checker.CheckerViewModel
+import forpdateam.ru.forpda.ui.EdgeToEdge
 import forpdateam.ru.forpda.ui.activities.MainActivity
-import moxy.MvpAppCompatActivity
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import kotlinx.coroutines.launch
 
-class UpdateCheckerActivity : MvpAppCompatActivity(), CheckerView {
+class UpdateCheckerActivity : AppCompatActivity() {
 
     companion object {
         const val ARG_FORCE = "force"
@@ -33,6 +36,13 @@ class UpdateCheckerActivity : MvpAppCompatActivity(), CheckerView {
 
     private lateinit var binding: ActivityUpdaterBinding
     private val systemLinkHandler = App.get().Di().systemLinkHandler
+
+    private val viewModel: CheckerViewModel by viewModels {
+        CheckerViewModel.Factory(
+                App.get().Di().checkerRepository,
+                App.get().Di().errorHandler
+        )
+    }
 
     private var pendingDownloadUrl: String? = null
 
@@ -46,32 +56,50 @@ class UpdateCheckerActivity : MvpAppCompatActivity(), CheckerView {
         }
     }
 
-    @InjectPresenter
-    lateinit var presenter: CheckerPresenter
-
-    @ProvidePresenter
-    fun provideCheckerPresenter() = CheckerPresenter(
-            App.get().Di().checkerRepository,
-            App.get().Di().errorHandler
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityUpdaterBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        EdgeToEdge.apply(this, binding.root, padTop = true, padBottom = false)
         MainActivity.setLightStatusBar(this, false)
-
-        intent?.let {
-            presenter.forceLoad = it.getBooleanExtra(ARG_FORCE, false)
-        }
 
         binding.toolbar.setNavigationOnClickListener { finish() }
         binding.toolbar.setNavigationIcon(R.drawable.ic_toolbar_arrow_back)
 
         binding.currentInfo.text = generateCurrentInfo(BuildConfig.VERSION_NAME, BuildConfig.BUILD_DATE)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    applyLoading(state.loading)
+                    state.update?.let { showUpdateData(it) }
+                }
+            }
+        }
+
+        val force = intent?.getBooleanExtra(ARG_FORCE, false) ?: false
+        viewModel.checkUpdate(force)
     }
 
-    override fun showUpdateData(update: UpdateData) {
+    private fun applyLoading(loading: Boolean) {
+        if (loading) {
+            binding.progressBar.visibility = View.VISIBLE
+            binding.updateInfo.visibility = View.GONE
+            binding.updateContent.visibility = View.GONE
+            binding.updateButton.visibility = View.GONE
+            binding.divider.visibility = View.GONE
+        } else {
+            binding.progressBar.visibility = View.GONE
+            binding.updateInfo.visibility = View.VISIBLE
+            binding.updateContent.visibility = View.VISIBLE
+            binding.updateButton.visibility = View.VISIBLE
+            binding.divider.visibility = View.VISIBLE
+        }
+    }
+
+    private fun showUpdateData(update: UpdateData) {
+        binding.updateContent.removeAllViews()
+
         val currentVersionCode = BuildConfig.VERSION_CODE
 
         if (update.code > currentVersionCode) {
@@ -140,22 +168,6 @@ class UpdateCheckerActivity : MvpAppCompatActivity(), CheckerView {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         App.get().onRequestPermissionsResult(requestCode, permissions, grantResults)
-    }
-
-    override fun setRefreshing(isRefreshing: Boolean) {
-        if (isRefreshing) {
-            binding.progressBar.visibility = View.VISIBLE
-            binding.updateInfo.visibility = View.GONE
-            binding.updateContent.visibility = View.GONE
-            binding.updateButton.visibility = View.GONE
-            binding.divider.visibility = View.GONE
-        } else {
-            binding.progressBar.visibility = View.GONE
-            binding.updateInfo.visibility = View.VISIBLE
-            binding.updateContent.visibility = View.VISIBLE
-            binding.updateButton.visibility = View.VISIBLE
-            binding.divider.visibility = View.VISIBLE
-        }
     }
 
     private fun addSection(title: String, array: List<String>) {

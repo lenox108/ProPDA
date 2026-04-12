@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import forpdateam.ru.forpda.BuildConfig;
 import forpdateam.ru.forpda.R;
 import forpdateam.ru.forpda.ui.fragments.TabFragment;
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter;
@@ -76,7 +77,9 @@ public class TabAdapter extends BaseAdapter<TabFragment, TabAdapter.TabHolder> {
         public void bind(TabFragment item, int position) {
             currentItem = item;
             boolean isActive = item.getTag() != null && item.getTag().equals(currentFragmentTag);
-            Log.d("lalala", "TabAdapter bind " + item + " : " + isActive + " : " + position);
+            if (BuildConfig.DEBUG) {
+                Log.d("TabAdapter", "bind " + item + " active=" + isActive + " pos=" + position);
+            }
 
             if (isActive)
                 wrapper.setBackgroundColor(color);

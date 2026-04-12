@@ -4,11 +4,14 @@
     android:id="@+id/swipe_refresh_list"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:clipChildren="false"
     app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/base_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:scrollbars="vertical" />
 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

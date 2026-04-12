@@ -224,6 +224,7 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
         private var reload: ImageButton
         private var name: TextView
         private var attributes: TextView
+        private var errorText: TextView
         private var description: View
         private val handler: Handler = @SuppressLint("HandlerLeak")
         object : Handler(Looper.getMainLooper()) {
@@ -247,6 +248,7 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
             reload = view.findViewById<View>(R.id.reload) as ImageButton
             name = view.findViewById<View>(R.id.file_name) as TextView
             attributes = view.findViewById<View>(R.id.file_attributes) as TextView
+            errorText = view.findViewById(R.id.error_text) as TextView
             description = view.findViewById(R.id.file_description) as View
 
             reload.setOnClickListener {
@@ -257,12 +259,15 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
 
         @SuppressLint("SetTextI18n")
         fun bind(item: AttachmentItem) {
+            // На случай реюза viewholder: убираем слушатель у прошлой модели
+            (items.getOrNull(layoutPosition) as? AttachmentListItem)?.item?.progressListener = null
             when (item.loadState) {
                 AttachmentItem.STATE_LOADING -> {
                     description.visibility = View.GONE
                     progressBar.visibility = View.VISIBLE
                     progressValue.visibility = View.VISIBLE
                     reload.visibility = View.GONE
+                    errorText.visibility = View.GONE
                     imageView.visibility = View.GONE
                     updateProgress(item.progress)
                     item.progressListener = progressListener
@@ -272,12 +277,15 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
                     progressBar.visibility = View.GONE
                     progressValue.visibility = View.GONE
                     reload.visibility = View.VISIBLE
+                    errorText.visibility = View.VISIBLE
+                    errorText.text = item.errorText ?: "Ошибка загрузки. Нажмите повторить."
                     imageView.visibility = View.GONE
                 }
                 AttachmentItem.STATE_LOADED -> {
                     description.visibility = View.VISIBLE
                     name.setText(item.getName())
                     attributes.text = "${item.extension}, ${item.weight}"
+                    errorText.visibility = View.GONE
                     progressBar.visibility = View.GONE
                     progressValue.visibility = View.GONE
                     reload.visibility = View.GONE

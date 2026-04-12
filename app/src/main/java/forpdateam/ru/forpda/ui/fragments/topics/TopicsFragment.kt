@@ -6,16 +6,15 @@ import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import android.view.*
 import android.widget.Toast
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.topics.TopicItem
 import forpdateam.ru.forpda.entity.remote.topics.TopicsData
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
-import forpdateam.ru.forpda.presentation.topics.TopicsPresenter
 import forpdateam.ru.forpda.presentation.topics.TopicsView
+import forpdateam.ru.forpda.presentation.topics.TopicsViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
@@ -33,6 +32,17 @@ class TopicsFragment : RecyclerFragment(), TopicsView {
     private lateinit var dialogMenu: DynamicDialogMenu<TopicsFragment, TopicItem>
     private val authHolder = App.get().Di().authHolder
 
+    private val presenter: TopicsViewModel by viewModels {
+        TopicsViewModel.Factory(
+                App.get().Di().topicsRepository,
+                App.get().Di().forumRepository,
+                App.get().Di().favoritesRepository,
+                App.get().Di().crossScreenInteractor,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     private val paginationListener = object : PaginationHelper.PaginationListener {
         override fun onTabSelected(tab: TabLayout.Tab): Boolean {
@@ -54,20 +64,6 @@ class TopicsFragment : RecyclerFragment(), TopicsView {
             return false
         }
     }
-
-    @InjectPresenter
-    lateinit var presenter: TopicsPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): TopicsPresenter = TopicsPresenter(
-            App.get().Di().topicsRepository,
-            App.get().Di().forumRepository,
-            App.get().Di().favoritesRepository,
-            App.get().Di().crossScreenInteractor,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_topics)
@@ -120,6 +116,14 @@ class TopicsFragment : RecyclerFragment(), TopicsView {
         recyclerView.adapter = adapter
         adapter.setOnItemClickListener(adapterListener)
         paginationHelper.setListener(paginationListener)
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun isShadowVisible(): Boolean {

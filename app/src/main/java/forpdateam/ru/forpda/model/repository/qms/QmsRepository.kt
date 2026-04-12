@@ -1,11 +1,7 @@
 package forpdateam.ru.forpda.model.repository.qms
 
 import android.util.Log
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.entity.app.TabNotification
-import forpdateam.ru.forpda.entity.db.qms.QmsContactBd
-import forpdateam.ru.forpda.entity.db.qms.QmsThemeBd
-import forpdateam.ru.forpda.entity.db.qms.QmsThemesBd
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
@@ -18,14 +14,15 @@ import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsApi
 import forpdateam.ru.forpda.model.data.remote.api.qms.QmsApi
 import forpdateam.ru.forpda.model.repository.BaseRepository
-import io.reactivex.Observable
 import io.reactivex.Single
-import io.realm.Realm
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.rx2.await
+import kotlinx.coroutines.rx2.asCoroutineDispatcher
+import kotlinx.coroutines.withContext
 
 /**
  * Created by radiationx on 01.01.18.
  */
-
 class QmsRepository(
         private val schedulers: SchedulersProvider,
         private val qmsApi: QmsApi,
@@ -35,80 +32,78 @@ class QmsRepository(
         private val countersHolder: CountersHolder
 ) : BaseRepository(schedulers) {
 
-    fun observeContacts(): Observable<List<QmsContact>> = qmsCache
-            .observeContacts()
-            .runInIoToUi()
+    private val ioDispatcher = schedulers.io().asCoroutineDispatcher()
 
-    fun observeThemes(userId: Int): Observable<QmsThemes> = qmsCache
-            .observeThemes(userId)
-            .runInIoToUi()
+    fun observeContacts(): Flow<List<QmsContact>> = qmsCache.observeContacts()
 
-    //Common
-    fun findUser(nick: String): Single<List<ForumUser>> = Single
-            .fromCallable { qmsApi.findUser(nick) }
-            .runInIoToUi()
+    fun observeThemes(userId: Int): Flow<QmsThemes> = qmsCache.observeThemes(userId)
 
-    fun blockUser(nick: String): Single<List<QmsContact>> = Single
-            .fromCallable { qmsApi.blockUser(nick) }
-            .runInIoToUi()
+    private suspend fun <T> ioSingle(
+            timeoutSec: Long = 30,
+            withRetry: Boolean = true,
+            block: () -> T
+    ): T = withContext(ioDispatcher) {
+        val single = Single.fromCallable(block).withNetworkTimeout(timeoutSec)
+        (if (withRetry) single.withNetworkRetry() else single).await()
+    }
 
-    fun unBlockUsers(userId: Int): Single<List<QmsContact>> = Single
-            .fromCallable { qmsApi.unBlockUsers(userId) }
-            .runInIoToUi()
+    suspend fun findUser(nick: String): List<ForumUser> =
+            ioSingle { qmsApi.findUser(nick) }
 
-    //Contacts
-    fun getContactList(): Single<List<QmsContact>> = Single
-            .fromCallable { qmsApi.getContactList() }
-            .doOnSuccess { saveUsers(it) }
-            .flatMap { saveContactsCache(it) }
-            .runInIoToUi()
+    suspend fun blockUser(nick: String): List<QmsContact> =
+            withContext(ioDispatcher) { qmsApi.blockUser(nick) }
 
-    fun getBlackList(): Single<List<QmsContact>> = Single
-            .fromCallable { qmsApi.getBlackList() }
-            .runInIoToUi()
+    suspend fun unBlockUsers(userId: Int): List<QmsContact> =
+            withContext(ioDispatcher) { qmsApi.unBlockUsers(userId) }
 
-    fun deleteDialog(mid: Int): Single<String> = Single
-            .fromCallable { qmsApi.deleteDialog(mid) }
-            .runInIoToUi()
+    suspend fun getContactList(): List<QmsContact> {
+        val list = ioSingle { qmsApi.getContactList() }
+        saveUsers(list)
+        withContext(ioDispatcher) {
+            qmsCache.saveContacts(list)
+        }
+        return withContext(ioDispatcher) { qmsCache.getContacts() }
+    }
 
+    suspend fun getBlackList(): List<QmsContact> =
+            ioSingle { qmsApi.getBlackList() }
 
-    //Themes
-    fun getThemesList(id: Int): Single<QmsThemes> = Single
-            .fromCallable { qmsApi.getThemesList(id) }
-            .flatMap { saveThemesCache(it) }
-            .runInIoToUi()
+    suspend fun deleteDialog(mid: Int): String =
+            withContext(ioDispatcher) { qmsApi.deleteDialog(mid) }
 
-    fun deleteTheme(id: Int, themeId: Int): Single<QmsThemes> = Single
-            .fromCallable { qmsApi.deleteTheme(id, themeId) }
-            .flatMap { saveThemesCache(it) }
-            .runInIoToUi()
+    suspend fun getThemesList(id: Int): QmsThemes {
+        val data = ioSingle { qmsApi.getThemesList(id) }
+        withContext(ioDispatcher) {
+            qmsCache.saveThemes(data)
+        }
+        return withContext(ioDispatcher) { qmsCache.getThemes(id) }
+    }
 
+    suspend fun deleteTheme(id: Int, themeId: Int): QmsThemes {
+        val data = withContext(ioDispatcher) { qmsApi.deleteTheme(id, themeId) }
+        withContext(ioDispatcher) {
+            qmsCache.saveThemes(data)
+        }
+        return withContext(ioDispatcher) { qmsCache.getThemes(data.userId) }
+    }
 
-    //Chat
-    fun getChat(userId: Int, themeId: Int): Single<QmsChatModel> = Single
-            .fromCallable { qmsApi.getChat(userId, themeId) }
-            .runInIoToUi()
+    suspend fun getChat(userId: Int, themeId: Int): QmsChatModel =
+            ioSingle(timeoutSec = 45) { qmsApi.getChat(userId, themeId) }
 
-    fun sendNewTheme(nick: String, title: String, mess: String, files: List<AttachmentItem>): Single<QmsChatModel> = Single
-            .fromCallable { qmsApi.sendNewTheme(nick, title, mess, files) }
-            .runInIoToUi()
+    suspend fun sendNewTheme(nick: String, title: String, mess: String, files: List<AttachmentItem>): QmsChatModel =
+            withContext(ioDispatcher) { qmsApi.sendNewTheme(nick, title, mess, files) }
 
-    fun sendMessage(userId: Int, themeId: Int, text: String, files: List<AttachmentItem>): Single<List<QmsMessage>> = Single
-            .fromCallable { qmsApi.sendMessage(userId, themeId, text, files) }
-            .runInIoToUi()
+    suspend fun sendMessage(userId: Int, themeId: Int, text: String, files: List<AttachmentItem>): List<QmsMessage> =
+            withContext(ioDispatcher) { qmsApi.sendMessage(userId, themeId, text, files) }
 
-    fun getMessagesFromWs(themeId: Int, messageId: Int, afterMessageId: Int): Single<List<QmsMessage>> = Single
-            .fromCallable { qmsApi.getMessagesFromWs(themeId, messageId, afterMessageId) }
-            .runInIoToUi()
+    suspend fun getMessagesFromWs(themeId: Int, messageId: Int, afterMessageId: Int): List<QmsMessage> =
+            ioSingle { qmsApi.getMessagesFromWs(themeId, messageId, afterMessageId) }
 
-    fun getMessagesAfter(userId: Int, themeId: Int, afterMessageId: Int): Single<List<QmsMessage>> = Single
-            .fromCallable { qmsApi.getMessagesAfter(userId, themeId, afterMessageId) }
-            .runInIoToUi()
+    suspend fun getMessagesAfter(userId: Int, themeId: Int, afterMessageId: Int): List<QmsMessage> =
+            ioSingle { qmsApi.getMessagesAfter(userId, themeId, afterMessageId) }
 
-    fun uploadFiles(files: List<RequestFile>, pending: List<AttachmentItem>): Single<List<AttachmentItem>> = Single
-            .fromCallable { attachmentsApi.uploadQmsFiles(files, pending) }
-            .runInIoToUi()
-
+    suspend fun uploadFiles(files: List<RequestFile>, pending: List<AttachmentItem>): List<AttachmentItem> =
+            withContext(ioDispatcher) { attachmentsApi.uploadQmsFiles(files, pending) }
 
     private fun saveUsers(contacts: List<QmsContact>) {
         val forumUsers = contacts.map { contact ->
@@ -120,28 +115,6 @@ class QmsRepository(
         }
         forumUsersCache.saveUsers(forumUsers)
     }
-
-
-    /*
-    *
-    * cache
-    *
-    * */
-
-    private fun saveContactsCache(items: List<QmsContact>): Single<List<QmsContact>> = Single
-            .fromCallable { qmsCache.saveContacts(items) }
-            .flatMap { getContactsCache() }
-
-    private fun getContactsCache(): Single<List<QmsContact>> = Single
-            .fromCallable { qmsCache.getContacts() }
-
-    private fun saveThemesCache(data: QmsThemes): Single<QmsThemes> = Single
-            .fromCallable { qmsCache.saveThemes(data) }
-            .flatMap { getThemesCache(data.userId) }
-
-    private fun getThemesCache(userId: Int): Single<QmsThemes> = Single
-            .fromCallable { qmsCache.getThemes(userId) }
-
 
     fun handleEvent(event: TabNotification) {
         if (!NotificationEvent.fromQms(event.source)) {
@@ -183,7 +156,6 @@ class QmsRepository(
                 }
             }
 
-
             qmsCache.saveThemes(targetDialog)
             allContacts.firstOrNull { it.id == targetDialog.userId }?.let { contact ->
                 val newCount = targetDialog.themes.sumOf { it.countNew }
@@ -202,6 +174,4 @@ class QmsRepository(
             }
         })
     }
-
-
 }

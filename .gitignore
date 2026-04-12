@@ -4,6 +4,7 @@ keystore.jks
 passses.rtf
 app/stable
 keystore.properties
+keystore.parallel.properties
 signing/
 
 ### Android ###

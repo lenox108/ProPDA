@@ -88,8 +88,9 @@ public class MessagePanel extends CardView {
         params = new CoordinatorLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, fullForm ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT);
         //params.setBehavior(panelBehavior);
         params.gravity = Gravity.BOTTOM;
+        // Снизу без отступа: иначе зазор над нижним меню приложения и «просвет» с текстом темы.
         if (!fullForm)
-            params.setMargins(App.px8, App.px8, App.px8, App.px8);
+            params.setMargins(App.px8, App.px8, App.px8, 0);
         setLayoutParams(params);
         setRadius(fullForm ? 0 : App.px8);
         setPreventCornerOverlap(false);

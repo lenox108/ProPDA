@@ -17,7 +17,9 @@ import android.view.inputmethod.InputMethodManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -27,11 +29,13 @@ import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.DayNightHelper
 import forpdateam.ru.forpda.common.LocaleHelper
+import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.databinding.ActivityMainBinding
 import forpdateam.ru.forpda.notifications.NotificationsService
-import forpdateam.ru.forpda.presentation.main.MainPresenter
-import forpdateam.ru.forpda.presentation.main.MainView
+import forpdateam.ru.forpda.presentation.main.MainActivityCallbacks
+import forpdateam.ru.forpda.presentation.main.MainViewModel
 import forpdateam.ru.forpda.ui.DimensionHelper
+import forpdateam.ru.forpda.ui.UiThemeStyles
 import forpdateam.ru.forpda.ui.activities.updatechecker.SimpleUpdateChecker
 import forpdateam.ru.forpda.ui.navigation.TabNavigator
 import forpdateam.ru.forpda.ui.views.drawers.BottomDrawer
@@ -39,12 +43,9 @@ import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
-import moxy.MvpAppCompatActivity
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
 import kotlin.math.max
 
-class MainActivity : MvpAppCompatActivity(), MainView {
+class MainActivity : AppCompatActivity(), MainActivityCallbacks {
     val removeTabListener: (View) -> Unit = { backHandler(true) }
 
     private lateinit var binding: ActivityMainBinding
@@ -64,24 +65,23 @@ class MainActivity : MvpAppCompatActivity(), MainView {
 
     private var lang: String? = null
 
+    private lateinit var appliedUiPalette: Preferences.Main.UiPalette
+
     private val notificationPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()
     ) { /* пользователь мог отказать — уведомления просто не покажутся */ }
 
-    @InjectPresenter
-    lateinit var presenter: MainPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): MainPresenter = MainPresenter(
-            App.get().Di().router,
-            App.get().Di().authHolder,
-            App.get().Di().linkHandler,
-            App.get().Di().menuRepository,
-            App.get().Di().qmsInteractor,
-            App.get().Di().otherPreferencesHolder,
-            App.get().Di().mainPreferencesHolder,
-            App.get().Di().errorHandler
-    )
+    private val presenter: MainViewModel by viewModels {
+        MainViewModel.Factory(
+                App.get().Di().router,
+                App.get().Di().authHolder,
+                App.get().Di().linkHandler,
+                App.get().Di().menuRepository,
+                App.get().Di().qmsInteractor,
+                App.get().Di().otherPreferencesHolder,
+                App.get().Di().webClient
+        )
+    }
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(LocaleHelper.onAttach(base))
@@ -89,7 +89,8 @@ class MainActivity : MvpAppCompatActivity(), MainView {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        setTheme(R.style.DayNightAppTheme_NoActionBar)
+        appliedUiPalette = mainPreferencesRepository.getUiPalette()
+        setTheme(UiThemeStyles.mainNoActionBar(appliedUiPalette))
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -198,6 +199,9 @@ class MainActivity : MvpAppCompatActivity(), MainView {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+
+        presenter.attachView(this)
+        presenter.start()
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
@@ -231,10 +235,15 @@ class MainActivity : MvpAppCompatActivity(), MainView {
             // Только при реальном IME: adjustResize уже сжимает окно — не дублируем отступом.
             // isFakeKeyboardShow (BBCode/нижний sheet без IME) не обнуляем: иначе панель +/скрепка
             // оказывается под нижней навигацией приложения.
+            //
+            // Высота «полоски» вкладок = базовая (иконки) + navigationBars — синхронно с peek bottom sheet
+            // (см. BottomDrawer). Раньше br.height без nav на части OEM давал контент под системной панелью
+            // или лишний зазор при двойном учёте insets.
+            val baseBar = resources.getDimensionPixelSize(R.dimen.dp52)
             val pb = if (dimensions.isKeyboardShow()) {
                 0
             } else {
-                binding.bottomMenuRecycler.height
+                baseBar + dimensions.navigationBar
             }
             setPadding(
                     paddingLeft,
@@ -268,6 +277,13 @@ class MainActivity : MvpAppCompatActivity(), MainView {
     override fun onResume() {
         super.onResume()
         Log.d(LOG_TAG, "onResume")
+        val paletteNow = mainPreferencesRepository.getUiPalette()
+        if (::appliedUiPalette.isInitialized && paletteNow != appliedUiPalette) {
+            appliedUiPalette = paletteNow
+            recreate()
+            return
+        }
+        presenter.onActivityResume()
         if (lang == null) {
             lang = LocaleHelper.getLanguage(this)
         }
@@ -294,6 +310,7 @@ class MainActivity : MvpAppCompatActivity(), MainView {
 
     override fun onDestroy() {
         Log.d(LOG_TAG, "onDestroy")
+        presenter.detachView()
         super.onDestroy()
         disposables.dispose()
         bottomDrawer.destroy()
@@ -364,14 +381,16 @@ class MainActivity : MvpAppCompatActivity(), MainView {
 
         fun getDefaultLightStatusBar(context: Activity): Boolean {
             val typedValue = TypedValue()
-            return if (context.theme.resolveAttribute(R.attr.is_use_light_status_bar, typedValue, true)) {
-                if (typedValue.type == TypedValue.TYPE_INT_BOOLEAN) {
-                    typedValue.data != 0
-                } else {
-                    throw Exception("Wtf bro?! I don't know this type: ${typedValue.type}")
-                }
-            } else {
-                throw Exception("Wtf bro?! Where is_use_light_status_bar attr?!")
+            // В проде нельзя падать из-за отсутствующего атрибута темы.
+            // Безопасный дефолт: false (тёмные иконки статус-бара выключены).
+            if (!context.theme.resolveAttribute(R.attr.is_use_light_status_bar, typedValue, true)) {
+                return false
+            }
+            return when (typedValue.type) {
+                TypedValue.TYPE_INT_BOOLEAN -> typedValue.data != 0
+                // Иногда OEM/темы кладут int-ресурс; трактуем как boolean по "0/не 0".
+                TypedValue.TYPE_INT_DEC, TypedValue.TYPE_INT_HEX -> typedValue.data != 0
+                else -> false
             }
         }
     }

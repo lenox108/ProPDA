@@ -27,7 +27,6 @@ class NewsRepository(
             .doOnSuccess { data ->
                 data.forEach {
                     val forumUser = forumUsersCache.getUserById(it.authorId)
-                    Log.e("kekosina", "forumUser ${it.authorId}, ${forumUser?.id}, ${forumUser?.nick}, ${forumUser?.avatar}")
                     if (forumUser != null) {
                         it.avatar = forumUser.avatar
                     }/* else {
@@ -62,6 +61,8 @@ class NewsRepository(
 
     fun getComments(article: DetailsPage): Single<Comment> = Single
             .fromCallable { newsApi.parseComments(article.karmaMap, article.commentsSource) }
-            .runInIoToUi()
+            // parseComments использует HTML parser и может быть тяжёлым → computation
+            .subscribeOn(schedulers.computation())
+            .observeOn(schedulers.ui())
 
 }

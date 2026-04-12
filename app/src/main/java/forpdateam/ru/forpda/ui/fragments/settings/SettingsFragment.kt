@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.ui.fragments.settings
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.DialogInterface
 import android.os.Bundle
 import android.util.Log
@@ -11,6 +12,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.preference.ListPreference
 import androidx.preference.Preference
+import androidx.preference.PreferenceCategory
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.BuildConfig
@@ -29,11 +31,22 @@ class SettingsFragment : BaseSettingFragment() {
     private val authHolder = App.get().Di().authHolder
     private val mainPreferencesHolder = App.get().Di().mainPreferencesHolder
     private var disposable: Disposable? = null
+    private val prefs by lazy { App.get().Di().preferences }
+    private val quickBindings = mutableListOf<Pair<String, forpdateam.ru.forpda.ui.views.SwitchPreference>>()
+
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        quickBindings.firstOrNull { it.first == key }?.also { (k, pref) ->
+            pref.isChecked = prefs.getBoolean(k, pref.isChecked)
+        }
+    }
 
     @SuppressLint("InflateParams")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         addPreferencesFromResource(R.xml.preferences)
+
+        addQuickSection()
+
         if (authHolder.get().isAuth()) {
             findPreference<Preference>("auth.action.logout")?.apply {
                 setOnPreferenceClickListener {
@@ -123,6 +136,11 @@ class SettingsFragment : BaseSettingFragment() {
                 true
             }
         }
+
+        findPreference<ListPreference>(Preferences.Main.UI_PALETTE)?.setOnPreferenceChangeListener { _, _ ->
+            activity?.recreate()
+            true
+        }
     }
 
     private fun logoutRequest() {
@@ -143,5 +161,84 @@ class SettingsFragment : BaseSettingFragment() {
     override fun onDestroy() {
         super.onDestroy()
         disposable?.dispose()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+    }
+
+    override fun onPause() {
+        prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        super.onPause()
+    }
+
+    private fun addQuickSection() {
+        val ctx = preferenceManager.context
+        val quickCategory = findPreference<PreferenceCategory>("quick_settings_category") ?: return
+
+        fun addMirrorSwitch(targetKey: String, titleRes: Int, summaryRes: Int?) {
+            val sp = forpdateam.ru.forpda.ui.views.SwitchPreference(ctx).apply {
+                title = getString(titleRes)
+                if (summaryRes != null) summary = getString(summaryRes)
+                // Без key: не создаём дубликаты Preferences в дереве, синхроним вручную
+                key = null
+                isPersistent = false
+                isChecked = prefs.getBoolean(targetKey, false)
+                setOnPreferenceChangeListener { _, newValue ->
+                    prefs.edit().putBoolean(targetKey, (newValue as? Boolean) == true).apply()
+                    true
+                }
+            }
+            quickBindings.add(targetKey to sp)
+            quickCategory.addPreference(sp)
+        }
+
+        // Быстрые тумблеры (самые частые)
+        addMirrorSwitch(
+            targetKey = "main.is_system_downloader",
+            titleRes = R.string.pref_title_system_downloader,
+            summaryRes = R.string.pref_summary_system_downloader
+        )
+        addMirrorSwitch(
+            targetKey = "main.show_bottom_arrow",
+            titleRes = R.string.pref_title_show_bottom_arrow,
+            summaryRes = R.string.pref_summary_show_bottom_arrow
+        )
+        addMirrorSwitch(
+            targetKey = "message_panel.is_monospace",
+            titleRes = R.string.pref_title_monospace,
+            summaryRes = R.string.pref_summary_monospace
+        )
+
+        // Быстрые переходы (без дублирования ключей)
+        Preference(ctx).apply {
+            title = getString(R.string.pref_title_theme_mode)
+            isIconSpaceReserved = false
+            setOnPreferenceClickListener {
+                findPreference<ListPreference>("main.theme.mode")?.performClick()
+                true
+            }
+        }.also { quickCategory.addPreference(it) }
+
+        Preference(ctx).apply {
+            title = getString(R.string.pref_title_ui_palette)
+            summary = getString(R.string.pref_summary_ui_palette)
+            isIconSpaceReserved = false
+            setOnPreferenceClickListener {
+                findPreference<ListPreference>(Preferences.Main.UI_PALETTE)?.performClick()
+                true
+            }
+        }.also { quickCategory.addPreference(it) }
+
+        Preference(ctx).apply {
+            title = getString(R.string.pref_title_text_size)
+            summary = getString(R.string.pref_summary_text_size)
+            isIconSpaceReserved = false
+            setOnPreferenceClickListener {
+                findPreference<Preference>(Preferences.Main.WEBVIEW_FONT_SIZE)?.performClick()
+                true
+            }
+        }.also { quickCategory.addPreference(it) }
     }
 }

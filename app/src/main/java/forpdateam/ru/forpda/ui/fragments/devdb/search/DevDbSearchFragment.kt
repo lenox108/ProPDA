@@ -8,12 +8,11 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.appcompat.widget.SearchView
 import android.view.*
 import android.widget.LinearLayout
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.devdb.Brand
-import forpdateam.ru.forpda.presentation.devdb.search.SearchDevicesPresenter
+import forpdateam.ru.forpda.presentation.devdb.search.DevDbSearchViewModel
 import forpdateam.ru.forpda.presentation.devdb.search.SearchDevicesView
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesAdapter
@@ -35,15 +34,13 @@ class DevDbSearchFragment : TabFragment(), SearchDevicesView, BaseAdapter.OnItem
     private lateinit var searchMenuItem: MenuItem
     private val dialogMenu = DynamicDialogMenu<DevDbSearchFragment, Brand.DeviceItem>()
 
-    @InjectPresenter
-    lateinit var presenter: SearchDevicesPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): SearchDevicesPresenter = SearchDevicesPresenter(
-            App.get().Di().devDbRepository,
-            App.get().Di().router,
-            App.get().Di().errorHandler
-    )
+    private val presenter: DevDbSearchViewModel by viewModels {
+        DevDbSearchViewModel.Factory(
+                App.get().Di().devDbRepository,
+                App.get().Di().router,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = "Поиск устройств"
@@ -114,6 +111,13 @@ class DevDbSearchFragment : TabFragment(), SearchDevicesView, BaseAdapter.OnItem
             }
         }
 
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {

@@ -20,7 +20,7 @@ import forpdateam.ru.forpda.entity.common.AuthData;
 import forpdateam.ru.forpda.entity.remote.IBaseForumPost;
 import forpdateam.ru.forpda.model.AuthHolder;
 import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder;
-import forpdateam.ru.forpda.presentation.theme.IThemePresenter;
+import forpdateam.ru.forpda.presentation.theme.ThemeWebCallbacks;
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu;
 
 /**
@@ -28,9 +28,9 @@ import forpdateam.ru.forpda.ui.views.DynamicDialogMenu;
  */
 
 public class ThemeDialogsHelper_V2 {
-    private final DynamicDialogMenu<IThemePresenter, IBaseForumPost> userMenu = new DynamicDialogMenu<>();
-    private final DynamicDialogMenu<IThemePresenter, IBaseForumPost> reputationMenu = new DynamicDialogMenu<>();
-    private final DynamicDialogMenu<IThemePresenter, IBaseForumPost> postMenu = new DynamicDialogMenu<>();
+    private final DynamicDialogMenu<ThemeWebCallbacks, IBaseForumPost> userMenu = new DynamicDialogMenu<>();
+    private final DynamicDialogMenu<ThemeWebCallbacks, IBaseForumPost> reputationMenu = new DynamicDialogMenu<>();
+    private final DynamicDialogMenu<ThemeWebCallbacks, IBaseForumPost> postMenu = new DynamicDialogMenu<>();
     private Context context;
     private AuthHolder authHolder;
     private OtherPreferencesHolder otherPreferencesHolder;
@@ -64,7 +64,7 @@ public class ThemeDialogsHelper_V2 {
         postMenu.addItem(App.get().getString(R.string.share), (context1, data) -> context1.sharePostLink(data.getId()));
     }
 
-    public void showUserMenu(IThemePresenter presenter, IBaseForumPost post) {
+    public void showUserMenu(ThemeWebCallbacks presenter, IBaseForumPost post) {
         userMenu.disallowAll();
         userMenu.allow(0);
         userMenu.allow(1);
@@ -78,7 +78,7 @@ public class ThemeDialogsHelper_V2 {
         userMenu.show(context, presenter, post);
     }
 
-    public void showReputationMenu(IThemePresenter presenter, IBaseForumPost post) {
+    public void showReputationMenu(ThemeWebCallbacks presenter, IBaseForumPost post) {
         reputationMenu.disallowAll();
         if (!authHolder.get().isAuth() || post.getCanPlusRep()) {
             reputationMenu.allow(0);
@@ -91,7 +91,7 @@ public class ThemeDialogsHelper_V2 {
         reputationMenu.show(context, title, presenter, post);
     }
 
-    public void showPostMenu(IThemePresenter presenter, IBaseForumPost post) {
+    public void showPostMenu(ThemeWebCallbacks presenter, IBaseForumPost post) {
         postMenu.disallowAll();
         if (!authHolder.get().isAuth() || post.getCanQuote()) {
             postMenu.allow(0);
@@ -117,7 +117,7 @@ public class ThemeDialogsHelper_V2 {
         postMenu.show(context, presenter, post);
     }
 
-    public void tryReportPost(IThemePresenter presenter, IBaseForumPost post) {
+    public void tryReportPost(ThemeWebCallbacks presenter, IBaseForumPost post) {
         if (otherPreferencesHolder.getShowReportWarning()) {
             MaterialAlertDialogHelper.showWithStyledButtons(new MaterialAlertDialogBuilder(context)
                     .setTitle(R.string.attention)
@@ -133,7 +133,7 @@ public class ThemeDialogsHelper_V2 {
     }
 
     @SuppressLint("InflateParams")
-    public void showReportDialog(IThemePresenter presenter, IBaseForumPost post) {
+    public void showReportDialog(ThemeWebCallbacks presenter, IBaseForumPost post) {
         LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         View layout = inflater.inflate(R.layout.report_layout, null);
 
@@ -147,7 +147,7 @@ public class ThemeDialogsHelper_V2 {
                 .setNegativeButton(R.string.cancel, null));
     }
 
-    public void deletePost(IThemePresenter presenter, IBaseForumPost post) {
+    public void deletePost(ThemeWebCallbacks presenter, IBaseForumPost post) {
         MaterialAlertDialogHelper.showWithStyledButtons(new MaterialAlertDialogBuilder(context)
                 .setMessage(String.format(App.get().getString(R.string.ask_delete_post_Nick), post.getNick()))
                 .setPositiveButton(R.string.ok, (dialogInterface, i) -> presenter.deletePost(post.getId()))
@@ -155,7 +155,7 @@ public class ThemeDialogsHelper_V2 {
     }
 
     @SuppressLint("InflateParams")
-    public void changeReputation(IThemePresenter presenter, IBaseForumPost post, boolean type) {
+    public void changeReputation(ThemeWebCallbacks presenter, IBaseForumPost post, boolean type) {
         LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         View layout = inflater.inflate(R.layout.reputation_change_layout, null);
 
@@ -170,21 +170,21 @@ public class ThemeDialogsHelper_V2 {
                 .setNegativeButton(R.string.cancel, null));
     }
 
-    public void votePost(IThemePresenter presenter, IBaseForumPost post, boolean type) {
+    public void votePost(ThemeWebCallbacks presenter, IBaseForumPost post, boolean type) {
         MaterialAlertDialogHelper.showWithStyledButtons(new MaterialAlertDialogBuilder(context)
                 .setMessage(String.format(context.getString(R.string.change_post_reputation_Type_Nick), context.getString(type ? R.string.increase : R.string.decrease), post.getNick()))
                 .setPositiveButton(R.string.ok, (dialog, which) -> presenter.votePost(post.getId(), type))
                 .setNegativeButton(R.string.cancel, null));
     }
 
-    public void openAnchorDialog(IThemePresenter presenter, @NotNull IBaseForumPost post, @NotNull String anchorName) {
+    public void openAnchorDialog(ThemeWebCallbacks presenter, @NotNull IBaseForumPost post, @NotNull String anchorName) {
         MaterialAlertDialogHelper.showWithStyledButtons(new MaterialAlertDialogBuilder(context)
                 .setTitle(R.string.link_to_anchor)
                 .setPositiveButton(R.string.copy, (dialog, which) -> presenter.copyAnchorLink(post.getId(), anchorName))
                 .setNegativeButton(R.string.cancel, null));
     }
 
-    public void openSpoilerLinkDialog(IThemePresenter presenter, @NotNull IBaseForumPost post, @NotNull String spoilNumber) {
+    public void openSpoilerLinkDialog(ThemeWebCallbacks presenter, @NotNull IBaseForumPost post, @NotNull String spoilNumber) {
         MaterialAlertDialogHelper.showWithStyledButtons(new MaterialAlertDialogBuilder(context)
                 .setMessage(R.string.spoiler_link_copy_ask)
                 .setPositiveButton(R.string.ok, (dialog, which) -> presenter.copySpoilerLink(post.getId(), spoilNumber))

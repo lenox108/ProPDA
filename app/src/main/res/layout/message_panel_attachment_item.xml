@@ -31,19 +31,19 @@
         android:layout_margin="@dimen/dp2"
         android:background="?attr/attachment_description_bg"
         android:orientation="vertical"
-        android:padding="2dp"
+        android:padding="@dimen/dp2"
         android:visibility="gone">
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/file_name"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="2dp"
+            android:layout_marginBottom="@dimen/dp2"
             android:ellipsize="marquee"
             android:gravity="center_horizontal"
             android:maxLines="1"
             android:textColor="?attr/attachment_text"
-            android:textSize="12sp" />
+            android:textSize="@dimen/list_section_header_text_size" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/file_attributes"
@@ -53,7 +53,18 @@
             android:maxLines="1"
             android:textAllCaps="true"
             android:textColor="?attr/attachment_text"
-            android:textSize="13sp" />
+            android:textSize="@dimen/list_topic_meta_text_size" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/error_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:maxLines="2"
+            android:textColor="?attr/colorAccent"
+            android:textSize="@dimen/attachment_error_text_size"
+            android:visibility="gone"
+            tools:text="Ошибка загрузки. Нажмите повторить." />
     </LinearLayout>
 
 
@@ -77,14 +88,14 @@
         android:layout_centerInParent="true"
         android:gravity="center"
         android:textColor="?colorAccent"
-        android:textSize="12sp"
+        android:textSize="@dimen/list_section_header_text_size"
         android:visibility="gone"
         tools:text="100%"
         tools:visibility="visible" />
 
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/reload"
-        android:layout_width="48dp"
+        android:layout_width="@dimen/dp48"
         android:layout_height="@dimen/dp48"
         android:layout_centerInParent="true"
         android:background="?attr/selectableItemBackgroundBorderless"

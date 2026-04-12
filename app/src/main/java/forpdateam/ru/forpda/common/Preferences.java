@@ -52,8 +52,16 @@ public class Preferences {
             public final static String MODE = PREFIX + "mode";
         }
 
+        /** Акцентные цвета и фоны: iOS-подобная палитра или «классика» ForPDA (бирюза/серое). */
+        public final static String UI_PALETTE = PREFIX + "ui.palette";
+
         public enum ThemeMode {
             LIGHT, DARK, SYSTEM
+        }
+
+        public enum UiPalette {
+            SYSTEM,
+            CLASSIC_4PDA
         }
     }
 

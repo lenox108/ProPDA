@@ -19,12 +19,12 @@
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/poll_question_title"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="@dimen/dp48"
                 android:gravity="center_vertical"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/poll_question"
-                android:textSize="14sp"
+                android:textSize="@dimen/list_topic_meta_text_size"
                 android:textStyle="bold" />
 
             <ImageButton
@@ -42,24 +42,24 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="@string/poll_question"
-            android:textSize="16sp"
-            android:layout_marginStart="@dimen/dp16"
-            android:layout_marginEnd="@dimen/dp16"/>
+            android:textSize="@dimen/list_topic_title_text_size"
+            android:layout_marginStart="@dimen/content_padding_horizontal"
+            android:layout_marginEnd="@dimen/content_padding_horizontal"/>
 
         <androidx.appcompat.widget.AppCompatCheckBox
             android:id="@+id/poll_question_multi"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/content_spacing"
             android:text="@string/poll_more_then_one_answer"
-            android:layout_marginStart="@dimen/dp16"
-            android:layout_marginEnd="@dimen/dp16"/>
+            android:layout_marginStart="@dimen/content_padding_horizontal"
+            android:layout_marginEnd="@dimen/content_padding_horizontal"/>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/poll_question_choices"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="@dimen/content_spacing" />
 
         <Button
             android:id="@+id/poll_add_choice"

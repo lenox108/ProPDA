@@ -24,6 +24,8 @@ class ForumRepository(
 
     fun getForums(): Single<ForumItemTree> = Single
             .fromCallable { forumApi.getForums() }
+            .withNetworkTimeout(30)
+            .withNetworkRetry()
             .runInIoToUi()
 
     fun getCache(): Single<ForumItemTree> = Single
@@ -44,10 +46,14 @@ class ForumRepository(
 
     fun getRules(): Single<ForumRules> = Single
             .fromCallable { forumApi.getRules() }
+            .withNetworkTimeout(30)
+            .withNetworkRetry()
             .runInIoToUi()
 
     fun getAnnounce(id: Int, forumId: Int): Single<Announce> = Single
             .fromCallable { forumApi.getAnnounce(id, forumId) }
+            .withNetworkTimeout(30)
+            .withNetworkRetry()
             .runInIoToUi()
 
     fun saveCache(rootForum: ForumItemTree): Completable = Completable

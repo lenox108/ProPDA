@@ -33,7 +33,7 @@ import forpdateam.ru.forpda.ui.fragments.topics.TopicsFragment
 object TabHelper {
 
     private fun createFragment(tabClass: Class<out TabFragment>, args: Bundle? = null): TabFragment {
-        return tabClass.newInstance().apply {
+        return tabClass.getDeclaredConstructor().newInstance().apply {
             args?.let { arguments = it }
         }
     }
@@ -158,7 +158,8 @@ object TabHelper {
                 createFragment(OtherFragment::class.java)
             }
             else -> {
-                throw Exception("What is screen: \"$screen\" bro? I don't know this screen. Look at this beautiful exception ))0)")
+                // Не падаем в проде из-за неизвестного экрана: открываем меню как безопасный fallback.
+                createFragment(OtherFragment::class.java)
             }
         }.apply {
             configuration.isMenu = screen.fromMenu
@@ -195,7 +196,8 @@ object TabHelper {
             is Screen.Topics -> TopicsFragment::class.java
             is Screen.OtherMenu -> OtherFragment::class.java
             else -> {
-                throw Exception("Not found class by screen: \"$screen\"")
+                // Безопасный fallback
+                OtherFragment::class.java
             }
         }
     }
@@ -229,7 +231,8 @@ object TabHelper {
             is TopicsFragment -> Screen.Topics::class.java
             is OtherFragment -> Screen.OtherMenu::class.java
             else -> {
-                throw Exception("Not found class by fragment: \"$fragment\"")
+                // Безопасный fallback
+                Screen.OtherMenu::class.java
             }
         }
     }

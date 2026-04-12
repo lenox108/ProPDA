@@ -1180,7 +1180,6 @@ class HtmlToSpannedConverter implements ContentHandler {
 
     private void startCssStyle(Editable text, Attributes attributes) {
         String style = attributes.getValue("", "style");
-        //Log.d("SUKA_HTML", "STYLE: " + style);
         if (style != null) {
             Matcher m = getForegroundColorPattern().matcher(style);
             if (m.find()) {
@@ -1293,13 +1292,10 @@ class HtmlToSpannedConverter implements ContentHandler {
     }
 
     private int getHtmlColor(String color) {
-        //Log.d("SUKA_HTML", "kolor " + color + "; FLAGS: " + mFlags);
         if ((mFlags & Html.FROM_HTML_OPTION_USE_CSS_COLORS)
                 == Html.FROM_HTML_OPTION_USE_CSS_COLORS) {
-            //Log.d("SUKA_HTML", "USE CSS COLOR");
             Integer i = Html.getColorMap().get(color.toLowerCase(Locale.ROOT));
             if (i != null) {
-                //Log.d("SUKA_HTML", "kolor return" + i);
                 return i;
             }
             i = null;
@@ -1308,7 +1304,6 @@ class HtmlToSpannedConverter implements ContentHandler {
             } catch (Exception ignore) {
             }
             if (i != null) {
-                //Log.d("SUKA_HTML", "kolor2 return" + i);
                 return i;
             }
         }

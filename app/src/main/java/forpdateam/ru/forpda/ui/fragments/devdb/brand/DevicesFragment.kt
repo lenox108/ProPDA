@@ -12,13 +12,12 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.devdb.Brand
-import forpdateam.ru.forpda.presentation.devdb.devices.DevicesPresenter
 import forpdateam.ru.forpda.presentation.devdb.devices.DevicesView
+import forpdateam.ru.forpda.presentation.devdb.devices.DevicesViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerTopScroller
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
@@ -44,15 +43,13 @@ class DevicesFragment : TabFragment(), DevicesView, BaseAdapter.OnItemClickListe
     private lateinit var topScroller: RecyclerTopScroller
 
 
-    @InjectPresenter
-    lateinit var presenter: DevicesPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): DevicesPresenter = DevicesPresenter(
-            App.get().Di().devDbRepository,
-            App.get().Di().router,
-            App.get().Di().errorHandler
-    )
+    private val presenter: DevicesViewModel by viewModels {
+        DevicesViewModel.Factory(
+                App.get().Di().devDbRepository,
+                App.get().Di().router,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_brand)
@@ -120,14 +117,22 @@ class DevicesFragment : TabFragment(), DevicesView, BaseAdapter.OnItemClickListe
         })
 
         topScroller = RecyclerTopScroller(recyclerView, appBarLayout)
+
+        presenter.attachView(this)
+        presenter.start()
     }
 
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
+    }
 
     override fun isShadowVisible(): Boolean {
         return true || appBarOffset != 0 || listScrollY > 0
     }
 
     override fun toggleScrollTop() {
+        if (!::topScroller.isInitialized) return
         topScroller.toggleScrollTop()
     }
 

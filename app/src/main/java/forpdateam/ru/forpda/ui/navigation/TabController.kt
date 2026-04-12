@@ -39,7 +39,7 @@ class TabController {
 
             newTabItem.tag = jsonTabItem.getString("tag")
 
-            jsonTabItem.getJSONObject("screen")?.also { jsonScreen ->
+            jsonTabItem.getJSONObject("screen").also { jsonScreen ->
                 newTabItem.screen = TabScreen(jsonScreen.getString("key")).apply {
                     screenTitle = jsonScreen.nullString("screenTitle")
                     screenSubTitle = jsonScreen.nullString("screenSubTitle")
@@ -83,8 +83,12 @@ class TabController {
     fun getCurrent() = findTabItem(currentTag)
     fun setCurrent(tag: String) {
         val item = findTabItem(tag)
-                ?: throw Exception("You want to do the impossible. You want set current tag: \"$tag\", but this tag does not exist!")
-        currentTag = item.tag
+        if (item != null) {
+            currentTag = item.tag
+        } else {
+            // Не валим приложение: оставляем текущий тег как есть.
+            // (Сломанный/устаревший tag может прилететь из сохранённого состояния на разных версиях.)
+        }
     }
 
     fun isCurrent(tag: String?): Boolean = currentTag == tag
@@ -128,8 +132,11 @@ class TabController {
             tabs.add(newItem)
         }
         currentTag = tag
-        Log.e("TabController", "addNew t=$tag, s=$screen")
-        printTabItems()
+        // Логи дерева вкладок — очень шумные и могут подлагивать на OEM. Оставляем только в debug.
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            Log.d("TabController", "addNew t=$tag, s=$screen")
+            printTabItems("TabController")
+        }
         return newItem
     }
 
@@ -146,10 +153,11 @@ class TabController {
             currentTag = item.parent?.tag ?: getNearest(index, parentList)?.tag ?: EMPTY_TAG
             item.parent = null
         }
-        Log.e("TabController", "remove t=$tag")
-        if (print) {
-            printTabItems()
-
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            Log.d("TabController", "remove t=$tag")
+            if (print) {
+                printTabItems("TabController")
+            }
         }
     }
 
@@ -173,8 +181,10 @@ class TabController {
             item.parent = null
         }
         currentTag = tag
-        Log.e("TabController", "replace t=$tag, s=$screen")
-        printTabItems()
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            Log.d("TabController", "replace t=$tag, s=$screen")
+            printTabItems("TabController")
+        }
     }
 
     fun backTo(screen: String): List<String> {
@@ -190,8 +200,10 @@ class TabController {
             }
             tagsRemove.forEach { remove(it, false) }
         }
-        Log.e("TabController", "backTo s=$screen")
-        printTabItems()
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            Log.d("TabController", "backTo s=$screen")
+            printTabItems("TabController")
+        }
         return tagsRemove
     }
 
@@ -241,8 +253,10 @@ class TabController {
             lal += "root->TabItem(${it.tag}, ${it.screen?.key}, ${it.parent?.tag}, ${it.children.size})${if (currentTag == it.tag) " <-- current" else ""}\n"
             lal += printTabItemsTree(it, 1)
         }
-        System.out.print(lal)
-        Log.e(logTag, "tree:\n$lal")
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            System.out.print(lal)
+            Log.d(logTag, "tree:\n$lal")
+        }
     }
 
     private fun printTabItemsTree(tab: TabItem, level: Int): String {

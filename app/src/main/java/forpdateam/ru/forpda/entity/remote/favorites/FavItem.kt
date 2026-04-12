@@ -26,6 +26,7 @@ class FavItem : IFavItem {
     override var isPin = false
     override var isForum = false
     override var isNew: Boolean = false
+    override var unreadPostCount: Int = 0
     override var isPoll: Boolean = false
     override var isClosed: Boolean = false
 
@@ -56,6 +57,7 @@ class FavItem : IFavItem {
         isForum = item.isForum
 
         isNew = item.isNew
+        unreadPostCount = item.unreadPostCount
         isPoll = item.isPoll
         isClosed = item.isClosed
     }

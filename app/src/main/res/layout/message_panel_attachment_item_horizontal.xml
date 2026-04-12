@@ -7,12 +7,12 @@
     android:layout_margin="@dimen/dp2"
     android:background="?attr/background_for_lists"
     android:foreground="?attr/selectableItemBackgroundBorderless"
-    android:minHeight="@dimen/dp64">
+    android:minHeight="@dimen/attachment_preview_size">
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/drawer_item_icon"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
+        android:layout_width="@dimen/attachment_preview_size"
+        android:layout_height="@dimen/attachment_preview_size"
         android:clickable="false"
         android:scaleType="centerCrop"
         app:layout_constraintStart_toStartOf="parent"
@@ -44,10 +44,10 @@
         android:id="@+id/file_name"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/dp16"
+        android:layout_marginStart="@dimen/content_padding_horizontal"
         android:layout_marginTop="@dimen/dp4"
         android:textColor="?attr/default_text_color"
-        android:textSize="16sp"
+        android:textSize="@dimen/list_topic_title_text_size"
         app:layout_constraintBottom_toTopOf="@id/file_attributes"
         app:layout_constraintEnd_toStartOf="@id/radio_button"
         app:layout_constraintStart_toEndOf="@id/drawer_item_icon"
@@ -59,18 +59,33 @@
         android:id="@+id/file_attributes"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/dp16"
+        android:layout_marginStart="@dimen/content_padding_horizontal"
         android:layout_marginTop="@dimen/dp4"
         android:layout_marginBottom="@dimen/dp4"
         android:maxLines="1"
         android:textAllCaps="true"
         android:textColor="?attr/second_text_color"
-        android:textSize="14sp"
+        android:textSize="@dimen/list_topic_meta_text_size"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/drawer_item_icon"
         app:layout_constraintTop_toBottomOf="@id/file_name"
         tools:text="PNG, 1024 KB" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/error_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/content_padding_horizontal"
+        android:layout_marginTop="@dimen/dp2"
+        android:maxLines="2"
+        android:textColor="?attr/colorAccent"
+        android:textSize="@dimen/list_section_header_text_size"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/drawer_item_icon"
+        app:layout_constraintTop_toBottomOf="@id/file_attributes"
+        app:layout_constraintEnd_toStartOf="@id/radio_button"
+        tools:text="Ошибка загрузки. Нажмите повторить." />
 
 
     <com.github.rahatarmanahmed.cpv.CircularProgressView
@@ -96,7 +111,7 @@
         android:layout_height="0dp"
         android:gravity="center"
         android:textColor="?colorAccent"
-        android:textSize="12sp"
+        android:textSize="@dimen/list_section_header_text_size"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@id/progress_bar"
         app:layout_constraintEnd_toEndOf="@id/progress_bar"
@@ -107,7 +122,7 @@
 
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/reload"
-        android:layout_width="48dp"
+        android:layout_width="@dimen/dp48"
         android:layout_height="@dimen/dp48"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:visibility="gone"

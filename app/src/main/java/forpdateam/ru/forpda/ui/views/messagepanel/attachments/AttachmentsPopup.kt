@@ -37,6 +37,8 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     private val textControls: RelativeLayout
     private val addFile: ImageButton
     private val deleteFile: ImageButton
+    private val retryFailed: ImageButton
+    private val clearFailed: ImageButton
     private val addToSpoiler: Button
     private val addToText: Button
     private val progressOverlay: FrameLayout
@@ -51,6 +53,10 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
 
     private var insertAttachmentListener: OnInsertAttachmentListener? = null
+    private var retryUploadListener: OnRetryUploadListener? = null
+
+    /** Для retry: сопоставляем loading item -> исходный файл. */
+    private val fileByItem = LinkedHashMap<AttachmentItem, RequestFile>()
 
     fun getAttachments(): List<AttachmentItem> = attachments
 
@@ -72,11 +78,15 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         noAttachments = bottomSheet.findViewById<View>(R.id.no_attachments_text) as TextView
         textControls = bottomSheet.findViewById<View>(R.id.text_controls) as RelativeLayout
         addFile = bottomSheet.findViewById<View>(R.id.add_file) as ImageButton
+        retryFailed = bottomSheet.findViewById<View>(R.id.retry_failed) as ImageButton
+        clearFailed = bottomSheet.findViewById<View>(R.id.clear_failed) as ImageButton
         deleteFile = bottomSheet.findViewById<View>(R.id.delete_file) as ImageButton
         addToSpoiler = bottomSheet.findViewById<View>(R.id.add_to_spoiler) as Button
         addToText = bottomSheet.findViewById<View>(R.id.add_to_text) as Button
 
-        recyclerView.setColumnWidth(App.get().dpToPx(112, recyclerView.context))
+        recyclerView.setColumnWidth(
+            recyclerView.context.resources.getDimensionPixelSize(R.dimen.attachment_grid_column_width)
+        )
         adapter.updateIsLinear(isLinear)
         adapter.updateReverse(isReverse)
         recyclerView.setFakeLinear(isLinear)
@@ -100,7 +110,14 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         //deleteFile.setItemClickListener(v -> adapter.deleteSelected());
         adapter.setReloadOnClickListener(object : AttachmentAdapter.OnReloadClickListener {
             override fun onReloadClick(item: AttachmentItem) {
-
+                val file = fileByItem[item]
+                if (file != null) {
+                    // Сбрасываем состояние и перезапускаем загрузку одного файла.
+                    item.loadState = AttachmentItem.STATE_LOADING
+                    item.setError(false)
+                    adapter.updateItem(item)
+                    retryUploadListener?.onRetry(listOf(file), listOf(item))
+                }
             }
         })
 
@@ -136,6 +153,8 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
         addToText.setOnClickListener { insertAttachment(selected, false) }
         addToSpoiler.setOnClickListener { insertAttachment(selected, true) }
+        retryFailed.setOnClickListener { retryAllFailed() }
+        clearFailed.setOnClickListener { clearAllFailed() }
 
         messagePanel.addAttachmentsOnClickListener {
             if (bottomSheet.parent != null && bottomSheet.parent is ViewGroup) {
@@ -221,6 +240,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
     private fun updateDataCounter() {
         onDataChange(attachments.size)
+        updateRetryVisibility()
     }
 
     private fun onSelectedChange() {
@@ -234,6 +254,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         }
         if (addFile.visibility != firstGroup)
             addFile.visibility = firstGroup
+        updateRetryVisibility()
         if (!enabledTextControls) {
             textControls.visibility = View.GONE
         } else if (textControls.visibility != secondGroup) {
@@ -243,6 +264,42 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
             deleteFile.visibility = secondGroup
 
         tryLockControls(!containNotLoaded())
+    }
+
+    private fun updateRetryVisibility() {
+        val hasFailed = attachments.any { it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError }
+        val shouldShow = hasFailed && selected.isEmpty()
+        retryFailed.visibility = if (shouldShow) View.VISIBLE else View.GONE
+        clearFailed.visibility = if (shouldShow) View.VISIBLE else View.GONE
+    }
+
+    private fun retryAllFailed() {
+        val retryItems = attachments.filter { it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError }
+            .mapNotNull { item ->
+                val file = fileByItem[item] ?: return@mapNotNull null
+                item.loadState = AttachmentItem.STATE_LOADING
+                item.setError(false)
+                adapter.updateItem(item)
+                file to item
+            }
+        if (retryItems.isEmpty()) return
+        val files = retryItems.map { it.first }
+        val pending = retryItems.map { it.second }
+        retryUploadListener?.onRetry(files, pending)
+        updateRetryVisibility()
+    }
+
+    private fun clearAllFailed() {
+        if (selected.isNotEmpty()) return
+        val failedItems = attachments.filter { it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError }
+        if (failedItems.isEmpty()) return
+        for (item in failedItems) {
+            fileByItem.remove(item)
+            attachments.remove(item)
+            adapter.removeItem(item)
+        }
+        updateDataCounter()
+        onSelectedChange()
     }
 
     private fun tryLockControls(enable: Boolean) {
@@ -263,6 +320,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     fun onLoadAttachments(form: EditPostForm) {
+        clearAttachments()
         attachments.addAll(form.attachments)
         adapter.add(form.attachments)
         updateDataCounter()
@@ -276,6 +334,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
             item.setProgressListener { _ ->
 
             }
+            fileByItem[item] = file
             Log.d(LOG_TAG, "Add loading item $item")
             attachments.add(item)
             adapter.add(item)
@@ -289,11 +348,14 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         for (item in items) {
             Log.d(LOG_TAG, "Loading item $item")
             if (item.loadState == AttachmentItem.STATE_NOT_LOADED) {
-                attachments.remove(item)
-                selected.remove(item)
-                adapter.removeItem(item)
-                //SHOW ERROR
+                // Оставляем элемент, чтобы можно было нажать retry.
+                item.setError(true)
+                adapter.updateItem(item)
             } else {
+                // Успешно — можно убрать файл из retry-map.
+                if (item.loadState == AttachmentItem.STATE_LOADED) {
+                    fileByItem.remove(item)
+                }
                 adapter.updateItem(item)
             }
         }
@@ -307,6 +369,11 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         tryLockControls(false)
     }
 
+    fun endDeleteProgress() {
+        progressOverlay.visibility = View.GONE
+        tryLockControls(true)
+    }
+
     fun setAttachments(items: List<AttachmentItem>) {
         clearAttachments()
         attachments.addAll(items)
@@ -317,6 +384,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     fun clearAttachments() {
         attachments.clear()
         selected.clear()
+        fileByItem.clear()
         adapter.clear()
         updateDataCounter()
         onSelectedChange()
@@ -324,18 +392,39 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
 
     fun onDeleteFiles(deletedItems: List<AttachmentItem>) {
-        //unblock ui
         Log.d(LOG_TAG, "onDeleteFiles $deletedItems")
+        endDeleteProgress()
         for (item in deletedItems) {
             Log.d(LOG_TAG, "Delete file $item")
-            messagePanel.setText(messagePanel.message.replace(("\\[attachment=['\"]?" + item.id + ":[^\\]]*?]").toRegex(), ""))
+            if (item.id > 0) {
+                messagePanel.setText(
+                        messagePanel.message.replace(
+                                ("\\[attachment=['\"]?" + item.id + ":[^\\]]*?]").toRegex(),
+                                ""
+                        )
+                )
+            }
+            if (item.status == AttachmentItem.STATUS_REMOVED) {
+                attachments.remove(item)
+                adapter.removeItem(item)
+                selected.remove(item)
+            }
         }
-        progressOverlay.visibility = View.GONE
-        deleteSelected()
+        updateDataCounter()
+        onSelectedChange()
+        unSelectItems()
     }
 
     fun setInsertAttachmentListener(insertAttachmentListener: OnInsertAttachmentListener) {
         this.insertAttachmentListener = insertAttachmentListener
+    }
+
+    fun setRetryUploadListener(listener: OnRetryUploadListener) {
+        this.retryUploadListener = listener
+    }
+
+    interface OnRetryUploadListener {
+        fun onRetry(files: List<RequestFile>, pending: List<AttachmentItem>)
     }
 
     interface OnInsertAttachmentListener {

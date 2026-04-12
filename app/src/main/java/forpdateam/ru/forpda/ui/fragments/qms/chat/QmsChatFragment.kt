@@ -9,8 +9,7 @@ import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -24,8 +23,8 @@ import forpdateam.ru.forpda.entity.remote.qms.QmsChatModel
 import forpdateam.ru.forpda.entity.remote.qms.QmsMessage
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.repository.temp.TempHelper
-import forpdateam.ru.forpda.presentation.qms.chat.QmsChatPresenter
 import forpdateam.ru.forpda.presentation.qms.chat.QmsChatView
+import forpdateam.ru.forpda.presentation.qms.chat.QmsChatViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
 import forpdateam.ru.forpda.ui.fragments.WebViewTopScroller
@@ -59,25 +58,26 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
     private lateinit var attachmentsPopup: AttachmentsPopup
     private lateinit var jsInterface: QmsChatJsInterface
 
+    private val uploadQueue: ArrayDeque<Pair<List<RequestFile>, List<AttachmentItem>>> = ArrayDeque()
+    private var uploadInProgress = false
+
     private lateinit var topScroller: WebViewTopScroller
 
     private val qmsChatTemplate = App.get().Di().qmsChatTemplate
 
-    @InjectPresenter
-    lateinit var presenter: QmsChatPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): QmsChatPresenter = QmsChatPresenter(
-            App.get().Di().qmsInteractor,
-            App.get().Di().qmsChatTemplate,
-            App.get().Di().avatarRepository,
-            App.get().Di().eventsRepository,
-            App.get().Di().mainPreferencesHolder,
-            App.get().Di().templateManager,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
+    private val presenter: QmsChatViewModel by viewModels {
+        QmsChatViewModel.Factory(
+                App.get().Di().qmsInteractor,
+                App.get().Di().qmsChatTemplate,
+                App.get().Di().avatarRepository,
+                App.get().Di().eventsRepository,
+                App.get().Di().mainPreferencesHolder,
+                App.get().Di().templateManager,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_chat)
@@ -126,6 +126,11 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
 
         attachmentsPopup.setEnabledTextControls(false)
         attachmentsPopup.setAddOnClickListener { tryPickFile() }
+        attachmentsPopup.setRetryUploadListener(object : AttachmentsPopup.OnRetryUploadListener {
+            override fun onRetry(files: List<RequestFile>, pending: List<AttachmentItem>) {
+                enqueueUpload(files, pending)
+            }
+        })
         attachmentsPopup.setDeleteOnClickListener {
             attachmentsPopup.preDeleteFiles()
             val selectedFiles = attachmentsPopup.getSelected()
@@ -151,9 +156,18 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         messagePanel.setHeightChangeListener { newHeight -> webView.paddingBottom = newHeight }
 
         topScroller = WebViewTopScroller(webView, appBarLayout)
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun toggleScrollTop() {
+        if (!::topScroller.isInitialized) return
         topScroller.toggleScrollTop()
     }
 
@@ -224,9 +238,9 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
 
 
     override fun setChatMode(mode: String) {
-        if (mode == QmsChatPresenter.MODE_CHAT) {
+        if (mode == QmsChatViewModel.MODE_CHAT) {
             themeCreator?.setVisible(false)
-        } else if (mode == QmsChatPresenter.MODE_CREATING) {
+        } else if (mode == QmsChatViewModel.MODE_CREATING) {
             if (themeCreator == null) {
                 themeCreator = ChatThemeCreator(this, presenter)
             }
@@ -342,11 +356,26 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
 
     fun uploadFiles(files: List<RequestFile>) {
         val pending = attachmentsPopup.preUploadFiles(files)
-        presenter.uploadFiles(files, pending)
+        enqueueUpload(files, pending)
+    }
+
+    private fun enqueueUpload(files: List<RequestFile>, pending: List<AttachmentItem>) {
+        uploadQueue.addLast(files to pending)
+        pumpUploadQueue()
+    }
+
+    private fun pumpUploadQueue() {
+        if (uploadInProgress) return
+        val next = uploadQueue.firstOrNull() ?: return
+        uploadInProgress = true
+        presenter.uploadFiles(next.first, next.second)
     }
 
     override fun onUploadFiles(items: List<AttachmentItem>) {
         attachmentsPopup.onUploadFiles(items)
+        uploadInProgress = false
+        if (uploadQueue.isNotEmpty()) uploadQueue.removeFirst()
+        pumpUploadQueue()
     }
 
     private fun tryPickFile() {

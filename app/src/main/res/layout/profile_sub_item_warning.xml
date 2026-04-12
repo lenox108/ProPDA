@@ -5,10 +5,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingBottom="12dp"
-    android:paddingEnd="16dp"
-    android:paddingStart="16dp"
-    android:paddingTop="12dp">
+    android:paddingBottom="@dimen/content_padding_vertical"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/content_padding_vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -20,7 +20,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textSize="14sp"
+            android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="1724891024"/>
 
         <androidx.appcompat.widget.AppCompatTextView
@@ -29,7 +29,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="end"
             android:textColor="?attr/second_text_color"
-            android:textSize="14sp"
+            android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="1724891024"/>
     </LinearLayout>
 
@@ -38,7 +38,7 @@
         android:id="@+id/item_content"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="4dp"
+        android:paddingTop="@dimen/content_spacing_half"
         android:textColor="?attr/default_text_color"
-        android:textSize="16sp"/>
+        android:textSize="@dimen/list_topic_title_text_size"/>
 </LinearLayout>

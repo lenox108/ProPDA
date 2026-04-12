@@ -7,19 +7,19 @@
     android:layout_height="wrap_content"
     android:clickable="false"
     android:clipToPadding="false"
-    android:padding="8dp">
+    android:padding="@dimen/content_spacing">
 
     <androidx.cardview.widget.CardView
         android:id="@+id/new_message_card"
         style="@style/CardStyle.Item.Wide"
         android:layout_width="wrap_content"
-        android:layout_height="36dp"
+        android:layout_height="@dimen/dp36"
         android:layout_gravity="center_horizontal"
         android:clickable="true"
         android:foreground="?selectableItemBackground"
         app:cardBackgroundColor="?colorAccent"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="4dp">
+        app:cardCornerRadius="@dimen/content_block_padding_vertical"
+        app:cardElevation="@dimen/dp4">
 
 
         <TextView
@@ -28,17 +28,17 @@
             android:layout_height="wrap_content"
             android:layout_gravity="start|center_vertical"
             android:layout_marginEnd="@dimen/dp48"
-            android:layout_marginStart="@dimen/dp16"
+            android:layout_marginStart="@dimen/content_padding_horizontal"
             android:textColor="?contrast_text_color"
-            android:textSize="14sp"
+            android:textSize="@dimen/list_topic_meta_text_size"
             android:textStyle="bold"
             tools:text="@string/test_topic_title"/>
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/icon"
             style="@style/Widget.AppCompat.Button.Borderless"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="@dimen/dp36"
+            android:layout_height="@dimen/dp36"
             android:layout_gravity="end|center_vertical"
             android:clickable="true"
             app:srcCompat="@drawable/ic_close"/>

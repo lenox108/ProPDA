@@ -142,12 +142,13 @@ public class FavoritesAdapter extends BaseSectionedAdapter<FavItem, BaseSectione
 
     private class ItemHolder extends BaseSectionedViewHolder<FavItem> implements View.OnClickListener, View.OnLongClickListener {
         TextView title, lastNick, date, desc;
+        View unreadDot;
         ImageView forumIcon, lockIcon, pollIcon;
-        View dot, topDivider;
+        View topDivider;
 
         ItemHolder(View v) {
             super(v);
-            dot = v.findViewById(R.id.topic_item_dot);
+            unreadDot = v.findViewById(R.id.topic_item_unread_dot);
             topDivider = v.findViewById(R.id.topic_item_top_divider);
             title = (TextView) v.findViewById(R.id.topic_item_title);
             desc = (TextView) v.findViewById(R.id.topic_item_desc);
@@ -167,7 +168,11 @@ public class FavoritesAdapter extends BaseSectionedAdapter<FavItem, BaseSectione
 
             title.setTypeface(item.isNew() ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
             title.setTextColor(item.isNew() ? titleColorNew : titleColor);
-            dot.setVisibility(showDot && item.isNew() ? View.VISIBLE : View.GONE);
+            if (showDot && item.isNew()) {
+                unreadDot.setVisibility(View.VISIBLE);
+            } else {
+                unreadDot.setVisibility(View.GONE);
+            }
 
             forumIcon.setVisibility(item.isForum() ? View.VISIBLE : View.GONE);
 

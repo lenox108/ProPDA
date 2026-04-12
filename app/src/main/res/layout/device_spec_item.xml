@@ -8,13 +8,13 @@
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/item_title"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="@dimen/dp48"
         android:gravity="center_vertical"
-        android:paddingEnd="@dimen/dp16"
-        android:paddingStart="@dimen/dp16"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingStart="@dimen/content_padding_horizontal"
         android:text="@string/profile_title_about"
         android:textColor="?attr/default_text_color"
-        android:textSize="14sp"
+        android:textSize="@dimen/list_topic_meta_text_size"
         android:textStyle="bold" />
 
     <androidx.appcompat.widget.AppCompatTextView
@@ -23,9 +23,9 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/dp48"
         android:gravity="top"
-        android:paddingStart="16dp"
-        android:paddingEnd="@dimen/dp16"
-        android:paddingBottom="16dp"
-        android:textSize="16sp"
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingBottom="@dimen/content_block_padding_vertical"
+        android:textSize="@dimen/list_topic_title_text_size"
         android:text="ajskldjklasjdlkajls;kjdklk;asd"/>
 </androidx.cardview.widget.CardView>

@@ -4,7 +4,9 @@ import android.net.Uri
 import android.util.Log
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.common.MimeTypeUtil
+import forpdateam.ru.forpda.common.topicUrlWithUnreadIfPlainOpen
 import java.net.URLDecoder
+import java.util.Locale
 import java.util.regex.Pattern
 
 /**
@@ -18,15 +20,15 @@ class LinkHandler(
         const val LOG_TAG = "LinkHandler"
     }
 
-    private val forumMediaPattern by lazy { Pattern.compile("https?:\\/\\/4pda\\.(?:ru|to)\\/forum\\/dl\\/post\\/\\d+\\/([\\s\\S]*\\.([\\s\\S]*))") }
+    private val forumMediaPattern by lazy { Pattern.compile("https?:\\/\\/4pda\\.to\\/forum\\/dl\\/post\\/\\d+\\/([\\s\\S]*\\.([\\s\\S]*))") }
 
-    private val supportImagePattern by lazy { Pattern.compile("\\/\\/.*?(4pda\\.to|4pda\\.(?:ru|to)|ggpht\\.com|googleusercontent\\.com|windowsphone\\.com|mzstatic\\.com|savepic\\.net|savepice\\.ru|savepic\\.ru|.*?\\.ibb\\.com?)\\/[\\s\\S]*?\\.(png|jpg|jpeg|gif)") }
+    private val supportImagePattern by lazy { Pattern.compile("\\/\\/.*?(4pda\\.to|ggpht\\.com|googleusercontent\\.com|windowsphone\\.com|mzstatic\\.com|savepic\\.net|savepice\\.ru|savepic\\.ru|.*?\\.ibb\\.com?)\\/[\\s\\S]*?\\.(png|jpg|jpeg|gif)") }
 
-    private val forumLofiPattern by lazy { Pattern.compile("(?:http?s?:)?\\/\\/[\\s\\S]*?4pda\\.(?:ru|to)\\/forum\\/lofiversion\\/[^\\?]*?\\?(t|f)(\\d+)(?:-(\\d+))?") }
+    private val forumLofiPattern by lazy { Pattern.compile("(?:http?s?:)?\\/\\/[\\s\\S]*?4pda\\.to\\/forum\\/lofiversion\\/[^\\?]*?\\?(t|f)(\\d+)(?:-(\\d+))?") }
 
-    private val baseFourPdaPattern by lazy { Pattern.compile("(?:http?s?:)?\\/\\/[\\s\\S]*?4pda\\.(?:ru|to)[\\s\\S]*") }
+    private val baseFourPdaPattern by lazy { Pattern.compile("(?:http?s?:)?\\/\\/[\\s\\S]*?4pda\\.to[\\s\\S]*") }
 
-    private val sitePattern by lazy { Pattern.compile("https?:\\/\\/4pda\\.(?:ru|to)\\/(?:.+?p=|\\d+\\/\\d+\\/\\d+\\/|[\\w\\/]*?\\/?(newer|older)\\/)(\\d+)(?:\\/#comment(\\d+))?") }
+    private val sitePattern by lazy { Pattern.compile("https?:\\/\\/4pda\\.to\\/(?:.+?p=|\\d+\\/\\d+\\/\\d+\\/|[\\w\\/]*?\\/?(newer|older)\\/)(\\d+)(?:\\/#comment(\\d+))?") }
 
 
     private fun handleDownload(url: String, name: String? = null) {
@@ -72,11 +74,12 @@ class LinkHandler(
         url = normalizeForumUrl(url)
 
         if (baseFourPdaPattern.matcher(url).matches()) {
-            val uri = Uri.parse(url.toLowerCase())
-            Log.d(LOG_TAG, "Compare uri/url " + uri.toString() + " : " + url)
+            val uri = Uri.parse(url)
+            val path0 = uri.pathSegments.firstOrNull()?.lowercase(Locale.ROOT).orEmpty()
+            Log.d(LOG_TAG, "Compare uri=$uri path0=$path0")
 
-            if (!uri.pathSegments.isEmpty()) {
-                when (uri.pathSegments[0]) {
+            if (uri.pathSegments.isNotEmpty()) {
+                when (path0) {
                     "pages" -> if (handlePages(uri, someRouter, args)) {
                         return true
                     }
@@ -114,9 +117,9 @@ class LinkHandler(
             }, router, args)
             return true
         }
-        uri.getQueryParameter("showtopic")?.also { param ->
+        uri.getQueryParameter("showtopic")?.also {
             navigateTo(Screen.Theme().apply {
-                themeUrl = uri.toString()
+                themeUrl = topicUrlWithUnreadIfPlainOpen(uri)
             }, router, args)
             return true
         }

@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.model.data.cache.forumuser
 
 import android.util.Log
+import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.entity.db.ForumUserBd
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
 import io.realm.Realm
@@ -20,7 +21,9 @@ class ForumUsersCache(
     fun saveUsers(forumUsers: List<ForumUser>) = Realm.getDefaultInstance().use {
         it.executeTransaction { realm ->
             realm.insertOrUpdate(forumUsers.map {
-                Log.e("kekosina", "saveUser  ${it.id}, ${it.nick}")
+                if (BuildConfig.DEBUG) {
+                    Log.d("ForumUsersCache", "saveUser ${it.id}, ${it.nick}")
+                }
                 ForumUserBd(it)
             })
         }

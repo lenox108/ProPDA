@@ -17,7 +17,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?attr/colorPrimary"
-        android:elevation="1dp">
+        android:elevation="@dimen/card_elevation">
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/no_attachments_text"
@@ -27,8 +27,8 @@
             android:layout_centerVertical="true"
             android:layout_marginEnd="@dimen/dp48"
             android:layout_toStartOf="@+id/files_controls"
-            android:paddingStart="@dimen/dp16"
-            android:paddingEnd="@dimen/dp16"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/content_padding_horizontal"
             android:text="@string/no_attachments"
             android:textAllCaps="true"
             android:textStyle="bold" />
@@ -43,7 +43,7 @@
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/add_to_spoiler"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_height="@dimen/dp48"
                 android:layout_alignEnd="@+id/divider_add_buttons"
                 android:layout_alignParentStart="true"
                 android:background="?attr/selectableItemBackgroundBorderless"
@@ -51,15 +51,15 @@
 
             <View
                 android:id="@+id/divider_add_buttons"
-                android:layout_width="1dp"
-                android:layout_height="24dp"
+                android:layout_width="@dimen/divider_thin"
+                android:layout_height="@dimen/list_avatar_compact_size"
                 android:layout_centerInParent="true"
                 android:background="?attr/divider_line" />
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/add_to_text"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_height="@dimen/dp48"
                 android:layout_alignStart="@+id/divider_add_buttons"
                 android:layout_alignParentEnd="true"
                 android:background="?attr/selectableItemBackgroundBorderless"
@@ -67,8 +67,8 @@
 
             <View
                 android:id="@+id/divider_all_buttons"
-                android:layout_width="1dp"
-                android:layout_height="24dp"
+                android:layout_width="@dimen/divider_thin"
+                android:layout_height="@dimen/list_avatar_compact_size"
                 android:layout_alignParentEnd="true"
                 android:layout_centerVertical="true"
                 android:background="?attr/divider_line" />
@@ -77,22 +77,44 @@
 
         <FrameLayout
             android:id="@+id/files_controls"
-            android:layout_width="@dimen/dp48"
+            android:layout_width="@dimen/attachment_toolbar_strip_width"
             android:layout_height="@dimen/dp48"
             android:layout_alignParentEnd="true">
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/add_file"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
+                android:layout_gravity="end"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/add_attachment"
                 app:srcCompat="@drawable/ic_toolbar_add" />
 
             <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/retry_failed"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
+                android:layout_gravity="start"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/retry"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_toolbar_refresh" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/clear_failed"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
+                android:layout_gravity="center"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/clear_failed"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_toolbar_delete" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/delete_file"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
+                android:layout_gravity="end"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/delete_selected_attachments"
                 android:visibility="gone"
@@ -108,8 +130,8 @@
         android:visibility="gone">
 
         <ProgressBar
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp48"
             android:layout_gravity="center" />
     </FrameLayout>
 

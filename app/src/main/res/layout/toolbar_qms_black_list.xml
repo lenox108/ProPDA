@@ -3,10 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingBottom="@dimen/dp16"
-    android:paddingEnd="@dimen/dp16"
-    android:paddingStart="@dimen/dp16"
-    android:paddingTop="56dp">
+    android:paddingBottom="@dimen/content_block_padding_vertical"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/toolbar_overlay_top_padding">
 
     <androidx.appcompat.widget.AppCompatAutoCompleteTextView
         android:id="@+id/qms_black_list_nick_field"

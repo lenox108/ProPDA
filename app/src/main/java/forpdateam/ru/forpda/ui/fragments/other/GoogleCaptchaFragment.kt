@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.ui.fragments.other
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -20,7 +21,6 @@ import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.views.ExtendedWebView
 import io.reactivex.Observable
-import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.schedulers.Schedulers
 
 /**
@@ -65,13 +65,11 @@ class GoogleCaptchaFragment : TabFragment() {
 
     internal inner class CaptchaWebViewClient : CustomWebViewClient() {
         override fun handleUri(uri: Uri): Boolean {
-            Log.e("SUKA", uri.toString())
             if (Pattern.compile("https://4pda.to/cdn-cgi/l/chk_captcha").matcher(uri.toString()).find()) {
                 val nr = NetworkRequest.Builder().url(uri.toString()).withoutBody().build()
                 val disposable = Observable.fromCallable { App.get().Di().webClient.request(nr) }
                         .onErrorReturn { NetworkResponse(null) }
                         .subscribeOn(Schedulers.io())
-                        .observeOn(AndroidSchedulers.mainThread())
                         .subscribe { this@GoogleCaptchaFragment.onResponse() }
                 addToDisposable(disposable)
             }
@@ -80,13 +78,15 @@ class GoogleCaptchaFragment : TabFragment() {
     }
 
     private fun onResponse() {
-        Toast.makeText(App.getContext(), "Приложение будет перезапущено", Toast.LENGTH_SHORT).show()
-        Handler().postDelayed({
-            val activity = App.getActivity()
-            if (activity == null) {
-                Toast.makeText(App.getContext(), "Перезапустите приложение", Toast.LENGTH_SHORT).show()
-            }
-            MainActivity.restartApplication(activity)
-        }, 1000)
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(App.getContext(), "Приложение будет перезапущено", Toast.LENGTH_SHORT).show()
+            Handler(Looper.getMainLooper()).postDelayed({
+                val activity = App.getActivity()
+                if (activity == null) {
+                    Toast.makeText(App.getContext(), "Перезапустите приложение", Toast.LENGTH_SHORT).show()
+                }
+                MainActivity.restartApplication(activity)
+            }, 1000)
+        }
     }
 }

@@ -16,8 +16,7 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.common.ForPdaCoil
 
 import java.util.ArrayList
@@ -26,8 +25,8 @@ import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.news.DetailsPage
 import forpdateam.ru.forpda.model.interactors.news.ArticleInteractor
-import forpdateam.ru.forpda.presentation.articles.detail.ArticleDetailPresenter
 import forpdateam.ru.forpda.presentation.articles.detail.ArticleDetailView
+import forpdateam.ru.forpda.presentation.articles.detail.ArticleDetailViewModel
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
@@ -62,8 +61,14 @@ class NewsDetailsFragment : TabFragment(), ArticleDetailView, TabTopScroller {
             App.get().Di().articleTemplate
     )
 
-    @InjectPresenter
-    lateinit var presenter: ArticleDetailPresenter
+    private val presenter: ArticleDetailViewModel by viewModels {
+        ArticleDetailViewModel.Factory(
+                interactor,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     fun provideChildInteractor(): ArticleInteractor {
         return interactor
@@ -75,14 +80,6 @@ class NewsDetailsFragment : TabFragment(), ArticleDetailView, TabTopScroller {
         super.attachWebView(webView)
     }
 
-    @ProvidePresenter
-    fun providePresenter(): ArticleDetailPresenter = ArticleDetailPresenter(
-            interactor,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
-
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_news)
         configuration.isFitSystemWindow = true
@@ -90,7 +87,6 @@ class NewsDetailsFragment : TabFragment(), ArticleDetailView, TabTopScroller {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.e("lalala", "onCreate " + this + " : " + arguments)
         arguments?.apply {
             interactor.initData.newsUrl = getString(ARG_NEWS_URL)
             interactor.initData.newsId = getInt(ARG_NEWS_ID, 0)
@@ -169,6 +165,14 @@ class NewsDetailsFragment : TabFragment(), ArticleDetailView, TabTopScroller {
         toolbar.navigationIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
         toolbar.overflowIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
         detailsNick.setOnClickListener { presenter.openAuthorProfile() }
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun toggleScrollTop() {

@@ -10,6 +10,7 @@ import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeParser
 import java.io.ByteArrayInputStream
 import java.security.MessageDigest
+import java.util.Locale
 
 class AttachmentsApi(
         private val webClient: IWebClient,
@@ -116,13 +117,39 @@ class AttachmentsApi(
                 builder.formHeader("relType", relType)
             }
             response = webClient.request(builder.build())
-            //todo проверка на ошибки, я хз че еще может быть кроме 0
-            if (response.body == "0") {
+            if (item.id <= 0) {
+                continue
+            }
+            if (isAttachRemoveResponseSuccess(response.body)) {
                 item.status = AttachmentItem.STATUS_REMOVED
                 item.isError = false
+            } else {
+                item.isError = true
             }
         }
         return items
+    }
+
+    /**
+     * Раньше проверяли только body == "0"; на актуальном форуме ответ AJAX может быть пустым, "1", JSON и т.д.
+     * Без этого [AttachmentItem.STATUS_REMOVED] не выставлялся — вложения не пропадали из списка при редактировании.
+     */
+    private fun isAttachRemoveResponseSuccess(body: String?): Boolean {
+        if (body == null) return true
+        val b = body.trim()
+        if (b.isEmpty()) return true
+        val lower = b.lowercase(Locale.ROOT)
+        if (lower == "nopermission" || lower.contains("nopermission")) return false
+        if (lower.contains("<html") && (lower.contains("error") || lower.contains("exception"))) return false
+        if (b == "0" || b == "1") return true
+        if (b.equals("ok", ignoreCase = true) || b.equals("true", ignoreCase = true)) return true
+        if (b.startsWith("{")) {
+            if (lower.contains("\"error\"") || lower.contains("errorcode")) return false
+            if (lower.contains("\"status\":\"ok\"") || lower.contains("\"status\": \"ok\"")) return true
+            if (lower.contains("\"status\":\"success\"") || lower.contains("\"status\": \"success\"")) return true
+            return b.length < 800 && !lower.contains("error") && !lower.contains("fail")
+        }
+        return b.length <= 96 && !lower.contains("error") && !lower.contains("fail")
     }
 
     private fun byteArrayToHexString(bytes: ByteArray): String {

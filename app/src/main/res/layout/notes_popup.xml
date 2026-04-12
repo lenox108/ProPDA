@@ -14,7 +14,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="@dimen/dp16">
+            android:padding="@dimen/content_padding_horizontal">
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
@@ -26,7 +26,7 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
                     android:hint="@string/title"
-                    android:textSize="16sp" />
+                    android:textSize="@dimen/list_topic_title_text_size" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
@@ -40,7 +40,7 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
                     android:hint="@string/note_link_hint"
-                    android:textSize="16sp" />
+                    android:textSize="@dimen/list_topic_title_text_size" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
@@ -59,7 +59,7 @@
                     android:imeOptions="flagNoFullscreen"
                     android:inputType="textCapSentences|textMultiLine"
                     android:minLines="4"
-                    android:textSize="16sp" />
+                    android:textSize="@dimen/list_topic_title_text_size" />
             </com.google.android.material.textfield.TextInputLayout>
 
         </LinearLayout>
@@ -71,7 +71,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?attr/colorPrimary"
-        android:elevation="1dp">
+        android:elevation="@dimen/divider_thin">
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/popup_title"
@@ -79,16 +79,16 @@
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
             android:layout_centerVertical="true"
-            android:layout_marginEnd="@dimen/dp16"
-            android:layout_marginStart="@dimen/dp16"
+            android:layout_marginEnd="@dimen/content_padding_horizontal"
+            android:layout_marginStart="@dimen/content_padding_horizontal"
             android:layout_toStartOf="@+id/add_button"
             android:textAllCaps="true"
             android:textStyle="bold" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/add_button"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp48"
             android:layout_alignParentEnd="true"
             android:background="?attr/selectableItemBackgroundBorderless"
             app:srcCompat="@drawable/ic_toolbar_add" />

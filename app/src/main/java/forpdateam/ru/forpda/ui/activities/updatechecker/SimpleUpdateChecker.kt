@@ -14,32 +14,31 @@ import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.checker.UpdateData
 import forpdateam.ru.forpda.model.repository.checker.CheckerRepository
-import io.reactivex.disposables.CompositeDisposable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Created by radiationx on 23.07.17.
  */
-
 class SimpleUpdateChecker(
         private val checkerRepository: CheckerRepository
 ) {
 
-    private val compositeDisposable = CompositeDisposable()
+    private val job = SupervisorJob()
+    private val scope = CoroutineScope(job + Dispatchers.Main.immediate)
 
     fun checkUpdate() {
-        compositeDisposable.add(
-                checkerRepository
-                        .checkUpdate(true)
-                        .subscribe({
-                            showUpdateData(it)
-                        }, {
-                            it.printStackTrace()
-                        })
-        )
+        scope.launch {
+            runCatching { checkerRepository.checkUpdate(true) }
+                    .onSuccess { showUpdateData(it) }
+                    .onFailure { it.printStackTrace() }
+        }
     }
 
     fun destroy() {
-        compositeDisposable.clear()
+        job.cancel()
     }
 
     @SuppressLint("NewApi")
@@ -71,7 +70,12 @@ class SimpleUpdateChecker(
 
             val notifyIntent = Intent(context, UpdateCheckerActivity::class.java)
             notifyIntent.action = Intent.ACTION_VIEW
-            val notifyPendingIntent = PendingIntent.getActivity(context, 0, notifyIntent, 0)
+            val piFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE
+            } else {
+                0
+            }
+            val notifyPendingIntent = PendingIntent.getActivity(context, 0, notifyIntent, piFlags)
             mBuilder.setContentIntent(notifyPendingIntent)
 
             mBuilder.setAutoCancel(true)

@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import com.f2prateek.rx.preferences2.RxSharedPreferences
 import com.jakewharton.rxrelay2.BehaviorRelay
+import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.entity.app.other.AppMenuItem
 import forpdateam.ru.forpda.entity.common.AuthState
@@ -12,6 +13,11 @@ import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.CountersHolder
 import forpdateam.ru.forpda.presentation.Screen
 import io.reactivex.Observable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 class MenuRepository(
         private val preferences: SharedPreferences,
@@ -45,7 +51,7 @@ class MenuRepository(
                 item_article_list,
                 item_favorites,
                 item_qms_contacts,
-                item_search,
+                // Вместо поиска в нижнем меню — «Ответы» (Mentions); поиск в GROUP_SYSTEM.
                 item_mentions,
                 item_my_messages,
                 item_forum,
@@ -56,6 +62,7 @@ class MenuRepository(
         )
 
         val GROUP_SYSTEM = arrayOf(
+                item_search,
                 item_settings
         )
     }
@@ -96,6 +103,8 @@ class MenuRepository(
 
     private val menuRelay = BehaviorRelay.create<Map<Int, List<AppMenuItem>>>()
 
+    private val menuScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     private var localCounters = MessageCounters()
 
     private val rxPreferences = RxSharedPreferences.create(preferences)
@@ -111,18 +120,22 @@ class MenuRepository(
         menuSequence
                 .asObservable()
                 .subscribe {
-                    Log.e("kulolo", "menuSequence pref change")
+                    if (BuildConfig.DEBUG) {
+                        Log.d("MenuRepository", "menuSequence pref change")
+                    }
                     loadMainMenuGroup()
                     updateMenuItems()
                 }
 
-        authHolder
-                .observe()
-                .subscribe {
-                    loadMainMenuGroup()
-                    Log.e("lplplp", "MenuRepository observe auth ${it.state.toString()}")
-                    updateMenuItems()
+        menuScope.launch {
+            authHolder.observe().collect {
+                loadMainMenuGroup()
+                if (BuildConfig.DEBUG) {
+                    Log.d("MenuRepository", "observe auth ${it.state}")
                 }
+                updateMenuItems()
+            }
+        }
 
         countersHolder
                 .observe()

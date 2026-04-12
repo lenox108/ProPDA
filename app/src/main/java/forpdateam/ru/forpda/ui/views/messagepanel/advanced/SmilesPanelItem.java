@@ -23,9 +23,8 @@ public class SmilesPanelItem extends BasePanelItem {
     public SmilesPanelItem(Context context, MessagePanel panel) {
         super(context, panel, App.get().getString(R.string.smiles_title));
         PanelItemAdapter adapter = new PanelItemAdapter(getSmiles(), getUrlToAssets(), PanelItemAdapter.TYPE_ASSET);
-        adapter.setOnItemClickListener(item -> {
-            messagePanel.insertText(" ".concat(item.getText()).concat(" "));
-        });
+        adapter.setOnItemClickListener(item ->
+                messagePanel.insertText(" ".concat(item.getText()).concat(" ")));
         recyclerView.setAdapter(adapter);
     }
 

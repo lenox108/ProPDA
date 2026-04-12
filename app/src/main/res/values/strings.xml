@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">ForPDA</string>
+    <string name="app_name" translatable="false">ForPDA 2</string>
     <string name="pager_bullet_separator" formatted="false">%s / %s</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
@@ -38,10 +38,12 @@
     <string name="add">Добавить</string>
     <string name="close">Закрыть</string>
     <string name="send">Отправить</string>
+    <string name="clear_failed">Очистить неудачные</string>
     <string name="retry">Повторить</string>
     <string name="delete">Удалить</string>
     <string name="save">Сохранить</string>
     <string name="insert">Вставить</string>
+    <string name="search">Поиск</string>
     <string name="copy">Копировать</string>
     <string name="quote">Цитировать</string>
     <string name="all_text">Весь текст</string>
@@ -72,6 +74,7 @@
     <string name="sort_by">Сортировать по</string>
     <string name="sort_order">Порядок</string>
     <string name="mark_all_read">Отметить все прочитанными</string>
+    <string name="pref_title_quick_settings">Быстро</string>
     <string name="mark_read">Отметить прочитанным</string>
     <string name="refreshing">Обновление</string>
     <string name="loading_data">Загрузка данных</string>
@@ -120,11 +123,13 @@
     <string name="msg_panel_hint_message">Сообщение</string>
     <string name="msg_panel_advanced_bbcode_desc">BBCode и смайлы: теги как при цитировании</string>
     <string name="msg_panel_clear_message">Очистить текст</string>
+    <string name="msg_panel_delete_last_char">Удалить последний символ</string>
     <string name="no_updates">Обновлений нет</string>
     <string name="updater_current_info" formatted="false">Версия %s\nСборка от %s</string>
     <string name="updater_notification_title">Обновление ForPDA</string>
     <string name="updater_notification_content_VerName">Новая версия: %s</string>
     <string name="close_other_tabs">Закрыть остальные</string>
+    <string name="bottom_nav_open_tabs_section">Открытые вкладки</string>
     <string name="your_profile">Ваш профиль</string>
     <string name="open_link">Открыть ссылку</string>
     <string name="apply">Применить</string>
@@ -294,10 +299,12 @@
     <string name="fav_pin">Закрепить</string>
     <string name="fav_sort_last_post">Последнее сообщение</string>
     <string name="fav_sort_title">Название</string>
+    <string name="fav_mark_all_read">Прочитать все темы</string>
     <string name="fav_unreaded_pinned">Непрочитанные закрепленные темы</string>
     <string name="fav_unreaded">Непрочитанные темы</string>
     <string name="fav_pinned">Закрепленные темы</string>
     <string name="fav_themes">Темы</string>
+    <string name="fav_new_posts_dot_cd">В теме есть новые сообщения</string>
     <string name="fav_change_subscribe_type">Изменить тип подписки</string>
     <string name="add_to_favorites">Добавить в избранное</string>
     <string name="favorites_added">Добавлено в избранное</string>
@@ -451,6 +458,10 @@
     <string name="pref_value_theme_mode_light">Светлая</string>
     <string name="pref_value_theme_mode_dark">Темная</string>
     <string name="pref_value_theme_mode_system">Системная</string>
+    <string name="pref_title_ui_palette">Цвета интерфейса</string>
+    <string name="pref_summary_ui_palette">Системный стиль (iOS) или классические цвета ForPDA</string>
+    <string name="pref_value_ui_palette_system">Системный стиль</string>
+    <string name="pref_value_ui_palette_classic">Классические цвета 4PDA</string>
 
     <string name="pref_title_show_bottom_arrow">Кнопка открытия нижнего меню</string>
     <string name="pref_summary_show_bottom_arrow">Включить, если в системе есть жесты снизу экрана</string>
@@ -518,6 +529,8 @@
     <string name="res_s_poll_results_btn" translatable="false">@string/poll_results_btn</string>
     <string name="res_s_poll_show_btn" translatable="false">@string/poll_show_btn</string>
 
+    <string name="res_s_search_post_btn" translatable="false">@string/search_post_btn</string>
+
     <string name="res_s_hat" translatable="false">@string/hat</string>
 
     <string name="res_s_avatar" translatable="false">@string/avatar</string>
@@ -569,5 +582,6 @@
 
     <!-- Menu item -->
     <string name="menu_item_my_messages">Мои сообщения</string>
+    <string name="search_post_btn">пост</string>
 
 </resources>

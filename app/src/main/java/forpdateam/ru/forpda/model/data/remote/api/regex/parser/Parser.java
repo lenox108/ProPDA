@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import forpdateam.ru.forpda.BuildConfig;
+
 /**
  * Created by radiationx on 13.08.17.
  */
@@ -155,7 +157,9 @@ public class Parser {
         }
         openedNodes.remove(root);
 
-        Log.d("SUKA", "FINAL OPENED " + openedNodes.size() + " : " + nodesAdd + " : " + nodesClose);
+        if (BuildConfig.DEBUG) {
+            Log.d("Parser", "FINAL OPENED " + openedNodes.size() + " : " + nodesAdd + " : " + nodesClose);
+        }
 
         return root;
     }

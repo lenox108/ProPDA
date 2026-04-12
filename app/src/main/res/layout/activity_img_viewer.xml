@@ -31,9 +31,9 @@
             android:layout_height="wrap_content"
             android:animateLayoutChanges="true"
             android:minHeight="?attr/actionBarSize"
-            app:contentInsetEndWithActions="0dp"
-            app:contentInsetStart="0dp"
-            app:contentInsetStartWithNavigation="0dp"
+            app:contentInsetEndWithActions="@dimen/dp0"
+            app:contentInsetStart="@dimen/dp0"
+            app:contentInsetStartWithNavigation="@dimen/dp0"
             app:layout_collapseMode="pin"
             app:popupTheme="@style/ImageViewTheme.PopupOverlay" />
     </com.google.android.material.appbar.AppBarLayout>

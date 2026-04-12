@@ -14,7 +14,7 @@ import java.util.List;
 import forpdateam.ru.forpda.R;
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher;
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser;
-import forpdateam.ru.forpda.presentation.qms.chat.QmsChatPresenter;
+import forpdateam.ru.forpda.presentation.qms.chat.QmsChatViewModel;
 
 /**
  * Created by radiationx on 11.06.17.
@@ -22,14 +22,14 @@ import forpdateam.ru.forpda.presentation.qms.chat.QmsChatPresenter;
 
 public class ChatThemeCreator {
     private QmsChatFragment fragment;
-    private QmsChatPresenter presenter;
+    private QmsChatViewModel presenter;
     private ViewStub viewStub;
     private AppCompatAutoCompleteTextView nickField;
     private AppCompatEditText titleField;
 
     private String userNick, themeTitle;
 
-    ChatThemeCreator(QmsChatFragment fragment, QmsChatPresenter presenter) {
+    ChatThemeCreator(QmsChatFragment fragment, QmsChatViewModel presenter) {
         this.fragment = fragment;
         this.presenter = presenter;
         viewStub = (ViewStub) this.fragment.findViewById(R.id.toolbar_content);

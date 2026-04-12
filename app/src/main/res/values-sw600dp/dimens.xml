@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Планшеты / широкие экраны: чуть больше воздуха по горизонтали у списков -->
+    <dimen name="list_row_padding_horizontal">24dp</dimen>
+    <dimen name="list_row_padding_vertical">14dp</dimen>
+    <!-- Заголовки блоков в bottom sheet и т.п. -->
+    <dimen name="content_block_padding_vertical">20dp</dimen>
+    <dimen name="auth_form_max_width">560dp</dimen>
+    <dimen name="attachment_grid_column_width">128dp</dimen>
+    <dimen name="news_list_compat_row_height">124dp</dimen>
+    <dimen name="news_list_compat_thumb_size">108dp</dimen>
+</resources>

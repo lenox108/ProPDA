@@ -45,6 +45,14 @@ class MainPreferencesHolder(
         rxPreferences.getBoolean(Preferences.Main.SHOW_BOTTOM_ARROW, false)
     }
 
+    private val uiPalette by lazy {
+        rxPreferences.getEnum(
+                Preferences.Main.UI_PALETTE,
+                Preferences.Main.UiPalette.SYSTEM,
+                Preferences.Main.UiPalette::class.java
+        )
+    }
+
     fun observeWebViewFontSize(): Observable<Int> = webViewFontSize.asObservable()
             .map { max(min(it, 64), 8) }
 
@@ -60,6 +68,7 @@ class MainPreferencesHolder(
 
     fun observeShowBottomArrow(): Observable<Boolean> = showBottomArrow.asObservable()
 
+    fun observeUiPalette(): Observable<Preferences.Main.UiPalette> = uiPalette.asObservable()
 
     fun getWebViewFontSize(): Int = max(min(webViewFontSize.get(), 64), 8)
 
@@ -75,9 +84,12 @@ class MainPreferencesHolder(
 
     fun getShowBottomArrow(): Boolean = showBottomArrow.get()
 
+    fun getUiPalette(): Preferences.Main.UiPalette = uiPalette.get()
 
     fun setWebViewFontSize(size: Int): Unit = webViewFontSize.set(max(min(size, 64), 8))
 
     fun setThemeMode(mode: Preferences.Main.ThemeMode) = themeMode.set(mode)
+
+    fun setUiPalette(palette: Preferences.Main.UiPalette) = uiPalette.set(palette)
 
 }

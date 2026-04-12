@@ -14,6 +14,8 @@
         <item name="colorPrimaryDark">@color/dark_colorPrimaryDark</item>
         <item name="colorAccent">@color/dark_colorAccent</item>
         <item name="colorSecondary">@color/dark_link_color</item>
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.ForPDA.Small</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.ForPDA.Medium</item>
         <item name="colorOnSecondary">@android:color/white</item>
         <item name="colorSurface">@color/dark_card_background</item>
         <item name="colorOnSurface">@color/dark_default_text_color</item>
@@ -82,8 +84,7 @@
     </style>
 
     <style name="DayNightAppTheme.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
-        <!--<item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:background">@color/dark_card_background</item>-->
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
     </style>
 
 

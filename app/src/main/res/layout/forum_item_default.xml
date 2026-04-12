@@ -9,20 +9,20 @@
         android:id="@+id/forum_item_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/dp16"
-        android:layout_marginEnd="0dp"
-        android:layout_marginStart="@dimen/dp16"
-        android:layout_marginTop="@dimen/dp16"
+        android:layout_marginBottom="@dimen/content_block_padding_vertical"
+        android:layout_marginEnd="@dimen/dp0"
+        android:layout_marginStart="@dimen/content_padding_horizontal"
+        android:layout_marginTop="@dimen/content_block_padding_vertical"
         android:layout_toStartOf="@+id/forum_item_icon"
         tools:text="@string/test_forum_title"
-        android:textSize="16sp"
+        android:textSize="@dimen/list_topic_title_text_size"
         android:textStyle="bold" />
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/forum_item_icon"
-        android:layout_width="@dimen/dp24"
-        android:layout_height="24dp"
+        android:layout_width="@dimen/list_avatar_compact_size"
+        android:layout_height="@dimen/list_avatar_compact_size"
         android:layout_alignParentEnd="true"
         android:layout_centerVertical="true"
-        android:layout_margin="@dimen/dp12" />
+        android:layout_margin="@dimen/content_padding_vertical" />
 </RelativeLayout>

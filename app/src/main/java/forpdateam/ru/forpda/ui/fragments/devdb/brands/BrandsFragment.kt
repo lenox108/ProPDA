@@ -8,16 +8,14 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
-
 import java.util.ArrayList
 
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.devdb.Brands
-import forpdateam.ru.forpda.presentation.devdb.brands.BrandsPresenter
 import forpdateam.ru.forpda.presentation.devdb.brands.BrandsView
+import forpdateam.ru.forpda.presentation.devdb.brands.BrandsViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 import forpdateam.ru.forpda.ui.views.adapters.BaseSectionedAdapter
@@ -30,15 +28,13 @@ class BrandsFragment : RecyclerFragment(), BrandsView, BaseSectionedAdapter.OnIt
 
     private lateinit var adapter: BrandsAdapter
 
-    @InjectPresenter
-    lateinit var presenter: BrandsPresenter
-
-    @ProvidePresenter
-    internal fun providePresenter(): BrandsPresenter = BrandsPresenter(
-            App.get().Di().devDbRepository,
-            App.get().Di().router,
-            App.get().Di().errorHandler
-    )
+    private val presenter: BrandsViewModel by viewModels {
+        BrandsViewModel.Factory(
+                App.get().Di().devDbRepository,
+                App.get().Di().router,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_brands)
@@ -76,6 +72,14 @@ class BrandsFragment : RecyclerFragment(), BrandsView, BaseSectionedAdapter.OnIt
         }
 
         adapter.setOnItemClickListener(this)
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun isShadowVisible(): Boolean {
@@ -120,10 +124,10 @@ class BrandsFragment : RecyclerFragment(), BrandsView, BaseSectionedAdapter.OnIt
 
     private fun getCategoryTitle(category: String): String? {
         when (category) {
-            BrandsPresenter.CATEGORY_PHONES -> return App.get().getString(R.string.brands_category_phones)
-            BrandsPresenter.CATEGORY_PAD -> return App.get().getString(R.string.brands_category_tabs)
-            BrandsPresenter.CATEGORY_EBOOK -> return App.get().getString(R.string.brands_category_ebook)
-            BrandsPresenter.CATEGORY_SMARTWATCH -> return App.get().getString(R.string.brands_category_smartwatch)
+            BrandsViewModel.CATEGORY_PHONES -> return App.get().getString(R.string.brands_category_phones)
+            BrandsViewModel.CATEGORY_PAD -> return App.get().getString(R.string.brands_category_tabs)
+            BrandsViewModel.CATEGORY_EBOOK -> return App.get().getString(R.string.brands_category_ebook)
+            BrandsViewModel.CATEGORY_SMARTWATCH -> return App.get().getString(R.string.brands_category_smartwatch)
         }
         return null
     }

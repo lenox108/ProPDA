@@ -22,7 +22,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 
-import moxy.MvpAppCompatFragment
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import kotlin.math.max
+import androidx.fragment.app.Fragment
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -39,7 +42,7 @@ import io.reactivex.disposables.Disposable
 /**
  * Created by radiationx on 07.08.16.
  */
-open class TabFragment : MvpAppCompatFragment() {
+open class TabFragment : Fragment() {
 
     private val mHandler = Handler(Looper.getMainLooper())
     private lateinit var mUiThread: Thread
@@ -231,21 +234,40 @@ open class TabFragment : MvpAppCompatFragment() {
                             updateDimens(dimensions)
                         }
         )
+        view.post { ViewCompat.requestApplyInsets(fragmentContainer) }
     }
 
-    private fun updateDimens(dimensions: DimensionHelper.Dimensions) {
+    private fun updateDimens(@Suppress("UNUSED_PARAMETER") dimensions: DimensionHelper.Dimensions) {
+        val wi = ViewCompat.getRootWindowInsets(fragmentContainer)
+        val sys = wi?.getInsets(WindowInsetsCompat.Type.systemBars())
+        val cut = wi?.getInsets(WindowInsetsCompat.Type.displayCutout())
+        val left = max(sys?.left ?: 0, cut?.left ?: 0)
+        val right = max(sys?.right ?: 0, cut?.right ?: 0)
+        // Нижний отступ под нижнее меню приложения задаёт MainActivity (fragments_container).
+        // Повторный navBottom здесь давал просвет между панелью ввода/клавиатурой и таббаром.
+        val bottom = 0
+
         if (!configuration.isFitSystemWindow) {
+            // Верхний inset уже даёт coordinator_layout (fitsSystemWindows). Не дублируем
+            // dimensions.statusBar здесь — иначе двойной отступ под статус-бар (как на «Избранном»).
             fragmentContainer.setPadding(
-                    fragmentContainer.paddingLeft,
-                    dimensions.statusBar,
-                    fragmentContainer.paddingRight,
-                    fragmentContainer.paddingBottom
+                    left,
+                    0,
+                    right,
+                    bottom
             )
             return
         }
         val params = toolbar.layoutParams as CollapsingToolbarLayout.LayoutParams
-        params.topMargin = dimensions.statusBar
+        // Отступ сверху уже учтён у activity (fragments_container fitsSystemWindows).
+        params.topMargin = 0
         toolbar.layoutParams = params
+        fragmentContainer.setPadding(
+                left,
+                0,
+                right,
+                bottom
+        )
     }
 
     protected fun baseInflateFragment(inflater: LayoutInflater, @LayoutRes res: Int) {

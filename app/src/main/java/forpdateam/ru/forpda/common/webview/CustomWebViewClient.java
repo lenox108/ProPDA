@@ -23,6 +23,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import forpdateam.ru.forpda.App;
+import forpdateam.ru.forpda.BuildConfig;
 import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository;
 import forpdateam.ru.forpda.presentation.ILinkHandler;
 
@@ -66,7 +67,9 @@ public class CustomWebViewClient extends WebViewClient {
                         avatarUrl = value;
                         break;
                 }
-                Log.d("lalala", "shouldInterceptRequest: avatar: " + avatarUrl + " : value: " + value);
+                if (BuildConfig.DEBUG) {
+                    Log.d(LOG_TAG, "shouldInterceptRequest avatarUrl=" + avatarUrl);
+                }
 
                 Bitmap bitmap = ForPdaCoil.loadBitmapSync(view.getContext(), avatarUrl);
                 String base64Bitmap = convert(bitmap);

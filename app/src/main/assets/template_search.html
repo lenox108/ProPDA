@@ -39,7 +39,7 @@
     <div class="posts_list">
         <!-- $BeginBlock post -->
         <div name="entry${post_id}" class="post_container ${user_online} close" data-post-id="${post_id}" data-user-id="${user_id}" data-nick="${nick}">
-            <div class="post_title"><a href="https://4pda.to/forum/index.php?showtopic=${topic_id}&view=findpost&p=${post_id}">${post_title}</a></div>
+            <div class="post_title"><a href="${post_title_href}">${post_title}</a></div>
             <div class="post_header">
                 <div tabindex="-1" class="accessibility_anchor"></div>
                 <div class="header_wrapper">
@@ -59,6 +59,10 @@
             <a class="btn hat_button aec" onclick="toggleButton(this, 'hat_content', 'search')" role="button" aria-label="${res_s_hat}"><span>Содержимое поста</span><i class="icon"></i></a>
             <div class="hat_content close">
                 <div class="post_body emoticons">${body}</div>
+            </div>
+            <div class="search_jump_to_post" style="${search_jump_row_style}">
+                <span class="search_post_id_hint">id ${post_id}</span>
+                <a class="search_post_btn" href="${jump_to_post_url}">${res_s_search_post_btn}</a>
             </div>
         </div>
         <!-- $EndBlock post -->

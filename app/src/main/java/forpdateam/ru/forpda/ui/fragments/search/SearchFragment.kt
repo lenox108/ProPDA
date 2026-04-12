@@ -20,9 +20,9 @@ import androidx.appcompat.widget.SearchView
 import android.util.Log
 import android.view.*
 import android.widget.*
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.App
+import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.extractPostBodyHtml
 import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
@@ -33,8 +33,8 @@ import forpdateam.ru.forpda.entity.remote.search.SearchItem
 import forpdateam.ru.forpda.entity.remote.search.SearchResult
 import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
-import forpdateam.ru.forpda.presentation.search.SearchPresenter
 import forpdateam.ru.forpda.presentation.search.SearchSiteView
+import forpdateam.ru.forpda.presentation.search.SearchViewModel
 import forpdateam.ru.forpda.presentation.theme.ThemeJsInterface
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesFragment
@@ -98,10 +98,10 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
     private val listener = object : AdapterView.OnItemSelectedListener {
         override fun onItemSelected(parent: AdapterView<*>, view: View, position: Int, id: Long) {
             val field = when (parent) {
-                resourceSpinner -> SearchPresenter.FIELD_RESOURCE
-                resultSpinner -> SearchPresenter.FIELD_RESULT
-                sortSpinner -> SearchPresenter.FIELD_SORT
-                sourceSpinner -> SearchPresenter.FIELD_SOURCE
+                resourceSpinner -> SearchViewModel.FIELD_RESOURCE
+                resultSpinner -> SearchViewModel.FIELD_RESULT
+                sortSpinner -> SearchViewModel.FIELD_SORT
+                sourceSpinner -> SearchViewModel.FIELD_SOURCE
                 else -> null
             }
 
@@ -115,24 +115,23 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         }
     }
 
-    @InjectPresenter
-    lateinit var presenter: SearchPresenter
-
-    @ProvidePresenter
-    internal fun providePresenter(): SearchPresenter = SearchPresenter(
-            App.get().Di().searchRepository,
-            App.get().Di().favoritesRepository,
-            App.get().Di().themeRepository,
-            App.get().Di().reputationRepository,
-            App.get().Di().topicPreferencesHolder,
-            App.get().Di().mainPreferencesHolder,
-            App.get().Di().otherPreferencesHolder,
-            App.get().Di().searchTemplate,
-            App.get().Di().templateManager,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
+    private val presenter: SearchViewModel by viewModels {
+        SearchViewModel.Factory(
+                App.get().Di().searchRepository,
+                App.get().Di().editPostRepository,
+                App.get().Di().favoritesRepository,
+                App.get().Di().themeRepository,
+                App.get().Di().reputationRepository,
+                App.get().Di().topicPreferencesHolder,
+                App.get().Di().mainPreferencesHolder,
+                App.get().Di().otherPreferencesHolder,
+                App.get().Di().searchTemplate,
+                App.get().Di().templateManager,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_search)
@@ -373,7 +372,8 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
             otherPreferencesHolder.setTooltipSearchSettings(false)
         }
 
-
+        presenter.attachView(this)
+        presenter.start()
     }
 
 
@@ -463,10 +463,10 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
 
         nickField.text = settings.nick
 
-        val resourceItems = fields[SearchPresenter.FIELD_RESOURCE] ?: emptyList()
-        val resultItems = fields[SearchPresenter.FIELD_RESULT] ?: emptyList()
-        val sortItems = fields[SearchPresenter.FIELD_SORT] ?: emptyList()
-        val sourceItems = fields[SearchPresenter.FIELD_SOURCE] ?: emptyList()
+        val resourceItems = fields[SearchViewModel.FIELD_RESOURCE] ?: emptyList()
+        val resultItems = fields[SearchViewModel.FIELD_RESULT] ?: emptyList()
+        val sortItems = fields[SearchViewModel.FIELD_SORT] ?: emptyList()
+        val sourceItems = fields[SearchViewModel.FIELD_SOURCE] ?: emptyList()
 
         setItems(resourceSpinner, resourceItems, 0)
         setItems(resultSpinner, resultItems, 0)
@@ -562,7 +562,9 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         setRefreshing(false)
         recyclerView.scrollToPosition(0)
         hideKeyboard()
-        Log.d("SUKA", "SEARCH SIZE " + searchResult.items.size)
+        if (BuildConfig.DEBUG) {
+            Log.d(LOG_TAG, "SEARCH SIZE " + searchResult.items.size)
+        }
         if (searchResult.items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
                 val funnyContent = FunnyContent(context)
@@ -595,7 +597,9 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
             if (webView.webChromeClient == null) {
                 webView.webChromeClient = CustomWebChromeClient()
             }
-            Log.d("SUKA", "SEARCH SHOW WEBVIEW")
+            if (BuildConfig.DEBUG) {
+                Log.d(LOG_TAG, "SEARCH SHOW WEBVIEW")
+            }
             webView.loadDataWithBaseURL("https://4pda.to/forum/", searchResult.html ?: "", "text/html", "utf-8", null)
         } else {
             for (i in 0 until refreshLayout.childCount) {
@@ -609,7 +613,9 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
                 refreshLayout.addView(recyclerView)
                 Log.d(LOG_TAG, "add recyclerview")
             }
-            Log.d("SUKA", "SEARCH SHOW RECYCLERVIEW")
+            if (BuildConfig.DEBUG) {
+                Log.d(LOG_TAG, "SEARCH SHOW RECYCLERVIEW")
+            }
             adapter.clear()
             adapter.addAll(searchResult.items)
         }
@@ -635,11 +641,12 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
     }
 
     override fun onDestroyView() {
-        super.onDestroyView()
         unregisterForContextMenu(webView)
         webView.removeJavascriptInterface(ThemeFragmentWeb.JS_INTERFACE)
         webView.setJsLifeCycleListener(null)
+        presenter.detachView()
         webView.endWork()
+        super.onDestroyView()
     }
 
     override fun onDestroy() {

@@ -9,24 +9,24 @@
     <View
         android:id="@+id/item_top_divider"
         android:layout_width="match_parent"
-        android:layout_height="1dp"
+        android:layout_height="@dimen/divider_thin"
         android:background="?attr/divider_line" />
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/item_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="@dimen/dp8"
-        android:paddingEnd="@dimen/dp16"
-        android:paddingStart="@dimen/dp16"
-        android:paddingTop="@dimen/dp16"
+        android:paddingBottom="@dimen/list_section_header_padding_bottom"
+        android:paddingEnd="@dimen/list_row_padding_horizontal"
+        android:paddingStart="@dimen/list_row_padding_horizontal"
+        android:paddingTop="@dimen/list_section_header_padding_top"
         android:textAllCaps="true"
         android:textColor="?attr/second_text_color"
-        android:textSize="12sp"
+        android:textSize="@dimen/list_section_header_text_size"
         tools:text="@string/test_topic_section_title"/>
 
     <View
         android:layout_width="match_parent"
-        android:layout_height="1dp"
+        android:layout_height="@dimen/divider_thin"
         android:background="?attr/divider_line" />
 </LinearLayout>

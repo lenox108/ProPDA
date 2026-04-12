@@ -43,6 +43,7 @@ public class AttachmentItem implements Parcelable {
     private String imageUrl;
     private String md5;
     private String url;
+    private String errorText;
 
     private int progress = -1;
 
@@ -174,6 +175,14 @@ public class AttachmentItem implements Parcelable {
         return isError;
     }
 
+    public String getErrorText() {
+        return errorText;
+    }
+
+    public void setErrorText(String errorText) {
+        this.errorText = errorText;
+    }
+
     public int getStatus() {
         return status;
     }
@@ -213,6 +222,7 @@ public class AttachmentItem implements Parcelable {
         writeStringToParcel(parcel, weight);
         writeStringToParcel(parcel, imageUrl);
         writeStringToParcel(parcel, url);
+        writeStringToParcel(parcel, errorText);
     }
 
     public static final Parcelable.Creator<AttachmentItem> CREATOR = new Parcelable.Creator<AttachmentItem>() {
@@ -239,6 +249,7 @@ public class AttachmentItem implements Parcelable {
         weight = readStringFromParcel(parcel);
         imageUrl = readStringFromParcel(parcel);
         url = readStringFromParcel(parcel);
+        errorText = readStringFromParcel(parcel);
     }
 
     private void writeStringToParcel(Parcel parcel, String string) {

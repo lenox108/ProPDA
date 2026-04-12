@@ -9,19 +9,19 @@
         android:layout_height="wrap_content"
         android:background="?attr/background_for_lists"
         android:orientation="vertical"
-        android:paddingTop="@dimen/dp16">
+        android:paddingTop="@dimen/content_block_padding_vertical">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/dp8"
+            android:layout_marginTop="@dimen/content_spacing"
             android:orientation="vertical">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/sort_by"
                 android:textColor="?attr/second_text_color" />
 
@@ -29,21 +29,21 @@
                 android:id="@+id/sorting_key"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/dp8"
-                android:paddingStart="@dimen/dp8" />
+                android:paddingEnd="@dimen/content_spacing"
+                android:paddingStart="@dimen/content_spacing" />
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/dp8"
+            android:layout_marginTop="@dimen/content_spacing"
             android:orientation="vertical">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/sort_order"
                 android:textColor="?attr/second_text_color" />
 
@@ -51,8 +51,8 @@
                 android:id="@+id/sorting_order"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/dp8"
-                android:paddingStart="@dimen/dp8" />
+                android:paddingEnd="@dimen/content_spacing"
+                android:paddingStart="@dimen/content_spacing" />
         </LinearLayout>
 
         <LinearLayout
@@ -60,8 +60,8 @@
             android:layout_height="wrap_content"
             android:gravity="end"
             android:orientation="horizontal"
-            android:paddingEnd="8dp"
-            android:paddingStart="8dp">
+            android:paddingEnd="@dimen/content_spacing"
+            android:paddingStart="@dimen/content_spacing">
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/sorting_reset"

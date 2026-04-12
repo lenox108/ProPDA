@@ -14,9 +14,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/dp20"
-        android:layout_marginTop="@dimen/dp12"
+        android:layout_marginTop="@dimen/content_padding_vertical"
         android:layout_marginEnd="@dimen/dp20"
-        android:layout_marginBottom="@dimen/dp12"
+        android:layout_marginBottom="@dimen/content_padding_vertical"
         android:orientation="vertical">
 
         <forpdateam.ru.forpda.ui.views.RoundAspectRatioImageView
@@ -33,7 +33,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/dp12"
+            android:layout_marginTop="@dimen/content_padding_vertical"
             android:layout_marginBottom="@dimen/dp8"
             android:orientation="horizontal">
 
@@ -45,11 +45,11 @@
                 android:layout_weight="1"
                 android:lineSpacingMultiplier="0.9"
                 android:textAppearance="@style/TextAppearance.AppCompat.Title"
-                android:textSize="20sp"
+                android:textSize="@dimen/empty_state_title_text_size"
                 tools:text="Самая крутая новость на сегодня. Завезли новости. Наконец-то, бля.\nasdasd\n " />
 
             <FrameLayout
-                android:layout_width="80dp"
+                android:layout_width="@dimen/news_full_new_badge_container_width"
                 android:layout_height="wrap_content"
                 android:visibility="gone">
 
@@ -60,7 +60,7 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center|bottom"
                     android:background="@color/cardview_light_background"
-                    android:minHeight="20dp"
+                    android:minHeight="@dimen/dp20"
                     android:orientation="vertical"
                     android:visibility="gone"
                     tools:visibility="visible">
@@ -97,14 +97,14 @@
 
             <de.hdodenhof.circleimageview.CircleImageView
                 android:id="@+id/articleAvatar"
-                android:layout_width="24dp"
-                android:layout_height="24dp" />
+                android:layout_width="@dimen/list_avatar_compact_size"
+                android:layout_height="@dimen/list_avatar_compact_size" />
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/dp8"
-                android:layout_marginEnd="@dimen/dp16"
+                android:layout_marginEnd="@dimen/content_padding_horizontal"
                 android:layout_weight="1"
                 android:orientation="horizontal">
 
@@ -129,7 +129,7 @@
                 android:id="@+id/news_full_item_comments_count"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="@dimen/dp16"
+                android:layout_marginEnd="@dimen/content_padding_horizontal"
                 android:textAppearance="@style/TextAppearance.AppCompat.Small"
                 tools:text="2560" />
 
@@ -146,7 +146,7 @@
 
     <View
         android:layout_width="match_parent"
-        android:layout_height="1dp"
+        android:layout_height="@dimen/divider_thin"
         android:layout_gravity="bottom"
         android:background="?attr/divider_line" />
 </FrameLayout>

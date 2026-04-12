@@ -1,6 +1,10 @@
 package forpdateam.ru.forpda.ui.fragments.other
 
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import android.view.LayoutInflater
 import android.view.View
@@ -8,6 +12,7 @@ import android.view.ViewGroup
 import com.hannesdorfmann.adapterdelegates3.AdapterDelegate
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.databinding.ItemOtherMenuBinding
+import forpdateam.ru.forpda.model.interactors.other.MenuRepository
 import forpdateam.ru.forpda.ui.views.drawers.adapters.DrawerMenuItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.ListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.MenuListItem
@@ -44,10 +49,24 @@ class MenuItemDelegate(
 
         fun bind(item: DrawerMenuItem) {
             this.currentItem = item
-            binding.otherMenuTitle.setText(item.title)
             binding.otherMenuIcon.setImageDrawable(AppCompatResources.getDrawable(binding.root.context, item.icon))
-            binding.otherMenuCounter.text = item.appItem.count.toString()
-            binding.otherMenuCounter.visibility = if (item.appItem.count > 0) View.VISIBLE else View.GONE
+            val ctx = binding.root.context
+            val count = item.appItem.count
+            if (item.appItem.id == MenuRepository.item_mentions && count > 0) {
+                val title = ctx.getString(item.title)
+                val full = "$title ($count)"
+                val ss = SpannableString(full)
+                val red = ContextCompat.getColor(ctx, R.color.md_red_400)
+                ss.setSpan(ForegroundColorSpan(red), title.length, full.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                binding.otherMenuTitle.text = ss
+                binding.otherMenuTitle.contentDescription = full
+                binding.otherMenuCounter.visibility = View.GONE
+            } else {
+                binding.otherMenuTitle.setText(item.title)
+                binding.otherMenuTitle.contentDescription = ctx.getString(item.title)
+                binding.otherMenuCounter.text = count.toString()
+                binding.otherMenuCounter.visibility = if (count > 0) View.VISIBLE else View.GONE
+            }
         }
     }
 }

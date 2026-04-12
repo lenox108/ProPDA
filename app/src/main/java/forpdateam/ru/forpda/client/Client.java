@@ -12,11 +12,13 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 
 import forpdateam.ru.forpda.App;
+import forpdateam.ru.forpda.BuildConfig;
 import forpdateam.ru.forpda.entity.common.AuthData;
 import forpdateam.ru.forpda.entity.common.AuthState;
 import forpdateam.ru.forpda.entity.common.MessageCounters;
@@ -41,7 +43,8 @@ import okhttp3.WebSocketListener;
 
 public class Client implements IWebClient {
     private final static String LOG_TAG = Client.class.getSimpleName();
-    private static final String USER_AGENT = "Mozilla/5.0 (Linux; Android 4.4; Nexus 5 Build/_BuildID_) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/30.0.0.0 Mobile Safari/537.36";
+    /** Актуальный мобильный Chrome на Android — ближе к WebView и к типичному браузеру пользователя. */
+    private static final String USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
     private Map<String, Cookie> clientCookies = new HashMap<>();
     private Handler observerHandler = new Handler(Looper.getMainLooper());
     private List<String> privateHeaders = new ArrayList<>(Arrays.asList("pass_hash", "session_id", "auth_key", "password"));
@@ -155,8 +158,10 @@ public class Client implements IWebClient {
         @Override
         public void saveFromResponse(@NonNull HttpUrl url, @NonNull List<Cookie> cookies) {
             SharedPreferences.Editor editor = App.get().getPreferences().edit();
-            /*for (Cookie cookie : cookies) {
-                Log.e("SUKA", "save COOK " + cookie.name() + " : " + cookie.value());
+            /*if (BuildConfig.DEBUG) {
+                for (Cookie cookie : cookies) {
+                    Log.d(LOG_TAG, "save COOK " + cookie.name());
+                }
             }*/
             for (Cookie cookie : cookies) {
                 if (cookie == null) {
@@ -207,8 +212,10 @@ public class Client implements IWebClient {
                     }
                 }
             }
-            /*for (Cookie cookie : cookies) {
-                Log.e("SUKA", "load COOK " + cookie.name() + " : " + cookie.value());
+            /*if (BuildConfig.DEBUG) {
+                for (Cookie cookie : cookies) {
+                    Log.d(LOG_TAG, "load COOK " + cookie.name());
+                }
             }*/
             return cookies;
         }
@@ -255,26 +262,36 @@ public class Client implements IWebClient {
         if (request.getUrl().substring(0, 2).equals("//")) {
             url = "https:".concat(request.getUrl());
         }
-        Log.d(LOG_TAG, "Request url " + request.getUrl());
+        if (BuildConfig.DEBUG) {
+            Log.d(LOG_TAG, "Request url " + request.getUrl());
+        }
         Request.Builder requestBuilder = new Request.Builder()
                 .url(url)
                 .header("Accept-Language", "ru-RU,ru;q=0.8,en-US;q=0.6,en;q=0.4")
                 .header("User-Agent", USER_AGENT);
         if (request.getHeaders() != null) {
             for (Map.Entry<String, String> entry : request.getHeaders().entrySet()) {
-                Log.d(LOG_TAG, "Header " + entry.getKey() + " : " + (privateHeaders.contains(entry.getKey()) ? "private" : entry.getValue()));
+                if (BuildConfig.DEBUG) {
+                    Log.d(LOG_TAG, "Header " + entry.getKey() + " : " + (privateHeaders.contains(entry.getKey()) ? "private" : entry.getValue()));
+                }
                 requestBuilder.header(entry.getKey(), entry.getValue());
             }
         }
         if (request.getFormHeaders() != null || request.getFile() != null) {
-            Log.d(LOG_TAG, "Multipart " + request.isMultipartForm());
+            if (BuildConfig.DEBUG) {
+                Log.d(LOG_TAG, "Multipart " + request.isMultipartForm());
+            }
             if (request.getFormHeaders() != null) {
                 for (Map.Entry<String, String> entry : request.getFormHeaders().entrySet()) {
-                    Log.d(LOG_TAG, "Form header " + entry.getKey() + " : " + (privateHeaders.contains(entry.getKey()) ? "private" : entry.getValue()));
+                    if (BuildConfig.DEBUG) {
+                        Log.d(LOG_TAG, "Form header " + entry.getKey() + " : " + (privateHeaders.contains(entry.getKey()) ? "private" : entry.getValue()));
+                    }
                 }
             }
             if (request.getFile() != null) {
-                Log.d(LOG_TAG, "Form file " + request.getFile().toString());
+                if (BuildConfig.DEBUG) {
+                    Log.d(LOG_TAG, "Form file " + request.getFile().toString());
+                }
             }
             if (!request.isMultipartForm()) {
                 if (request.getFormHeaders() != null) {
@@ -326,9 +343,12 @@ public class Client implements IWebClient {
             okHttpResponse = client.newCall(requestBuilder.build()).execute();
             if (!okHttpResponse.isSuccessful()) {
                 if (okHttpResponse.code() == 403) {
-                    String content = okHttpResponse.body().string();
-                    //todo catch this is errorhandler
-                    throw new GoogleCaptchaException(content);
+                    String content = okHttpResponse.body() != null ? okHttpResponse.body().string() : "";
+                    // Раньше любой 403 считали Cloudflare — гости часто получают иной 403, тост «Google Captcha» вводил в заблуждение.
+                    if (looksLikeCloudflareCaptchaChallenge(content)) {
+                        throw new GoogleCaptchaException(content);
+                    }
+                    throw new OkHttpResponseException(403, okHttpResponse.message(), request.getUrl());
                 }
                 throw new OkHttpResponseException(okHttpResponse.code(), okHttpResponse.message(), request.getUrl());
             }
@@ -343,7 +363,9 @@ public class Client implements IWebClient {
                 checkForumErrors(response.getBody());
             }
 
-            Log.d(LOG_TAG, "Response: " + response.toString());
+            if (BuildConfig.DEBUG) {
+                Log.d(LOG_TAG, "Response: " + response.toString());
+            }
         } finally {
             if (okHttpResponse != null)
                 okHttpResponse.close();
@@ -381,7 +403,9 @@ public class Client implements IWebClient {
                 tempGroup = countsMatcher.group(3);
                 counters.setQms(tempGroup == null ? 0 : Integer.parseInt(tempGroup));
             } catch (Exception exception) {
-                Log.d("WATAFUCK", res);
+                if (BuildConfig.DEBUG) {
+                    Log.d(LOG_TAG, "getCounts parse failed");
+                }
             }
             countersHolder.set(counters);
         }
@@ -389,6 +413,35 @@ public class Client implements IWebClient {
 
     public void clearCookies() {
         clientCookies.clear();
+    }
+
+    /**
+     * Только явные признаки страницы проверки Cloudflare / chk_captcha. Остальные 403 — обычная ошибка доступа.
+     */
+    private static boolean looksLikeCloudflareCaptchaChallenge(String html) {
+        if (html == null || html.length() < 32) {
+            return false;
+        }
+        String lower = html.toLowerCase(Locale.ROOT);
+        if (lower.contains("chk_captcha") || lower.contains("cdn-cgi/l/chk_captcha")) {
+            return true;
+        }
+        if (lower.contains("cf-browser-verification") || lower.contains("cf-chl-")) {
+            return true;
+        }
+        if (lower.contains("challenge-platform") && lower.contains("cloudflare")) {
+            return true;
+        }
+        if (lower.contains("just a moment") && lower.contains("cloudflare")) {
+            return true;
+        }
+        if (lower.contains("turnstile") || lower.contains("cf-turnstile")) {
+            return true;
+        }
+        if (lower.contains("проверка безопасности") && lower.contains("cloudflare")) {
+            return true;
+        }
+        return false;
     }
 
 }

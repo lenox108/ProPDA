@@ -16,10 +16,15 @@ import android.webkit.JavascriptInterface
 import android.widget.ImageView
 import android.widget.LinearLayout
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 
 import java.util.ArrayList
+
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -28,8 +33,7 @@ import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
 import forpdateam.ru.forpda.common.webview.DialogsHelper
 import forpdateam.ru.forpda.entity.remote.forum.ForumRules
-import forpdateam.ru.forpda.presentation.forumrules.ForumRulesPresenter
-import forpdateam.ru.forpda.presentation.forumrules.ForumRulesView
+import forpdateam.ru.forpda.presentation.forumrules.ForumRulesViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
 import forpdateam.ru.forpda.ui.fragments.WebViewTopScroller
@@ -39,23 +43,21 @@ import forpdateam.ru.forpda.ui.views.ExtendedWebView
  * Created by radiationx on 16.10.17.
  */
 
-class ForumRulesFragment : TabFragment(), ForumRulesView, TabTopScroller {
+class ForumRulesFragment : TabFragment(), TabTopScroller {
 
     private var searchViewTag = 0
     private lateinit var webView: ExtendedWebView
     private lateinit var topScroller: WebViewTopScroller
 
-    @InjectPresenter
-    lateinit var presenter: ForumRulesPresenter
-
-    @ProvidePresenter
-    internal fun providePresenter(): ForumRulesPresenter = ForumRulesPresenter(
-            App.get().Di().forumRepository,
-            App.get().Di().mainPreferencesHolder,
-            App.get().Di().forumRulesTemplate,
-            App.get().Di().templateManager,
-            App.get().Di().errorHandler
-    )
+    private val viewModel: ForumRulesViewModel by viewModels {
+        ForumRulesViewModel.Factory(
+                App.get().Di().forumRepository,
+                App.get().Di().mainPreferencesHolder,
+                App.get().Di().forumRulesTemplate,
+                App.get().Di().templateManager,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = "Правила форума"
@@ -90,27 +92,38 @@ class ForumRulesFragment : TabFragment(), ForumRulesView, TabTopScroller {
             }
         })
         topScroller = WebViewTopScroller(webView, appBarLayout)
+
+        var lastRules: ForumRules? = null
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    setRefreshing(state.loading)
+                    val rules = state.rules
+                    if (rules != null && rules !== lastRules) {
+                        lastRules = rules
+                        webView.loadDataWithBaseURL(
+                                "https://4pda.to/forum/",
+                                rules.html ?: "",
+                                "text/html",
+                                "utf-8",
+                                null
+                        )
+                    }
+                    webView.evalJs("changeStyleType(\"${state.styleType}\")")
+                    webView.setRelativeFontSize(state.fontSize)
+                }
+            }
+        }
     }
 
     override fun toggleScrollTop() {
+        if (!::topScroller.isInitialized) return
         topScroller.toggleScrollTop()
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
         addSearchOnPageItem(menu)
-    }
-
-    override fun showData(data: ForumRules) {
-        webView.loadDataWithBaseURL("https://4pda.to/forum/", data.html ?: "", "text/html", "utf-8", null)
-    }
-
-    override fun setStyleType(type: String) {
-        webView.evalJs("changeStyleType(\"$type\")")
-    }
-
-    override fun setFontSize(size: Int) {
-        webView.setRelativeFontSize(size)
     }
 
     @JavascriptInterface

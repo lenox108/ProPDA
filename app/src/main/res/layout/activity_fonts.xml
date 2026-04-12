@@ -20,7 +20,7 @@
             android:layout_marginTop="@dimen/dp32"
             android:fontFamily="monospace"
             android:text="textStyle:"
-            android:textSize="32sp" />
+            android:textSize="@dimen/font_settings_section_header_text_size" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:layout_width="match_parent"
@@ -55,7 +55,7 @@
             android:layout_marginTop="@dimen/dp32"
             android:fontFamily="monospace"
             android:text="fontFamily:"
-            android:textSize="32sp" />
+            android:textSize="@dimen/font_settings_section_header_text_size" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:layout_width="match_parent"
@@ -98,7 +98,7 @@
             android:layout_marginTop="@dimen/dp32"
             android:fontFamily="monospace"
             android:text="typeface:"
-            android:textSize="32sp" />
+            android:textSize="@dimen/font_settings_section_header_text_size" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:layout_width="match_parent"

@@ -15,6 +15,7 @@ public class FavItemBd extends RealmObject implements IFavItem {
     private String trackType, infoColor, topicTitle, forumTitle, authorUserNick, lastUserNick, date, desc, curatorNick, subType;
     private boolean pin = false, isForum = false;
     private boolean isNew = false, isPoll = false, isClosed = false;
+    private int unreadPostCount = 0;
 
     public FavItemBd() {
     }
@@ -44,6 +45,7 @@ public class FavItemBd extends RealmObject implements IFavItem {
         isForum = item.isForum();
 
         isNew = item.isNew();
+        unreadPostCount = item.getUnreadPostCount();
         isPoll = item.isPoll();
         isClosed = item.isClosed();
     }
@@ -220,6 +222,16 @@ public class FavItemBd extends RealmObject implements IFavItem {
 
     public void setNew(boolean aNew) {
         isNew = aNew;
+    }
+
+    @Override
+    public int getUnreadPostCount() {
+        return unreadPostCount;
+    }
+
+    @Override
+    public void setUnreadPostCount(int unreadPostCount) {
+        this.unreadPostCount = unreadPostCount;
     }
 
     public boolean isPoll() {

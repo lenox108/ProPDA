@@ -5,20 +5,22 @@
     android:layout_height="wrap_content"
     xmlns:tools="http://schemas.android.com/tools"
     android:background="?attr/selectableItemBackground"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:clickable="true"
-    android:paddingBottom="@dimen/dp12"
-    android:paddingEnd="@dimen/dp16"
-    android:paddingStart="@dimen/dp16"
-    android:paddingTop="@dimen/dp12">
+    android:paddingBottom="@dimen/list_row_padding_vertical"
+    android:paddingEnd="@dimen/list_row_padding_horizontal"
+    android:paddingStart="@dimen/list_row_padding_horizontal"
+    android:paddingTop="@dimen/list_row_padding_vertical">
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/topic_item_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="4dp"
+        android:layout_marginBottom="@dimen/list_topic_title_bottom_spacing"
         android:layout_alignParentStart="true"
         android:layout_toStartOf="@+id/icons_block"
-        android:textSize="16sp"
+        android:textSize="@dimen/list_topic_title_text_size"
         tools:text="@string/test_topic_title"/>
 
     <LinearLayout
@@ -26,39 +28,50 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="true"
-        android:paddingTop="2dp"
-        android:orientation="horizontal">
+        android:clipChildren="false"
+        android:orientation="horizontal"
+        android:paddingTop="@dimen/list_topic_icons_padding_top">
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/topic_item_poll_icon"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
+            android:layout_width="@dimen/list_topic_icon_size"
+            android:layout_height="@dimen/list_topic_icon_size"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_poll" />
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/topic_item_forum_icon"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
+            android:layout_width="@dimen/list_topic_icon_size"
+            android:layout_height="@dimen/list_topic_icon_size"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_forum" />
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/topic_item_lock_icon"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
+            android:layout_width="@dimen/list_topic_icon_size"
+            android:layout_height="@dimen/list_topic_icon_size"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_lock" />
-        <View
-            android:id="@+id/topic_item_dot"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
-            android:layout_marginTop="6dp"
-            android:layout_marginEnd="4dp"
-            android:layout_marginBottom="4dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/notify_dot"
-            android:visibility="gone"/>
+
+        <!-- FrameLayout: центр без marginTop+center_vertical (иначе точка вылезает за bounds и RecyclerView срезает круг). -->
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/list_topic_unread_dot_row_height"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="@dimen/list_topic_unread_dot_margin_start"
+            android:clipChildren="false"
+            android:minWidth="@dimen/list_topic_unread_dot_gutter_min">
+
+            <View
+                android:id="@+id/topic_item_unread_dot"
+                android:layout_width="@dimen/list_topic_unread_dot_size"
+                android:layout_height="@dimen/list_topic_unread_dot_size"
+                android:layout_gravity="center"
+                android:background="@drawable/fav_unread_dot"
+                android:contentDescription="@string/fav_new_posts_dot_cd"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </FrameLayout>
     </LinearLayout>
 
     <androidx.appcompat.widget.AppCompatTextView
@@ -67,7 +80,7 @@
         android:layout_height="wrap_content"
         android:layout_below="@+id/topic_item_title"
         android:textColor="?attr/second_text_color"
-        android:textSize="14sp"
+        android:textSize="@dimen/list_topic_meta_text_size"
         tools:text="@string/test_topic_description"/>
 
     <androidx.appcompat.widget.AppCompatTextView
@@ -75,9 +88,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/topic_item_desc"
+        android:contentDescription="@string/user"
         android:textColor="?attr/second_text_color"
-        tools:text="@string/test_topic_last_nick"
-        android:contentDescription="@string/user"/>
+        android:textSize="@dimen/list_topic_meta_text_size"
+        tools:text="@string/test_topic_last_nick" />
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/topic_item_date"
@@ -86,6 +100,7 @@
         android:layout_alignParentEnd="true"
         android:layout_below="@+id/topic_item_desc"
         android:textColor="?attr/second_text_color"
-        tools:text="@string/test_topic_date"/>
+        android:textSize="@dimen/list_topic_meta_text_size"
+        tools:text="@string/test_topic_date" />
 
 </RelativeLayout>

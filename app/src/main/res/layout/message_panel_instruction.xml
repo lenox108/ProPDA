@@ -11,11 +11,11 @@
 
     <androidx.appcompat.widget.AppCompatTextView
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="@dimen/dp48"
         android:gravity="center"
         android:text="@string/tooltip_msg_panel_useful"
         android:textAllCaps="true"
-        android:textSize="16sp"
+        android:textSize="@dimen/list_topic_title_text_size"
         android:textStyle="bold" />
 
 
@@ -24,17 +24,17 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:layout_marginBottom="8dp"
+        android:layout_marginBottom="@dimen/content_spacing"
         android:gravity="center_horizontal"
-        android:padding="@dimen/dp16"
-        android:textSize="18sp" />
+        android:padding="@dimen/content_padding_horizontal"
+        android:textSize="@dimen/news_title_size_18sp" />
 
     <Button
         android:id="@+id/instruction_close_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="16dp"
+        android:layout_marginBottom="@dimen/content_padding_horizontal"
         android:text="@string/tooltip_btn_msg_panel_accept" />
 
 

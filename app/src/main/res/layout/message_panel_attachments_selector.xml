@@ -12,8 +12,8 @@
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/selectorReverse"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp48"
         android:layout_gravity="end"
         android:background="?selectableItemBackground"
         android:clickable="true"

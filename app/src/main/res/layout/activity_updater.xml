@@ -38,7 +38,7 @@
                     android:singleLine="false"
                     android:text="@string/app_name"
                     android:textColor="@color/dark_default_text_color"
-                    android:textSize="42sp" />
+                    android:textSize="@dimen/updater_app_title_text_size" />
 
                 <TextView
                     android:id="@+id/currentInfo"
@@ -55,9 +55,9 @@
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
-                app:contentInsetEndWithActions="0dp"
-                app:contentInsetStart="0dp"
-                app:contentInsetStartWithNavigation="0dp"
+                app:contentInsetEndWithActions="@dimen/dp0"
+                app:contentInsetStart="@dimen/dp0"
+                app:contentInsetStartWithNavigation="@dimen/dp0"
                 app:layout_collapseMode="pin"
                 app:popupTheme="?attr/popup_overlay" />
 
@@ -81,7 +81,7 @@
             <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:padding="16dp">
+                android:padding="@dimen/content_padding_horizontal">
 
                 <ProgressBar
                     android:id="@+id/progressBar"
@@ -112,9 +112,9 @@
             <View
                 android:id="@+id/divider"
                 android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginEnd="16dp"
-                android:layout_marginStart="@dimen/dp16"
+                android:layout_height="@dimen/divider_thin"
+                android:layout_marginEnd="@dimen/content_padding_horizontal"
+                android:layout_marginStart="@dimen/content_padding_horizontal"
                 android:background="#ddd"
                 android:visibility="gone" />
 
@@ -123,7 +123,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="@dimen/dp16"
+                android:padding="@dimen/content_padding_horizontal"
                 android:visibility="gone">
 
             </LinearLayout>

@@ -22,8 +22,8 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.*
 import android.widget.*
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import forpdateam.ru.forpda.BuildConfig
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.FilePickHelper
@@ -37,8 +37,8 @@ import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.presentation.Screen
-import forpdateam.ru.forpda.presentation.theme.ThemePresenter
 import forpdateam.ru.forpda.presentation.theme.ThemeView
+import forpdateam.ru.forpda.presentation.theme.ThemeViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
@@ -84,44 +84,49 @@ abstract class ThemeFragment : TabFragment(), ThemeView {
     lateinit var attachmentsPopup: AttachmentsPopup
         protected set
 
+    private val uploadQueue: ArrayDeque<Pair<List<RequestFile>, List<AttachmentItem>>> = ArrayDeque()
+    private var uploadInProgress = false
+
     private lateinit var notificationView: View
     private lateinit var notificationTitle: TextView
     private lateinit var notificationButton: ImageButton
 
     protected val authHolder = App.get().Di().authHolder
-    private val mainPreferencesHolder = App.get().Di().mainPreferencesHolder
+    protected val mainPreferencesHolder = App.get().Di().mainPreferencesHolder
     private val otherPreferencesHolder = App.get().Di().otherPreferencesHolder
 
-    @InjectPresenter
-    lateinit var presenter: ThemePresenter
-
-    @ProvidePresenter
-    fun providePresenter(): ThemePresenter = ThemePresenter(
-            App.get().Di().themeRepository,
-            App.get().Di().reputationRepository,
-            App.get().Di().editPostRepository,
-            App.get().Di().favoritesRepository,
-            App.get().Di().eventsRepository,
-            App.get().Di().userHolder,
-            App.get().Di().authHolder,
-            App.get().Di().topicPreferencesHolder,
-            App.get().Di().mainPreferencesHolder,
-            App.get().Di().otherPreferencesHolder,
-            App.get().Di().crossScreenInteractor,
-            App.get().Di().themeTemplate,
-            App.get().Di().templateManager,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
+    protected val presenter: ThemeViewModel by viewModels {
+        ThemeViewModel.Factory(
+                App.get().Di().themeRepository,
+                App.get().Di().reputationRepository,
+                App.get().Di().editPostRepository,
+                App.get().Di().favoritesRepository,
+                App.get().Di().eventsRepository,
+                App.get().Di().userHolder,
+                App.get().Di().authHolder,
+                App.get().Di().topicPreferencesHolder,
+                App.get().Di().mainPreferencesHolder,
+                App.get().Di().otherPreferencesHolder,
+                App.get().Di().crossScreenInteractor,
+                App.get().Di().themeTemplate,
+                App.get().Di().templateManager,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     override fun onEventNew(event: TabNotification) {
-        Log.d("SUKAT", "onEventNew")
+        if (BuildConfig.DEBUG) {
+            Log.d(LOG_TAG, "onEventNew")
+        }
         notificationView.visibility = View.VISIBLE
     }
 
     override fun onEventRead(event: TabNotification) {
-        Log.d("SUKAT", "onEventRead")
+        if (BuildConfig.DEBUG) {
+            Log.d(LOG_TAG, "onEventRead")
+        }
         notificationView.visibility = View.GONE
     }
 
@@ -167,7 +172,7 @@ abstract class ThemeFragment : TabFragment(), ThemeView {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setFontSize(mainPreferencesHolder.getWebViewFontSize())
+        // Размер шрифта WebView задаёт ThemeFragmentWeb после создания webView (иначе lateinit webView).
 
         notificationButton.setColorFilter(App.getColorFromAttr(context, R.attr.contrast_text_color), PorterDuff.Mode.SRC_ATOP)
         notificationTitle.text = "Новое сообщение"
@@ -193,6 +198,11 @@ abstract class ThemeFragment : TabFragment(), ThemeView {
         attachmentsPopup = messagePanel.attachmentsPopup
         attachmentsPopup.setAddOnClickListener { tryPickFile() }
         attachmentsPopup.setDeleteOnClickListener { removeFiles() }
+        attachmentsPopup.setRetryUploadListener(object : AttachmentsPopup.OnRetryUploadListener {
+            override fun onRetry(files: List<RequestFile>, pending: List<AttachmentItem>) {
+                enqueueUpload(files, pending)
+            }
+        })
 
 
         paginationHelper.setListener(object : PaginationHelper.PaginationListener {
@@ -316,7 +326,7 @@ abstract class ThemeFragment : TabFragment(), ThemeView {
             if (showKeyboard) {
                 messagePanel.show()
             }
-            messagePanel.heightChangeListener.onChangedHeight(messagePanel.lastHeight)
+            messagePanel.heightChangeListener?.onChangedHeight(messagePanel.lastHeight)
             toggleMessagePanelItem.icon = App.getVecDrawable(context, R.drawable.ic_toolbar_transcribe_close)
         }
         if (showKeyboard) {
@@ -331,7 +341,7 @@ abstract class ThemeFragment : TabFragment(), ThemeView {
         messagePanel.visibility = View.GONE
         messagePanel.hidePopupWindows()
         hideKeyboard()
-        messagePanel.heightChangeListener.onChangedHeight(0)
+        messagePanel.heightChangeListener?.onChangedHeight(0)
         toggleMessagePanelItem.icon = App.getVecDrawable(context, R.drawable.ic_toolbar_create)
     }
 
@@ -572,7 +582,19 @@ abstract class ThemeFragment : TabFragment(), ThemeView {
 
     fun uploadFiles(files: List<RequestFile>) {
         val pending = attachmentsPopup.preUploadFiles(files)
-        presenter.uploadFiles(files, pending)
+        enqueueUpload(files, pending)
+    }
+
+    private fun enqueueUpload(files: List<RequestFile>, pending: List<AttachmentItem>) {
+        uploadQueue.addLast(files to pending)
+        pumpUploadQueue()
+    }
+
+    private fun pumpUploadQueue() {
+        if (uploadInProgress) return
+        val next = uploadQueue.firstOrNull() ?: return
+        uploadInProgress = true
+        presenter.uploadFiles(next.first, next.second)
     }
 
     private fun removeFiles() {
@@ -583,6 +605,9 @@ abstract class ThemeFragment : TabFragment(), ThemeView {
 
     override fun onUploadFiles(items: List<AttachmentItem>) {
         attachmentsPopup.onUploadFiles(items)
+        uploadInProgress = false
+        if (uploadQueue.isNotEmpty()) uploadQueue.removeFirst()
+        pumpUploadQueue()
     }
 
     override fun onDeleteFiles(items: List<AttachmentItem>) {
@@ -630,7 +655,7 @@ abstract class ThemeFragment : TabFragment(), ThemeView {
     }
 
     override fun editPost(post: IBaseForumPost) {
-        presenter.openEditPostForm(post.id)
+        presenter.openEditPostForm(post.id, post.body)
     }
 
     override fun toast(text: String) {

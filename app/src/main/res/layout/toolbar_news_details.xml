@@ -8,8 +8,8 @@
 
     <ProgressBar
         android:id="@+id/article_progress_bar"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp48"
         android:layout_gravity="center"
         android:visibility="gone"/>
 
@@ -32,10 +32,10 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:orientation="vertical"
-        android:paddingBottom="@dimen/dp12"
-        android:paddingEnd="16dp"
-        android:paddingStart="16dp"
-        android:paddingTop="@dimen/dp12">
+        android:paddingBottom="@dimen/content_padding_vertical"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingTop="@dimen/content_padding_vertical">
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/article_title"
@@ -44,7 +44,7 @@
             android:layout_height="wrap_content"
             android:gravity="start"
             android:singleLine="false"
-            android:textSize="24sp"
+            android:textSize="@dimen/profile_stat_value_text_size"
             android:textStyle="bold"
             tools:text="asuiodauspoudioauiosdupoiausioudoiauopisuoiduaiouspodiuaopsudoaipusoai"/>
 
@@ -60,7 +60,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textSize="14sp"
+                android:textSize="@dimen/list_topic_meta_text_size"
                 android:textStyle="bold"
                 tools:text="LONG NICK"/>
 
@@ -70,8 +70,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="end"
-                android:layout_marginEnd="@dimen/dp16"
-                android:textSize="14sp"
+                android:layout_marginEnd="@dimen/content_padding_horizontal"
+                android:textSize="@dimen/list_topic_meta_text_size"
                 android:textStyle="bold"
                 tools:text="2560"/>
 
@@ -81,7 +81,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="end"
-                android:textSize="14sp"
+                android:textSize="@dimen/list_topic_meta_text_size"
                 android:textStyle="bold"
                 tools:text="LONG NICK"/>
         </LinearLayout>

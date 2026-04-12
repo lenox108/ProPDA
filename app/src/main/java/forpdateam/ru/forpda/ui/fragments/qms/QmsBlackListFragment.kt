@@ -5,15 +5,18 @@ import androidx.appcompat.widget.AppCompatAutoCompleteTextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import android.view.*
 import android.widget.ArrayAdapter
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
 import forpdateam.ru.forpda.entity.remote.qms.QmsContact
-import forpdateam.ru.forpda.presentation.qms.blacklist.QmsBlackListPresenter
-import forpdateam.ru.forpda.presentation.qms.blacklist.QmsBlackListView
+import forpdateam.ru.forpda.presentation.qms.blacklist.QmsBlackListViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.qms.adapters.QmsContactsAdapter
 import forpdateam.ru.forpda.ui.views.ContentController
@@ -25,22 +28,20 @@ import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
  * Created by radiationx on 22.03.17.
  */
 
-class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<QmsContact>, QmsBlackListView {
+class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<QmsContact> {
 
     private lateinit var nickField: AppCompatAutoCompleteTextView
     private lateinit var adapter: QmsContactsAdapter
     private val dialogMenu = DynamicDialogMenu<QmsBlackListFragment, QmsContact>()
 
-    @InjectPresenter
-    lateinit var presenter: QmsBlackListPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): QmsBlackListPresenter = QmsBlackListPresenter(
-            App.get().Di().qmsInteractor,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
+    private val viewModel: QmsBlackListViewModel by viewModels {
+        QmsBlackListViewModel.Factory(
+                App.get().Di().qmsInteractor,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_blacklist)
@@ -60,28 +61,45 @@ class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener
         setScrollFlagsEnterAlways()
         nickField.addTextChangedListener(object : SimpleTextWatcher() {
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-                presenter.searchUser(s.toString())
+                viewModel.searchUser(s.toString())
             }
         })
 
-        refreshLayout.setOnRefreshListener { presenter.loadContacts() }
-        recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+        refreshLayout.setOnRefreshListener { viewModel.loadContacts() }
+        recyclerView.layoutManager = LinearLayoutManager(context)
 
         dialogMenu.apply {
             addItem(getString(R.string.profile)) { _, data ->
-                presenter.openProfile(data)
+                viewModel.openProfile(data)
             }
             addItem(getString(R.string.dialogs)) { _, data ->
-                presenter.openDialogs(data)
+                viewModel.openDialogs(data)
             }
             addItem(getString(R.string.delete)) { _, data ->
-                presenter.unBlockUser(data.id)
+                viewModel.unBlockUser(data.id)
             }
         }
 
         adapter = QmsContactsAdapter()
         recyclerView.adapter = adapter
         adapter.setOnItemClickListener(this)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.uiState.collect { state ->
+                        setRefreshing(state.loading)
+                        bindContactsList(state.contacts)
+                        bindSuggestions(state.nickSuggestions)
+                    }
+                }
+                launch {
+                    viewModel.clearNick.collect {
+                        nickField.setText("")
+                    }
+                }
+            }
+        }
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
@@ -92,14 +110,13 @@ class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener
                     var nick = ""
                     if (nickField.text != null)
                         nick = nickField.text.toString()
-                    presenter.blockUser(nick)
+                    viewModel.blockUser(nick)
                     false
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
     }
 
-    override fun showContacts(items: List<QmsContact>) {
-        setRefreshing(false)
+    private fun bindContactsList(items: List<QmsContact>) {
         if (items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
                 val funnyContent = FunnyContent(context)
@@ -116,16 +133,13 @@ class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener
         adapter.addAll(items)
     }
 
-    override fun clearNickField() {
-        nickField.setText("")
-    }
-
-    override fun showFoundUsers(items: List<ForumUser>) {
+    private fun bindSuggestions(items: List<ForumUser>) {
+        if (context == null) return
         val nicks = items.map { it.nick.orEmpty() }
         nickField.setAdapter(ArrayAdapter(context!!, android.R.layout.simple_dropdown_item_1line, nicks))
     }
 
-    override fun showItemDialogMenu(item: QmsContact) {
+    override fun onItemClick(item: QmsContact) {
         dialogMenu.apply {
             disallowAll()
             allowAll()
@@ -133,12 +147,8 @@ class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener
         }
     }
 
-    override fun onItemClick(item: QmsContact) {
-        presenter.onItemLongClick(item)
-    }
-
     override fun onItemLongClick(item: QmsContact): Boolean {
-        presenter.onItemLongClick(item)
+        onItemClick(item)
         return false
     }
 }

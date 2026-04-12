@@ -1,15 +1,16 @@
 <resources>
-    <!-- Default screen margins, per the Android Design guidelines. -->
-    <dimen name="activity_horizontal_margin">16dp</dimen>
-    <dimen name="activity_vertical_margin">16dp</dimen>
+    <!-- Отступы экранов = те же, что у списков (sw600dp / w820dp подхватывают свои values-*) -->
+    <dimen name="activity_horizontal_margin">@dimen/list_row_padding_horizontal</dimen>
+    <dimen name="activity_vertical_margin">@dimen/content_block_padding_vertical</dimen>
     <dimen name="fab_margin">0dp</dimen>
     <dimen name="card_margin_horizontal">-3dp</dimen>
-    <dimen name="card_corner_radius">12dp</dimen>
-    <dimen name="card_elevation">2dp</dimen>
+    <dimen name="card_corner_radius">14dp</dimen>
+    <dimen name="card_elevation">1dp</dimen>
     <dimen name="pager_bullet_indicator_height">52dp</dimen>
     <dimen name="pager_bullet_indicator_dot_margin">4dp</dimen>
     <dimen name="pager_bullet_indicator_active_dot_diameter">12dp</dimen>
     <dimen name="pager_bullet_indicator_inactive_dot_diameter">8dp</dimen>
+    <dimen name="dp0">0dp</dimen>
     <dimen name="dp2">2dp</dimen>
     <dimen name="dp4">4dp</dimen>
     <dimen name="dp6">6dp</dimen>
@@ -23,6 +24,7 @@
     <dimen name="dp36">36dp</dimen>
     <dimen name="dp40">40dp</dimen>
     <dimen name="dp48">48dp</dimen>
+    <dimen name="dp52">52dp</dimen>
     <dimen name="dp56">56dp</dimen>
     <dimen name="dp64">64dp</dimen>
     <dimen name="default_statusbar_height">24dp</dimen>
@@ -32,4 +34,96 @@
     <dimen name="detail_backdrop_height">256dp</dimen>
     <dimen name="news_title_size_18sp">18sp</dimen>
     <dimen name="news_details_content_height">200dp</dimen>
+
+    <!-- Разделители: одна точка для тонких линий на всех dpi -->
+    <dimen name="divider_thin">1dp</dimen>
+
+    <!-- Списки тем / избранное / упоминания: отступы строк (sw600dp шире) -->
+    <dimen name="list_row_padding_horizontal">@dimen/dp16</dimen>
+    <dimen name="list_row_padding_vertical">@dimen/dp12</dimen>
+    <dimen name="list_topic_title_text_size">16sp</dimen>
+    <dimen name="list_topic_meta_text_size">14sp</dimen>
+    <dimen name="list_topic_title_bottom_spacing">@dimen/dp4</dimen>
+    <dimen name="list_topic_icon_size">16dp</dimen>
+    <dimen name="list_topic_icons_padding_top">@dimen/dp2</dimen>
+    <dimen name="list_topic_unread_dot_size">10dp</dimen>
+    <dimen name="list_topic_unread_dot_row_height">@dimen/list_topic_icon_size</dimen>
+    <dimen name="list_topic_unread_dot_margin_start">@dimen/dp6</dimen>
+    <dimen name="list_topic_unread_dot_gutter_min">@dimen/dp12</dimen>
+    <dimen name="list_section_header_text_size">12sp</dimen>
+    <dimen name="list_section_header_padding_top">@dimen/dp16</dimen>
+    <dimen name="list_section_header_padding_bottom">@dimen/dp8</dimen>
+
+    <!-- Нижняя панель вкладок (item_bottom_tab + activity_main) -->
+    <dimen name="bottom_nav_tab_bar_height">@dimen/dp52</dimen>
+    <dimen name="bottom_tab_item_min_height">@dimen/dp52</dimen>
+    <dimen name="bottom_tab_padding_top">@dimen/dp6</dimen>
+    <dimen name="bottom_tab_padding_bottom">@dimen/dp4</dimen>
+    <dimen name="bottom_tab_icon_size">26dp</dimen>
+    <dimen name="bottom_tab_indicator_height">3dp</dimen>
+    <dimen name="bottom_tab_indicator_margin_horizontal">18dp</dimen>
+    <dimen name="bottom_tab_badge_margin_bottom">10dp</dimen>
+    <dimen name="bottom_tab_badge_margin_start">14dp</dimen>
+    <dimen name="bottom_tab_badge_min_height">20dp</dimen>
+    <dimen name="bottom_tab_badge_padding_horizontal">@dimen/dp6</dimen>
+    <dimen name="bottom_tab_badge_min_width">20dp</dimen>
+    <dimen name="bottom_nav_recycler_padding_horizontal">@dimen/dp8</dimen>
+
+    <!-- Глобальные отступы контента = как у списков тем (на планшете шире через sw600dp) -->
+    <dimen name="content_padding_horizontal">@dimen/list_row_padding_horizontal</dimen>
+    <dimen name="content_padding_vertical">@dimen/list_row_padding_vertical</dimen>
+    <dimen name="content_spacing">@dimen/dp8</dimen>
+    <dimen name="content_spacing_half">@dimen/dp4</dimen>
+    <dimen name="content_block_padding_vertical">@dimen/dp16</dimen>
+    <dimen name="toolbar_avatar_size">40dp</dimen>
+    <dimen name="list_avatar_two_line_size">40dp</dimen>
+    <dimen name="list_avatar_compact_size">24dp</dimen>
+    <!-- Текст справа от аватарки 40dp: 16 + 40 + 16 = 72 (Material navigation) -->
+    <dimen name="list_row_with_avatar_text_margin_start">72dp</dimen>
+    <!-- Иконка 24dp + поля 16+16 -->
+    <dimen name="menu_icon_text_margin_start">56dp</dimen>
+    <dimen name="message_panel_button_overlap">-8dp</dimen>
+    <dimen name="news_footer_meta_icon_size">20dp</dimen>
+    <dimen name="comment_like_icon_margin_end_overlap">-4dp</dimen>
+
+    <!-- Панель BBCode: отступ табов справа под две кнопки по 56dp -->
+    <dimen name="message_panel_advanced_trailing_margin">112dp</dimen>
+    <dimen name="attachment_toolbar_strip_width">144dp</dimen>
+    <!-- Профиль: хедер (фиксированная геометрия, но на планшете те же горизонтальные поля) -->
+    <dimen name="profile_toolbar_avatar_size">128dp</dimen>
+    <dimen name="profile_toolbar_progress_ring_size">132dp</dimen>
+    <dimen name="profile_toolbar_avatar_margin_top">72dp</dimen>
+    <dimen name="profile_toolbar_progress_margin_top">70dp</dimen>
+    <dimen name="profile_toolbar_text_block_margin_top">216dp</dimen>
+    <dimen name="profile_toolbar_text_block_margin_bottom">32dp</dimen>
+    <dimen name="empty_state_illustration_size">96dp</dimen>
+    <dimen name="device_grid_card_image_height">144dp</dimen>
+    <dimen name="empty_state_title_text_size">20sp</dimen>
+    <dimen name="empty_state_subtitle_text_size">16sp</dimen>
+    <dimen name="profile_stat_value_text_size">24sp</dimen>
+    <dimen name="attachment_preview_size">64dp</dimen>
+    <dimen name="attachment_grid_column_width">112dp</dimen>
+    <dimen name="attachment_error_text_size">11sp</dimen>
+    <dimen name="toolbar_overlay_top_padding">56dp</dimen>
+    <dimen name="pagination_bar_height">40dp</dimen>
+    <dimen name="news_load_more_row_height">50dp</dimen>
+    <dimen name="news_list_compat_row_height">116dp</dimen>
+    <dimen name="news_list_compat_thumb_size">100dp</dimen>
+    <dimen name="news_list_compat_avatar_size">25dp</dimen>
+    <dimen name="news_list_compat_meta_text_size">10sp</dimen>
+    <dimen name="bottom_tab_badge_autosize_max_text_size">@dimen/news_list_compat_meta_text_size</dimen>
+    <dimen name="bottom_tab_badge_autosize_min_text_size">7sp</dimen>
+    <dimen name="text_autosize_step_granularity_1sp">1sp</dimen>
+    <dimen name="news_full_new_badge_container_width">80dp</dimen>
+    <dimen name="webview_not_found_gp_badge_width">164dp</dimen>
+    <dimen name="profile_contact_icon_size">80dp</dimen>
+    <dimen name="device_post_news_thumb_width">112dp</dimen>
+    <dimen name="device_post_news_thumb_height">84dp</dimen>
+    <dimen name="device_toolbar_pager_height">244dp</dimen>
+    <!-- Экран входа -->
+    <dimen name="auth_form_max_width">480dp</dimen>
+    <dimen name="auth_complete_nick_text_size">26sp</dimen>
+    <!-- Настройки / превью шрифтов: крупные заголовки секций -->
+    <dimen name="font_settings_section_header_text_size">32sp</dimen>
+    <dimen name="updater_app_title_text_size">42sp</dimen>
 </resources>

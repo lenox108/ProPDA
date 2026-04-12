@@ -10,14 +10,14 @@
         android:layout_height="wrap_content"
         android:background="?attr/background_for_lists"
         android:orientation="vertical"
-        android:paddingTop="@dimen/dp16">
+        android:paddingTop="@dimen/content_block_padding_vertical">
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/search_nick_block"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingEnd="@dimen/dp12"
-            android:paddingStart="@dimen/dp12">
+            android:paddingEnd="@dimen/content_padding_vertical"
+            android:paddingStart="@dimen/content_padding_vertical">
 
             <androidx.appcompat.widget.AppCompatEditText
                 android:id="@+id/search_nick_field"
@@ -26,21 +26,21 @@
                 android:layout_gravity="center_horizontal"
                 android:hint="@string/search_settings_hint_nick"
                 android:maxLines="1"
-                android:textSize="16sp" />
+                android:textSize="@dimen/list_topic_title_text_size" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <LinearLayout
             android:id="@+id/search_resource_block"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/dp8"
+            android:layout_marginTop="@dimen/content_spacing"
             android:orientation="vertical">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/search_settings_resource"
                 android:textColor="?attr/second_text_color" />
 
@@ -48,22 +48,22 @@
                 android:id="@+id/search_resource_spinner"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/dp8"
-                android:paddingStart="@dimen/dp8" />
+                android:paddingEnd="@dimen/content_spacing"
+                android:paddingStart="@dimen/content_spacing" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/search_result_block"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/dp8"
+            android:layout_marginTop="@dimen/content_spacing"
             android:orientation="vertical">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/search_settings_result"
                 android:textColor="?attr/second_text_color" />
 
@@ -71,22 +71,22 @@
                 android:id="@+id/search_result_spinner"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/dp8"
-                android:paddingStart="@dimen/dp8" />
+                android:paddingEnd="@dimen/content_spacing"
+                android:paddingStart="@dimen/content_spacing" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/search_sort_block"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/dp8"
+            android:layout_marginTop="@dimen/content_spacing"
             android:orientation="vertical">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/search_settings_sorting"
                 android:textColor="?attr/second_text_color" />
 
@@ -94,22 +94,22 @@
                 android:id="@+id/search_sort_spinner"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/dp8"
-                android:paddingStart="@dimen/dp8" />
+                android:paddingEnd="@dimen/content_spacing"
+                android:paddingStart="@dimen/content_spacing" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/search_source_block"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/dp8"
+            android:layout_marginTop="@dimen/content_spacing"
             android:orientation="vertical">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/search_settings_source"
                 android:textColor="?attr/second_text_color" />
 
@@ -117,8 +117,8 @@
                 android:id="@+id/search_source_spinner"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/dp8"
-                android:paddingStart="@dimen/dp8" />
+                android:paddingEnd="@dimen/content_spacing"
+                android:paddingStart="@dimen/content_spacing" />
         </LinearLayout>
 
         <LinearLayout
@@ -126,15 +126,15 @@
             android:layout_height="wrap_content"
             android:gravity="end"
             android:orientation="horizontal"
-            android:paddingEnd="8dp"
-            android:paddingStart="8dp">
+            android:paddingEnd="@dimen/content_spacing"
+            android:paddingStart="@dimen/content_spacing">
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/search_save_settings"
                 style="@style/Widget.AppCompat.Button.Borderless"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="@dimen/content_spacing"
                 android:text="@string/search_settings_btn_save" />
 
             <androidx.appcompat.widget.AppCompatButton

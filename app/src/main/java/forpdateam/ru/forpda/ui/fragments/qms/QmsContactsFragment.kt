@@ -10,13 +10,16 @@ import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.qms.QmsContact
-import forpdateam.ru.forpda.presentation.qms.contacts.QmsContactsPresenter
-import forpdateam.ru.forpda.presentation.qms.contacts.QmsContactsView
+import forpdateam.ru.forpda.presentation.qms.contacts.QmsContactsViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
 import forpdateam.ru.forpda.ui.fragments.qms.adapters.QmsContactsAdapter
@@ -26,23 +29,21 @@ import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 /**
  * Created by radiationx on 25.08.16.
  */
-class QmsContactsFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<QmsContact>, QmsContactsView {
+class QmsContactsFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<QmsContact> {
 
     private lateinit var adapter: QmsContactsAdapter
     private val dialogMenu = DynamicDialogMenu<QmsContactsFragment, QmsContact>()
 
-    @InjectPresenter
-    lateinit var presenter: QmsContactsPresenter
-
-    @ProvidePresenter
-    internal fun providePresenter(): QmsContactsPresenter = QmsContactsPresenter(
-            App.get().Di().qmsInteractor,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().countersHolder,
-            App.get().Di().eventsRepository,
-            App.get().Di().errorHandler
-    )
+    private val viewModel: QmsContactsViewModel by viewModels {
+        QmsContactsViewModel.Factory(
+                App.get().Di().qmsInteractor,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().countersHolder,
+                App.get().Di().eventsRepository,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_contacts)
@@ -59,32 +60,57 @@ class QmsContactsFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<
         initFabBehavior()
         refreshLayoutStyle(refreshLayout)
         setScrollFlagsEnterAlways()
-        refreshLayout.setOnRefreshListener { presenter.loadContacts() }
-        recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+        refreshLayout.setOnRefreshListener { viewModel.loadContacts() }
+        recyclerView.layoutManager = LinearLayoutManager(context)
 
         fab.setImageDrawable(App.getVecDrawable(context, R.drawable.ic_fab_create))
-        fab.setOnClickListener { presenter.openChatCreator() }
+        fab.setOnClickListener { viewModel.openChatCreator() }
         fab.visibility = View.VISIBLE
 
         dialogMenu.apply {
             addItem(getString(R.string.profile)) { _, data ->
-                presenter.openProfile(data)
+                viewModel.openProfile(data)
             }
             addItem(getString(R.string.add_to_blacklist)) { _, data ->
-                presenter.blockUser(data)
+                viewModel.blockUser(data)
             }
             addItem(getString(R.string.delete)) { _, data ->
-                presenter.deleteDialog(data.id)
+                viewModel.deleteDialog(data.id)
             }
             addItem(getString(R.string.create_note)) { _, data ->
-                presenter.createNote(data)
+                viewModel.createNote(data)
             }
         }
 
         adapter = QmsContactsAdapter()
         adapter.setOnItemClickListener(this)
         recyclerView.adapter = adapter
-        presenter.loadContacts()
+        viewModel.loadContacts()
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.uiState.collect { state ->
+                        setRefreshing(state.loading)
+                        recyclerView.scrollToPosition(0)
+                        adapter.addAll(state.contacts)
+                    }
+                }
+                launch {
+                    viewModel.blockUserResult.collect { res ->
+                        if (res) {
+                            Toast.makeText(context, R.string.user_added_to_blacklist, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                launch {
+                    viewModel.createNote.collect { (nick, url) ->
+                        val title = String.format(getString(R.string.dialogs_Nick), nick)
+                        NotesAddPopup.showAddNoteDialog(context, title, url)
+                    }
+                }
+            }
+        }
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
@@ -103,14 +129,14 @@ class QmsContactsFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<
             }
 
             override fun onQueryTextChange(newText: String): Boolean {
-                presenter.searchLocal(newText)
+                viewModel.searchLocal(newText)
                 return false
             }
         })
         searchView.queryHint = getString(R.string.user)
         menu.add(R.string.blacklist)
                 .setOnMenuItemClickListener {
-                    presenter.openBlackList()
+                    viewModel.openBlackList()
                     false
                 }
     }
@@ -125,36 +151,16 @@ class QmsContactsFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<
         }
     }
 
-    override fun showContacts(items: List<QmsContact>) {
-        recyclerView.scrollToPosition(0)
-        adapter.addAll(items)
+    override fun onItemClick(item: QmsContact) {
+        viewModel.onItemClick(item)
     }
 
-    override fun onBlockUser(res: Boolean) {
-        if (res) {
-            Toast.makeText(context, R.string.user_added_to_blacklist, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    override fun showCreateNote(nick: String, url: String) {
-        val title = String.format(getString(R.string.dialogs_Nick), nick)
-        NotesAddPopup.showAddNoteDialog(context, title, url)
-    }
-
-    override fun showItemDialogMenu(item: QmsContact) {
+    override fun onItemLongClick(item: QmsContact): Boolean {
         dialogMenu.apply {
             disallowAll()
             allowAll()
             show(context, this@QmsContactsFragment, item)
         }
-    }
-
-    override fun onItemClick(item: QmsContact) {
-        presenter.onItemClick(item)
-    }
-
-    override fun onItemLongClick(item: QmsContact): Boolean {
-        presenter.onItemLongClick(item)
         return false
     }
 }

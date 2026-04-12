@@ -12,16 +12,16 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="@dimen/dp12"
-        android:paddingEnd="@dimen/dp16"
-        android:paddingStart="@dimen/dp16"
-        android:paddingTop="@dimen/dp12">
+        android:paddingBottom="@dimen/content_padding_vertical"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingTop="@dimen/content_padding_vertical">
 
         <ImageView
             android:id="@+id/item_image"
-            android:layout_width="112dp"
-            android:layout_height="84dp"
-            android:layout_marginEnd="@dimen/dp16"
+            android:layout_width="@dimen/device_post_news_thumb_width"
+            android:layout_height="@dimen/device_post_news_thumb_height"
+            android:layout_marginEnd="@dimen/content_padding_horizontal"
             android:scaleType="fitCenter" />
 
         <androidx.appcompat.widget.AppCompatTextView
@@ -31,7 +31,7 @@
             android:layout_toEndOf="@+id/item_image"
             android:maxLines="3"
             tools:text="@string/test_topic_title"
-            android:textSize="16sp" />
+            android:textSize="@dimen/list_topic_title_text_size" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/item_desc"
@@ -41,7 +41,7 @@
             android:layout_toEndOf="@+id/item_image"
             tools:text="@string/test_topic_description"
             android:textColor="?attr/second_text_color"
-            android:textSize="14sp"
+            android:textSize="@dimen/list_topic_meta_text_size"
             android:visibility="gone" />
 
         <androidx.appcompat.widget.AppCompatTextView

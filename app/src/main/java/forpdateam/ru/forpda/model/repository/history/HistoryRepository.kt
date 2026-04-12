@@ -4,33 +4,31 @@ import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.model.SchedulersProvider
 import forpdateam.ru.forpda.model.data.cache.history.HistoryCache
 import forpdateam.ru.forpda.model.repository.BaseRepository
-import io.reactivex.Completable
-import io.reactivex.Observable
-import io.reactivex.Single
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.rx2.asCoroutineDispatcher
+import kotlinx.coroutines.withContext
 
 /**
  * Created by radiationx on 01.01.18.
  */
-
 class HistoryRepository(
         private val schedulers: SchedulersProvider,
         private val historyCache: HistoryCache
 ) : BaseRepository(schedulers) {
 
-    fun observeItems(): Observable<List<HistoryItem>> = historyCache
-            .observeItems()
-            .runInIoToUi()
+    private val ioDispatcher = schedulers.io().asCoroutineDispatcher()
 
-    fun getHistory(): Single<List<HistoryItem>> = Single
-            .fromCallable { historyCache.getHistory() }
-            .runInIoToUi()
+    fun observeItems(): Flow<List<HistoryItem>> = historyCache.observeItems()
 
-    fun remove(id: Int): Completable = Completable
-            .fromRunnable { historyCache.remove(id) }
-            .runInIoToUi()
+    suspend fun getHistory(): List<HistoryItem> = withContext(ioDispatcher) {
+        historyCache.getHistory()
+    }
 
-    fun clear(): Completable = Completable
-            .fromRunnable { historyCache.clear() }
-            .runInIoToUi()
+    suspend fun remove(id: Int) = withContext(ioDispatcher) {
+        historyCache.remove(id)
+    }
 
+    suspend fun clear() = withContext(ioDispatcher) {
+        historyCache.clear()
+    }
 }

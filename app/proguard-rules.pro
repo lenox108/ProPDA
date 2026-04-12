@@ -9,14 +9,42 @@
 -dontnote **
 -dontwarn forpdateam.ru.forpda.**
 
--keep class ru.forpdateam.forpda.** { *; }
--keep class forpdateam.ru.forpda.** { *; }
+# =============================================================================
+# Приложение forpdateam.ru.forpda — точечные правила (без -keep всего пакета).
+# R8 может удалять неиспользуемый код и обфусцировать имена, кроме перечисленного.
+# =============================================================================
 
--keepclassmembers class ru.forpdateam.forpda.** { *; }
--keepclassmembers class forpdateam.ru.forpda.** { *; }
+# Точка входа Application
+-keep public class forpdateam.ru.forpda.App {
+    public <init>();
+}
 
--keepclassmembers enum forpdateam.ru.forpda.** { *; }
--keepclassmembers enum ru.forpdateam.forpda.** { *; }
+# Moxy (kapt): биндеры и ViewState — иначе чёрный экран / краш при открытии экранов
+-keep class **$$PresentersBinder { *; }
+-keep class **$$ViewStateProvider { *; }
+-keep class **$$State { *; }
+
+# WebView: методы, вызываемые из JS по имени
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# Kotlin: метаданные (sealed, inline, reflection в библиотеках)
+-keepattributes kotlin.Metadata
+-keep class kotlin.Metadata { *; }
+
+# Cicerone: Screen.getKey() = simpleName вложенных классов — стабильные ключи навигации
+-keepnames class forpdateam.ru.forpda.presentation.Screen$* {
+    *;
+}
+
+# Parcelable
+-keepclassmembers class * implements android.os.Parcelable {
+    public static final ** CREATOR;
+}
+
+# Realm: модели БД (дополнительно к правилу * extends RealmObject ниже)
+-keep class forpdateam.ru.forpda.entity.db.** { *; }
 
 -keepattributes SourceFile,LineNumberTable
 
@@ -78,5 +106,4 @@
 
 # В search fragment юзается с рефлексией, поэтому нужно исключить
 -keep public class androidx.swiperefreshlayout.widget.SwipeRefreshLayout { *; }
-
 

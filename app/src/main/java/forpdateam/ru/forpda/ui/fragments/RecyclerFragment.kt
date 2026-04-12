@@ -65,6 +65,7 @@ abstract class RecyclerFragment : TabFragment(), TabTopScroller {
     }
 
     override fun toggleScrollTop() {
+        if (!::topScroller.isInitialized) return
         topScroller.toggleScrollTop()
     }
 }

@@ -23,7 +23,10 @@
             inFavorite: ${in_favorite_bool},
             authorized: ${authorized_bool},
             isCurator: ${is_curator_bool},
-            memberId: ${member_id_int}
+            memberId: ${member_id_int},
+
+            /** Соответствует настройке «Открытая шапка темы». Если false — scrollToElement не разворачивает шапку. */
+            hatOpenedPref: ${hat_opened_pref_bool}
         }
 
         function setPaddingBottom(newPadding) {

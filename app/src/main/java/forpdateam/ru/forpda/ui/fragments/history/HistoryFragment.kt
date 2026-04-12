@@ -5,14 +5,18 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import android.view.Menu
 import android.view.View
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.history.HistoryItem
-import forpdateam.ru.forpda.presentation.history.HistoryPresenter
-import forpdateam.ru.forpda.presentation.history.HistoryView
+import forpdateam.ru.forpda.presentation.history.HistoryViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.views.ContentController
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
@@ -23,32 +27,34 @@ import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
  * Created by radiationx on 06.09.17.
  */
 
-class HistoryFragment : RecyclerFragment(), HistoryView {
+class HistoryFragment : RecyclerFragment() {
 
     private lateinit var adapter: HistoryAdapter
     private lateinit var dialogMenu: DynamicDialogMenu<HistoryFragment, HistoryItem>
 
     private val adapterListener = object : BaseAdapter.OnItemClickListener<HistoryItem> {
         override fun onItemClick(item: HistoryItem) {
-            presenter.onItemClick(item)
+            viewModel.onItemClick(item)
         }
 
         override fun onItemLongClick(item: HistoryItem): Boolean {
-            presenter.onItemLongClick(item)
-            return false
+            dialogMenu.apply {
+                disallowAll()
+                allowAll()
+                show(context, this@HistoryFragment, item)
+            }
+            return true
         }
     }
 
-    @InjectPresenter
-    lateinit var presenter: HistoryPresenter
-
-    @ProvidePresenter
-    internal fun providePresenter(): HistoryPresenter = HistoryPresenter(
-            App.get().Di().historyRepository,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
+    private val viewModel: HistoryViewModel by viewModels {
+        HistoryViewModel.Factory(
+                App.get().Di().historyRepository,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_history)
@@ -61,10 +67,10 @@ class HistoryFragment : RecyclerFragment(), HistoryView {
         dialogMenu = DynamicDialogMenu()
         dialogMenu.apply {
             addItem(getString(R.string.copy_link)) { _, data ->
-                presenter.copyLink(data)
+                viewModel.copyLink(data)
             }
             addItem(getString(R.string.delete)) { _, data ->
-                presenter.remove(data.id)
+                viewModel.remove(data.id)
             }
         }
 
@@ -74,19 +80,28 @@ class HistoryFragment : RecyclerFragment(), HistoryView {
         recyclerView.adapter = adapter
 
         adapter.setItemClickListener(adapterListener)
-        refreshLayout.setOnRefreshListener { presenter.getHistory() }
+        refreshLayout.setOnRefreshListener { viewModel.refresh() }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    setRefreshing(state.loading)
+                    showHistory(state.items)
+                }
+            }
+        }
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
         menu.add("Удалить историю")
                 .setOnMenuItemClickListener {
-                    presenter.clear()
+                    viewModel.clear()
                     false
                 }
     }
 
-    override fun showHistory(items: List<HistoryItem>) {
+    private fun showHistory(items: List<HistoryItem>) {
         if (items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
                 val funnyContent = FunnyContent(context)
@@ -100,14 +115,6 @@ class HistoryFragment : RecyclerFragment(), HistoryView {
             contentController.hideContent(ContentController.TAG_NO_DATA)
         }
         adapter.addAll(items)
-    }
-
-    override fun showItemDialogMenu(item: HistoryItem) {
-        dialogMenu.apply {
-            disallowAll()
-            allowAll()
-            show(context, this@HistoryFragment, item)
-        }
     }
 
 }

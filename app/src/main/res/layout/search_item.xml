@@ -13,17 +13,17 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="@dimen/dp12"
-        android:paddingEnd="@dimen/dp16"
-        android:paddingStart="@dimen/dp16"
-        android:paddingTop="@dimen/dp12">
+        android:paddingBottom="@dimen/content_padding_vertical"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingTop="@dimen/content_padding_vertical">
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/search_item_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
-            android:textSize="16sp"
+            android:textSize="@dimen/list_topic_title_text_size"
             android:textStyle="bold"
             tools:text="@string/test_topic_title"/>
 
@@ -32,9 +32,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/search_item_title"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="@dimen/content_spacing_half"
             android:ellipsize="end"
             android:maxLines="5"
+            android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="@string/test_topic_description"/>
 
         <androidx.appcompat.widget.AppCompatTextView
@@ -42,8 +43,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@+id/search_item_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="@dimen/content_spacing_half"
             android:textColor="?attr/second_text_color"
+            android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="@string/test_topic_last_nick"/>
 
         <androidx.appcompat.widget.AppCompatTextView
@@ -52,8 +54,9 @@
             android:layout_height="wrap_content"
             android:layout_alignParentEnd="true"
             android:layout_below="@+id/search_item_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="@dimen/content_spacing_half"
             android:textColor="?attr/second_text_color"
+            android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="@string/test_topic_date"/>
 
     </RelativeLayout>

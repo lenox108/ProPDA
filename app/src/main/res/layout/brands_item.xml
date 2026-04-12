@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="48dp"
+    android:layout_height="@dimen/dp48"
     xmlns:tools="http://schemas.android.com/tools"
     android:background="?attr/selectableItemBackground">
 
@@ -10,7 +10,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerVertical="true"
-        android:layout_marginStart="16dp"
+        android:layout_marginStart="@dimen/content_padding_horizontal"
         android:layout_alignParentStart="true"
         android:layout_toStartOf="@+id/item_count"
         tools:text="@string/test_topic_title"
@@ -19,14 +19,14 @@
     <TextView
         android:id="@+id/item_count"
         android:layout_width="wrap_content"
-        android:layout_height="24dp"
-        android:minWidth="24dp"
+        android:layout_height="@dimen/list_avatar_compact_size"
+        android:minWidth="@dimen/list_avatar_compact_size"
         android:layout_alignParentEnd="true"
         android:layout_centerVertical="true"
         android:gravity="center"
-        android:layout_marginEnd="16dp"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
+        android:layout_marginEnd="@dimen/content_padding_horizontal"
+        android:paddingStart="@dimen/content_spacing"
+        android:paddingEnd="@dimen/content_spacing"
         android:background="?count_background"
         android:textColor="?attr/contrast_text_color"
         android:textStyle="bold"

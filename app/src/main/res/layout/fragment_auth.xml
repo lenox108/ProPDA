@@ -17,8 +17,8 @@
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp">
+            android:paddingTop="@dimen/content_spacing"
+            android:paddingBottom="@dimen/content_spacing">
 
             <RelativeLayout
                 android:id="@+id/auth_complete"
@@ -31,18 +31,18 @@
 
                 <de.hdodenhof.circleimageview.CircleImageView xmlns:app="http://schemas.android.com/apk/res-auto"
                     android:id="@+id/auth_avatar"
-                    android:layout_width="128dp"
-                    android:layout_height="128dp"
+                    android:layout_width="@dimen/profile_toolbar_avatar_size"
+                    android:layout_height="@dimen/profile_toolbar_avatar_size"
                     android:layout_centerHorizontal="true"
-                    android:layout_marginTop="2dp"
+                    android:layout_marginTop="@dimen/dp2"
                     android:scaleType="centerCrop"
                     app:civ_border_color="#00000000"
-                    app:civ_border_width="0dp" />
+                    app:civ_border_width="@dimen/dp0" />
 
                 <com.github.rahatarmanahmed.cpv.CircularProgressView
                     android:id="@+id/auth_progress"
-                    android:layout_width="132dp"
-                    android:layout_height="132dp"
+                    android:layout_width="@dimen/profile_toolbar_progress_ring_size"
+                    android:layout_height="@dimen/profile_toolbar_progress_ring_size"
                     android:layout_centerHorizontal="true"
                     android:scaleType="centerCrop"
                     app:cpv_animAutostart="true"
@@ -56,7 +56,7 @@
                     android:layout_below="@+id/auth_avatar"
                     android:layout_centerHorizontal="true"
                     android:layout_marginTop="@dimen/dp32"
-                    android:textSize="26sp"
+                    android:textSize="@dimen/auth_complete_nick_text_size"
                     android:visibility="gone"
                     tools:text="@string/test_auth_nick" />
             </RelativeLayout>
@@ -64,7 +64,7 @@
 
             <LinearLayout
                 android:id="@+id/auth_main_form"
-                android:layout_width="480dp"
+                android:layout_width="@dimen/auth_form_max_width"
                 android:layout_height="wrap_content"
                 android:layout_centerInParent="true"
                 android:focusableInTouchMode="true"
@@ -157,7 +157,7 @@
                     <androidx.appcompat.widget.AppCompatCheckBox
                         android:id="@+id/auth_hidden"
                         android:layout_width="wrap_content"
-                        android:layout_height="48dp"
+                        android:layout_height="@dimen/dp48"
                         android:focusable="false"
                         android:text="@string/auth_hidden"
                         android:textAllCaps="true"
@@ -177,7 +177,7 @@
                         android:layout_width="@dimen/dp36"
                         android:layout_height="@dimen/dp36"
                         android:layout_gravity="end|center_vertical"
-                        android:layout_marginEnd="@dimen/dp16"
+                        android:layout_marginEnd="@dimen/content_padding_horizontal"
                         android:visibility="gone" />
                 </FrameLayout>
             </LinearLayout>
@@ -190,7 +190,7 @@
         android:layout_width="match_parent"
         android:layout_height="@dimen/dp64"
         android:orientation="horizontal"
-        android:padding="8dp">
+        android:padding="@dimen/content_spacing">
 
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/auth_skip"

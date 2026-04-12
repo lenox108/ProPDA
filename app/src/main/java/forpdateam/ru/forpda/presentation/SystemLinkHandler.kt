@@ -68,11 +68,13 @@ class SystemLinkHandler(
                     App.get().Di().webClient.request(request)
                 }
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({ response ->
+                    // UI: диалоги/тосты/permissions — только на main.
+                    val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                    mainHandler.post {
                     if (response.url == null) {
                         Toast.makeText(App.getContext(), R.string.error_occurred, Toast.LENGTH_SHORT).show()
-                        return@subscribe
+                        return@post
                     }
                     try {
                         val activity = App.getActivity()
@@ -100,9 +102,12 @@ class SystemLinkHandler(
                         AppMetrica.reportError(ex.message.orEmpty(), ex)
                         //ACRA.getErrorReporter().handleException(ex)
                     }
+                    }
                 }, {
                     it.printStackTrace()
-                    Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                    }
                 })
     }
 

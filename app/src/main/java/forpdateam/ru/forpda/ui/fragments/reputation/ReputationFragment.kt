@@ -10,8 +10,7 @@ import android.view.*
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -19,8 +18,8 @@ import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.reputation.RepData
 import forpdateam.ru.forpda.entity.remote.reputation.RepItem
 import forpdateam.ru.forpda.model.data.remote.api.reputation.ReputationApi
-import forpdateam.ru.forpda.presentation.reputation.ReputationPresenter
 import forpdateam.ru.forpda.presentation.reputation.ReputationView
+import forpdateam.ru.forpda.presentation.reputation.ReputationViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.views.ContentController
@@ -47,6 +46,16 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
 
     private val authHolder = App.get().Di().authHolder
 
+    private val presenter: ReputationViewModel by viewModels {
+        ReputationViewModel.Factory(
+                App.get().Di().reputationRepository,
+                App.get().Di().avatarRepository,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
+
     private val paginationListener = object : PaginationHelper.PaginationListener {
         override fun onTabSelected(tab: TabLayout.Tab): Boolean {
             return refreshLayout.isRefreshing
@@ -67,18 +76,6 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
             return false
         }
     }
-
-    @InjectPresenter
-    lateinit var presenter: ReputationPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): ReputationPresenter = ReputationPresenter(
-            App.get().Di().reputationRepository,
-            App.get().Di().avatarRepository,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_reputation)
@@ -121,6 +118,14 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
         recyclerView.adapter = adapter
         paginationHelper.setListener(paginationListener)
         adapter.setOnItemClickListener(adapterListener)
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun onDestroy() {

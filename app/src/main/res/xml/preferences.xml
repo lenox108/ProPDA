@@ -3,6 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools">
     <PreferenceCategory
+        android:key="quick_settings_category"
+        android:layout="@layout/preference_category_custom_top"
+        android:title="@string/pref_title_quick_settings" />
+    <PreferenceCategory
         android:layout="@layout/preference_category_custom_top"
         android:title="@string/pref_title_notifications">
         <Preference
@@ -54,6 +58,17 @@
             android:defaultValue="SYSTEM"
             android:title="@string/pref_title_theme_mode"
             app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:dialogTitle="@string/pref_title_ui_palette"
+            android:entries="@array/entries_ui_palette"
+            android:entryValues="@array/entry_values_ui_palette"
+            android:key="main.ui.palette"
+            android:layout="@layout/preference_custom"
+            android:defaultValue="SYSTEM"
+            android:title="@string/pref_title_ui_palette"
+            app:iconSpaceReserved="false"
+            app:useSimpleSummaryProvider="true" />
 
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="false"

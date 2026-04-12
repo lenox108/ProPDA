@@ -56,7 +56,6 @@ public class NestedWebView extends WebView implements NestedScrollingChild {
     private OnLongClickListener longClickListener = v -> true;
 
     private void changeLongClickable(boolean enable) {
-        //Log.d("SUKA", "CHANGE LONG " + enable);
         setOnLongClickListener(enable ? null : longClickListener);
         setLongClickable(enable);
         setHapticFeedbackEnabled(enable);
@@ -73,7 +72,6 @@ public class NestedWebView extends WebView implements NestedScrollingChild {
         vtev.offsetLocation(mNestedOffsets[0], mNestedOffsets[1]);
         switch (action) {
             case MotionEvent.ACTION_DOWN: {
-                //Log.e("SUKA", "ACT DWN " + mScrollState);
                 mLastTouchX = (int) (e.getX() + 0.5f);
                 mLastTouchY = (int) (e.getY() + 0.5f);
 
@@ -96,7 +94,6 @@ public class NestedWebView extends WebView implements NestedScrollingChild {
                         break;
                     }
                 }
-                //Log.d("SUKA", "PREMOVE " + dy + " : " + mScrollState);
                 final boolean preScrollConsumed = dispatchNestedPreScroll(dx, dy, mScrollConsumed, mScrollOffset);
 
                 if (preScrollConsumed) {
@@ -135,14 +132,12 @@ public class NestedWebView extends WebView implements NestedScrollingChild {
                         changeLongClickable(false);
                     }
                 }
-                //Log.d("SUKA", "Move " + dy + " : " + mScrollState + " : ");
             }
             break;
 
 
             case MotionEvent.ACTION_UP: {
                 //long dt = System.currentTimeMillis() - lastTouchTime;
-                //Log.e("SUKA", "ACT UP " + mScrollState + " : dt=" + dt);
                 if (mScrollState == SCROLL_STATE_NESTED_SCROLL) {
                     e.setAction(MotionEvent.ACTION_CANCEL);
                 }
@@ -153,7 +148,6 @@ public class NestedWebView extends WebView implements NestedScrollingChild {
             break;
 
             case MotionEvent.ACTION_CANCEL: {
-                //Log.e("SUKA", "ACT CANCEL " + mScrollState);
                 super.onTouchEvent(e);
                 resetTouch();
                 changeLongClickable(true);

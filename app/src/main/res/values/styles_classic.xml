@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="DayNightAppTheme.Classic4pda" parent="DayNightAppTheme">
+        <item name="colorPrimary">@color/classic_light_colorPrimary</item>
+        <item name="colorPrimaryDark">@color/classic_light_colorPrimaryDark</item>
+        <item name="colorAccent">@color/classic_light_colorAccent</item>
+        <item name="colorSecondary">@color/classic_light_colorAccent</item>
+        <item name="link_color">@color/classic_light_link_color</item>
+        <item name="default_text_color">@color/classic_light_default_text_color</item>
+        <item name="second_text_color">@color/classic_light_second_text_color</item>
+        <item name="background_base">@color/classic_light_background_base</item>
+        <item name="background_for_cards">@color/classic_light_background_for_cards</item>
+        <item name="background_for_lists">@color/classic_light_background_for_lists</item>
+        <item name="divider_line">@color/classic_light_divider_line</item>
+        <item name="divider_line_bottom_nav">@color/classic_light_divider_line_bottom_nav</item>
+        <item name="icon_base">@color/classic_light_icon_base</item>
+        <item name="icon_toolbar">@color/classic_light_icon_toolbar</item>
+        <item name="cards_background">@color/classic_light_card_background</item>
+        <item name="msg_panel_tooltip_bg">@color/classic_light_msg_panel_tooltip_bg</item>
+        <item name="actionModeBackground">@color/classic_light_colorPrimary</item>
+        <item name="android:windowBackground">@color/classic_light_background_base</item>
+        <item name="android:navigationBarColor">@color/classic_light_navigation_bar_color</item>
+        <item name="colorSurface">@color/classic_light_card_background</item>
+        <item name="colorOnSurface">@color/classic_light_default_text_color</item>
+        <item name="alertDialogTheme">@style/DayNightAppTheme.Classic4pda.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Classic4pda.BottomSheetDialog</item>
+    </style>
+
+    <style name="DayNightAppTheme.Classic4pda.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:colorBackground">@color/classic_light_card_background</item>
+        <item name="colorAccent">@color/classic_light_colorAccent</item>
+        <item name="colorPrimary">@color/classic_light_link_color</item>
+        <item name="colorOnSurface">@color/classic_light_default_text_color</item>
+        <item name="android:textColorPrimary">@color/classic_light_default_text_color</item>
+        <item name="android:textColorSecondary">@color/classic_light_second_text_color</item>
+    </style>
+
+    <style name="DayNightAppTheme.Classic4pda.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
+    </style>
+
+    <style name="DayNightAppTheme.Classic4pda.NoActionBarBase" parent="DayNightAppTheme.Classic4pda">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/classic_light_navigation_bar_color</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+    </style>
+
+    <style name="DayNightAppTheme.Classic4pda.NoActionBar" parent="DayNightAppTheme.Classic4pda.NoActionBarBase" />
+
+    <style name="DayNightPreferenceTheme.Classic4pda" parent="DayNightAppTheme.Classic4pda" />
+</resources>

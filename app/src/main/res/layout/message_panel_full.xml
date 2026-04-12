@@ -4,6 +4,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/cards_background"
+    android:clipChildren="true"
     android:orientation="vertical">
 
     <ScrollView
@@ -11,6 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:clipToPadding="true"
         android:fillViewport="true"
         android:scrollbars="vertical">
 
@@ -28,8 +31,8 @@
                 android:imeOptions="flagNoFullscreen"
                 android:inputType="textCapSentences|textMultiLine"
                 android:minHeight="@dimen/dp48"
-                android:padding="@dimen/dp16"
-                android:textSize="16sp" />
+                android:padding="@dimen/content_padding_horizontal"
+                android:textSize="@dimen/list_topic_title_text_size" />
 
             <ProgressBar
                 android:id="@+id/form_load_progress"
@@ -58,7 +61,7 @@
             android:id="@+id/button_attachments"
             android:layout_width="@dimen/dp48"
             android:layout_height="@dimen/dp48"
-            android:layout_marginStart="-8dp"
+            android:layout_marginStart="@dimen/message_panel_button_overlap"
             android:layout_toEndOf="@+id/button_advanced_input"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/codes_and_smiles"
@@ -70,25 +73,25 @@
             android:layout_height="wrap_content"
             android:layout_alignTop="@+id/button_attachments"
             android:layout_alignEnd="@id/button_attachments"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="4dp"
+            android:layout_marginTop="@dimen/content_spacing"
+            android:layout_marginEnd="@dimen/content_spacing_half"
             android:background="@drawable/notify_dot_menu"
             android:gravity="center"
             android:maxLines="1"
-            android:minWidth="16dp"
-            android:minHeight="16dp"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp"
+            android:minWidth="@dimen/dp16"
+            android:minHeight="@dimen/dp16"
+            android:paddingStart="@dimen/content_spacing_half"
+            android:paddingEnd="@dimen/content_spacing_half"
             android:text="1"
             android:textColor="@color/white"
-            android:textSize="10sp"
+            android:textSize="@dimen/news_list_compat_meta_text_size"
             android:visibility="visible" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_edt_poll"
             android:layout_width="@dimen/dp48"
             android:layout_height="@dimen/dp48"
-            android:layout_marginStart="-8dp"
+            android:layout_marginStart="@dimen/message_panel_button_overlap"
             android:layout_toEndOf="@+id/button_attachments"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/attachments"

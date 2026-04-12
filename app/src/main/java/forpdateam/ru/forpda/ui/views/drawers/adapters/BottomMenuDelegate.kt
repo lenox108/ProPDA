@@ -8,6 +8,7 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.isVisible
 import com.hannesdorfmann.adapterdelegates3.AdapterDelegate
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -46,6 +47,7 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
                         colorRes,
                         PorterDuff.Mode.SRC_ATOP
                 )
+                binding.bottomTabSelectionIndicator.isVisible = selected
 
                 binding.itemBottomMenuCounter.visibility = if (item.appItem.count > 0) {
                     TextViewCompat.setAutoSizeTextTypeWithDefaults(binding.itemBottomMenuCounter, TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE)

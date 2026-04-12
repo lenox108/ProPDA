@@ -4,10 +4,10 @@
     android:layout_height="wrap_content"
     android:gravity="center"
     android:orientation="vertical"
-    android:paddingTop="32dp"
-    android:paddingBottom="32dp"
-    android:paddingStart="24dp"
-    android:paddingEnd="24dp"
+    android:paddingTop="@dimen/dp32"
+    android:paddingBottom="@dimen/dp32"
+    android:paddingStart="@dimen/dp24"
+    android:paddingEnd="@dimen/dp24"
     android:clickable="true"
     android:background="?attr/selectableItemBackgroundBorderless">
 
@@ -17,14 +17,14 @@
         android:layout_height="wrap_content"
         android:textColor="?attr/second_text_color"
         android:textAllCaps="true"
-        android:textSize="14sp" />
+        android:textSize="@dimen/list_topic_meta_text_size" />
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/item_value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:paddingTop="4dp"
+        android:paddingTop="@dimen/content_spacing_half"
         android:textColor="?attr/default_text_color"
-        android:textSize="24sp"
+        android:textSize="@dimen/profile_stat_value_text_size"
         android:textStyle="bold"/>
 </LinearLayout>

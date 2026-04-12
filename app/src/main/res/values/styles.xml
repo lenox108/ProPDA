@@ -17,6 +17,8 @@
         <item name="colorPrimaryDark">@color/light_colorPrimaryDark</item>
         <item name="colorAccent">@color/light_colorAccent</item>
         <item name="colorSecondary">@color/light_link_color</item>
+        <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.ForPDA.Small</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.ForPDA.Medium</item>
         <item name="colorOnSecondary">@android:color/white</item>
         <item name="colorSurface">@color/light_card_background</item>
         <item name="colorOnSurface">@color/light_default_text_color</item>
@@ -84,8 +86,7 @@
     </style>
 
     <style name="DayNightAppTheme.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
-        <!--<item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:background">@color/light_card_background</item>-->
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
     </style>
 
     <style name="DayNightAppTheme.NoActionBarBase" parent="DayNightAppTheme">
@@ -181,5 +182,27 @@
     <style name="ImageViewTheme.PopupOverlay" parent="ThemeOverlay.Material3.Dark">
         <item name="elevation">0dp</item>
         <item name="android:background">@android:color/transparent</item>
+    </style>
+
+    <style name="MessagePanelAdvancedTabText" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <style name="ShapeAppearance.ForPDA.Small" parent="ShapeAppearance.Material3.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">10dp</item>
+    </style>
+    <style name="ShapeAppearance.ForPDA.Medium" parent="ShapeAppearance.Material3.MediumComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
+    </style>
+    <!-- Верхние углы bottom sheet как у iOS (~16pt) -->
+    <style name="ShapeAppearance.ForPDA.BottomSheet" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">16dp</item>
+        <item name="cornerSizeTopRight">16dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
     </style>
 </resources>

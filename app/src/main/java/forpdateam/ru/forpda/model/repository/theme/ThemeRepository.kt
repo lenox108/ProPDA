@@ -21,7 +21,7 @@ class ThemeRepository(
         private val forumUsersCache: ForumUsersCache
 ) : BaseRepository(schedulers) {
 
-    fun getTheme(url: String, withHtml: Boolean, hatOpen: Boolean, pollOpen: Boolean): Single<ThemePage> = Single
+    fun getTheme(url: String, @Suppress("UNUSED_PARAMETER") withHtml: Boolean, hatOpen: Boolean, pollOpen: Boolean): Single<ThemePage> = Single
             .fromCallable { themeApi.getTheme(url, hatOpen, pollOpen) }
             .doOnSuccess {
                 saveUsers(it)

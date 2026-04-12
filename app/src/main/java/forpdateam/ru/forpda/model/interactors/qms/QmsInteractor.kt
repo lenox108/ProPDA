@@ -9,78 +9,63 @@ import forpdateam.ru.forpda.entity.remote.qms.QmsThemes
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
 import forpdateam.ru.forpda.model.repository.qms.QmsRepository
-import io.reactivex.Observable
-import io.reactivex.Single
-import io.reactivex.disposables.Disposable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 class QmsInteractor(
         private val qmsRepository: QmsRepository,
         private val eventsRepository: EventsRepository
 ) {
 
-    private var eventsDisposable: Disposable? = null
+    private val eventsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var eventsJob: Job? = null
 
     fun subscribeEvents() {
-        if (eventsDisposable != null) return
-        eventsDisposable = eventsRepository
-                .observeEventsTab()
-                .subscribe {
-                    qmsRepository.handleEvent(it)
-                }
+        if (eventsJob?.isActive == true) return
+        eventsJob = eventsScope.launch {
+            eventsRepository.observeEventsTab().collect { qmsRepository.handleEvent(it) }
+        }
     }
 
+    fun observeContacts(): Flow<List<QmsContact>> = qmsRepository.observeContacts()
 
-    fun observeContacts(): Observable<List<QmsContact>> = qmsRepository
-            .observeContacts()
+    fun observeThemes(userId: Int): Flow<QmsThemes> = qmsRepository.observeThemes(userId)
 
-    fun observeThemes(userId: Int): Observable<QmsThemes> = qmsRepository
-            .observeThemes(userId)
+    suspend fun findUser(nick: String): List<ForumUser> = qmsRepository.findUser(nick)
 
-    //Common
-    fun findUser(nick: String): Single<List<ForumUser>> = qmsRepository
-            .findUser(nick)
+    suspend fun blockUser(nick: String): List<QmsContact> = qmsRepository.blockUser(nick)
 
-    fun blockUser(nick: String): Single<List<QmsContact>> = qmsRepository
-            .blockUser(nick)
+    suspend fun unBlockUsers(userId: Int): List<QmsContact> = qmsRepository.unBlockUsers(userId)
 
-    fun unBlockUsers(userId: Int): Single<List<QmsContact>> = qmsRepository
-            .unBlockUsers(userId)
+    suspend fun getContactList(): List<QmsContact> = qmsRepository.getContactList()
 
-    //Contacts
-    fun getContactList(): Single<List<QmsContact>> = qmsRepository
-            .getContactList()
+    suspend fun getBlackList(): List<QmsContact> = qmsRepository.getBlackList()
 
-    fun getBlackList(): Single<List<QmsContact>> = qmsRepository
-            .getBlackList()
+    suspend fun deleteDialog(mid: Int): String = qmsRepository.deleteDialog(mid)
 
-    fun deleteDialog(mid: Int): Single<String> = qmsRepository
-            .deleteDialog(mid)
+    suspend fun getThemesList(id: Int): QmsThemes = qmsRepository.getThemesList(id)
 
-    //Themes
-    fun getThemesList(id: Int): Single<QmsThemes> = qmsRepository
-            .getThemesList(id)
+    suspend fun deleteTheme(id: Int, themeId: Int): QmsThemes = qmsRepository.deleteTheme(id, themeId)
 
-    fun deleteTheme(id: Int, themeId: Int): Single<QmsThemes> = qmsRepository
-            .deleteTheme(id, themeId)
+    suspend fun getChat(userId: Int, themeId: Int): QmsChatModel = qmsRepository.getChat(userId, themeId)
 
+    suspend fun sendNewTheme(nick: String, title: String, mess: String, files: List<AttachmentItem>): QmsChatModel =
+            qmsRepository.sendNewTheme(nick, title, mess, files)
 
-    //Chat
-    fun getChat(userId: Int, themeId: Int): Single<QmsChatModel> = qmsRepository
-            .getChat(userId, themeId)
+    suspend fun sendMessage(userId: Int, themeId: Int, text: String, files: List<AttachmentItem>): List<QmsMessage> =
+            qmsRepository.sendMessage(userId, themeId, text, files)
 
-    fun sendNewTheme(nick: String, title: String, mess: String, files: List<AttachmentItem>): Single<QmsChatModel> = qmsRepository
-            .sendNewTheme(nick, title, mess, files)
+    suspend fun getMessagesFromWs(themeId: Int, messageId: Int, afterMessageId: Int): List<QmsMessage> =
+            qmsRepository.getMessagesFromWs(themeId, messageId, afterMessageId)
 
-    fun sendMessage(userId: Int, themeId: Int, text: String, files: List<AttachmentItem>): Single<List<QmsMessage>> = qmsRepository
-            .sendMessage(userId, themeId, text, files)
+    suspend fun getMessagesAfter(userId: Int, themeId: Int, afterMessageId: Int): List<QmsMessage> =
+            qmsRepository.getMessagesAfter(userId, themeId, afterMessageId)
 
-    fun getMessagesFromWs(themeId: Int, messageId: Int, afterMessageId: Int): Single<List<QmsMessage>> = qmsRepository
-            .getMessagesFromWs(themeId, messageId, afterMessageId)
-
-    fun getMessagesAfter(userId: Int, themeId: Int, afterMessageId: Int): Single<List<QmsMessage>> = qmsRepository
-            .getMessagesAfter(userId, themeId, afterMessageId)
-
-    fun uploadFiles(files: List<RequestFile>, pending: List<AttachmentItem>): Single<List<AttachmentItem>> = qmsRepository
-            .uploadFiles(files, pending)
-
+    suspend fun uploadFiles(files: List<RequestFile>, pending: List<AttachmentItem>): List<AttachmentItem> =
+            qmsRepository.uploadFiles(files, pending)
 }

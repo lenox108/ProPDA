@@ -9,8 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
@@ -18,8 +17,8 @@ import forpdateam.ru.forpda.entity.remote.mentions.MentionItem
 import forpdateam.ru.forpda.entity.remote.mentions.MentionsData
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
-import forpdateam.ru.forpda.presentation.mentions.MentionsPresenter
 import forpdateam.ru.forpda.presentation.mentions.MentionsView
+import forpdateam.ru.forpda.presentation.mentions.MentionsViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment
 import forpdateam.ru.forpda.ui.views.ContentController
@@ -38,6 +37,16 @@ class MentionsFragment : RecyclerFragment(), MentionsView {
     private lateinit var adapter: MentionsAdapter
     private lateinit var paginationHelper: PaginationHelper
     private val authHolder = App.get().Di().authHolder
+
+    private val presenter: MentionsViewModel by viewModels {
+        MentionsViewModel.Factory(
+                App.get().Di().mentionsRepository,
+                App.get().Di().favoritesRepository,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     private val paginationListener = object : PaginationHelper.PaginationListener {
         override fun onTabSelected(tab: TabLayout.Tab): Boolean {
@@ -60,18 +69,6 @@ class MentionsFragment : RecyclerFragment(), MentionsView {
             return false
         }
     }
-
-    @InjectPresenter
-    lateinit var presenter: MentionsPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): MentionsPresenter = MentionsPresenter(
-            App.get().Di().mentionsRepository,
-            App.get().Di().favoritesRepository,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_mentions)
@@ -106,6 +103,14 @@ class MentionsFragment : RecyclerFragment(), MentionsView {
         adapter.setOnItemClickListener(adapterListener)
         refreshLayout.setOnRefreshListener { presenter.getMentions() }
         paginationHelper.setListener(paginationListener)
+
+        presenter.attachView(this)
+        presenter.start()
+    }
+
+    override fun onDestroyView() {
+        presenter.detachView()
+        super.onDestroyView()
     }
 
     override fun showMentions(data: MentionsData) {

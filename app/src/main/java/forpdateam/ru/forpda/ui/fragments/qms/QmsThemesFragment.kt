@@ -9,16 +9,19 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 
-import moxy.presenter.InjectPresenter
-import moxy.presenter.ProvidePresenter
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.common.ForPdaCoil
 
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.qms.QmsTheme
 import forpdateam.ru.forpda.entity.remote.qms.QmsThemes
-import forpdateam.ru.forpda.presentation.qms.themes.QmsThemesPresenter
-import forpdateam.ru.forpda.presentation.qms.themes.QmsThemesView
+import forpdateam.ru.forpda.presentation.qms.themes.QmsThemesViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
 import forpdateam.ru.forpda.ui.fragments.qms.adapters.QmsThemesAdapter
@@ -28,34 +31,27 @@ import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 /**
  * Created by radiationx on 25.08.16.
  */
-class QmsThemesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<QmsTheme>, QmsThemesView {
+class QmsThemesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<QmsTheme> {
 
     private lateinit var blackListMenuItem: MenuItem
     private lateinit var noteMenuItem: MenuItem
     private lateinit var adapter: QmsThemesAdapter
     private val dialogMenu = DynamicDialogMenu<QmsThemesFragment, QmsTheme>()
 
-    @InjectPresenter
-    lateinit var presenter: QmsThemesPresenter
-
-    @ProvidePresenter
-    fun providePresenter(): QmsThemesPresenter = QmsThemesPresenter(
-            App.get().Di().qmsInteractor,
-            App.get().Di().router,
-            App.get().Di().linkHandler,
-            App.get().Di().errorHandler
-    )
+    private val viewModel: QmsThemesViewModel by viewModels {
+        val args = arguments ?: Bundle()
+        QmsThemesViewModel.Factory(
+                args.getInt(USER_ID_ARG),
+                args.getString(USER_AVATAR_ARG),
+                App.get().Di().qmsInteractor,
+                App.get().Di().router,
+                App.get().Di().linkHandler,
+                App.get().Di().errorHandler
+        )
+    }
 
     init {
         configuration.defaultTitle = App.get().getString(R.string.fragment_title_dialogs)
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        arguments?.apply {
-            presenter.themesId = getInt(USER_ID_ARG)
-            presenter.avatarUrl = getString(USER_AVATAR_ARG)
-        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -69,26 +65,68 @@ class QmsThemesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<Qm
         initFabBehavior()
         setScrollFlagsEnterAlways()
 
-        refreshLayout.setOnRefreshListener { presenter.loadThemes() }
-        recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+        refreshLayout.setOnRefreshListener { viewModel.loadThemes() }
+        recyclerView.layoutManager = LinearLayoutManager(context)
 
         fab.setImageDrawable(App.getVecDrawable(context, R.drawable.ic_fab_create))
-        fab.setOnClickListener { presenter.openChat() }
+        fab.setOnClickListener { viewModel.openChat() }
         fab.visibility = View.VISIBLE
 
         dialogMenu.apply {
             addItem(getString(R.string.delete)) { _, data ->
-                presenter.deleteTheme(data.id)
+                viewModel.deleteTheme(data.id)
             }
             addItem(getString(R.string.create_note)) { _, data ->
-                presenter.createThemeNote(data)
+                viewModel.createThemeNote(data)
             }
         }
 
         adapter = QmsThemesAdapter()
         adapter.setOnItemClickListener(this)
         recyclerView.adapter = adapter
-        presenter.loadThemes()
+        viewModel.loadThemes()
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.uiState.collect { state ->
+                        setRefreshing(state.loading)
+                        val avatar = state.toolbarAvatarUrl
+                        if (avatar.isNullOrEmpty()) {
+                            toolbarImageView.visibility = View.GONE
+                            toolbarImageView.setOnClickListener(null)
+                        } else {
+                            ForPdaCoil.loadInto(toolbarImageView, avatar)
+                            toolbarImageView.visibility = View.VISIBLE
+                            toolbarImageView.setOnClickListener {
+                                viewModel.openProfile(viewModel.themesUserId)
+                            }
+                            toolbarImageView.contentDescription = App.get().getString(R.string.user_avatar)
+                        }
+                        state.themes?.let { showThemesData(it) }
+                    }
+                }
+                launch {
+                    viewModel.blockDone.collect {
+                        Toast.makeText(context, R.string.user_added_to_blacklist, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                launch {
+                    viewModel.noteEffect.collect { effect ->
+                        when (effect) {
+                            is QmsThemesViewModel.NoteEffect.ForUser -> {
+                                val title = String.format(getString(R.string.dialogs_Nick), effect.nick)
+                                NotesAddPopup.showAddNoteDialog(context, title, effect.url)
+                            }
+                            is QmsThemesViewModel.NoteEffect.ForTheme -> {
+                                val title = String.format(getString(R.string.dialog_Title_Nick), effect.name, effect.nick)
+                                NotesAddPopup.showAddNoteDialog(context, title, effect.url)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
@@ -96,13 +134,13 @@ class QmsThemesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<Qm
         blackListMenuItem = menu
                 .add(R.string.add_to_blacklist)
                 .setOnMenuItemClickListener {
-                    presenter.blockUser()
+                    viewModel.blockUser()
                     false
                 }
         noteMenuItem = menu
                 .add(R.string.create_note)
                 .setOnMenuItemClickListener {
-                    presenter.createNote()
+                    viewModel.createNote()
                     true
                 }
         refreshToolbarMenuItems(false)
@@ -124,7 +162,7 @@ class QmsThemesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<Qm
         refreshToolbarMenuItems(!isRefreshing)
     }
 
-    override fun showThemes(data: QmsThemes) {
+    private fun showThemesData(data: QmsThemes) {
         recyclerView.scrollToPosition(0)
 
         setTabTitle(String.format(getString(R.string.dialogs_Nick), data.nick))
@@ -134,41 +172,16 @@ class QmsThemesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<Qm
         adapter.notifyDataSetChanged()
     }
 
-    override fun showAvatar(avatarUrl: String) {
-        ForPdaCoil.loadInto(toolbarImageView, avatarUrl)
-        toolbarImageView.visibility = View.VISIBLE
-        toolbarImageView.setOnClickListener { presenter.openProfile(presenter.themesId) }
-        toolbarImageView.contentDescription = App.get().getString(R.string.user_avatar)
+    override fun onItemClick(item: QmsTheme) {
+        viewModel.onItemClick(item)
     }
 
-    override fun showCreateNote(nick: String, url: String) {
-        val title = String.format(getString(R.string.dialogs_Nick), nick)
-        NotesAddPopup.showAddNoteDialog(context, title, url)
-    }
-
-    override fun showCreateNote(name: String, nick: String, url: String) {
-        val title = String.format(getString(R.string.dialog_Title_Nick), name, nick)
-        NotesAddPopup.showAddNoteDialog(context, title, url)
-    }
-
-    override fun onBlockUser(res: Boolean) {
-        Toast.makeText(context, R.string.user_added_to_blacklist, Toast.LENGTH_SHORT).show()
-    }
-
-    override fun showItemDialogMenu(item: QmsTheme) {
+    override fun onItemLongClick(item: QmsTheme): Boolean {
         dialogMenu.apply {
             disallowAll()
             allowAll()
             show(context, this@QmsThemesFragment, item)
         }
-    }
-
-    override fun onItemClick(item: QmsTheme) {
-        presenter.onItemClick(item)
-    }
-
-    override fun onItemLongClick(item: QmsTheme): Boolean {
-        presenter.onItemLongClick(item)
         return false
     }
 

@@ -16,12 +16,12 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.VectorDrawable;
-import android.net.ConnectivityManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Messenger;
 import android.os.PowerManager;
+import android.os.StrictMode;
 import androidx.annotation.AttrRes;
 import androidx.annotation.ColorInt;
 import androidx.annotation.DrawableRes;
@@ -40,9 +40,14 @@ import android.util.Log;
 import android.util.TypedValue;
 import android.webkit.WebSettings;
 
+import forpdateam.ru.forpda.BuildConfig;
+
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
+import androidx.work.BackoffPolicy;
+import androidx.work.Constraints;
+import androidx.work.NetworkType;
 
 import java.util.concurrent.TimeUnit;
 
@@ -62,7 +67,7 @@ import forpdateam.ru.forpda.common.DayNightHelper;
 import forpdateam.ru.forpda.common.LocaleHelper;
 import forpdateam.ru.forpda.common.Preferences;
 import forpdateam.ru.forpda.common.realm.DbMigration;
-import forpdateam.ru.forpda.common.receivers.NetworkStateReceiver;
+import forpdateam.ru.forpda.common.NetworkConnectivityTracker;
 import forpdateam.ru.forpda.common.simple.SimpleObservable;
 import forpdateam.ru.forpda.notifications.NotificationsPeriodicWorker;
 import forpdateam.ru.forpda.notifications.NotificationsService;
@@ -87,6 +92,7 @@ public class App extends android.app.Application {
     private SharedPreferences preferences;
 
     private SimpleObservable networkForbidden = new SimpleObservable();
+    private NetworkConnectivityTracker networkConnectivityTracker;
     private Boolean webViewFound = null;
     private Messenger mBoundService = null;
     private boolean mServiceBound = false;
@@ -98,7 +104,7 @@ public class App extends android.app.Application {
 
     public static App get() {
         if (instance == null) {
-            instance = new App();
+            throw new IllegalStateException("App is not initialized — call only after Application.onCreate()");
         }
         return instance;
     }
@@ -151,9 +157,34 @@ public class App extends android.app.Application {
         super.onCreate();
         instance = this;
         long time = System.currentTimeMillis();
+
+        // Debug-only: помогает ловить причины лагов/ANR (диск/сеть на main, утечки Closeable).
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder()
+                    .detectAll()
+                    .penaltyLog()
+                    .build());
+            StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder()
+                    .detectLeakedClosableObjects()
+                    .penaltyLog()
+                    .build());
+        }
         AppMetricaConfig config = AppMetricaConfig.newConfigBuilder("a94d9236-cdf3-4a5e-af30-d6dbffaea362").build();
         AppMetrica.activate(getApplicationContext(), config);
         AppMetrica.enableActivityAutoTracking(this);
+
+        final Thread.UncaughtExceptionHandler defaultUncaught = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, ex) -> {
+            try {
+                if (ex != null) {
+                    AppMetrica.reportError("uncaught:" + thread.getName() + ":" + ex.getMessage(), ex);
+                }
+            } catch (Throwable ignored) {
+            }
+            if (defaultUncaught != null) {
+                defaultUncaught.uncaughtException(thread, ex);
+            }
+        });
 
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.KITKAT) {
             AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
@@ -164,8 +195,10 @@ public class App extends android.app.Application {
 
 
         RxJavaPlugins.setErrorHandler(throwable -> {
-            Log.d("SUKA", "RxJavaPlugins errorHandler " + throwable);
             throwable.printStackTrace();
+            if (BuildConfig.DEBUG) {
+                Log.e("RxJava", "Undelivered exception (global handler)", throwable);
+            }
             AppMetrica.reportError("Крит " + throwable.getMessage(), throwable);
         });
 
@@ -215,7 +248,7 @@ public class App extends android.app.Application {
         Realm.init(this);
         RealmConfiguration configuration = new RealmConfiguration.Builder()
                 .name("forpda.realm")
-                .schemaVersion(4)
+                .schemaVersion(5)
                 .migration(new DbMigration())
                 .build();
         Realm.setDefaultConfiguration(configuration);
@@ -256,11 +289,17 @@ public class App extends android.app.Application {
 
         Observable
                 .fromCallable(() -> {
+                    Constraints constraints = new Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build();
                     PeriodicWorkRequest workRequest = new PeriodicWorkRequest.Builder(
                             NotificationsPeriodicWorker.class,
                             15,
                             TimeUnit.MINUTES
-                    ).build();
+                    )
+                            .setConstraints(constraints)
+                            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                            .build();
                     WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                             NotificationsPeriodicWorker.UNIQUE_WORK_NAME,
                             ExistingPeriodicWorkPolicy.UPDATE,
@@ -269,32 +308,27 @@ public class App extends android.app.Application {
                     return true;
                 })
                 .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
                 .subscribe();
 
-        Log.e("APP", "TIME APP FINAL " + (System.currentTimeMillis() - time));
+        if (BuildConfig.DEBUG) {
+            Log.d("APP", "TIME APP FINAL " + (System.currentTimeMillis() - time));
+        }
 
         registerConnectivityReceiver();
     }
 
-    @SuppressWarnings("deprecation")
     private void registerConnectivityReceiver() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(
-                    new NetworkStateReceiver(),
-                    new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION),
-                    Context.RECEIVER_NOT_EXPORTED
-            );
-        } else {
-            registerReceiver(
-                    new NetworkStateReceiver(),
-                    new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
-            );
+        if (networkConnectivityTracker != null) {
+            networkConnectivityTracker.stop();
         }
+        networkConnectivityTracker = new NetworkConnectivityTracker(this, Di().getNetworkState());
+        networkConnectivityTracker.start();
     }
 
     private void updateStaticRes() {
-        Log.e("kekosina", "updateStaticRes");
+        if (BuildConfig.DEBUG) {
+            Log.d("App", "updateStaticRes");
+        }
         px2 = getContext().getResources().getDimensionPixelSize(R.dimen.dp2);
         px4 = getContext().getResources().getDimensionPixelSize(R.dimen.dp4);
         px6 = getContext().getResources().getDimensionPixelSize(R.dimen.dp6);

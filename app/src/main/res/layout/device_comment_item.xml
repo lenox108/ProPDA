@@ -14,35 +14,35 @@
 
         <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="48dp">
+            android:layout_height="@dimen/dp48">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/item_title"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_height="@dimen/dp48"
                 android:layout_alignParentStart="true"
                 android:layout_centerVertical="true"
                 android:layout_toStartOf="@+id/item_date"
                 android:gravity="center_vertical"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/profile_title_about"
                 android:textColor="?attr/default_text_color"
-                android:textSize="14sp"
+                android:textSize="@dimen/list_topic_meta_text_size"
                 android:textStyle="bold" />
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/item_date"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
+                android:layout_height="@dimen/dp48"
                 android:layout_alignParentEnd="true"
                 android:layout_centerVertical="true"
                 android:gravity="center_vertical"
-                android:paddingEnd="@dimen/dp16"
-                android:paddingStart="@dimen/dp16"
+                android:paddingEnd="@dimen/content_padding_horizontal"
+                android:paddingStart="@dimen/content_padding_horizontal"
                 tools:text="@string/test_topic_date"
                 android:textColor="?attr/second_text_color"
-                android:textSize="14sp" />
+                android:textSize="@dimen/list_topic_meta_text_size" />
         </RelativeLayout>
 
 
@@ -51,15 +51,15 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="top"
-            android:paddingBottom="16dp"
-            android:paddingEnd="@dimen/dp16"
-            android:paddingStart="16dp"
+            android:paddingBottom="@dimen/content_block_padding_vertical"
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
             android:text="ajskldjklasjdlkajls;kjdklk;asd"
-            android:textSize="16sp" />
+            android:textSize="@dimen/list_topic_title_text_size" />
 
         <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="48dp">
+            android:layout_height="@dimen/dp48">
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/item_dislike_btn"
@@ -67,10 +67,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_alignParentEnd="true"
-                android:layout_marginEnd="8dp"
-                android:drawablePadding="8dp"
+                android:layout_marginEnd="@dimen/content_spacing"
+                android:drawablePadding="@dimen/content_spacing"
                 android:enabled="false"
-                android:minWidth="48dp"
+                android:minWidth="@dimen/dp48"
                 android:text="1" />
 
             <androidx.appcompat.widget.AppCompatButton
@@ -79,22 +79,22 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_toStartOf="@+id/item_dislike_btn"
-                android:drawablePadding="8dp"
+                android:drawablePadding="@dimen/content_spacing"
                 android:enabled="false"
-                android:minWidth="48dp"
+                android:minWidth="@dimen/dp48"
                 android:text="1" />
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/item_rating"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
+                android:layout_height="@dimen/dp32"
                 android:layout_alignParentStart="true"
                 android:layout_centerVertical="true"
-                android:layout_marginStart="16dp"
+                android:layout_marginStart="@dimen/content_padding_horizontal"
                 android:gravity="center"
-                android:minWidth="32dp"
-                android:paddingEnd="6dp"
-                android:paddingStart="6dp"
+                android:minWidth="@dimen/dp32"
+                android:paddingEnd="@dimen/bottom_tab_badge_padding_horizontal"
+                android:paddingStart="@dimen/bottom_tab_badge_padding_horizontal"
                 android:text="10"
                 android:textColor="@color/white"
                 android:textStyle="bold" />

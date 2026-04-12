@@ -14,6 +14,7 @@ import android.widget.TextView
 import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.LocaleHelper
+import forpdateam.ru.forpda.ui.EdgeToEdge
 
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 
@@ -37,6 +38,7 @@ class WebVewNotFoundActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_wv_not_found)
+        EdgeToEdge.apply(this, findViewById(android.R.id.content), padTop = true, padBottom = false)
         val getInGp = findViewById<View>(R.id.get_in_gp) as ImageView
         val getIn4pda = findViewById<View>(R.id.get_in_4pda) as ImageView
         val tryStart = findViewById<View>(R.id.wv_try_start) as Button

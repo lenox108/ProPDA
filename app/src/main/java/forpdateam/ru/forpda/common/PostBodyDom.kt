@@ -16,11 +16,33 @@ fun ExtendedWebView.extractPostBodyHtml(postId: Int, onResult: (String?) -> Unit
           var pid = '$pid';
           var el = document.querySelector('.post_container[data-post-id="' + pid + '"] .post_body')
             || document.querySelector('[data-post-id="' + pid + '"] .post_body')
+            || document.querySelector('[data-post="' + pid + '"] .post_body')
+            || document.querySelector('#post-main-' + pid)
             || document.querySelector('[name="entry' + pid + '"] .post_body');
           if(!el) return null;
-          var html = el.innerHTML;
-          if(!html || !String(html).trim()) html = el.innerText || '';
-          return JSON.stringify(html);
+          var wrap = el.cloneNode(true);
+          function removeByClass(cls) {
+            var nodes = wrap.getElementsByClassName(cls);
+            while (nodes.length > 0) { try { nodes[0].remove(); } catch (e) {} }
+          }
+          removeByClass('attachments');
+          removeByClass('btns_container');
+          var rm = wrap.querySelectorAll('.attach_block, a.attach_block, a.attach.file, a.attach.picture');
+          for (var i = 0; i < rm.length; i++) { try { rm[i].remove(); } catch (e) {} }
+          var legacy = wrap.querySelectorAll('a.ipb-attach, table[id*="ipb-attach"], table[id*="ipb_attach"]');
+          for (var j = 0; j < legacy.length; j++) { try { legacy[j].remove(); } catch (e2) {} }
+          var spoils = wrap.querySelectorAll('div.post-block.spoil, div[class*="post-block"][class*="spoil"]');
+          for (var k = spoils.length - 1; k >= 0; k--) {
+            var bt = spoils[k].querySelector('.block-title');
+            var tx = bt ? bt.textContent : '';
+            var low = (tx || '').toLowerCase();
+            if (tx.indexOf('Прикреплен') >= 0 || low.indexOf('attached file') >= 0) {
+              try { spoils[k].remove(); } catch (e3) {}
+            }
+          }
+          var html = wrap.innerHTML;
+          if (!html || !String(html).trim()) html = wrap.innerText || '';
+          return JSON.stringify(String(html));
         })()
     """.trimIndent()
     evalJs(script) { jsonResult ->

@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="50dp">
+    android:layout_height="@dimen/news_load_more_row_height">
 
     <LinearLayout
         android:id="@+id/nl_lm_container"
@@ -28,7 +28,7 @@
             android:paddingBottom="@dimen/dp8"
             android:paddingEnd="@dimen/dp8"
             android:paddingStart="@dimen/dp2"
-            android:textSize="14sp"
+            android:textSize="@dimen/list_topic_meta_text_size"
             tools:ignore="HardcodedText"/>
     </LinearLayout>
 
@@ -42,7 +42,7 @@
         android:text="@string/load_more"
         android:layout_gravity="center"
         android:padding="@dimen/dp8"
-        android:textSize="12sp"
+        android:textSize="@dimen/list_section_header_text_size"
         tools:visibility="visible"
         tools:ignore="HardcodedText"/>
 

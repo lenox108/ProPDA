@@ -1,6 +1,9 @@
 package forpdateam.ru.forpda.presentation.search
 
+import android.net.Uri
+import forpdateam.ru.forpda.common.topicUrlWithUnreadIfPlainOpen
 import forpdateam.ru.forpda.entity.remote.search.SearchResult
+import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder
@@ -50,6 +53,10 @@ class SearchTemplate(
             setVariableOpt("avatar_type", if (topicPreferencesHolder.getCircleAvatars()) "circle_avatar" else "square_avatar")
 
 
+            val st = page.settings ?: SearchSettings()
+            val forumPostsResult = st.resourceType == SearchSettings.RESOURCE_FORUM.first
+                    && st.result == SearchSettings.RESULT_POSTS.first
+
             var letterMatcher: Matcher? = null
             for (post in page.items) {
                 setVariableOpt("topic_id", post.topicId)
@@ -57,13 +64,37 @@ class SearchTemplate(
 
                 setVariableOpt("user_online", if (post.isOnline) "online" else "")
                 setVariableOpt("post_id", post.id)
+
+                // Как [SearchPresenter.onItemClick]: showtopic + view=findpost + p= — тот же путь, что и у клика по строке.
+                // act=findpost&pid= давал нестабильные редиректы: иногда тема без якоря на конкретный пост.
+                val showJump = forumPostsResult && post.id > 0
+                val jumpToPostUrl = if (showJump) {
+                    if (post.topicId > 0) {
+                        "https://4pda.to/forum/index.php?showtopic=${post.topicId}&view=findpost&p=${post.id}"
+                    } else {
+                        "https://4pda.to/forum/index.php?act=findpost&pid=${post.id}"
+                    }
+                } else {
+                    "#"
+                }
+                val postTitleHref = when {
+                    forumPostsResult && post.id > 0 -> jumpToPostUrl
+                    post.topicId > 0 -> topicUrlWithUnreadIfPlainOpen(
+                            Uri.parse("https://4pda.to/forum/index.php?showtopic=${post.topicId}")
+                    )
+                    else -> "#"
+                }
+                setVariableOpt("jump_to_post_url", jumpToPostUrl)
+                setVariableOpt("post_title_href", postTitleHref)
+                setVariableOpt("search_jump_row_style", if (showJump) "" else "display:none")
                 setVariableOpt("user_id", post.userId)
 
                 //Post header
                 setVariableOpt("avatar", post.avatar)
                 setVariableOpt("none_avatar", if (post.avatar.isNullOrEmpty()) "none_avatar" else "")
 
-                letterMatcher = letterMatcher?.reset(post.nick) ?: firstLetter.matcher(post.nick)
+                val nickForLetter = post.nick.orEmpty()
+                letterMatcher = letterMatcher?.reset(nickForLetter) ?: firstLetter.matcher(nickForLetter)
                 val letter: String = letterMatcher?.run {
                     if (find()) group(1) else null
                 } ?: post.nick?.substring(0, 1).orEmpty()

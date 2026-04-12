@@ -1,7 +1,7 @@
 package forpdateam.ru.forpda
 
 import android.content.Context
-import android.preference.PreferenceManager
+import androidx.preference.PreferenceManager
 import forpdateam.ru.forpda.client.Client
 import forpdateam.ru.forpda.common.DayNightHelper
 import forpdateam.ru.forpda.entity.app.profile.IUserHolder
@@ -112,7 +112,7 @@ class Dependencies internal constructor(
 
     val externalStorage: ExternalStorageProvider by lazy { ExternalStorage() }
 
-    val authHolder: AuthHolder by lazy { AuthHolder(preferences, schedulers) }
+    val authHolder: AuthHolder by lazy { AuthHolder(preferences) }
     val countersHolder: CountersHolder by lazy { CountersHolder(preferences, schedulers) }
     val userHolder: IUserHolder by lazy { UserHolder(dataStoragePreferences) }
     val closeableInfoHolder: CloseableInfoHolder by lazy { CloseableInfoHolder(preferences, schedulers) }
@@ -171,7 +171,7 @@ class Dependencies internal constructor(
     val notesCache by lazy { NotesCache() }
 
     val avatarRepository by lazy { AvatarRepository(forumUsersCache, schedulers) }
-    val favoritesRepository by lazy { FavoritesRepository(schedulers, favoritesApi, favoritesCache, authHolder, countersHolder, listsPreferencesHolder, notificationPreferencesHolder) }
+    val favoritesRepository by lazy { FavoritesRepository(schedulers, favoritesApi, favoritesCache, authHolder, countersHolder, listsPreferencesHolder, notificationPreferencesHolder, eventsApi) }
     val historyRepository by lazy { HistoryRepository(schedulers, historyCache) }
     val mentionsRepository by lazy { MentionsRepository(schedulers, mentionsApi) }
     val authRepository by lazy { AuthRepository(schedulers, authApi, authHolder, countersHolder, userHolder) }
