@@ -1,31 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingTop="@dimen/content_padding_horizontal"
-    android:paddingStart="@dimen/activity_horizontal_margin"
-    android:paddingEnd="@dimen/activity_horizontal_margin">
+    android:paddingStart="@dimen/dp24"
+    android:paddingTop="@dimen/dp20"
+    android:paddingEnd="@dimen/dp24"
+    android:paddingBottom="@dimen/dp4">
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/reputation_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="@dimen/list_topic_title_text_size"
-        android:paddingBottom="@dimen/content_padding_horizontal"/>
+        android:layout_marginBottom="@dimen/dp16"
+        android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+        android:textColor="?attr/default_text_color" />
 
     <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/reputation_input_layout"
+        style="@style/DialogTextInputStyle"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:hint="@string/reputation_reason"
+        app:boxCornerRadiusBottomEnd="@dimen/dp12"
+        app:boxCornerRadiusBottomStart="@dimen/dp12"
+        app:boxCornerRadiusTopEnd="@dimen/dp12"
+        app:boxCornerRadiusTopStart="@dimen/dp12">
 
-        <androidx.appcompat.widget.AppCompatEditText
+        <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/reputation_text_field"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ems="10"
-            android:hint="@string/reputation_reason"
+            android:minLines="2"
+            android:maxLines="4"
             android:inputType="text|textCapSentences|textMultiLine"
-            android:scrollHorizontally="true"/>
+            android:scrollHorizontally="false" />
 
     </com.google.android.material.textfield.TextInputLayout>
 </LinearLayout>

@@ -20,17 +20,29 @@ class FavItem : IFavItem {
     override var authorUserNick: String? = null
     override var lastUserNick: String? = null
     override var date: String? = null
+    var displayDateOverride: String? = null
+    /** Parsed showtopic href from favorites row; used for unread navigation hints (not persisted). */
+    var listingHref: String? = null
+    /** Inspector fav snapshot marked this topic unread on last merge (not persisted). */
+    var inspectorMarkedUnread: Boolean = false
     override var desc: String? = null
     override var curatorNick: String? = null
     override var subType: String? = null
     override var isPin = false
     override var isForum = false
     override var isNew: Boolean = false
+    var readState: FavoriteReadState = FavoriteReadState.UNKNOWN
     override var unreadPostCount: Int = 0
+    override var localReadPostId: Int = 0
+    override var localReadPostDateMillis: Long = 0L
     override var isPoll: Boolean = false
     override var isClosed: Boolean = false
 
     constructor() {}
+
+    /** Row should render as unread (bold title / badge) even if legacy [isNew] flag is stale. */
+    fun isUnreadForDisplay(): Boolean =
+            readState == FavoriteReadState.UNREAD || isNew || unreadPostCount > 0
 
     constructor(item: IFavItem) {
         favId = item.favId
@@ -49,6 +61,9 @@ class FavItem : IFavItem {
         authorUserNick = item.authorUserNick
         lastUserNick = item.lastUserNick
         date = item.date
+        displayDateOverride = (item as? FavItem)?.displayDateOverride
+        listingHref = (item as? FavItem)?.listingHref
+        inspectorMarkedUnread = (item as? FavItem)?.inspectorMarkedUnread == true
         desc = item.desc
         curatorNick = item.curatorNick
         subType = item.subType
@@ -57,7 +72,13 @@ class FavItem : IFavItem {
         isForum = item.isForum
 
         isNew = item.isNew
+        readState = (item as? FavItem)?.readState ?: when {
+            item.isNew -> FavoriteReadState.UNREAD
+            else -> FavoriteReadState.UNKNOWN
+        }
         unreadPostCount = item.unreadPostCount
+        localReadPostId = item.localReadPostId
+        localReadPostDateMillis = item.localReadPostDateMillis
         isPoll = item.isPoll
         isClosed = item.isClosed
     }

@@ -1,6 +1,6 @@
 package forpdateam.ru.forpda.model.data.remote.api.editpost
 
-import android.util.Log
+import timber.log.Timber
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
@@ -9,6 +9,7 @@ import forpdateam.ru.forpda.model.data.remote.api.NetworkRequest
 import forpdateam.ru.forpda.model.data.remote.api.NetworkResponse
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsParser
+import forpdateam.ru.forpda.common.encodeEditPostBodyForSubmit
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeParser
 import java.io.ByteArrayInputStream
@@ -33,7 +34,7 @@ class EditPostApi(
         val url = "https://4pda.to/forum/index.php?act=post&do=edit_post&p=" + Integer.toString(postId)
         var response = webClient.get(url)
         if (response.body == "nopermission") {
-            Log.d(EDIT_POST_DIAG, "loadForm postId=$postId result=nopermission")
+            Timber.d("loadForm postId=%s result=nopermission", postId)
             return EditPostForm().apply {
                 errorCode = EditPostForm.ERROR_NO_PERMISSION
             }
@@ -41,11 +42,12 @@ class EditPostApi(
 
         val body = response.body
         val bodyNorm = body.replace("&#45;", "-").replace("&#x2d;", "-").replace("&#X2D;", "-")
-        Log.d(
-                EDIT_POST_DIAG,
-                "loadForm postId=$postId bodyLen=${body.length} " +
-                        "hasEdTextarea=${Regex("(?i)ed-\\d+_textarea").containsMatchIn(bodyNorm)} " +
-                        "hasNamePost=${Regex("(?i)name\\s*=\\s*[\"']post[\"']").containsMatchIn(body)}"
+        Timber.d(
+                "loadForm postId=%s bodyLen=%d hasEdTextarea=%s hasNamePost=%s",
+                postId,
+                body.length,
+                Regex("(?i)ed-\\d+_textarea").containsMatchIn(bodyNorm),
+                Regex("(?i)name\\s*=\\s*[\"']post[\"']").containsMatchIn(body)
         )
         val form = editPostParser.parseForm(body)
         form.poll = editPostParser.parsePoll(response.body)
@@ -54,7 +56,7 @@ class EditPostApi(
         val fromEditPage = attachmentsParser.parseAttachments(body)
         if (fromEditPage.isNotEmpty()) {
             form.attachments.addAll(fromEditPage)
-            Log.d(EDIT_POST_DIAG, "loadForm postId=$postId attachmentsFromEditPage=${fromEditPage.size}")
+            Timber.d("loadForm postId=%s attachmentsFromEditPage=%d", postId, fromEditPage.size)
         }
         return form
     }
@@ -77,8 +79,8 @@ class EditPostApi(
                 .formHeader("CODE", if (form.type == EditPostForm.TYPE_NEW_POST) "03" else "9")
                 .formHeader("f", form.forumId.toString())
                 .formHeader("t", form.topicId.toString())
-                .formHeader("auth_key", webClient.authKey)
-                .formHeader("Post", form.message)
+                .formHeader("auth_key", webClient.getAuthKey())
+                .formHeader("Post", encodeEditPostBodyForSubmit(form.message))
                 .formHeader("enablesig", "yes")
                 .formHeader("enableemo", "yes")
                 .formHeader("st", form.st.toString())
@@ -94,14 +96,16 @@ class EditPostApi(
         if (poll != null) {
             builder.formHeader("poll_question", poll.title.replace("\n".toRegex(), " "))
             for (i in 0 until poll.questions.size) {
-                val question = poll.getQuestion(i)
+                val question = poll.getQuestion(i) ?: continue
                 val q_index = i + 1
                 builder.formHeader("question[$q_index]", question.title.replace("\n".toRegex(), " "))
                 builder.formHeader("multi[$q_index]", if (question.isMulti) "1" else "0")
                 for (j in 0 until question.choices.size) {
                     val choice = question.getChoice(j)
                     val c_index = j + 1
-                    builder.formHeader("choice[$q_index${'_'}$c_index]", choice.title.replace("\n".toRegex(), " "))
+                    choice?.let {
+                        builder.formHeader("choice[$q_index${'_'}$c_index]", it.title.replace("\n".toRegex(), " "))
+                    }
                 }
             }
         }
@@ -125,15 +129,208 @@ class EditPostApi(
             builder.formHeader("p", form.postId.toString())
 
         val response = webClient.request(builder.build())
-        val redirectUrl = response.redirect ?: url
-        val effectiveUrl = if (redirectUrl.contains("showtopic=", ignoreCase = true)) {
-            redirectUrl
-        } else {
-            "https://4pda.to/forum/index.php?showtopic=${form.topicId}&st=${form.st}"
+        val redirectUrl = response.redirectWithFragment.ifBlank { response.redirect }
+        if (form.type == EditPostForm.TYPE_EDIT_POST) {
+            return parseEditedPostPage(form, response.body, redirectUrl, scrollTraceId)
         }
-        val page = themeParser.parsePage(response.body, effectiveUrl, false, false, initialRequestUrl = effectiveUrl)
-        ThemeApi.ensureScrollAnchorForPostedPage(page, response.body, scrollTraceId)
+
+        return parseNewPostPage(form, response.body, redirectUrl, scrollTraceId)
+    }
+
+    private fun parseNewPostPage(
+            form: EditPostForm,
+            body: String,
+            redirectUrl: String,
+            scrollTraceId: String?
+    ): ThemePage {
+        val effectiveUrl = EditPostSubmitUrl.applySubmittedPageSt(
+                if (redirectUrl.contains("showtopic=", ignoreCase = true)) {
+                    redirectUrl
+                } else {
+                    "https://4pda.to/forum/index.php?showtopic=${form.topicId}&st=${form.st}"
+                },
+                form.st
+        )
+        val targetPostId = ThemeApi.extractScrollPostIdFromFinalTopicUrl(effectiveUrl)?.toIntOrNull()
+        // POST response often contains only the new message while pagination footer is complete.
+        // Parse it only to discover the posted entry id, then always load the full topic page at st.
+        val previewPage = themeParser.parsePage(body, effectiveUrl, false, false, initialRequestUrl = effectiveUrl)
+        ThemeApi.ensureScrollAnchorForPostedPage(previewPage, body, scrollTraceId)
+        val anchorPostId = previewPage.anchor
+                ?.removePrefix("entry")
+                ?.takeIf { it.all(Char::isDigit) }
+                ?.toIntOrNull()
+        val scrollToPostId = targetPostId ?: anchorPostId
+
+        val fullPageUrl = if (scrollToPostId == null) {
+            "https://4pda.to/forum/index.php?showtopic=${form.topicId}&view=getlastpost"
+        } else {
+            EditPostSubmitUrl.buildPostedFullPageUrl(form.topicId, form.st, scrollToPostId)
+        }
+        var page = loadPostedThemePage(fullPageUrl, fullPageUrl)
+        if (scrollToPostId != null && page.posts.none { it.id == scrollToPostId }) {
+            val findPostUrl =
+                    "https://4pda.to/forum/index.php?showtopic=${form.topicId}&view=findpost&p=$scrollToPostId"
+            page = loadPostedThemePage(findPostUrl, findPostUrl)
+        }
+        applyPostedScrollAnchor(page, scrollToPostId, scrollTraceId)
+
+        val canonicalUrl = EditPostSubmitUrl.applySubmittedPageSt(
+                page.url?.takeIf { it.contains("showtopic=", ignoreCase = true) } ?: effectiveUrl,
+                form.st
+        )
+        page.url = canonicalUrl
+        themeApi.mergeDesktopRatingsIntoPage(page, canonicalUrl)
         return page
     }
 
+    private fun loadPostedThemePage(requestUrl: String, initialRequestUrl: String): ThemePage {
+        val response = webClient.get(requestUrl)
+        val loadedUrl = response.redirectWithFragment
+                .ifBlank { response.redirect }
+                .takeIf { it.contains("showtopic=", ignoreCase = true) }
+                ?: requestUrl
+        return themeParser.parsePage(response.body, loadedUrl, false, false, initialRequestUrl = initialRequestUrl)
+    }
+
+    private fun applyPostedScrollAnchor(page: ThemePage, scrollToPostId: Int?, scrollTraceId: String?) {
+        if (scrollToPostId != null) {
+            page.anchors.clear()
+            page.addAnchor("entry$scrollToPostId")
+            page.anchorPostId = scrollToPostId.toString()
+            return
+        }
+        ThemeApi.ensureScrollAnchorForPostedPage(page, null, scrollTraceId)
+    }
+
+    private fun parseEditedPostPage(
+            form: EditPostForm,
+            body: String,
+            redirectUrl: String,
+            scrollTraceId: String?
+    ): ThemePage {
+        val effectiveUrl = normalizeEditRedirectUrl(form, redirectUrl)
+        var page = themeParser.parsePage(body, effectiveUrl, false, false, initialRequestUrl = effectiveUrl)
+        val targetPostId = editedTargetPostId(form, page.url.orEmpty())
+
+        if (targetPostId > 0 && page.posts.none { it.id == targetPostId }) {
+            val response = webClient.get(effectiveUrl)
+            val loadedUrl = response.redirectWithFragment
+                    .ifBlank { response.redirect }
+                    .takeIf { it.contains("showtopic=", ignoreCase = true) }
+                    ?: effectiveUrl
+            page = themeParser.parsePage(response.body, loadedUrl, false, false, initialRequestUrl = effectiveUrl)
+        }
+
+        forceEditedPostAnchor(page, targetPostId, scrollTraceId)
+        themeApi.mergeDesktopRatingsIntoPage(page, page.url ?: effectiveUrl)
+        return page
+    }
+
+    /**
+     * После сохранения редактирования Location часто даёт `showtopic` с неверным `st` (например 0),
+     * без фрагмента `#entry…`. Тогда парсер получает лист «не той» страницы — якорь поста нет в DOM,
+     * скролл срывается на первое сообщение. Явный `view=findpost&p=` совпадает с поиском/уведомлениями
+     * и стабильно открывает страницу с нужным постом.
+     */
+    private fun normalizeEditRedirectUrl(form: EditPostForm, redirectUrl: String): String {
+        if (form.topicId > 0 && form.postId > 0) {
+            return buildEditTargetUrl(form)
+        }
+        val fallback = buildEditTargetUrl(form)
+        if (!redirectUrl.contains("showtopic=", ignoreCase = true)) return fallback
+
+        val postIdFromRedirect = ThemeApi.extractScrollPostIdFromFinalTopicUrl(redirectUrl)
+        var result = if (hasQueryParam(redirectUrl, "st")) {
+            redirectUrl
+        } else {
+            appendQueryBeforeFragment(redirectUrl, "st=${form.st.coerceAtLeast(0)}")
+        }
+        if (postIdFromRedirect == null && form.postId > 0 && !result.contains('#')) {
+            result += "#entry${form.postId}"
+        }
+        return result
+    }
+
+    private fun buildEditTargetUrl(form: EditPostForm): String {
+        val tid = form.topicId
+        val pid = form.postId
+        if (tid > 0 && pid > 0) {
+            return "https://4pda.to/forum/index.php?showtopic=$tid&view=findpost&p=$pid"
+        }
+        val safeSt = form.st.coerceAtLeast(0)
+        val anchor = if (pid > 0) "#entry$pid" else ""
+        return "https://4pda.to/forum/index.php?showtopic=$tid&st=$safeSt$anchor"
+    }
+
+    private fun editedTargetPostId(form: EditPostForm, url: String): Int {
+        return ThemeApi.extractScrollPostIdFromFinalTopicUrl(url)?.toIntOrNull()
+                ?: form.postId
+    }
+
+    private fun forceEditedPostAnchor(page: ThemePage, postId: Int, scrollTraceId: String?) {
+        if (postId <= 0) {
+            ThemeApi.ensureScrollAnchorForPostedPage(page, null, scrollTraceId)
+            return
+        }
+        page.anchors.clear()
+        page.addAnchor("entry$postId")
+        page.anchorPostId = postId.toString()
+    }
+
+    private fun hasQueryParam(url: String, name: String): Boolean {
+        val query = url.substringAfter('?', missingDelimiterValue = "")
+                .substringBefore('#')
+        if (query.isEmpty()) return false
+        return query.split('&').any { it.substringBefore('=') == name }
+    }
+
+    private fun appendQueryBeforeFragment(url: String, queryPart: String): String {
+        val base = url.substringBefore('#')
+        val fragment = url.substringAfter('#', missingDelimiterValue = "")
+        val separator = if (base.contains('?')) "&" else "?"
+        val result = "$base$separator$queryPart"
+        return if (fragment.isEmpty()) result else "$result#$fragment"
+    }
+
+}
+
+/**
+ * После POST сервер часто редиректит на `showtopic` без `st` (страница 1), хотя ответ
+ * отправляли с текущего `st` — восстанавливаем смещение страницы в URL темы.
+ */
+internal object EditPostSubmitUrl {
+    fun buildPostedFullPageUrl(topicId: Int, submittedSt: Int, scrollToPostId: Int): String {
+        val safeSt = submittedSt.coerceAtLeast(0)
+        val base = if (safeSt > 0) {
+            "https://4pda.to/forum/index.php?showtopic=$topicId&st=$safeSt"
+        } else {
+            "https://4pda.to/forum/index.php?showtopic=$topicId"
+        }
+        return "$base#entry$scrollToPostId"
+    }
+
+    fun applySubmittedPageSt(url: String, submittedSt: Int): String {
+        if (submittedSt <= 0 || !url.contains("showtopic=", ignoreCase = true)) return url
+        val hashIndex = url.indexOf('#')
+        val withoutHash = if (hashIndex >= 0) url.substring(0, hashIndex) else url
+        val hash = if (hashIndex >= 0) url.substring(hashIndex) else ""
+        val query = withoutHash.substringAfter('?', "")
+        if (query.isEmpty()) {
+            return "$withoutHash?st=$submittedSt$hash"
+        }
+        val params = linkedMapOf<String, String>()
+        query.split('&').forEach { part ->
+            if (part.isBlank()) return@forEach
+            val name = part.substringBefore('=')
+            val value = part.substringAfter('=', "")
+            params[name] = value
+        }
+        val existingSt = params["st"]?.toIntOrNull() ?: 0
+        if (existingSt > 0) return url
+        params["st"] = submittedSt.toString()
+        val base = withoutHash.substringBefore('?')
+        val newQuery = params.entries.joinToString("&") { "${it.key}=${it.value}" }
+        return "$base?$newQuery$hash"
+    }
 }

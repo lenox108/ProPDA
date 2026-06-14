@@ -11,18 +11,25 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.LocaleHelper
+import forpdateam.ru.forpda.databinding.ActivityWvNotFoundBinding
 import forpdateam.ru.forpda.ui.EdgeToEdge
-
+import forpdateam.ru.forpda.common.PermissionHelper
 import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * Created by radiationx on 23.07.17.
  */
 
+@AndroidEntryPoint
 class WebVewNotFoundActivity : AppCompatActivity() {
+    @Inject lateinit var permissionHelper: PermissionHelper
+
+    private var _binding: ActivityWvNotFoundBinding? = null
+    private val binding: ActivityWvNotFoundBinding get() = requireNotNull(_binding)
 
     private val nougatMsg = """Убедитесь, что сервис WebView установлен и активирован:
 1. Включите режим разработчика на вашем Android-устройстве.
@@ -37,12 +44,13 @@ class WebVewNotFoundActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_wv_not_found)
+        _binding = ActivityWvNotFoundBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         EdgeToEdge.apply(this, findViewById(android.R.id.content), padTop = true, padBottom = false)
-        val getInGp = findViewById<View>(R.id.get_in_gp) as ImageView
-        val getIn4pda = findViewById<View>(R.id.get_in_4pda) as ImageView
-        val tryStart = findViewById<View>(R.id.wv_try_start) as Button
-        val nougatPlus = findViewById<TextView>(R.id.nougatplus)
+        val getInGp = binding.getInGp
+        val getIn4pda = binding.getIn4pda
+        val tryStart = binding.wvTryStart
+        val nougatPlus = binding.nougatplus
 
         nougatPlus.visibility = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) View.VISIBLE else View.GONE
         nougatPlus.text = nougatMsg
@@ -65,11 +73,15 @@ class WebVewNotFoundActivity : AppCompatActivity() {
             finish()
         }
 
+    }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        App.get().onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionHelper.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 }

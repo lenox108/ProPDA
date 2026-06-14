@@ -3,15 +3,15 @@
 @light_colorPrimary: #ffffff;
 @light_colorPrimaryDark: #aaaaaa;
 @light_colorAccent: #000000;
-@light_link_color: #2177af;
+@light_link_color: #616161;
 @light_link_color_contrast: #ffffff;
 @light_default_text_color: #212121;
 @light_contrast_text_color: @dark_default_text_color;
 @light_second_text_color: #757575;
-@light_background_base: #fafafa;
-@light_background_for_cards: #eeeeee;
-@light_background_for_lists: #ffffff;
-@light_divider_line: #e0e0e0;
+@light_background_base: #F2F2F7;
+@light_background_for_cards: #F2F2F7;
+@light_background_for_lists: #F2F2F7;
+@light_divider_line: #C6C6C8;
 @light_icon_base: #757575;
 @light_icon_base_inverse: @dark_icon_base;
 @light_icon_toolbar: #212121;
@@ -32,7 +32,7 @@
 @dark_colorPrimary: #212121;
 @dark_colorPrimaryDark: #121212;
 @dark_colorAccent: #ffffff;
-@dark_link_color: #2177af;
+@dark_link_color: #E0E0E0;
 @dark_link_color_contrast: #ffffff;
 @dark_default_text_color: #ffffff;
 @dark_contrast_text_color: @light_default_text_color;
@@ -55,6 +55,29 @@
 @dark_arrow_right: "../../res/dark/chevron-right.svg";
 @dark_arrow_double_right: "../../res/dark/chevron-double-right.svg";
 @dark_anchor: "../../res/dark/anchor.svg";
+
+/* WebView semantic surface tokens, aligned with native attrs:
+   background_base/cards_background/divider_line/default_text_color/icon_base/colorAccent. */
+@surface_background: @light_background_base;
+@surface_card: @light_card_background;
+@surface_elevated: @light_card_background;
+@surface_control: fade(@light_colorAccent, 10%);
+@surface_control_active: fade(@light_colorAccent, 16%);
+@surface_divider: @light_divider_line;
+@surface_text_primary: @light_default_text_color;
+@surface_text_secondary: @light_second_text_color;
+@surface_icon: @light_icon_base;
+@surface_accent: @light_link_color;
+@topic_pagination_surface: @light_card_background;
+@topic_pagination_icon: @light_icon_toolbar;
+@topic_pagination_icon_disabled: @light_icon_toolbar;
+@radius_small: 6/16rem;
+@radius_medium: 12/16rem;
+@radius_large: 14/16rem;
+
+/* Legacy names kept as aliases while modules move to semantic tokens. */
+@theme_surface_radius: @radius_large;
+@theme_control_radius: @radius_medium;
 
 /*OTHERS*/
 

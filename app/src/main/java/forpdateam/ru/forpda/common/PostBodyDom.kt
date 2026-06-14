@@ -1,7 +1,5 @@
 package forpdateam.ru.forpda.common
 
-import android.os.Handler
-import android.os.Looper
 import forpdateam.ru.forpda.ui.views.ExtendedWebView
 import org.json.JSONTokener
 
@@ -47,9 +45,7 @@ fun ExtendedWebView.extractPostBodyHtml(postId: Int, onResult: (String?) -> Unit
     """.trimIndent()
     evalJs(script) { jsonResult ->
         val html = decodeJsJsonString(jsonResult)
-        Handler(Looper.getMainLooper()).post {
-            onResult(html)
-        }
+        onResult(html)
     }
 }
 

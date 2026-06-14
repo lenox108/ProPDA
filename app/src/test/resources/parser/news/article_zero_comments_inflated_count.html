@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!--
+  Sanitized fixture derived from a real 4PDA mobile article page that has ZERO comments but whose
+  comment counter was misparsed as a large number. The article being viewed (id 457285) renders:
+    - its own counter badge as 0 (article-meta-comment + head-comments-count)
+    - an EMPTY <ul class="comment-list level-0"></ul> (comments are server-rendered inline)
+  The related / popular-news widget below contains OTHER articles, each with a <a class="v-count"
+  href="...#comments">N</a>. A page-wide #comments / v-count scan picks the MAX of those (345),
+  which is the bug. The parser must trust the article's own badge (0).
+  Auth tokens / private ids were removed or replaced with placeholders; structure is preserved.
+-->
+<html>
+<head><meta itemprop="datePublished" content="2026-06-04T12:15:00+00:00"></head>
+<body>
+<article class="post" itemscope="" itemtype="http://schema.org/Article" itemid="8349783">
+  <div class="article">
+    <div class="article-header">
+      <h1>Aurender выпустила аудиотранспорт N300X и стриминговый ЦАП</h1>
+      <div class="article-anons">
+        <div class="article-meta">
+          <time class="article-meta-time" datatime="2026-06-04 12:15:00">04.06.26</time>
+          <div class="article-meta-comment"><a style="color:inherit;text-decoration:inherit" href="https://4pda.to/2026/06/04/457285/aurender/#comments">0</a></div>
+        </div>
+        <p>На выставке High End Vienna 2026 компания Aurender представила новинки.</p>
+      </div>
+    </div>
+    <div class="content entry-content material_item" itemprop="articleBody">
+      <p>Тело статьи с достаточной длиной для проверок рендера и стабильной перезагрузки статьи.</p>
+    </div>
+    <div class="article-footer"><div class="article-footer-tags"># <a href="https://4pda.to/tag/aurender/" rel="tag">Aurender</a></div></div>
+  </div>
+</article>
+
+<div class="spoiler-close"><div class="heading">
+  <div class="text-left head-comments-count"><span title="Комментарии"><i class="icon-comment"></i>0</span></div>
+  <div class="text-center head-comment-link"><a href="https://4pda.to/2026/06/04/457285/aurender/#comments" class="btn spoiler-close big" data-toggle="#comments" data-class="open">Комментарии</a></div>
+</div></div>
+
+<ul class="comment-list level-0"></ul>
+<form action="https://4pda.to/wp-comments-post.php" method="post" class="comment-form" id="commentform"><textarea name="comment"></textarea></form>
+
+<section class="news-widget popular">
+  <article class="post" itemscope="" itemtype="http://schema.org/Article" itemid="457071">
+    <div class="v-panel"><a href="https://4pda.to/2026/05/30/457071/?utm_source=ngfp5-1#comments" class="v-count" title="Недорогих ПК больше не будет">345</a></div>
+    <div class="description"><h2 class="list-post-title"><a rel="bookmark" href="https://4pda.to/2026/05/30/457071/">Недорогих ПК больше не будет</a></h2></div>
+  </article>
+  <article class="post" itemscope="" itemtype="http://schema.org/Article" itemid="457072">
+    <div class="v-panel"><a href="https://4pda.to/2026/05/30/457072/?utm_source=ngfp5-2#comments" class="v-count" title="Другая новость">245</a></div>
+    <div class="description"><h2 class="list-post-title"><a rel="bookmark" href="https://4pda.to/2026/05/30/457072/">Другая новость</a></h2></div>
+  </article>
+  <article class="post" itemscope="" itemtype="http://schema.org/Article" itemid="456942">
+    <div class="v-panel"><a href="https://4pda.to/2026/05/27/456942/?utm_source=ngfp5-3#comments" class="v-count" title="Ещё новость">192</a></div>
+    <div class="description"><h2 class="list-post-title"><a rel="bookmark" href="https://4pda.to/2026/05/27/456942/">Ещё новость</a></h2></div>
+  </article>
+  <article class="post" itemscope="" itemtype="http://schema.org/Article" itemid="455621">
+    <div class="v-panel"><a href="https://4pda.to/2026/04/23/455621/?utm_source=ngfp5-4#comments" class="v-count" title="И ещё одна">105</a></div>
+    <div class="description"><h2 class="list-post-title"><a rel="bookmark" href="https://4pda.to/2026/04/23/455621/">И ещё одна</a></h2></div>
+  </article>
+</section>
+</body>
+</html>

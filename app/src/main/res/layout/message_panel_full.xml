@@ -2,6 +2,7 @@
 <!-- Вертикальная колонка: поле занимает оставшееся место, BBCode и кнопки всегда выше IME (padding на CardView). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?attr/cards_background"
@@ -23,6 +24,7 @@
 
             <forpdateam.ru.forpda.ui.views.CodeEditor
                 android:id="@+id/message_field"
+                style="@style/Widget.ForPDA.CodeEditor"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="@android:color/transparent"
@@ -39,6 +41,7 @@
                 android:layout_width="@dimen/dp48"
                 android:layout_height="@dimen/dp48"
                 android:layout_gravity="center"
+                android:contentDescription="@string/loading_data"
                 android:visibility="gone" />
         </FrameLayout>
 
@@ -64,7 +67,7 @@
             android:layout_marginStart="@dimen/message_panel_button_overlap"
             android:layout_toEndOf="@+id/button_advanced_input"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/codes_and_smiles"
+            android:contentDescription="@string/attachments"
             app:srcCompat="@drawable/ic_attachment" />
 
         <TextView
@@ -77,15 +80,16 @@
             android:layout_marginEnd="@dimen/content_spacing_half"
             android:background="@drawable/notify_dot_menu"
             android:gravity="center"
+            android:importantForAccessibility="no"
             android:maxLines="1"
             android:minWidth="@dimen/dp16"
             android:minHeight="@dimen/dp16"
             android:paddingStart="@dimen/content_spacing_half"
             android:paddingEnd="@dimen/content_spacing_half"
-            android:text="1"
+            tools:text="1"
             android:textColor="@color/white"
             android:textSize="@dimen/news_list_compat_meta_text_size"
-            android:visibility="visible" />
+            android:visibility="gone" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_edt_poll"
@@ -94,18 +98,38 @@
             android:layout_marginStart="@dimen/message_panel_button_overlap"
             android:layout_toEndOf="@+id/button_attachments"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/attachments"
+            android:contentDescription="@string/poll"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_poll_box" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/button_full"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp48"
+            android:layout_marginStart="@dimen/message_panel_button_overlap"
+            android:layout_toEndOf="@+id/button_edt_poll"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/full_form"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_fullscreen" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_clear_message"
             android:layout_width="@dimen/dp48"
             android:layout_height="@dimen/dp48"
-            android:layout_toStartOf="@+id/send_container"
+            android:layout_toStartOf="@+id/button_preview"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/msg_panel_clear_message"
             app:srcCompat="@drawable/ic_clear" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/button_preview"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp48"
+            android:layout_toStartOf="@+id/send_container"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/msg_panel_preview"
+            app:srcCompat="@drawable/ic_visibility" />
 
         <FrameLayout
             android:id="@+id/send_container"
@@ -126,6 +150,7 @@
                 android:layout_width="@dimen/dp48"
                 android:layout_height="@dimen/dp48"
                 android:clickable="false"
+                android:contentDescription="@string/send_message"
                 android:padding="@dimen/dp8"
                 android:visibility="gone" />
         </FrameLayout>

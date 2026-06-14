@@ -9,7 +9,8 @@
 
 /*Fonts*/
 
-@font: "Roboto",
+@font: "AppFont",
+"ForPdaRoboto",
 sans-serif;
 @fontMono: "Roboto Mono",
 monospace;
@@ -33,6 +34,19 @@ monospace;
 @icon_toolbar: @light_icon_toolbar;
 @icon_toolbar_inverse: @light_icon_toolbar_inverse;
 @card_background: @light_card_background;
+@surface_background: @light_background_base;
+@surface_card: @light_card_background;
+@surface_elevated: @light_card_background;
+@surface_control: fade(@light_colorAccent, 10%);
+@surface_control_active: fade(@light_colorAccent, 16%);
+@surface_divider: @light_divider_line;
+@surface_text_primary: @light_default_text_color;
+@surface_text_secondary: @light_second_text_color;
+@surface_icon: @light_icon_base;
+@surface_accent: @light_link_color;
+@topic_pagination_surface: @light_main_toolbar_accent_surface;
+@topic_pagination_icon: @light_icon_toolbar;
+@topic_pagination_icon_disabled: @light_icon_toolbar;
 @icon_post_menu_src: @light_icon_post_menu_src;
 @icon_wrap_src: @light_icon_wrap_src;
 @icon_select_all_src: @light_icon_select_all_src;
@@ -54,15 +68,19 @@ monospace;
 @avatar_overlap_background: darken(#fff, 50%);
 @button_selected_background: @tapColor;
 @poll_range_bar_background: fade(#000, 10%);
+@poll_result_title_background: @card_background;
 @attachment_background: fade(@link_color, 5%);
 @attachment_border: fade(@link_color, 10%);
 @quote_border_color: darken(#fff, 25%);
+@quote_surface: @surface_control;
+@attachment_surface: @surface_control;
+@attachment_surface_border: @surface_divider;
 @code_border_color: #448d62;
 @code_text_color: #448d62;
 
 /*Elements colors*/
 
-@border1: 1/16rem solid fade(#000, 5%); //Основной бордер
+@border1: 1/16rem solid @surface_divider; //Основной бордер
 @borderInput: 2/16rem solid fade(#000, 50%); //Основной бордер
 @userOnlineColor: #12b557; //Цвет ника онлайн
 

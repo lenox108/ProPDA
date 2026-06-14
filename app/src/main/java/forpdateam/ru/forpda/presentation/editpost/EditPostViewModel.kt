@@ -1,22 +1,35 @@
 package forpdateam.ru.forpda.presentation.editpost
 
+import forpdateam.ru.forpda.presentation.BaseViewModel
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import timber.log.Timber
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import forpdateam.ru.forpda.common.mergeEditPostMessage
 import forpdateam.ru.forpda.entity.app.EditPostSyncData
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
+import forpdateam.ru.forpda.entity.app.profile.IUserHolder
+import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
+import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.posteditor.PostEditorRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
 import forpdateam.ru.forpda.presentation.theme.ThemeTemplate
-import io.reactivex.disposables.CompositeDisposable
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.util.HashSet
 import java.util.concurrent.TimeoutException
 
@@ -31,35 +44,34 @@ private class EditLoadState {
     var attachDone = false
 }
 
-class EditPostViewModel(
+@HiltViewModel
+class EditPostViewModel @Inject constructor(
         private val editorRepository: PostEditorRepository,
         private val themeTemplate: ThemeTemplate,
         private val router: TabRouter,
+        private val favoritesRepository: FavoritesRepository,
+        private val authHolder: AuthHolder,
+        private val userHolder: IUserHolder,
         private val errorHandler: IErrorHandler
-) : ViewModel() {
+) : BaseViewModel() {
 
-    @Volatile
-    private var editPostView: EditPostView? = null
+    private var editLoadSafetyJob: Job? = null
 
-    fun attachView(view: EditPostView) {
-        editPostView = view
-    }
-
-    fun detachView() {
-        editPostView = null
-    }
-
-    private val editLoadSafetyHandler = Handler(Looper.getMainLooper())
-    private var editLoadSafetyRunnable: Runnable? = null
-
-    private val editLoadDisposables = CompositeDisposable()
-    private val rxSubscriptions = CompositeDisposable()
+    private var editLoadJob: Job? = null
 
     private var subscriptionsStarted = false
 
     private val postForm = EditPostForm()
 
+    /** Серверные id вложений на момент первого успешного merge после открытия редактора (TYPE_EDIT_POST). */
+    private var editSessionBaselineAttachmentIds: Set<Int>? = null
+
+    private var uploadJob: Job? = null
+
     private var messageFromView: (() -> String)? = null
+
+    private val _uiEvents = MutableSharedFlow<EditPostUiEvent>()
+    val uiEvents: SharedFlow<EditPostUiEvent> = _uiEvents.asSharedFlow()
 
     fun attachMessageSource(source: (() -> String)?) {
         messageFromView = source
@@ -84,8 +96,8 @@ class EditPostViewModel(
         subscriptionsStarted = true
         if (postForm.type == EditPostForm.TYPE_EDIT_POST) {
             if (postForm.postId <= 0) {
-                Log.e(EDIT_POST_DIAG, "TYPE_EDIT_POST but postId=${postForm.postId}, skip load")
-                editPostView?.showForm(postForm)
+                Timber.e("TYPE_EDIT_POST has invalid post id, skip load")
+                scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
                 return
             }
             val snap = editorRepository.snapshotWarmEdit(postForm.postId)
@@ -97,47 +109,42 @@ class EditPostViewModel(
                     editLoadState.attachDone = true
                 }
                 applyEditLoadMerge()
-                Log.d(EDIT_POST_DIAG, "warm snapshot postId=${postForm.postId} attachReady=${snap.attachments != null}")
+                Timber.d("warm snapshot postId=${postForm.postId} attachReady=${snap.attachments != null}")
             } else {
-                if (postForm.message.isNotBlank() || postForm.attachments.isNotEmpty()) {
-                    editPostView?.showEditLoadingDraft(postForm)
-                } else {
-                    editPostView?.showEditLoadPlaceholder()
-                }
+                scope.launch { _uiEvents.emit(EditPostUiEvent.ShowEditLoadPlaceholder) }
             }
             loadForm(keepWarmPrefill = snap != null)
         } else {
-            editPostView?.showForm(postForm)
+            scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
         }
     }
 
     override fun onCleared() {
         cancelEditLoadSafetyTimeout()
-        editLoadDisposables.dispose()
+        editLoadJob?.cancel()
+        uploadJob?.cancel()
         messageFromView = null
-        rxSubscriptions.clear()
         super.onCleared()
     }
 
     private fun scheduleEditLoadSafetyTimeout() {
         cancelEditLoadSafetyTimeout()
-        editLoadSafetyRunnable = Runnable {
-            editLoadSafetyRunnable = null
+        editLoadSafetyJob = scope.launch {
+            kotlinx.coroutines.delay(EDIT_LOAD_SAFETY_MS)
             if (!editLoadState.formDone) {
-                Log.e(
-                        EDIT_POST_DIAG,
-                        "edit load safety timeout ${EDIT_LOAD_SAFETY_MS}ms postId=${postForm.postId}"
+                Timber.e(
+                        "edit load safety timeout ${EDIT_LOAD_SAFETY_MS}ms"
                 )
                 errorHandler.handle(TimeoutException("Загрузка формы редактирования"))
-                editPostView?.showForm(postForm)
+                postForm.message = ""
+                scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
             }
         }
-        editLoadSafetyHandler.postDelayed(editLoadSafetyRunnable!!, EDIT_LOAD_SAFETY_MS)
     }
 
     private fun cancelEditLoadSafetyTimeout() {
-        editLoadSafetyRunnable?.let { editLoadSafetyHandler.removeCallbacks(it) }
-        editLoadSafetyRunnable = null
+        editLoadSafetyJob?.cancel()
+        editLoadSafetyJob = null
     }
 
     fun sendMessage(message: String, attachments: List<AttachmentItem>) {
@@ -146,62 +153,95 @@ class EditPostViewModel(
         for (item in attachments) {
             postForm.addAttachment(item)
         }
-        editorRepository
-                .sendPost(postForm)
-                .map { themeTemplate.mapEntity(it) }
-                .subscribe({
-                    editorRepository.invalidateEditCache(postForm.postId)
-                    editPostView?.onPostSend(it, postForm)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            val sentAtMillis = System.currentTimeMillis()
+            runCatching {
+                val page = editorRepository.sendPost(postForm)
+                themeTemplate.mapEntity(page)
+            }.onSuccess { mapped ->
+                if (postForm.type == EditPostForm.TYPE_NEW_POST && authHolder.get().isAuth()) {
+                    runCatching {
+                        favoritesRepository.syncSubmittedTopicLastPost(
+                                topicId = postForm.topicId,
+                                currentUserId = authHolder.get().userId,
+                                currentUserNick = userHolder.user?.nick,
+                                sentAtMillis = sentAtMillis,
+                                page = mapped
+                        )
+                    }.onFailure { errorHandler.handle(it) }
+                }
+                editorRepository.invalidateEditCache(postForm.postId)
+                // После редактирования иногда теряются якорь/HTML скролла; явно привязываемся к postId.
+                if (postForm.type == EditPostForm.TYPE_EDIT_POST && postForm.postId > 0) {
+                    val tid = mapped.id.takeIf { it > 0 } ?: postForm.topicId
+                    if (tid > 0) {
+                        mapped.url =
+                                "https://4pda.to/forum/index.php?showtopic=$tid&view=findpost&p=${postForm.postId}"
+                    }
+                    mapped.anchors.clear()
+                    mapped.addAnchor("entry${postForm.postId}")
+                    mapped.anchorPostId = postForm.postId.toString()
+                    themeTemplate.mapEntity(mapped)
+                }
+                scope.launch { _uiEvents.emit(EditPostUiEvent.OnPostSend(mapped, postForm)) }
+            }.onFailure {
+                errorHandler.handle(it)
+            }
+        }
     }
 
     fun loadForm(keepWarmPrefill: Boolean = false) {
-        editLoadDisposables.clear()
+        editLoadJob?.cancel()
         if (!keepWarmPrefill) {
             editLoadState = EditLoadState()
         }
         scheduleEditLoadSafetyTimeout()
-        editorRepository.loadForm(postForm.postId)
-                .doFinally {
-                    cancelEditLoadSafetyTimeout()
-                }
-                .subscribe({ form ->
-                    try {
-                        editLoadState.form = form
-                        editLoadState.formDone = true
-                        applyEditLoadMerge()
-                        if (form.errorCode == EditPostForm.ERROR_NONE) {
-                            subscribeLoadEditAttachmentsIfNeeded()
-                        }
-                    } catch (e: Throwable) {
-                        Log.e(EDIT_POST_DIAG, "applyEditLoadMerge postId=${postForm.postId}", e)
-                        errorHandler.handle(e)
-                        editPostView?.showForm(postForm)
+        editLoadJob = scope.launch {
+            try {
+                val form = editorRepository.loadForm(postForm.postId)
+                cancelEditLoadSafetyTimeout()
+                try {
+                    editLoadState.form = form
+                    editLoadState.formDone = true
+                    // Если форма уже принесла вложения — пропускаем отдельный attach-init запрос
+                    // (согласно EditPostApi.loadForm, attach init часто пустой, а форма даёт список
+                    // существующих вложений). Экономит HTTP-запрос на медленном сервере 4pda.
+                    if (form.errorCode == EditPostForm.ERROR_NONE && form.attachments.isNotEmpty()) {
+                        editLoadState.attachments = emptyList()
+                        editLoadState.attachDone = true
                     }
-                }, { e ->
-                    Log.e(EDIT_POST_DIAG, "loadForm error postId=${postForm.postId}", e)
+                    applyEditLoadMerge()
+                    if (form.errorCode == EditPostForm.ERROR_NONE && !editLoadState.attachDone) {
+                        loadEditAttachmentsIfNeeded()
+                    }
+                } catch (e: Throwable) {
+                    Timber.e(e, "applyEditLoadMerge failed")
                     errorHandler.handle(e)
-                    editPostView?.showForm(postForm)
-                })
-                .also { editLoadDisposables.add(it) }
+                    postForm.message = ""
+                    scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+                }
+            } catch (e: Throwable) {
+                cancelEditLoadSafetyTimeout()
+                Timber.e(e, "loadForm error")
+                errorHandler.handle(e)
+                postForm.message = ""
+                scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+            }
+        }
     }
 
-    private fun subscribeLoadEditAttachmentsIfNeeded() {
+    private suspend fun loadEditAttachmentsIfNeeded() {
         if (editLoadState.attachDone) return
-        editorRepository.loadEditAttachments(postForm.postId)
-                .subscribe({ list ->
-                    editLoadState.attachments = list
-                    editLoadState.attachDone = true
-                    applyEditLoadMerge()
-                }, {
-                    editLoadState.attachments = emptyList()
-                    editLoadState.attachDone = true
-                    applyEditLoadMerge()
-                })
-                .also { editLoadDisposables.add(it) }
+        try {
+            val list = editorRepository.loadEditAttachments(postForm.postId)
+            editLoadState.attachments = list
+            editLoadState.attachDone = true
+            applyEditLoadMerge()
+        } catch (_: Throwable) {
+            editLoadState.attachments = emptyList()
+            editLoadState.attachDone = true
+            applyEditLoadMerge()
+        }
     }
 
     private fun applyEditLoadMerge() {
@@ -211,22 +251,24 @@ class EditPostViewModel(
 
         if (form.errorCode != EditPostForm.ERROR_NONE) {
             postForm.errorCode = form.errorCode
-            editPostView?.showForm(postForm)
+            scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
             return
         }
 
         val serverAttachments = if (state.attachDone) state.attachments.orEmpty() else emptyList()
 
         postForm.errorCode = EditPostForm.ERROR_NONE
-        val localDraft = messageFromView?.invoke() ?: postForm.message
+        val localDraft = messageFromView?.invoke()?.takeIf { it.isNotBlank() } ?: postForm.message
         val mergedMessage = mergeEditPostMessage(form.message, localDraft)
         if (state.attachDone) {
-            Log.d(
-                    EDIT_POST_DIAG,
-                    "loadForm ok postId=${postForm.postId} serverLen=${form.message.length} " +
-                            "prefilledLen=${localDraft.length} mergedLen=${mergedMessage.length} " +
-                            "attachCount=${serverAttachments.size} " +
-                            "mergedPreview=${mergedMessage.replace("\r\n", "\n").replace("\n", "↵").take(200)}"
+            Timber.d(
+                    "loadForm ok postId=%d serverLen=%d prefilledLen=%d mergedLen=%d attachCount=%d mergedPreview=%s",
+                    postForm.postId,
+                    form.message.length,
+                    localDraft.length,
+                    mergedMessage.length,
+                    serverAttachments.size,
+                    mergedMessage.replace("\r\n", "\n").replace("\n", "↵").take(200)
             )
         }
         postForm.message = mergedMessage
@@ -239,7 +281,11 @@ class EditPostViewModel(
         postForm.attachments.addAll(serverAttachments)
         mergeAttachmentIdsFromPostText(postForm)
         dedupeAttachmentsById(postForm)
-        editPostView?.showForm(postForm)
+        if (postForm.type == EditPostForm.TYPE_EDIT_POST && editSessionBaselineAttachmentIds == null) {
+            editSessionBaselineAttachmentIds =
+                    postForm.attachments.mapNotNull { it.id.takeIf { id -> id > 0 } }.toSet()
+        }
+        scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
     }
 
     private fun mergeAttachmentIdsFromPostText(form: EditPostForm) {
@@ -248,12 +294,12 @@ class EditPostViewModel(
             if (id <= 0 || id in have) return
             have.add(id)
             val item = AttachmentItem()
-            item.setId(id)
+            item.id = id
             val name = nameHint?.trim()?.takeIf { it.isNotBlank() && it.length < 260 }
                     ?: "attachment_$id"
-            item.setName(name)
-            item.setLoadState(AttachmentItem.STATE_LOADED)
-            item.setStatus(AttachmentItem.STATUS_READY)
+            item.name = name
+            item.loadState = AttachmentItem.STATE_LOADED
+            item.status = AttachmentItem.STATUS_READY
             form.attachments.add(item)
         }
         val msg = form.message
@@ -286,39 +332,74 @@ class EditPostViewModel(
     }
 
     fun uploadFiles(files: List<RequestFile>, pending: List<AttachmentItem>) {
-        editorRepository
-                .uploadFiles(postForm.postId, files, pending)
-                .subscribe({
-                    editPostView?.onUploadFiles(it)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        uploadJob?.cancel()
+        uploadJob = scope.launch {
+            runCatching { editorRepository.uploadFiles(postForm.postId, files, pending) }
+                    .onSuccess { merged ->
+                        for (item in merged) {
+                            if (item.id > 0 && postForm.attachments.none { existing -> existing.id == item.id }) {
+                                postForm.attachments.add(item)
+                            }
+                        }
+                        scope.launch { _uiEvents.emit(EditPostUiEvent.OnUploadFiles(merged)) }
+                    }
+                    .onFailure { errorHandler.handle(it) }
+        }
+    }
+
+    fun cancelPendingUploads() {
+        uploadJob?.cancel()
+        uploadJob = null
+    }
+
+    private fun transientUploadedForDiscard(uiSnapshot: List<AttachmentItem>): List<AttachmentItem> =
+            when (postForm.type) {
+                EditPostForm.TYPE_EDIT_POST -> {
+                    val baseline = editSessionBaselineAttachmentIds ?: emptySet()
+                    uiSnapshot.filter { it.id > 0 && it.id !in baseline }
+                }
+                else -> uiSnapshot.filter { it.id > 0 }
+            }
+
+    suspend fun discardTransientUploads(uiSnapshot: List<AttachmentItem>) {
+        cancelPendingUploads()
+        val orphans = transientUploadedForDiscard(uiSnapshot)
+        if (orphans.isEmpty()) return
+        runCatching { editorRepository.deleteFiles(postForm.postId, orphans) }
+    }
+
+    /** Вызывается при уничтожении без сохранения — очередь ViewModel уже отменена, удаление с сервера best-effort. */
+    fun scheduleDiscardTransientUploads(uiSnapshot: List<AttachmentItem>) {
+        cancelPendingUploads()
+        val orphans = transientUploadedForDiscard(uiSnapshot)
+        if (orphans.isEmpty()) return
+        val postId = postForm.postId
+        scope.launch(Dispatchers.IO) {
+            runCatching { editorRepository.deleteFiles(postId, orphans) }
+                    .onFailure { errorHandler.handle(it) }
+        }
     }
 
     fun deleteFiles(items: List<AttachmentItem>) {
-        editorRepository
-                .deleteFiles(postForm.postId, items)
-                .doFinally { editPostView?.onAttachmentDeleteProgressFinished() }
-                .subscribe({
-                    editPostView?.onDeleteFiles(it)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            runCatching { editorRepository.deleteFiles(postForm.postId, items) }
+                    .onSuccess { scope.launch { _uiEvents.emit(EditPostUiEvent.OnDeleteFiles(it)) } }
+                    .onFailure { errorHandler.handle(it) }
+            scope.launch { _uiEvents.emit(EditPostUiEvent.OnAttachmentDeleteProgressFinished) }
+        }
     }
 
     fun onSendClick() {
         if (postForm.type == EditPostForm.TYPE_EDIT_POST) {
-            editPostView?.showReasonDialog(postForm)
+            scope.launch { _uiEvents.emit(EditPostUiEvent.ShowReasonDialog(postForm)) }
         } else {
-            editPostView?.sendMessage()
+            scope.launch { _uiEvents.emit(EditPostUiEvent.SendMessage) }
         }
     }
 
     fun onReasonEdit(reason: String) {
         postForm.editReason = reason
-        editPostView?.sendMessage()
+        scope.launch { _uiEvents.emit(EditPostUiEvent.SendMessage) }
     }
 
     fun exit() {
@@ -338,17 +419,16 @@ class EditPostViewModel(
     fun exitWithPage(page: ThemePage) {
         router.exitWithResult(Screen.Theme.CODE_RESULT_PAGE, page)
     }
+}
 
-    class Factory(
-            private val editorRepository: PostEditorRepository,
-            private val themeTemplate: ThemeTemplate,
-            private val router: TabRouter,
-            private val errorHandler: IErrorHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != EditPostViewModel::class.java) throw IllegalArgumentException("Unknown ViewModel class")
-            return EditPostViewModel(editorRepository, themeTemplate, router, errorHandler) as T
-        }
-    }
+sealed class EditPostUiEvent {
+    data class ShowForm(val form: EditPostForm) : EditPostUiEvent()
+    data class ShowEditLoadingDraft(val form: EditPostForm) : EditPostUiEvent()
+    object ShowEditLoadPlaceholder : EditPostUiEvent()
+    data class OnPostSend(val page: ThemePage, val form: EditPostForm) : EditPostUiEvent()
+    data class OnUploadFiles(val files: List<AttachmentItem>) : EditPostUiEvent()
+    data class OnDeleteFiles(val items: List<AttachmentItem>) : EditPostUiEvent()
+    object OnAttachmentDeleteProgressFinished : EditPostUiEvent()
+    data class ShowReasonDialog(val form: EditPostForm) : EditPostUiEvent()
+    object SendMessage : EditPostUiEvent()
 }

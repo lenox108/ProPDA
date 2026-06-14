@@ -18,6 +18,7 @@ class DetailsPage {
     var author: String? = null
     var date: String? = null
     var imgUrl: String? = null
+    var category: Tag? = null
     var commentsCount: Int = 0
     val tags = mutableListOf<Tag>()
     var karmaMap = SparseArray<Comment.Karma>()
@@ -28,5 +29,6 @@ class DetailsPage {
     val materials = mutableListOf<Material>()
     var navId: String? = null
     var commentsSource: String? = null
+    var desktopCommentsSource: String? = null
     var commentTree: Comment? = null
 }

@@ -1,13 +1,13 @@
 package forpdateam.ru.forpda.model
 
 import android.content.SharedPreferences
-import com.jakewharton.rxrelay2.BehaviorRelay
 import forpdateam.ru.forpda.entity.app.CloseableInfo
-import io.reactivex.Observable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class CloseableInfoHolder(
-        private val preferences: SharedPreferences,
-        private val schedulers: SchedulersProvider
+        private val preferences: SharedPreferences
 ) {
 
     companion object {
@@ -21,30 +21,28 @@ class CloseableInfoHolder(
         )
     }
 
-    private val relay = BehaviorRelay.create<List<CloseableInfo>>()
+    private val _items = MutableStateFlow(loadInitialList())
 
-    init {
+    private fun loadInitialList(): List<CloseableInfo> {
         val closedIds: List<Int> = preferences.getString("closeable_info_closed_ids", null)?.let { savedIds ->
-            savedIds.split(',').map { it.toInt() }
+            savedIds.split(',').mapNotNull { it.toIntOrNull() }
         } ?: emptyList()
 
-        val allItems = ALL_ITEMS.map { CloseableInfo(it, closedIds.contains(it)) }
-        relay.accept(allItems)
+        return ALL_ITEMS.map { CloseableInfo(it, closedIds.contains(it)) }
     }
 
-    fun observe(): Observable<List<CloseableInfo>> = relay
-            .subscribeOn(schedulers.io())
-            .observeOn(schedulers.ui());
+    fun observe(): Flow<List<CloseableInfo>> = _items.asStateFlow()
 
-    fun get(): List<CloseableInfo> = relay.value!!
+    fun get(): List<CloseableInfo> = _items.value.map { CloseableInfo(it.id, it.isClosed) }
 
     fun close(item: CloseableInfo) {
-        val currentItems = get()
-        currentItems.firstOrNull { it.id == item.id }?.isClosed = true
-        val closedItems = currentItems.filter { it.isClosed }
-        preferences.edit().putString("closeable_info_closed_ids", closedItems.joinToString(",") { it.id.toString() }).apply()
-        relay.accept(currentItems)
+        val current = _items.value.map { info ->
+            if (info.id == item.id) info.copy(isClosed = true) else info
+        }
+        val closedItems = current.filter { it.isClosed }
+        preferences.edit()
+                .putString("closeable_info_closed_ids", closedItems.joinToString(",") { it.id.toString() })
+                .apply()
+        _items.value = current
     }
-
-
 }

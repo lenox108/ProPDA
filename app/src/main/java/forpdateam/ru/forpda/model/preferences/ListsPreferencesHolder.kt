@@ -1,57 +1,43 @@
 package forpdateam.ru.forpda.model.preferences
 
-import android.content.SharedPreferences
-import com.f2prateek.rx.preferences2.RxSharedPreferences
-import forpdateam.ru.forpda.common.Preferences
-import io.reactivex.Observable
+import android.content.Context
+import forpdateam.ru.forpda.model.datastore.ListsDataStore
+import kotlinx.coroutines.flow.Flow
 
 class ListsPreferencesHolder(
-        private val sharedPreferences: SharedPreferences
+        private val context: Context
 ) {
+    private val dataStore = ListsDataStore(context)
 
-    private val rxPreferences = RxSharedPreferences.create(sharedPreferences)
+    fun observeUnreadTopFlow(): Flow<Boolean> = dataStore.observeUnreadTopFlow()
 
-    private val unreadTop by lazy {
-        rxPreferences.getBoolean(Preferences.Lists.Topic.UNREAD_TOP, false)
-    }
+    fun observeShowDotFlow(): Flow<Boolean> = dataStore.observeShowDotFlow()
 
-    private val showDot by lazy {
-        rxPreferences.getBoolean(Preferences.Lists.Topic.SHOW_DOT, false)
-    }
+    fun observeFavLoadAllFlow(): Flow<Boolean> = dataStore.observeFavLoadAllFlow()
 
-    private val favLoadAll by lazy {
-        rxPreferences.getBoolean(Preferences.Lists.Favorites.LOAD_ALL, false)
-    }
+    fun observeFavShowUnreadBadgeFlow(): Flow<Boolean> = dataStore.observeFavShowUnreadBadgeFlow()
 
-    private val favSortingKey by lazy {
-        rxPreferences.getString(Preferences.Lists.Favorites.SORTING_KEY, "")
-    }
+    suspend fun setSortingKey(key: String) = dataStore.setSortingKey(key)
 
-    private val favSortingOrder by lazy {
-        rxPreferences.getString(Preferences.Lists.Favorites.SORTING_ORDER, "")
-    }
+    suspend fun setSortingOrder(order: String) = dataStore.setSortingOrder(order)
 
-    fun observeUnreadTop(): Observable<Boolean> = unreadTop.asObservable()
+    fun getUnreadTop(): Boolean = dataStore.getUnreadTopImmediate()
 
-    fun observeShowDot(): Observable<Boolean> = showDot.asObservable()
+    fun getShowDot(): Boolean = dataStore.getShowDotImmediate()
 
-    fun observeFavLoadAll(): Observable<Boolean> = favLoadAll.asObservable()
+    suspend fun setFavLoadAll(value: Boolean) = dataStore.setFavLoadAll(value)
 
-    fun observeSortingKey(): Observable<String> = favSortingKey.asObservable()
+    fun getFavLoadAll(): Boolean = dataStore.getFavLoadAllImmediate()
 
-    fun observeSortingOrder(): Observable<String> = favSortingOrder.asObservable()
+    fun getFavShowUnreadBadge(): Boolean = dataStore.getFavShowUnreadBadgeImmediate()
 
-    fun setSortingKey(key: String): Unit = favSortingKey.set(key)
+    suspend fun setUnreadTop(value: Boolean) = dataStore.setUnreadTop(value)
 
-    fun setSortingOrder(order: String): Unit = favSortingOrder.set(order)
+    suspend fun setShowDot(value: Boolean) = dataStore.setShowDot(value)
 
-    fun getUnreadTop(): Boolean = unreadTop.get()
+    suspend fun setFavShowUnreadBadge(value: Boolean) = dataStore.setFavShowUnreadBadge(value)
 
-    fun getShowDot(): Boolean = showDot.get()
+    fun getSortingKey(): String = dataStore.getSortingKeyImmediate()
 
-    fun getFavLoadAll(): Boolean = favLoadAll.get()
-
-    fun getSortingKey(): String = favSortingKey.get()
-
-    fun getSortingOrder(): String = favSortingOrder.get()
+    fun getSortingOrder(): String = dataStore.getSortingOrderImmediate()
 }

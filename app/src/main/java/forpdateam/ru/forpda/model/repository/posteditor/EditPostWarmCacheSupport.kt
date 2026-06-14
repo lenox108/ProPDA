@@ -1,7 +1,7 @@
 package forpdateam.ru.forpda.model.repository.posteditor
 
 import android.os.Parcel
-import android.util.Log
+import timber.log.Timber
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
 
@@ -40,7 +40,7 @@ internal fun copyAttachmentParcelable(src: AttachmentItem): AttachmentItem {
         p.setDataPosition(0)
         val out = AttachmentItem.CREATOR.createFromParcel(p)
         if (out == null) {
-            Log.w(WARM_CACHE_TAG, "createFromParcel returned null, fallback empty item")
+            Timber.w("createFromParcel returned null, fallback empty item")
             return AttachmentItem()
         }
         return out

@@ -1,5 +1,5 @@
 {
-  "version": 29,
+  "version": 30,
   "scopes": [
     {
       "scope":"global",
@@ -118,7 +118,7 @@
       "patterns": [
         {
           "key": "main",
-          "value": "<div data-item-fid=\"([^\"]*)\" data-item-track=\"([^\"]*)\" data-item-pin=\"([^\"]*)\">[\\s\\S]*?(?:class=\"(?:modifier|forum_img_with_link)\"[^>]*?>(?:<font color=\"([^\"]*)\">)?([^< ]*)(?:<\\/font>)?<\\/(?:span|a)>)?[^<]*?<a href=\"[^\"]*=(\\d*)[^\"]*?\"[^>]*?>(<strong>)?([^<]*)(?:<\\/strong>)?<\\/a>(?:[^<]*?<a[^>]*?tpg\\(\\d+,(\\d+)\\)[^>]*?>[^<]*?<\\/a>[\\s\\S]*?)?(?:<\\/div><div class=\"topic_body\"><span class=\"topic_desc\">([^<]*|)(<br[^>]*>|)[\\s\\S]*?showforum=([^\"]*?)\">([^<]*)<\\/a><br[^>]*>[\\s\\S]*?showuser=([^\"]*)\">([^<]*)<\\/a>[\\s\\S]*?showuser=([^\"]*)\">([^<]*)<\\/a> ([^<]*?)|[^<]*?<\\/div>[^<]*?<div class=\"board-forum-lastpost[\\s\\S]*?<div class=\"topic_body\">([^<]*?) <a href=\"[^\"]*?(\\d+)\"[^>]*?>([^<]*?))<(?:span class=\"forumdesc\"[^\"]*?>[^>]*?<br[^>]*?>[^<]*?<a href=\"[^\"]*?=(\\d+)\"[^>]*?>([\\s\\S]*?)<\\/a><\\/span><)?\\/div>[^<]*?<script[^>]*?>wr_fav_subscribe\\([^\"]*?\"([^\"]*?)\"\\)"
+          "value": "<div data-item-fid=\"([^\"]*)\" data-item-track=\"([^\"]*)\" data-item-pin=\"([^\"]*)\">[\\s\\S]*?(?:class=\"[^\"]*\\b(?:modifier|forum_img_with_link)\\b[^\"]*\"[^>]*?>(?:<font color=\"([^\"]*)\">)?\\s*([^<]*?)(?:<\\/font>)?<\\/(?:span|a)>)?[^<]*?<a href=\"[^\"]*=(\\d*)[^\"]*?\"[^>]*?>((?:<strong>)|(?:<b>))?([^<]*?)(?:<\\/strong>|<\\/b>)?<\\/a>(?:[^<]*?<a[^>]*?tpg\\(\\d+,(\\d+)\\)[^>]*?>[^<]*?<\\/a>[\\s\\S]*?)?(?:<\\/div><div class=\"topic_body\"><span class=\"topic_desc\">([^<]*|)(<br[^>]*>|)[\\s\\S]*?showforum=([^\"]*?)\">([^<]*)<\\/a><br[^>]*>[\\s\\S]*?showuser=([^\"]*)\">([^<]*)<\\/a>[\\s\\S]*?showuser=([^\"]*)\">([^<]*)<\\/a> ([^<]*?)|[^<]*?<\\/div>[^<]*?<div class=\"board-forum-lastpost[\\s\\S]*?<div class=\"topic_body\">([^<]*?) <a href=\"[^\"]*?(\\d+)\"[^>]*?>([^<]*?))<(?:span class=\"forumdesc\"[^\"]*?>[^>]*?<br[^>]*?>[^<]*?<a href=\"[^\"]*?=(\\d+)\"[^>]*?>([\\s\\S]*?)<\\/a><\\/span><)?\\/div>[^<]*?<script[^>]*?>wr_fav_subscribe\\([^\"]*?\"([^\"]*?)\"\\)"
         },
         {
           "key": "check_action",
@@ -177,7 +177,7 @@
         },
         {
           "key": "detail_detector",
-          "value": "(<[^>]*>[^<]*?<[^>]*?>[^<]*?<div[^>]*?data-ztm=\"\\d+:\\d+[^\"]*?\"[^>]*?>[^<]*?<meta[^>]*?content=\"[^\"]*?\"[^>]*?><div[^>]*><div[^>]*?class=\"photo\"[^>]*?>)|(<[^>]*>[^<]*?<[^>]*?>[^<]*?<div[^>]*?data-ztm=\"\\d+:\\d+[^\"]*?\"[^>]*?>[^<]*?<meta[^>]*?content=\"[^\"]*?\"[^>]*?><link[^>]*?><div class=\"[^\"]*?article[^\"]*?\"[^>]*?>)"
+          "value": "(<[^>]*>[^<]*?<[^>]*?>[^<]*?<div[^>]*?data-ztm=\"\\d+:\\d+[^\"]*?\"[^>]*?>[^<]*?<meta[^>]*?content=\"[^\"]*?\"[^>]*?><div[^>]*><div[^>]*?class=\"photo\"[^>]*?>)|(<[^>]*>[^<]*?<[^>]*?>[^<]*?<div[^>]*?data-ztm=\"\\d+:\\d+[^\"]*?\"[^>]*?>[^<]*?<meta[^>]*?content=\"[^\"]*?\"[^>]*?><link[^>]*?><div class=\"[^\"]*?article[^\"]*?\"[^>]*?>)|(<meta[^>]*?property=\"og:description\"[^>]*>[^<]*<meta[^>]*?property=\"og:site_name\"[^>]*>.*?<div[^>]*?class=\"[^\"]*?(?:article|content|post|entry)[^\"]*?\"[^>]*>)|(<div[^>]*?class=\"[^\"]*?(?:articleBody|article-body|article-content|entry-content|post-content|content-body)[^\"]*?\"[^>]*>)"
         },
         {
           "key": "exclude_form_comment",
@@ -278,6 +278,10 @@
           "value": "group-item([^\"]*?)\" data-message-id=\"([^\"]*?)\"[^>]*?data-unread-status=\"([^\"]*?)\">[\\s\\S]*?<\\/b> ([^ <]*?) [\\s\\S]*?src=\"([^\"]*?)\"[\\s\\S]*?<div[^>]*?msg-content[^>]*?>([\\s\\S]*?)<\\/div>[^<]*?<\\/div>[^<]*?(?:\\*\\/--><\\/div>|<div (?:class=\"(?=date|list-group-item)|id=\"thread-inside-bottom))|<div class=\"text\">([^<]*?)<\\/div>"
         },
         {
+          "key": "chat_pattern_container",
+          "value": "(?:mess_container\\s+([^\"]*?)\"\\s+data-mess-id=\"(\\d+)\"|data-mess-id=\"(\\d+)\"[^>]*class=\"([^\"]*mess_container[^\"]*)\")[^>]*>[\\s\\S]*?<div[^>]*class=\"[^\"]*?content[^\"]*?\"[^>]*>([\\s\\S]*?)<\\/div>[\\s\\S]*?<div[^>]*class=\"time\"[^>]*>[\\s\\S]*?<span>([^<]*?)<\\/span>"
+        },
+        {
           "key": "blacklist_main",
           "value": "<a class=\"list-group-item[^>]*?showuser=(\\d+)[^>]*?>[\\s\\S]*?<img class=\"avatar\" src=\"([^\"]*?)\" title=\"([\\s\\S]*?)\" alt[^>]*?>"
         },
@@ -374,7 +378,7 @@
         },
         {
           "key": "attached_images",
-          "value": "(4pda\\.to\\/forum\\/dl\\/post\\/\\d+\\/[^\"']*?\\.(?:jpe?g|png|gif|bmp))\"?(?:[^>]*?title=\"([^\"']*?\\.(?:jpe?g|png|gif|bmp)) - [^\"']*?\")?"
+          "value": "(4pda\\.to\\/forum\\/dl\\/post\\/\\d+\\/[^\"']*?\\.(?:jpe?g|png|gif|bmp|webp)(?:\\?[^\"'\\s<>]*)?)\"?(?:[^>]*?title=\"([^\"']*?\\.(?:jpe?g|png|gif|bmp|webp)) - [^\"']*?\")?"
         }
       ]
     },
@@ -399,7 +403,7 @@
         },
         {
           "key": "topics",
-          "value": "<div[^>]*?data-topic=\"(\\d+)\"[^>]*?>[^<]*?<div[^>]*?class=\"topic_title\"[^>]*?>[^<]*?<span[^>]*?class=\"modifier\"[^>]*?>(?:[^<]*?<font[^>]*?>)?([^<]*?)(?:<\\/font>)?<\\/span>[^<]*?(\\(!\\))?[^<]*?<a[^>]*?href=\"[^\"]*?\"[^>]*?>([\\s\\S]*?)<\\/a>(?: ?&nbsp;[\\s\\S]*?<\\/div>|<\\/div>)[^<]*?<div[^>]*?class=\"topic_body\"[^>]*?>(?:[^<]*?<span[^>]*?class=\"topic_desc\"[^>]*?>(?!автор)([\\s\\S]*?)<br\\s?\\/>[^<]*?<\\/span>)?[^<]*?<span[^>]*?class=\"topic_desc\"[^>]*?>[^<]*?<a[^>]*?showuser=(\\d+)[^>]*?>([^<]*?)<\\/a>[^<]*?<\\/span>[\\s\\S]*?showuser=(\\d+)[^>]*?>([^<]*?)<\\/a>\\s?([^<]*?)(?:<span[\\s\\S]*?showuser=(\\d+)[^>]*?>([^<]*?)<\\/a>[^<]*?<\\/span>)?<\\/div>[^<]*?<\\/div>"
+          "value": "<div[^>]*?data-topic=\"(\\d+)\"[^>]*?>[^<]*?<div[^>]*?class=\"topic_title\"[^>]*?>[^<]*?<span[^>]*?class=\"modifier\"[^>]*?>(?:[^<]*?<font[^>]*?>)?([^<]*?)(?:<\\/font>)?<\\/span>[^<]*?(\\(!\\))?[^<]*?<a[^>]*?href=\"([^\"]*?showtopic=\\d+[^\"]*?)\"[^>]*?>([\\s\\S]*?)<\\/a>(?: ?&nbsp;[\\s\\S]*?<\\/div>|<\\/div>)[^<]*?<div[^>]*?class=\"topic_body\"[^>]*?>(?:[^<]*?<span[^>]*?class=\"topic_desc\"[^>]*?>(?!автор)([\\s\\S]*?)<br\\s?\\/>[^<]*?<\\/span>)?[^<]*?<span[^>]*?class=\"topic_desc\"[^>]*?>[^<]*?<a[^>]*?showuser=(\\d+)[^>]*?>([^<]*?)<\\/a>[^<]*?<\\/span>[\\s\\S]*?showuser=(\\d+)[^>]*?>([^<]*?)<\\/a>\\s?([^<]*?)(?:<span[\\s\\S]*?showuser=(\\d+)[^>]*?>([^<]*?)<\\/a>[^<]*?<\\/span>)?<\\/div>[^<]*?<\\/div>"
         }
       ]
     }

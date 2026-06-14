@@ -1,4 +1,5 @@
 package forpdateam.ru.forpda.ui.navigation
+import timber.log.Timber
 
 import android.os.Bundle
 import forpdateam.ru.forpda.presentation.Screen
@@ -27,10 +28,14 @@ import forpdateam.ru.forpda.ui.fragments.qms.QmsThemesFragment
 import forpdateam.ru.forpda.ui.fragments.qms.chat.QmsChatFragment
 import forpdateam.ru.forpda.ui.fragments.reputation.ReputationFragment
 import forpdateam.ru.forpda.ui.fragments.search.SearchFragment
+import forpdateam.ru.forpda.ui.fragments.downloads.DownloadsFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeFragmentWeb
+import forpdateam.ru.forpda.ui.fragments.theme.blacklist.ForumBlackListFragment
 import forpdateam.ru.forpda.ui.fragments.topics.TopicsFragment
 
 object TabHelper {
+
+    private const val EDIT_POST_DRAFT_SYNC_TAG = "EditPostDraftSync"
 
     private fun createFragment(tabClass: Class<out TabFragment>, args: Bundle? = null): TabFragment {
         return tabClass.getDeclaredConstructor().newInstance().apply {
@@ -63,6 +68,15 @@ object TabHelper {
             }
             is Screen.DevDbSearch -> createFragment(DevDbSearchFragment::class.java, args)
             is Screen.EditPost -> {
+                val screenMessageLen = screen.editPostForm?.message?.length
+                    ?: screen.initialBodyHtml?.length
+                    ?: 0
+                Timber.d(
+                    EDIT_POST_DRAFT_SYNC_TAG,
+                    "screenArgs len=$screenMessageLen" +
+                        " hasForm=${screen.editPostForm != null}" +
+                        " selection=${screen.initialSelectionStart}..${screen.initialSelectionEnd}"
+                )
                 val arguments = if (screen.editPostForm == null) {
                     EditPostFragment.fillArguments(
                             args,
@@ -77,7 +91,9 @@ object TabHelper {
                     EditPostFragment.fillArguments(
                             args,
                             screen.editPostForm!!,
-                            screen.themeName
+                            screen.themeName,
+                            screen.initialSelectionStart,
+                            screen.initialSelectionEnd
                     )
                 }
                 createFragment(EditPostFragment::class.java, arguments)
@@ -101,6 +117,7 @@ object TabHelper {
                     putString(NewsDetailsFragment.ARG_NEWS_DATE, screen.articleDate)
                     putString(NewsDetailsFragment.ARG_NEWS_IMAGE, screen.articleImageUrl)
                     putInt(NewsDetailsFragment.ARG_NEWS_COMMENTS_COUNT, screen.articleCommentsCount)
+                    putString(NewsDetailsFragment.ARG_NEWS_OPEN_SOURCE, screen.articleOpenSource)
                 })
             }
             is Screen.Notes -> createFragment(NotesFragment::class.java, args)
@@ -111,6 +128,7 @@ object TabHelper {
                 })
             }
             is Screen.ForumRules -> createFragment(ForumRulesFragment::class.java, args)
+            is Screen.ForumBlackList -> createFragment(ForumBlackListFragment::class.java, args)
             is Screen.GoogleCaptcha -> createFragment(GoogleCaptchaFragment::class.java, args)
             is Screen.Profile -> {
                 createFragment(ProfileFragment::class.java, args.apply {
@@ -144,9 +162,16 @@ object TabHelper {
                     putString(TabFragment.ARG_TAB, screen.searchUrl)
                 })
             }
+            is Screen.Downloads -> createFragment(DownloadsFragment::class.java, args)
             is Screen.Theme -> {
                 createFragment(ThemeFragmentWeb::class.java, args.apply {
                     putString(TabFragment.ARG_TAB, screen.themeUrl)
+                    putString(Screen.Theme.ARG_TOPIC_OPEN_SOURCE, screen.topicOpenSource)
+                    putString(Screen.Theme.ARG_TOPIC_OPEN_INTENT, screen.topicOpenIntent)
+                    screen.unreadUrlFromList?.let { putString(Screen.Theme.ARG_UNREAD_URL_FROM_LIST, it) }
+                    if (screen.unreadPostIdFromList > 0) {
+                        putInt(Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST, screen.unreadPostIdFromList)
+                    }
                 })
             }
             is Screen.Topics -> {
@@ -184,6 +209,7 @@ object TabHelper {
             is Screen.Notes -> NotesFragment::class.java
             is Screen.Announce -> AnnounceFragment::class.java
             is Screen.ForumRules -> ForumRulesFragment::class.java
+            is Screen.ForumBlackList -> ForumBlackListFragment::class.java
             is Screen.GoogleCaptcha -> GoogleCaptchaFragment::class.java
             is Screen.Profile -> ProfileFragment::class.java
             is Screen.QmsContacts -> QmsContactsFragment::class.java
@@ -192,6 +218,7 @@ object TabHelper {
             is Screen.QmsChat -> QmsChatFragment::class.java
             is Screen.Reputation -> ReputationFragment::class.java
             is Screen.Search -> SearchFragment::class.java
+            is Screen.Downloads -> DownloadsFragment::class.java
             is Screen.Theme -> ThemeFragmentWeb::class.java
             is Screen.Topics -> TopicsFragment::class.java
             is Screen.OtherMenu -> OtherFragment::class.java
@@ -219,6 +246,7 @@ object TabHelper {
             is NotesFragment -> Screen.Notes::class.java
             is AnnounceFragment -> Screen.Announce::class.java
             is ForumRulesFragment -> Screen.ForumRules::class.java
+            is ForumBlackListFragment -> Screen.ForumBlackList::class.java
             is GoogleCaptchaFragment -> Screen.GoogleCaptcha::class.java
             is ProfileFragment -> Screen.Profile::class.java
             is QmsContactsFragment -> Screen.QmsContacts::class.java
@@ -227,6 +255,7 @@ object TabHelper {
             is QmsChatFragment -> Screen.QmsChat::class.java
             is ReputationFragment -> Screen.Reputation::class.java
             is SearchFragment -> Screen.Search::class.java
+            is DownloadsFragment -> Screen.Downloads::class.java
             is ThemeFragmentWeb -> Screen.Theme::class.java
             is TopicsFragment -> Screen.Topics::class.java
             is OtherFragment -> Screen.OtherMenu::class.java

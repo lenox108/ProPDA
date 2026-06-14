@@ -86,11 +86,58 @@ private fun htmlInnerToPlainForMention(inner: String): String {
 }
 
 /**
+ * Snapback-ссылка на пост в DOM не содержит собственного текста: [HtmlCompat.fromHtml] оставит только ник,
+ * а `[snapback]postId[/snapback]` потеряется при редактировании.
+ */
+private fun preprocessHtmlSnapbackPostLinksForBbcodeEdit(html: String): String {
+    var s = html
+    val postLink = Regex("(?is)<a\\b([^>]*)>([\\s\\S]*?)</a>")
+    var guard = 0
+    while (postLink.containsMatchIn(s) && guard++ < 128) {
+        var changed = false
+        s = postLink.replace(s) { m ->
+            val attrs = m.groupValues[1]
+            val postId = snapbackPostIdFromAnchorAttrs(attrs)
+            if (postId == null) {
+                m.value
+            } else {
+                changed = true
+                "[snapback]$postId[/snapback] ${m.groupValues[2]}"
+            }
+        }
+        if (!changed) break
+    }
+    return s
+}
+
+private fun snapbackPostIdFromAnchorAttrs(attrs: String): String? {
+    val classAttr = Regex("""(?is)\bclass\s*=\s*["']([^"']*)["']""")
+        .find(attrs)
+        ?.groupValues
+        ?.getOrNull(1)
+        .orEmpty()
+    val isSnapbackPostClass = classAttr.contains("snapback", ignoreCase = true) &&
+            classAttr.contains("post", ignoreCase = true)
+    val titleAttr = Regex("""(?is)\btitle\s*=\s*["']([^"']*)["']""")
+            .find(attrs)
+            ?.groupValues
+            ?.getOrNull(1)
+            .orEmpty()
+    val isFindpostSnapback = attrs.contains("findpost", ignoreCase = true) &&
+            (titleAttr.contains("сообщ", ignoreCase = true) || titleAttr.contains("post", ignoreCase = true))
+    if (!isSnapbackPostClass && !isFindpostSnapback) return null
+
+    return Regex("""(?i)(?:[?&]|&amp;)p=(\d+)""").find(attrs)?.groupValues?.getOrNull(1)
+        ?: Regex("""(?i)#entry(\d+)""").find(attrs)?.groupValues?.getOrNull(1)
+        ?: Regex("""(?is)\bdata-post-id\s*=\s*["'](\d+)["']""").find(attrs)?.groupValues?.getOrNull(1)
+}
+
+/**
  * Упоминания в DOM: ссылка на профиль (showuser), часто с `<b>Ник,</b>` внутри — в BBCode как `[b]Ник,[/b]`.
  * Оставшиеся простые `<b>`/`</b>` тоже переводим, иначе [HtmlCompat.fromHtml] съедает жирный текст.
  */
 fun preprocessHtmlMentionsAndBoldForBbcodeEdit(html: String): String {
-    var s = html
+    var s = preprocessHtmlSnapbackPostLinksForBbcodeEdit(html)
     // Ссылка на профиль (showuser) — в т.ч. после blocks.js (class snapback user).
     val showUserLink = Regex("(?is)<a\\b[^>]*href=[^>]*showuser[^>]*>([\\s\\S]*?)</a>")
     var guard = 0
@@ -145,6 +192,32 @@ private fun extractDivInnerUntilMatchingClose(s: String, afterOpenTagGt: Int): P
         }
     }
     return null
+}
+
+private fun extractDirectChildDivInnerByClass(parentInnerHtml: String, classToken: String): String? {
+    var i = 0
+    while (i < parentInnerHtml.length) {
+        val nextOpen = parentInnerHtml.indexOf("<div", i, ignoreCase = true)
+        if (nextOpen < 0) return null
+        val gt = parentInnerHtml.indexOf('>', nextOpen)
+        if (gt < 0) return null
+        val tag = parentInnerHtml.substring(nextOpen, gt + 1)
+        val pair = extractDivInnerUntilMatchingClose(parentInnerHtml, gt + 1) ?: return null
+        if (tag.hasHtmlClassToken(classToken)) {
+            return pair.first
+        }
+        i = pair.second
+    }
+    return null
+}
+
+private fun String.hasHtmlClassToken(classToken: String): Boolean {
+    val classes = Regex("""(?is)\bclass\s*=\s*["']([^"']*)["']""")
+            .find(this)
+            ?.groupValues
+            ?.getOrNull(1)
+            .orEmpty()
+    return classes.split(Regex("\\s+")).any { it.equals(classToken, ignoreCase = true) }
 }
 
 private fun htmlFragmentToPlainForSpoilerEdit(fragment: String): String {
@@ -202,14 +275,9 @@ fun preprocessHtmlQuoteBlocksForBbcodeEdit(html: String): String {
             "[quote $attrs]$body[/quote]"
         }
     }
-    // Разметка темы в приложении: .post-block.quote > .block-body
-    val postBlockBody = Regex(
-        "(?is)<div[^>]*class=\"[^\"]*(?:post-block\\s+quote|quote\\s+post-block)[^\"]*\"[^>]*>" +
-                "[\\s\\S]*?<div[^>]*class=\"[^\"]*block-body[^\"]*\"[^>]*>([\\s\\S]*?)</div>"
-    )
-    while (postBlockBody.containsMatchIn(s)) {
-        s = postBlockBody.replace(s) { "[quote]${it.groupValues[1]}[/quote]" }
-    }
+    // Разметка темы в приложении: .post-block.quote > .block-body.
+    // Берём только body: smart-quote-toggle из WebView ("Развернуть цитату") не является текстом поста.
+    s = replacePostBlockQuoteBlocksForBbcodeEdit(s)
     val bq = Regex("(?is)<blockquote[^>]*>([\\s\\S]*?)</blockquote>")
     while (bq.containsMatchIn(s)) {
         s = bq.replace(s) { "[quote]${it.groupValues[1]}[/quote]" }
@@ -219,6 +287,34 @@ fun preprocessHtmlQuoteBlocksForBbcodeEdit(html: String): String {
     )
     while (postBlockquote.containsMatchIn(s)) {
         s = postBlockquote.replace(s) { "[quote]${it.groupValues[1]}[/quote]" }
+    }
+    return s
+}
+
+private fun replacePostBlockQuoteBlocksForBbcodeEdit(html: String): String {
+    var s = html
+    var searchStart = 0
+    val quoteOpen = Regex(
+            "(?is)<div\\b[^>]*class=[\"'][^\"']*(?:post-block\\s+quote|quote\\s+post-block)[^\"']*[\"'][^>]*>"
+    )
+    var guard = 0
+    while (guard++ < 256) {
+        val m = quoteOpen.find(s, searchStart) ?: break
+        val gt = s.indexOf('>', m.range.first)
+        if (gt < 0) break
+        val quotePair = extractDivInnerUntilMatchingClose(s, gt + 1)
+        if (quotePair == null) {
+            searchStart = m.range.first + 1
+            continue
+        }
+        val bodyInner = extractDirectChildDivInnerByClass(quotePair.first, "block-body")
+        if (bodyInner == null) {
+            searchStart = quotePair.second
+            continue
+        }
+        val replacement = "[quote]${preprocessHtmlQuoteBlocksForBbcodeEdit(bodyInner)}[/quote]"
+        s = s.replaceRange(m.range.first, quotePair.second, replacement)
+        searchStart = m.range.first + replacement.length
     }
     return s
 }
@@ -305,6 +401,29 @@ private fun stripOuterDivByClassName(html: String, classToken: String): String {
         s = s.removeRange(m.range.first, endPair.second)
     }
     return s
+}
+
+private val TRAILING_BLOCK_CLOSE_TAG =
+        Regex("""</(?:p|div|li|blockquote|td|th)>\s*$""", RegexOption.IGNORE_CASE)
+
+/**
+ * Вставляет HTML-маркер «отредактировано» перед закрывающим блочным тегом,
+ * чтобы ✎ шёл в конце текста, а не на отдельной строке после `</p>`.
+ */
+private val bbcodeLineBreakTagInHtml = Regex("""(?i)\[br\s*/?\]""")
+
+/**
+ * IPB иногда отдаёт в HTML тела поста нераспарсенные `[br]` (после submit с литеральными тегами).
+ * Превращаем в `<br>`, чтобы в теме были переносы строк, а не видимый текст `[br]`.
+ */
+fun renderBbcodeLineBreakTagsInPostHtml(html: String): String =
+        bbcodeLineBreakTagInHtml.replace(html) { "<br>" }
+
+fun appendEditedMarkerInline(html: String, markerHtml: String): String {
+    if (markerHtml.isEmpty()) return html
+    val trimmed = html.trimEnd()
+    val match = TRAILING_BLOCK_CLOSE_TAG.find(trimmed) ?: return trimmed + markerHtml
+    return trimmed.substring(0, match.range.first) + markerHtml + trimmed.substring(match.range.first)
 }
 
 fun forumPostHtmlToPlainText(html: String): String {

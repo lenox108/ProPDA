@@ -3,37 +3,69 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="?attr/colorSurface"
     android:orientation="vertical"
     android:paddingBottom="@dimen/content_block_padding_vertical"
     android:paddingEnd="@dimen/content_padding_horizontal"
     android:paddingStart="@dimen/content_padding_horizontal"
-    android:paddingTop="@dimen/toolbar_overlay_top_padding"
+    android:paddingTop="@dimen/content_block_padding_vertical"
     android:animateLayoutChanges="true">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/content_block_padding_vertical"
+        android:text="@string/user_nick"
+        android:textColor="?attr/second_text_color" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        app:hintEnabled="false"
+        app:boxBackgroundMode="outline"
+        app:boxBackgroundColor="?attr/colorSurface"
+        app:boxStrokeWidth="1dp"
+        app:boxStrokeWidthFocused="2dp"
+        app:boxStrokeColor="@color/qms_textfield_stroke">
 
-        <androidx.appcompat.widget.AppCompatAutoCompleteTextView
+        <com.google.android.material.textfield.MaterialAutoCompleteTextView
             android:id="@+id/qms_theme_nick_field"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/user_nick"
+            android:hint=""
+            android:textColor="?attr/default_text_color"
+            android:textColorHint="@color/dialog_textinput_hint"
             android:inputType="textPersonName"
             android:maxLines="1"
             android:scrollHorizontally="true" />
 
     </com.google.android.material.textfield.TextInputLayout>
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/content_block_padding_vertical"
+        android:layout_marginBottom="@dimen/content_block_padding_vertical"
+        android:text="@string/theme"
+        android:textColor="?attr/second_text_color" />
+
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        app:hintEnabled="false"
+        app:boxBackgroundMode="outline"
+        app:boxBackgroundColor="?attr/colorSurface"
+        app:boxStrokeWidth="1dp"
+        app:boxStrokeWidthFocused="2dp"
+        app:boxStrokeColor="@color/qms_textfield_stroke">
 
-        <androidx.appcompat.widget.AppCompatEditText
+        <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/qms_theme_title_field"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="@string/theme"
+            android:hint=""
+            android:textColor="?attr/default_text_color"
+            android:textColorHint="@color/dialog_textinput_hint"
             android:inputType="text"
             android:maxLines="1"
             android:scrollHorizontally="true" />

@@ -4,8 +4,6 @@
 <head>
     <title>${topic_title}</title>
     <script type="text/javascript">
-        console.log("LOAD JS SOURCE template_theme.html");
-        console.error("RATION "+window.devicePixelRatio);
         var PageInfo = {
             url: "${topic_url}",
             title: "${topic_title}",
@@ -19,19 +17,75 @@
             allPagesCount: ${all_pages_int},
             postsOnPageCount: ${posts_on_page_int},
             currentPage: ${current_page_int},
+            scrollMode: "${topic_scroll_mode}",
+            hybridScroll: ${topic_hybrid_scroll_bool},
+            debug: ${debug_bool},
 
             inFavorite: ${in_favorite_bool},
             authorized: ${authorized_bool},
             isCurator: ${is_curator_bool},
             memberId: ${member_id_int},
+            topicId: ${topic_id_int},
+            topicHatPostId: ${topic_hat_post_id_int},
+            forumBlacklist: {
+                single: "${res_s_forum_blacklist_post_hidden}",
+                pluralTemplate: "${res_s_forum_blacklist_posts_hidden}"
+            }
+        }
 
-            /** Соответствует настройке «Открытая шапка темы». Если false — scrollToElement не разворачивает шапку. */
-            hatOpenedPref: ${hat_opened_pref_bool}
+        var bottomChromePadding = 0;
+        var messagePanelPadding = 0;
+        var topChromePadding = ${top_chrome_padding_css_px};
+
+        function getExpectedBottomSpacerHeight() {
+            return Math.max(0, bottomChromePadding + messagePanelPadding);
+        }
+
+        function applyBottomSpacer() {
+            var element = document.getElementById("bottom_chrome_spacer");
+            var value = getExpectedBottomSpacerHeight();
+            document.documentElement.style.setProperty("--theme-bottom-chrome-padding", value + "px");
+            if (typeof updateThemeHatOverlayLayout === "function") {
+                updateThemeHatOverlayLayout();
+            }
+            if (typeof updateThemePollOverlayLayout === "function") {
+                updateThemePollOverlayLayout();
+            }
+            if (element) {
+                element.style.height = value + "px";
+            }
+            console.log("[ThemeInsets] applyBottomSpacer bottomChrome=" + bottomChromePadding + " messagePanel=" + messagePanelPadding + " spacer=" + value + " viewportH=" + (window.innerHeight || 0) + " documentH=" + Math.max(document.documentElement.scrollHeight || 0, document.body ? document.body.scrollHeight || 0 : 0));
         }
 
         function setPaddingBottom(newPadding) {
-            document.getElementById("padding_for_message_panel").style.paddingBottom = Number(newPadding) + "px";
+            messagePanelPadding = Math.max(0, Number(newPadding) || 0);
+            applyBottomSpacer();
+
+            var legacy = document.getElementById("padding_for_message_panel");
+            if (!legacy) return;
+            legacy.style.paddingBottom = "0";
+            legacy.style.height = "0";
+            legacy.style.margin = "0";
+            legacy.style.display = "none";
         }
+
+        function setBottomChromePadding(newPadding) {
+            bottomChromePadding = Math.max(0, Number(newPadding) || 0);
+            applyBottomSpacer();
+        }
+
+        function setTopChromePadding(newPadding) {
+            topChromePadding = Math.max(0, Number(newPadding) || 0);
+            document.documentElement.style.setProperty("--theme-top-chrome-padding", topChromePadding + "px");
+            if (typeof updateThemeHatOverlayLayout === "function") {
+                updateThemeHatOverlayLayout();
+            }
+            if (typeof updateThemePollOverlayLayout === "function") {
+                updateThemePollOverlayLayout();
+            }
+        }
+
+        document.documentElement.style.setProperty("--theme-top-chrome-padding", topChromePadding + "px");
 
     </script>
     <script type="text/javascript" src="file:///android_asset/forpda/scripts/main.js"></script>
@@ -44,25 +98,83 @@
     <link rel="stylesheet" type="text/css" href="file:///android_asset/fonts/fontello/import.css">
     <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/${style_type}/${style_type}_main.css">
     <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/${style_type}/${style_type}_themes.css">
+    ${theme_overrides_css}
     <script type="text/javascript" src="file:///android_asset/forpda/scripts/z_emoticons.js"></script>
 </head>
 
-<body id="${body_type}" class="${enable_avatars} ${avatar_type}">
-    <!-- $BeginBlock poll_block -->
-    <div class="poll ${poll_type} ${poll_state_class}">
+<body id="${body_type}" class="${enable_avatars} ${avatar_type} ${post_density_class}">
+    <svg class="rep-action-symbols" aria-hidden="true" focusable="false">
+        <symbol id="rep-thumb-up-final" viewBox="0 0 128 128"><path d="M76 3h9v1H76zM74 4h12v1H74zM73 5h15v1H73zM71 6h18v1H71zM71 7h19v1H71zM70 8h21v1H70zM70 9h8v1H70zM82 9h10v1H82zM69 10h8v1H69zM84 10h8v1H84zM69 11h7v1H69zM85 11h8v1H85zM68 12h7v1H68zM85 12h8v1H85zM68 13h7v1H68zM86 13h7v1H86zM68 14h7v1H68zM87 14h7v1H87zM67 15h8v1H67zM87 15h7v1H87zM67 16h7v1H67zM88 16h7v1H88zM67 17h7v1H67zM88 17h7v1H88zM67 18h7v1H67zM88 18h7v1H88zM67 19h6v1H67zM88 19h7v1H88zM66 20h7v1H66zM88 20h7v1H88zM66 21h7v1H66zM88 21h7v1H88zM65 22h8v1H65zM88 22h7v1H88zM65 23h7v1H65zM88 23h7v1H88zM64 24h8v1H64zM88 24h7v1H88zM64 25h7v1H64zM88 25h7v1H88zM63 26h8v1H63zM88 26h7v1H88zM62 27h8v1H62zM88 27h6v1H88zM62 28h8v1H62zM87 28h7v1H87zM61 29h8v1H61zM87 29h7v1H87zM60 30h8v1H60zM87 30h7v1H87zM59 31h9v1H59zM87 31h6v1H87zM58 32h9v1H58zM87 32h6v1H87zM57 33h9v1H57zM86 33h7v1H86zM56 34h9v1H56zM86 34h7v1H86zM55 35h9v1H55zM85 35h8v1H85zM53 36h10v1H53zM85 36h7v1H85zM53 37h9v1H53zM85 37h7v1H85zM52 38h9v1H52zM84 38h7v1H84zM50 39h10v1H50zM84 39h7v1H84zM50 40h9v1H50zM84 40h7v1H84zM48 41h10v1H48zM83 41h7v1H83zM47 42h10v1H47zM83 42h7v1H83zM46 43h10v1H46zM82 43h8v1H82zM45 44h10v1H45zM82 44h7v1H82zM44 45h10v1H44zM81 45h8v1H81zM43 46h10v1H43zM81 46h7v1H81zM42 47h10v1H42zM81 47h6v1H81zM14 48h5v1H14zM41 48h10v1H41zM80 48h7v1H80zM8 49h23v1H8zM40 49h9v1H40zM79 49h8v1H79zM7 50h25v1H7zM39 50h10v1H39zM79 50h9v1H79zM6 51h27v1H6zM38 51h10v1H38zM78 51h39v1H78zM5 52h29v1H5zM38 52h9v1H38zM78 52h42v1H78zM4 53h42v1H4zM78 53h44v1H78zM3 54h42v1H3zM78 54h45v1H78zM3 55h9v1H3zM28 55h16v1H28zM78 55h46v1H78zM3 56h7v1H3zM29 56h14v1H29zM79 56h46v1H79zM3 57h6v1H3zM29 57h13v1H29zM115 57h10v1H115zM2 58h7v1H2zM30 58h11v1H30zM117 58h9v1H117zM2 59h7v1H2zM30 59h11v1H30zM118 59h8v1H118zM2 60h7v1H2zM30 60h10v1H30zM119 60h8v1H119zM2 61h7v1H2zM30 61h9v1H30zM120 61h8v1H120zM2 62h7v1H2zM30 62h8v1H30zM120 62h8v1H120zM2 63h7v1H2zM30 63h8v1H30zM120 63h8v1H120zM2 64h7v1H2zM30 64h8v1H30zM120 64h8v1H120zM2 65h7v1H2zM30 65h7v1H30zM120 65h8v1H120zM2 66h7v1H2zM30 66h7v1H30zM120 66h8v1H120zM2 67h7v1H2zM30 67h7v1H30zM119 67h8v1H119zM2 68h7v1H2zM30 68h7v1H30zM119 68h7v1H119zM2 69h7v1H2zM30 69h7v1H30zM118 69h8v1H118zM2 70h7v1H2zM30 70h7v1H30zM117 70h8v1H117zM2 71h7v1H2zM30 71h7v1H30zM101 71h24v1H101zM2 72h7v1H2zM30 72h7v1H30zM100 72h24v1H100zM2 73h7v1H2zM30 73h7v1H30zM99 73h25v1H99zM2 74h7v1H2zM30 74h7v1H30zM99 74h25v1H99zM2 75h7v1H2zM30 75h7v1H30zM99 75h25v1H99zM2 76h7v1H2zM30 76h7v1H30zM100 76h25v1H100zM2 77h7v1H2zM30 77h7v1H30zM102 77h23v1H102zM2 78h7v1H2zM30 78h7v1H30zM118 78h8v1H118zM2 79h7v1H2zM30 79h7v1H30zM119 79h7v1H119zM2 80h7v1H2zM30 80h7v1H30zM119 80h7v1H119zM2 81h7v1H2zM30 81h7v1H30zM120 81h7v1H120zM2 82h7v1H2zM30 82h7v1H30zM120 82h7v1H120zM2 83h7v1H2zM30 83h7v1H30zM120 83h7v1H120zM2 84h7v1H2zM30 84h7v1H30zM120 84h7v1H120zM2 85h7v1H2zM30 85h7v1H30zM120 85h6v1H120zM2 86h7v1H2zM30 86h7v1H30zM119 86h7v1H119zM2 87h7v1H2zM30 87h7v1H30zM119 87h7v1H119zM2 88h7v1H2zM30 88h7v1H30zM118 88h7v1H118zM2 89h7v1H2zM30 89h7v1H30zM116 89h9v1H116zM2 90h7v1H2zM30 90h7v1H30zM102 90h23v1H102zM2 91h7v1H2zM30 91h7v1H30zM100 91h24v1H100zM2 92h7v1H2zM30 92h7v1H30zM99 92h24v1H99zM2 93h7v1H2zM30 93h7v1H30zM99 93h23v1H99zM2 94h7v1H2zM30 94h7v1H30zM99 94h23v1H99zM2 95h7v1H2zM30 95h7v1H30zM100 95h22v1H100zM2 96h7v1H2zM30 96h7v1H30zM102 96h20v1H102zM2 97h7v1H2zM30 97h7v1H30zM115 97h8v1H115zM2 98h7v1H2zM30 98h7v1H30zM116 98h7v1H116zM2 99h7v1H2zM30 99h7v1H30zM116 99h7v1H116zM2 100h7v1H2zM30 100h7v1H30zM117 100h6v1H117zM2 101h7v1H2zM30 101h7v1H30zM116 101h7v1H116zM2 102h7v1H2zM30 102h7v1H30zM116 102h7v1H116zM2 103h7v1H2zM30 103h7v1H30zM115 103h8v1H115zM2 104h7v1H2zM30 104h7v1H30zM114 104h8v1H114zM2 105h7v1H2zM30 105h7v1H30zM113 105h9v1H113zM2 106h7v1H2zM30 106h7v1H30zM102 106h20v1H102zM2 107h7v1H2zM30 107h7v1H30zM100 107h21v1H100zM2 108h7v1H2zM30 108h7v1H30zM99 108h21v1H99zM2 109h7v1H2zM30 109h7v1H30zM99 109h20v1H99zM2 110h7v1H2zM30 110h7v1H30zM99 110h19v1H99zM2 111h7v1H2zM30 111h7v1H30zM99 111h18v1H99zM2 112h7v1H2zM30 112h7v1H30zM102 112h14v1H102zM2 113h7v1H2zM30 113h8v1H30zM109 113h7v1H109zM3 114h7v1H3zM29 114h10v1H29zM109 114h7v1H109zM3 115h8v1H3zM28 115h12v1H28zM109 115h7v1H109zM3 116h9v1H3zM27 116h14v1H27zM109 116h7v1H109zM4 117h39v1H4zM108 117h8v1H108zM4 118h41v1H4zM107 118h8v1H107zM5 119h43v1H5zM105 119h10v1H105zM6 120h26v1H6zM36 120h78v1H36zM7 121h24v1H7zM37 121h76v1H37zM10 122h19v1H10zM38 122h75v1H38zM41 123h70v1H41zM43 124h67v1H43zM48 125h59v1H48zM55 126h43v1H55zM101 126h1v1H101z"></path></symbol>
+        <symbol id="rep-thumb-down-final" viewBox="0 0 128 128"><path d="M22 3h63v1H22zM19 4h69v1H19zM101 4h18v1H101zM18 5h73v1H18zM99 5h22v1H99zM16 6h76v1H16zM97 6h26v1H97zM15 7h79v1H15zM96 7h28v1H96zM14 8h110v1H14zM13 9h11v1H13zM83 9h42v1H83zM12 10h10v1H12zM85 10h18v1H85zM116 10h9v1H116zM12 11h9v1H12zM88 11h14v1H88zM118 11h7v1H118zM12 12h7v1H12zM90 12h11v1H90zM119 12h7v1H119zM11 13h7v1H11zM91 13h10v1H91zM119 13h7v1H119zM11 14h7v1H11zM92 14h8v1H92zM119 14h7v1H119zM10 15h7v1H10zM93 15h7v1H93zM120 15h6v1H120zM10 16h7v1H10zM93 16h7v1H93zM120 16h6v1H120zM10 17h7v1H10zM94 17h6v1H94zM120 17h6v1H120zM10 18h7v1H10zM94 18h6v1H94zM119 18h7v1H119zM10 19h7v1H10zM94 19h6v1H94zM119 19h7v1H119zM10 20h7v1H10zM94 20h6v1H94zM119 20h7v1H119zM10 21h7v1H10zM94 21h6v1H94zM119 21h7v1H119zM11 22h7v1H11zM94 22h6v1H94zM119 22h7v1H119zM11 23h9v1H11zM94 23h6v1H94zM119 23h7v1H119zM11 24h18v1H11zM94 24h6v1H94zM119 24h7v1H119zM9 25h22v1H9zM94 25h6v1H94zM119 25h7v1H119zM8 26h23v1H8zM94 26h6v1H94zM119 26h7v1H119zM7 27h24v1H7zM94 27h6v1H94zM119 27h7v1H119zM6 28h25v1H6zM94 28h6v1H94zM119 28h7v1H119zM5 29h25v1H5zM94 29h6v1H94zM119 29h7v1H119zM5 30h11v1H5zM94 30h6v1H94zM119 30h7v1H119zM4 31h8v1H4zM94 31h6v1H94zM119 31h7v1H119zM4 32h7v1H4zM94 32h6v1H94zM119 32h7v1H119zM3 33h8v1H3zM94 33h6v1H94zM119 33h7v1H119zM3 34h7v1H3zM94 34h6v1H94zM119 34h7v1H119zM3 35h6v1H3zM94 35h6v1H94zM119 35h7v1H119zM3 36h6v1H3zM94 36h6v1H94zM119 36h7v1H119zM3 37h6v1H3zM94 37h6v1H94zM119 37h7v1H119zM3 38h6v1H3zM94 38h6v1H94zM119 38h7v1H119zM3 39h7v1H3zM94 39h6v1H94zM119 39h7v1H119zM3 40h7v1H3zM94 40h6v1H94zM119 40h7v1H119zM3 41h8v1H3zM94 41h6v1H94zM119 41h7v1H119zM4 42h8v1H4zM94 42h6v1H94zM119 42h7v1H119zM4 43h22v1H4zM94 43h6v1H94zM119 43h7v1H119zM5 44h22v1H5zM94 44h6v1H94zM119 44h7v1H119zM5 45h23v1H5zM94 45h6v1H94zM119 45h7v1H119zM5 46h24v1H5zM94 46h6v1H94zM119 46h7v1H119zM4 47h24v1H4zM94 47h6v1H94zM119 47h7v1H119zM3 48h24v1H3zM94 48h6v1H94zM119 48h7v1H119zM3 49h11v1H3zM15 49h10v1H15zM94 49h6v1H94zM119 49h7v1H119zM3 50h8v1H3zM94 50h6v1H94zM119 50h7v1H119zM2 51h7v1H2zM94 51h6v1H94zM119 51h7v1H119zM2 52h7v1H2zM94 52h6v1H94zM119 52h7v1H119zM1 53h7v1H1zM94 53h6v1H94zM119 53h7v1H119zM0 54h8v1H0zM94 54h6v1H94zM119 54h7v1H119zM0 55h8v1H0zM94 55h6v1H94zM119 55h7v1H119zM0 56h8v1H0zM94 56h6v1H94zM119 56h7v1H119zM1 57h7v1H1zM94 57h6v1H94zM119 57h7v1H119zM2 58h7v1H2zM94 58h6v1H94zM119 58h7v1H119zM2 59h8v1H2zM94 59h6v1H94zM119 59h7v1H119zM3 60h10v1H3zM16 60h2v1H16zM19 60h3v1H19zM94 60h6v1H94zM119 60h7v1H119zM3 61h21v1H3zM94 61h6v1H94zM119 61h7v1H119zM4 62h21v1H4zM94 62h6v1H94zM119 62h7v1H119zM4 63h21v1H4zM94 63h6v1H94zM119 63h7v1H119zM4 64h21v1H4zM94 64h6v1H94zM119 64h7v1H119zM4 65h20v1H4zM93 65h7v1H93zM119 65h7v1H119zM4 66h19v1H4zM93 66h7v1H93zM119 66h7v1H119zM4 67h9v1H4zM93 67h7v1H93zM120 67h6v1H120zM3 68h8v1H3zM92 68h8v1H92zM120 68h6v1H120zM3 69h7v1H3zM92 69h9v1H92zM119 69h7v1H119zM3 70h6v1H3zM91 70h10v1H91zM119 70h7v1H119zM3 71h6v1H3zM90 71h11v1H90zM119 71h7v1H119zM3 72h6v1H3zM89 72h13v1H89zM118 72h7v1H118zM3 73h6v1H3zM89 73h14v1H89zM117 73h8v1H117zM3 74h7v1H3zM87 74h38v1H87zM3 75h7v1H3zM87 75h37v1H87zM3 76h8v1H3zM86 76h37v1H86zM4 77h8v1H4zM85 77h9v1H85zM98 77h24v1H98zM4 78h9v1H4zM84 78h9v1H84zM99 78h22v1H99zM5 79h12v1H5zM46 79h2v1H46zM83 79h9v1H83zM101 79h18v1H101zM6 80h44v1H6zM82 80h9v1H82zM6 81h45v1H6zM81 81h9v1H81zM8 82h43v1H8zM80 82h9v1H80zM9 83h42v1H9zM79 83h10v1H79zM11 84h40v1H11zM78 84h10v1H78zM15 85h36v1H15zM77 85h9v1H77zM43 86h8v1H43zM76 86h10v1H76zM43 87h7v1H43zM75 87h10v1H75zM43 88h7v1H43zM74 88h10v1H74zM42 89h8v1H42zM73 89h10v1H73zM42 90h7v1H42zM72 90h10v1H72zM42 91h7v1H42zM71 91h10v1H71zM41 92h7v1H41zM70 92h10v1H70zM41 93h7v1H41zM69 93h10v1H69zM41 94h7v1H41zM68 94h10v1H68zM41 95h6v1H41zM67 95h10v1H67zM40 96h7v1H40zM66 96h10v1H66zM40 97h7v1H40zM65 97h10v1H65zM40 98h7v1H40zM65 98h9v1H65zM39 99h7v1H39zM64 99h9v1H64zM39 100h7v1H39zM63 100h9v1H63zM39 101h7v1H39zM62 101h9v1H62zM39 102h6v1H39zM62 102h8v1H62zM39 103h6v1H39zM61 103h8v1H61zM39 104h6v1H39zM60 104h8v1H60zM39 105h6v1H39zM60 105h8v1H60zM38 106h7v1H38zM59 106h8v1H59zM38 107h7v1H38zM59 107h7v1H59zM38 108h7v1H38zM59 108h7v1H59zM38 109h7v1H38zM58 109h7v1H58zM38 110h7v1H38zM58 110h7v1H58zM38 111h7v1H38zM57 111h8v1H57zM39 112h6v1H39zM57 112h7v1H57zM39 113h6v1H39zM57 113h7v1H57zM39 114h7v1H39zM57 114h6v1H57zM39 115h7v1H39zM57 115h6v1H57zM39 116h8v1H39zM56 116h7v1H56zM40 117h8v1H40zM55 117h8v1H55zM40 118h8v1H40zM54 118h8v1H54zM41 119h9v1H41zM53 119h9v1H53zM41 120h20v1H41zM42 121h19v1H42zM43 122h17v1H43zM44 123h15v1H44zM46 124h11v1H46zM49 125h5v1H49z"></path></symbol>
+    </svg>
+    <div id="theme_top_chrome_spacer" aria-hidden="true"></div>
+    <!-- $BeginBlock top_hat -->
+    <div class="topic_hat_fixed post_container top_hat_overlay_host ${user_online} ${top_hat_state_class}" data-post-id="${post_id}" data-display-date="${date}" data-user-id="${user_id}" data-nick="${nick}">
+        <div class="hat_content ${top_hat_state_class}">
+            <div class="post_header">
+                <div tabindex="-1" class="accessibility_anchor"></div>
+                <div class="header_wrapper">
+                    <div class="avatar ${none_avatar} aec">
+                        <b class="letter" onclick="IThemePresenter.showUserMenu('${post_id}')">${nick_letter}</b>
+                        <div class="img" style="background-image:url(${avatar});" onclick="IThemePresenter.showUserMenu('${post_id}')" role="button" aria-label="${res_s_avatar}"></div>
+                        <div class="reputation" onclick="IThemePresenter.showReputationMenu('${post_id}')" role="button" aria-label="${res_s_reputation} ${reputation}"><span>${reputation}</span></div>
+                    </div>
+                    <span class="inf nick">
+                <span class="aec" onclick="IThemePresenter.showUserMenu('${post_id}')"><b>${nick}</b></span>
+                        <span class="online_dot" aria-hidden="true"></span>
+                    </span>
+                    <span class="inf post_meta">
+                        <span class="group_text aec" style="color:${group_color};" onclick="IThemePresenter.toast('${res_s_group}: ${group}')" role="button" aria-label="${res_s_group} ${group}"><span>${group}</span></span>
+                        <span class="date"><span>${date}</span></span>
+                    </span>
+                    ${user_post_count_html}
+                    <span class="inf number"><span>#${number}</span></span>
+                    <a class="btn inf menu aec" href="javascript:void(0)" onclick="IThemePresenter.showPostMenu('${post_id}'); return false;" role="button" aria-label="${res_s_menu}"><span>${res_s_menu}</span></a>
+                </div>
+            </div>
+            <div class="post_body emoticons">${body}</div>
+            <div class="post_footer">
+                <!-- $BeginBlock top_hat_report_block -->
+                <!--<a class="btn report" onclick="IThemePresenter.reportPost(${post_id})"><span>${res_s_report}</span></a>-->
+                <!-- $EndBlock top_hat_report_block -->
+                <!-- $BeginBlock top_hat_reply_quote_row -->
+                <div class="post_actions_row">
+                <!-- $BeginBlock top_hat_rep_up_block -->
+                <a class="btn rep_up aec" data-post-id="${post_id}" onclick="votePostFromEl(this, true)" role="button" aria-label="${res_s_vote_post_good}" title="${res_s_vote_post_good}"><svg class="rep-action-icon" aria-hidden="true" viewBox="0 0 128 128"><use href="#rep-thumb-up-final" xlink:href="#rep-thumb-up-final"></use></svg><span>+</span></a>
+                <!-- $EndBlock top_hat_rep_up_block -->
+                <span class="post_rating ${post_rating_state} ${post_rating_hidden_class}" aria-label="${res_s_post_rating} ${post_rating}"><b>${post_rating}</b></span>
+                <!-- $BeginBlock top_hat_rep_down_block -->
+                <a class="btn rep_down aec" data-post-id="${post_id}" onclick="votePostFromEl(this, false)" role="button" aria-label="${res_s_vote_post_bad}" title="${res_s_vote_post_bad}"><svg class="rep-action-icon" aria-hidden="true" viewBox="0 0 128 128"><use href="#rep-thumb-down-final" xlink:href="#rep-thumb-down-final"></use></svg><span>-</span></a>
+                <!-- $EndBlock top_hat_rep_down_block -->
+                <a class="btn reply aec" onclick="replyThemePost('${post_id}')" role="button" aria-label="${res_s_reply}" title="${res_s_reply}"><svg class="post-action-icon post-action-stroke-icon post-action-reply-icon" aria-hidden="true" viewBox="3.25 3.25 17.5 17.5"><path d="M12 4.5a7.5 7.5 0 017.5 7.5 7.5 7.5 0 01-7.5 7.5 7.3 7.3 0 01-3.1-.68L5 20l1.18-3.75A7.46 7.46 0 014.5 12 7.5 7.5 0 0112 4.5z"/></svg><span>${res_s_reply}</span></a>
+                <a class="btn quote aec" onclick="quoteFullThemePost('${post_id}', this)" role="button" aria-label="${res_s_quote}" title="${res_s_quote}"><svg class="post-action-icon post-action-stroke-icon post-action-quote-icon quote-action-icon" aria-hidden="true" viewBox="2 2 20 20"><path d="M3.5 6h17"/><path d="M17 2.75L20.5 6 17 9.25"/><path d="M3.5 6v5.5H6"/><path d="M20.5 18h-17"/><path d="M7 14.75L3.5 18 7 21.25"/><path d="M20.5 18v-5.5H18"/></svg><span>${res_s_quote}</span></a>
+                </div>
+                <!-- $EndBlock top_hat_reply_quote_row -->
+                <!-- $BeginBlock top_hat_delete_block -->
+                <!--<a class="btn delete" onclick="IThemePresenter.deletePost('${post_id}')"><span>${res_s_delete}</span></a>-->
+                <!-- $EndBlock top_hat_delete_block -->
+                <!-- $BeginBlock top_hat_edit_block -->
+                <!--<a class="btn edit" onclick="IThemePresenter.editPost('${post_id}')"><span>${res_s_edit}</span></a>-->
+                <!-- $EndBlock top_hat_edit_block -->
+            </div>
+        </div>
+    </div>
+    <!-- $EndBlock top_hat -->
+    <!-- $BeginBlock poll_overlay_block -->
+    <div id="theme_poll_overlay_host" class="poll ${poll_type} poll_overlay_host ${poll_overlay_state_class}">
         <a class="btn title aec" onclick="toggleButton(this, 'hat_content', 'poll')" role="button" aria-label="${res_s_poll_title}: ${poll_title}"><span>${poll_title}</span><i class="icon"></i></a>
-        <form action="index.php" method="get" class="hat_content body ${poll_state_class}">
+        <form action="${poll_form_action}" method="${poll_form_method}" class="hat_content body ${poll_overlay_state_class}" onsubmit="return submitThemePoll(this)">
             <div class="questions">
-                <!-- $BeginBlock poll_question_block -->
+                <!-- $BeginBlock poll_overlay_question_block -->
                 <div class="question">
                     <div class="title">${question_title}</div>
                     <div class="items">
-                        <!-- $BeginBlock poll_default_item -->
+                        <!-- $BeginBlock poll_overlay_default_item -->
                         <label class="item ${poll_type} aec">
-                            <input type="${question_item_type}" name="${question_item_name}" value="${question_item_value}"><i class="icon"><i class="add"></i></i><span class="title"><span>${question_item_title}</span></span>
+                            <input type="${question_item_type}" name="${question_item_name}" value="${question_item_value}" ${question_item_disabled}><i class="icon"><i class="add"></i></i><span class="title"><span>${question_item_title}</span></span>
                         </label>
-                        <!-- $EndBlock poll_default_item -->
-                        <!-- $BeginBlock poll_result_item -->
+                        <!-- $EndBlock poll_overlay_default_item -->
+                        <!-- $BeginBlock poll_overlay_result_item -->
                         <div class="item ${poll_type}">
                             <div class="range_bar">
                                 <div class="range" style="min-width:${question_item_percent}%;"></div>
@@ -71,30 +183,142 @@
                                 <span class="title"><span>${question_item_title}</span></span>
                             </div>
                         </div>
-                        <!-- $EndBlock poll_result_item -->
+                        <!-- $EndBlock poll_overlay_result_item -->
                     </div>
                 </div>
-                <!-- $EndBlock poll_question_block -->
+                <!-- $EndBlock poll_overlay_question_block -->
             </div>
             <div class="votes_info"><span>${res_s_poll_all_votes_count}: ${poll_votes_count}</span></div>
-            <!-- $BeginBlock poll_buttons -->
+            <!-- $BeginBlock poll_overlay_unavailable_status -->
+            <div class="poll_status"><span>${res_s_poll_unavailable}</span></div>
+            <!-- $EndBlock poll_overlay_unavailable_status -->
+            <!-- $BeginBlock poll_overlay_buttons -->
             <div class="buttons">
-                <!-- $BeginBlock poll_vote_button -->
+                <!-- $BeginBlock poll_overlay_vote_button -->
                 <button type="submit" class="btn vote aec" role="button" aria-label="${res_s_poll_vote_btn}"><span>${res_s_poll_vote_btn}</span></button>
-                <!-- $EndBlock poll_vote_button -->
-                <!-- $BeginBlock poll_show_results_button --><a class="btn show_results aec" onclick="IThemePresenter.showPollResults()" role="button" aria-label="${res_s_poll_results_btn}"><span>${res_s_poll_results_btn}</span></a>
-                <!-- $EndBlock poll_show_results_button -->
-                <!-- $BeginBlock poll_show_poll_button --><a class="btn show_poll aec" onclick="IThemePresenter.showPoll()" role="button" aria-label="${res_s_poll_show_btn}"><span>${res_s_poll_show_btn}</span></a>
-                <!-- $EndBlock poll_show_poll_button -->
+                <!-- $EndBlock poll_overlay_vote_button -->
+                <!-- $BeginBlock poll_overlay_show_results_button --><a class="btn show_results aec" onclick="IThemePresenter.showPollResults('${poll_results_url}')" role="button" aria-label="${res_s_poll_results_btn}"><span>${res_s_poll_results_btn}</span></a>
+                <!-- $EndBlock poll_overlay_show_results_button -->
+                <!-- $BeginBlock poll_overlay_show_poll_button --><a class="btn show_poll aec" onclick="IThemePresenter.showPoll()" role="button" aria-label="${res_s_poll_show_btn}"><span>${res_s_poll_show_btn}</span></a>
+                <!-- $EndBlock poll_overlay_show_poll_button -->
             </div>
-            <!-- $EndBlock poll_buttons -->
-            <input type="hidden" name="addpoll" value="1">
+            <!-- $EndBlock poll_overlay_buttons -->
+            <!-- $BeginBlock poll_overlay_hidden_input -->
+            <input type="hidden" name="${poll_hidden_name}" value="${poll_hidden_value}">
+            <!-- $EndBlock poll_overlay_hidden_input -->
         </form>
     </div>
-    <!-- $EndBlock poll_block -->
+    <!-- $EndBlock poll_overlay_block -->
     <div class="posts_list">
+        <!-- theme_posts_list_start -->
+        <!-- $BeginBlock top_hat_entry -->
+        <div name="entry${post_id}" class="topic_hat_entry post_container top_hat_entry ${inline_hat_state_class} ${user_online}" data-topic-id="${topic_id_int}" data-post-id="${post_id}" data-display-date="${date}" data-user-id="${user_id}" data-nick="${nick}">
+            <a class="btn hat_button inline_hat_button aec" onclick="toggleInlineTopicHat(this, '${topic_id_int}')" role="button" aria-label="${res_s_hat}"><span>${res_s_hat}</span><i class="icon"></i></a>
+            <div class="hat_content inline_hat_content ${inline_hat_state_class}">
+                <div class="post_header">
+                    <div tabindex="-1" class="accessibility_anchor"></div>
+                    <div class="header_wrapper">
+                        <div class="avatar ${none_avatar} aec">
+                            <b class="letter" onclick="IThemePresenter.showUserMenu('${post_id}')">${nick_letter}</b>
+                            <div class="img" style="background-image:url(${avatar});" onclick="IThemePresenter.showUserMenu('${post_id}')" role="button" aria-label="${res_s_avatar}"></div>
+                            <div class="reputation" onclick="IThemePresenter.showReputationMenu('${post_id}')" role="button" aria-label="${res_s_reputation} ${reputation}"><span>${reputation}</span></div>
+                        </div>
+                        <span class="inf nick">
+                    <span class="aec" onclick="IThemePresenter.showUserMenu('${post_id}')"><b>${nick}</b></span>
+                            <span class="online_dot" aria-hidden="true"></span>
+                        </span>
+                        <span class="inf post_meta">
+                            <span class="group_text aec" style="color:${group_color};" onclick="IThemePresenter.toast('${res_s_group}: ${group}')" role="button" aria-label="${res_s_group} ${group}"><span>${group}</span></span>
+                            <span class="date"><span>${date}</span></span>
+                        </span>
+                        ${user_post_count_html}
+                        <span class="inf number"><span>#${number}</span></span>
+                        <a class="btn inf menu aec" href="javascript:void(0)" onclick="IThemePresenter.showPostMenu('${post_id}'); return false;" role="button" aria-label="${res_s_menu}"><span>${res_s_menu}</span></a>
+                    </div>
+                </div>
+                <div class="post_body emoticons">${body}</div>
+                <div class="post_footer">
+                    <!-- $BeginBlock top_hat_entry_report_block -->
+                    <!--<a class="btn report" onclick="IThemePresenter.reportPost(${post_id})"><span>${res_s_report}</span></a>-->
+                    <!-- $EndBlock top_hat_entry_report_block -->
+                    <!-- $BeginBlock top_hat_entry_reply_quote_row -->
+                    <div class="post_actions_row">
+                    <!-- $BeginBlock top_hat_entry_rep_up_block -->
+                    <a class="btn rep_up aec" data-post-id="${post_id}" onclick="votePostFromEl(this, true)" role="button" aria-label="${res_s_vote_post_good}" title="${res_s_vote_post_good}"><svg class="rep-action-icon" aria-hidden="true" viewBox="0 0 128 128"><use href="#rep-thumb-up-final" xlink:href="#rep-thumb-up-final"></use></svg><span>+</span></a>
+                    <!-- $EndBlock top_hat_entry_rep_up_block -->
+                    <span class="post_rating ${post_rating_state} ${post_rating_hidden_class}" aria-label="${res_s_post_rating} ${post_rating}"><b>${post_rating}</b></span>
+                    <!-- $BeginBlock top_hat_entry_rep_down_block -->
+                    <a class="btn rep_down aec" data-post-id="${post_id}" onclick="votePostFromEl(this, false)" role="button" aria-label="${res_s_vote_post_bad}" title="${res_s_vote_post_bad}"><svg class="rep-action-icon" aria-hidden="true" viewBox="0 0 128 128"><use href="#rep-thumb-down-final" xlink:href="#rep-thumb-down-final"></use></svg><span>-</span></a>
+                    <!-- $EndBlock top_hat_entry_rep_down_block -->
+                    <a class="btn reply aec" onclick="replyThemePost('${post_id}')" role="button" aria-label="${res_s_reply}" title="${res_s_reply}"><svg class="post-action-icon post-action-stroke-icon post-action-reply-icon" aria-hidden="true" viewBox="3.25 3.25 17.5 17.5"><path d="M12 4.5a7.5 7.5 0 017.5 7.5 7.5 7.5 0 01-7.5 7.5 7.3 7.3 0 01-3.1-.68L5 20l1.18-3.75A7.46 7.46 0 014.5 12 7.5 7.5 0 0112 4.5z"/></svg><span>${res_s_reply}</span></a>
+                    <a class="btn quote aec" onclick="quoteFullThemePost('${post_id}', this)" role="button" aria-label="${res_s_quote}" title="${res_s_quote}"><svg class="post-action-icon post-action-stroke-icon post-action-quote-icon quote-action-icon" aria-hidden="true" viewBox="2 2 20 20"><path d="M3.5 6h17"/><path d="M17 2.75L20.5 6 17 9.25"/><path d="M3.5 6v5.5H6"/><path d="M20.5 18h-17"/><path d="M7 14.75L3.5 18 7 21.25"/><path d="M20.5 18v-5.5H18"/></svg><span>${res_s_quote}</span></a>
+                    </div>
+                    <!-- $EndBlock top_hat_entry_reply_quote_row -->
+                    <!-- $BeginBlock top_hat_entry_delete_block -->
+                    <!--<a class="btn delete" onclick="IThemePresenter.deletePost('${post_id}')"><span>${res_s_delete}</span></a>-->
+                    <!-- $EndBlock top_hat_entry_delete_block -->
+                    <!-- $BeginBlock top_hat_entry_edit_block -->
+                    <!--<a class="btn edit" onclick="IThemePresenter.editPost('${post_id}')"><span>${res_s_edit}</span></a>-->
+                    <!-- $EndBlock top_hat_entry_edit_block -->
+                </div>
+            </div>
+        </div>
+        <!-- $EndBlock top_hat_entry -->
+        <!-- $BeginBlock poll_block -->
+        <div class="poll ${poll_type} poll_entry ${poll_state_class}">
+            <a class="btn title aec" onclick="toggleButton(this, 'hat_content', 'poll')" role="button" aria-label="${res_s_poll_title}: ${poll_title}"><span>${poll_title}</span><i class="icon"></i></a>
+            <form action="${poll_form_action}" method="${poll_form_method}" class="hat_content body ${poll_state_class}" onsubmit="return submitThemePoll(this)">
+                <div class="questions">
+                    <!-- $BeginBlock poll_question_block -->
+                    <div class="question">
+                        <div class="title">${question_title}</div>
+                        <div class="items">
+                            <!-- $BeginBlock poll_default_item -->
+                            <label class="item ${poll_type} aec">
+                                <input type="${question_item_type}" name="${question_item_name}" value="${question_item_value}" ${question_item_disabled}><i class="icon"><i class="add"></i></i><span class="title"><span>${question_item_title}</span></span>
+                            </label>
+                            <!-- $EndBlock poll_default_item -->
+                            <!-- $BeginBlock poll_result_item -->
+                            <div class="item ${poll_type}">
+                                <div class="range_bar">
+                                    <div class="range" style="min-width:${question_item_percent}%;"></div>
+                                    <span class="value">${question_item_percent}%<span class="num_votes"><span>${question_item_votes}</span></span>
+                                    </span>
+                                    <span class="title"><span>${question_item_title}</span></span>
+                                </div>
+                            </div>
+                            <!-- $EndBlock poll_result_item -->
+                        </div>
+                    </div>
+                    <!-- $EndBlock poll_question_block -->
+                </div>
+                <div class="votes_info"><span>${res_s_poll_all_votes_count}: ${poll_votes_count}</span></div>
+                <!-- $BeginBlock poll_unavailable_status -->
+                <div class="poll_status"><span>${res_s_poll_unavailable}</span></div>
+                <!-- $EndBlock poll_unavailable_status -->
+                <!-- $BeginBlock poll_buttons -->
+                <div class="buttons">
+                    <!-- $BeginBlock poll_vote_button -->
+                    <button type="submit" class="btn vote aec" role="button" aria-label="${res_s_poll_vote_btn}"><span>${res_s_poll_vote_btn}</span></button>
+                    <!-- $EndBlock poll_vote_button -->
+                    <!-- $BeginBlock poll_show_results_button --><a class="btn show_results aec" onclick="IThemePresenter.showPollResults('${poll_results_url}')" role="button" aria-label="${res_s_poll_results_btn}"><span>${res_s_poll_results_btn}</span></a>
+                    <!-- $EndBlock poll_show_results_button -->
+                    <!-- $BeginBlock poll_show_poll_button --><a class="btn show_poll aec" onclick="IThemePresenter.showPoll()" role="button" aria-label="${res_s_poll_show_btn}"><span>${res_s_poll_show_btn}</span></a>
+                    <!-- $EndBlock poll_show_poll_button -->
+                </div>
+                <!-- $EndBlock poll_buttons -->
+                <!-- $BeginBlock poll_hidden_input -->
+                <input type="hidden" name="${poll_hidden_name}" value="${poll_hidden_value}">
+                <!-- $EndBlock poll_hidden_input -->
+            </form>
+        </div>
+        <!-- $EndBlock poll_block -->
         <!-- $BeginBlock post -->
-        <div name="entry${post_id}" class="post_container ${user_online} ${hat_state_class}" data-post-id="${post_id}" data-user-id="${user_id}" data-nick="${nick}">
+        <div name="entry${post_id}" class="post_container ${blacklisted_post_class} ${user_online} ${hat_state_class}" data-post-id="${post_id}" data-display-date="${date}" data-user-id="${user_id}" data-nick="${nick}">
+            <!-- $BeginBlock blacklisted_stub_open -->
+            <button type="button" class="blacklisted_post_placeholder" onclick="toggleBlacklistedPost('${post_id}', this); return false;" role="button" aria-expanded="false" aria-label="${res_s_forum_blacklist_post_hidden}"><span class="blacklisted_post_placeholder_text">${res_s_forum_blacklist_post_hidden}</span></button>
+            <div class="blacklisted_post_content" aria-hidden="true" hidden>
+            <!-- $EndBlock blacklisted_stub_open -->
             <!-- $BeginBlock hat_button --><a class="btn hat_button aec" onclick="toggleButton(this, 'hat_content', 'hat')" role="button" aria-label="${res_s_hat}"><span>${res_s_hat}</span><i class="icon"></i></a>
             <!-- $EndBlock hat_button -->
             <!-- $BeginBlock hat_content_start -->
@@ -110,21 +334,65 @@
                         </div>
                         <span class="inf nick">
                     <span class="aec" onclick="IThemePresenter.showUserMenu('${post_id}')"><b>${nick}</b></span>
-                        <span class="group aec" style="color:${group_color};" onclick="IThemePresenter.toast('${res_s_group}: ${group}')" role="button" aria-label="${res_s_group} ${group}"><span>${group}</span></span>
+                            <span class="online_dot" aria-hidden="true"></span>
                         </span>
-                        <span class="inf date"><span>${date}</span></span>
-                        <a class="btn inf menu aec" onclick="IThemePresenter.showPostMenu('${post_id}')" role="button" aria-label="${res_s_menu}"><span>${res_s_menu}</span></a>
+                        <span class="inf post_meta">
+                            <span class="group_text aec" style="color:${group_color};" onclick="IThemePresenter.toast('${res_s_group}: ${group}')" role="button" aria-label="${res_s_group} ${group}"><span>${group}</span></span>
+                            <span class="date"><span>${date}</span></span>
+                        </span>
+                        ${user_post_count_html}
+                        <span class="inf number"><span>#${number}</span></span>
+                        <a class="btn inf menu aec" href="javascript:void(0)" onclick="IThemePresenter.showPostMenu('${post_id}'); return false;" role="button" aria-label="${res_s_menu}"><span>${res_s_menu}</span></a>
                     </div>
                 </div>
+                <!-- $BeginBlock blacklisted_post_body -->
                 <div class="post_body emoticons">${body}</div>
+                <!-- $EndBlock blacklisted_post_body -->
+                <!-- $BeginBlock blacklisted_post_footer -->
+                <div class="post_footer">
+                    <!-- $BeginBlock blacklisted_report_block -->
+                    <!--<a class="btn report" onclick="IThemePresenter.reportPost(${post_id})"><span>${res_s_report}</span></a>-->
+                    <!-- $EndBlock blacklisted_report_block -->
+                    <!-- $BeginBlock blacklisted_reply_quote_row -->
+                    <div class="post_actions_row">
+                    <!-- $BeginBlock blacklisted_rep_up_block -->
+                    <a class="btn rep_up aec" data-post-id="${post_id}" onclick="votePostFromEl(this, true)" role="button" aria-label="${res_s_vote_post_good}" title="${res_s_vote_post_good}"><svg class="rep-action-icon" aria-hidden="true" viewBox="0 0 128 128"><use href="#rep-thumb-up-final" xlink:href="#rep-thumb-up-final"></use></svg><span>+</span></a>
+                    <!-- $EndBlock blacklisted_rep_up_block -->
+                    <span class="post_rating ${post_rating_state} ${post_rating_hidden_class}" aria-label="${res_s_post_rating} ${post_rating}"><b>${post_rating}</b></span>
+                    <!-- $BeginBlock blacklisted_rep_down_block -->
+                    <a class="btn rep_down aec" data-post-id="${post_id}" onclick="votePostFromEl(this, false)" role="button" aria-label="${res_s_vote_post_bad}" title="${res_s_vote_post_bad}"><svg class="rep-action-icon" aria-hidden="true" viewBox="0 0 128 128"><use href="#rep-thumb-down-final" xlink:href="#rep-thumb-down-final"></use></svg><span>-</span></a>
+                    <!-- $EndBlock blacklisted_rep_down_block -->
+                    <a class="btn reply aec" onclick="replyThemePost('${post_id}')" role="button" aria-label="${res_s_reply}" title="${res_s_reply}"><svg class="post-action-icon post-action-stroke-icon post-action-reply-icon" aria-hidden="true" viewBox="3.25 3.25 17.5 17.5"><path d="M12 4.5a7.5 7.5 0 017.5 7.5 7.5 7.5 0 01-7.5 7.5 7.3 7.3 0 01-3.1-.68L5 20l1.18-3.75A7.46 7.46 0 014.5 12 7.5 7.5 0 0112 4.5z"/></svg><span>${res_s_reply}</span></a>
+                    <a class="btn quote aec" onclick="quoteFullThemePost('${post_id}', this)" role="button" aria-label="${res_s_quote}" title="${res_s_quote}"><svg class="post-action-icon post-action-stroke-icon post-action-quote-icon quote-action-icon" aria-hidden="true" viewBox="2 2 20 20"><path d="M3.5 6h17"/><path d="M17 2.75L20.5 6 17 9.25"/><path d="M3.5 6v5.5H6"/><path d="M20.5 18h-17"/><path d="M7 14.75L3.5 18 7 21.25"/><path d="M20.5 18v-5.5H18"/></svg><span>${res_s_quote}</span></a>
+                    </div>
+                    <!-- $EndBlock blacklisted_reply_quote_row -->
+                    <!-- $BeginBlock blacklisted_delete_block -->
+                    <!--<a class="btn delete" onclick="IThemePresenter.deletePost('${post_id}')"><span>${res_s_delete}</span></a>-->
+                    <!-- $EndBlock blacklisted_delete_block -->
+                    <!-- $BeginBlock blacklisted_edit_block -->
+                    <!--<a class="btn edit" onclick="IThemePresenter.editPost('${post_id}')"><span>${res_s_edit}</span></a>-->
+                    <!-- $EndBlock blacklisted_edit_block -->
+                </div>
+                <!-- $EndBlock blacklisted_post_footer -->
+                <!-- $BeginBlock visible_post_body -->
+                <div class="post_body emoticons">${body}</div>
+                <!-- $EndBlock visible_post_body -->
+                <!-- $BeginBlock visible_post_footer -->
                 <div class="post_footer">
                     <!-- $BeginBlock report_block -->
                     <!--<a class="btn report" onclick="IThemePresenter.reportPost(${post_id})"><span>${res_s_report}</span></a>-->
                     <!-- $EndBlock report_block -->
                     <!-- $BeginBlock reply_quote_row -->
                     <div class="post_actions_row">
-                    <a class="btn reply aec" onclick="IThemePresenter.reply('${post_id}')" role="button" aria-label="${res_s_reply}"><span>${res_s_reply}</span></a>
-                    <a class="btn quote aec" onclick="IThemePresenter.quoteFullPost('${post_id}')" role="button" aria-label="${res_s_quote}"><span>${res_s_quote}</span></a>
+                    <!-- $BeginBlock rep_up_block -->
+                    <a class="btn rep_up aec" data-post-id="${post_id}" onclick="votePostFromEl(this, true)" role="button" aria-label="${res_s_vote_post_good}" title="${res_s_vote_post_good}"><svg class="rep-action-icon" aria-hidden="true" viewBox="0 0 128 128"><use href="#rep-thumb-up-final" xlink:href="#rep-thumb-up-final"></use></svg><span>+</span></a>
+                    <!-- $EndBlock rep_up_block -->
+                    <span class="post_rating ${post_rating_state} ${post_rating_hidden_class}" aria-label="${res_s_post_rating} ${post_rating}"><b>${post_rating}</b></span>
+                    <!-- $BeginBlock rep_down_block -->
+                    <a class="btn rep_down aec" data-post-id="${post_id}" onclick="votePostFromEl(this, false)" role="button" aria-label="${res_s_vote_post_bad}" title="${res_s_vote_post_bad}"><svg class="rep-action-icon" aria-hidden="true" viewBox="0 0 128 128"><use href="#rep-thumb-down-final" xlink:href="#rep-thumb-down-final"></use></svg><span>-</span></a>
+                    <!-- $EndBlock rep_down_block -->
+                    <a class="btn reply aec" onclick="replyThemePost('${post_id}')" role="button" aria-label="${res_s_reply}" title="${res_s_reply}"><svg class="post-action-icon post-action-stroke-icon post-action-reply-icon" aria-hidden="true" viewBox="3.25 3.25 17.5 17.5"><path d="M12 4.5a7.5 7.5 0 017.5 7.5 7.5 7.5 0 01-7.5 7.5 7.3 7.3 0 01-3.1-.68L5 20l1.18-3.75A7.46 7.46 0 014.5 12 7.5 7.5 0 0112 4.5z"/></svg><span>${res_s_reply}</span></a>
+                    <a class="btn quote aec" onclick="quoteFullThemePost('${post_id}', this)" role="button" aria-label="${res_s_quote}" title="${res_s_quote}"><svg class="post-action-icon post-action-stroke-icon post-action-quote-icon quote-action-icon" aria-hidden="true" viewBox="2 2 20 20"><path d="M3.5 6h17"/><path d="M17 2.75L20.5 6 17 9.25"/><path d="M3.5 6v5.5H6"/><path d="M20.5 18h-17"/><path d="M7 14.75L3.5 18 7 21.25"/><path d="M20.5 18v-5.5H18"/></svg><span>${res_s_quote}</span></a>
                     </div>
                     <!-- $EndBlock reply_quote_row -->
                     <!-- $BeginBlock delete_block -->
@@ -134,23 +402,412 @@
                     <!--<a class="btn edit" onclick="IThemePresenter.editPost('${post_id}')"><span>${res_s_edit}</span></a>-->
                     <!-- $EndBlock edit_block -->
                 </div>
+                <!-- $EndBlock visible_post_footer -->
+                <!-- $BeginBlock blacklisted_stub_close -->
+            </div>
+            <!-- $EndBlock blacklisted_stub_close -->
                 <!-- $BeginBlock hat_content_end -->
             </div>
             <!-- $EndBlock hat_content_end -->
         </div>
         <!-- $EndBlock post -->
+        <!-- theme_posts_list_end -->
     </div>
-    <div class="navigation ${navigation_disable}">
-        <span class="button first ${first_disable}" onclick="IThemePresenter.firstPage()" role="button" aria-label="${res_s_first}"><i class="icon"></i></span>
-        <span class="button prev ${prev_disable}" onclick="IThemePresenter.prevPage()" role="button" aria-label="${res_s_prev}"><i class="icon"></i></span>
-        <span class="button page" onclick="IThemePresenter.selectPage()" role="button" aria-label="${res_s_select_desc}"><b>${res_s_select}</b><i class="icon"></i></span>
-        <span class="button next ${next_disable}" onclick="IThemePresenter.nextPage()" role="button" aria-label="${res_s_next}"><i class="icon"></i></span>
-        <span class="button last ${last_disable}" onclick="IThemePresenter.lastPage()" role="button" aria-label="${res_s_last}"><i class="icon"></i></span>
-    </div>
-    <div id="padding_for_message_panel" style="padding-bottom: 0em;"></div>
+    <!-- $BeginBlock bottom_pagination -->
+    <nav class="theme_bottom_pagination" aria-label="${res_s_select_desc}">
+        <div class="theme_bottom_pagination_row">
+            <!-- $BeginBlock bottom_pagination_first_enabled -->
+            <button type="button" class="theme_bottom_pagination_btn aec" onclick="IThemePresenter.firstPage()" aria-label="${res_s_first}"><span>«</span></button>
+            <!-- $EndBlock bottom_pagination_first_enabled -->
+            <!-- $BeginBlock bottom_pagination_first_disabled -->
+            <button type="button" class="theme_bottom_pagination_btn disabled" disabled aria-disabled="true" aria-label="${res_s_first}"><span>«</span></button>
+            <!-- $EndBlock bottom_pagination_first_disabled -->
+            <!-- $BeginBlock bottom_pagination_prev_enabled -->
+            <button type="button" class="theme_bottom_pagination_btn aec" onclick="IThemePresenter.prevPage()" aria-label="${res_s_prev}"><span>‹</span></button>
+            <!-- $EndBlock bottom_pagination_prev_enabled -->
+            <!-- $BeginBlock bottom_pagination_prev_disabled -->
+            <button type="button" class="theme_bottom_pagination_btn disabled" disabled aria-disabled="true" aria-label="${res_s_prev}"><span>‹</span></button>
+            <!-- $EndBlock bottom_pagination_prev_disabled -->
+            <button type="button" class="theme_bottom_pagination_current aec" onclick="IThemePresenter.selectPage()" oncontextmenu="return themeBottomPaginationInput(event)" aria-label="${bottom_pagination_accessibility_label}" title="${bottom_pagination_accessibility_label}"><span>${bottom_pagination_label}</span></button>
+            <!-- $BeginBlock bottom_pagination_next_enabled -->
+            <button type="button" class="theme_bottom_pagination_btn aec" onclick="IThemePresenter.nextPage()" aria-label="${res_s_next}"><span>›</span></button>
+            <!-- $EndBlock bottom_pagination_next_enabled -->
+            <!-- $BeginBlock bottom_pagination_next_disabled -->
+            <button type="button" class="theme_bottom_pagination_btn disabled" disabled aria-disabled="true" aria-label="${res_s_next}"><span>›</span></button>
+            <!-- $EndBlock bottom_pagination_next_disabled -->
+            <!-- $BeginBlock bottom_pagination_last_enabled -->
+            <button type="button" class="theme_bottom_pagination_btn aec" onclick="IThemePresenter.lastPage()" aria-label="${res_s_last}"><span>»</span></button>
+            <!-- $EndBlock bottom_pagination_last_enabled -->
+            <!-- $BeginBlock bottom_pagination_last_disabled -->
+            <button type="button" class="theme_bottom_pagination_btn disabled" disabled aria-disabled="true" aria-label="${res_s_last}"><span>»</span></button>
+            <!-- $EndBlock bottom_pagination_last_disabled -->
+        </div>
+    </nav>
+    <!-- $EndBlock bottom_pagination -->
+    <div id="bottom_chrome_spacer" aria-hidden="true"></div>
     <script type="text/javascript">
         jsEmoticons.parseAll("file:///android_asset/smiles/")
 
+        function themeBottomPaginationInput(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            IThemePresenter.selectPageInput();
+            return false;
+        }
+
+        function suppressThemeBottomPaginationSelection(event) {
+            var target = event && event.target;
+            if (!target || !target.closest || !target.closest(".theme_bottom_pagination")) {
+                return true;
+            }
+            event.preventDefault();
+            return false;
+        }
+
+        document.addEventListener("selectstart", suppressThemeBottomPaginationSelection, true);
+        document.addEventListener("dragstart", suppressThemeBottomPaginationSelection, true);
+
+        var topicHeaderInlineObserver = null;
+        var topicHeaderInlineFallbackBound = false;
+        var topicHeaderInlineFallbackRaf = null;
+        var topicHeaderInlineVisibleOnScreen = false;
+
+        function findInlineTopicHeaderBlock() {
+            return document.querySelector(".topic_hat_entry.top_hat_entry");
+        }
+
+        function findTopicHeaderOverlayBlock() {
+            return document.querySelector(".topic_hat_fixed.top_hat_overlay_host");
+        }
+
+        function isTopicHeaderOverlayVisible() {
+            var block = findTopicHeaderOverlayBlock();
+            if (!block) return false;
+            var body = block.querySelector(".hat_content");
+            return !block.classList.contains("initial_open") &&
+                block.classList.contains("open") && !block.classList.contains("close") &&
+                (!body || (body.classList.contains("open") && !body.classList.contains("close")));
+        }
+
+        function computeInlineTopicHeaderVisibleOnScreen() {
+            var block = findInlineTopicHeaderBlock();
+            if (!block || typeof block.getBoundingClientRect !== "function") return false;
+            var rect = block.getBoundingClientRect();
+            var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+            var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+            return rect.width > 0 && rect.height > 0 &&
+                rect.bottom > 0 && rect.right > 0 &&
+                rect.top < viewportHeight && rect.left < viewportWidth;
+        }
+
+        function onTopicHeaderViewportVisibilityChanged(visible) {
+            topicHeaderInlineVisibleOnScreen = visible === true;
+        }
+
+        function updateInlineTopicHeaderVisibleOnScreen(visible) {
+            var next = visible === true;
+            if (topicHeaderInlineVisibleOnScreen === next) return;
+            onTopicHeaderViewportVisibilityChanged(next);
+        }
+
+        function scheduleInlineTopicHeaderFallbackCheck() {
+            if (topicHeaderInlineFallbackRaf !== null) return;
+            topicHeaderInlineFallbackRaf = requestAnimationFrame(function () {
+                topicHeaderInlineFallbackRaf = null;
+                updateInlineTopicHeaderVisibleOnScreen(computeInlineTopicHeaderVisibleOnScreen());
+            });
+        }
+
+        function installInlineTopicHeaderVisibilityObserver() {
+            destroyInlineTopicHeaderVisibilityObserver();
+            var block = findInlineTopicHeaderBlock();
+            topicHeaderInlineVisibleOnScreen = computeInlineTopicHeaderVisibleOnScreen();
+            if (!block) return;
+            if (typeof IntersectionObserver === "function") {
+                topicHeaderInlineObserver = new IntersectionObserver(function (entries) {
+                    if (!entries || !entries.length) return;
+                    updateInlineTopicHeaderVisibleOnScreen(entries[0].isIntersecting === true);
+                }, {threshold: 0});
+                topicHeaderInlineObserver.observe(block);
+                return;
+            }
+            window.addEventListener("scroll", scheduleInlineTopicHeaderFallbackCheck, {passive: true});
+            window.addEventListener("resize", scheduleInlineTopicHeaderFallbackCheck);
+            topicHeaderInlineFallbackBound = true;
+        }
+
+        function destroyInlineTopicHeaderVisibilityObserver() {
+            if (topicHeaderInlineObserver) {
+                topicHeaderInlineObserver.disconnect();
+                topicHeaderInlineObserver = null;
+            }
+            if (topicHeaderInlineFallbackBound) {
+                window.removeEventListener("scroll", scheduleInlineTopicHeaderFallbackCheck);
+                window.removeEventListener("resize", scheduleInlineTopicHeaderFallbackCheck);
+                topicHeaderInlineFallbackBound = false;
+            }
+            if (topicHeaderInlineFallbackRaf !== null) {
+                cancelAnimationFrame(topicHeaderInlineFallbackRaf);
+                topicHeaderInlineFallbackRaf = null;
+            }
+        }
+
+        function isTopicHeaderVisibleOnScreen() {
+            return computeInlineTopicHeaderVisibleOnScreen();
+        }
+
+        function showTopicHeaderOverlay() {
+            return toggleThemeHatFromFixed(true);
+        }
+
+        function openTopicHeaderOverlayFromToolbar() {
+            if (typeof suppressThemeInfiniteScrollFor === "function") {
+                suppressThemeInfiniteScrollFor(1200);
+            }
+            closeInlineTopicHatForToolbarOverlay();
+            return toggleThemeHatFromFixed(true);
+        }
+
+        function hideTopicHeaderOverlay() {
+            return toggleThemeHatFromFixed(false);
+        }
+
+        function closeInlineTopicHatForToolbarOverlay() {
+            var block = findInlineTopicHeaderBlock();
+            if (!block) return false;
+            var body = block.querySelector(".inline_hat_content");
+            var isOpen = block.classList.contains("open") ||
+                (body && body.classList.contains("open") && !body.classList.contains("close"));
+            if (!isOpen) return false;
+            block.classList.add("once-opened");
+            block.classList.remove("open");
+            block.classList.add("close");
+            if (body) {
+                body.classList.remove("open");
+                body.classList.add("close");
+            }
+            var topicId = block.getAttribute("data-topic-id") || "";
+            if (topicId && typeof IThemePresenter !== "undefined" &&
+                typeof IThemePresenter.setInlineHatOpen === "function") {
+                IThemePresenter.setInlineHatOpen(String(topicId), "false", "false");
+            }
+            return true;
+        }
+
+        function ensureTopicHatOverlayRendered() {
+            var block = findTopicHeaderOverlayBlock();
+            if (block) {
+                return showTopicHeaderOverlay();
+            }
+            if (typeof IThemePresenter !== "undefined" &&
+                typeof IThemePresenter.requestHatOverlayInjection === "function") {
+                IThemePresenter.requestHatOverlayInjection();
+                return false;
+            }
+            return false;
+        }
+
+        function onToolbarHeaderButtonClick() {
+            if (typeof suppressThemeInfiniteScrollFor === "function") {
+                suppressThemeInfiniteScrollFor(1200);
+            }
+            if (isTopicHeaderOverlayVisible()) {
+                return hideTopicHeaderOverlay();
+            }
+            closeInlineTopicHatForToolbarOverlay();
+            if (toggleThemeHatFromFixed(true)) {
+                return true;
+            }
+            return ensureTopicHatOverlayRendered();
+        }
+
+        function onToolbarHeaderButtonClickWithResult() {
+            try {
+                return onToolbarHeaderButtonClick() === true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function openTopicHeaderOverlayFromToolbarWithResult() {
+            try {
+                if (typeof openTopicHeaderOverlayFromToolbar === "function") {
+                    return openTopicHeaderOverlayFromToolbar() === true;
+                }
+                if (typeof showTopicHeaderOverlay === "function") {
+                    return showTopicHeaderOverlay() === true;
+                }
+                if (typeof toggleThemeHatFromFixed === "function") {
+                    return toggleThemeHatFromFixed(true) === true;
+                }
+            } catch (e) {
+                return false;
+            }
+            return false;
+        }
+
+        function handleTopicHeaderToolbarClick() {
+            return onToolbarHeaderButtonClick();
+        }
+
+        function toggleThemePollFromToolbar() {
+            var poll = document.getElementById("theme_poll_overlay_host") || document.querySelector(".poll.poll_overlay_host");
+            if (!poll) return false;
+            if (typeof suppressThemeInfiniteScrollFor === "function") {
+                suppressThemeInfiniteScrollFor(1200);
+            }
+            var body = poll.querySelector(".hat_content");
+            if (typeof cancelThemeAnchorScrollRetries === "function") {
+                cancelThemeAnchorScrollRetries();
+            }
+            var isClosed = poll.classList.contains("close") || (body && body.classList.contains("close"));
+            if (isClosed) {
+                poll.classList.remove("close");
+                poll.classList.add("open");
+                poll.style.pointerEvents = "";
+                if (body) {
+                    body.classList.remove("close");
+                    body.classList.add("open");
+                }
+                document.body.classList.add("theme_poll_overlay_open");
+                if (typeof updateThemePollOverlayLayout === "function") {
+                    updateThemePollOverlayLayout();
+                }
+                IThemePresenter.setPollOpen("true");
+            } else {
+                poll.classList.add("once-opened");
+                poll.classList.remove("open");
+                poll.classList.add("close");
+                if (body) {
+                    body.classList.remove("open");
+                    body.classList.add("close");
+                }
+                document.body.classList.remove("theme_poll_overlay_open");
+                IThemePresenter.setPollOpen("false");
+            }
+            if (typeof scheduleThemeInfiniteScrollBootstrap === "function") {
+                scheduleThemeInfiniteScrollBootstrap(80);
+            }
+            return true;
+        }
+
+        function toggleInlineTopicHat(button, topicId) {
+            var block = button;
+            while (block && block.classList && !block.classList.contains("topic_hat_entry")) {
+                block = block.parentElement;
+            }
+            if (!block) return false;
+            var body = block.querySelector(".inline_hat_content");
+            if (!body) return false;
+            var isClosed = block.classList.contains("close") || body.classList.contains("close");
+            if (isClosed) {
+                block.classList.remove("close");
+                block.classList.add("open");
+                body.classList.remove("close");
+                body.classList.add("open");
+                IThemePresenter.setInlineHatOpen(String(topicId || block.getAttribute("data-topic-id") || ""), "true");
+            } else {
+                block.classList.add("once-opened");
+                block.classList.remove("open");
+                block.classList.add("close");
+                body.classList.remove("open");
+                body.classList.add("close");
+                IThemePresenter.setInlineHatOpen(String(topicId || block.getAttribute("data-topic-id") || ""), "false");
+            }
+            if (typeof scheduleThemeInfiniteScrollBootstrap === "function") {
+                scheduleThemeInfiniteScrollBootstrap(80);
+            }
+            return true;
+        }
+
+        function toggleThemeHatFromFixed(forceOpen) {
+            var block = document.querySelector(".topic_hat_fixed.top_hat_overlay_host");
+            if (!block) return false;
+            if (typeof suppressThemeInfiniteScrollFor === "function") {
+                suppressThemeInfiniteScrollFor(1200);
+            }
+            var body = block.querySelector(".hat_content");
+            if (!body) return false;
+            var isClosed = block.classList.contains("close") || body.classList.contains("close");
+            var shouldOpen = typeof forceOpen === "boolean" ? forceOpen : isClosed;
+            if (shouldOpen) {
+                if (typeof openThemeHatOverlayHost === "function") {
+                    openThemeHatOverlayHost(block, body);
+                } else {
+                    block.classList.remove("initial_open");
+                    block.classList.remove("close");
+                    block.classList.add("open");
+                    block.style.pointerEvents = "";
+                    body.classList.remove("initial_open");
+                    body.classList.remove("close");
+                    body.classList.add("open");
+                    if (typeof updateThemeHatOverlayLayout === "function") {
+                        updateThemeHatOverlayLayout();
+                    }
+                    document.body.classList.add("topic_hat_overlay_open");
+                    IThemePresenter.setHatOpen("true");
+                }
+            } else {
+                if (typeof closeThemeHatOverlayHost === "function") {
+                    closeThemeHatOverlayHost(block, body);
+                } else {
+                    block.classList.remove("initial_open");
+                    block.classList.remove("open");
+                    block.classList.add("close");
+                    body.classList.remove("initial_open");
+                    body.classList.remove("open");
+                    body.classList.add("close");
+                    if (typeof updateThemeHatOverlayLayout === "function") {
+                        updateThemeHatOverlayLayout();
+                    }
+                    document.body.classList.remove("topic_hat_overlay_open");
+                    IThemePresenter.setHatOpen("false");
+                }
+            }
+            if (typeof scheduleThemeInfiniteScrollBootstrap === "function") {
+                scheduleThemeInfiniteScrollBootstrap(80);
+            }
+            return true;
+        }
+
+        function closeThemeToolbarOverlaysForNavigation(notifyNative) {
+            var hat = document.querySelector(".topic_hat_fixed.top_hat_overlay_host");
+            if (hat) {
+                var hatBody = hat.querySelector(".hat_content");
+                hat.classList.remove("open");
+                hat.classList.add("close");
+                hat.style.pointerEvents = "none";
+                if (hatBody) {
+                    hatBody.classList.remove("initial_open");
+                    hatBody.classList.remove("open");
+                    hatBody.classList.add("close");
+                }
+                document.body.classList.remove("topic_hat_overlay_open");
+                if (notifyNative !== false) {
+                    IThemePresenter.setHatOpen("false");
+                }
+            }
+
+            var poll = document.getElementById("theme_poll_overlay_host") || document.querySelector(".poll.poll_overlay_host");
+            if (poll) {
+                var pollBody = poll.querySelector(".hat_content");
+                poll.classList.remove("open");
+                poll.classList.add("close");
+                poll.style.pointerEvents = "none";
+                if (pollBody) {
+                    pollBody.classList.remove("open");
+                    pollBody.classList.add("close");
+                }
+                document.body.classList.remove("theme_poll_overlay_open");
+                if (notifyNative !== false) {
+                    IThemePresenter.setPollOpen("false");
+                }
+            }
+        }
+
+        installInlineTopicHeaderVisibilityObserver();
     </script>
 </body>
 

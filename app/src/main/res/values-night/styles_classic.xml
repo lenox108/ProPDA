@@ -13,13 +13,39 @@
         <item name="background_for_lists">@color/classic_dark_background_for_lists</item>
         <item name="divider_line_bottom_nav">@color/classic_dark_divider_line_bottom_nav</item>
         <item name="icon_base">@color/classic_dark_icon_base</item>
+        <item name="menu_tile_icon">?attr/icon_base</item>
         <item name="cards_background">@color/classic_dark_card_background</item>
+        <item name="chrome_plane_background">@color/classic_dark_card_background</item>
+        <item name="main_toolbar_accent_surface">@color/classic_dark_main_toolbar_accent_surface</item>
+        <item name="main_toolbar_stroke_width">1dp</item>
+        <item name="main_toolbar_stroke_color">@color/classic_dark_main_toolbar_stroke</item>
+        <item name="list_plate_stroke_width">0dp</item>
+        <item name="list_plate_stroke_color">@android:color/transparent</item>
         <item name="msg_panel_tooltip_bg">@color/classic_dark_msg_panel_tooltip_bg</item>
         <item name="actionModeBackground">@color/classic_dark_colorPrimary</item>
         <item name="android:windowBackground">@color/classic_dark_background_base</item>
         <item name="android:navigationBarColor">@color/dark_navigation_bar_color</item>
         <item name="colorSurface">@color/classic_dark_card_background</item>
+        <item name="toolbar_color">@color/classic_dark_card_background</item>
+        <item name="colorOnPrimary">@color/dark_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/classic_dark_card_background</item>
+        <item name="colorOnPrimaryContainer">@color/dark_default_text_color</item>
+        <item name="colorSecondaryContainer">@color/classic_dark_card_background</item>
+        <item name="bottom_nav_tab_active_fill">@color/classic_dark_card_background</item>
+        <item name="colorOnSecondaryContainer">@color/dark_default_text_color</item>
+        <item name="colorSurfaceVariant">@color/classic_dark_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/classic_dark_second_text_color</item>
+        <item name="colorControlHighlight">#33FFFFFF</item>
+        <item name="android:colorControlHighlight">#33FFFFFF</item>
+        <item name="icon_toolbar">@color/dark_icon_toolbar</item>
+        <item name="icon_toolbar_inverse">@color/dark_icon_toolbar_inverse</item>
+        <item name="colorControlActivated">?attr/colorAccent</item>
+        <item name="android:colorControlActivated">?attr/colorAccent</item>
+        <item name="app_bar_overlay">@style/DayNightAppTheme.Classic4pda.AppBarOverlay</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Classic4pda.PopupOverlay</item>
+        <item name="is_use_light_status_bar">false</item>
         <item name="alertDialogTheme">@style/DayNightAppTheme.Classic4pda.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/DayNightAppTheme.Classic4pda.Dialog</item>
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Classic4pda.BottomSheetDialog</item>
     </style>
 
@@ -28,11 +54,24 @@
         <item name="colorAccent">@color/classic_dark_link_color</item>
         <item name="colorPrimary">@color/classic_dark_link_color</item>
         <item name="colorOnSurface">@color/dark_default_text_color</item>
+        <item name="colorOnPrimary">@color/dark_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/classic_dark_card_background</item>
+        <item name="colorOnPrimaryContainer">@color/dark_default_text_color</item>
         <item name="android:textColorPrimary">@color/dark_default_text_color</item>
         <item name="android:textColorSecondary">@color/classic_dark_second_text_color</item>
+        <item name="android:textColorHint">@color/classic_dark_second_text_color</item>
+        <item name="colorSurface">@color/classic_dark_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/classic_dark_second_text_color</item>
+        <item name="colorOutlineVariant">@color/classic_dark_divider_line_bottom_nav</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
     </style>
 
     <style name="DayNightAppTheme.Classic4pda.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:colorBackground">@color/classic_dark_colorPrimary</item>
+        <item name="colorSurface">@color/classic_dark_colorPrimary</item>
+        <item name="colorOnSurface">@color/dark_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/classic_dark_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
     </style>
 
@@ -46,5 +85,25 @@
 
     <style name="DayNightAppTheme.Classic4pda.NoActionBar" parent="DayNightAppTheme.Classic4pda.NoActionBarBase" />
 
-    <style name="DayNightPreferenceTheme.Classic4pda" parent="DayNightAppTheme.Classic4pda" />
+    <style name="DayNightPreferenceTheme.Classic4pda" parent="DayNightAppTheme.Classic4pda">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Classic4pda.AppBarOverlay" parent="ThemeOverlay.Material3.Dark.ActionBar">
+        <item name="android:singleLine">true</item>
+        <item name="colorSurface">?attr/cards_background</item>
+        <item name="colorControlNormal">?icon_toolbar</item>
+        <item name="colorPrimary">@color/classic_dark_link_color</item>
+        <item name="colorPrimaryContainer">@color/classic_dark_card_background</item>
+        <item name="colorOnPrimaryContainer">@color/dark_default_text_color</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Classic4pda.PopupOverlay</item>
+    </style>
+
+    <style name="DayNightAppTheme.Classic4pda.PopupOverlay" parent="DayNightAppTheme.PopupOverlay">
+        <item name="colorSurface">@color/classic_dark_card_background</item>
+        <item name="colorOnSurface">@color/dark_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/classic_dark_second_text_color</item>
+        <item name="android:textColorPrimary">@color/dark_default_text_color</item>
+        <item name="android:textColorSecondary">@color/classic_dark_second_text_color</item>
+    </style>
 </resources>

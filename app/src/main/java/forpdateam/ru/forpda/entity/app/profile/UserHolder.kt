@@ -11,8 +11,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
+import javax.inject.Inject
 
-class UserHolder(
+class UserHolder @Inject constructor(
         private val sharedPreferences: SharedPreferences
 ) : IUserHolder {
 

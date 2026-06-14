@@ -1,7 +1,13 @@
 -optimizationpasses 5
 -dontskipnonpubliclibraryclassmembers
 -allowaccessmodification
--dontpreverify
+# Prevent crashes on API < 30 where getWindowInsetsController() doesn't exist.
+-keepclassmembers class android.view.View {
+    public android.view.WindowInsetsController getWindowInsetsController();
+}
+-keepclassmembers class android.webkit.WebView {
+    public android.view.WindowInsetsController getWindowInsetsController();
+}
 -repackageclasses ''
 -adaptclassstrings
 
@@ -19,13 +25,14 @@
     public <init>();
 }
 
-# Moxy (kapt): биндеры и ViewState — иначе чёрный экран / краш при открытии экранов
--keep class **$$PresentersBinder { *; }
--keep class **$$ViewStateProvider { *; }
--keep class **$$State { *; }
-
 # WebView: методы, вызываемые из JS по имени
 -keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# News article WebView bridge (INews) — must survive R8 in stableRelease
+-keep class forpdateam.ru.forpda.ui.fragments.news.details.ArticleCommentsNativeBar { *; }
+-keep class forpdateam.ru.forpda.ui.fragments.news.details.ArticleContentFragment {
     @android.webkit.JavascriptInterface <methods>;
 }
 
@@ -56,11 +63,11 @@
 -dontnote okio.**
 
 
-# OkHttp
+# OkHttp - optimized: keepnames instead of keep
 -keepattributes Signature
 -keepattributes *Annotation*
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
+-keepnames class okhttp3.** { *; }
+-keepnames interface okhttp3.** { *; }
 -dontwarn okhttp3.**
 
 -keep public class androidx.browser.customtabs.CustomTabsService
@@ -69,20 +76,18 @@
 -keep class io.appmetrica.** { *; }
 -dontwarn io.appmetrica.**
 
-# WorkManager
--keep class androidx.work.** { *; }
+# WorkManager - keepnames for shrinking
+-keepnames class androidx.work.** { *; }
 -dontwarn androidx.work.**
 
-# Coil
--keep class coil.** { *; }
--keep interface coil.** { *; }
+# Coil - optimized: keepnames instead of keep
+-keepnames class coil.** { *; }
+-keepnames interface coil.** { *; }
 -dontwarn coil.**
 
-# Cicerone
--keep class com.github.terrakok.cicerone.** { *; }
+# Cicerone - keepnames for shrinking
+-keepnames class com.github.terrakok.cicerone.** { *; }
 -dontwarn com.github.terrakok.cicerone.**
-
-# -keep сlass com.lapism.searchview.** { *; }
 
 -keep class io.realm.annotations.RealmModule
 -keep @io.realm.annotations.RealmModule class *
@@ -99,11 +104,5 @@
     <fields>;
 }
 
--keep public class com.unnamed.b.atv.model.TreeNode
--keep public class * extends com.unnamed.b.atv.model.TreeNode { *; }
--keep public class com.unnamed.b.atv.model.TreeNode.BaseNodeViewHolder
--keep public class * extends com.unnamed.b.atv.model.TreeNode.BaseNodeViewHolder { *; }
-
 # В search fragment юзается с рефлексией, поэтому нужно исключить
 -keep public class androidx.swiperefreshlayout.widget.SwipeRefreshLayout { *; }
-

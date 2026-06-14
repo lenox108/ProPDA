@@ -2,10 +2,11 @@ package forpdateam.ru.forpda.common
 
 import android.content.res.Configuration
 import android.os.Build
-import android.util.Log
+import timber.log.Timber
 import androidx.appcompat.app.AppCompatDelegate
-import com.jakewharton.rxrelay2.BehaviorRelay
-import io.reactivex.Observable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class DayNightHelper(
         private val defaultMode: Boolean
@@ -20,16 +21,22 @@ class DayNightHelper(
 
 
         fun applyTheme(prefMode: String) {
-            val mode = Preferences.Main.ThemeMode.valueOf(prefMode)
+            val mode = try {
+                Preferences.Main.ThemeMode.valueOf(prefMode)
+            } catch (e: IllegalArgumentException) {
+                Preferences.Main.ThemeMode.SYSTEM
+            }
             applyTheme(mode)
         }
 
         fun applyTheme(mode: Preferences.Main.ThemeMode) {
-            Log.d("kekeke", "DayNightHelper applyTheme $mode")
+            Timber.d("DayNightHelper applyTheme $mode")
             val delegateMode = when (mode) {
                 Preferences.Main.ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
                 Preferences.Main.ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
-                Preferences.Main.ThemeMode.SYSTEM -> {
+                Preferences.Main.ThemeMode.AMOLED -> AppCompatDelegate.MODE_NIGHT_YES
+                Preferences.Main.ThemeMode.SYSTEM,
+                Preferences.Main.ThemeMode.SYSTEM_AMOLED -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
                     } else {
@@ -41,14 +48,13 @@ class DayNightHelper(
         }
     }
 
-    private val isNightRelay = BehaviorRelay.createDefault(defaultMode)
+    private val _isNightFlow = MutableStateFlow(defaultMode)
+    val isNightFlow: StateFlow<Boolean> = _isNightFlow.asStateFlow()
 
-    fun observeIsNight(): Observable<Boolean> = isNightRelay.hide().distinctUntilChanged()
-
-    fun isNight(): Boolean = isNightRelay.value ?: false
+    fun isNight(): Boolean = _isNightFlow.value
 
     fun setIsNight(isNight: Boolean) {
-        isNightRelay.accept(isNight)
+        _isNightFlow.value = isNight
     }
 
 }

@@ -2,21 +2,20 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:foreground="?attr/selectableItemBackgroundBorderless">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/forum_item_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/content_block_padding_vertical"
+        android:layout_marginBottom="@dimen/list_row_padding_vertical"
         android:layout_marginEnd="@dimen/dp0"
-        android:layout_marginStart="@dimen/content_padding_horizontal"
-        android:layout_marginTop="@dimen/content_block_padding_vertical"
+        android:layout_marginStart="@dimen/dp0"
+        android:layout_marginTop="@dimen/list_row_padding_vertical"
         android:layout_toStartOf="@+id/forum_item_icon"
         tools:text="@string/test_forum_title"
-        android:textSize="@dimen/list_topic_title_text_size"
-        android:textStyle="bold" />
+        android:textAppearance="?attr/textAppearanceTitleMedium"
+        android:textColor="?attr/default_text_color" />
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/forum_item_icon"

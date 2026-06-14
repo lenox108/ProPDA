@@ -9,6 +9,7 @@
     android:paddingStart="@dimen/dp24"
     android:paddingEnd="@dimen/dp24"
     android:clickable="true"
+    android:focusable="true"
     android:background="?attr/selectableItemBackgroundBorderless">
 
     <androidx.appcompat.widget.AppCompatTextView

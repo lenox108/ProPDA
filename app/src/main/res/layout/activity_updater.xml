@@ -12,7 +12,8 @@
         android:layout_height="wrap_content"
         android:background="#333"
         android:fitsSystemWindows="true"
-        android:theme="@style/DayNightAppTheme">
+        android:theme="@style/DayNightAppTheme"
+        app:elevation="@dimen/dp4">
 
         <com.google.android.material.appbar.CollapsingToolbarLayout
             android:id="@+id/toolbar_layout"

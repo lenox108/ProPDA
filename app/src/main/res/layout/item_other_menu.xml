@@ -4,10 +4,10 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?cards_background"
     android:clickable="true"
     android:focusable="true"
     android:foreground="?selectableItemBackground"
+    android:minHeight="@dimen/dp48"
     android:paddingBottom="@dimen/content_padding_vertical"
     android:paddingEnd="@dimen/content_padding_horizontal"
     android:paddingStart="@dimen/content_padding_horizontal"
@@ -18,37 +18,42 @@
         android:layout_width="@dimen/list_avatar_compact_size"
         android:layout_height="@dimen/list_avatar_compact_size"
         android:contentDescription="@null"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         tools:src="@drawable/ic_star" />
 
     <TextView
         android:id="@+id/otherMenuTitle"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/menu_icon_text_margin_start"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:textColor="?default_text_color"
         android:textSize="@dimen/list_topic_meta_text_size"
         android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/otherMenuIcon"
         app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
         tools:text="Favorites" />
 
+    <!-- Counter is rendered inline in title: "Title (N)" -->
     <TextView
         android:id="@+id/otherMenuCounter"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:background="@drawable/notify_dot_menu"
-        android:gravity="center"
-        android:maxLines="1"
-        android:minHeight="@dimen/bottom_tab_badge_min_height"
-        android:minWidth="@dimen/bottom_tab_badge_min_width"
-        android:paddingEnd="@dimen/bottom_tab_badge_padding_horizontal"
-        android:paddingStart="@dimen/bottom_tab_badge_padding_horizontal"
-        android:text="1"
-        android:textColor="@color/white"
-        android:textSize="@dimen/news_list_compat_meta_text_size"
-        android:visibility="visible"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/otherMenuRowDivider"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/divider_thin"
+        android:layout_marginStart="@dimen/menu_icon_text_margin_start"
+        android:background="?divider_line"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintStart_toStartOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

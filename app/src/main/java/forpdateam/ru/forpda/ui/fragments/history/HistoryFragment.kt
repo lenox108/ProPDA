@@ -13,7 +13,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.presentation.history.HistoryViewModel
@@ -22,12 +21,16 @@ import forpdateam.ru.forpda.ui.views.ContentController
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
 import forpdateam.ru.forpda.ui.views.FunnyContent
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * Created by radiationx on 06.09.17.
  */
 
+@AndroidEntryPoint
 class HistoryFragment : RecyclerFragment() {
+
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
 
     private lateinit var adapter: HistoryAdapter
     private lateinit var dialogMenu: DynamicDialogMenu<HistoryFragment, HistoryItem>
@@ -41,28 +44,23 @@ class HistoryFragment : RecyclerFragment() {
             dialogMenu.apply {
                 disallowAll()
                 allowAll()
-                show(context, this@HistoryFragment, item)
+                show(requireContext(), this@HistoryFragment, item)
             }
             return true
         }
     }
 
-    private val viewModel: HistoryViewModel by viewModels {
-        HistoryViewModel.Factory(
-                App.get().Di().historyRepository,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler
-        )
-    }
+    private val viewModel: HistoryViewModel by viewModels()
 
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_history)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_history)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setScrollFlagsEnterAlways()
+        // Единое поведение для вкладок: AppBar скрывается вниз и появляется при скролле вверх.
+        clearToolbarScrollFlags()
 
         dialogMenu = DynamicDialogMenu()
         dialogMenu.apply {
@@ -104,7 +102,7 @@ class HistoryFragment : RecyclerFragment() {
     private fun showHistory(items: List<HistoryItem>) {
         if (items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
-                val funnyContent = FunnyContent(context)
+                val funnyContent = FunnyContent(requireContext())
                         .setImage(R.drawable.ic_history)
                         .setTitle(R.string.funny_history_nodata_title)
                         .setDesc(R.string.funny_history_nodata_desc)

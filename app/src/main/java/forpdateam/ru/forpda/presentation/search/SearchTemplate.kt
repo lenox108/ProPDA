@@ -1,13 +1,11 @@
 package forpdateam.ru.forpda.presentation.search
 
-import android.net.Uri
-import forpdateam.ru.forpda.common.topicUrlWithUnreadIfPlainOpen
+import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.search.SearchResult
 import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder
-import forpdateam.ru.forpda.model.repository.temp.TempHelper
 import forpdateam.ru.forpda.ui.TemplateManager
 import java.util.regex.Matcher
 import java.util.regex.Pattern
@@ -20,18 +18,18 @@ class SearchTemplate(
 
     private val firstLetter = Pattern.compile("([a-zA-Zа-яА-Я])")
 
-    fun mapEntity(page: SearchResult): SearchResult = page.apply { html = mapString(page) }
+    fun mapEntity(page: SearchResult, expandedPostIds: Set<Int> = emptySet()): SearchResult =
+            page.apply { html = mapString(page, expandedPostIds) }
 
-    private fun mapString(page: SearchResult): String {
+    private fun mapString(page: SearchResult, expandedPostIds: Set<Int>): String {
         val template = templateManager.getTemplate(TemplateManager.TEMPLATE_SEARCH)
 
         val authData = authHolder.get()
         template.apply {
             templateManager.fillStaticStrings(template)
-            val prevDisabled = page.pagination.current <= 1
-            val nextDisabled = page.pagination.current == page.pagination.all
 
             setVariableOpt("style_type", templateManager.getThemeType())
+            setVariableOpt("theme_overrides_css", templateManager.getThemeOverridesCss())
 
             setVariableOpt("all_pages_int", page.pagination.all)
             setVariableOpt("posts_on_page_int", page.pagination.perPage)
@@ -41,11 +39,6 @@ class SearchTemplate(
 
 
             setVariableOpt("body_type", "search")
-            setVariableOpt("navigation_disable", TempHelper.getDisableStr(prevDisabled && nextDisabled))
-            setVariableOpt("first_disable", TempHelper.getDisableStr(prevDisabled))
-            setVariableOpt("prev_disable", TempHelper.getDisableStr(prevDisabled))
-            setVariableOpt("next_disable", TempHelper.getDisableStr(nextDisabled))
-            setVariableOpt("last_disable", TempHelper.getDisableStr(nextDisabled))
 
             val isEnableAvatars = topicPreferencesHolder.getShowAvatars()
             setVariableOpt("enable_avatars_bool", java.lang.Boolean.toString(isEnableAvatars))
@@ -64,28 +57,33 @@ class SearchTemplate(
 
                 setVariableOpt("user_online", if (post.isOnline) "online" else "")
                 setVariableOpt("post_id", post.id)
+                val isPostContentExpanded = expandedPostIds.contains(post.id)
+                setVariableOpt("post_content_state_class", if (isPostContentExpanded) "open" else "close")
+                setVariableOpt("post_content_expanded_bool", isPostContentExpanded.toString())
 
-                // Как [SearchPresenter.onItemClick]: showtopic + view=findpost + p= — тот же путь, что и у клика по строке.
+                // Как [SearchViewModel.onItemClick]: showtopic + view=findpost + p= — тот же путь, что и у клика по строке.
                 // act=findpost&pid= давал нестабильные редиректы: иногда тема без якоря на конкретный пост.
                 val showJump = forumPostsResult && post.id > 0
                 val jumpToPostUrl = if (showJump) {
-                    if (post.topicId > 0) {
-                        "https://4pda.to/forum/index.php?showtopic=${post.topicId}&view=findpost&p=${post.id}"
-                    } else {
-                        "https://4pda.to/forum/index.php?act=findpost&pid=${post.id}"
-                    }
+                    buildSearchFindPostTopicUrl(post.topicId, post.id)
                 } else {
                     "#"
                 }
+                val userTopicSearchUrl = if (st.isBroadUserSearch() && post.topicId > 0) {
+                    st.userPostsInTopicSearchUrl(post)
+                } else {
+                    null
+                }
                 val postTitleHref = when {
+                    userTopicSearchUrl != null -> userTopicSearchUrl
                     forumPostsResult && post.id > 0 -> jumpToPostUrl
-                    post.topicId > 0 -> topicUrlWithUnreadIfPlainOpen(
-                            Uri.parse("https://4pda.to/forum/index.php?showtopic=${post.topicId}")
-                    )
+                    post.topicId > 0 -> "https://4pda.to/forum/index.php?showtopic=${post.topicId}"
                     else -> "#"
                 }
+                val postOpenUrl = userTopicSearchUrl ?: "#"
                 setVariableOpt("jump_to_post_url", jumpToPostUrl)
                 setVariableOpt("post_title_href", postTitleHref)
+                setVariableOpt("post_open_url", postOpenUrl)
                 setVariableOpt("search_jump_row_style", if (showJump) "" else "display:none")
                 setVariableOpt("user_id", post.userId)
 
@@ -97,7 +95,7 @@ class SearchTemplate(
                 letterMatcher = letterMatcher?.reset(nickForLetter) ?: firstLetter.matcher(nickForLetter)
                 val letter: String = letterMatcher?.run {
                     if (find()) group(1) else null
-                } ?: post.nick?.substring(0, 1).orEmpty()
+                } ?: post.nick?.take(1).orEmpty()
 
                 setVariableOpt("nick_letter", letter)
                 setVariableOpt("nick", ApiUtils.htmlEncode(post.nick))
@@ -105,7 +103,10 @@ class SearchTemplate(
                 setVariableOpt("group_color", post.groupColor)
                 setVariableOpt("group", post.group)
                 setVariableOpt("reputation", post.reputation)
-                setVariableOpt("date", post.date)
+                val dateText = Utils.formatForumDisplayDateTime(post.date, "search.post") ?: run {
+                    post.date?.trim().orEmpty()
+                }
+                setVariableOpt("date", dateText)
                 //t.setVariableOpt("number", post.getNumber());
 
                 //Post body

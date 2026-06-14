@@ -1,29 +1,45 @@
 package forpdateam.ru.forpda.ui.fragments.search
 
+import javax.inject.Inject
+import forpdateam.ru.forpda.common.getVecDrawable
+import forpdateam.ru.forpda.common.showSnackbar
 import android.annotation.SuppressLint
 import android.app.SearchManager
 import android.content.Context
 import android.graphics.Color
 import android.os.Build
+import android.view.ViewTreeObserver
+import android.webkit.WebView
 import android.os.Bundle
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputLayout
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.tabs.TabLayout
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.view.menu.ActionMenuItemView
 import androidx.appcompat.widget.ActionMenuView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.appcompat.widget.SearchView
-import android.util.Log
+import com.google.android.material.textfield.TextInputEditText
+import timber.log.Timber
 import android.view.*
 import android.widget.*
 import androidx.fragment.app.viewModels
-import forpdateam.ru.forpda.App
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.ui.dp8
+import forpdateam.ru.forpda.ui.dp16
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.SiteUrls
+import forpdateam.ru.forpda.databinding.FragmentSearchBinding
+import forpdateam.ru.forpda.databinding.SearchSettingsBinding
 import forpdateam.ru.forpda.common.extractPostBodyHtml
 import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
@@ -33,9 +49,11 @@ import forpdateam.ru.forpda.entity.remote.search.SearchItem
 import forpdateam.ru.forpda.entity.remote.search.SearchResult
 import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
-import forpdateam.ru.forpda.presentation.search.SearchSiteView
 import forpdateam.ru.forpda.presentation.search.SearchViewModel
-import forpdateam.ru.forpda.presentation.theme.ThemeJsInterface
+import forpdateam.ru.forpda.presentation.search.SearchJsInterface
+import forpdateam.ru.forpda.common.webview.WebViewLoadDispatchPolicy
+import forpdateam.ru.forpda.presentation.search.SearchWebRenderPolicy
+import forpdateam.ru.forpda.ui.fragments.search.SearchQueryHelper
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesFragment
 import forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment
@@ -44,29 +62,66 @@ import forpdateam.ru.forpda.ui.fragments.theme.ThemeDialogsHelper_V2
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeFragmentWeb
 import forpdateam.ru.forpda.ui.views.*
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.pagination.PaginationHelper
-import io.github.douglasjunior.androidSimpleTooltip.SimpleTooltip
-import java.util.*
+import forpdateam.ru.forpda.ui.views.tooltip.CustomTooltip
+import org.json.JSONObject
+import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.model.AuthHolder
+import forpdateam.ru.forpda.model.MenuMapper
+import forpdateam.ru.forpda.model.data.remote.api.search.SearchParser
+import forpdateam.ru.forpda.ui.activities.MainActivity
+import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
+import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
+import forpdateam.ru.forpda.model.repository.note.NotesRepository
+import forpdateam.ru.forpda.common.ClipboardHelper
+import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
+import forpdateam.ru.forpda.presentation.ILinkHandler
+import forpdateam.ru.forpda.presentation.ISystemLinkHandler
+import forpdateam.ru.forpda.presentation.TabRouter
 
 /**
  * Created by radiationx on 29.01.17.
+ *
+ * Fragment для поиска по форуму.
+ *
+ * JS Bridge обоснование:
+ * - SearchJsInterface: используется для навигации по результатам поиска и взаимодействием с UI поиска.
+ * - Контент: результаты поиска с сервера 4pda.to (доверенный контент).
+ * - Профиль безопасности: TRUSTED_STATIC_ARTICLE (JS для локального шаблона, IBase запрещён, только SearchJsInterface).
  */
+@AndroidEntryPoint
+class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseAdapter.OnItemClickListener<SearchItem> {
+    @Inject lateinit var authHolder: AuthHolder
+    @Inject lateinit var linkHandler: ILinkHandler
+    @Inject lateinit var mainPreferencesHolder: MainPreferencesHolder
+    @Inject lateinit var otherPreferencesHolder: OtherPreferencesHolder
+    @Inject lateinit var router: TabRouter
+    @Inject lateinit var systemLinkHandler: ISystemLinkHandler
+    @Inject lateinit var notesRepository: NotesRepository
+    @Inject lateinit var clipboardHelper: ClipboardHelper
+    @Inject lateinit var avatarRepository: AvatarRepository
 
-class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycleListener, BaseAdapter.OnItemClickListener<SearchItem> {
 
-    private lateinit var searchSettingsView: ViewGroup
-    private lateinit var nickBlock: ViewGroup
-    private lateinit var resourceBlock: ViewGroup
-    private lateinit var resultBlock: ViewGroup
-    private lateinit var sortBlock: ViewGroup
-    private lateinit var sourceBlock: ViewGroup
-    private lateinit var resourceSpinner: Spinner
-    private lateinit var resultSpinner: Spinner
-    private lateinit var sortSpinner: Spinner
-    private lateinit var sourceSpinner: Spinner
-    private lateinit var nickField: TextView
-    private lateinit var submitButton: Button
-    private lateinit var saveSettingsButton: Button
+    private var _searchBinding: FragmentSearchBinding? = null
+    private val searchBinding get() = checkNotNull(_searchBinding) { "Binding accessed after onDestroyView" }
+    private var _settingsBinding: SearchSettingsBinding? = null
+    private val settingsBinding get() = checkNotNull(_settingsBinding) { "Binding accessed after onDestroyView" }
+
+    // Legacy field accessors for search settings dialog
+    private val searchSettingsView: ViewGroup get() = settingsBinding.root
+    private val nickBlock: ViewGroup get() = settingsBinding.searchNickBlock
+    private val resourceBlock: ViewGroup get() = settingsBinding.searchResourceBlock
+    private val resultBlock: ViewGroup get() = settingsBinding.searchResultBlock
+    private val sortBlock: ViewGroup get() = settingsBinding.searchSortBlock
+    private val sourceBlock: ViewGroup get() = settingsBinding.searchSourceBlock
+    private val resourceLayout: TextInputLayout get() = settingsBinding.searchResourceBlock
+    private val resultLayout: TextInputLayout get() = settingsBinding.searchResultBlock
+    private val sortLayout: TextInputLayout get() = settingsBinding.searchSortBlock
+    private val sourceLayout: TextInputLayout get() = settingsBinding.searchSourceBlock
+    private val nickField: TextView get() = settingsBinding.searchNickField
+    private val submitButton: Button get() = settingsBinding.searchSubmit
+    private val saveSettingsButton: Button get() = settingsBinding.searchSaveSettings
 
 
     private lateinit var webView: ExtendedWebView
@@ -74,107 +129,84 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
     private lateinit var refreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout
     private val adapter = SearchAdapter()
     private var webViewClient: CustomWebViewClient? = null
+    private var webChromeClient: CustomWebChromeClient? = null
+    private var fabBehavior: FabOnScroll? = null
 
 
     private lateinit var paginationHelper: PaginationHelper
     private lateinit var dialogMenu: DynamicDialogMenu<SearchFragment, IBaseForumPost>
+    private lateinit var searchQueryHelper: SearchQueryHelper
 
 
-    private lateinit var searchView: SearchView
-    private lateinit var searchItem: MenuItem
-    private lateinit var dialog: BottomSheetDialog
-    private var tooltip: SimpleTooltip? = null
+    private var searchView: SearchView? = null
+    private var searchItem: MenuItem? = null
+    private lateinit var settingsDialog: BottomSheetDialog
+    private var tooltip: CustomTooltip? = null
 
     private lateinit var settingsMenuItem: MenuItem
 
 
-    private lateinit var jsInterface: ThemeJsInterface
+    private lateinit var jsInterface: SearchJsInterface
     private lateinit var dialogsHelper: ThemeDialogsHelper_V2
 
-    private val authHolder = App.get().Di().authHolder
-    private val mainPreferencesHolder = App.get().Di().mainPreferencesHolder
-    private val otherPreferencesHolder = App.get().Di().otherPreferencesHolder
+    private var pendingSearchHtml: String? = null
+    private var pendingSearchHtmlHash: Int = 0
+    private var searchRenderGeneration = 0
+    private var searchLoadDispatched = false
+    private var searchDomConfirmedGeneration = 0
+    private var searchBlankRetryCount = 0
+    private var searchLayoutDispatchGeneration = -1
+    private var searchLayoutDispatchListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var searchBlankVerifyRunnable: Runnable? = null
 
-    private val listener = object : AdapterView.OnItemSelectedListener {
-        override fun onItemSelected(parent: AdapterView<*>, view: View, position: Int, id: Long) {
-            val field = when (parent) {
-                resourceSpinner -> SearchViewModel.FIELD_RESOURCE
-                resultSpinner -> SearchViewModel.FIELD_RESULT
-                sortSpinner -> SearchViewModel.FIELD_SORT
-                sourceSpinner -> SearchViewModel.FIELD_SOURCE
-                else -> null
-            }
+    private val presenter: SearchViewModel by viewModels()
 
-            if (field != null) {
-                presenter.updateSettings(field, position)
-            }
-        }
-
-        override fun onNothingSelected(parent: AdapterView<*>) {
-
-        }
-    }
-
-    private val presenter: SearchViewModel by viewModels {
-        SearchViewModel.Factory(
-                App.get().Di().searchRepository,
-                App.get().Di().editPostRepository,
-                App.get().Di().favoritesRepository,
-                App.get().Di().themeRepository,
-                App.get().Di().reputationRepository,
-                App.get().Di().topicPreferencesHolder,
-                App.get().Di().mainPreferencesHolder,
-                App.get().Di().otherPreferencesHolder,
-                App.get().Di().searchTemplate,
-                App.get().Di().templateManager,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler
-        )
-    }
-
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_search)
-    }
-
-    override fun updateShowAvatarState(isShow: Boolean) {
-        webView.evalJs("updateShowAvatarState($isShow)")
-    }
-
-    override fun updateTypeAvatarState(isCircle: Boolean) {
-        webView.evalJs("updateTypeAvatarState($isCircle)")
-    }
-
-    override fun updateScrollButtonState(isEnabled: Boolean) {
-        if (isEnabled) {
-            fab.visibility = View.VISIBLE
-        } else {
-            fab.visibility = View.GONE
-        }
-    }
-
-    override fun setFontSize(size: Int) {
-        webView.setRelativeFontSize(size)
-    }
-
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_search)
         arguments?.apply {
-            presenter.initSearchSettings(getString(TabFragment.ARG_TAB))
-
+            presenter.initSearchSettings(
+                    getString(TabFragment.ARG_TAB),
+                    getString(TabFragment.ARG_SUBTITLE),
+            )
         }
-        dialogsHelper = ThemeDialogsHelper_V2(context, authHolder, otherPreferencesHolder)
+        dialogsHelper = ThemeDialogsHelper_V2(
+                requireContext(),
+                authHolder,
+                otherPreferencesHolder,
+                topicPreferencesHolder,
+                enableForumBlacklistMenu = false
+        )
+    }
+
+    fun updateShowAvatarState(isShow: Boolean) {
+        webView.evalJs("updateShowAvatarState($isShow)")
+    }
+
+    fun updateTypeAvatarState(isCircle: Boolean) {
+        webView.evalJs("updateTypeAvatarState($isCircle)")
+    }
+
+    fun updateScrollButtonState(isEnabled: Boolean) {
+        fab.visibility = View.VISIBLE
+    }
+
+    fun setFontSize(size: Int) {
+        webView.setRelativeFontSize(size)
+    }
+
+    private fun setAppFontMode(mode: forpdateam.ru.forpda.ui.AppFontMode) {
+        webView.setAppFontMode(mode)
     }
 
     override fun initFabBehavior() {
         val params = fab.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
         val behavior = FabOnScroll(fab.context)
+        fabBehavior = behavior
         params.behavior = behavior
         params.gravity = Gravity.CENTER_VERTICAL or Gravity.END
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.LOLLIPOP) {
-            params.setMargins(App.px16, App.px16, App.px16, App.px16)
-        }
         fab.requestLayout()
     }
 
@@ -183,50 +215,78 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         super.onCreateView(inflater, container, savedInstanceState)
         initFabBehavior()
 
-        baseInflateFragment(inflater, R.layout.fragment_search)
-        refreshLayout = findViewById(R.id.swipe_refresh_list) as androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        searchSettingsView = View.inflate(context, R.layout.search_settings, null) as ViewGroup
+        _searchBinding = FragmentSearchBinding.inflate(inflater, fragmentContent, true)
+        refreshLayout = searchBinding.swipeRefreshList
+        _settingsBinding = SearchSettingsBinding.inflate(inflater, null, false)
 
-        nickBlock = searchSettingsView.findViewById<View>(R.id.search_nick_block) as ViewGroup
-        resourceBlock = searchSettingsView.findViewById<View>(R.id.search_resource_block) as ViewGroup
-        resultBlock = searchSettingsView.findViewById<View>(R.id.search_result_block) as ViewGroup
-        sortBlock = searchSettingsView.findViewById<View>(R.id.search_sort_block) as ViewGroup
-        sourceBlock = searchSettingsView.findViewById<View>(R.id.search_source_block) as ViewGroup
-
-        resourceSpinner = searchSettingsView.findViewById<View>(R.id.search_resource_spinner) as Spinner
-        resultSpinner = searchSettingsView.findViewById<View>(R.id.search_result_spinner) as Spinner
-        sortSpinner = searchSettingsView.findViewById<View>(R.id.search_sort_spinner) as Spinner
-        sourceSpinner = searchSettingsView.findViewById<View>(R.id.search_source_spinner) as Spinner
-
-        nickField = searchSettingsView.findViewById<View>(R.id.search_nick_field) as TextView
-
-        submitButton = searchSettingsView.findViewById<View>(R.id.search_submit) as Button
-        saveSettingsButton = searchSettingsView.findViewById<View>(R.id.search_save_settings) as Button
-
-        webView = ExtendedWebView(context)
+        webView = ExtendedWebView(requireContext()).also {
+            it.systemLinkHandler = systemLinkHandler
+            it.init(WebViewSecurityProfile.TRUSTED_STATIC_ARTICLE)
+        }
         webView.setDialogsHelper(DialogsHelper(
                 webView.context,
-                App.get().Di().linkHandler,
-                App.get().Di().systemLinkHandler,
-                App.get().Di().router
+                linkHandler,
+                systemLinkHandler,
+                router,
+                clipboardHelper
         ))
         attachWebView(webView)
-        recyclerView = androidx.recyclerview.widget.RecyclerView(context!!)
+        recyclerView = androidx.recyclerview.widget.RecyclerView(requireContext())
         recyclerView.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         webView.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         refreshLayout.addView(recyclerView)
 
-        paginationHelper = PaginationHelper(activity)
-        paginationHelper.addInToolbar(inflater, toolbarLayout, configuration.isFitSystemWindow)
+        paginationHelper = PaginationHelper(requireActivity(), dimensionsProvider)
+        paginationHelper.addInToolbar(
+                inflater = inflater,
+                target = toolbarLayout,
+                enablePadding = configuration.fitSystemWindow,
+                surfaceColorAttr = R.attr.main_toolbar_accent_surface,
+        )
 
         contentController.setMainRefresh(refreshLayout)
         return viewFragment
     }
 
+    override fun onDestroyViewBinding() {
+        _searchBinding = null
+        _settingsBinding = null
+        super.onDestroyViewBinding()
+    }
+
+    override fun useCompactToolbarPaginationChrome(): Boolean = true
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        jsInterface = ThemeJsInterface(presenter)
-        setScrollFlagsEnterAlways()
+        jsInterface = SearchJsInterface(presenter)
+        clearToolbarScrollFlags()
+        ensureOpaquePinnedToolbarUnderlay()
+
+        // Initialize BottomSheetDialog with STATE_EXPANDED to prevent IME clipping
+        settingsDialog = BottomSheetDialog(requireContext())
+        settingsDialog.setOnShowListener {
+            val bottomSheet = settingsDialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            bottomSheet?.let {
+                val behavior = BottomSheetBehavior.from(it)
+                behavior.state = BottomSheetBehavior.STATE_EXPANDED
+            }
+            settingsDialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+
+        // Initialize searchQueryHelper first before using it
+        searchQueryHelper = SearchQueryHelper(
+                context = requireContext(),
+                onSearchSubmit = { query, nick ->
+                    presenter.search(query, nick)
+                    settingsDialog.dismiss()
+                },
+                onSettingsUpdate = { field, position ->
+                    presenter.updateSettings(field, position)
+                },
+                onSettingsSave = {
+                    lifecycleScope.launch { presenter.saveSettings() }
+                }
+        )
 
         dialogMenu = DynamicDialogMenu()
         dialogMenu.apply {
@@ -251,36 +311,37 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         }
 
 
+        var currentFabDirection = ExtendedWebView.DIRECTION_DOWN
         fab.setOnClickListener {
-            if (webView.direction == ExtendedWebView.DIRECTION_DOWN) {
+            if (currentFabDirection == ExtendedWebView.DIRECTION_DOWN) {
                 webView.pageDown(true)
-            } else if (webView.direction == ExtendedWebView.DIRECTION_UP) {
+            } else if (currentFabDirection == ExtendedWebView.DIRECTION_UP) {
                 webView.pageUp(true)
             }
+            fabBehavior?.resetHideTimer(fab)
         }
-        webView.setOnDirectionListener { direction ->
-            if (direction == ExtendedWebView.DIRECTION_DOWN) {
-                fab.setImageDrawable(App.getVecDrawable(fab.context, R.drawable.ic_arrow_down))
-            } else if (direction == ExtendedWebView.DIRECTION_UP) {
-                fab.setImageDrawable(App.getVecDrawable(fab.context, R.drawable.ic_arrow_up))
+        webView.setOnDirectionListener(object : ExtendedWebView.OnDirectionListener {
+            override fun onDirectionChanged(direction: Int) {
+                currentFabDirection = direction
+                if (direction == ExtendedWebView.DIRECTION_DOWN) {
+                    fab.setImageDrawable(fab.context.getVecDrawable(R.drawable.ic_arrow_down))
+                } else if (direction == ExtendedWebView.DIRECTION_UP) {
+                    fab.setImageDrawable(fab.context.getVecDrawable(R.drawable.ic_arrow_up))
+                }
             }
-        }
+        })
 
         webView.setJsLifeCycleListener(this)
-        webView.addJavascriptInterface(jsInterface, ThemeFragmentWeb.JS_INTERFACE)
+        webView.addJavascriptInterface(jsInterface, SEARCH_JS_INTERFACE)
         webView.setRelativeFontSize(mainPreferencesHolder.getWebViewFontSize())
 
         fab.size = FloatingActionButton.SIZE_MINI
-        if (mainPreferencesHolder.getScrollButtonEnabled()) {
-            fab.visibility = View.VISIBLE
-        } else {
-            fab.visibility = View.GONE
-        }
+        fab.visibility = View.VISIBLE
         fab.scaleX = 0.0f
         fab.scaleY = 0.0f
         fab.alpha = 0.0f
 
-        setCardsBackground()
+        setListsBackground()
 
         paginationHelper.setListener(object : PaginationHelper.PaginationListener {
             override fun onTabSelected(tab: TabLayout.Tab): Boolean {
@@ -293,20 +354,18 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         })
 
         //searchSettingsView.setVisibility(View.GONE);
-        dialog = BottomSheetDialog(context!!)
-        dialog.setOnShowListener {
-            @Suppress("DEPRECATION")
-            dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        }
         //dialog.setPeekHeight(App.getKeyboardHeight());
         //dialog.getWindow().getDecorView().setFitsSystemWindows(true);
 
 
-        val searchManager = activity?.getSystemService(Context.SEARCH_SERVICE) as SearchManager
-        searchView.setSearchableInfo(searchManager.getSearchableInfo(activity?.componentName))
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+        val searchManager = activity?.getSystemService(Context.SEARCH_SERVICE) as? SearchManager
+        val toolbarSearchView = searchView
+        if (toolbarSearchView != null && searchManager != null) {
+            searchQueryHelper.setupSearchView(toolbarSearchView, searchManager, activity?.componentName)
+        }
+        toolbarSearchView?.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
-                startSearch()
+                presenter.search(query, nickField.text.toString())
                 return false
             }
 
@@ -315,21 +374,11 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
             }
         })
 
-        searchView.queryHint = getString(R.string.search_keywords)
-
-        val searchEditFrame = searchView.findViewById<View>(R.id.search_edit_frame) as LinearLayout
-        val params = searchEditFrame.layoutParams as LinearLayout.LayoutParams
-        params.leftMargin = 0
-
-        val searchSrcText = searchView.findViewById<View>(R.id.search_src_text)
-        searchSrcText.setPadding(0, searchSrcText.paddingTop, 0, searchSrcText.paddingBottom)
-
-
-        submitButton.setOnClickListener { startSearch() }
-        saveSettingsButton.setOnClickListener { presenter.saveSettings() }
+        toolbarSearchView?.let { searchQueryHelper.setupSubmitButton(submitButton, it, nickField) }
+        searchQueryHelper.setupSaveButton(saveSettingsButton)
         //recyclerView.setHasFixedSize(true);
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
-        recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(App.px8, true))
+        recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(dp8, true))
         recyclerView.adapter = adapter
         tuneListRecyclerView(recyclerView)
         refreshLayoutStyle(refreshLayout)
@@ -337,43 +386,38 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         refreshLayout.setOnRefreshListener { presenter.refreshData() }
         adapter.setOnItemClickListener(this)
 
-        if (otherPreferencesHolder.getTooltipSearchSettings()) {
-            for (toolbarChildIndex in 0 until toolbar.childCount) {
-                val childView = toolbar.getChildAt(toolbarChildIndex)
-                if (childView is ActionMenuView) {
-                    for (menuChildIndex in 0 until childView.childCount) {
-                        try {
-                            val itemView = childView.getChildAt(menuChildIndex) as ActionMenuItemView
-                            if (settingsMenuItem === itemView.itemData) {
-                                tooltip = SimpleTooltip.Builder(context)
-                                        .anchorView(itemView)
-                                        .text(R.string.tooltip_search_settings)
-                                        .gravity(Gravity.BOTTOM)
-                                        .animated(false)
-                                        .modal(true)
-                                        .transparentOverlay(false)
-                                        .backgroundColor(Color.BLACK)
-                                        .textColor(Color.WHITE)
-                                        .padding(App.px16.toFloat())
-                                        .build()
-                                        .apply {
-                                            show()
-                                        }
-                                break
+        lifecycleScope.launch {
+            if (otherPreferencesHolder.getTooltipSearchSettings()) {
+                for (toolbarChildIndex in 0 until toolbar.childCount) {
+                    val childView = toolbar.getChildAt(toolbarChildIndex)
+                    if (childView is ActionMenuView) {
+                        for (menuChildIndex in 0 until childView.childCount) {
+                            try {
+                                val itemView = childView.getChildAt(menuChildIndex) as ActionMenuItemView
+                                if (settingsMenuItem === itemView.itemData) {
+                                    tooltip = CustomTooltip(
+                                        requireContext(),
+                                        itemView,
+                                        getString(R.string.tooltip_search_settings),
+                                        Gravity.BOTTOM
+                                    ).apply {
+                                        show()
+                                    }
+                                    break
+                                }
+                            } catch (ignore: ClassCastException) {
                             }
-                        } catch (ignore: ClassCastException) {
+
                         }
-
+                        break
                     }
-                    break
                 }
+                otherPreferencesHolder.setTooltipSearchSettings(false)
             }
-
-            otherPreferencesHolder.setTooltipSearchSettings(false)
         }
 
-        presenter.attachView(this)
         presenter.start()
+        observeViewModel()
     }
 
 
@@ -389,29 +433,34 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         settingsMenuItem = menu.add(R.string.settings)
                 .setIcon(R.drawable.ic_toolbar_tune)
                 .setOnMenuItemClickListener {
-                    hideKeyboard()
                     if (searchSettingsView.parent != null && searchSettingsView.parent is ViewGroup) {
                         (searchSettingsView.parent as ViewGroup).removeView(searchSettingsView)
                     }
-                    dialog.setContentView(searchSettingsView)
-                    dialog.show()
+                    settingsDialog.setContentView(searchSettingsView)
+                    settingsDialog.show()
+                    presenter.emitFillSettings()
                     false
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
 
         searchItem = menu.findItem(R.id.action_search)
-        searchView = searchItem.actionView as SearchView
-        searchView.setIconifiedByDefault(true)
+        searchView = searchItem?.actionView as? SearchView ?: SearchView(requireContext()).also {
+            searchItem?.actionView = it
+        }
+        searchView?.setIconifiedByDefault(true)
     }
 
     override fun onResumeOrShow() {
         super.onResumeOrShow()
-        searchItem.expandActionView()
+        searchItem?.expandActionView()
     }
 
     override fun onPauseOrHide() {
         super.onPauseOrHide()
-        searchItem.collapseActionView()
+        hideKeyboard()
+        searchItem?.collapseActionView()
+        // Clear focus from search view to prevent IME issues when returning
+        searchView?.clearFocus()
     }
 
     override fun onBackPressed(): Boolean {
@@ -421,153 +470,72 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
                 return true
             }
         }
+        if (::settingsDialog.isInitialized && settingsDialog.isShowing) {
+            settingsDialog.dismiss()
+            return true
+        }
+        if (searchItem?.isActionViewExpanded == true) {
+            searchItem?.collapseActionView()
+            searchView?.clearFocus()
+            hideKeyboard()
+            return true
+        }
         return super.onBackPressed()
     }
 
-    override fun setStyleType(type: String) {
+    fun setStyleType(type: String) {
         webView.evalJs("changeStyleType(\"$type\")")
     }
 
-    override fun showAddInFavDialog(item: IBaseForumPost) {
-        AlertDialog.Builder(context!!)
+    fun showAddInFavDialog(item: IBaseForumPost) {
+        MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.favorites_subscribe_email)
-                .setItems(FavoritesFragment.SUB_NAMES) { _, which ->
+                .setItems(FavoritesFragment.getSubNames(requireContext())) { _, which ->
                     presenter.addTopicToFavorite(item.topicId, FavoritesApi.SUB_TYPES[which])
                 }
-                .show()
+                .showWithStyledButtons()
     }
 
-    override fun onAddToFavorite(result: Boolean) {
-        Toast.makeText(context, if (result) getString(R.string.favorites_added) else getString(R.string.error_occurred), Toast.LENGTH_SHORT).show()
+    fun onAddToFavorite(result: Boolean) {
+        showSnackbar(if (result) getString(R.string.favorites_added) else getString(R.string.error_occurred))
         refreshToolbarMenuItems(true)
     }
 
-    private fun checkArg(arg: String, pair: Pair<String, String>): Boolean {
-        return arg == pair.first
-    }
-
-    private fun setSelection(spinner: Spinner, items: List<String>, pair: Pair<String, String>) {
-        spinner.setSelection(items.indexOf(pair.second))
-    }
-
-    private fun setItems(spinner: Spinner, items: List<String>, selection: Int) {
-        val adapter = ArrayAdapter(activity!!, android.R.layout.simple_spinner_item, items)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinner.adapter = adapter
-        spinner.setSelection(selection)
-        spinner.onItemSelectedListener = listener
-    }
-
-    override fun fillSettingsData(settings: SearchSettings, fields: Map<String, List<String>>) {
-        searchView.post { searchView.setQuery(settings.query, false) }
-
-        nickField.text = settings.nick
-
-        val resourceItems = fields[SearchViewModel.FIELD_RESOURCE] ?: emptyList()
-        val resultItems = fields[SearchViewModel.FIELD_RESULT] ?: emptyList()
-        val sortItems = fields[SearchViewModel.FIELD_SORT] ?: emptyList()
-        val sourceItems = fields[SearchViewModel.FIELD_SOURCE] ?: emptyList()
-
-        setItems(resourceSpinner, resourceItems, 0)
-        setItems(resultSpinner, resultItems, 0)
-        setItems(sortSpinner, sortItems, 0)
-        setItems(sourceSpinner, sourceItems, 1)
-
-        when {
-            checkArg(settings.resourceType, SearchSettings.RESOURCE_NEWS) -> {
-                setSelection(resourceSpinner, resourceItems, SearchSettings.RESOURCE_NEWS)
-            }
-            checkArg(settings.resourceType, SearchSettings.RESOURCE_FORUM) -> {
-                setSelection(resourceSpinner, resourceItems, SearchSettings.RESOURCE_FORUM)
-            }
-        }
-
-        when {
-            checkArg(settings.result, SearchSettings.RESULT_TOPICS) -> {
-                setSelection(resultSpinner, resultItems, SearchSettings.RESULT_TOPICS)
-            }
-            checkArg(settings.result, SearchSettings.RESULT_POSTS) -> {
-                setSelection(resultSpinner, resultItems, SearchSettings.RESULT_POSTS)
-            }
-        }
-
-        when {
-            checkArg(settings.sort, SearchSettings.SORT_DA) -> {
-                setSelection(sortSpinner, sortItems, SearchSettings.SORT_DA)
-            }
-            checkArg(settings.sort, SearchSettings.SORT_DD) -> {
-                setSelection(sortSpinner, sortItems, SearchSettings.SORT_DD)
-            }
-            checkArg(settings.sort, SearchSettings.SORT_REL) -> {
-                setSelection(sortSpinner, sortItems, SearchSettings.SORT_REL)
-            }
-        }
-
-        when {
-            checkArg(settings.source, SearchSettings.SOURCE_ALL) -> {
-                setSelection(sourceSpinner, sourceItems, SearchSettings.SOURCE_ALL)
-            }
-            checkArg(settings.source, SearchSettings.SOURCE_TITLES) -> {
-                setSelection(sourceSpinner, sourceItems, SearchSettings.SOURCE_TITLES)
-            }
-            checkArg(settings.source, SearchSettings.SOURCE_CONTENT) -> {
-                setSelection(sourceSpinner, sourceItems, SearchSettings.SOURCE_CONTENT)
-            }
+    fun fillSettingsData(settings: SearchSettings, fields: Map<String, List<String>>) {
+        searchQueryHelper.setupSpinners(resourceLayout, resultLayout, sortLayout, sourceLayout, fields)
+        searchView?.let {
+            searchQueryHelper.fillSettingsData(it, nickField, resourceLayout, resultLayout, sortLayout, sourceLayout, settings, fields)
         }
     }
 
-    override fun setNewsMode() {
-        nickBlock.visibility = View.GONE
-        resultBlock.visibility = View.GONE
-        sortBlock.visibility = View.GONE
-        sourceBlock.visibility = View.GONE
+    fun setNewsMode() {
+        searchQueryHelper.setNewsMode(nickBlock, resultBlock, sortBlock, sourceBlock)
     }
 
-    override fun setForumMode() {
-        nickBlock.visibility = View.VISIBLE
-        resultBlock.visibility = View.VISIBLE
-        sortBlock.visibility = View.VISIBLE
-        sourceBlock.visibility = View.VISIBLE
+    fun setForumMode() {
+        searchQueryHelper.setForumMode(nickBlock, resultBlock, sortBlock, sourceBlock)
     }
 
     private fun startSearch() {
-        presenter.search(searchView.query.toString(), nickField.text.toString())
-        dialog.dismiss()
+        searchView?.let { searchQueryHelper.setupSubmitButton(submitButton, it, nickField) }
     }
 
-    override fun onStartSearch(settings: SearchSettings) {
+    fun onStartSearch(settings: SearchSettings) {
         hideKeyboard()
-
-        val titleBuilder = StringBuilder()
-        titleBuilder.append("Поиск")
-        if (settings.resourceType == SearchSettings.RESOURCE_NEWS.first) {
-            titleBuilder.append(" новостей")
-        } else {
-            if (settings.result == SearchSettings.RESULT_POSTS.first) {
-                titleBuilder.append(" сообщений")
-            } else {
-                titleBuilder.append(" тем")
-            }
-            if (!settings.nick.isEmpty()) {
-                titleBuilder.append(" пользователя \"").append(settings.nick).append("\"")
-            }
-        }
-        if (!settings.query.isEmpty()) {
-            titleBuilder.append(" по запросу \"").append(settings.query).append("\"")
-        }
-        setTitle(titleBuilder.toString())
+        setTitle(searchQueryHelper.buildSearchTitle(settings, presenter.scopedForumTitleForUi()))
     }
 
-    override fun showData(searchResult: SearchResult) {
+    fun showData(searchResult: SearchResult) {
+        contentController.hideContent(ContentController.TAG_ERROR)
         setRefreshing(false)
         recyclerView.scrollToPosition(0)
         hideKeyboard()
         if (BuildConfig.DEBUG) {
-            Log.d(LOG_TAG, "SEARCH SIZE " + searchResult.items.size)
+            Timber.d("SEARCH SIZE %d", searchResult.items.size)
         }
         if (searchResult.items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
-                val funnyContent = FunnyContent(context)
+                val funnyContent = FunnyContent(requireContext())
                         .setImage(R.drawable.ic_search)
                         .setTitle(R.string.funny_search_nodata_title)
                         .setDesc(R.string.funny_search_nodata_desc)
@@ -590,17 +558,16 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
             }
             if (refreshLayout.childCount <= 1) {
                 refreshLayout.addView(webView)
-                Log.d(LOG_TAG, "add webview")
+                Timber.d("add webview")
             }
-            val client = webViewClient ?: CustomWebViewClient().also { webViewClient = it }
+            val client = webViewClient ?: SearchWebViewClient().also { webViewClient = it }
             webView.webViewClient = client
-            if (webView.webChromeClient == null) {
-                webView.webChromeClient = CustomWebChromeClient()
-            }
+            val chrome = webChromeClient ?: CustomWebChromeClient().also { webChromeClient = it }
+            webView.webChromeClient = chrome
             if (BuildConfig.DEBUG) {
-                Log.d(LOG_TAG, "SEARCH SHOW WEBVIEW")
+                Timber.d("SEARCH SHOW WEBVIEW")
             }
-            webView.loadDataWithBaseURL("https://4pda.to/forum/", searchResult.html ?: "", "text/html", "utf-8", null)
+            queueSearchHtmlLoad(searchResult.html ?: "")
         } else {
             for (i in 0 until refreshLayout.childCount) {
                 if (refreshLayout.getChildAt(i) is ExtendedWebView) {
@@ -611,17 +578,16 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
             if (refreshLayout.childCount <= 1) {
                 fab.visibility = View.GONE
                 refreshLayout.addView(recyclerView)
-                Log.d(LOG_TAG, "add recyclerview")
+                Timber.d("add recyclerview")
             }
             if (BuildConfig.DEBUG) {
-                Log.d(LOG_TAG, "SEARCH SHOW RECYCLERVIEW")
+                Timber.d("SEARCH SHOW RECYCLERVIEW")
             }
-            adapter.clear()
-            adapter.addAll(searchResult.items)
+            adapter.addAll(searchResult.items, true)
         }
 
         paginationHelper.updatePagination(searchResult.pagination)
-        setSubtitle(paginationHelper.title)
+        clearToolbarPaginationSubtitle()
     }
 
 
@@ -633,19 +599,24 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
             field.set(refreshLayout, null)
             field.isAccessible = false
         } catch (e: NoSuchFieldException) {
-            e.printStackTrace()
+            Timber.e(e, "SwipeRefreshLayout reflection error")
         } catch (e: IllegalAccessException) {
-            e.printStackTrace()
+            Timber.e(e, "SwipeRefreshLayout reflection error")
         }
 
     }
 
     override fun onDestroyView() {
+        cancelSearchBlankVerify()
+        detachSearchLayoutDispatchListener()
         unregisterForContextMenu(webView)
-        webView.removeJavascriptInterface(ThemeFragmentWeb.JS_INTERFACE)
+        if (::jsInterface.isInitialized) jsInterface.cancel()
+        webView.removeJavascriptInterface(SEARCH_JS_INTERFACE)
         webView.setJsLifeCycleListener(null)
-        presenter.detachView()
         webView.endWork()
+        pendingSearchHtml = null
+        pendingSearchHtmlHash = 0
+        searchLoadDispatched = false
         super.onDestroyView()
     }
 
@@ -654,10 +625,211 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         paginationHelper.destroy()
     }
 
-    override fun onDomContentComplete(actions: ArrayList<String>) {}
+    override fun onDomContentComplete(actions: ArrayList<String>) {
+        setRefreshing(false)
+        val generation = searchRenderGeneration
+        cancelSearchBlankVerify()
+        searchBlankVerifyRunnable = Runnable { verifySearchRender(generation, "dom_content_complete") }
+        webView.postDelayed(searchBlankVerifyRunnable!!, 48L)
+    }
 
     override fun onPageComplete(actions: ArrayList<String>) {
         actions.add("window.scrollTo(0, 0);")
+    }
+
+    private fun searchLoadSnapshot(): WebViewLoadDispatchPolicy.Snapshot =
+            WebViewLoadDispatchPolicy.Snapshot(
+                    pendingTargetId = searchRenderGeneration,
+                    pendingContentHash = pendingSearchHtmlHash,
+                    loadDispatched = searchLoadDispatched,
+                    requestGeneration = searchRenderGeneration,
+                    domConfirmedGeneration = searchDomConfirmedGeneration,
+            )
+
+    private fun queueSearchHtmlLoad(html: String) {
+        if (html.isBlank()) return
+        val htmlHash = html.hashCode()
+        if (SearchWebRenderPolicy.isDuplicateQueuedHtml(htmlHash, pendingSearchHtmlHash, searchRenderGeneration)) {
+            if (WebViewLoadDispatchPolicy.shouldSkipInflightDuplicate(
+                            force = false,
+                            targetId = searchRenderGeneration,
+                            contentHash = htmlHash,
+                            snapshot = searchLoadSnapshot(),
+                    )
+            ) {
+                return
+            }
+            scheduleSearchHtmlLoad()
+            return
+        }
+        pendingSearchHtml = html
+        pendingSearchHtmlHash = htmlHash
+        searchRenderGeneration++
+        searchLoadDispatched = false
+        searchDomConfirmedGeneration = 0
+        searchBlankRetryCount = 0
+        scheduleSearchHtmlLoad()
+    }
+
+    private fun scheduleSearchHtmlLoad() {
+        if (!::webView.isInitialized) return
+        webView.post { dispatchSearchHtmlLoad(force = false) }
+    }
+
+    private fun dispatchSearchHtmlLoad(force: Boolean) {
+        if (!::webView.isInitialized || !isAdded || view == null) return
+        val html = pendingSearchHtml ?: return
+        val generation = searchRenderGeneration
+        if (WebViewLoadDispatchPolicy.shouldSkipInflightDuplicate(
+                        force = force,
+                        targetId = generation,
+                        contentHash = pendingSearchHtmlHash,
+                        snapshot = searchLoadSnapshot(),
+                )
+        ) {
+            return
+        }
+        if (SearchWebRenderPolicy.shouldDeferHtmlLoad(webView.width, webView.height)) {
+            scheduleSearchLayoutDispatch(generation)
+            return
+        }
+        detachSearchLayoutDispatchListener()
+        searchLoadDispatched = true
+        if (BuildConfig.DEBUG) {
+            Timber.d(
+                    "SEARCH load htmlLen=%d webView=%dx%d generation=%d force=%s",
+                    html.length,
+                    webView.width,
+                    webView.height,
+                    generation,
+                    force
+            )
+        }
+        webView.loadDataWithBaseURL(
+                SearchWebRenderPolicy.SEARCH_BASE_URL,
+                html,
+                "text/html",
+                "utf-8",
+                null
+        )
+    }
+
+    private fun scheduleSearchLayoutDispatch(generation: Int) {
+        if (!::webView.isInitialized || generation != searchRenderGeneration || searchLoadDispatched) return
+        if (!SearchWebRenderPolicy.shouldDeferHtmlLoad(webView.width, webView.height)) {
+            dispatchSearchHtmlLoad(force = false)
+            return
+        }
+        if (searchLayoutDispatchGeneration == generation && searchLayoutDispatchListener != null) {
+            return
+        }
+        detachSearchLayoutDispatchListener()
+        searchLayoutDispatchGeneration = generation
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            if (!::webView.isInitialized ||
+                    generation != searchRenderGeneration ||
+                    searchLoadDispatched ||
+                    !isAdded ||
+                    view == null
+            ) {
+                detachSearchLayoutDispatchListener()
+                return@OnGlobalLayoutListener
+            }
+            if (SearchWebRenderPolicy.shouldDeferHtmlLoad(webView.width, webView.height)) {
+                return@OnGlobalLayoutListener
+            }
+            detachSearchLayoutDispatchListener()
+            dispatchSearchHtmlLoad(force = false)
+        }
+        searchLayoutDispatchListener = listener
+        webView.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    }
+
+    private fun detachSearchLayoutDispatchListener() {
+        val listener = searchLayoutDispatchListener ?: return
+        if (::webView.isInitialized) {
+            val observer = webView.viewTreeObserver
+            if (observer.isAlive) {
+                observer.removeOnGlobalLayoutListener(listener)
+            }
+        }
+        searchLayoutDispatchListener = null
+        searchLayoutDispatchGeneration = -1
+    }
+
+    private fun cancelSearchBlankVerify() {
+        val runnable = searchBlankVerifyRunnable ?: return
+        if (::webView.isInitialized) {
+            webView.removeCallbacks(runnable)
+        }
+        searchBlankVerifyRunnable = null
+    }
+
+    private fun verifySearchRender(generation: Int, source: String) {
+        if (!::webView.isInitialized || !isAdded || view == null || generation != searchRenderGeneration) {
+            return
+        }
+        val script = """
+            (function(){
+                var posts=document.querySelectorAll('.post_container[data-post-id]').length;
+                return JSON.stringify({posts:posts,scrollHeight:Math.max(document.documentElement.scrollHeight||0,document.body.scrollHeight||0)});
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(script) { result ->
+            if (!isAdded || view == null || generation != searchRenderGeneration) return@evaluateJavascript
+            val raw = result
+                    ?.let { runCatching { JSONObject("{\"v\":$it}").optString("v") }.getOrNull() }
+                    ?.takeIf { it.isNotEmpty() }
+            val domPostCount = runCatching {
+                JSONObject(raw ?: "{}").optInt("posts")
+            }.getOrDefault(0)
+            val contentHeight = webView.contentHeight
+            if (SearchWebRenderPolicy.isBodyVisible(contentHeight, domPostCount)) {
+                searchDomConfirmedGeneration = generation
+                searchBlankRetryCount = 0
+                if (BuildConfig.DEBUG) {
+                    Timber.d(
+                            "SEARCH render confirmed source=%s generation=%d contentHeight=%d posts=%d",
+                            source,
+                            generation,
+                            contentHeight,
+                            domPostCount
+                    )
+                }
+                return@evaluateJavascript
+            }
+            handleSearchBlankBody(generation, source, contentHeight, domPostCount)
+        }
+    }
+
+    private fun handleSearchBlankBody(
+            generation: Int,
+            source: String,
+            contentHeight: Int,
+            domPostCount: Int,
+    ) {
+        if (generation != searchRenderGeneration || !isAdded || view == null) return
+        searchBlankRetryCount++
+        if (BuildConfig.DEBUG) {
+            Timber.w(
+                    "SEARCH blank body source=%s generation=%d retry=%d contentHeight=%d posts=%d",
+                    source,
+                    generation,
+                    searchBlankRetryCount,
+                    contentHeight,
+                    domPostCount
+            )
+        }
+        when (SearchWebRenderPolicy.blankRecoveryDecision(searchBlankRetryCount)) {
+            SearchWebRenderPolicy.BlankRecovery.RERENDER_CACHED -> {
+                searchLoadDispatched = false
+                webView.post { dispatchSearchHtmlLoad(force = true) }
+            }
+            SearchWebRenderPolicy.BlankRecovery.REFETCH -> presenter.refreshData()
+            SearchWebRenderPolicy.BlankRecovery.GIVE_UP -> {
+                showSnackbar(getString(R.string.error_occurred))
+            }
+        }
     }
 
     override fun onItemClick(item: SearchItem) {
@@ -669,7 +841,7 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
         return false
     }
 
-    override fun showItemDialogMenu(item: SearchItem, settings: SearchSettings) {
+    fun showItemDialogMenu(item: SearchItem, settings: SearchSettings) {
         dialogMenu.apply {
             disallowAll()
             if (settings.resourceType == SearchSettings.RESOURCE_NEWS.first) {
@@ -677,100 +849,218 @@ class SearchFragment : TabFragment(), SearchSiteView, ExtendedWebView.JsLifeCycl
             } else {
                 allowAll()
             }
-            show(context, this@SearchFragment, item)
+            show(requireContext(), this@SearchFragment, item)
         }
     }
 
 
     /* JS PRESENTER */
 
-    override fun showNoteCreate(title: String, url: String) {
-        NotesAddPopup.showAddNoteDialog(context, title, url)
+    fun showNoteCreate(title: String, url: String) {
+        NotesAddPopup.showAddNoteDialog(requireContext(), title, url, notesRepository)
     }
 
-    override fun deletePostUi(post: IBaseForumPost) {
+    fun deletePostUi(post: IBaseForumPost) {
         webView.evalJs("onDeletePostClick(" + post.id + ");")
     }
 
-    override fun openAnchorDialog(post: IBaseForumPost, anchorName: String) {
+    fun openAnchorDialog(post: IBaseForumPost, anchorName: String) {
         dialogsHelper.openAnchorDialog(presenter, post, anchorName)
     }
 
-    override fun openSpoilerLinkDialog(post: IBaseForumPost, spoilNumber: String) {
+    fun openSpoilerLinkDialog(post: IBaseForumPost, spoilNumber: String) {
         dialogsHelper.openSpoilerLinkDialog(presenter, post, spoilNumber)
     }
 
-    override fun firstPage() {
+    fun firstPage() {
         paginationHelper.firstPage()
     }
 
-    override fun prevPage() {
+    fun prevPage() {
         paginationHelper.prevPage()
     }
 
-    override fun nextPage() {
+    fun nextPage() {
         paginationHelper.nextPage()
     }
 
-    override fun lastPage() {
+    fun lastPage() {
         paginationHelper.lastPage()
     }
 
-    override fun selectPage() {
+    fun selectPage() {
         paginationHelper.selectPageDialog()
     }
 
 
-    override fun toast(text: String) {
-        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+    fun toast(text: String) {
+        showSnackbar(text)
     }
 
-    override fun log(text: String) {
+    fun log(text: String) {
         val maxLogSize = 1000
         for (i in 0..text.length / maxLogSize) {
             val start = i * maxLogSize
             var end = (i + 1) * maxLogSize
             end = if (end > text.length) text.length else end
-            Log.v(LOG_TAG, text.substring(start, end))
+            Timber.v(text.substring(start, end))
         }
     }
 
-    override fun showUserMenu(post: IBaseForumPost) {
+    fun showUserMenu(post: IBaseForumPost) {
         dialogsHelper.showUserMenu(presenter, post)
     }
 
-    override fun showReputationMenu(post: IBaseForumPost) {
+    fun showReputationMenu(post: IBaseForumPost) {
         dialogsHelper.showReputationMenu(presenter, post)
     }
 
-    override fun showPostMenu(post: IBaseForumPost) {
+    fun showPostMenu(post: IBaseForumPost) {
         dialogsHelper.showPostMenu(presenter, post)
     }
 
-    override fun reportPost(post: IBaseForumPost) {
+    fun reportPost(post: IBaseForumPost) {
         dialogsHelper.tryReportPost(presenter, post)
     }
 
-    override fun deletePost(post: IBaseForumPost) {
+    fun deletePost(post: IBaseForumPost) {
         dialogsHelper.deletePost(presenter, post)
     }
 
-    override fun votePost(post: IBaseForumPost, type: Boolean) {
+    fun votePost(post: IBaseForumPost, type: Boolean) {
         dialogsHelper.votePost(presenter, post, type)
     }
 
-    override fun showChangeReputation(post: IBaseForumPost, type: Boolean) {
+    fun showChangeReputation(post: IBaseForumPost, type: Boolean) {
         dialogsHelper.changeReputation(presenter, post, type)
     }
 
-    override fun editPost(post: IBaseForumPost) {
+    fun editPost(post: IBaseForumPost) {
         webView.extractPostBodyHtml(post.id) { domHtml ->
             presenter.openEditPostForm(post.id, domHtml)
         }
     }
 
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        setRefreshing(isRefreshing)
+                    }
+                }
+                launch {
+                    presenter.currentData.collect { data ->
+                        if (data != null) {
+                            showData(data)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleUiEvent(event: forpdateam.ru.forpda.presentation.search.SearchUiEvent) {
+        when (event) {
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.UpdateShowAvatarState -> updateShowAvatarState(event.show)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.UpdateTypeAvatarState -> updateTypeAvatarState(event.circle)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.UpdateScrollButtonState -> updateScrollButtonState(event.enabled)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SetFontSize -> setFontSize(event.size)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SetAppFontMode -> setAppFontMode(event.mode)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SetStyleType -> setStyleType(event.styleType)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.FillSettingsData -> fillSettingsData(event.settings, event.fields)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.OnStartSearch -> onStartSearch(event.settings)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowData -> showData(event.data)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowLoadError -> showLoadError(event.message)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowInitialState -> showInitialState()
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SetNewsMode -> setNewsMode()
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SetForumMode -> setForumMode()
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowItemDialogMenu -> showItemDialogMenu(event.item, event.settings)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowAddInFavDialog -> showAddInFavDialog(event.item)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.OnAddToFavorite -> onAddToFavorite(event.result)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.FirstPage -> firstPage()
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.PrevPage -> prevPage()
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.NextPage -> nextPage()
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.LastPage -> lastPage()
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SelectPage -> selectPage()
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowUserMenu -> showUserMenu(event.post)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowReputationMenu -> showReputationMenu(event.post)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowPostMenu -> showPostMenu(event.post)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ReportPost -> reportPost(event.post)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.DeletePost -> deletePost(event.post)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.EditPost -> editPost(event.post)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.VotePost -> votePost(event.post, event.type)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.OpenSpoilerLinkDialog -> openSpoilerLinkDialog(event.post, event.spoilNumber)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.OpenAnchorDialog -> openAnchorDialog(event.post, event.name)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.Log -> log(event.text)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowChangeReputation -> showChangeReputation(event.post, event.type)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.DeletePostUi -> deletePostUi(event.post)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowNoteCreate -> showNoteCreate(event.title, event.url)
+        }
+    }
+
+    private fun showInitialState() {
+        contentController.hideContent(ContentController.TAG_ERROR)
+        if (!contentController.contains(ContentController.TAG_NO_DATA)) {
+            val funnyContent = FunnyContent(requireContext())
+                    .setImage(R.drawable.ic_search)
+                    .setTitle(R.string.funny_search_initial_title)
+                    .setDesc(R.string.funny_search_initial_desc)
+            contentController.addContent(funnyContent, ContentController.TAG_NO_DATA)
+        }
+        contentController.showContent(ContentController.TAG_NO_DATA)
+    }
+
+    private fun showLoadError(message: String?) {
+        val hasData = presenter.currentData.value != null && (adapter.itemCount > 0 || refreshLayout.indexOfChild(webView) >= 0)
+        if (hasData) {
+            showSnackbar(message ?: getString(R.string.error_occurred))
+            return
+        }
+        contentController.hideContent(ContentController.TAG_NO_DATA)
+        if (!contentController.contains(ContentController.TAG_ERROR)) {
+            val funnyContent = FunnyContent(requireContext())
+                    .setImage(R.drawable.ic_search)
+                    .setTitle(R.string.funny_search_error_title)
+                    .setDesc(R.string.funny_search_error_desc)
+                    .addAction(R.string.retry) { presenter.refreshData() }
+            contentController.addContent(funnyContent, ContentController.TAG_ERROR)
+        }
+        contentController.showContent(ContentController.TAG_ERROR)
+        adapter.clear()
+        showSnackbar(message ?: getString(R.string.error_occurred))
+    }
+
     companion object {
         private val LOG_TAG = SearchFragment::class.java.simpleName
+        const val SEARCH_JS_INTERFACE = "IThemePresenter"
+    }
+
+    private inner class SearchWebViewClient : CustomWebViewClient(avatarRepository, linkHandler, systemLinkHandler) {
+        override fun handleUri(view: WebView, uri: android.net.Uri): Boolean {
+            // Let parent handle file downloads first
+            if (super.handleUri(view, uri)) {
+                return true // File download handled
+            }
+            // Handle forum links through the app
+            val url = uri.toString()
+            if (uri.getQueryParameter("act") == "search") {
+                uri.getQueryParameter("st")?.toIntOrNull()?.let { st ->
+                    presenter.onSearchPageClick(st)
+                    return true
+                }
+            }
+            if (SiteUrls.isSiteUri(uri)) {
+                presenter.onOpenLink(url)
+                return true
+            }
+            return false
+        }
     }
 
 }

@@ -8,7 +8,7 @@ class PollQuestionItem {
     var title: String? = null
 
     //For no result poll
-    var value: Int = 0
+    var value: String = ""
     var name: String? = null
     var type: String? = null
 

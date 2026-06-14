@@ -3,8 +3,9 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     xmlns:tools="http://schemas.android.com/tools"
-    android:background="?attr/selectableItemBackground"
     android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
     android:orientation="vertical"
     android:paddingBottom="@dimen/content_block_padding_vertical"
     android:paddingEnd="@dimen/content_padding_horizontal"
@@ -15,6 +16,7 @@
         android:id="@+id/topic_item_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:textColor="?attr/default_text_color"
         android:textSize="@dimen/list_topic_title_text_size"
         android:textStyle="bold"
         tools:text="@string/test_topic_title"/>

@@ -1,24 +1,25 @@
 package forpdateam.ru.forpda.ui.fragments.reputation
 
-import android.annotation.SuppressLint
+import forpdateam.ru.forpda.presentation.TabRouter
+import javax.inject.Inject
+import forpdateam.ru.forpda.common.getVecDrawable
 import android.content.Context
 import android.os.Bundle
 import com.google.android.material.tabs.TabLayout
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.recyclerview.widget.LinearLayoutManager
 import android.view.*
-import android.widget.EditText
-import android.widget.TextView
-import android.widget.Toast
+import forpdateam.ru.forpda.common.showSnackbar
 import androidx.fragment.app.viewModels
 import forpdateam.ru.forpda.common.ForPdaCoil
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.reputation.RepData
 import forpdateam.ru.forpda.entity.remote.reputation.RepItem
+import forpdateam.ru.forpda.entity.remote.reputation.ReputationReportForm
 import forpdateam.ru.forpda.model.data.remote.api.reputation.ReputationApi
-import forpdateam.ru.forpda.presentation.reputation.ReputationView
+import forpdateam.ru.forpda.presentation.reputation.ReputationUiEvent
 import forpdateam.ru.forpda.presentation.reputation.ReputationViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
@@ -26,13 +27,32 @@ import forpdateam.ru.forpda.ui.views.ContentController
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
 import forpdateam.ru.forpda.ui.views.FunnyContent
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.pagination.PaginationHelper
+import forpdateam.ru.forpda.databinding.ReputationChangeLayoutBinding
+import forpdateam.ru.forpda.databinding.ReportLayoutBinding
+import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.model.AuthHolder
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 
 /**
  * Created by radiationx on 20.03.17.
  */
 
-class ReputationFragment : RecyclerFragment(), ReputationView {
+@AndroidEntryPoint
+class ReputationFragment : RecyclerFragment() {
+    @Inject lateinit var authHolder: AuthHolder
+    @Inject lateinit var router: TabRouter
+
+    private companion object {
+        const val MENU_PROFILE = 0
+        const val MENU_GO_TO_MESSAGE = 1
+        const val MENU_REPORT = 2
+    }
+
 
     private lateinit var adapter: ReputationAdapter
     private lateinit var paginationHelper: PaginationHelper
@@ -44,17 +64,8 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
     private lateinit var upRepMenuItem: MenuItem
     private lateinit var downRepMenuItem: MenuItem
 
-    private val authHolder = App.get().Di().authHolder
 
-    private val presenter: ReputationViewModel by viewModels {
-        ReputationViewModel.Factory(
-                App.get().Di().reputationRepository,
-                App.get().Di().avatarRepository,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler
-        )
-    }
+    private val presenter: ReputationViewModel by viewModels()
 
     private val paginationListener = object : PaginationHelper.PaginationListener {
         override fun onTabSelected(tab: TabLayout.Tab): Boolean {
@@ -77,29 +88,26 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
         }
     }
 
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_reputation)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_reputation)
         arguments?.apply {
             getString(TabFragment.ARG_TAB)?.also {
-                presenter.currentData = ReputationApi.fromUrl(it)
+                presenter.setInitialData(ReputationApi.fromUrl(it))
             }
         }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        paginationHelper = PaginationHelper(activity)
-        paginationHelper.addInToolbar(inflater, toolbarLayout, configuration.isFitSystemWindow)
+        paginationHelper = PaginationHelper(requireActivity(), dimensionsProvider)
+        paginationHelper.addInToolbar(inflater, toolbarLayout, configuration.fitSystemWindow)
         return viewFragment
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setScrollFlagsEnterAlways()
+        clearToolbarScrollFlags()
 
         dialogMenu = DynamicDialogMenu()
         dialogMenu.apply {
@@ -108,6 +116,13 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
             }
             addItem(getString(R.string.go_to_message)) { _, data ->
                 presenter.navigateToMessage(data)
+            }
+            addItem(getString(R.string.reputation_report)) { _, data ->
+                if (authHolder.get().isAuth()) {
+                    presenter.onReportClick(data)
+                } else {
+                    Utils.showNeedAuthDialog(requireContext(), router)
+                }
             }
         }
 
@@ -119,14 +134,15 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
         paginationHelper.setListener(paginationListener)
         adapter.setOnItemClickListener(adapterListener)
 
-        presenter.attachView(this)
         presenter.start()
+        observeViewModel()
     }
 
     override fun onDestroyView() {
-        presenter.detachView()
         super.onDestroyView()
     }
+
+    override fun useCompactToolbarPaginationChrome(): Boolean = true
 
     override fun onDestroy() {
         super.onDestroy()
@@ -137,7 +153,7 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
         super.addBaseToolbarMenu(menu)
         val subMenu = menu.addSubMenu(R.string.sorting_title)
         subMenu.item.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        subMenu.item.icon = App.getVecDrawable(context, R.drawable.ic_toolbar_sort)
+        subMenu.item.icon = requireContext().getVecDrawable(R.drawable.ic_toolbar_sort)
         descSortMenuItem = subMenu.add(R.string.sorting_desc).setOnMenuItemClickListener {
             presenter.setSort(ReputationApi.SORT_DESC)
             false
@@ -146,7 +162,7 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
             presenter.setSort(ReputationApi.SORT_ASC)
             false
         }
-        repModeMenuItem = menu.add(getString(if (presenter.currentData.mode == ReputationApi.MODE_FROM) R.string.reputation_mode_from else R.string.reputation_mode_to))
+        repModeMenuItem = menu.add(getString(if (presenter.currentData.value.mode == ReputationApi.MODE_FROM) R.string.reputation_mode_from else R.string.reputation_mode_to))
                 .setOnMenuItemClickListener {
                     presenter.changeReputationMode()
                     false
@@ -156,7 +172,7 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
                     if (authHolder.get().isAuth()) {
                         showChangeReputationDialog(true)
                     } else {
-                        Utils.showNeedAuthDialog(requireContext())
+                        Utils.showNeedAuthDialog(requireContext(), router)
                     }
                     false
                 }
@@ -165,7 +181,7 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
                     if (authHolder.get().isAuth()) {
                         showChangeReputationDialog(false)
                     } else {
-                        Utils.showNeedAuthDialog(requireContext())
+                        Utils.showNeedAuthDialog(requireContext(), router)
                     }
                     false
                 }
@@ -178,8 +194,8 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
             descSortMenuItem.isEnabled = true
             ascSortMenuItem.isEnabled = true
             repModeMenuItem.isEnabled = true
-            repModeMenuItem.title = getString(if (presenter.currentData.mode == ReputationApi.MODE_FROM) R.string.reputation_mode_from else R.string.reputation_mode_to)
-            if (presenter.currentData.id != authHolder.get().userId) {
+            repModeMenuItem.title = getString(if (presenter.currentData.value.mode == ReputationApi.MODE_FROM) R.string.reputation_mode_from else R.string.reputation_mode_to)
+            if (presenter.currentData.value.id != authHolder.get().userId) {
                 upRepMenuItem.isEnabled = true
                 upRepMenuItem.isVisible = true
                 downRepMenuItem.isEnabled = true
@@ -196,27 +212,57 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
         }
     }
 
-    @SuppressLint("InflateParams")
     fun showChangeReputationDialog(type: Boolean) {
-        val inflater = context?.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
+        val builder = MaterialAlertDialogBuilder(requireContext())
+        val binding = ReputationChangeLayoutBinding.inflate(LayoutInflater.from(builder.context))
+        binding.reputationText.text =
+            String.format(getString(R.string.change_reputation_Type_Nick), getString(if (type) R.string.increase else R.string.decrease), presenter.currentData.value.nick)
 
-        val layout = inflater.inflate(R.layout.reputation_change_layout, null)
-
-        val text = layout.findViewById<View>(R.id.reputation_text) as TextView
-        val messageField = layout.findViewById<View>(R.id.reputation_text_field) as EditText
-        text.text = String.format(getString(R.string.change_reputation_Type_Nick), getString(if (type) R.string.increase else R.string.decrease), presenter.currentData.nick)
-
-        AlertDialog.Builder(context!!)
-                .setView(layout)
+        builder
+                .setView(binding.root)
                 .setPositiveButton(R.string.ok) { _, _ ->
-                    presenter.changeReputation(type, messageField.text.toString())
+                    presenter.changeReputation(type, binding.reputationTextField.text.toString())
                 }
                 .setNegativeButton(R.string.cancel, null)
-                .show()
+                .showWithStyledButtons()
     }
 
-    override fun onChangeReputation(result: Boolean) {
-        Toast.makeText(context, getString(R.string.reputation_changed), Toast.LENGTH_SHORT).show()
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        setRefreshing(isRefreshing)
+                    }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleUiEvent(event: ReputationUiEvent) {
+        when (event) {
+            is ReputationUiEvent.ShowReputation -> showReputation(event.data)
+            is ReputationUiEvent.ShowAvatar -> showAvatar(event.avatarUrl)
+            is ReputationUiEvent.ShowItemDialogMenu -> showItemDialogMenu(event.item)
+            is ReputationUiEvent.OnChangeReputation -> onChangeReputation(event.result)
+            is ReputationUiEvent.ShowReportDialog -> showReportDialog(event.item, event.form)
+            is ReputationUiEvent.OnReportSubmitted -> onReportSubmitted(event.result)
+        }
+    }
+
+    private fun onReportSubmitted(result: Boolean) {
+        if (result) {
+            showSnackbar(getString(R.string.report_post_success))
+        }
+    }
+
+    private fun onChangeReputation(result: Boolean) {
+        showSnackbar(getString(R.string.reputation_changed))
     }
 
     override fun setRefreshing(isRefreshing: Boolean) {
@@ -224,16 +270,16 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
         refreshToolbarMenuItems(!isRefreshing)
     }
 
-    override fun showAvatar(avatarUrl: String) {
+    private fun showAvatar(avatarUrl: String) {
         ForPdaCoil.loadInto(toolbarImageView, avatarUrl)
         toolbarImageView.visibility = View.VISIBLE
         toolbarImageView.contentDescription = getString(R.string.user_avatar)
     }
 
-    override fun showReputation(repData: RepData) {
+    private fun showReputation(repData: RepData) {
         if (repData.items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
-                val funnyContent = FunnyContent(context)
+                val funnyContent = FunnyContent(requireContext())
                         .setImage(R.drawable.ic_history)
                         .setTitle(R.string.funny_reputation_nodata_title)
                 contentController.addContent(funnyContent, ContentController.TAG_NO_DATA)
@@ -253,11 +299,37 @@ class ReputationFragment : RecyclerFragment(), ReputationView {
         toolbarImageView.setOnClickListener { presenter.navigateToProfile(repData.id) }
     }
 
-    override fun showItemDialogMenu(item: RepItem) {
+    private fun showItemDialogMenu(item: RepItem) {
         dialogMenu.disallowAll()
-        dialogMenu.allow(0)
-        if (item.sourceUrl != null)
-            dialogMenu.allow(1)
-        dialogMenu.show(context, item.userNick, this@ReputationFragment, item)
+        dialogMenu.allow(MENU_PROFILE)
+        if (item.sourceUrl != null) {
+            dialogMenu.allow(MENU_GO_TO_MESSAGE)
+        }
+        if (item.hasReportAction()) {
+            dialogMenu.changeTitle(
+                    MENU_REPORT,
+                    getString(if (item.isPositive == false) R.string.reputation_appeal else R.string.reputation_report)
+            )
+            dialogMenu.allow(MENU_REPORT)
+        }
+        dialogMenu.show(requireContext(), this@ReputationFragment, item, item.userNick)
+    }
+
+    private fun showReportDialog(item: RepItem, form: ReputationReportForm) {
+        val builder = MaterialAlertDialogBuilder(requireContext())
+        val binding = ReportLayoutBinding.inflate(LayoutInflater.from(builder.context))
+        binding.reportInputLayout.hint = getString(R.string.report_text)
+        builder
+                .setTitle(
+                        getString(
+                                if (item.isPositive == false) R.string.reputation_appeal else R.string.reputation_report
+                        )
+                )
+                .setView(binding.root)
+                .setPositiveButton(R.string.send) { _, _ ->
+                    presenter.submitReport(item, form, binding.reportTextField.text.toString())
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .showWithStyledButtons()
     }
 }

@@ -13,11 +13,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.github.chrisbanes.photoview.OnPhotoTapListener
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.databinding.ActivityImgViewerBinding
 
-@Suppress("DEPRECATION")
 class ImageViewerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityImgViewerBinding
@@ -47,23 +47,18 @@ class ImageViewerActivity : AppCompatActivity() {
         }
 
         val extUrls = mutableListOf<String>()
-        if (intent.extras != null && intent.extras!!.containsKey(IMAGE_URLS_KEY)) {
-            extUrls.addAll(intent.extras!!.getStringArrayList(IMAGE_URLS_KEY)!!)
-        } else if (savedInstanceState != null && savedInstanceState.containsKey(IMAGE_URLS_KEY)) {
-            extUrls.addAll(savedInstanceState.getStringArrayList(IMAGE_URLS_KEY)!!)
-        }
+        intent.extras?.let { extras ->
+            if (extras.containsKey(IMAGE_URLS_KEY)) {
+                extras.getStringArrayList(IMAGE_URLS_KEY)?.let { extUrls.addAll(it) }
+            }
+        } ?: savedInstanceState?.getStringArrayList(IMAGE_URLS_KEY)?.let { extUrls.addAll(it) }
 
-        currentImages.addAll(extUrls)
+        currentImages.addAll(extUrls.map(FourPdaImageUrls::resolveViewerUrl))
         names.addAll(currentImages.map { Utils.getFileNameFromUrl(it) })
 
-        if (savedInstanceState != null && savedInstanceState.containsKey(SELECTED_INDEX_KEY)) {
-            currentIndex = savedInstanceState.getInt(SELECTED_INDEX_KEY, 0)
-        } else if (intent.extras != null && intent.extras!!.containsKey(SELECTED_INDEX_KEY)) {
-            currentIndex = intent.extras!!.getInt(SELECTED_INDEX_KEY, 0)
-        }
-        if (currentIndex < 0) {
-            currentIndex = 0
-        }
+        currentIndex = (savedInstanceState?.getInt(SELECTED_INDEX_KEY, 0)
+            ?: intent.extras?.getInt(SELECTED_INDEX_KEY, 0) ?: 0)
+            .coerceIn(0, (currentImages.size - 1).coerceAtLeast(0))
 
         binding.imgViewerPager.addOnPageChangeListener(object : androidx.viewpager.widget.ViewPager.SimpleOnPageChangeListener() {
             override fun onPageSelected(position: Int) {
@@ -79,9 +74,15 @@ class ImageViewerActivity : AppCompatActivity() {
     }
 
     private fun updateTitle(selectedPageIndex: Int) {
-        currentIndex = selectedPageIndex
-        binding.toolbar.title = names[selectedPageIndex]
-        binding.toolbar.subtitle = String.format(getString(R.string.image_viewer_subtitle_Cur_All), selectedPageIndex + 1, currentImages.size)
+        if (currentImages.isEmpty() || names.isEmpty()) {
+            currentIndex = 0
+            binding.toolbar.title = ""
+            binding.toolbar.subtitle = ""
+            return
+        }
+        currentIndex = selectedPageIndex.coerceIn(0, currentImages.lastIndex)
+        binding.toolbar.title = names.getOrNull(currentIndex).orEmpty()
+        binding.toolbar.subtitle = String.format(getString(R.string.image_viewer_subtitle_Cur_All), currentIndex + 1, currentImages.size)
     }
 
     private fun toggle() {
@@ -132,8 +133,7 @@ class ImageViewerActivity : AppCompatActivity() {
             val urls = ArrayList<String>()
             urls.add(imageUrl)
             intent.putExtra(IMAGE_URLS_KEY, urls)
-            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-            intent.addFlags(FLAG_ACTIVITY_NEW_TASK)
+            intent.flags = FLAG_ACTIVITY_NEW_TASK
             context.startActivity(intent)
         }
 
@@ -142,8 +142,7 @@ class ImageViewerActivity : AppCompatActivity() {
             val intent = Intent(context, ImageViewerActivity::class.java)
             intent.putExtra(IMAGE_URLS_KEY, imageUrls)
             intent.putExtra(SELECTED_INDEX_KEY, selectedIndex)
-            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-            intent.addFlags(FLAG_ACTIVITY_NEW_TASK)
+            intent.flags = FLAG_ACTIVITY_NEW_TASK
             context.startActivity(intent)
         }
     }

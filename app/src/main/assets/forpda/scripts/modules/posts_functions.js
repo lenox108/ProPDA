@@ -1,5 +1,3 @@
-console.log("LOAD JS SOURCE posts_functions.js");
-
 function updateShowAvatarState(isShow) {
     console.log("updateShowAvatarState " + isShow);
 
@@ -28,14 +26,14 @@ function updateShowAvatarState(isShow) {
 function updateTypeAvatarState(isCircle) {
     console.log("updateTypeAvatarState " + isCircle);
     var body = document.body;
-    var isCircled = body.classList.contains("circle_avatar");
-    var isSquared = body.classList.contains("square_avatar");
-    if (isCircle && isSquared) {
-        body.classList.remove("square_avatar");
+    body.classList.remove("circle_avatar", "square_avatar");
+    if (isCircle) {
         body.classList.add("circle_avatar");
-    } else if (!isCircle && isCircled) {
-        body.classList.remove("circle_avatar");
+    } else {
         body.classList.add("square_avatar");
+    }
+    if (typeof PageInfo !== "undefined") {
+        PageInfo.avatarType = isCircle ? "circle_avatar" : "square_avatar";
     }
 }
 

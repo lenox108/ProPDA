@@ -23,7 +23,8 @@
         android:layout_height="wrap_content"
         android:animateLayoutChanges="true"
         android:background="?attr/img_viewer_toolbar"
-        android:theme="@style/ImageViewTheme.AppBarOverlay">
+        android:theme="@style/ImageViewTheme.AppBarOverlay"
+        app:elevation="@dimen/dp4">
 
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbar"

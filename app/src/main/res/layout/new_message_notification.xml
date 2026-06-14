@@ -41,6 +41,8 @@
             android:layout_height="@dimen/dp36"
             android:layout_gravity="end|center_vertical"
             android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="@string/new_message_notification_close"
             app:srcCompat="@drawable/ic_close"/>
     </androidx.cardview.widget.CardView>
 </FrameLayout>

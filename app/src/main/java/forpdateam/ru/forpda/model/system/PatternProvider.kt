@@ -2,11 +2,11 @@ package forpdateam.ru.forpda.model.system
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
+import timber.log.Timber
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
 
 class PatternProvider(
@@ -18,8 +18,8 @@ class PatternProvider(
         private const val KEY_PATTERNS = "regex_patterns"
     }
 
-    private val patternSources = Collections.synchronizedMap(mutableMapOf<String, MutableMap<String, String>>())
-    private val patterns = Collections.synchronizedMap(mutableMapOf<String, MutableMap<String, Pattern>>())
+    private val patternSources = ConcurrentHashMap<String, MutableMap<String, String>>()
+    private val patterns = ConcurrentHashMap<String, MutableMap<String, Pattern>>()
 
     private var currentVersion = -1
 
@@ -49,18 +49,18 @@ class PatternProvider(
     @Synchronized
     override fun update(jsonString: String) {
         val parsed = parse(jsonString)
-        //Log.e("PatternProvider", "parsed: ${parsed.first}, ${parsed.second.size}")
+        //Timber.e("parsed: ${parsed.first}, ${parsed.second.size}")
         update(parsed.first, parsed.second)
     }
 
     private fun update(version: Int, newData: Map<String, MutableMap<String, String>>) {
-        //Log.e("PatternProvider", "version $version, nds=${newData.size}")
+        //Timber.e("version $version, nds=${newData.size}")
         setLocalData(newData)
         save(version, patternSources)
     }
 
     private fun init() {
-        Log.e("PatternProvider", "init")
+        Timber.e("init")
 
         val time = System.currentTimeMillis()
 
@@ -69,17 +69,17 @@ class PatternProvider(
             parse(it)
         } ?: assetsData
 
-        Log.e("PatternProvider", "versions: assets=${assetsData.first}, saved=${savedData.first}")
+        Timber.e("versions: assets=${assetsData.first}, saved=${savedData.first}")
 
         arrayOf(assetsData, savedData).maxBy { it.first }?.let {
             update(it.first, it.second)
         }
-        Log.e("PatternProvider", "update time: ${System.currentTimeMillis() - time}, ${Thread.currentThread()}")
+        Timber.e("update time: ${System.currentTimeMillis() - time}, ${Thread.currentThread()}")
     }
 
     private fun parse(jsonString: String): Pair<Int, Map<String, MutableMap<String, String>>> {
         val time = System.currentTimeMillis()
-        val result = Collections.synchronizedMap(mutableMapOf<String, MutableMap<String, String>>())
+        val result = ConcurrentHashMap<String, MutableMap<String, String>>()
         val patternsJson = JSONObject(jsonString)
 
         val version = patternsJson.getInt("version")
@@ -88,7 +88,7 @@ class PatternProvider(
         for (i in 0 until scopesArray.length()) {
             val scopeItem = scopesArray.getJSONObject(i)
             val scopeName = scopeItem.getString("scope")
-            val patternsMap = Collections.synchronizedMap(mutableMapOf<String, String>())
+            val patternsMap = ConcurrentHashMap<String, String>()
             val patternsArray = scopeItem.getJSONArray("patterns")
             for (j in 0 until patternsArray.length()) {
                 val patternItem = patternsArray.getJSONObject(j)
@@ -99,21 +99,21 @@ class PatternProvider(
             result[scopeName] = patternsMap
         }
 
-        //Log.e("PatternProvider", "JSON parse time: ${System.currentTimeMillis() - time}")
+        //Timber.e("JSON parse time: ${System.currentTimeMillis() - time}")
         return Pair(version, result)
     }
 
     private fun setLocalData(newData: Map<String, MutableMap<String, String>>) {
         newData.forEach { scopeItem ->
-            //Log.e("PatternProvider", "contains scope: ${!patternSources.contains(scopeItem.key)}, ${!patterns.contains(scopeItem.key)}, ${scopeItem.key}")
+            //Timber.e("contains scope: ${!patternSources.contains(scopeItem.key)}, ${!patterns.contains(scopeItem.key)}, ${scopeItem.key}")
             if (!patternSources.contains(scopeItem.key)) {
-                patternSources[scopeItem.key] = Collections.synchronizedMap(mutableMapOf())
+                patternSources[scopeItem.key] = ConcurrentHashMap()
             }
             if (!patterns.contains(scopeItem.key)) {
-                patterns[scopeItem.key] = Collections.synchronizedMap(mutableMapOf())
+                patterns[scopeItem.key] = ConcurrentHashMap()
             }
             scopeItem.value.forEach { patternItem ->
-                //Log.e("PatternProvider", "check scope pattern: ${scopeItem.key}.${patternItem.key} (${patternSources[scopeItem.key]?.get(patternItem.key)?.length} vs ${patternItem.value.length} -> ${patternSources[scopeItem.key]?.get(patternItem.key) != patternItem.value})")
+                //Timber.e("check scope pattern: ${scopeItem.key}.${patternItem.key} (${patternSources[scopeItem.key]?.get(patternItem.key)?.length} vs ${patternItem.value.length} -> ${patternSources[scopeItem.key]?.get(patternItem.key) != patternItem.value})")
                 if (patternSources[scopeItem.key]?.get(patternItem.key) != patternItem.value) {
                     patterns[scopeItem.key]?.remove(patternItem.key)
                     patternSources[scopeItem.key]?.remove(patternItem.key)
@@ -151,7 +151,7 @@ class PatternProvider(
         patternsJson.put("version", version)
         patternsJson.put("scopes", scopesArray)
         val jsonString = patternsJson.toString()
-        //Log.e("PatternProvider", "saved length : ${jsonString.length}")
+        //Timber.e("saved length : ${jsonString.length}")
         sharedPreferences.edit().putString(KEY_PATTERNS, jsonString).apply()
         currentVersion = version
     }

@@ -28,6 +28,10 @@ interface IFavItem {
     var isNew: Boolean
     /** Сколько новых постов не прочитано (из разметки +N у темы; иначе минимум 1 при isNew). */
     var unreadPostCount: Int
+    /** Последний пост, до которого тема была локально дочитана в приложении. */
+    var localReadPostId: Int
+    /** Время последнего локально прочитанного поста, millis epoch. */
+    var localReadPostDateMillis: Long
     var isPoll: Boolean
     var isClosed: Boolean
 }

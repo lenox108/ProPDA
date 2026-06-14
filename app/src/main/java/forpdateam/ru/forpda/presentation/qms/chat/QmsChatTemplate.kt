@@ -18,6 +18,7 @@ class QmsChatTemplate(
         template.apply {
             templateManager.fillStaticStrings(this)
             setVariableOpt("style_type", templateManager.getThemeType())
+            setVariableOpt("theme_overrides_css", templateManager.getThemeOverridesCss())
             setVariableOpt("chat_title", ApiUtils.htmlEncode(chatModel.title))
             setVariableOpt("chatId", chatModel.themeId)
             setVariableOpt("userId", chatModel.userId)
@@ -45,6 +46,7 @@ class QmsChatTemplate(
         template.apply {
             templateManager.fillStaticStrings(this)
             setVariableOpt("style_type", templateManager.getThemeType())
+            setVariableOpt("theme_overrides_css", templateManager.getThemeOverridesCss())
             setVariableOpt("body_type", "qms")
             setVariableOpt("messages", "")
         }

@@ -22,7 +22,7 @@
         android:layout_marginTop="@dimen/dp24"
         android:fontFamily="monospace"
         android:gravity="center_horizontal"
-        android:text="Список контактов пуст"
+        android:text="@string/contacts_list_empty"
         android:textSize="@dimen/empty_state_title_text_size"
         android:textStyle="bold"
         android:visibility="gone"/>
@@ -36,7 +36,7 @@
         android:layout_marginTop="@dimen/content_padding_horizontal"
         android:fontFamily="monospace"
         android:gravity="center_horizontal"
-        android:text="Список контактов пуст"
+        android:text="@string/contacts_list_empty"
         android:textSize="@dimen/empty_state_subtitle_text_size"
         android:visibility="gone"/>
 

@@ -1,8 +1,10 @@
 package forpdateam.ru.forpda.presentation.history
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
+import forpdateam.ru.forpda.presentation.BaseViewModel
+
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.model.repository.history.HistoryRepository
@@ -15,18 +17,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
  * История посещений без Moxy.
  */
-class HistoryViewModel(
+@HiltViewModel
+class HistoryViewModel @Inject constructor(
         private val historyRepository: HistoryRepository,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
-        private val errorHandler: IErrorHandler
-) : ViewModel() {
+        private val errorHandler: IErrorHandler,
+        private val clipboardHelper: ClipboardHelper
+) : BaseViewModel() {
 
     data class UiState(
             val items: List<HistoryItem> = emptyList(),
@@ -35,9 +40,10 @@ class HistoryViewModel(
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+    private var refreshJob: Job? = null
 
     init {
-        viewModelScope.launch {
+        scope.launch {
             historyRepository.observeItems()
                     .catch { e -> errorHandler.handle(e) }
                     .collect { items ->
@@ -48,7 +54,8 @@ class HistoryViewModel(
     }
 
     fun refresh() {
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = scope.launch {
             _uiState.update { it.copy(loading = true) }
             runCatching { historyRepository.getHistory() }
                     .onSuccess { items ->
@@ -62,47 +69,37 @@ class HistoryViewModel(
     }
 
     fun remove(id: Int) {
-        viewModelScope.launch {
+        scope.launch {
             _uiState.update { it.copy(loading = true) }
-            runCatching { historyRepository.remove(id) }
-                    .onFailure { e ->
-                        errorHandler.handle(e)
-                    }
+            try {
+                historyRepository.remove(id)
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            }
             _uiState.update { it.copy(loading = false) }
         }
     }
 
-    fun clear() {
-        viewModelScope.launch {
+    override fun clear() {
+        scope.launch {
             _uiState.update { it.copy(loading = true) }
-            runCatching { historyRepository.clear() }
-                    .onFailure { e ->
-                        errorHandler.handle(e)
-                    }
+            try {
+                historyRepository.clear()
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            }
             _uiState.update { it.copy(loading = false) }
         }
     }
 
     fun copyLink(item: HistoryItem) {
-        Utils.copyToClipBoard(item.url)
+        item.url?.let { clipboardHelper.copyToClipboard(it) }
     }
 
     fun onItemClick(item: HistoryItem) {
-        linkHandler.handle(item.url, router, mapOf(Screen.ARG_TITLE to item.title))
-    }
-
-    class Factory(
-            private val historyRepository: HistoryRepository,
-            private val router: TabRouter,
-            private val linkHandler: ILinkHandler,
-            private val errorHandler: IErrorHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != HistoryViewModel::class.java) {
-                throw IllegalArgumentException("Unknown ViewModel class")
-            }
-            return HistoryViewModel(historyRepository, router, linkHandler, errorHandler) as T
+        item.url?.let { url ->
+            linkHandler.handle(url, router, mapOf(Screen.ARG_TITLE to (item.title ?: "")))
         }
     }
+
 }

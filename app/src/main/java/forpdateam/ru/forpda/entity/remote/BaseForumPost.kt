@@ -16,6 +16,9 @@ open class BaseForumPost : IBaseForumPost {
         }
     override var group: String? = null
     override var reputation: String? = null
+    override var postRating: String? = null
+    override var canMinusPostRating: Boolean = false
+    override var canPlusPostRating: Boolean = false
     override var body: String? = null
     override var isCurator: Boolean = false
     override var isOnline: Boolean = false

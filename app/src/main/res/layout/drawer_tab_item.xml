@@ -8,8 +8,7 @@
     <RelativeLayout
         android:id="@+id/drawer_item_wrapper"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:foreground="?attr/selectableItemBackground">
+        android:layout_height="wrap_content">
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/drawer_item_title"
@@ -22,6 +21,7 @@
             android:paddingEnd="@dimen/dp0"
             android:paddingStart="@dimen/content_padding_horizontal"
             android:paddingTop="@dimen/content_padding_vertical"
+            android:textColor="?attr/default_text_color"
             android:textSize="@dimen/list_topic_meta_text_size"
             android:textStyle="bold"
             tools:text="@string/test_drawer_item_name" />
@@ -34,6 +34,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:padding="@dimen/dp12"
-            app:srcCompat="@drawable/ic_clear" />
+            app:srcCompat="@drawable/ic_clear"
+            app:tint="?attr/second_text_color" />
     </RelativeLayout>
 </FrameLayout>

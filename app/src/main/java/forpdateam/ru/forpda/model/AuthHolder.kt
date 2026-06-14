@@ -12,18 +12,19 @@ class AuthHolder(
 ) {
     private val _auth = MutableStateFlow(createInitialAuth())
 
-    private fun createInitialAuth(): AuthData = AuthData().apply {
-        userId = preferences.getString("member_id", null)?.toInt() ?: AuthData.NO_ID
-        state = enumValueOf(
+    private fun createInitialAuth(): AuthData {
+        val userId = preferences.getString("member_id", null)?.toInt() ?: AuthData.NO_ID
+        val state = enumValueOf<AuthState>(
                 preferences.getString("auth_state", null)
                         ?: AuthState.NO_AUTH.toString()
         )
-
         val cookieMemberId = preferences.getString("cookie_member_id", null)
         val cookiePassHash = preferences.getString("cookie_pass_hash", null)
-        if (cookieMemberId != null && cookiePassHash != null) {
-            state = AuthState.AUTH
-        }
+        val isAuth = cookieMemberId != null && cookiePassHash != null
+        return AuthData(
+            userId = userId,
+            state = if (isAuth) AuthState.AUTH else state
+        )
     }
 
     init {

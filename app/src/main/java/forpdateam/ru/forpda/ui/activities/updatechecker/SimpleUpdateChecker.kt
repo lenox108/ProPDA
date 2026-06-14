@@ -9,7 +9,6 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.checker.UpdateData
@@ -18,11 +17,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Created by radiationx on 23.07.17.
  */
 class SimpleUpdateChecker(
+        private val context: Context,
         private val checkerRepository: CheckerRepository
 ) {
 
@@ -33,7 +34,7 @@ class SimpleUpdateChecker(
         scope.launch {
             runCatching { checkerRepository.checkUpdate(true) }
                     .onSuccess { showUpdateData(it) }
-                    .onFailure { it.printStackTrace() }
+                    .onFailure { Timber.e(it, "Update check error") }
         }
     }
 
@@ -41,12 +42,12 @@ class SimpleUpdateChecker(
         job.cancel()
     }
 
-    @SuppressLint("NewApi")
+    @SuppressLint("MissingPermission")
     private fun showUpdateData(update: UpdateData) {
         val currentVersionCode = BuildConfig.VERSION_CODE
 
         if (update.code > currentVersionCode) {
-            val context: Context = App.getContext()
+            // context already available from constructor
             val channelId = "forpda_channel_updates"
             val channelName = context.getString(R.string.updater_notification_title)
 
@@ -70,11 +71,7 @@ class SimpleUpdateChecker(
 
             val notifyIntent = Intent(context, UpdateCheckerActivity::class.java)
             notifyIntent.action = Intent.ACTION_VIEW
-            val piFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PendingIntent.FLAG_IMMUTABLE
-            } else {
-                0
-            }
+            val piFlags = PendingIntent.FLAG_IMMUTABLE
             val notifyPendingIntent = PendingIntent.getActivity(context, 0, notifyIntent, piFlags)
             mBuilder.setContentIntent(notifyPendingIntent)
 
@@ -88,6 +85,12 @@ class SimpleUpdateChecker(
             defaults = defaults or NotificationCompat.DEFAULT_VIBRATE
             mBuilder.setDefaults(defaults)
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    return
+                }
+            }
             mNotificationManager.notify(update.code, mBuilder.build())
         }
     }

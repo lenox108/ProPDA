@@ -1,45 +1,72 @@
 package forpdateam.ru.forpda.model.repository.posteditor
 
+import android.content.Context
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
-import forpdateam.ru.forpda.model.SchedulersProvider
-import forpdateam.ru.forpda.model.data.cache.forumuser.ForumUsersCache
+import forpdateam.ru.forpda.model.data.cache.forumuser.ForumUsersCacheRoom
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsApi
 import forpdateam.ru.forpda.model.data.remote.api.editpost.EditPostApi
-import forpdateam.ru.forpda.model.repository.BaseRepository
-import io.reactivex.Completable
-import io.reactivex.Single
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Semaphore
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Created by radiationx on 01.01.18.
  */
 class PostEditorRepository(
-        private val schedulers: SchedulersProvider,
+        private val context: Context,
         private val editPostApi: EditPostApi,
         private val attachmentsApi: AttachmentsApi,
-        private val forumUsersCache: ForumUsersCache
-) : BaseRepository(schedulers) {
+        private val forumUsersCache: ForumUsersCacheRoom
+) {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val warmCache = ConcurrentHashMap<Int, EditPostWarmEntry>()
-    /** Один активный сетевой Single на postId — префетч и открытие редактора не дублируют TCP. */
-    private val inflightForm = ConcurrentHashMap<Int, Single<EditPostForm>>()
-    private val inflightAttach = ConcurrentHashMap<Int, Single<List<AttachmentItem>>>()
+    private val diskCache = EditPostDiskCache(context)
+    /** Один активный Deferred на postId — префетч и открытие редактора не дублируют TCP. */
+    private val inflightForm = ConcurrentHashMap<Int, Deferred<EditPostForm>>()
+    private val inflightAttach = ConcurrentHashMap<Int, Deferred<List<AttachmentItem>>>()
     /** [bumpEditPrefetchGeneration] при новой загрузке темы; префетч сравнивает снимок с [get]. */
     private val prefetchGeneration = AtomicInteger(0)
+
+    init {
+        // Подтягиваем сохранённый кэш с диска при старте — формы будут доступны даже после
+        // перезапуска приложения.
+        scope.launch {
+            val loaded = diskCache.loadAll()
+            for ((postId, entry) in loaded) {
+                // Не перетираем свежие in-memory записи, если они успели появиться.
+                warmCache.putIfAbsent(postId, entry)
+            }
+        }
+    }
 
     fun bumpEditPrefetchGeneration() {
         prefetchGeneration.incrementAndGet()
     }
 
     fun invalidateEditCache(postId: Int) {
-        if (postId > 0) warmCache.remove(postId)
+        if (postId > 0) {
+            warmCache.remove(postId)
+            diskCache.remove(postId)
+        }
     }
 
     /**
@@ -57,19 +84,17 @@ class PostEditorRepository(
 
     /**
      * Старт загрузки формы + attach до открытия экрана (делит inflight с редактором).
+     * Загружаем параллельно — форма и attach независимы, суммарная задержка = max(form, attach)
+     * вместо form + attach.
      */
     fun kickWarmNetworkLoad(postId: Int) {
         if (postId <= 0) return
-        // Сначала форма (BBCode), потом attach init — меньше параллельной нагрузки на лимиты сервера.
-        Completable.fromAction {
-            try {
-                loadFormBody(postId).blockingGet()
-                loadAttachBody(postId).blockingGet()
-            } catch (_: Exception) {
-            }
+        scope.launch {
+            val form = async { runCatching { loadFormBody(postId) } }
+            val att = async { runCatching { loadAttachBody(postId) } }
+            form.await()
+            att.await()
         }
-                .subscribeOn(schedulers.io())
-                .subscribe({}, {})
     }
 
     /**
@@ -81,20 +106,18 @@ class PostEditorRepository(
         val gen = prefetchGeneration.get()
         val sem = Semaphore(PREFETCH_MAX_PARALLEL)
         for (postId in ids) {
-            Completable.fromAction {
-                sem.acquireUninterruptibly()
+            scope.launch {
+                sem.acquire()
                 try {
                     prefetchEditOnePost(postId, gen)
                 } finally {
                     sem.release()
                 }
             }
-                    .subscribeOn(schedulers.io())
-                    .subscribe({}, {})
         }
     }
 
-    private fun prefetchEditOnePost(postId: Int, gen: Int) {
+    private suspend fun prefetchEditOnePost(postId: Int, gen: Int) {
         if (prefetchGeneration.get() != gen) return
         try {
             val cached = warmCache[postId]
@@ -102,11 +125,16 @@ class PostEditorRepository(
                 return
             }
             if (prefetchGeneration.get() != gen) return
-            val form = loadFormBody(postId).blockingGet()
+            val form = loadFormBody(postId)
             if (form.errorCode != EditPostForm.ERROR_NONE) return
             if (!isEditFormContentPresent(form)) return
             if (prefetchGeneration.get() != gen) return
-            val att = loadAttachBody(postId).blockingGet()
+            // Если форма уже содержит вложения — attach init обычно пустой, не тратим запрос.
+            val att = if (form.attachments.isNotEmpty()) {
+                emptyList()
+            } else {
+                runCatching { loadAttachBody(postId) }.getOrNull() ?: return
+            }
             putWarmEntry(
                     postId,
                     EditPostWarmEntry(
@@ -124,6 +152,7 @@ class PostEditorRepository(
         pruneStaleWarmCache()
         evictWarmCacheIfOverLimit(postId)
         warmCache[postId] = entry
+        diskCache.put(postId, entry)
     }
 
     private fun evictWarmCacheIfOverLimit(incomingPostId: Int) {
@@ -152,63 +181,74 @@ class PostEditorRepository(
     }
 
     /**
-     * UI: результат на main. Внутри — [loadFormBody] + observeOn(ui).
-     * Rx-таймаут с запасом к OkHttp (connect/read/write в [Client] по 45 с).
+     * Загрузка формы редактирования: кеш → сеть (с дедупликацией inflight).
      */
-    fun loadForm(postId: Int): Single<EditPostForm> =
-            loadFormBody(postId).observeOn(schedulers.ui())
+    suspend fun loadForm(postId: Int): EditPostForm = withContext(Dispatchers.IO) {
+        loadFormBody(postId)
+    }
 
-    /**
-     * Цепочка без observeOn(main): для префетча с io и для single-flight.
-     */
-    private fun loadFormBody(postId: Int): Single<EditPostForm> = Single.defer {
+    private suspend fun loadFormBody(postId: Int): EditPostForm {
         val hit = warmCache[postId]
         val cachedForm = hit?.form
         if (cachedForm != null && hit.isFresh(CACHE_TTL_MS) && isEditFormContentPresent(cachedForm)) {
-            return@defer Single.fromCallable { cachedForm.deepCopyForCache() }
-                    .subscribeOn(schedulers.io())
+            return cachedForm.deepCopyForCache()
         }
-        sharedNetworkLoadForm(postId)
+        return sharedNetworkLoadForm(postId)
     }
 
-    private fun sharedNetworkLoadForm(postId: Int): Single<EditPostForm> =
-            inflightForm.computeIfAbsent(postId) {
-                Single.fromCallable { editPostApi.loadForm(postId) }
-                        .timeout(NETWORK_FORM_TIMEOUT_SEC, TimeUnit.SECONDS, schedulers.io())
-                        .subscribeOn(schedulers.io())
-                        .withNetworkRetry(maxAttempts = 1, initialDelayMs = 500L)
-                        .doOnSuccess { form ->
-                            if (form.errorCode == EditPostForm.ERROR_NONE && isEditFormContentPresent(form)) {
-                                mergeWarmCacheAfterForm(postId, form)
-                            }
-                        }
-                        .doFinally { inflightForm.remove(postId) }
-                        .cache()
+    private suspend fun sharedNetworkLoadForm(postId: Int): EditPostForm {
+        val deferred = inflightForm.computeIfAbsent(postId) {
+            scope.async {
+                try {
+                    val form = suspendRetry(maxAttempts = 1, initialDelayMs = 500L) {
+                        withTimeoutOrNull(NETWORK_FORM_TIMEOUT_SEC * 1000) {
+                            withContext(Dispatchers.IO) { editPostApi.loadForm(postId) }
+                        } ?: throw TimeoutException("loadForm timeout ${NETWORK_FORM_TIMEOUT_SEC}s")
+                    }
+                    if (form.errorCode == EditPostForm.ERROR_NONE && isEditFormContentPresent(form)) {
+                        mergeWarmCacheAfterForm(postId, form)
+                    }
+                    form
+                } finally {
+                    inflightForm.remove(postId)
+                }
             }
+        }
+        return deferred.await()
+    }
 
-    fun loadEditAttachments(postId: Int): Single<List<AttachmentItem>> =
-            loadAttachBody(postId).observeOn(schedulers.ui())
+    suspend fun loadEditAttachments(postId: Int): List<AttachmentItem> = withContext(Dispatchers.IO) {
+        loadAttachBody(postId)
+    }
 
-    private fun loadAttachBody(postId: Int): Single<List<AttachmentItem>> = Single.defer {
+    private suspend fun loadAttachBody(postId: Int): List<AttachmentItem> {
         val hit = warmCache[postId]
         if (hit != null && hit.attachments != null && hit.isFresh(CACHE_TTL_MS)) {
-            return@defer Single.fromCallable { deepCopyAttachmentList(hit.attachments!!).toMutableList() }
-                    .subscribeOn(schedulers.io())
+            return deepCopyAttachmentList(hit.attachments).toMutableList()
         }
-        sharedNetworkLoadAttach(postId)
+        return sharedNetworkLoadAttach(postId)
     }
 
-    private fun sharedNetworkLoadAttach(postId: Int): Single<List<AttachmentItem>> =
-            inflightAttach.computeIfAbsent(postId) {
-                Single.fromCallable { editPostApi.loadEditAttachments(postId) }
-                        .timeout(ATTACH_NETWORK_TIMEOUT_SEC, TimeUnit.SECONDS, schedulers.io())
-                        .subscribeOn(schedulers.io())
-                        .withNetworkRetry(maxAttempts = 1, initialDelayMs = 400L)
-                        .doOnSuccess { list -> mergeWarmCacheAfterAttachments(postId, list) }
-                        .onErrorReturn { emptyList() }
-                        .doFinally { inflightAttach.remove(postId) }
-                        .cache()
+    private suspend fun sharedNetworkLoadAttach(postId: Int): List<AttachmentItem> {
+        val deferred = inflightAttach.computeIfAbsent(postId) {
+            scope.async {
+                try {
+                    val list = suspendRetry(maxAttempts = 1, initialDelayMs = 400L) {
+                        withTimeoutOrNull(ATTACH_NETWORK_TIMEOUT_SEC * 1000) {
+                            withContext(Dispatchers.IO) { editPostApi.loadEditAttachments(postId) }
+                        } ?: throw TimeoutException("loadAttach timeout ${ATTACH_NETWORK_TIMEOUT_SEC}s")
+                    }
+                    mergeWarmCacheAfterAttachments(postId, list)
+                    list
+                } catch (_: Exception) {
+                    emptyList<AttachmentItem>()
+                } finally {
+                    inflightAttach.remove(postId)
+                }
             }
+        }
+        return deferred.await()
+    }
 
     private fun mergeWarmCacheAfterForm(postId: Int, form: EditPostForm) {
         val prev = warmCache[postId]
@@ -238,20 +278,21 @@ class PostEditorRepository(
         )
     }
 
-    fun uploadFiles(id: Int, files: List<RequestFile>, pending: List<AttachmentItem>): Single<List<AttachmentItem>> = Single
-            .fromCallable { attachmentsApi.uploadTopicFiles(id, files, pending) }
-            .runInIoToUi()
+    suspend fun uploadFiles(id: Int, files: List<RequestFile>, pending: List<AttachmentItem>): List<AttachmentItem> = withContext(Dispatchers.IO) {
+        attachmentsApi.uploadTopicFiles(id, files, pending)
+    }
 
-    fun deleteFiles(id: Int, items: List<AttachmentItem>): Single<List<AttachmentItem>> = Single
-            .fromCallable { attachmentsApi.deleteTopicFiles(id, items) }
-            .runInIoToUi()
+    suspend fun deleteFiles(id: Int, items: List<AttachmentItem>): List<AttachmentItem> = withContext(Dispatchers.IO) {
+        attachmentsApi.deleteTopicFiles(id, items)
+    }
 
-    fun sendPost(form: EditPostForm, scrollTraceId: String? = null): Single<ThemePage> = Single
-            .fromCallable { editPostApi.sendPost(form, scrollTraceId) }
-            .doOnSuccess { saveUsers(it) }
-            .runInIoToUi()
+    suspend fun sendPost(form: EditPostForm, scrollTraceId: String? = null): ThemePage = withContext(Dispatchers.IO) {
+        val page = editPostApi.sendPost(form, scrollTraceId)
+        saveUsers(page)
+        page
+    }
 
-    private fun saveUsers(page: ThemePage) {
+    private suspend fun saveUsers(page: ThemePage) {
         val forumUsers = page.posts.map { post ->
             ForumUser().apply {
                 id = post.userId
@@ -262,15 +303,31 @@ class PostEditorRepository(
         forumUsersCache.saveUsers(forumUsers)
     }
 
+    private suspend fun <T> suspendRetry(
+            maxAttempts: Int = 3,
+            initialDelayMs: Long = 500,
+            block: suspend () -> T
+    ): T {
+        var lastException: Throwable? = null
+        repeat(maxAttempts) { attempt ->
+            try {
+                return block()
+            } catch (e: Exception) {
+                val transient = e is IOException || e is SocketTimeoutException || e is TimeoutException
+                lastException = e
+                if (!transient || attempt >= maxAttempts - 1) throw e
+                delay(initialDelayMs * (1L shl attempt))
+            }
+        }
+        throw lastException ?: IOException("Unknown error")
+    }
+
     companion object {
-        private const val CACHE_TTL_MS = 10 * 60 * 1000L
-        /**
-         * Выше OkHttp 45 с × возможный ретрай: иначе Rx обрывает раньше сети и показывается «60 seconds».
-         */
+        private const val CACHE_TTL_MS = 30 * 60 * 1000L
         private const val NETWORK_FORM_TIMEOUT_SEC = 120L
         private const val ATTACH_NETWORK_TIMEOUT_SEC = 45L
         private const val MAX_WARM_ENTRIES = 32
-        private const val PREFETCH_MAX_PARALLEL = 4
+        private const val PREFETCH_MAX_PARALLEL = 8
     }
 }
 

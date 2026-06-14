@@ -1,71 +1,82 @@
 package forpdateam.ru.forpda.ui.fragments.favorites
 
 import android.app.Dialog
+import android.app.SearchManager
+import android.content.Context
 import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.tabs.TabLayout
-import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
-import android.util.Log
+import androidx.appcompat.widget.SearchView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.progressindicator.CircularProgressIndicator
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
+import androidx.core.view.MenuItemCompat
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.Spinner
-import android.widget.Toast
+import android.widget.LinearLayout
+import android.widget.RadioGroup
+import android.widget.TextView
+import forpdateam.ru.forpda.common.showSnackbar
+import forpdateam.ru.forpda.common.Utils
+import forpdateam.ru.forpda.presentation.TabRouter
+import javax.inject.Inject
 
 import androidx.fragment.app.viewModels
 
 import java.util.Arrays
 
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.favorites.FavData
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.model.data.remote.api.favorites.Sorting
-import forpdateam.ru.forpda.presentation.favorites.FavoritesView
+import forpdateam.ru.forpda.presentation.favorites.FavoritesUiEvent
 import forpdateam.ru.forpda.presentation.favorites.FavoritesViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.views.ContentController
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
 import forpdateam.ru.forpda.ui.views.FunnyContent
 import forpdateam.ru.forpda.ui.views.adapters.BaseSectionedAdapter
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.pagination.PaginationHelper
+import forpdateam.ru.forpda.databinding.FavoriteSortingBinding
+import forpdateam.ru.forpda.ui.fragments.search.applyToolbarSearchPlateChrome
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 
 /**
  * Created by radiationx on 22.09.16.
  */
 
-class FavoritesFragment : RecyclerFragment(), FavoritesView {
+@AndroidEntryPoint
+class FavoritesFragment : RecyclerFragment() {
+
+    @Inject lateinit var router: TabRouter
 
     private lateinit var dialogMenu: DynamicDialogMenu<FavoritesFragment, FavItem>
     private lateinit var adapter: FavoritesAdapter
 
     private lateinit var paginationHelper: PaginationHelper
 
-    private lateinit var dialog: BottomSheetDialog
-    private lateinit var sortingView: ViewGroup
-    private lateinit var keySpinner: Spinner
-    private lateinit var orderSpinner: Spinner
-    private lateinit var sortApply: Button
-    private lateinit var sortReset: Button
+    private var currentSortDialog: BottomSheetDialog? = null
+    private var currentSorting: Sorting = Sorting("", "")
+    private var searchMenuItem: MenuItem? = null
+    private var markAllReadMenuItem: MenuItem? = null
+    private var markAllReadProgressDialog: AlertDialog? = null
+    private var markAllReadProgressText: TextView? = null
 
-    private val presenter: FavoritesViewModel by viewModels {
-        FavoritesViewModel.Factory(
-                App.get().Di().favoritesRepository,
-                App.get().Di().eventsRepository,
-                App.get().Di().listsPreferencesHolder,
-                App.get().Di().crossScreenInteractor,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler
-        )
-    }
+    private val presenter: FavoritesViewModel by viewModels()
+
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
 
     private val paginationListener = object : PaginationHelper.PaginationListener {
         override fun onTabSelected(tab: TabLayout.Tab): Boolean {
@@ -88,8 +99,9 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
         }
     }
 
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_favorite)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_favorite)
     }
 
     private fun getPinText(b: Boolean): CharSequence {
@@ -97,23 +109,18 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
     }
 
     private fun getSubText(subTypeIndex: Int): CharSequence {
-        return String.format("%s (%s)", getString(R.string.fav_change_subscribe_type), SUB_NAMES[subTypeIndex])
+        return String.format("%s (%s)", getString(R.string.fav_change_subscribe_type), getSubNames(requireContext())[subTypeIndex])
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        sortingView = View.inflate(context, R.layout.favorite_sorting, null) as ViewGroup
-        keySpinner = sortingView.findViewById<View>(R.id.sorting_key) as Spinner
-        orderSpinner = sortingView.findViewById<View>(R.id.sorting_order) as Spinner
-        sortApply = sortingView.findViewById<View>(R.id.sorting_apply) as Button
-        sortReset = sortingView.findViewById(R.id.sorting_reset)
-        dialog = BottomSheetDialog(context!!)
-        dialog.setOnShowListener { dialog1 ->
-            @Suppress("DEPRECATION")
-            (dialog1 as Dialog).window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        }
-        paginationHelper = PaginationHelper(activity)
-        paginationHelper.addInToolbar(inflater, toolbarLayout, configuration.isFitSystemWindow)
+        paginationHelper = PaginationHelper(requireActivity(), dimensionsProvider)
+        paginationHelper.addInToolbar(
+                inflater = inflater,
+                target = toolbarLayout,
+                enablePadding = configuration.fitSystemWindow,
+                surfaceColorAttr = R.attr.main_toolbar_accent_surface,
+        )
         contentController.setFirstLoad(false)
         return viewFragment
     }
@@ -141,6 +148,9 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
             addItem(getString(R.string.delete)) { _, data ->
                 presenter.changeFav(FavoritesApi.ACTION_DELETE, null, data.favId)
             }
+            addItem(getString(R.string.fav_mute_notifications)) { _, data ->
+                presenter.toggleTopicMute(data)
+            }
         }
 
 
@@ -148,106 +158,259 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
 
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
         adapter = FavoritesAdapter()
+        adapter.paginationFooterBinder = { container ->
+            paginationHelper.addInList(layoutInflater, container)
+        }
         adapter.setOnItemClickListener(adapterListener)
+        adapter.setOnItemDisplayListener { presenter.onItemDisplayed(it) }
+        adapter.setOnItemTouchDownListener { presenter.onItemTouchDown(it) }
         recyclerView.adapter = adapter
 
         paginationHelper.setListener(paginationListener)
 
-        initSpinnerItems(keySpinner, arrayOf(getString(R.string.fav_sort_last_post), getString(R.string.fav_sort_title)))
-        initSpinnerItems(orderSpinner, arrayOf(getString(R.string.sorting_asc), getString(R.string.sorting_desc)))
-        sortApply.setOnClickListener {
-            val key = when (keySpinner.selectedItemPosition) {
-                0 -> Sorting.Key.LAST_POST
-                1 -> Sorting.Key.TITLE
-                else -> ""
-            }
-            val order = when (orderSpinner.selectedItemPosition) {
-                0 -> Sorting.Order.ASC
-                1 -> Sorting.Order.DESC
-                else -> ""
-            }
-            presenter.updateSorting(key, order)
-            dialog.dismiss()
-        }
-        sortReset.setOnClickListener {
-            presenter.updateSorting("", "")
-            dialog.dismiss()
-        }
-
-        presenter.attachView(this)
         presenter.start()
+        observeViewModel()
         presenter.refresh()
     }
 
-    override fun onDestroyView() {
-        presenter.detachView()
-        super.onDestroyView()
-    }
-
-    override fun isShadowVisible(): Boolean {
-        return true
-    }
+    override fun useCompactToolbarPaginationChrome(): Boolean = true
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
-        menu.add(Menu.NONE, R.id.menu_fav_mark_all_read, Menu.NONE, "")
+        addSearchItem(menu)
+        val item = menu.add(Menu.NONE, R.id.menu_fav_mark_all_read, Menu.NONE, getString(R.string.fav_mark_all_read))
                 .setIcon(R.drawable.ic_toolbar_done)
-                .setContentDescription(getString(R.string.fav_mark_all_read))
                 .setOnMenuItemClickListener {
                     hideKeyboard()
                     openMarkAllFavoritesReadConfirmDialog()
                     false
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        markAllReadMenuItem = item
+        MenuItemCompat.setContentDescription(item, getString(R.string.fav_mark_all_read))
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            MenuItemCompat.setTooltipText(item, getString(R.string.fav_mark_all_read))
+        }
         menu.add(R.string.sorting_title)
                 .setIcon(R.drawable.ic_toolbar_sort)
                 .setOnMenuItemClickListener {
                     hideKeyboard()
-                    if (sortingView.parent != null && sortingView.parent is ViewGroup) {
-                        (sortingView.parent as ViewGroup).removeView(sortingView)
+                    val dialogBinding = FavoriteSortingBinding.inflate(LayoutInflater.from(requireContext()))
+                    selectSortingInto(dialogBinding, currentSorting)
+                    dialogBinding.sortingApply.setOnClickListener {
+                        val key = when (dialogBinding.sortingKey.checkedRadioButtonId) {
+                            R.id.sorting_key_last_post -> Sorting.Companion.Key.LAST_POST
+                            R.id.sorting_key_title -> Sorting.Companion.Key.TITLE
+                            else -> ""
+                        }
+                        val order = when (dialogBinding.sortingOrder.checkedRadioButtonId) {
+                            R.id.sorting_order_asc -> Sorting.Companion.Order.ASC
+                            R.id.sorting_order_desc -> Sorting.Companion.Order.DESC
+                            else -> ""
+                        }
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            presenter.updateSorting(key, order)
+                        }
+                        currentSortDialog?.dismiss()
                     }
-                    dialog.setContentView(sortingView)
-                    dialog.show()
+                    dialogBinding.sortingReset.setOnClickListener {
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            presenter.updateSorting("", "")
+                        }
+                        currentSortDialog?.dismiss()
+                    }
+                    currentSortDialog = BottomSheetDialog(requireContext())
+                    currentSortDialog?.setOnShowListener { dialog1 ->
+                        (dialog1 as Dialog).window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+                    }
+                    currentSortDialog?.setContentView(dialogBinding.root)
+                    currentSortDialog?.show()
                     false
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
     }
 
+    private fun addSearchItem(menu: Menu) {
+        val item = menu.add(Menu.NONE, R.id.action_favorites_search, Menu.NONE, getString(R.string.search))
+                .setIcon(R.drawable.ic_toolbar_search)
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS or MenuItem.SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW)
+        searchMenuItem = item
+
+        val searchView = SearchView(requireContext())
+        item.actionView = searchView
+        val searchManager = activity?.getSystemService(Context.SEARCH_SERVICE) as? SearchManager
+        searchView.setSearchableInfo(searchManager?.getSearchableInfo(activity?.componentName))
+        searchView.setIconifiedByDefault(true)
+        searchView.queryHint = getString(R.string.favorites_search_hint)
+        searchView.maxWidth = Int.MAX_VALUE
+        searchView.applyToolbarSearchPlateChrome()
+        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String): Boolean {
+                hideKeyboard()
+                presenter.searchLocal(query)
+                return true
+            }
+
+            override fun onQueryTextChange(newText: String): Boolean {
+                presenter.searchLocal(newText)
+                return true
+            }
+        })
+        item.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
+            override fun onMenuItemActionExpand(item: MenuItem): Boolean = true
+
+            override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
+                presenter.searchLocal("")
+                return true
+            }
+        })
+        MenuItemCompat.setContentDescription(item, getString(R.string.search))
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            MenuItemCompat.setTooltipText(item, getString(R.string.search))
+        }
+    }
+
     private fun openMarkAllFavoritesReadConfirmDialog() {
         val ctx = context ?: return
-        AlertDialog.Builder(ctx)
-                .setMessage(getString(R.string.fav_mark_all_read) + "?")
-                .setPositiveButton(R.string.ok) { _, _ ->
+        val count = presenter.getMarkAllFavoritesReadCount()
+        if (count <= 0) {
+            showSnackbar(R.string.fav_mark_all_read_nothing)
+            return
+        }
+        MaterialAlertDialogBuilder(ctx)
+                .setTitle(R.string.fav_mark_all_read_title)
+                .setMessage(getString(R.string.fav_mark_all_read_confirm, count))
+                .setPositiveButton(R.string.fav_mark_all_read_button) { _, _ ->
                     presenter.markAllFavoritesRead()
                 }
                 .setNegativeButton(R.string.cancel, null)
-                .show()
+                .showWithStyledButtons()
     }
 
-    override fun onMarkAllRead() {
-        Toast.makeText(context, R.string.action_complete, Toast.LENGTH_SHORT).show()
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        refreshLayout.isRefreshing = isRefreshing
+                    }
+                }
+                launch {
+                    presenter.markAllReadRunning.collect { isRunning ->
+                        markAllReadMenuItem?.isEnabled = !isRunning
+                        if (!isRunning) {
+                            dismissMarkAllReadProgressDialog()
+                        }
+                    }
+                }
+                launch {
+                    presenter.sortingFlow.collect { sorting ->
+                        currentSorting = sorting
+                        adapter.setSorting(sorting)
+                    }
+                }
+                launch {
+                    presenter.displayedItems.collect { items ->
+                        if (items != null) {
+                            onShowFavorite(items)
+                        }
+                    }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
     }
 
-    override fun onLoadFavorites(data: FavData) {
-        Log.e("kjkjkj", "onLoadFavorites")
-        selectSpinners(data.sorting)
+    private fun handleUiEvent(event: FavoritesUiEvent) {
+        when (event) {
+            is FavoritesUiEvent.InitSorting -> {
+                currentSorting = event.sorting
+                adapter.setSorting(event.sorting)
+            }
+            is FavoritesUiEvent.SetShowDot -> adapter.setShowDot(event.show)
+            is FavoritesUiEvent.SetShowUnreadIndicators -> adapter.setShowUnreadIndicators(event.show)
+            is FavoritesUiEvent.SetUnreadTop -> adapter.setUnreadTop(event.unreadTop)
+            is FavoritesUiEvent.OnShowFavorite -> Unit
+            is FavoritesUiEvent.OnLoadFavorites -> onLoadFavorites(event.data)
+            is FavoritesUiEvent.OnMarkAllReadProgress -> onMarkAllReadProgress(event.progress.processed, event.progress.total)
+            is FavoritesUiEvent.OnMarkAllRead -> onMarkAllRead(event.result.successCount, event.result.failCount)
+            is FavoritesUiEvent.ShowItemDialogMenu -> showItemDialogMenu(event.item)
+            is FavoritesUiEvent.OnChangeFav -> onChangeFav(event.result)
+            is FavoritesUiEvent.ShowSubscribeDialog -> showSubscribeDialog(event.item)
+            is FavoritesUiEvent.OnToggleMute -> showSnackbar(
+                    if (event.nowMuted) R.string.fav_notifications_muted else R.string.fav_notifications_unmuted
+            )
+            is FavoritesUiEvent.ShowLoadError -> showLoadError(event.message)
+            is FavoritesUiEvent.ShowNeedAuth -> Utils.showNeedAuthDialog(requireContext(), router)
+        }
+    }
+
+    private fun onMarkAllReadProgress(processed: Int, total: Int) {
+        if (markAllReadProgressDialog?.isShowing != true) {
+            showMarkAllReadProgressDialog(processed, total)
+        } else {
+            markAllReadProgressText?.text = getString(R.string.fav_mark_all_read_progress, processed, total)
+        }
+    }
+
+    private fun onMarkAllRead(successCount: Int, failCount: Int) {
+        dismissMarkAllReadProgressDialog()
+        val message = if (failCount > 0) {
+            getString(R.string.fav_mark_all_read_result_with_errors, successCount, failCount)
+        } else {
+            getString(R.string.fav_mark_all_read_result, successCount)
+        }
+        showSnackbar(message)
+        // Confirm server/cache state after the queued operation settles.
+        presenter.refresh()
+    }
+
+    private fun showMarkAllReadProgressDialog(processed: Int, total: Int) {
+        val ctx = context ?: return
+        val padding = (24 * resources.displayMetrics.density).toInt()
+        val progressText = TextView(ctx).apply {
+            text = getString(R.string.fav_mark_all_read_progress, processed, total)
+        }
+        val content = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(padding, padding / 2, padding, padding / 2)
+            addView(CircularProgressIndicator(ctx).apply { isIndeterminate = true })
+            addView(progressText, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginStart = padding / 2
+            })
+        }
+        markAllReadProgressText = progressText
+        markAllReadProgressDialog = MaterialAlertDialogBuilder(ctx)
+                .setTitle(R.string.fav_mark_all_read_title)
+                .setView(content)
+                .setCancelable(false)
+                .showWithStyledButtons()
+    }
+
+    private fun dismissMarkAllReadProgressDialog() {
+        markAllReadProgressDialog?.dismiss()
+        markAllReadProgressDialog = null
+        markAllReadProgressText = null
+    }
+
+    private fun onLoadFavorites(data: FavData) {
+        contentController.hideContent(ContentController.TAG_ERROR)
+        currentSorting = data.sorting
         paginationHelper.updatePagination(data.pagination)
-        setSubtitle(paginationHelper.title)
+        clearToolbarPaginationSubtitle()
     }
 
-    override fun setShowDot(enabled: Boolean) {
-        adapter.setShowDot(enabled)
-    }
-
-    override fun setUnreadTop(unreadTop: Boolean) {
-        adapter.setUnreadTop(unreadTop)
-    }
-
-    override fun onShowFavorite(items: List<FavItem>) {
-        Log.e("kjkjkj", "onShowFavorite")
+    private fun onShowFavorite(items: List<FavItem>) {
         if (items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
-                val funnyContent = FunnyContent(context)
+                val funnyContent = FunnyContent(requireContext())
                         .setImage(R.drawable.ic_star)
                         .setTitle(R.string.funny_favorites_nodata_title)
                         .setDesc(R.string.funny_favorites_nodata_desc)
@@ -257,52 +420,83 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
         } else {
             contentController.hideContent(ContentController.TAG_NO_DATA)
         }
-        adapter.bindItems(items)
-    }
-
-    override fun initSorting(sorting: Sorting) {
-        selectSpinners(sorting)
-    }
-
-    private fun selectSpinners(sorting: Sorting) {
-        when (sorting.key) {
-            Sorting.Key.LAST_POST -> keySpinner.setSelection(0)
-            Sorting.Key.TITLE -> keySpinner.setSelection(1)
-        }
-        when (sorting.order) {
-            Sorting.Order.ASC -> orderSpinner.setSelection(0)
-            Sorting.Order.DESC -> orderSpinner.setSelection(1)
+        // Delay bindItems to prevent RecyclerView crash during layout
+        recyclerView.post {
+            adapter.bindItems(items)
         }
     }
 
-    private fun initSpinnerItems(spinner: Spinner, items: Array<String>) {
-        val adapter = ArrayAdapter(activity!!, android.R.layout.simple_spinner_item, items)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinner.adapter = adapter
-        spinner.setSelection(0)
+    private fun showLoadError(message: String?) {
+        if (adapter.itemCount > 0) {
+            showSnackbar(message ?: getString(R.string.error_occurred))
+            return
+        }
+        contentController.hideContent(ContentController.TAG_NO_DATA)
+        if (!contentController.contains(ContentController.TAG_ERROR)) {
+            val funnyContent = FunnyContent(requireContext())
+                    .setImage(R.drawable.ic_toolbar_refresh)
+                    .setTitle(R.string.funny_favorites_error_title)
+                    .setDesc(R.string.funny_favorites_error_desc)
+                    .addAction(R.string.retry) { presenter.refresh() }
+            contentController.addContent(funnyContent, ContentController.TAG_ERROR)
+        }
+        contentController.showContent(ContentController.TAG_ERROR)
+        recyclerView.post { adapter.bindItems(emptyList()) }
+        message?.let { showSnackbar(it) }
+    }
+
+    override fun onBackPressed(): Boolean {
+        val item = searchMenuItem
+        return if (item?.isActionViewExpanded == true) {
+            item.collapseActionView()
+            hideKeyboard()
+            true
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    private fun selectSortingInto(binding: FavoriteSortingBinding, sorting: Sorting) {
+        val keyId = when (sorting.key) {
+            Sorting.Companion.Key.LAST_POST -> R.id.sorting_key_last_post
+            Sorting.Companion.Key.TITLE -> R.id.sorting_key_title
+            else -> R.id.sorting_key_last_post
+        }
+        val orderId = when (sorting.order) {
+            Sorting.Companion.Order.ASC -> R.id.sorting_order_asc
+            Sorting.Companion.Order.DESC -> R.id.sorting_order_desc
+            else -> R.id.sorting_order_asc
+        }
+        binding.sortingKey.check(keyId)
+        binding.sortingOrder.check(orderId)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        dismissMarkAllReadProgressDialog()
         paginationHelper.destroy()
     }
 
-    override fun onChangeFav(result: Boolean) {
-        Toast.makeText(context, R.string.action_complete, Toast.LENGTH_SHORT).show()
+    private fun onChangeFav(result: Boolean) {
+        if (result) {
+            showSnackbar(R.string.action_complete)
+        } else {
+            showSnackbar(R.string.error_occurred)
+        }
     }
 
-    override fun showSubscribeDialog(item: FavItem) {
+    private fun showSubscribeDialog(item: FavItem) {
         val subTypeIndex = Arrays.asList(*FavoritesApi.SUB_TYPES).indexOf(item.subType)
-        AlertDialog.Builder(context!!)
+        MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.favorites_subscribe_email)
-                .setSingleChoiceItems(FavoritesFragment.SUB_NAMES, subTypeIndex) { dialog, which ->
+                .setSingleChoiceItems(getSubNames(requireContext()), subTypeIndex) { dialog, which ->
                     presenter.changeFav(FavoritesApi.ACTION_EDIT_SUB_TYPE, FavoritesApi.SUB_TYPES[which], item.favId)
                     dialog.dismiss()
                 }
-                .show()
+                .showWithStyledButtons()
     }
 
-    override fun showItemDialogMenu(item: FavItem) {
+    private fun showItemDialogMenu(item: FavItem) {
         dialogMenu.apply {
             disallowAll()
             allow(0)
@@ -313,6 +507,8 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
             allow(3)
             allow(4)
             allow(5)
+            // Меню mute доступно только для тем (не форумов).
+            if (!item.isForum) allow(6)
 
             val index = containsIndex(getPinText(!item.isPin))
             if (index != -1)
@@ -321,19 +517,33 @@ class FavoritesFragment : RecyclerFragment(), FavoritesView {
             val subTypeIndex = Arrays.asList(*FavoritesApi.SUB_TYPES).indexOf(item.subType)
             changeTitle(3, getSubText(subTypeIndex))
 
-            show(context, this@FavoritesFragment, item)
+            // Переписываем заголовок mute-пункта в зависимости от текущего состояния.
+            if (!item.isForum) {
+                val muted = presenter.isTopicMuted(item)
+                changeTitle(
+                        6,
+                        getString(
+                                if (muted) R.string.fav_unmute_notifications
+                                else R.string.fav_mute_notifications
+                        )
+                )
+            }
+
+            show(requireContext(), this@FavoritesFragment, item)
         }
     }
 
     companion object {
-        @JvmField
-        var SUB_NAMES = arrayOf<CharSequence>(
-                App.get().getString(R.string.fav_subscribe_none),
-                App.get().getString(R.string.fav_subscribe_delayed),
-                App.get().getString(R.string.fav_subscribe_immediate),
-                App.get().getString(R.string.fav_subscribe_daily),
-                App.get().getString(R.string.fav_subscribe_weekly),
-                App.get().getString(R.string.fav_subscribe_pinned)
-        )
+        @JvmStatic
+        fun getSubNames(context: android.content.Context): Array<CharSequence> {
+            return arrayOf(
+                    context.getString(R.string.fav_subscribe_none),
+                    context.getString(R.string.fav_subscribe_delayed),
+                    context.getString(R.string.fav_subscribe_immediate),
+                    context.getString(R.string.fav_subscribe_daily),
+                    context.getString(R.string.fav_subscribe_weekly),
+                    context.getString(R.string.fav_subscribe_pinned)
+            )
+        }
     }
 }

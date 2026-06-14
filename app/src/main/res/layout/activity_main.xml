@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:id="@+id/measure_root_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -21,19 +21,14 @@
 
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
-    <!--
-        Нужен для корректного adjustResize + IME: иначе панель ввода оказывается под клавиатурой.
-        Дублирование верха с AppBar снимаем: у AppBarLayout во fragment_base — fitsSystemWindows=false.
-    -->
+    <!-- Контейнер вкладок: только фрагменты. Верх/низ — padding из MainActivity (таббар совпадает с peek BottomDrawer). -->
+    <!-- background_for_lists: с системным nav, нижним sheet и подложкой темы (см. ThemeWebController); без ступени cards vs base/AMOLED #000. -->
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:id="@+id/fragments_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:fitsSystemWindows="true">
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+        android:background="?attr/background_for_lists"
+        android:fitsSystemWindows="false">
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
 
@@ -46,19 +41,19 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Полноэкранный scrim под раскрытый sheet; fits=false — как у фрагментов, без лишнего смещения под cutout. -->
     <View
         android:id="@+id/bottomMenuFade"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:fitsSystemWindows="true" />
+        android:fitsSystemWindows="false"
+        android:importantForAccessibility="no" />
 
-    <!-- fitsSystemWindows=false: иначе на части устройств (жесты / планшеты) нижний inset дублируется
-         с peek bottom sheet — толстая пустая полоса между иконками и системной панелью. Insets задаём в коде. -->
+    <!-- Нижний sheet + таббар: insets (навигация / жесты) только в коде — см. BottomDrawer + MainActivity. -->
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:id="@+id/bottomMenuContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginTop="@dimen/dp24"
         android:fitsSystemWindows="false">
 
         <View
@@ -69,10 +64,12 @@
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/bottomToggleArrow"
             android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp36"
+            android:layout_height="@dimen/dp48"
             android:layout_gravity="top|center_horizontal"
+            android:translationY="-35dp"
             android:background="?selectableItemBackgroundBorderless"
             android:clickable="true"
+            android:contentDescription="@string/bottom_nav_toggle_open_tabs"
             android:focusable="true"
             android:scaleType="center"
             android:visibility="gone"
@@ -86,20 +83,22 @@
             android:id="@+id/bottom_sheet2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="?background_for_cards"
             app:layout_behavior="forpdateam.ru.forpda.ui.views.control.BottomSheetBehaviorFixed">
 
+            <!-- Иконки — у нижнего края листа: peek bottom sheet показывает НИЗ контента, иначе при
+                 раскрытии в полоске оказывались «хвост» списка/кнопка, а не иконки; fitToContents
+                 давал collapsedOffset == expandedOffset и анимация пропадала. -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/bottomMenuRecycler"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/bottom_nav_tab_bar_height"
-                android:background="?cards_background"
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:overScrollMode="never"
                 android:paddingStart="@dimen/bottom_nav_recycler_padding_horizontal"
                 android:paddingEnd="@dimen/bottom_nav_recycler_padding_horizontal"
-                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/bottomCloseAllTabs"
                 tools:layoutManager="GridLayoutManager"
                 tools:listitem="@layout/item_bottom_tab"
                 tools:spanCount="5" />
@@ -109,16 +108,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/content_spacing"
-                android:background="?cards_background"
                 android:visibility="gone"
-                app:layout_constraintTop_toBottomOf="@id/bottomMenuRecycler">
+                app:layout_constraintTop_toTopOf="parent">
 
                 <EditText
                     android:id="@+id/bottomMenuLinkText"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:autofillHints="url"
                     android:background="@android:color/transparent"
-                    android:hint="Введите ссылку"
+                    android:hint="@string/main_link_hint"
                     android:inputType="text|textWebEmailAddress"
                     android:minHeight="@dimen/dp48"
                     android:paddingStart="@dimen/list_row_padding_horizontal"
@@ -126,17 +125,21 @@
                     android:paddingEnd="@dimen/list_row_padding_horizontal"
                     android:paddingBottom="@dimen/list_row_padding_vertical"
                     android:textSize="@dimen/list_topic_title_text_size"
+                    app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toStartOf="@id/bottomMenuLinkIcon"
-                    app:layout_constraintStart_toStartOf="parent" />
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
 
                 <ImageButton
                     android:id="@+id/bottomMenuLinkIcon"
                     android:layout_width="@dimen/dp48"
                     android:layout_height="@dimen/dp48"
                     android:background="?selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/open_link"
                     android:scaleType="center"
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
                     app:srcCompat="@drawable/ic_open_in_new" />
             </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -146,7 +149,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/content_spacing"
-                android:background="?cards_background"
                 android:gravity="center_vertical"
                 android:paddingStart="@dimen/list_row_padding_horizontal"
                 android:paddingTop="@dimen/content_block_padding_vertical"
@@ -163,13 +165,12 @@
                 android:id="@+id/bottomTabsRecycler"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
-                android:layout_marginBottom="@dimen/dp56"
-                android:background="?cards_background"
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:paddingBottom="@dimen/content_spacing"
                 android:visibility="gone"
-                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constrainedHeight="true"
+                app:layout_constraintBottom_toTopOf="@id/bottomCloseAllTabs"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintHeight_default="wrap"
                 app:layout_constraintStart_toStartOf="parent"
@@ -182,20 +183,16 @@
                 style="@style/Widget.AppCompat.Button.Borderless"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="?cards_background"
+                android:background="@android:color/transparent"
                 android:foreground="?selectableItemBackground"
                 android:gravity="end|center_vertical"
                 android:paddingStart="@dimen/list_row_padding_horizontal"
                 android:paddingEnd="@dimen/list_row_padding_horizontal"
                 android:text="@string/close_other_tabs"
+                android:textColor="?attr/default_text_color"
                 android:visibility="gone"
-                app:layout_constraintBottom_toBottomOf="parent" />
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/divider_thin"
-                android:background="?divider_line_bottom_nav"
-                app:layout_constraintTop_toTopOf="@id/bottomMenuRecycler" />
+                app:layout_constraintBottom_toTopOf="@id/bottomMenuRecycler"
+                app:layout_constraintTop_toBottomOf="@id/bottomTabsRecycler" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.coordinatorlayout.widget.CoordinatorLayout>

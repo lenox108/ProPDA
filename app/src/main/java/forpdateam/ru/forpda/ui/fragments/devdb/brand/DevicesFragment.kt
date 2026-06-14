@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.devdb.brand
 
+import forpdateam.ru.forpda.common.dpToPx
 import android.graphics.Rect
 import android.os.Bundle
 import com.google.android.material.appbar.AppBarLayout
@@ -13,24 +14,37 @@ import android.view.View
 import android.view.ViewGroup
 
 import androidx.fragment.app.viewModels
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.dp8
 import forpdateam.ru.forpda.entity.remote.devdb.Brand
-import forpdateam.ru.forpda.presentation.devdb.devices.DevicesView
+import forpdateam.ru.forpda.presentation.devdb.devices.DevicesUiEvent
 import forpdateam.ru.forpda.presentation.devdb.devices.DevicesViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerTopScroller
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
+import forpdateam.ru.forpda.model.repository.note.NotesRepository
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 import forpdateam.ru.forpda.ui.views.messagepanel.AutoFitRecyclerView
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Created by radiationx on 08.08.17.
  */
 
-class DevicesFragment : TabFragment(), DevicesView, BaseAdapter.OnItemClickListener<Brand.DeviceItem>, TabTopScroller {
+@AndroidEntryPoint
+class DevicesFragment : TabFragment(), BaseAdapter.OnItemClickListener<Brand.DeviceItem>, TabTopScroller {
+
+    @Inject lateinit var notesRepository: NotesRepository
+
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
 
     private lateinit var refreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout
     private lateinit var recyclerView: AutoFitRecyclerView
@@ -43,52 +57,46 @@ class DevicesFragment : TabFragment(), DevicesView, BaseAdapter.OnItemClickListe
     private lateinit var topScroller: RecyclerTopScroller
 
 
-    private val presenter: DevicesViewModel by viewModels {
-        DevicesViewModel.Factory(
-                App.get().Di().devDbRepository,
-                App.get().Di().router,
-                App.get().Di().errorHandler
-        )
-    }
-
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_brand)
-    }
+    private val presenter: DevicesViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_brand)
         arguments?.apply {
             presenter.categoryId = getString(ARG_CATEGORY_ID, null)
             presenter.brandId = getString(ARG_BRAND_ID, null)
         }
     }
 
+    override fun useTopBarRoundedBottomCorners(): Boolean = false
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
         baseInflateFragment(inflater, R.layout.fragment_brand)
-        refreshLayout = findViewById(R.id.swipe_refresh_list) as androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        recyclerView = findViewById(R.id.base_list) as AutoFitRecyclerView
+        refreshLayout = findViewById(R.id.swipe_refresh_list) as? androidx.swiperefreshlayout.widget.SwipeRefreshLayout ?: throw IllegalStateException("SwipeRefreshLayout not found")
+        recyclerView = findViewById(R.id.base_list) as? AutoFitRecyclerView ?: throw IllegalStateException("AutoFitRecyclerView not found")
         contentController.setMainRefresh(refreshLayout)
-        setScrollFlagsEnterAlways()
+        clearToolbarScrollFlags()
         return viewFragment
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setCardsBackground()
+        setListsBackground()
+        ensureOpaquePinnedToolbarUnderlay()
         refreshLayoutStyle(refreshLayout)
         refreshLayout.setOnRefreshListener { presenter.loadBrand() }
 
         adapter = DevicesAdapter()
         adapter.setItemClickListener(this)
-        recyclerView.setColumnWidth(App.get().dpToPx(144, recyclerView.context))
+        recyclerView.setColumnWidth(requireContext().dpToPx(144))
         recyclerView.adapter = adapter
         tuneListRecyclerView(recyclerView)
         try {
             val gridLayoutManager = recyclerView.layoutManager as androidx.recyclerview.widget.GridLayoutManager
-            recyclerView.addItemDecoration(SpacingItemDecoration(gridLayoutManager, App.px8))
+            recyclerView.addItemDecoration(SpacingItemDecoration(gridLayoutManager, dp8))
         } catch (ex: Exception) {
-            ex.printStackTrace()
+            Timber.e(ex, "DevicesFragment setup error")
         }
 
         dialogMenu.apply {
@@ -118,12 +126,11 @@ class DevicesFragment : TabFragment(), DevicesView, BaseAdapter.OnItemClickListe
 
         topScroller = RecyclerTopScroller(recyclerView, appBarLayout)
 
-        presenter.attachView(this)
         presenter.start()
+        observeViewModel()
     }
 
     override fun onDestroyView() {
-        presenter.detachView()
         super.onDestroyView()
     }
 
@@ -147,15 +154,39 @@ class DevicesFragment : TabFragment(), DevicesView, BaseAdapter.OnItemClickListe
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
     }
 
-    override fun showData(data: Brand) {
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        refreshLayout.isRefreshing = isRefreshing
+                    }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleUiEvent(event: DevicesUiEvent) {
+        when (event) {
+            is DevicesUiEvent.ShowData -> showData(event.brand)
+            is DevicesUiEvent.ShowCreateNote -> showCreateNote(event.title, event.url)
+        }
+    }
+
+    private fun showData(data: Brand) {
         setTitle(data.title)
         setTabTitle("${data.catTitle} ${data.title}")
         setSubtitle(data.catTitle)
         adapter.addAll(data.devices)
     }
 
-    override fun showCreateNote(title: String, url: String) {
-        NotesAddPopup.showAddNoteDialog(context, title, url)
+    private fun showCreateNote(title: String, url: String) {
+        NotesAddPopup.showAddNoteDialog(context, title, url, notesRepository)
     }
 
     override fun onItemClick(item: Brand.DeviceItem) {
@@ -166,7 +197,7 @@ class DevicesFragment : TabFragment(), DevicesView, BaseAdapter.OnItemClickListe
         dialogMenu.apply {
             disallowAll()
             allowAll()
-            show(context, this@DevicesFragment, item)
+            show(requireContext(), this@DevicesFragment, item)
         }
         return false
     }

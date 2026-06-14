@@ -1,4 +1,3 @@
-console.log("LOAD JS SOURCE main.js");
 (function () {
     //Element.prototype.eventListenerList = {};
 
@@ -30,9 +29,9 @@ function NativeEvents() {
     this.DOM = "DOMContentLoaded";
     this.PAGE = "load";
 
-    const DOM = this.DOM;
-    const PAGE = this.PAGE;
-    const LOG_TAG = "JS event: ";
+    var DOM = this.DOM;
+    var PAGE = this.PAGE;
+    var LOG_TAG = "JS event: ";
 
     var nativeDomComplete = [];
     var nativePageComplete = [];
@@ -283,43 +282,62 @@ function AvatarLoader() {
 
 function toggleButton(button, bodyClass, name) {
     var parent = button.parentNode;
-    var body;
-    if (bodyClass !== undefined)
-        body = parent.querySelector("." + bodyClass);
-    console.log("toggle " + parent.getAttribute("class") + " : " + body.getAttribute("class"));
-    if (parent.classList.contains("close") | (body != undefined && parent.classList.contains("close"))) {
+    var body = bodyClass ? parent.querySelector("." + bodyClass) : null;
+    var bodyClassName = body ? body.getAttribute("class") : "";
+    console.log("toggle " + parent.getAttribute("class") + " : " + bodyClassName);
+    var shouldOpen = parent.classList.contains("close")
+        || (body && body.classList.contains("close"));
+    if (shouldOpen) {
         parent.classList.remove("close");
         parent.classList.add("open");
-        if (body !== undefined) {
-            body.classList.remove("close");
+        if (body) {
+            body.classList.remove("close", "over_height");
             body.classList.add("open");
-            //body.removeAttribute("hidden");
+            button.setAttribute("aria-expanded", "true");
         }
         if (name === "poll") {
             IThemePresenter.setPollOpen("true");
         } else if (name === "hat") {
             IThemePresenter.setHatOpen("true");
+        } else if (name === "search") {
+            if (typeof finalizeSearchPostContentExpand === "function" && body) {
+                finalizeSearchPostContentExpand(body);
+            }
+            if (typeof IThemePresenter !== "undefined"
+                && typeof IThemePresenter.onPostContentToggle === "function") {
+                IThemePresenter.onPostContentToggle(parent.getAttribute("data-post-id"), "true");
+            }
         }
     } else {
         parent.classList.add("once-opened");
         parent.classList.remove("open");
         parent.classList.add("close");
-        if (body !== undefined) {
+        if (body) {
             body.classList.remove("open");
             body.classList.add("close");
-            //body.setAttribute("hidden", "");
+            body.style.maxHeight = "";
+            body.style.height = "";
+            body.style.overflow = "";
+            button.setAttribute("aria-expanded", "false");
         }
         if (name === "poll") {
             IThemePresenter.setPollOpen("false");
         } else if (name === "hat") {
             IThemePresenter.setHatOpen("false");
+        } else if (name === "search"
+            && typeof IThemePresenter !== "undefined"
+            && typeof IThemePresenter.onPostContentToggle === "function") {
+            IThemePresenter.onPostContentToggle(parent.getAttribute("data-post-id"), "false");
+        }
+        if (name === "search" && body && typeof measurePostHeight === "function") {
+            measurePostHeight();
         }
     }
 }
 
 function fixImagesSizeWithDensity() {
-    const density = window.devicePixelRatio;
-    //const density = 5;
+    var density = window.devicePixelRatio;
+    //var density = 5;
     console.log("Density: " + density);
     if (density == 1) {
         return;
@@ -349,22 +367,28 @@ function fixImagesSizeWithDensity() {
 
     function onLoadImage(ev) {
         fixSize(ev.target);
+        if (typeof markThemeMediaImageLoaded === "function") {
+            markThemeMediaImageLoaded(ev.target);
+        }
     }
 
     function fixSize(img) {
         if (img.classList.contains("size_fixed")) {
             return;
         }
+        if (img.dataset && img.dataset.densityFixed === "true") {
+            img.classList.add("size_fixed");
+            return;
+        }
         var srcWidth = Number(img.width);
         var srcHeight = Number(img.height);
         
-        if (srcWidth == 0 || srcWidth == 0) {
+        if (srcWidth == 0 || srcHeight == 0) {
             return;
         }
 
         var width = srcWidth / density;
         var height = srcHeight / density;
-        console.error("WH: " + width + " : " + height + "; "+img.src);
         if (width > 16 && height > 16) {
             //console.log(width + " : " + height);
             setEmSize(img, width, height);
@@ -372,6 +396,9 @@ function fixImagesSizeWithDensity() {
             setEmSize(img, srcWidth, srcHeight);
         }
         img.classList.add("size_fixed");
+        if (img.dataset) {
+            img.dataset.densityFixed = "true";
+        }
         
         //console.error("WH_ATTR: " + img.getAttribute("width") + " : " + img.getAttribute("width")+" :__: "+img.width+" : "+img.height);
     }
@@ -401,9 +428,13 @@ function escapeHtml(unsafe) {
         console.log("Unknown style type: "+type)
         return
     }
-    var styleLinks = document.querySelectorAll("link");
+    var styleLinks = document.querySelectorAll("link[rel='stylesheet'], link[rel=stylesheet]");
     for (var i = 0; i < styleLinks.length; i++) {
-        var currentHref = styleLinks[i].href
-        styleLinks[i].href = currentHref.replace(/\/(light|dark)\/(light|dark)/, "/" + type + "/" + type)
+        var currentHref = styleLinks[i].getAttribute("href") || styleLinks[i].href || "";
+        if (!/\/styles\/(light|dark)\//i.test(currentHref)) continue;
+        var nextHref = currentHref
+            .replace(/\/(light|dark)\/(light|dark)_/g, "/" + type + "/" + type + "_")
+            .replace(/\/styles\/(light|dark)\//gi, "/styles/" + type + "/");
+        styleLinks[i].setAttribute("href", nextHref);
     }
  }

@@ -1,5 +1,3 @@
-console.log("LOAD JS SOURCE attach_transformer.js");
-
 function AttachmentTransformer() {
     function Attachment() {
         this.attachType = TYPE_FILE;
@@ -20,6 +18,16 @@ function AttachmentTransformer() {
     const weightPattern = /\( ([\s\S]*?) \)/g;
     //1-count
     const countPattern = /(\d+)/g;
+
+    function firstNonEmpty() {
+        for (var i = 0; i < arguments.length; i++) {
+            var value = arguments[i];
+            if (typeof value == "string" && value.length > 0) {
+                return value;
+            }
+        }
+        return "";
+    }
 
 
     function parseFile(item, weight, count) {
@@ -44,10 +52,15 @@ function AttachmentTransformer() {
         var attach = new Attachment();
         attach.attachType = TYPE_PICTURE;
         attach.link = item.href;
-        attach.image = item.querySelector("img").src;
-        if (typeof attach.image == "string" && attach.image.length == 0) {
-            attach.image = item.querySelector("img").dataset.imageSrc;
-        }
+        var tableImg = item.querySelector("img");
+        attach.image = firstNonEmpty(
+            tableImg.getAttribute("data-src"),
+            tableImg.getAttribute("src"),
+            tableImg.src,
+            tableImg.dataset.imageSrc,
+            tableImg.getAttribute("data-preview"),
+            attach.link
+        );
         var match;
         while (match = metaPattern.exec(item.getAttribute("title"))) {
             attach.name = match[1];
@@ -62,11 +75,15 @@ function AttachmentTransformer() {
     function parseImage(item) {
         var attach = new Attachment();
         attach.attachType = TYPE_PICTURE;
-        attach.image = item.src;
-        if (typeof attach.image == "string" && attach.image.length == 0) {
-            attach.image = item.dataset.imageSrc;
-        }
-        attach.link = attach.image;
+        attach.link = firstNonEmpty(item.getAttribute("data-preview"), item.parentElement && item.parentElement.href);
+        attach.image = firstNonEmpty(
+            item.getAttribute("data-src"),
+            item.getAttribute("src"),
+            item.src,
+            item.dataset.imageSrc,
+            attach.link
+        );
+        if (!attach.link) attach.link = attach.image;
         var match;
         while (match = namePattern.exec(attach.image)) {
             attach.extension = match[2];

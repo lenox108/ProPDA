@@ -4,8 +4,20 @@
     <dimen name="activity_vertical_margin">@dimen/content_block_padding_vertical</dimen>
     <dimen name="fab_margin">0dp</dimen>
     <dimen name="card_margin_horizontal">-3dp</dimen>
+    <!-- M3-style grouped lists: same geometry as preference plates ([pref_plate_*]) -->
+    <dimen name="list_plate_corner_radius">@dimen/card_corner_radius</dimen>
+    <dimen name="list_plate_horizontal_inset">@dimen/dp4</dimen>
+    <!-- Только верхняя плашка TabFragment (заголовок + пагинация): почти на всю ширину, карточки списка без изменений -->
+    <dimen name="top_bar_plaque_horizontal_inset">@dimen/dp4</dimen>
+    <dimen name="list_plate_group_gap_vertical">@dimen/dp8</dimen>
     <dimen name="card_corner_radius">14dp</dimen>
     <dimen name="card_elevation">1dp</dimen>
+    <!-- Полное меню (OtherFragment): те же горизонтальные поля, что у настроек и списков тем -->
+    <dimen name="other_menu_plate_horizontal_margin">@dimen/list_plate_horizontal_inset</dimen>
+    <dimen name="other_menu_plate_vertical_gap">@dimen/dp8</dimen>
+    <dimen name="other_menu_tile_height">76dp</dimen>
+    <dimen name="other_menu_tile_title_height">26dp</dimen>
+    <dimen name="other_menu_action_row_height">@dimen/dp56</dimen>
     <dimen name="pager_bullet_indicator_height">52dp</dimen>
     <dimen name="pager_bullet_indicator_dot_margin">4dp</dimen>
     <dimen name="pager_bullet_indicator_active_dot_diameter">12dp</dimen>
@@ -15,9 +27,11 @@
     <dimen name="dp4">4dp</dimen>
     <dimen name="dp6">6dp</dimen>
     <dimen name="dp8">8dp</dimen>
+    <dimen name="dp10">10dp</dimen>
     <dimen name="dp12">12dp</dimen>
     <dimen name="dp14">14dp</dimen>
     <dimen name="dp16">16dp</dimen>
+    <dimen name="dp18">18dp</dimen>
     <dimen name="dp20">20dp</dimen>
     <dimen name="dp24">24dp</dimen>
     <dimen name="dp32">32dp</dimen>
@@ -27,8 +41,12 @@
     <dimen name="dp52">52dp</dimen>
     <dimen name="dp56">56dp</dimen>
     <dimen name="dp64">64dp</dimen>
+    <dimen name="dp88">88dp</dimen>
+    <dimen name="dp120">120dp</dimen>
     <dimen name="default_statusbar_height">24dp</dimen>
     <dimen name="default_keyboard_height">250dp</dimen>
+    <!-- Верхняя граница резерва под панель в HTML (#padding_for_message_panel); иначе при IME багах layout в документ уходит гигантский paddingBottom → серая полоса под «ВЫБОР». -->
+    <dimen name="message_panel_web_bottom_padding_max">320dp</dimen>
 
     <!--News Details Content-->
     <dimen name="detail_backdrop_height">256dp</dimen>
@@ -42,6 +60,7 @@
     <dimen name="list_row_padding_horizontal">@dimen/dp16</dimen>
     <dimen name="list_row_padding_vertical">@dimen/dp12</dimen>
     <dimen name="list_topic_title_text_size">16sp</dimen>
+    <dimen name="list_news_title_text_size">19sp</dimen>
     <dimen name="list_topic_meta_text_size">14sp</dimen>
     <dimen name="list_topic_title_bottom_spacing">@dimen/dp4</dimen>
     <dimen name="list_topic_icon_size">16dp</dimen>
@@ -53,6 +72,29 @@
     <dimen name="list_section_header_text_size">12sp</dimen>
     <dimen name="list_section_header_padding_top">@dimen/dp16</dimen>
     <dimen name="list_section_header_padding_bottom">@dimen/dp8</dimen>
+    <!-- Deprecated native density placeholders. Topic post density is applied inside opened-topic WebView only. -->
+    <dimen name="ui_density_compact_item_padding_horizontal">@dimen/dp14</dimen>
+    <dimen name="ui_density_compact_item_padding_vertical">@dimen/dp8</dimen>
+    <dimen name="ui_density_compact_card_padding_vertical">@dimen/dp10</dimen>
+    <dimen name="ui_density_compact_title_text_size">16sp</dimen>
+    <dimen name="ui_density_compact_subtitle_text_size">13sp</dimen>
+    <dimen name="ui_density_compact_metadata_text_size">13sp</dimen>
+    <dimen name="ui_density_compact_section_header_padding_top">@dimen/dp8</dimen>
+    <dimen name="ui_density_compact_section_header_padding_bottom">@dimen/dp6</dimen>
+    <dimen name="ui_density_compact_divider_spacing">@dimen/dp6</dimen>
+    <dimen name="ui_density_compact_qms_theme_row_height">44dp</dimen>
+    <dimen name="ui_density_compact_qms_contact_min_height">48dp</dimen>
+    <dimen name="ui_density_comfortable_item_padding_horizontal">@dimen/list_row_padding_horizontal</dimen>
+    <dimen name="ui_density_comfortable_item_padding_vertical">14dp</dimen>
+    <dimen name="ui_density_comfortable_card_padding_vertical">@dimen/content_padding_vertical</dimen>
+    <dimen name="ui_density_comfortable_title_text_size">@dimen/list_topic_title_text_size</dimen>
+    <dimen name="ui_density_comfortable_subtitle_text_size">@dimen/list_topic_meta_text_size</dimen>
+    <dimen name="ui_density_comfortable_metadata_text_size">@dimen/list_topic_meta_text_size</dimen>
+    <dimen name="ui_density_comfortable_section_header_padding_top">@dimen/dp12</dimen>
+    <dimen name="ui_density_comfortable_section_header_padding_bottom">@dimen/list_section_header_padding_bottom</dimen>
+    <dimen name="ui_density_comfortable_divider_spacing">@dimen/list_plate_group_gap_vertical</dimen>
+    <dimen name="ui_density_comfortable_qms_theme_row_height">52dp</dimen>
+    <dimen name="ui_density_comfortable_qms_contact_min_height">56dp</dimen>
 
     <!-- Нижняя панель вкладок (item_bottom_tab + activity_main) -->
     <dimen name="bottom_nav_tab_bar_height">@dimen/dp52</dimen>
@@ -60,7 +102,7 @@
     <dimen name="bottom_tab_padding_top">@dimen/dp6</dimen>
     <dimen name="bottom_tab_padding_bottom">@dimen/dp4</dimen>
     <dimen name="bottom_tab_icon_size">26dp</dimen>
-    <dimen name="bottom_tab_indicator_height">3dp</dimen>
+    <dimen name="bottom_tab_indicator_height">5dp</dimen>
     <dimen name="bottom_tab_indicator_margin_horizontal">18dp</dimen>
     <dimen name="bottom_tab_badge_margin_bottom">10dp</dimen>
     <dimen name="bottom_tab_badge_margin_start">14dp</dimen>
@@ -74,10 +116,25 @@
     <dimen name="content_padding_vertical">@dimen/list_row_padding_vertical</dimen>
     <dimen name="content_spacing">@dimen/dp8</dimen>
     <dimen name="content_spacing_half">@dimen/dp4</dimen>
+    <!-- Верхняя пагинация: зазор под Toolbar (список/Web .navigation используют больший верхний margin) -->
+    <dimen name="pagination_toolbar_below_toolbar_gap">@dimen/content_spacing</dimen>
+    <dimen name="pagination_toolbar_bottom_gap">@dimen/content_spacing</dimen>
+    <dimen name="pagination_toolbar_compact_height">@dimen/dp36</dimen>
+    <dimen name="pagination_toolbar_compact_bottom_gap">@dimen/dp4</dimen>
+    <dimen name="pagination_page_autosize_max_text_size">14sp</dimen>
+    <!-- 6sp: «18566/18566» в центральной вкладке (~40% ширины) без ellipsize -->
+    <dimen name="pagination_page_autosize_min_text_size">6sp</dimen>
     <dimen name="content_block_padding_vertical">@dimen/dp16</dimen>
+    <!-- Отступ одного уровня вложенности в списке форумов (ForumTreeRecyclerAdapter). -->
+    <dimen name="forum_tree_level_indent">12dp</dimen>
     <dimen name="toolbar_avatar_size">40dp</dimen>
     <dimen name="list_avatar_two_line_size">40dp</dimen>
     <dimen name="list_avatar_compact_size">24dp</dimen>
+    <dimen name="qms_contact_card_min_height">52dp</dimen>
+    <dimen name="qms_contact_card_gap_vertical">@dimen/dp4</dimen>
+    <dimen name="qms_contact_avatar_size">36dp</dimen>
+    <dimen name="qms_contact_title_text_size">15sp</dimen>
+    <dimen name="qms_contacts_list_bottom_padding">96dp</dimen>
     <!-- Текст справа от аватарки 40dp: 16 + 40 + 16 = 72 (Material navigation) -->
     <dimen name="list_row_with_avatar_text_margin_start">72dp</dimen>
     <!-- Иконка 24dp + поля 16+16 -->

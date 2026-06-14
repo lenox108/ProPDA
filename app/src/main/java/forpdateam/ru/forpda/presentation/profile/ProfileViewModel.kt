@@ -1,44 +1,52 @@
 package forpdateam.ru.forpda.presentation.profile
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import forpdateam.ru.forpda.App
+import android.content.Context
+import android.graphics.drawable.BitmapDrawable
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import forpdateam.ru.forpda.presentation.BaseViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+
 import forpdateam.ru.forpda.common.ForPdaCoil
+import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
-import forpdateam.ru.forpda.model.SchedulersProvider
 import forpdateam.ru.forpda.model.repository.profile.ProfileRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.TabRouter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.rx2.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 
-class ProfileViewModel(
+@HiltViewModel
+class ProfileViewModel @Inject constructor(
+        @ApplicationContext private val context: Context,
         private val profileRepository: ProfileRepository,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
         private val errorHandler: IErrorHandler,
-        private val schedulers: SchedulersProvider
-) : ViewModel() {
-
-    @Volatile
-    private var profileView: ProfileView? = null
-
-    fun attachView(view: ProfileView) {
-        profileView = view
-    }
-
-    fun detachView() {
-        profileView = null
-    }
+        private val clipboardHelper: ClipboardHelper
+) : BaseViewModel() {
 
     private var subscriptionsStarted = false
 
     var profileUrl: String? = null
     private var currentData: ProfileModel? = null
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _uiEvents = MutableSharedFlow<ProfileUiEvent>()
+    val uiEvents: SharedFlow<ProfileUiEvent> = _uiEvents.asSharedFlow()
 
     fun start() {
         if (subscriptionsStarted) return
@@ -48,25 +56,25 @@ class ProfileViewModel(
 
     private fun loadProfile() {
         val url = profileUrl ?: return
-        viewModelScope.launch {
+        scope.launch {
             try {
-                profileView?.setRefreshing(true)
+                _refreshing.value = true
                 val profileModel = profileRepository.loadProfile(url)
                 currentData = profileModel
                 loadAvatar(profileModel)
-                profileView?.showProfile(profileModel)
+                _uiEvents.emit(ProfileUiEvent.ShowProfile(profileModel))
             } catch (e: Throwable) {
                 errorHandler.handle(e)
             } finally {
-                profileView?.setRefreshing(false)
+                _refreshing.value = false
             }
         }
     }
 
     fun saveNote(note: String) {
-        viewModelScope.launch {
+        scope.launch {
             runCatching { profileRepository.saveNote(note) }
-                    .onSuccess { profileView?.onSaveNote(it) }
+                    .onSuccess { _uiEvents.emit(ProfileUiEvent.OnSaveNote(it)) }
                     .onFailure { errorHandler.handle(it) }
         }
     }
@@ -84,7 +92,7 @@ class ProfileViewModel(
     }
 
     fun copyUrl() {
-        Utils.copyToClipBoard(profileUrl)
+        clipboardHelper.copyToClipboard(profileUrl)
     }
 
     fun navigateToQms() {
@@ -94,31 +102,29 @@ class ProfileViewModel(
     }
 
     private fun loadAvatar(profile: ProfileModel) {
-        val io = schedulers.io().asCoroutineDispatcher()
-        viewModelScope.launch {
+        scope.launch {
             runCatching {
-                withContext(io) {
-                    ForPdaCoil.loadBitmapSync(App.getContext(), profile.avatar ?: "")
+                val url = profile.avatar ?: ""
+                val data = ForPdaCoil.normalizeData(url)
+                val req = ImageRequest.Builder(context.applicationContext)
+                        .data(data)
+                        .allowHardware(false)
+                        .build()
+                when (val r = ForPdaCoil.imageLoader.execute(req)) {
+                    is SuccessResult -> (r.drawable as? BitmapDrawable)?.bitmap
+                    else -> null
                 }
             }.onSuccess { bitmap ->
-                bitmap?.let { profileView?.showAvatar(it) }
+                bitmap?.let { _uiEvents.emit(ProfileUiEvent.ShowAvatar(it)) }
             }.onFailure {
                 errorHandler.handle(it)
             }
         }
     }
+}
 
-    class Factory(
-            private val profileRepository: ProfileRepository,
-            private val router: TabRouter,
-            private val linkHandler: ILinkHandler,
-            private val errorHandler: IErrorHandler,
-            private val schedulers: SchedulersProvider
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != ProfileViewModel::class.java) throw IllegalArgumentException("Unknown ViewModel class")
-            return ProfileViewModel(profileRepository, router, linkHandler, errorHandler, schedulers) as T
-        }
-    }
+sealed class ProfileUiEvent {
+    data class ShowProfile(val profile: ProfileModel) : ProfileUiEvent()
+    data class ShowAvatar(val bitmap: android.graphics.Bitmap) : ProfileUiEvent()
+    data class OnSaveNote(val result: Boolean) : ProfileUiEvent()
 }

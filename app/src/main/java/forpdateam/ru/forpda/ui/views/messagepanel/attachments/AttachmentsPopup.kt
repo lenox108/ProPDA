@@ -3,7 +3,7 @@ package forpdateam.ru.forpda.ui.views.messagepanel.attachments
 import android.content.Context
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import androidx.recyclerview.widget.GridLayoutManager
-import android.util.Log
+import timber.log.Timber
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -15,33 +15,36 @@ import android.widget.TextView
 
 import java.util.ArrayList
 
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.dp48
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.ui.views.messagepanel.AutoFitRecyclerView
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
+import forpdateam.ru.forpda.databinding.MessagePanelAttachmentsBinding
+import android.view.LayoutInflater
 
 /**
  * Created by radiationx on 09.01.17.
  */
 
 class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel) {
+    private val context: Context = context
     private val dialog: BottomSheetDialog
-    private val bottomSheet: View
-    private val recyclerView: AutoFitRecyclerView
+    private val binding = MessagePanelAttachmentsBinding.inflate(LayoutInflater.from(context), null, false)
+    private val recyclerView: AutoFitRecyclerView = binding.autoFitRecyclerView
     private val adapter = AttachmentAdapter()
 
-    private val noAttachments: TextView
-    private val textControls: RelativeLayout
-    private val addFile: ImageButton
-    private val deleteFile: ImageButton
-    private val retryFailed: ImageButton
-    private val clearFailed: ImageButton
-    private val addToSpoiler: Button
-    private val addToText: Button
-    private val progressOverlay: FrameLayout
+    private val noAttachments: TextView = binding.noAttachmentsText
+    private val textControls: RelativeLayout = binding.textControls
+    private val addFile: ImageButton = binding.addFile
+    private val deleteFile: ImageButton = binding.deleteFile
+    private val retryFailed: ImageButton = binding.retryFailed
+    private val clearFailed: ImageButton = binding.clearFailed
+    private val addToSpoiler: Button = binding.addToSpoiler
+    private val addToText: Button = binding.addToText
+    private val progressOverlay: FrameLayout = binding.progressOverlay
 
     private var enabledTextControls = true
     private var isLinear = true
@@ -64,25 +67,14 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
     init {
         dialog = BottomSheetDialog(context)
-        val lp = dialog.window!!.attributes
-        lp.dimAmount = 1.0f
-        dialog.window!!.attributes = lp
-        dialog.window!!.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        dialog.window?.let { window ->
+            val lp = window.attributes
+            lp.dimAmount = 1.0f
+            window.attributes = lp
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
         //dialog.setPeekHeight(App.getKeyboardHeight());
         //dialog.getWindow().getDecorView().setFitsSystemWindows(true);
-
-        bottomSheet = View.inflate(context, R.layout.message_panel_attachments, null)
-        recyclerView = bottomSheet.findViewById<View>(R.id.auto_fit_recycler_view) as AutoFitRecyclerView
-        progressOverlay = bottomSheet.findViewById<View>(R.id.progress_overlay) as FrameLayout
-
-        noAttachments = bottomSheet.findViewById<View>(R.id.no_attachments_text) as TextView
-        textControls = bottomSheet.findViewById<View>(R.id.text_controls) as RelativeLayout
-        addFile = bottomSheet.findViewById<View>(R.id.add_file) as ImageButton
-        retryFailed = bottomSheet.findViewById<View>(R.id.retry_failed) as ImageButton
-        clearFailed = bottomSheet.findViewById<View>(R.id.clear_failed) as ImageButton
-        deleteFile = bottomSheet.findViewById<View>(R.id.delete_file) as ImageButton
-        addToSpoiler = bottomSheet.findViewById<View>(R.id.add_to_spoiler) as Button
-        addToText = bottomSheet.findViewById<View>(R.id.add_to_text) as Button
 
         recyclerView.setColumnWidth(
             recyclerView.context.resources.getDimensionPixelSize(R.dimen.attachment_grid_column_width)
@@ -91,6 +83,8 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         adapter.updateReverse(isReverse)
         recyclerView.setFakeLinear(isLinear)
         recyclerView.adapter = adapter
+
+        dialog.setContentView(binding.root)
 
         recyclerView.manager.spanSizeLookup = object : androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup() {
             override fun getSpanSize(i: Int): Int {
@@ -124,7 +118,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         adapter.setOnItemClickListener(object : AttachmentAdapter.OnItemClickListener {
             override fun onItemClick(item: AttachmentItem) {
                 item.toggle()
-                if (item.isSelected) {
+                if (item.selected) {
                     if (!selected.contains(item)) {
                         selected.add(item)
                     }
@@ -157,10 +151,10 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         clearFailed.setOnClickListener { clearAllFailed() }
 
         messagePanel.addAttachmentsOnClickListener {
-            if (bottomSheet.parent != null && bottomSheet.parent is ViewGroup) {
-                (bottomSheet.parent as ViewGroup).removeView(bottomSheet)
+            if (binding.root.parent != null && binding.root.parent is ViewGroup) {
+                (binding.root.parent as ViewGroup).removeView(binding.root)
             }
-            dialog.setContentView(bottomSheet)
+            dialog.setContentView(binding.root)
             dialog.show()
         }
 
@@ -184,11 +178,9 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         if (toSpoiler)
             text.append("[spoiler]")
         for (item in items) {
-            if (insertAttachmentListener != null) {
-                text.append(insertAttachmentListener!!.onInsert(item))
-            } else {
-                text.append("[attachment=").append(item.id).append(":").append(item.name).append("]")
-            }
+            insertAttachmentListener?.let {
+                text.append(it.onInsert(item))
+            } ?: text.append("[attachment=").append(item.id).append(":").append(item.name).append("]")
         }
         if (toSpoiler)
             text.append("[/spoiler]")
@@ -199,7 +191,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
     fun unSelectItems() {
         for (item in selected) {
-            if (item.isSelected) item.toggle()
+            if (item.selected) item.toggle()
             adapter.updateItem(item)
         }
         selected.clear()
@@ -230,11 +222,11 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     private fun onDataChange(count: Int) {
         messagePanel.updateAttachmentsCounter(count)
         if (count > 0) {
-            noAttachments.text = String.format(App.get().getString(R.string.attachments_count), count)
+            noAttachments.text = String.format(context.getString(R.string.attachments_count), count)
             //dialog.setPeekHeight(App.getKeyboardHeight());
         } else {
             noAttachments.setText(R.string.no_attachments)
-            //dialog.setPeekHeight(App.px48);
+            //dialog.setPeekHeight(dp48);
         }
     }
 
@@ -327,7 +319,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     fun preUploadFiles(files: List<RequestFile>): List<AttachmentItem> {
-        Log.d(LOG_TAG, "preUploadFiles $files")
+        Timber.d("preUploadFiles $files")
         val loadingItems = ArrayList<AttachmentItem>()
         for (file in files) {
             val item = AttachmentItem(file.fileName)
@@ -335,18 +327,32 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
             }
             fileByItem[item] = file
-            Log.d(LOG_TAG, "Add loading item $item")
+            Timber.d("Add loading item $item")
             attachments.add(item)
             adapter.add(item)
             loadingItems.add(item)
         }
+        updateDataCounter()
         return loadingItems
     }
 
+    /** Opens the attachment sheet so loading thumbnails/spinner are visible during upload. */
+    fun revealDuringUploadPreview() {
+        if (!dialog.isShowing) dialog.show()
+    }
+
+    fun isShowing(): Boolean = dialog.isShowing
+
+    fun dismiss(): Boolean {
+        if (!dialog.isShowing) return false
+        dialog.dismiss()
+        return true
+    }
+
     fun onUploadFiles(items: List<AttachmentItem>) {
-        Log.d(LOG_TAG, "onUploadFiles $items")
+        Timber.d("onUploadFiles $items")
         for (item in items) {
-            Log.d(LOG_TAG, "Loading item $item")
+            Timber.d("Loading item $item")
             if (item.loadState == AttachmentItem.STATE_NOT_LOADED) {
                 // Оставляем элемент, чтобы можно было нажать retry.
                 item.setError(true)
@@ -375,9 +381,12 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     fun setAttachments(items: List<AttachmentItem>) {
+        // Копия до clear: иначе при вызове из setAttachmentsToPanels(getAttachments())
+        // это тот же mutableList — clearAttachments() опустошает источник и список становится пустым.
+        val snapshot = ArrayList(items)
         clearAttachments()
-        attachments.addAll(items)
-        adapter.add(items)
+        attachments.addAll(snapshot)
+        adapter.add(snapshot)
         updateDataCounter()
     }
 
@@ -392,10 +401,10 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
 
     fun onDeleteFiles(deletedItems: List<AttachmentItem>) {
-        Log.d(LOG_TAG, "onDeleteFiles $deletedItems")
+        Timber.d("onDeleteFiles $deletedItems")
         endDeleteProgress()
         for (item in deletedItems) {
-            Log.d(LOG_TAG, "Delete file $item")
+            Timber.d("Delete file $item")
             if (item.id > 0) {
                 messagePanel.setText(
                         messagePanel.message.replace(

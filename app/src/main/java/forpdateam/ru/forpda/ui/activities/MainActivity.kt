@@ -1,5 +1,4 @@
 package forpdateam.ru.forpda.ui.activities
-
 import android.Manifest
 import android.animation.ObjectAnimator
 import android.app.Activity
@@ -11,21 +10,23 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.util.TypedValue
+import timber.log.Timber
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.launch
 import android.view.animation.BounceInterpolator
-import forpdateam.ru.forpda.App
+import forpdateam.ru.forpda.model.datastore.MainDataStore
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.DayNightHelper
 import forpdateam.ru.forpda.common.LocaleHelper
@@ -34,19 +35,48 @@ import forpdateam.ru.forpda.databinding.ActivityMainBinding
 import forpdateam.ru.forpda.notifications.NotificationsService
 import forpdateam.ru.forpda.presentation.main.MainActivityCallbacks
 import forpdateam.ru.forpda.presentation.main.MainViewModel
+import forpdateam.ru.forpda.ui.BottomNavWindowInset
 import forpdateam.ru.forpda.ui.DimensionHelper
+import forpdateam.ru.forpda.ui.FontController
+import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.UiThemeStyles
-import forpdateam.ru.forpda.ui.activities.updatechecker.SimpleUpdateChecker
 import forpdateam.ru.forpda.ui.navigation.TabNavigator
 import forpdateam.ru.forpda.ui.views.drawers.BottomDrawer
-import io.reactivex.Single
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.schedulers.Schedulers
+import forpdateam.ru.forpda.presentation.Screen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.max
+import dagger.hilt.android.AndroidEntryPoint
+import com.github.terrakok.cicerone.NavigatorHolder
+import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.common.BatteryDebugLogger
+import forpdateam.ru.forpda.model.interactors.other.MenuRepository
+import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
+import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
+import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
+import forpdateam.ru.forpda.presentation.TabRouter
+import forpdateam.ru.forpda.ui.DimensionsProvider
+import forpdateam.ru.forpda.common.PermissionHelper
+import forpdateam.ru.forpda.common.WebViewChecker
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : AppCompatActivity(), MainActivityCallbacks {
-    val removeTabListener: (View) -> Unit = { backHandler(true) }
+    @Inject lateinit var dayNightHelper: DayNightHelper
+    @Inject lateinit var dimensionsProvider: DimensionsProvider
+    @Inject lateinit var mainPreferencesHolder: MainPreferencesHolder
+    @Inject lateinit var menuRepository: MenuRepository
+    @Inject lateinit var listsPreferencesHolder: ListsPreferencesHolder
+    @Inject lateinit var navigatorHolder: NavigatorHolder
+    @Inject lateinit var notificationPreferencesHolder: NotificationPreferencesHolder
+    @Inject lateinit var router: TabRouter
+    @Inject lateinit var authHolder: forpdateam.ru.forpda.model.AuthHolder
+    @Inject lateinit var userHolder: forpdateam.ru.forpda.entity.app.profile.IUserHolder
+    @Inject lateinit var webViewChecker: WebViewChecker
+    @Inject lateinit var permissionHelper: PermissionHelper
+
+    val removeTabListener: (View) -> Unit = { backHandler() }
 
     private lateinit var binding: ActivityMainBinding
 
@@ -55,97 +85,109 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
     private lateinit var bottomDrawer: BottomDrawer
     private var firstStartAnimator: ObjectAnimator? = null
 
-    val tabNavigator = TabNavigator(this, R.id.fragments_container)
-    private val dimensionsProvider = App.get().Di().dimensionsProvider
-    private val disposables = CompositeDisposable()
-    private val notificationPreferencesRepository = App.get().Di().notificationPreferencesHolder
-    private val mainPreferencesRepository = App.get().Di().mainPreferencesHolder
-    private val checkerRepository = App.get().Di().checkerRepository
-    private val updateChecker by lazy { SimpleUpdateChecker(checkerRepository) }
+    val tabNavigator by lazy { TabNavigator(this, R.id.fragments_container) }
 
     private var lang: String? = null
 
     private lateinit var appliedUiPalette: Preferences.Main.UiPalette
+    private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
 
     private val notificationPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()
-    ) { /* пользователь мог отказать — уведомления просто не покажутся */ }
-
-    private val presenter: MainViewModel by viewModels {
-        MainViewModel.Factory(
-                App.get().Di().router,
-                App.get().Di().authHolder,
-                App.get().Di().linkHandler,
-                App.get().Di().menuRepository,
-                App.get().Di().qmsInteractor,
-                App.get().Di().otherPreferencesHolder,
-                App.get().Di().webClient
-        )
+    ) { granted ->
+        if (granted) {
+            Log.i(NOTIFICATIONS_LOG_TAG, "POST_NOTIFICATIONS granted")
+            NotificationsService.createEventChannels(this)
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) && notificationPreferencesHolder.getMainEnabled()) {
+                NotificationsService.startAndCheckNoBind(this)
+            }
+        } else {
+            Log.w(NOTIFICATIONS_LOG_TAG, "POST_NOTIFICATIONS denied by user")
+        }
     }
 
+    private val presenter: MainViewModel by viewModels()
+
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(LocaleHelper.onAttach(base))
-        App.get().Di().dayNightHelper.setIsNight(DayNightHelper.isUiModeNight(resources.configuration))
+        val localizedContext = LocaleHelper.onAttach(base)
+        super.attachBaseContext(localizedContext)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        appliedUiPalette = mainPreferencesRepository.getUiPalette()
-        setTheme(UiThemeStyles.mainNoActionBar(appliedUiPalette))
+        if (BuildConfig.DEBUG) Timber.d("[INTENT] onCreate: hasData=${intent?.data != null}, action=${intent?.action}, hasExtras=${intent?.extras != null}")
+        // Get theme settings directly from DataStore before super.onCreate() (DI not available yet)
+        // Using SharedPreferences mirror for instant synchronous read (<1ms vs 50-200ms DataStore)
+        val tempDataStore = MainDataStore(this)
+        appliedUiPalette = try {
+            tempDataStore.getUiPaletteImmediate()
+        } catch (e: Exception) {
+            Preferences.Main.UiPalette.SYSTEM
+        }
+        val themeMode = try {
+            tempDataStore.getThemeModeImmediate()  // Reads from SharedPreferences mirror first
+        } catch (e: Exception) {
+            Preferences.Main.ThemeMode.SYSTEM
+        }
+        appliedFontMode = tempDataStore.getAppFontModeImmediate()
+        setTheme(UiThemeStyles.mainNoActionBar(appliedUiPalette, themeMode, resources.configuration))
+        FontController.applyNativeTheme(this, appliedFontMode)
         super.onCreate(savedInstanceState)
+        dayNightHelper.setIsNight(DayNightHelper.isUiModeNight(resources.configuration))
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        enableEdgeToEdge()
-        // Иначе с adjustResize получается двойной учёт области IME (система сжимает окно + мы бы ещё паддингом).
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+
+        // Enable edge-to-edge; insets (statusBar top, navBar bottom) applied per-container in updateDimens()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        syncStatusBarIconContrast()
+        syncNavigationBarAppearance()
 
         if (intent != null) {
             checkWebView = intent.getBooleanExtra(ARG_CHECK_WEBVIEW, checkWebView)
         }
         if (checkWebView) {
-            disposables.add(Single
-                    .fromCallable { App.get().isWebViewFound(this) }
-                    .subscribeOn(Schedulers.io())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe { aBoolean ->
-                        if (!aBoolean) {
-                            startActivity(Intent(App.getContext(), WebVewNotFoundActivity::class.java))
-                            finish()
-                        }
-                    })
+            lifecycleScope.launch {
+                val found = withContext(Dispatchers.IO) { webViewChecker.isWebViewFound() }
+                if (!found) {
+                    startActivity(Intent(this@MainActivity, WebVewNotFoundActivity::class.java))
+                    finish()
+                }
+            }
         }
 
         presenter.setIsRestored(savedInstanceState != null)
         intent?.data?.also {
             presenter.setStartLink(it.toString())
         }
+        // Check initial intent (when app is launched from notification)
+        if (intent != null && intent.data != null) {
+            if (BuildConfig.DEBUG) Timber.d("[INTENT] onCreate: calling checkIntent for initial intent")
+            checkIntent(intent)
+        }
 
         bottomDrawer = BottomDrawer(
                 this,
                 binding,
                 tabNavigator,
-                App.get().Di().router,
-                App.get().Di().menuRepository,
-                App.get().Di().mainPreferencesHolder
+                router,
+                menuRepository,
+                mainPreferencesHolder,
+                listsPreferencesHolder,
+                authHolder,
+                userHolder
         )
         bottomDrawer.setListener(object : BottomDrawer.DrawerListener {
-            @Suppress("DEPRECATION")
             override fun onHide() {
                 hideKeyboard()
                 cancelStartAnimation()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    window.navigationBarDividerColor = 0
-                }
+                syncNavigationBarAppearance()
             }
 
             override fun onShow() {
                 cancelStartAnimation()
             }
 
-            @Suppress("DEPRECATION")
             override fun onSlide(slideOffset: Float) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && window.navigationBarDividerColor == 0) {
-                    window.navigationBarDividerColor = App.getColorFromAttr(this@MainActivity, R.attr.divider_line_bottom_nav)
-                }
                 val container = binding.fragmentsContainer
                 val translate = -slideOffset * 0.1f * container.height
                 container.translationY = translate
@@ -155,11 +197,16 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                Log.d(LOG_TAG, "onBackPressed")
-                if (bottomDrawer.isShown()) {
-                    bottomDrawer.hide()
-                } else {
-                    backHandler(false)
+                Timber.d("onBackPressed")
+                try {
+                    if (::bottomDrawer.isInitialized && bottomDrawer.isShown()) {
+                        bottomDrawer.hide()
+                    } else {
+                        backHandler()
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Error in onBackPressed")
+                    finishAffinity()
                 }
             }
         })
@@ -179,23 +226,27 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
                 defaultKeyboardHeight
         )
 
-        disposables.add(
-                dimensionsProvider
-                        .observeDimensions()
-                        .subscribe { dimensions ->
-                            binding.bottomMenuRecycler.post {
-                                binding.fragmentsContainer.also { updateDimens(dimensions) }
-                            }
-                        }
-        )
-
-        if (notificationPreferencesRepository.getUpdateEnabled()) {
-            updateChecker.checkUpdate()
+        lifecycleScope.launch {
+            dimensionsProvider.dimensionsFlow.collect { dimensions ->
+                binding.bottomMenuRecycler.post {
+                    binding.fragmentsContainer.also { updateDimens(dimensions) }
+                }
+            }
+        }
+        // Сторонние клавиатуры / OEM: IME приходит в root insets позже или не попадает в DimensionHelper.
+        ViewCompat.setOnApplyWindowInsetsListener(binding.fragmentsContainer) { _, insets ->
+            binding.bottomMenuRecycler.post {
+                updateDimens(dimensionsProvider.getDimensions())
+            }
+            // Переустанавливаем цвет навбара при любом изменении insets (клавиатура, жесты и т.д.)
+            syncNavigationBarAppearance()
+            insets
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (notificationPreferencesRepository.wantsPushNotifications() &&
+            if (notificationPreferencesHolder.wantsPushNotifications() &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                Log.w(NOTIFICATIONS_LOG_TAG, "Requesting POST_NOTIFICATIONS permission")
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
@@ -230,104 +281,156 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         binding.bottomSheet2.translationY = 0f
     }
 
-    private fun updateDimens(dimensions: DimensionHelper.Dimensions) {
+    fun updateDimens(dimensions: DimensionHelper.Dimensions) {
+        val rootInsets = ViewCompat.getRootWindowInsets(binding.fragmentsContainer)
+        bottomDrawer.syncBottomChromeWithInsets(rootInsets)
         binding.fragmentsContainer.apply {
-            // Только при реальном IME: adjustResize уже сжимает окно — не дублируем отступом.
-            // isFakeKeyboardShow (BBCode/нижний sheet без IME) не обнуляем: иначе панель +/скрепка
-            // оказывается под нижней навигацией приложения.
-            //
-            // Высота «полоски» вкладок = базовая (иконки) + navigationBars — синхронно с peek bottom sheet
-            // (см. BottomDrawer). Раньше br.height без nav на части OEM давал контент под системной панелью
-            // или лишний зазор при двойном учёте insets.
-            val baseBar = resources.getDimensionPixelSize(R.dimen.dp52)
-            val pb = if (dimensions.isKeyboardShow()) {
-                0
-            } else {
-                baseBar + dimensions.navigationBar
+            val baseBar = resources.getDimensionPixelSize(R.dimen.bottom_nav_tab_bar_height)
+            val basePb = BottomNavWindowInset.fragmentsBottomPaddingPx(
+                    baseBar,
+                    rootInsets,
+                    dimensions.navigationBar
+            )
+            val currentFragment = tabNavigator.getCurrentFragment()
+            // Theme WebView рисует под нижней панелью и сам добавляет spacer в HTML:
+            // иначе parent padding виден как цветная полоса после нижней пагинации.
+            // При открытой клавиатуре (особенно на OEM, где adjustResize не работает как раньше)
+            // нижний таббар всё равно перекрыт IME. Если оставить резерв (basePb), появляется
+            // «пустая полоса» между панелью ввода и клавиатурой.
+            val pb = when {
+                dimensions.isKeyboardShow() -> 0
+                currentFragment?.shouldDrawBehindBottomNav() == true -> 0
+                else -> basePb
             }
+            val statusTopPx = rootInsets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: 0
+            val topInset = maxOf(dimensions.statusBar, statusTopPx, 0)
             setPadding(
                     paddingLeft,
-                    paddingTop,
+                    topInset,
                     paddingRight,
                     max(pb, 0)
             )
+            currentFragment?.onBottomChromePaddingChanged(basePb)
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        Log.d(LOG_TAG, "onNewIntent " + intent.toString())
+        if (BuildConfig.DEBUG) Timber.d("[INTENT] onNewIntent: hasData=${intent.data != null}, action=${intent.action}, hasExtras=${intent.extras != null}")
         checkIntent(intent)
     }
 
     override fun onStart() {
         super.onStart()
         bottomDrawer.onStart()
+        NotificationsService.createEventChannels(this)
         // UI поток: стартуем сервис, а bind пусть делает сам сервис при необходимости.
         // Это же снижает риск ANR на некоторых устройствах при старте/возврате в приложение.
-        NotificationsService.startAndCheckNoBind()
+        // Проверяем, включены ли уведомления перед запуском сервиса
+        if (notificationPreferencesHolder.getMainEnabled()) {
+            NotificationsService.startAndCheckNoBind(this)
+        } else {
+            Timber.d("MainActivity.onStart: notifications disabled, skipping service start")
+        }
+        BatteryDebugLogger.logState("MainActivity", "start")
     }
 
     override fun onResumeFragments() {
         super.onResumeFragments()
-        Log.d(LOG_TAG, "onResumeFragments")
-        App.get().Di().navigatorHolder.setNavigator(tabNavigator)
+        Timber.d("onResumeFragments")
+        navigatorHolder.setNavigator(tabNavigator)
     }
 
     override fun onResume() {
         super.onResume()
-        Log.d(LOG_TAG, "onResume")
-        val paletteNow = mainPreferencesRepository.getUiPalette()
+        Timber.d("onResume")
+        val paletteNow = mainPreferencesHolder.getUiPalette()
+        val fontModeNow = FontController.getCurrentFontMode(mainPreferencesHolder)
         if (::appliedUiPalette.isInitialized && paletteNow != appliedUiPalette) {
             appliedUiPalette = paletteNow
+            if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=uiPalette")
             recreate()
             return
         }
+        if (::appliedFontMode.isInitialized && fontModeNow != appliedFontMode) {
+            appliedFontMode = fontModeNow
+            if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=fontMode selectedFontMode=%s", fontModeNow)
+            recreate()
+            return
+        }
+        syncStatusBarIconContrast()
+        syncNavigationBarAppearance()
         presenter.onActivityResume()
         if (lang == null) {
             lang = LocaleHelper.getLanguage(this)
         }
+
         if (false && LocaleHelper.getLanguage(this) != lang) {
             val newContext = LocaleHelper.onAttach(this)
-            AlertDialog.Builder(this)
+            MaterialAlertDialogBuilder(this)
                     .setMessage(newContext.getString(R.string.lang_changed))
                     .setPositiveButton(newContext.getString(R.string.ok)) { _, _ -> MainActivity.restartApplication(this@MainActivity) }
                     .setNegativeButton(newContext.getString(R.string.cancel), null)
-                    .show()
+                    .showWithStyledButtons()
         }
     }
 
     override fun onPause() {
-        App.get().Di().navigatorHolder.removeNavigator()
+        navigatorHolder.removeNavigator()
         super.onPause()
-        Log.d(LOG_TAG, "onPause")
+        Timber.d("onPause")
     }
 
     override fun onStop() {
         super.onStop()
         bottomDrawer.onStop()
+        BatteryDebugLogger.logState("MainActivity", "stop")
     }
 
     override fun onDestroy() {
-        Log.d(LOG_TAG, "onDestroy")
+        Timber.d("onDestroy")
         presenter.detachView()
+        bottomDrawer.cleanup()
         super.onDestroy()
-        disposables.dispose()
         bottomDrawer.destroy()
-        updateChecker.destroy()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        App.get().onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionHelper.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
     private fun checkIntent(intent: Intent?) {
-        if (intent == null || intent.data == null) {
+        if (BuildConfig.DEBUG) Timber.d("[INTENT] checkIntent called: hasData=${intent?.data != null}, action=${intent?.action}")
+        if (intent == null) {
+            if (BuildConfig.DEBUG) Timber.d("[INTENT] checkIntent: intent is null, returning")
+            return
+        }
+        if (intent.getBooleanExtra(EXTRA_OPEN_FORUM_RULES, false)) {
+            if (BuildConfig.DEBUG) Timber.d("[INTENT] checkIntent: opening forum rules screen")
+            router.navigateTo(Screen.ForumRules())
+            setIntent(null)
+            return
+        }
+        if (intent.getBooleanExtra(EXTRA_OPEN_FORUM_BLACKLIST, false)) {
+            if (BuildConfig.DEBUG) Timber.d("[INTENT] checkIntent: opening forum blacklist screen")
+            router.navigateTo(Screen.ForumBlackList())
+            setIntent(null)
+            return
+        }
+        // Проверяем специальный параметр для открытия экрана загрузок
+        if (intent.getBooleanExtra("open_downloads", false)) {
+            if (BuildConfig.DEBUG) Timber.d("[INTENT] checkIntent: opening downloads screen")
+            router.navigateTo(Screen.Downloads())
+            setIntent(null)
+            return
+        }
+        if (intent.data == null) {
+            if (BuildConfig.DEBUG) Timber.d("[INTENT] checkIntent: intent.data is null, returning")
             return
         }
         val url: String = intent.data?.toString().orEmpty()
-
+        if (BuildConfig.DEBUG) Timber.d("[INTENT] checkIntent: opening url")
         presenter.openLink(url)
         setIntent(null)
     }
@@ -346,22 +449,65 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         iim?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
     }
 
-    private fun backHandler(fromToolbar: Boolean) {
-        val active = tabNavigator.getCurrentFragment()
-        if (active == null) {
-            App.get().Di().router.exit()
-            return
-        }
-        if (fromToolbar || !active.onBackPressed()) {
-            hideKeyboard()
-            tabNavigator.close(active.tag)
+    private fun backHandler() {
+        try {
+            val active = tabNavigator.getCurrentFragment()
+            Log.i(
+                    "ThemeHistory",
+                    "activity back active=${active?.javaClass?.simpleName} tag=${active?.tag} setting=${mainPreferencesHolder.getTopicBackBehavior()}"
+            )
+            if (active == null) {
+                router.exit()
+                return
+            }
+            // И системная «назад», и стрелка в toolbar — один путь: фрагмент решает (диалоги, pop внутренних стеков).
+            if (!active.onBackPressed()) {
+                hideKeyboard()
+                // Защита от NPE: active.tag может быть null если фрагмент не полностью инициализирован
+                active.tag?.let { tag ->
+                    if (!closeTopicChainToOriginIfEnabled(tag)) {
+                        tabNavigator.close(tag)
+                    }
+                } ?: router.exit()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error in backHandler")
+            finishAffinity()
         }
     }
 
+    private fun closeTopicChainToOriginIfEnabled(tag: String): Boolean {
+        if (mainPreferencesHolder.getTopicBackBehavior() != Preferences.Main.TopicBackBehavior.ORIGIN) {
+            return false
+        }
+        return tabNavigator.closeThemeChainToOrigin(tag)
+    }
+
+    fun selectTopicOriginOrParent(tag: String?): Boolean {
+        if (tag == null) return false
+        if (mainPreferencesHolder.getTopicBackBehavior() == Preferences.Main.TopicBackBehavior.ORIGIN &&
+                tabNavigator.closeThemeChainToOrigin(tag)) {
+            return true
+        }
+        return tabNavigator.selectParentOf(tag)
+    }
+
+    private fun syncStatusBarIconContrast() {
+        SystemBarAppearance.syncStatusBarIconContrast(this)
+    }
+
+    private fun syncNavigationBarAppearance() {
+        // Согласовано с fragments_container и нижним sheet (background_for_lists), иначе полоска другого тона.
+        SystemBarAppearance.syncNavigationBar(this)
+    }
+
     companion object {
+        private const val NOTIFICATIONS_LOG_TAG = "Notifications"
         val LOG_TAG = MainActivity::class.java.simpleName
-        val DEF_TITLE = "ForPDA"
+        val DEF_TITLE = "ProPDA"
         val ARG_CHECK_WEBVIEW = "CHECK_WEBVIEW"
+        const val EXTRA_OPEN_FORUM_RULES = "open_forum_rules"
+        const val EXTRA_OPEN_FORUM_BLACKLIST = "open_forum_blacklist"
 
         fun restartApplication(activity: Activity) {
             val mStartActivity = Intent(activity, MainActivity::class.java)
@@ -370,28 +516,17 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
             val mPendingIntent = PendingIntent.getActivity(activity, mPendingIntentId, mStartActivity, piFlags)
             val mgr = activity.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             mgr.set(AlarmManager.RTC, System.currentTimeMillis() + 100, mPendingIntent)
-            activity.finish()
-            System.exit(0)
+            activity.finishAffinity()
         }
 
         fun setLightStatusBar(activity: Activity, value: Boolean) {
-            val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-            controller.isAppearanceLightStatusBars = value
+            SystemBarAppearance.setLightStatusBar(activity, value)
         }
 
         fun getDefaultLightStatusBar(context: Activity): Boolean {
-            val typedValue = TypedValue()
-            // В проде нельзя падать из-за отсутствующего атрибута темы.
-            // Безопасный дефолт: false (тёмные иконки статус-бара выключены).
-            if (!context.theme.resolveAttribute(R.attr.is_use_light_status_bar, typedValue, true)) {
-                return false
-            }
-            return when (typedValue.type) {
-                TypedValue.TYPE_INT_BOOLEAN -> typedValue.data != 0
-                // Иногда OEM/темы кладут int-ресурс; трактуем как boolean по "0/не 0".
-                TypedValue.TYPE_INT_DEC, TypedValue.TYPE_INT_HEX -> typedValue.data != 0
-                else -> false
-            }
+            return SystemBarAppearance.getDefaultLightSystemBar(context)
         }
+
+        const val EXTRA_RESTART_WITH_NEW_THEME = "restart_with_new_theme"
     }
 }

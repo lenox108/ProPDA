@@ -13,7 +13,14 @@ class TopicsApi(
 ) {
 
     fun getTopics(id: Int, st: Int): TopicsData {
-        val response = webClient.get("https://4pda.to/forum/index.php?showforum=$id&st=$st")
+        // Добавляем timestamp и no-cache чтобы избежать кэширования
+        val url = "https://4pda.to/forum/index.php?showforum=$id&st=$st&_t=${System.currentTimeMillis()}"
+        val request = forpdateam.ru.forpda.model.data.remote.api.NetworkRequest.Builder()
+            .url(url)
+            .addHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+            .addHeader("Pragma", "no-cache")
+            .build()
+        val response = webClient.request(request)
         return topicsParser.parse(response.body, id)
     }
 }

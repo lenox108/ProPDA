@@ -11,4 +11,5 @@ import forpdateam.ru.forpda.entity.remote.BaseForumPost
  */
 class ThemePost : BaseForumPost(), IThemePost {
     val attachImages = ArrayList<Pair<String, String>>()
+    var userPostCount: Int? = null
 }

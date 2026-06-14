@@ -1,42 +1,283 @@
 package forpdateam.ru.forpda.ui.fragments.settings
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.DialogInterface
+import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.UnderlineSpan
 import android.util.Log
-import androidx.appcompat.app.AlertDialog
+import timber.log.Timber
+import androidx.activity.result.contract.ActivityResultContracts
 import android.view.View
 import android.widget.SeekBar
 import android.widget.TextView
-import android.widget.Toast
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
+import forpdateam.ru.forpda.common.makeSnackbarAboveSystemBars
+import forpdateam.ru.forpda.common.showSnackbarAboveSystemBars
+import forpdateam.ru.forpda.common.showSnackbar
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.DayNightHelper
+import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Preferences
+import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
-import io.reactivex.disposables.Disposable
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import android.content.SharedPreferences
+import forpdateam.ru.forpda.model.AuthHolder
+import forpdateam.ru.forpda.appupdates.AppUpdatePreferences
+import forpdateam.ru.forpda.appupdates.AppUpdateRepository
+import forpdateam.ru.forpda.appupdates.AppUpdateScheduler
+import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
+import forpdateam.ru.forpda.ui.AppFontMode
+import forpdateam.ru.forpda.ui.FontController
+import forpdateam.ru.forpda.model.repository.auth.AuthRepository
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
+import javax.inject.Inject
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * Created by radiationx on 25.12.16.
  */
 
+@AndroidEntryPoint
 class SettingsFragment : BaseSettingFragment() {
-    private val authRepository = App.get().Di().authRepository
-    private val authHolder = App.get().Di().authHolder
-    private val mainPreferencesHolder = App.get().Di().mainPreferencesHolder
-    private var disposable: Disposable? = null
-    private val prefs by lazy { App.get().Di().preferences }
-    private val quickBindings = mutableListOf<Pair<String, forpdateam.ru.forpda.ui.views.SwitchPreference>>()
+    @Inject lateinit var authHolder: AuthHolder
+    @Inject lateinit var authRepository: AuthRepository
+    @Inject lateinit var mainPreferencesHolder: MainPreferencesHolder
+    @Inject lateinit var appUpdatePreferences: AppUpdatePreferences
+    @Inject lateinit var appUpdateRepository: AppUpdateRepository
+    @Inject lateinit var appUpdateScheduler: AppUpdateScheduler
+    @Inject lateinit var preferences: SharedPreferences
+    @Inject lateinit var dayNightHelper: DayNightHelper
+    @Inject lateinit var clipboardHelper: ClipboardHelper
 
-    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        quickBindings.firstOrNull { it.first == key }?.also { (k, pref) ->
-            pref.isChecked = prefs.getBoolean(k, pref.isChecked)
+    private var logoutJob: kotlinx.coroutines.Job? = null
+    private val prefs by lazy { preferences }
+    private val downloadFolderLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        val uri = result.data?.data ?: return@registerForActivityResult
+        persistDownloadFolder(uri)
+    }
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
+        if (key == Preferences.Main.BOTTOM_NAV_COLUMNS) {
+            val value = sharedPrefs.getString(key, "6")?.toIntOrNull() ?: 6
+            lifecycleScope.launch { mainPreferencesHolder.setBottomNavColumns(value) }
+        }
+        if (key == "lists.favorites.load_all") {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext()).setFavLoadAll(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Lists.Favorites.SHOW_UNREAD_BADGE) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext()).setFavShowUnreadBadge(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Lists.Topic.UNREAD_TOP) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext()).setUnreadTop(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Lists.Topic.SHOW_DOT) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext()).setShowDot(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.SHOW_BOTTOM_ARROW) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setShowBottomArrow(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.SCROLL_BUTTON_ENABLE) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setScrollButtonEnabled(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_PAGINATION_PANEL_ENABLE) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicPaginationPanelEnabled(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_SCROLL_MODE) {
+            val value = sharedPrefs.getString(key, Preferences.Main.TopicScrollMode.HYBRID.name)
+            val mode = try {
+                Preferences.Main.TopicScrollMode.valueOf(value ?: Preferences.Main.TopicScrollMode.HYBRID.name)
+            } catch (_: IllegalArgumentException) {
+                Preferences.Main.TopicScrollMode.HYBRID
+            }
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicScrollMode(mode)
+                }
+            }
+            updateTopicScrollModeSummary(mode)
+            updateTopicPageSwipePreferenceState(mode)
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_POST_DENSITY) {
+            val density = parseTopicPostDensity(sharedPrefs.getString(key, Preferences.Main.TopicPostDensity.COMFORTABLE.name))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicPostDensity(density)
+                }
+            }
+            updateTopicPostDensitySummary(density)
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_TOOLBAR_BEHAVIOR) {
+            val behavior = parseTopicToolbarBehavior(sharedPrefs.getString(key, Preferences.Main.TopicToolbarBehavior.PINNED.name))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicToolbarBehavior(behavior)
+                }
+            }
+            updateTopicToolbarBehaviorSummary(behavior)
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_PAGE_SWIPE_ENABLE) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicPageSwipeEnabled(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicBottomRefreshGestureEnabled(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_BACK_BEHAVIOR) {
+            val behavior = parseTopicBackBehavior(sharedPrefs.getString(key, Preferences.Main.TopicBackBehavior.HISTORY.name))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicBackBehavior(behavior)
+                }
+            }
+            updateTopicBackBehaviorSummary(behavior)
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_OPEN_TARGET) {
+            val target = parseTopicOpenTarget(sharedPrefs.getString(key, Preferences.Main.TopicOpenTarget.LAST_UNREAD.name))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicOpenTarget(target)
+                }
+            }
+            updateTopicOpenTargetSummary(target)
+            updateTopicHeaderInitialStateEnabled(target)
+        }
+        if (key == Preferences.Main.STARTUP_SCREEN) {
+            val startup = parseStartupScreen(sharedPrefs.getString(key, Preferences.Main.StartupScreen.NEWS.name))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setStartupScreen(startup)
+                }
+            }
+            updateStartupScreenSummary(startup)
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_HEADER_INITIAL_STATE) {
+            val state = parseTopicHeaderInitialState(sharedPrefs.getString(key, Preferences.Main.TopicHeaderInitialState.EXPANDED.name))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicHeaderInitialState(state)
+                }
+            }
+            updateTopicHeaderInitialStateSummary(state)
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.IS_EDITOR_MONOSPACE) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setEditorMonospace(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.IS_EDITOR_DEFAULT_HIDDEN) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setEditorDefaultHidden(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.APP_FONT_MODE) {
+            val mode = FontController.parseMode(sharedPrefs.getString(key, FontController.DEFAULT_FONT_MODE.name))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setAppFontMode(mode)
+                    updateAppFontSummary(mode)
+                    activity?.recreate()
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.DOWNLOAD_METHOD) {
+            val value = sharedPrefs.getString(key, Preferences.Main.DownloadMethod.SYSTEM.name)
+            val method = try {
+                Preferences.Main.DownloadMethod.valueOf(value ?: Preferences.Main.DownloadMethod.SYSTEM.name)
+            } catch (_: IllegalArgumentException) {
+                Preferences.Main.DownloadMethod.SYSTEM
+            }
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setDownloadMethod(method)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.SHOW_AVATARS) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setShowAvatars(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.CIRCLE_AVATARS) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setCircleAvatars(value)
+                }
+            }
+        }
+        if (key == AppUpdatePreferences.KEY_CHECK_ENABLED) {
+            appUpdatePreferences.setCheckEnabled(sharedPrefs.getBoolean(key, true))
+            appUpdateScheduler.reschedule()
         }
     }
 
@@ -45,18 +286,109 @@ class SettingsFragment : BaseSettingFragment() {
         super.onCreate(savedInstanceState)
         addPreferencesFromResource(R.xml.preferences)
 
-        addQuickSection()
+        // Синхронизируем DataStore → SwitchPreference, чтобы переключатели
+        // показывали актуальные значения, а не XML-defaults.
+        lifecycleScope.launch {
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.SHOW_BOTTOM_ARROW)
+                ?.isChecked = mainPreferencesHolder.observeShowBottomArrowFlow().first()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.IS_EDITOR_MONOSPACE)
+                ?.isChecked = mainPreferencesHolder.observeEditorMonospaceFlow().first()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.IS_EDITOR_DEFAULT_HIDDEN)
+                ?.isChecked = mainPreferencesHolder.getEditorDefaultHidden()
+            findPreference<ListPreference>(Preferences.Main.APP_FONT_MODE)
+                ?.let {
+                    val mode = mainPreferencesHolder.observeAppFontModeFlow().first()
+                    it.value = mode.name
+                    updateAppFontSummary(mode)
+                }
+            findPreference<ListPreference>(Preferences.Main.DOWNLOAD_METHOD)
+                ?.let {
+                    val method = mainPreferencesHolder.getDownloadMethod()
+                    it.value = method.name
+                    updateDownloadMethodSummary(method)
+                }
+            updateDownloadFolderSummary(mainPreferencesHolder.observeDownloadFolderUriFlow().first())
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.SCROLL_BUTTON_ENABLE)
+                ?.isChecked = mainPreferencesHolder.observeScrollButtonEnabledFlow().first()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_PAGINATION_PANEL_ENABLE)
+                ?.isChecked = mainPreferencesHolder.observeTopicPaginationPanelEnabledFlow().first()
+            findPreference<ListPreference>(Preferences.Main.TOPIC_SCROLL_MODE)
+                ?.let {
+                    val mode = mainPreferencesHolder.observeTopicScrollModeFlow().first()
+                    it.value = mode.name
+                    updateTopicScrollModeSummary(mode)
+                    updateTopicPageSwipePreferenceState(mode)
+                }
+            findPreference<ListPreference>(Preferences.Main.TOPIC_POST_DENSITY)
+                ?.let {
+                    val density = mainPreferencesHolder.observeTopicPostDensityFlow().first()
+                    it.value = density.name.lowercase()
+                    updateTopicPostDensitySummary(density)
+                }
+            findPreference<ListPreference>(Preferences.Main.TOPIC_TOOLBAR_BEHAVIOR)
+                ?.let {
+                    val behavior = mainPreferencesHolder.observeTopicToolbarBehaviorFlow().first()
+                    it.value = behavior.name
+                    updateTopicToolbarBehaviorSummary(behavior)
+                }
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_PAGE_SWIPE_ENABLE)
+                ?.isChecked = mainPreferencesHolder.observeTopicPageSwipeEnabledFlow().first()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE)
+                ?.isChecked = mainPreferencesHolder.observeTopicBottomRefreshGestureEnabledFlow().first()
+            findPreference<ListPreference>(Preferences.Main.TOPIC_BACK_BEHAVIOR)
+                ?.let {
+                    val behavior = mainPreferencesHolder.observeTopicBackBehaviorFlow().first()
+                    it.value = behavior.name
+                    updateTopicBackBehaviorSummary(behavior)
+                }
+            findPreference<ListPreference>(Preferences.Main.TOPIC_OPEN_TARGET)
+                ?.let {
+                    val target = mainPreferencesHolder.observeTopicOpenTargetFlow().first()
+                    it.value = target.name
+                    updateTopicOpenTargetSummary(target)
+                    updateTopicHeaderInitialStateEnabled(target)
+                }
+            findPreference<ListPreference>(Preferences.Main.STARTUP_SCREEN)
+                ?.let {
+                    val startup = mainPreferencesHolder.getStartupScreen()
+                    it.value = startup.name
+                    updateStartupScreenSummary(startup)
+                }
+            findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)
+                ?.let {
+                    val state = mainPreferencesHolder.observeTopicHeaderInitialStateFlow().first()
+                    it.value = state.name
+                    updateTopicHeaderInitialStateSummary(state)
+                }
+            updateTopicPageSwipePreferenceState(mainPreferencesHolder.observeTopicScrollModeFlow().first())
+            // Topic preferences
+            val topicHolder = forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext())
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.SHOW_AVATARS)
+                ?.isChecked = topicHolder.getShowAvatars()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.CIRCLE_AVATARS)
+                ?.isChecked = topicHolder.getCircleAvatars()
+            // Lists preferences
+            val listsHolder = forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext())
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Lists.Topic.UNREAD_TOP)
+                ?.isChecked = listsHolder.getUnreadTop()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Lists.Topic.SHOW_DOT)
+                ?.isChecked = listsHolder.getShowDot()
+            findPreference<androidx.preference.SwitchPreferenceCompat>("lists.favorites.load_all")
+                ?.isChecked = listsHolder.getFavLoadAll()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Lists.Favorites.SHOW_UNREAD_BADGE)
+                ?.isChecked = listsHolder.getFavShowUnreadBadge()
+        }
 
         if (authHolder.get().isAuth()) {
             findPreference<Preference>("auth.action.logout")?.apply {
                 setOnPreferenceClickListener {
-                    AlertDialog.Builder(activity!!)
+                    MaterialAlertDialogBuilder(requireActivity())
                             .setMessage(R.string.ask_logout)
                             .setPositiveButton(R.string.ok) { _, _ ->
                                 logoutRequest()
                             }
                             .setNegativeButton(R.string.no, null)
-                            .show()
+                            .showWithStyledButtons()
                     false
                 }
             }
@@ -68,19 +400,45 @@ class SettingsFragment : BaseSettingFragment() {
 
         findPreference<Preference>("clear_menu_sequence")?.apply {
             setOnPreferenceClickListener {
-                AlertDialog.Builder(activity!!)
+                MaterialAlertDialogBuilder(requireActivity())
                         .setMessage("Подтвердите действие")
                         .setPositiveButton(R.string.ok) { _, _ ->
-                            App.get().Di().preferences.edit().remove("menu_items_sequence").apply()
+                            preferences.edit().remove("menu_items_sequence").apply()
                         }
                         .setNegativeButton(R.string.cancel, null)
-                        .show()
+                        .showWithStyledButtons()
                 false
             }
         }
 
+        findPreference<Preference>("bottom_nav_order")?.setOnPreferenceClickListener {
+            requireActivity().supportFragmentManager.beginTransaction()
+                    .replace(R.id.fragment_content, BottomNavOrderFragment())
+                    .addToBackStack("bottom_nav_order")
+                    .commit()
+            true
+        }
+
+        findPreference<Preference>(Preferences.Main.DOWNLOAD_FOLDER_URI)?.setOnPreferenceClickListener {
+            showDownloadFolderDialog()
+            true
+        }
+
         findPreference<Preference>("about.application")?.apply {
             summary = String.format(getString(R.string.version_Build), BuildConfig.VERSION_NAME)
+        }
+        findPreference<androidx.preference.SwitchPreferenceCompat>(AppUpdatePreferences.KEY_CHECK_ENABLED)?.apply {
+            isChecked = appUpdatePreferences.isCheckEnabled()
+        }
+        updateAppUpdateSummary()
+        findPreference<Preference>("app_updates.check_now")?.setOnPreferenceClickListener {
+            checkAppUpdateNow()
+            true
+        }
+
+        findPreference<Preference>("about.support_author")?.setOnPreferenceClickListener {
+            showSupportAuthorDialog()
+            true
         }
 
         // Форк: скрываем/убираем встроенную проверку обновлений
@@ -91,9 +449,10 @@ class SettingsFragment : BaseSettingFragment() {
         findPreference<Preference>(Preferences.Main.WEBVIEW_FONT_SIZE)?.apply {
             setOnPreferenceClickListener { _ ->
 
-                val dialogView = activity!!.layoutInflater.inflate(R.layout.dialog_font_size, null)!!
-                val seekBar = dialogView.findViewById<View>(R.id.value_seekbar) as SeekBar
-                val textView = dialogView.findViewById<View>(R.id.value_textview) as TextView
+                val dialogView = requireActivity().layoutInflater.inflate(R.layout.dialog_font_size, null)
+                    ?: throw IllegalStateException("Failed to inflate dialog_font_size")
+                val seekBar = dialogView.findViewById<SeekBar>(R.id.value_seekbar) ?: throw IllegalStateException("seekBar not found")
+                val textView = dialogView.findViewById<TextView>(R.id.value_textview) ?: throw IllegalStateException("textView not found")
 
                 seekBar.progress = mainPreferencesHolder.getWebViewFontSize() - 1 - 7
 
@@ -109,19 +468,23 @@ class SettingsFragment : BaseSettingFragment() {
                     override fun onStartTrackingTouch(seekBar: SeekBar) {}
                     override fun onStopTrackingTouch(seekBar: SeekBar) {}
                 })
-                AlertDialog.Builder(activity!!)
+                MaterialAlertDialogBuilder(requireActivity())
                         .setTitle(R.string.text_size)
                         .setView(dialogView)
                         .setPositiveButton(R.string.ok) { _, _ ->
-                            mainPreferencesHolder.setWebViewFontSize(seekBar.progress + 1 + 7)
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                mainPreferencesHolder.setWebViewFontSize(seekBar.progress + 1 + 7)
+                            }
                         }
                         .setNegativeButton(R.string.cancel, null)
                         .setNeutralButton(R.string.reset, null)
-                        .show()
+                        .showWithStyledButtons()
                         .getButton(DialogInterface.BUTTON_NEUTRAL)
                         .setOnClickListener {
                             seekBar.progress = 16 - 1 - 7
-                            mainPreferencesHolder.setWebViewFontSize(16)
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                mainPreferencesHolder.setWebViewFontSize(16)
+                            }
                         }
 
                 false
@@ -137,34 +500,661 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
-        findPreference<ListPreference>(Preferences.Main.UI_PALETTE)?.setOnPreferenceChangeListener { _, _ ->
-            activity?.recreate()
+        findPreference<Preference>("open_forum_rules")?.apply {
+            setOnPreferenceClickListener {
+                val intent = Intent(requireContext(), MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra(MainActivity.EXTRA_OPEN_FORUM_RULES, true)
+                }
+                startActivity(intent)
+                true
+            }
+        }
+
+        findPreference<Preference>("open_forum_blacklist")?.apply {
+            setOnPreferenceClickListener {
+                val intent = Intent(requireContext(), MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra(MainActivity.EXTRA_OPEN_FORUM_BLACKLIST, true)
+                }
+                startActivity(intent)
+                true
+            }
+        }
+
+        findPreference<ListPreference>(Preferences.Main.UI_PALETTE)?.apply {
+            lifecycleScope.launch {
+                val currentTheme = mainPreferencesHolder.observeThemeModeFlow().first()
+                val currentPalette = mainPreferencesHolder.observeUiPaletteFlow().first()
+                val safePalette = sanitizeUiPaletteForTheme(currentPalette, currentTheme)
+                updateUiPaletteEntries(currentTheme, safePalette)
+                updateUiPaletteSummary(safePalette)
+                if (safePalette != currentPalette) mainPreferencesHolder.setUiPalette(safePalette)
+            }
+            setOnPreferenceChangeListener { _, newValue ->
+                val paletteName = newValue as String
+                val themeMode = mainPreferencesHolder.getThemeMode()
+                val palette = sanitizeUiPaletteForTheme(parseUiPalette(paletteName), themeMode)
+                updateUiPaletteSummary(palette)
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setUiPalette(palette)
+                    activity?.recreate()
+                }
+                true
+            }
+        }
+
+        findPreference<ListPreference>(Preferences.Main.APP_FONT_MODE)?.setOnPreferenceChangeListener { _, newValue ->
+            val mode = FontController.parseMode(newValue as? String)
+            updateAppFontSummary(mode)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setAppFontMode(mode)
+                activity?.recreate()
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.TOPIC_SCROLL_MODE)?.setOnPreferenceChangeListener { _, newValue ->
+            val mode = parseTopicScrollMode(newValue as? String)
+            updateTopicScrollModeSummary(mode)
+            updateTopicPageSwipePreferenceState(mode)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setTopicScrollMode(mode)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.TOPIC_POST_DENSITY)?.setOnPreferenceChangeListener { _, newValue ->
+            val density = parseTopicPostDensity(newValue as? String)
+            updateTopicPostDensitySummary(density)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setTopicPostDensity(density)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.TOPIC_BACK_BEHAVIOR)?.setOnPreferenceChangeListener { _, newValue ->
+            val behavior = parseTopicBackBehavior(newValue as? String)
+            updateTopicBackBehaviorSummary(behavior)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setTopicBackBehavior(behavior)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.TOPIC_OPEN_TARGET)?.setOnPreferenceChangeListener { _, newValue ->
+            val target = parseTopicOpenTarget(newValue as? String)
+            updateTopicOpenTargetSummary(target)
+            updateTopicHeaderInitialStateEnabled(target)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setTopicOpenTarget(target)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.STARTUP_SCREEN)?.setOnPreferenceChangeListener { _, newValue ->
+            val startup = parseStartupScreen(newValue as? String)
+            updateStartupScreenSummary(startup)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setStartupScreen(startup)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.TOPIC_TOOLBAR_BEHAVIOR)?.setOnPreferenceChangeListener { _, newValue ->
+            val behavior = parseTopicToolbarBehavior(newValue as? String)
+            updateTopicToolbarBehaviorSummary(behavior)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setTopicToolbarBehavior(behavior)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)?.setOnPreferenceChangeListener { _, newValue ->
+            val state = parseTopicHeaderInitialState(newValue as? String)
+            updateTopicHeaderInitialStateSummary(state)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setTopicHeaderInitialState(state)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.DOWNLOAD_METHOD)?.setOnPreferenceChangeListener { _, newValue ->
+            val method = parseDownloadMethod(newValue as? String)
+            updateDownloadMethodSummary(method)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setDownloadMethod(method)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(LocaleHelper.SELECTED_LANGUAGE)?.setOnPreferenceChangeListener { _, _ ->
+            requireActivity().window.decorView.post {
+                MainActivity.restartApplication(requireActivity())
+            }
+            true
+        }
+
+        // Sync ListPreference selection with actual theme stored in DataStore (async to avoid ANR)
+        findPreference<ListPreference>("main.theme.mode")?.apply {
+            lifecycleScope.launch {
+                val currentMode = mainPreferencesHolder.observeThemeModeFlow().first()
+                if (value != currentMode.name) {
+                    value = currentMode.name
+                }
+                updateThemeModeSummary(currentMode)
+            }
+        }
+
+        findPreference<ListPreference>("main.theme.mode")?.setOnPreferenceChangeListener { _, newValue ->
+            val modeName = newValue as String
+            Timber.d("[THEME] Preference changed to: $modeName")
+            val mode = parseThemeMode(modeName)
+            updateThemeModeSummary(mode)
+            // 1. Save to DataStore asynchronously (suspend, no runBlocking), then restart
+            lifecycleScope.launch {
+                mainPreferencesHolder.setThemeMode(mode)
+                Timber.d("[THEME] Saved to DataStore: $mode")
+                // 2. Apply night mode immediately
+                DayNightHelper.applyTheme(mode)
+                // 3. Force restart entire app to pick up new theme styles
+                val ctx = requireContext().applicationContext
+                val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                }
+                if (intent != null) {
+                    startActivity(intent)
+                    activity?.finishAffinity()
+                }
+            }
             true
         }
     }
 
-    private fun logoutRequest() {
-        disposable?.dispose()
-        disposable = authRepository
-                .signOut()
-                .subscribe({
-                    if (it) {
-                        Toast.makeText(App.getContext(), "Logout complete", Toast.LENGTH_LONG).show()
-                    } else {
-                        Toast.makeText(App.getContext(), "Logout error", Toast.LENGTH_LONG).show()
+    private fun showAppFontRestartNotice() {
+        view?.makeSnackbarAboveSystemBars(
+            R.string.pref_app_font_restart_notice,
+            Snackbar.LENGTH_LONG
+        )?.setAction(R.string.restart) {
+            if (isAdded) {
+                MainActivity.restartApplication(requireActivity())
+            }
+        }?.show()
+    }
+
+    private fun updateAppFontSummary(mode: AppFontMode) {
+        findPreference<ListPreference>(Preferences.Main.APP_FONT_MODE)?.setSummary(
+            when (mode) {
+                AppFontMode.SYSTEM -> R.string.pref_summary_app_font_system
+                AppFontMode.ROBOTO -> R.string.pref_summary_app_font_roboto
+                AppFontMode.INTER -> R.string.pref_summary_app_font_inter
+                AppFontMode.SOURCE_SANS_3 -> R.string.pref_summary_app_font_source_sans_3
+                AppFontMode.OPEN_SANS -> R.string.pref_summary_app_font_open_sans
+            }
+        )
+    }
+
+    private fun parseThemeMode(value: String?): Preferences.Main.ThemeMode = try {
+        Preferences.Main.ThemeMode.valueOf(value ?: Preferences.Main.ThemeMode.SYSTEM.name)
+    } catch (e: Exception) {
+        Timber.e(e, "[THEME] Invalid mode: $value")
+        Preferences.Main.ThemeMode.SYSTEM
+    }
+
+    private fun parseUiPalette(value: String?): Preferences.Main.UiPalette = try {
+        when (val palette = Preferences.Main.UiPalette.valueOf(value ?: Preferences.Main.UiPalette.SYSTEM.name)) {
+            Preferences.Main.UiPalette.CLASSIC_4PDA -> Preferences.Main.UiPalette.SYSTEM
+            else -> palette
+        }
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.UiPalette.SYSTEM
+    }
+
+    private fun sanitizeUiPaletteForTheme(
+            palette: Preferences.Main.UiPalette,
+            themeMode: Preferences.Main.ThemeMode
+    ): Preferences.Main.UiPalette {
+        return palette
+    }
+
+    private fun ListPreference.updateUiPaletteEntries(
+            themeMode: Preferences.Main.ThemeMode,
+            selectedPalette: Preferences.Main.UiPalette
+    ) {
+        val palettes = supportedUiPalettes(themeMode)
+        entries = palettes.map { getUiPaletteLabel(it) }.toTypedArray()
+        entryValues = palettes.map { it.name }.toTypedArray()
+        value = sanitizeUiPaletteForTheme(selectedPalette, themeMode).name
+    }
+
+    private fun updateThemeModeSummary(mode: Preferences.Main.ThemeMode) {
+        findPreference<ListPreference>("main.theme.mode")?.setSummary(
+                when (mode) {
+                    Preferences.Main.ThemeMode.LIGHT -> R.string.pref_summary_theme_mode_light
+                    Preferences.Main.ThemeMode.DARK -> R.string.pref_summary_theme_mode_dark
+                    Preferences.Main.ThemeMode.AMOLED -> R.string.pref_summary_theme_mode_amoled
+                    Preferences.Main.ThemeMode.SYSTEM_AMOLED -> R.string.pref_summary_theme_mode_system_amoled
+                    else -> R.string.pref_summary_theme_mode_system
+                }
+        )
+    }
+
+    private fun updateUiPaletteSummary(palette: Preferences.Main.UiPalette) {
+        findPreference<ListPreference>(Preferences.Main.UI_PALETTE)?.setSummary(
+                when (palette) {
+                    Preferences.Main.UiPalette.SEPIA_READING -> R.string.pref_summary_ui_palette_sepia_reading
+                    Preferences.Main.UiPalette.SEPIA_BLUE -> R.string.pref_summary_ui_palette_sepia_blue
+                    Preferences.Main.UiPalette.MINIMAL_READER -> R.string.pref_summary_ui_palette_minimal_reader
+                    else -> R.string.pref_summary_ui_palette_system
+                }
+        )
+    }
+
+    private fun updateTopicScrollModeSummary(mode: Preferences.Main.TopicScrollMode) {
+        findPreference<ListPreference>(Preferences.Main.TOPIC_SCROLL_MODE)?.setSummary(
+                when (mode) {
+                    Preferences.Main.TopicScrollMode.CLASSIC -> R.string.pref_summary_topic_scroll_mode_classic
+                    else -> R.string.pref_summary_topic_scroll_mode_hybrid
+                }
+        )
+    }
+
+    private fun updateTopicPostDensitySummary(density: Preferences.Main.TopicPostDensity) {
+        findPreference<ListPreference>(Preferences.Main.TOPIC_POST_DENSITY)?.setSummary(
+                when (density) {
+                    Preferences.Main.TopicPostDensity.SUPER_COMPACT -> R.string.pref_summary_topic_post_density_super_compact
+                    Preferences.Main.TopicPostDensity.COMPACT -> R.string.pref_summary_topic_post_density_compact
+                    else -> R.string.pref_summary_topic_post_density_comfortable
+                }
+        )
+    }
+
+    private fun updateTopicToolbarBehaviorSummary(behavior: Preferences.Main.TopicToolbarBehavior) {
+        findPreference<ListPreference>(Preferences.Main.TOPIC_TOOLBAR_BEHAVIOR)?.setSummary(
+                when (behavior) {
+                    Preferences.Main.TopicToolbarBehavior.HIDE_ON_SCROLL -> R.string.pref_topic_toolbar_behavior_hide_on_scroll_summary
+                    else -> R.string.pref_topic_toolbar_behavior_pinned_summary
+                }
+        )
+    }
+
+    private fun updateTopicBackBehaviorSummary(behavior: Preferences.Main.TopicBackBehavior) {
+        findPreference<ListPreference>(Preferences.Main.TOPIC_BACK_BEHAVIOR)?.setSummary(
+                when (behavior) {
+                    Preferences.Main.TopicBackBehavior.ORIGIN -> R.string.pref_summary_topic_back_behavior_origin
+                    else -> R.string.pref_summary_topic_back_behavior_history
+                }
+        )
+    }
+
+    private fun updateTopicOpenTargetSummary(target: Preferences.Main.TopicOpenTarget) {
+        findPreference<ListPreference>(Preferences.Main.TOPIC_OPEN_TARGET)?.setSummary(
+                when (target) {
+                    Preferences.Main.TopicOpenTarget.FIRST_PAGE -> R.string.pref_summary_topic_open_target_first_page
+                    else -> R.string.pref_summary_topic_open_target_last_unread
+                }
+        )
+    }
+
+    private fun updateStartupScreenSummary(startup: Preferences.Main.StartupScreen) {
+        findPreference<ListPreference>(Preferences.Main.STARTUP_SCREEN)?.setSummary(
+                when (startup) {
+                    Preferences.Main.StartupScreen.FAVORITES -> R.string.pref_summary_startup_screen_favorites
+                    Preferences.Main.StartupScreen.FORUM -> R.string.pref_summary_startup_screen_forum
+                    Preferences.Main.StartupScreen.REPLIES -> R.string.pref_summary_startup_screen_replies
+                    Preferences.Main.StartupScreen.QMS -> R.string.pref_summary_startup_screen_qms
+                    else -> R.string.pref_summary_startup_screen_news
+                }
+        )
+    }
+
+    private fun updateTopicHeaderInitialStateSummary(state: Preferences.Main.TopicHeaderInitialState) {
+        findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)?.setSummary(
+                when (state) {
+                    Preferences.Main.TopicHeaderInitialState.COLLAPSED -> R.string.pref_summary_topic_header_initial_state_collapsed
+                    else -> R.string.pref_summary_topic_header_initial_state_expanded
+                }
+        )
+    }
+
+    private fun updateTopicHeaderInitialStateEnabled(target: Preferences.Main.TopicOpenTarget) {
+        findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)?.isEnabled =
+                target == Preferences.Main.TopicOpenTarget.FIRST_PAGE
+    }
+
+    private fun parseTopicScrollMode(value: String?): Preferences.Main.TopicScrollMode = try {
+        Preferences.Main.TopicScrollMode.valueOf(value ?: Preferences.Main.TopicScrollMode.HYBRID.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.TopicScrollMode.HYBRID
+    }
+
+    private fun parseTopicPostDensity(value: String?): Preferences.Main.TopicPostDensity = try {
+        Preferences.Main.TopicPostDensity.valueOf(value?.uppercase() ?: Preferences.Main.TopicPostDensity.COMFORTABLE.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.TopicPostDensity.COMFORTABLE
+    }
+
+    private fun parseTopicToolbarBehavior(value: String?): Preferences.Main.TopicToolbarBehavior = try {
+        Preferences.Main.TopicToolbarBehavior.valueOf(value?.uppercase() ?: Preferences.Main.TopicToolbarBehavior.PINNED.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.TopicToolbarBehavior.PINNED
+    }
+
+    private fun parseTopicBackBehavior(value: String?): Preferences.Main.TopicBackBehavior = try {
+        Preferences.Main.TopicBackBehavior.valueOf(value ?: Preferences.Main.TopicBackBehavior.HISTORY.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.TopicBackBehavior.HISTORY
+    }
+
+    private fun parseTopicOpenTarget(value: String?): Preferences.Main.TopicOpenTarget = try {
+        Preferences.Main.TopicOpenTarget.valueOf(value ?: Preferences.Main.TopicOpenTarget.LAST_UNREAD.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.TopicOpenTarget.LAST_UNREAD
+    }
+
+    private fun parseStartupScreen(value: String?): Preferences.Main.StartupScreen = try {
+        Preferences.Main.StartupScreen.valueOf(value ?: Preferences.Main.StartupScreen.NEWS.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.StartupScreen.NEWS
+    }
+
+    private fun parseTopicHeaderInitialState(value: String?): Preferences.Main.TopicHeaderInitialState = try {
+        Preferences.Main.TopicHeaderInitialState.valueOf(value ?: Preferences.Main.TopicHeaderInitialState.EXPANDED.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.TopicHeaderInitialState.EXPANDED
+    }
+
+    private fun parseDownloadMethod(value: String?): Preferences.Main.DownloadMethod = try {
+        Preferences.Main.DownloadMethod.valueOf(value ?: Preferences.Main.DownloadMethod.SYSTEM.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.DownloadMethod.SYSTEM
+    }
+
+    private fun updateDownloadMethodSummary(method: Preferences.Main.DownloadMethod) {
+        findPreference<ListPreference>(Preferences.Main.DOWNLOAD_METHOD)?.setSummary(
+                when (method) {
+                    Preferences.Main.DownloadMethod.EXTERNAL_MANAGER -> R.string.download_method_external_manager
+                    Preferences.Main.DownloadMethod.BROWSER -> R.string.download_method_browser
+                    Preferences.Main.DownloadMethod.ASK -> R.string.download_method_ask
+                    else -> R.string.download_method_system
+                }
+        )
+    }
+
+    private fun supportedUiPalettes(themeMode: Preferences.Main.ThemeMode): List<Preferences.Main.UiPalette> {
+        val palettes = mutableListOf(Preferences.Main.UiPalette.SYSTEM)
+        palettes.add(Preferences.Main.UiPalette.MINIMAL_READER)
+        palettes.add(Preferences.Main.UiPalette.SEPIA_READING)
+        palettes.add(Preferences.Main.UiPalette.SEPIA_BLUE)
+        return palettes
+    }
+
+    private fun getUiPaletteLabel(palette: Preferences.Main.UiPalette): String {
+        return when (palette) {
+            Preferences.Main.UiPalette.SEPIA_READING -> getString(R.string.pref_value_ui_palette_sepia_reading)
+            Preferences.Main.UiPalette.SEPIA_BLUE -> getString(R.string.pref_value_ui_palette_sepia_blue)
+            Preferences.Main.UiPalette.MINIMAL_READER -> getString(R.string.pref_value_ui_palette_minimal_reader)
+            else -> getString(R.string.pref_value_ui_palette_system)
+        }
+    }
+
+    private fun updateTopicPageSwipePreferenceState(mode: Preferences.Main.TopicScrollMode) {
+        findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_PAGE_SWIPE_ENABLE)?.apply {
+            val isClassic = mode == Preferences.Main.TopicScrollMode.CLASSIC
+            isEnabled = isClassic
+            setSummary(if (isClassic) R.string.pref_summary_topic_page_swipe else R.string.pref_summary_topic_page_swipe_disabled)
+        }
+    }
+
+    private fun updateAppUpdateSummary() {
+        findPreference<Preference>("app_updates.check_now")?.summary =
+            getString(R.string.pref_summary_app_update_check_now, BuildConfig.VERSION_NAME)
+    }
+
+    private fun checkAppUpdateNow() {
+        showSnackbarAboveSystemBars(R.string.app_update_checking)
+        Log.i(AppUpdateRepository.LOG_TAG, "manual UI start enabled=${appUpdatePreferences.isCheckEnabled()}")
+        Timber.tag(AppUpdateRepository.LOG_TAG).i("manual UI start enabled=%s", appUpdatePreferences.isCheckEnabled())
+        viewLifecycleOwner.lifecycleScope.launch {
+            runCatching { appUpdateRepository.check(manual = true) }
+                .onSuccess { result ->
+                    when (result) {
+                        is AppUpdateRepository.CheckResult.UpdateAvailable -> {
+                            Log.i(
+                                AppUpdateRepository.LOG_TAG,
+                                "manual UI result update_available version=${result.version} url=${result.url} openActionRegistered=true openActionFired=false"
+                            )
+                            Timber.tag(AppUpdateRepository.LOG_TAG).i(
+                                "manual UI result update_available version=%s url=%s openActionRegistered=true openActionFired=false",
+                                result.version,
+                                result.url
+                            )
+                            showAppUpdateAvailableSnackbar(result)
+                        }
+                        is AppUpdateRepository.CheckResult.UpToDate -> {
+                            Log.i(
+                                AppUpdateRepository.LOG_TAG,
+                                "manual UI result up_to_date latest=${result.latestVersion} current=${BuildConfig.VERSION_NAME}"
+                            )
+                            Timber.tag(AppUpdateRepository.LOG_TAG).i(
+                                "manual UI result up_to_date latest=%s current=%s",
+                                result.latestVersion,
+                                BuildConfig.VERSION_NAME
+                            )
+                            showSnackbarAboveSystemBars(getString(R.string.app_update_up_to_date, BuildConfig.VERSION_NAME))
+                        }
                     }
-                }, {
-                    Toast.makeText(App.getContext(), "Logout error: $it", Toast.LENGTH_LONG).show()
-                })
+                }
+                .onFailure { error ->
+                    Log.w(AppUpdateRepository.LOG_TAG, "manual UI failed", error)
+                    Timber.tag(AppUpdateRepository.LOG_TAG).w(error, "manual UI failed")
+                    showSnackbarAboveSystemBars(appUpdateCheckErrorMessage(error))
+                }
+        }
+    }
+
+    private fun showAppUpdateAvailableSnackbar(result: AppUpdateRepository.CheckResult.UpdateAvailable) {
+        view?.let { root ->
+            root.makeSnackbarAboveSystemBars(
+                getString(R.string.app_update_available, result.version.toString()),
+                Snackbar.LENGTH_LONG
+            )
+                .setAction(R.string.open) {
+                    Log.i(
+                        AppUpdateRepository.LOG_TAG,
+                        "manual UI open action fired version=${result.version} url=${result.url}"
+                    )
+                    Timber.tag(AppUpdateRepository.LOG_TAG).i(
+                        "manual UI open action fired version=%s url=%s",
+                        result.version,
+                        result.url
+                    )
+                    openAppUpdateUrl(result.url)
+                }
+                .show()
+        }
+    }
+
+    private fun openAppUpdateUrl(url: String) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            setClass(requireContext(), MainActivity::class.java)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(intent)
+    }
+
+    private fun appUpdateCheckErrorMessage(error: Throwable): String {
+        val reason = (error as? AppUpdateRepository.CheckException)?.reason
+        val reasonText = when (reason) {
+            AppUpdateRepository.FailureReason.Network -> getString(R.string.app_update_check_failed_network)
+            AppUpdateRepository.FailureReason.RateLimited -> getString(R.string.app_update_check_failed_rate_limited)
+            AppUpdateRepository.FailureReason.Forbidden,
+            AppUpdateRepository.FailureReason.Captcha -> getString(R.string.app_update_check_failed_forbidden)
+            AppUpdateRepository.FailureReason.NotFound -> getString(R.string.app_update_check_failed_not_found)
+            AppUpdateRepository.FailureReason.Parse -> getString(R.string.app_update_check_failed_parse)
+            AppUpdateRepository.FailureReason.Server -> getString(R.string.app_update_check_failed_server)
+            else -> error.message?.takeIf { it.isNotBlank() }?.take(80)
+                ?: getString(R.string.app_update_check_failed_unknown)
+        }
+        return getString(R.string.app_update_check_failed_with_reason, reasonText)
+    }
+
+    private fun showSupportAuthorDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_support_author, null)
+        val paymentLink = getString(R.string.support_author_payment_link)
+        val tbankCardNumber = getString(R.string.support_author_tbank_card)
+        val sberCardNumber = getString(R.string.support_author_sber_card)
+        val usdtAddress = getString(R.string.support_author_usdt_trc20)
+
+        dialogView.findViewById<TextView>(R.id.supportAuthorPaymentLink)?.apply {
+            text = SpannableString(paymentLink).apply {
+                setSpan(UnderlineSpan(), 0, paymentLink.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            setOnClickListener {
+                openSupportPaymentLink(paymentLink)
+            }
+        }
+        dialogView.findViewById<View>(R.id.supportAuthorCopyTbankCard)?.setOnClickListener {
+            copySupportValue(tbankCardNumber)
+        }
+        dialogView.findViewById<View>(R.id.supportAuthorCopySberCard)?.setOnClickListener {
+            copySupportValue(sberCardNumber)
+        }
+        dialogView.findViewById<View>(R.id.supportAuthorCopyUsdt)?.setOnClickListener {
+            copySupportValue(usdtAddress)
+        }
+
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.support_author_title)
+            .setView(dialogView)
+            .setNegativeButton(R.string.close, null)
+            .showWithStyledButtons()
+    }
+
+    private fun copySupportValue(value: String) {
+        clipboardHelper.copyToClipboard(value)
+        showSnackbar(R.string.copied)
+    }
+
+    private fun openSupportPaymentLink(url: String) {
+        runCatching {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+            }
+            startActivity(Intent.createChooser(intent, getString(R.string.open_with)))
+        }.onFailure { error ->
+            if (error !is ActivityNotFoundException) {
+                Timber.e(error, "Failed to open support payment link")
+            }
+            showSnackbar(R.string.error_occurred)
+        }
+    }
+
+    private fun showDownloadFolderDialog() {
+        val currentUri = mainPreferencesHolder.getDownloadFolderUri()
+        val items = mutableListOf(getString(R.string.download_folder_choose))
+        if (!currentUri.isNullOrBlank()) {
+            items += getString(R.string.download_folder_reset)
+        }
+        MaterialAlertDialogBuilder(requireActivity())
+            .setTitle(R.string.pref_title_download_folder)
+            .setItems(items.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    openDownloadFolderPicker()
+                } else {
+                    resetDownloadFolder()
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .showWithStyledButtons()
+    }
+
+    private fun openDownloadFolderPicker() {
+        val downloadsDoc = Uri.parse("content://com.android.externalstorage.documents/root/primary")
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsDoc)
+        }
+        downloadFolderLauncher.launch(intent)
+    }
+
+    private fun persistDownloadFolder(uri: Uri) {
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        runCatching {
+            requireContext().contentResolver.takePersistableUriPermission(uri, flags)
+        }.onFailure { e ->
+            Timber.e(e, "Failed to persist downloads folder permission")
+            showSnackbar(R.string.download_folder_unavailable)
+            return
+        }
+        lifecycleScope.launch {
+            mainPreferencesHolder.setDownloadFolderUri(uri.toString())
+            updateDownloadFolderSummary(uri.toString())
+            showSnackbar(R.string.download_folder_saved)
+        }
+    }
+
+    private fun resetDownloadFolder() {
+        val currentUri = mainPreferencesHolder.getDownloadFolderUri()
+        currentUri?.let { value ->
+            runCatching {
+                requireContext().contentResolver.releasePersistableUriPermission(
+                    Uri.parse(value),
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
+        }
+        lifecycleScope.launch {
+            mainPreferencesHolder.setDownloadFolderUri(null)
+            updateDownloadFolderSummary(null)
+            showSnackbar(R.string.download_folder_reset_done)
+        }
+    }
+
+    private fun updateDownloadFolderSummary(uriString: String?) {
+        findPreference<Preference>(Preferences.Main.DOWNLOAD_FOLDER_URI)?.summary = if (uriString.isNullOrBlank()) {
+            getString(R.string.pref_summary_download_folder_default)
+        } else {
+            getString(R.string.pref_summary_download_folder_selected, readableFolderName(uriString))
+        }
+    }
+
+    private fun readableFolderName(uriString: String): String {
+        return runCatching {
+            val uri = Uri.parse(uriString)
+            DocumentsContract.getTreeDocumentId(uri).substringAfterLast(':').substringAfterLast('/')
+                .ifBlank { uri.lastPathSegment.orEmpty() }
+        }.getOrDefault(uriString)
+    }
+
+    private fun logoutRequest() {
+        logoutJob?.cancel()
+        logoutJob = lifecycleScope.launch {
+            try {
+                val success = authRepository.signOut()
+                if (success) {
+                    showSnackbar("Logout complete")
+                } else {
+                    showSnackbar("Logout error")
+                }
+            } catch (e: Exception) {
+                showSnackbar("Logout error: $e")
+            }
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        disposable?.dispose()
+        logoutJob?.cancel()
     }
 
     override fun onResume() {
         super.onResume()
+        (activity as? androidx.appcompat.app.AppCompatActivity)?.supportActionBar
+                ?.setTitle(R.string.activity_title_settings)
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
     }
 
@@ -173,72 +1163,4 @@ class SettingsFragment : BaseSettingFragment() {
         super.onPause()
     }
 
-    private fun addQuickSection() {
-        val ctx = preferenceManager.context
-        val quickCategory = findPreference<PreferenceCategory>("quick_settings_category") ?: return
-
-        fun addMirrorSwitch(targetKey: String, titleRes: Int, summaryRes: Int?) {
-            val sp = forpdateam.ru.forpda.ui.views.SwitchPreference(ctx).apply {
-                title = getString(titleRes)
-                if (summaryRes != null) summary = getString(summaryRes)
-                // Без key: не создаём дубликаты Preferences в дереве, синхроним вручную
-                key = null
-                isPersistent = false
-                isChecked = prefs.getBoolean(targetKey, false)
-                setOnPreferenceChangeListener { _, newValue ->
-                    prefs.edit().putBoolean(targetKey, (newValue as? Boolean) == true).apply()
-                    true
-                }
-            }
-            quickBindings.add(targetKey to sp)
-            quickCategory.addPreference(sp)
-        }
-
-        // Быстрые тумблеры (самые частые)
-        addMirrorSwitch(
-            targetKey = "main.is_system_downloader",
-            titleRes = R.string.pref_title_system_downloader,
-            summaryRes = R.string.pref_summary_system_downloader
-        )
-        addMirrorSwitch(
-            targetKey = "main.show_bottom_arrow",
-            titleRes = R.string.pref_title_show_bottom_arrow,
-            summaryRes = R.string.pref_summary_show_bottom_arrow
-        )
-        addMirrorSwitch(
-            targetKey = "message_panel.is_monospace",
-            titleRes = R.string.pref_title_monospace,
-            summaryRes = R.string.pref_summary_monospace
-        )
-
-        // Быстрые переходы (без дублирования ключей)
-        Preference(ctx).apply {
-            title = getString(R.string.pref_title_theme_mode)
-            isIconSpaceReserved = false
-            setOnPreferenceClickListener {
-                findPreference<ListPreference>("main.theme.mode")?.performClick()
-                true
-            }
-        }.also { quickCategory.addPreference(it) }
-
-        Preference(ctx).apply {
-            title = getString(R.string.pref_title_ui_palette)
-            summary = getString(R.string.pref_summary_ui_palette)
-            isIconSpaceReserved = false
-            setOnPreferenceClickListener {
-                findPreference<ListPreference>(Preferences.Main.UI_PALETTE)?.performClick()
-                true
-            }
-        }.also { quickCategory.addPreference(it) }
-
-        Preference(ctx).apply {
-            title = getString(R.string.pref_title_text_size)
-            summary = getString(R.string.pref_summary_text_size)
-            isIconSpaceReserved = false
-            setOnPreferenceClickListener {
-                findPreference<Preference>(Preferences.Main.WEBVIEW_FONT_SIZE)?.performClick()
-                true
-            }
-        }.also { quickCategory.addPreference(it) }
-    }
 }

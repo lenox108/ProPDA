@@ -2,8 +2,8 @@ package forpdateam.ru.forpda.ui.fragments.other
 
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.ItemTouchHelper
-import android.util.Log
-import forpdateam.ru.forpda.model.interactors.other.MenuRepository
+import forpdateam.ru.forpda.ui.views.drawers.adapters.MenuListItem
+import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuSectionListItem
 
 /**
  * Created by radiationx on 26.05.17.
@@ -14,13 +14,14 @@ class OtherItemDragCallback(
         private val listener: ItemTouchHelperListener
 ) : ItemTouchHelper.Callback() {
 
+    private var isDragging = false
+
     override fun isLongPressDragEnabled(): Boolean {
-        return true
+        return false
     }
 
-    override fun getMovementFlags(recyclerView: androidx.recyclerview.widget.RecyclerView, viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder): Int {
-        Log.e("lplplp", "getMovementFlags")
-        val dragFlags = if (checkViewHolder(viewHolder)) {
+    override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
+        val dragFlags = if (isDraggableViewHolder(viewHolder)) {
             ItemTouchHelper.UP or ItemTouchHelper.DOWN or ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
         } else {
             ItemTouchHelper.ACTION_STATE_IDLE
@@ -29,36 +30,58 @@ class OtherItemDragCallback(
         return ItemTouchHelper.Callback.makeMovementFlags(dragFlags, swipeFlags)
     }
 
+    override fun canDropOver(recyclerView: RecyclerView, current: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+        return isDraggableViewHolder(current) && isDropTargetViewHolder(target)
+    }
+
     override fun onMove(
-            recyclerView: androidx.recyclerview.widget.RecyclerView,
-            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder,
-            target: androidx.recyclerview.widget.RecyclerView.ViewHolder
+            recyclerView: RecyclerView,
+            viewHolder: RecyclerView.ViewHolder,
+            target: RecyclerView.ViewHolder
     ): Boolean {
-        if (checkViewHolder(viewHolder) && checkViewHolder(target)) {
-            listener.onItemMove(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
-            return true
+        if (isDraggableViewHolder(viewHolder) && isDropTargetViewHolder(target)) {
+            return otherAdapter.canMoveItem(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition).also { canMove ->
+                if (canMove) listener.onItemMove(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
+            }
         }
         return false
     }
 
 
-    override fun onSwiped(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder, direction: Int) {
+    override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
     }
 
-    override fun onSelectedChanged(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder?, actionState: Int) {
+    override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
         super.onSelectedChanged(viewHolder, actionState)
-        if(actionState==ItemTouchHelper.ACTION_STATE_DRAG){
+        if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && viewHolder != null && isDraggableViewHolder(viewHolder)) {
+            isDragging = true
             listener.onDragStart()
+            viewHolder.itemView.animate()
+                    .alpha(0.9f)
+                    .setDuration(120L)
+                    .start()
+            viewHolder.itemView.elevation = viewHolder.itemView.resources.getDimension(forpdateam.ru.forpda.R.dimen.dp8)
         }
     }
 
-    override fun clearView(recyclerView: androidx.recyclerview.widget.RecyclerView, viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder) {
+    override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
         super.clearView(recyclerView, viewHolder)
+        if (!isDragging) return
+        isDragging = false
+        viewHolder.itemView.animate()
+                .alpha(1f)
+                .setDuration(120L)
+                .start()
+        viewHolder.itemView.elevation = 0f
         listener.onDragEnd()
     }
 
-    private fun checkViewHolder(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder): Boolean {
-        return viewHolder is MenuItemDelegate.ViewHolder && MenuRepository.GROUP_MAIN.contains(viewHolder.getItem().appItem.id)
+    private fun isDraggableViewHolder(viewHolder: RecyclerView.ViewHolder): Boolean =
+            otherAdapter.isMenuEditMode() && otherAdapter.isDraggableItem(viewHolder.bindingAdapterPosition)
+
+    private fun isDropTargetViewHolder(viewHolder: RecyclerView.ViewHolder): Boolean {
+        val item = otherAdapter.items?.getOrNull(viewHolder.bindingAdapterPosition)
+        return item is MenuListItem || item is OtherMenuSectionListItem
     }
 
     interface ItemTouchHelperListener {

@@ -4,4 +4,7 @@
     android:id="@+id/swipe_refresh_list"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/background_for_lists"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     app:layout_behavior="@string/appbar_scrolling_view_behavior"/>

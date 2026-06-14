@@ -1,10 +1,14 @@
 package forpdateam.ru.forpda.presentation.mentions
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import forpdateam.ru.forpda.common.Utils
+import android.os.SystemClock
+import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.presentation.BaseViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+
+import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.entity.remote.mentions.MentionItem
+import forpdateam.ru.forpda.model.CountersHolder
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.mentions.MentionsRepository
@@ -12,79 +16,105 @@ import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
-import io.reactivex.disposables.CompositeDisposable
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.util.regex.Pattern
 
-class MentionsViewModel(
+@HiltViewModel
+class MentionsViewModel @Inject constructor(
         private val mentionsRepository: MentionsRepository,
         private val favoritesRepository: FavoritesRepository,
+        private val countersHolder: CountersHolder,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
-        private val errorHandler: IErrorHandler
-) : ViewModel() {
+        private val errorHandler: IErrorHandler,
+        private val clipboardHelper: ClipboardHelper
+) : BaseViewModel() {
 
-    @Volatile
-    private var mentionsView: MentionsView? = null
-
-    fun attachView(view: MentionsView) {
-        mentionsView = view
-    }
-
-    fun detachView() {
-        mentionsView = null
-    }
-
-    private val rxSubscriptions = CompositeDisposable()
+    private var loadJob: Job? = null
     private var subscriptionsStarted = false
 
-    var currentSt: Int = 0
+    private val _currentSt = MutableStateFlow(0)
+    val currentSt: StateFlow<Int> = _currentSt.asStateFlow()
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _uiEvents = MutableSharedFlow<MentionsUiEvent>()
+    val uiEvents: SharedFlow<MentionsUiEvent> = _uiEvents.asSharedFlow()
+
+    fun setCurrentSt(st: Int) {
+        _currentSt.value = st
+    }
 
     fun start() {
+        Timber.d("start() called, subscriptionsStarted=$subscriptionsStarted")
         if (subscriptionsStarted) return
         subscriptionsStarted = true
-        getMentions()
+        getMentions(cacheFirst = true)
     }
 
-    override fun onCleared() {
-        rxSubscriptions.clear()
-        super.onCleared()
-    }
-
-    fun getMentions() {
-        mentionsRepository
-                .getMentions(currentSt)
-                .doOnSubscribe { mentionsView?.setRefreshing(true) }
-                .doAfterTerminate { mentionsView?.setRefreshing(false) }
-                .subscribe({
-                    mentionsView?.showMentions(it)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+    fun getMentions(cacheFirst: Boolean = true) {
+        Timber.d("getMentions() called, currentSt=${_currentSt.value}")
+        loadJob?.cancel()
+        loadJob = scope.launch {
+            val page = _currentSt.value
+            val cacheStartedAt = SystemClock.uptimeMillis()
+            val cachedData = if (cacheFirst) mentionsRepository.getCachedMentions(page) else null
+            cachedData?.let {
+                logPerf("emit cached list", cacheStartedAt, "page=$page items=${it.items.size}")
+                _uiEvents.emit(MentionsUiEvent.ShowMentions(it))
+            }
+            _refreshing.value = true
+            try {
+                val refreshStartedAt = SystemClock.uptimeMillis()
+                val data = mentionsRepository.refreshMentions(page)
+                logPerf("emit refreshed list", refreshStartedAt, "page=$page items=${data.items.size}")
+                val badgeStartedAt = SystemClock.uptimeMillis()
+                countersHolder.setMentions(mentionsRepository.getUnreadSnapshot().unreadCount, source = "mentions_refresh_changed")
+                logPerf("badge recompute", badgeStartedAt, "source=mentions_refresh_changed")
+                Timber.d("getMentions success, got ${data.items.size} items")
+                _uiEvents.emit(MentionsUiEvent.ShowMentions(data))
+            } catch (e: Exception) {
+                Timber.e(e, "getMentions failed")
+                var message: String? = null
+                errorHandler.handle(e) { _, handledMessage -> message = handledMessage }
+                _uiEvents.emit(MentionsUiEvent.ShowLoadError(message))
+            } finally {
+                _refreshing.value = false
+            }
+        }
     }
 
     fun addTopicToFavorite(topicId: Int, subType: String) {
-        viewModelScope.launch {
+        scope.launch {
             runCatching {
                 favoritesRepository.editFavorites(FavoritesApi.ACTION_ADD, -1, topicId, subType)
-            }.onSuccess { mentionsView?.onAddToFavorite(it) }
+            }.onSuccess { _uiEvents.emit(MentionsUiEvent.OnAddToFavorite(it)) }
                     .onFailure { errorHandler.handle(it) }
         }
     }
 
     fun onItemClick(item: MentionItem) {
         linkHandler.handle(item.link, router, mapOf(
-                Screen.ARG_TITLE to item.title.orEmpty()
+                Screen.ARG_TITLE to item.title.orEmpty(),
+                Screen.Theme.ARG_TOPIC_OPEN_SOURCE to "mentions"
         ))
     }
 
     fun onItemLongClick(item: MentionItem) {
-        mentionsView?.showItemDialogMenu(item)
+        scope.launch { _uiEvents.emit(MentionsUiEvent.ShowItemDialogMenu(item)) }
     }
 
     fun copyLink(item: MentionItem) {
-        Utils.copyToClipBoard(item.link)
+        clipboardHelper.copyToClipboard(item.link)
     }
 
     fun addToFavorites(item: MentionItem) {
@@ -93,20 +123,21 @@ class MentionsViewModel(
         if (matcher.find()) {
             id = matcher.group(1)?.toIntOrNull() ?: 0
         }
-        mentionsView?.showAddFavoritesDialog(id)
+        scope.launch { _uiEvents.emit(MentionsUiEvent.ShowAddFavoritesDialog(id)) }
     }
 
-    class Factory(
-            private val mentionsRepository: MentionsRepository,
-            private val favoritesRepository: FavoritesRepository,
-            private val router: TabRouter,
-            private val linkHandler: ILinkHandler,
-            private val errorHandler: IErrorHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != MentionsViewModel::class.java) throw IllegalArgumentException("Unknown ViewModel class")
-            return MentionsViewModel(mentionsRepository, favoritesRepository, router, linkHandler, errorHandler) as T
+    private fun logPerf(label: String, startedAt: Long, extra: String = "") {
+        if (BuildConfig.DEBUG) {
+            Timber.d("MentionsPerf %s took %dms %s", label, SystemClock.uptimeMillis() - startedAt, extra)
         }
     }
+}
+
+sealed class MentionsUiEvent {
+    data class MentionMarkedRead(val item: MentionItem) : MentionsUiEvent()
+    data class ShowMentions(val data: forpdateam.ru.forpda.entity.remote.mentions.MentionsData) : MentionsUiEvent()
+    data class ShowItemDialogMenu(val item: MentionItem) : MentionsUiEvent()
+    data class ShowAddFavoritesDialog(val id: Int) : MentionsUiEvent()
+    data class OnAddToFavorite(val result: Boolean) : MentionsUiEvent()
+    data class ShowLoadError(val message: String?) : MentionsUiEvent()
 }

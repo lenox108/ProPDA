@@ -54,8 +54,24 @@ private fun unicodeScalarEntityToString(v: Int): String? {
  * Убирает служебные хвосты IPB (кто отредактировал, причина), артефакты JSON/экранирования.
  * Вызывать для текста из DOM и после парсера формы.
  */
+private val bbcodeLineBreakTag = Regex("""(?i)\[br\s*/?\]""")
+
+/**
+ * 4PDA/IPB в textarea отдаёт переводы строк как `[br]`; в редакторе показываем обычный `\n`.
+ */
+fun decodeBbcodeLineBreaksForEditor(text: String): String =
+        bbcodeLineBreakTag.replace(text) { "\n" }
+
+/**
+ * Тело поля `Post` при submit — как в браузерной textarea: сырые `\n`, не `[br]`.
+ * IPB в textarea отдаёт `[br]`, но при сохранении принимает переводы строк; литеральные
+ * `[br]` в POST попадают в HTML поста как видимый текст.
+ */
+fun encodeEditPostBodyForSubmit(text: String): String =
+        text.replace("\r\n", "\n").replace('\r', '\n')
+
 fun normalizeEditPostBodyForEditor(text: String): String {
-    var s = text
+    var s = decodeBbcodeLineBreaksForEditor(text)
     // Снять экранирование кавычек/переносов (двойное тоже — пока есть подстрока)
     var prev: String
     do {
@@ -222,12 +238,16 @@ private fun stripIpbEditFooterHtml(html: String): String {
 
 /**
  * Выбор лучшего варианта тела поста: приоритет у строки с `[quote` (как на форуме),
- * затем у более длинной с BBCode — иначе «обрезок» с `[img]` побеждает полный `[quote]`.
+ * кроме случаев, когда более длинный кандидат содержит merged/appended-секцию поста.
  */
 fun selectBestEditBodyCandidate(candidates: List<String>): String {
     val nonBlank = candidates.filter { it.isNotBlank() }
     if (nonBlank.isEmpty()) return ""
     val quoteRe = Regex("""(?i)\[quote\b""")
+    val withMergedSection = nonBlank.filter { containsMergedPostSection(it) }
+    if (withMergedSection.isNotEmpty()) {
+        return withMergedSection.maxByOrNull { it.length } ?: withMergedSection.first()
+    }
     val withQuote = nonBlank.filter { quoteRe.containsMatchIn(it) }
     if (withQuote.isNotEmpty()) {
         return withQuote.maxByOrNull { it.length } ?: withQuote.first()
@@ -241,6 +261,7 @@ fun selectBestEditBodyCandidate(candidates: List<String>): String {
 
 /** Упоминание в стиле форума: `[b]Ник,[/b]` (запятая перед закрытием тега). */
 private val mentionBoldBbcode = Regex("""\[(?i)b\][^\[]+?,\s*\[\s*/\s*b\]""")
+private val snapbackBbcode = Regex("""(?is)\[snapback\]\d+\[/snapback\]""")
 
 /**
  * Текст из `<textarea name="Post">` — основной источник BBCode.
@@ -253,6 +274,7 @@ private fun roughPlainForMerge(s: String): String {
     var prev: String
     do {
         prev = t
+        t = t.replace(snapbackBbcode, "")
         t = t.replace(Regex("""(?is)\[[^\]]*\]"""), "")
     } while (t != prev)
     return t.replace(Regex("\\s+"), " ").trim()
@@ -263,15 +285,31 @@ private fun singleOuterQuoteInner(text: String): String? {
     return m.groupValues[1].trim()
 }
 
+private fun containsMergedPostSection(text: String): Boolean =
+        Regex("""(?i)\[(?:no)?mergetime\b""").containsMatchIn(text) ||
+                text.contains("Добавлено", ignoreCase = true)
+
 fun mergeEditPostMessage(serverMessage: String, prefilledFromDom: String): String {
     val server = normalizeEditPostBodyForEditor(serverMessage)
     val dom = normalizeEditPostBodyForEditor(prefilledFromDom)
     if (server.isBlank()) return dom
     if (dom.isBlank()) return server
+    // Для редактирования серверная textarea — единственный полный источник merged-постов
+    // (`Добавлено ...`, [mergetime]); DOM-подстановка может содержать только первую часть.
+    if (containsMergedPostSection(server) && !containsMergedPostSection(dom)) {
+        return server
+    }
+    // Если сервер внезапно вернул только первую часть, но предзаполнение из WebView уже содержит
+    // видимый merged-блок, лучше сохранить полный текст, чем молча отрезать добавленную часть.
+    if (!containsMergedPostSection(server) && containsMergedPostSection(dom) && dom.length > server.length) {
+        return dom
+    }
     val serverHasBracket = server.contains('[')
     val domLooksLikeBbcode = dom.contains('[') && dom.contains(']')
     val serverHasQuote = server.contains("[quote", ignoreCase = true)
     val domHasQuote = dom.contains("[quote", ignoreCase = true)
+    val serverHasSnapback = snapbackBbcode.containsMatchIn(server)
+    val domHasSnapback = snapbackBbcode.containsMatchIn(dom)
     // Страница редактирования иногда отдаёт «голый» текст без [, а из WebView уже собран нормальный BBCode.
     if (!serverHasBracket && domLooksLikeBbcode) {
         // DOM часто даёт ложные [quote] из blockquote/обёрток 4PDA — для правки поста приоритет у textarea с сервера.
@@ -288,6 +326,9 @@ fun mergeEditPostMessage(serverMessage: String, prefilledFromDom: String): Strin
                 return server
             }
         }
+    }
+    if (!serverHasSnapback && domHasSnapback && roughPlainForMerge(server) == roughPlainForMerge(dom)) {
+        return dom
     }
     if (mentionBoldBbcode.containsMatchIn(dom) && !mentionBoldBbcode.containsMatchIn(server)) {
         // Не терять цитаты с сервера, если из DOM цитата не попала в нормализацию.

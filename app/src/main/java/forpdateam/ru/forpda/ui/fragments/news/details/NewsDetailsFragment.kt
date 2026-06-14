@@ -1,73 +1,114 @@
 package forpdateam.ru.forpda.ui.fragments.news.details
 
-import android.graphics.Color
+import android.content.res.ColorStateList
 import android.graphics.PorterDuff
 import android.os.Bundle
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentManager
-import androidx.viewpager.widget.ViewPager
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewStub
-import android.widget.ImageView
-import android.widget.ProgressBar
-import android.widget.TextView
-
 import androidx.fragment.app.viewModels
-import forpdateam.ru.forpda.common.ForPdaCoil
+import com.google.android.material.appbar.CollapsingToolbarLayout
+import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.databinding.FragmentArticleBinding
 
 import java.util.ArrayList
 
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.news.DetailsPage
+import forpdateam.ru.forpda.model.interactors.CrossScreenInteractor
 import forpdateam.ru.forpda.model.interactors.news.ArticleInteractor
-import forpdateam.ru.forpda.presentation.articles.detail.ArticleDetailView
+import forpdateam.ru.forpda.model.interactors.news.ArticleDiskCache
+import forpdateam.ru.forpda.model.interactors.news.ArticleMemoryCache
+import forpdateam.ru.forpda.model.interactors.news.ArticlePrefetchService
+import forpdateam.ru.forpda.presentation.articles.detail.ArticleDetailUiEvent
 import forpdateam.ru.forpda.presentation.articles.detail.ArticleDetailViewModel
-import forpdateam.ru.forpda.ui.activities.MainActivity
+import forpdateam.ru.forpda.presentation.articles.detail.ArticleUiState
+import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
 import forpdateam.ru.forpda.ui.views.ExtendedWebView
-import forpdateam.ru.forpda.ui.views.ScrimHelper
+import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.model.repository.news.NewsRepository
+import forpdateam.ru.forpda.presentation.articles.detail.ArticleTemplate
+import forpdateam.ru.forpda.presentation.IErrorHandler
+import forpdateam.ru.forpda.presentation.ILinkHandler
+import forpdateam.ru.forpda.presentation.TabRouter
+import forpdateam.ru.forpda.common.ClipboardHelper
+import forpdateam.ru.forpda.model.repository.note.NotesRepository
+import javax.inject.Inject
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+import androidx.fragment.app.commitNow
 
 /**
  * Created by isanechek on 8/19/17.
  */
 
-class NewsDetailsFragment : TabFragment(), ArticleDetailView, TabTopScroller {
+@AndroidEntryPoint
+class NewsDetailsFragment : TabFragment(), TabTopScroller {
+    @Inject lateinit var articleTemplate: ArticleTemplate
+    @Inject lateinit var newsRepository: NewsRepository
+    @Inject lateinit var router: TabRouter
+    @Inject lateinit var linkHandler: ILinkHandler
+    @Inject lateinit var errorHandler: IErrorHandler
+    @Inject lateinit var clipboardHelper: ClipboardHelper
+    @Inject lateinit var notesRepository: NotesRepository
+    @Inject lateinit var articleDiskCache: ArticleDiskCache
+    @Inject lateinit var articleMemoryCache: ArticleMemoryCache
+    @Inject lateinit var articlePrefetchService: ArticlePrefetchService
+    @Inject lateinit var crossScreenInteractor: CrossScreenInteractor
 
+    private var _articleBinding: FragmentArticleBinding? = null
+    private val articleBinding get() = checkNotNull(_articleBinding) { "Binding accessed after onDestroyView" }
 
-    lateinit var fragmentsPager: androidx.viewpager.widget.ViewPager
-        private set
-    private lateinit var progressBar: ProgressBar
-    private lateinit var imageProgressBar: ProgressBar
-    private lateinit var detailsImage: ImageView
-
-    private lateinit var detailsTitle: TextView
-    private lateinit var detailsNick: TextView
-    private lateinit var detailsCount: TextView
-    private lateinit var detailsDate: TextView
-
-    private var isResume = false
-    private var isScrim = false
-
-    private val interactor = ArticleInteractor(
-            ArticleInteractor.InitData(),
-            App.get().Di().newsRepository,
-            App.get().Di().articleTemplate
-    )
+    private val interactor by lazy {
+        ArticleInteractor(
+                ArticleInteractor.InitData(),
+                newsRepository,
+                articleTemplate,
+                articleDiskCache,
+                crossScreenInteractor,
+                articleMemoryCache,
+                articlePrefetchService
+        )
+    }
 
     private val presenter: ArticleDetailViewModel by viewModels {
-        ArticleDetailViewModel.Factory(
-                interactor,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler
-        )
+        ArticleDetailViewModel.Factory(requireContext(), interactor, router, linkHandler, errorHandler, clipboardHelper)
+    }
+
+    private var prevStatusBarColor: Int? = null
+    private val networkRefreshing = AtomicBoolean(false)
+    private val awaitingWebViewRender = AtomicBoolean(false)
+
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
+
+    fun markArticleWebViewLoadStarted() {
+        if (articleContentFragment()?.hasConfirmedArticleRender() == true) {
+            return
+        }
+        awaitingWebViewRender.set(true)
+        applyLoadingIndicator()
+    }
+
+    fun onArticleWebViewRendered() {
+        awaitingWebViewRender.set(false)
+        applyLoadingIndicator()
+    }
+
+    /** Stops toolbar spinner only when article body is confirmed painted in the WebView. */
+    fun clearArticleWebViewPendingRenderIfDisplayed() {
+        if (articleContentFragment()?.hasConfirmedArticleRender() == true) {
+            awaitingWebViewRender.set(false)
+            applyLoadingIndicator()
+        }
     }
 
     fun provideChildInteractor(): ArticleInteractor {
@@ -76,111 +117,123 @@ class NewsDetailsFragment : TabFragment(), ArticleDetailView, TabTopScroller {
 
     fun getAppBar() = appBarLayout
 
+    fun currentArticleId(): Int = presenter.currentData.value?.id ?: interactor.initData.newsId
+
+    fun currentCommentsCount(): Int = presenter.currentData.value?.commentsCount ?: -1
+
+    fun currentArticle(): DetailsPage? = presenter.currentData.value
+
+    fun reloadArticle() {
+        presenter.loadArticle(forceRefresh = true)
+    }
+
+    fun isArticleLoading(): Boolean = presenter.isArticleLoading()
+
+    fun showInlineComments() {
+        appBarLayout.setExpanded(false, true)
+        (childFragmentManager.findFragmentById(R.id.article_container) as? ArticleContentFragment)
+                ?.loadInlineComments()
+    }
+
     public override fun attachWebView(webView: ExtendedWebView) {
         super.attachWebView(webView)
     }
 
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_news)
-        configuration.isFitSystemWindow = true
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_news)
+        configuration.fitSystemWindow = true
         arguments?.apply {
             interactor.initData.newsUrl = getString(ARG_NEWS_URL)
             interactor.initData.newsId = getInt(ARG_NEWS_ID, 0)
             interactor.initData.commentId = getInt(ARG_NEWS_COMMENT_ID, 0)
+            interactor.initData.hintCommentsCount = getInt(ARG_NEWS_COMMENTS_COUNT, 0)
+            interactor.initData.openSource = getString(ARG_NEWS_OPEN_SOURCE, "news_list")
         }
+        interactor.resetForNewOpen()
+        presenter.start()
+    }
+
+    override fun onDestroy() {
+        interactor.close()
+        super.onDestroy()
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        baseInflateFragment(inflater, R.layout.fragment_article)
-        val viewStub = findViewById(R.id.toolbar_content) as ViewStub
-        viewStub.layoutResource = R.layout.toolbar_news_details
-        viewStub.inflate()
-        fragmentsPager = findViewById(R.id.view_pager) as androidx.viewpager.widget.ViewPager
-        progressBar = findViewById(R.id.progress_bar) as ProgressBar
-        detailsImage = findViewById(R.id.article_image) as ImageView
-        detailsTitle = findViewById(R.id.article_title) as TextView
-        detailsNick = findViewById(R.id.article_nick) as TextView
-        detailsCount = findViewById(R.id.article_comments_count) as TextView
-        detailsDate = findViewById(R.id.article_date) as TextView
-        imageProgressBar = findViewById(R.id.article_progress_bar) as ProgressBar
+        _articleBinding = FragmentArticleBinding.inflate(inflater, fragmentContent, true)
 
-        detailsImage.maxHeight = App.px24 * 10
-
-        setScrollFlagsExitUntilCollapsed()
+        clearToolbarScrollFlags()
+        (toolbar.layoutParams as? CollapsingToolbarLayout.LayoutParams)?.let { params ->
+            if (params.collapseMode != CollapsingToolbarLayout.LayoutParams.COLLAPSE_MODE_PIN) {
+                params.collapseMode = CollapsingToolbarLayout.LayoutParams.COLLAPSE_MODE_PIN
+                toolbar.layoutParams = params
+            }
+        }
+        appBarLayout.setExpanded(true, false)
 
         return viewFragment
     }
 
-    @Suppress("DEPRECATION")
+    override fun onDestroyViewBinding() {
+        _articleBinding = null
+        super.onDestroyViewBinding()
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val scrimHelper = ScrimHelper(appBarLayout, toolbarLayout)
-        scrimHelper.setScrimListener { scrim1 ->
-            isScrim = scrim1
-            if (scrim1) {
-                toolbar.navigationIcon?.clearColorFilter()
-                toolbar.overflowIcon?.clearColorFilter()
-                toolbarTitleView.visibility = View.VISIBLE
-            } else {
-                toolbar.navigationIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
-                toolbar.overflowIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
-                toolbarTitleView.visibility = View.GONE
-            }
-            updateStatusBar()
-        }
+        toolbar.visibility = View.VISIBLE
+        toolbar.setBackgroundColor(requireContext().getColorFromAttr(topBarSurfaceColorAttr()))
 
-
+        val iconColor = requireContext().getColorFromAttr(R.attr.icon_toolbar)
         arguments?.apply {
             val newsTitle = getString(ARG_NEWS_TITLE)
-            val newsNick = getString(ARG_NEWS_AUTHOR_NICK)
-            val newsDate = getString(ARG_NEWS_DATE)
-            val newsImageUrl = getString(ARG_NEWS_IMAGE)
-            val newsCount = getInt(ARG_NEWS_COMMENTS_COUNT, -1)
             if (newsTitle != null) {
                 setTitle(newsTitle)
                 setTabTitle(String.format(getString(R.string.fragment_tab_title_article), newsTitle))
-                detailsTitle.text = newsTitle
-            }
-            if (newsNick != null) {
-                detailsNick.text = newsNick
-            }
-            if (newsCount != -1) {
-                detailsCount.text = newsCount.toString()
-            }
-            if (newsDate != null) {
-                detailsDate.text = newsDate
-            }
-            if (newsImageUrl != null) {
-                showArticleImage(newsImageUrl)
             }
         }
 
-        toolbarTitleView.visibility = View.GONE
-        toolbar.navigationIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
-        toolbar.overflowIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
-        detailsNick.setOnClickListener { presenter.openAuthorProfile() }
+        toolbarTitleView.visibility = View.VISIBLE
+        toolbar.navigationIcon?.setColorFilter(iconColor, PorterDuff.Mode.SRC_ATOP)
+        toolbar.overflowIcon?.setColorFilter(iconColor, PorterDuff.Mode.SRC_ATOP)
+        toolbarProgress.indeterminateTintList = ColorStateList.valueOf(
+                requireContext().getColorFromAttr(R.attr.colorAccent)
+        )
 
-        presenter.attachView(this)
-        presenter.start()
+        if (childFragmentManager.findFragmentById(R.id.article_container) == null) {
+            childFragmentManager.commitNow {
+                replace(R.id.article_container, ArticleContentFragment())
+            }
+        }
+
+        networkRefreshing.set(true)
+        awaitingWebViewRender.set(true)
+        applyLoadingIndicator()
+        observeViewModel()
     }
 
     override fun onDestroyView() {
-        presenter.detachView()
+        restoreStatusBar()
         super.onDestroyView()
     }
 
     override fun toggleScrollTop() {
-        ((fragmentsPager.adapter as FragmentPagerAdapter).getItem(fragmentsPager.currentItem) as? TabTopScroller)?.toggleScrollTop()
+        (childFragmentManager.findFragmentById(R.id.article_container) as? TabTopScroller)?.toggleScrollTop()
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
+        menu.add(R.string.write).apply {
+            setIcon(R.drawable.ic_comment_outline)
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            setOnMenuItemClickListener {
+                NewsCommentComposeBottomSheet()
+                        .show(childFragmentManager, NewsCommentComposeBottomSheet.TAG)
+                true
+            }
+        }
         menu.add(R.string.copy_link)
                 .setOnMenuItemClickListener {
                     presenter.copyLink()
@@ -198,93 +251,128 @@ class NewsDetailsFragment : TabFragment(), ArticleDetailView, TabTopScroller {
                 }
     }
 
-    override fun onBackPressed(): Boolean {
-        if (fragmentsPager.currentItem == 1) {
-            fragmentsPager.currentItem = 0
-            return true
-        }
-        return super.onBackPressed()
-    }
-
     override fun onResumeOrShow() {
         super.onResumeOrShow()
-        isResume = true
         updateStatusBar()
+        presenter.reloadIfContentMissing()
+        articleContentFragment()?.ensureRendered()
     }
 
     override fun onPauseOrHide() {
         super.onPauseOrHide()
-        isResume = false
-        updateStatusBar()
+        restoreStatusBar()
     }
 
     private fun updateStatusBar() {
-        val defaultSb = MainActivity.getDefaultLightStatusBar(activity!!)
-        if (isResume) {
-            MainActivity.setLightStatusBar(activity!!, isScrim && defaultSb)
-        } else {
-            MainActivity.setLightStatusBar(activity!!, defaultSb)
+        val act = activity ?: return
+        // Экран статьи новости визуально не должен "просвечивать" статус-бар в светлой теме.
+        // Тема MainActivity работает edge-to-edge со статус-баром #0000; поэтому здесь явно
+        // задаём непрозрачный фон, совпадающий с верхней плашкой.
+        if (prevStatusBarColor == null) prevStatusBarColor = act.window.statusBarColor
+        SystemBarAppearance.syncStatusBar(act, requireContext().getColorFromAttr(topBarSurfaceColorAttr()))
+    }
+
+    private fun restoreStatusBar() {
+        val act = activity
+        val prev = prevStatusBarColor
+        if (act != null && prev != null) {
+            act.window.statusBarColor = prev
+        }
+        prevStatusBarColor = null
+        act?.let(SystemBarAppearance::syncStatusBarIconContrast)
+    }
+
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        setRefreshing(isRefreshing)
+                    }
+                }
+                launch {
+                    presenter.uiState
+                            .collect { state ->
+                                when (state) {
+                                    is ArticleUiState.Idle -> Unit
+                                    is ArticleUiState.Loading -> {
+                                        awaitingWebViewRender.set(true)
+                                        applyLoadingIndicator()
+                                    }
+                                    is ArticleUiState.Content -> {
+                                        showArticle(state.page)
+                                        clearArticleWebViewPendingRenderIfDisplayed()
+                                    }
+                                    is ArticleUiState.Error -> {
+                                        awaitingWebViewRender.set(false)
+                                        applyLoadingIndicator()
+                                        val contentFragment = childFragmentManager
+                                                .findFragmentById(R.id.article_container) as? ArticleContentFragment
+                                        if (contentFragment?.hasConfirmedArticleRender() != true) {
+                                            contentFragment?.showError(
+                                                    state.throwable.message
+                                                            ?: getString(R.string.error_occurred)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleUiEvent(event: ArticleDetailUiEvent) {
+        when (event) {
+            is ArticleDetailUiEvent.ShowCreateNote -> showCreateNote(event.title, event.url)
         }
     }
 
     override fun setRefreshing(isRefreshing: Boolean) {
-        progressBar.visibility = if (isRefreshing) View.VISIBLE else View.GONE
+        networkRefreshing.set(isRefreshing)
+        if (isRefreshing) {
+            val articleBodyReady = articleContentFragment()?.hasConfirmedArticleRender() == true
+            if (!articleBodyReady) {
+                awaitingWebViewRender.set(true)
+            }
+        } else {
+            clearArticleWebViewPendingRenderIfDisplayed()
+        }
+        applyLoadingIndicator()
+        // TabFragment.setRefreshing shows contentProgress (center); article load uses toolbar only.
+        if (!isRefreshing) {
+            stopRefreshing()
+        }
     }
 
-    override fun showArticle(data: DetailsPage) {
+    private fun applyLoadingIndicator() {
+        val articleBodyReady = articleContentFragment()?.hasConfirmedArticleRender() == true
+        val showNetwork = networkRefreshing.get() && !articleBodyReady
+        val showWebRender = awaitingWebViewRender.get() && !articleBodyReady
+        val show = showNetwork || showWebRender
+        toolbarProgress.visibility = if (show) View.VISIBLE else View.INVISIBLE
+        contentProgress.visibility = View.GONE
+    }
+
+    private fun showArticle(data: DetailsPage) {
         setTitle(data.title)
         setTabTitle(String.format(getString(R.string.fragment_tab_title_article), data.title))
-        detailsTitle.text = data.title
-        detailsNick.text = data.author
-        detailsDate.text = data.date
-        detailsCount.text = data.commentsCount.toString()
-
-        data.imgUrl?.also {
-            showArticleImage(it)
-        }
-
-        val pagerAdapter = FragmentPagerAdapter(childFragmentManager)
-        fragmentsPager.adapter = pagerAdapter
+        articleContentFragment()?.scheduleInlineCommentsBinding()
         if (data.commentId > 0) {
-            appBarLayout.setExpanded(false, true)
-            fragmentsPager.setCurrentItem(1, true)
+            showInlineComments()
         }
     }
 
-    override fun showCreateNote(title: String, url: String) {
-        NotesAddPopup.showAddNoteDialog(context, title, url)
-    }
+    private fun articleContentFragment(): ArticleContentFragment? =
+            childFragmentManager.findFragmentById(R.id.article_container) as? ArticleContentFragment
 
-    override fun showArticleImage(imageUrl: String) {
-        ForPdaCoil.loadIntoWithProgress(detailsImage, imageUrl, imageProgressBar)
-    }
-
-    @Suppress("DEPRECATION")
-    private inner class FragmentPagerAdapter(
-            fm: androidx.fragment.app.FragmentManager
-    ) : androidx.fragment.app.FragmentPagerAdapter(fm) {
-        private val fragments = ArrayList<androidx.fragment.app.Fragment>()
-        private val titles = ArrayList<String>()
-
-        init {
-            fragments.add(ArticleContentFragment())
-            titles.add(App.get().getString(R.string.news_page_content))
-
-            fragments.add(ArticleCommentsFragment())
-            titles.add(App.get().getString(R.string.news_page_comments))
-        }
-
-        override fun getItem(position: Int): androidx.fragment.app.Fragment {
-            return fragments[position]
-        }
-
-        override fun getCount(): Int {
-            return fragments.size
-        }
-
-        override fun getPageTitle(position: Int): CharSequence? {
-            return titles[position]
-        }
+    private fun showCreateNote(title: String, url: String) {
+        NotesAddPopup.showAddNoteDialog(context, title, url, notesRepository)
     }
 
     companion object {
@@ -297,6 +385,7 @@ class NewsDetailsFragment : TabFragment(), ArticleDetailView, TabTopScroller {
         const val ARG_NEWS_COMMENTS_COUNT = "ARG_NEWS_COMMENTS_COUNT"
         const val ARG_NEWS_DATE = "ARG_NEWS_DATE"
         const val ARG_NEWS_IMAGE = "ARG_NEWS_IMAGE"
+        const val ARG_NEWS_OPEN_SOURCE = "ARG_NEWS_OPEN_SOURCE"
     }
 
 }

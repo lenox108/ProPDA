@@ -1,12 +1,14 @@
 package forpdateam.ru.forpda.presentation.search
 
-import android.net.Uri
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import forpdateam.ru.forpda.common.topicUrlWithUnreadIfPlainOpen
-import forpdateam.ru.forpda.App
+import android.content.Context
+import forpdateam.ru.forpda.presentation.BaseViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+
+import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.IBaseForumPost
 import forpdateam.ru.forpda.entity.remote.search.SearchItem
@@ -21,16 +23,29 @@ import forpdateam.ru.forpda.model.repository.reputation.ReputationRepository
 import forpdateam.ru.forpda.model.repository.posteditor.PostEditorRepository
 import forpdateam.ru.forpda.model.repository.search.SearchRepository
 import forpdateam.ru.forpda.model.repository.theme.ThemeRepository
+import forpdateam.ru.forpda.presentation.theme.TopicOpenContext
+import forpdateam.ru.forpda.presentation.theme.TopicOpenTargetResolver
+import forpdateam.ru.forpda.presentation.theme.TopicUserOpenAction
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
+import forpdateam.ru.forpda.ui.fragments.theme.ThemeDialogsHelper_V2
 import forpdateam.ru.forpda.presentation.theme.ThemeWebCallbacks
+import timber.log.Timber
 import forpdateam.ru.forpda.ui.TemplateManager
-import io.reactivex.disposables.CompositeDisposable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-class SearchViewModel(
+@HiltViewModel
+class SearchViewModel @Inject constructor(
+        @ApplicationContext private val context: Context,
         private val searchRepository: SearchRepository,
         private val editPostRepository: PostEditorRepository,
         private val favoritesRepository: FavoritesRepository,
@@ -43,22 +58,21 @@ class SearchViewModel(
         private val templateManager: TemplateManager,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
-        private val errorHandler: IErrorHandler
-) : ViewModel(), ThemeWebCallbacks {
+        private val errorHandler: IErrorHandler,
+        private val clipboardHelper: ClipboardHelper
+) : BaseViewModel(), ThemeWebCallbacks {
 
-    @Volatile
-    private var searchView: SearchSiteView? = null
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
-    fun attachView(view: SearchSiteView) {
-        searchView = view
-    }
+    private val _currentData = MutableStateFlow<SearchResult?>(null)
+    val currentData: StateFlow<SearchResult?> = _currentData.asStateFlow()
 
-    fun detachView() {
-        searchView = null
-    }
+    private val _uiEvents = MutableSharedFlow<SearchUiEvent>(extraBufferCapacity = 1)
+    val uiEvents: SharedFlow<SearchUiEvent> = _uiEvents.asSharedFlow()
 
-    private val rxSubscriptions = CompositeDisposable()
     private var subscriptionsStarted = false
+    private val expandedPostIds = mutableSetOf<Int>()
 
     companion object {
         const val FIELD_RESOURCE = "resource"
@@ -80,16 +94,18 @@ class SearchViewModel(
     )
 
     private var settings = SearchSettings()
+    private var hasRouteSettings = false
+    private var scopedForumTitle: String? = null
 
-    private var currentData: SearchResult? = null
-
-    init {
-        initSearchSettings(otherPreferencesHolder.getSearchSettings())
+    fun emitFillSettings() {
+        _uiEvents.tryEmit(SearchUiEvent.FillSettingsData(settings, fields))
     }
 
-    fun initSearchSettings(url: String?) {
-        url?.let {
-            settings = SearchSettings.parseSettings(settings, it)
+    fun initSearchSettings(url: String?, forumTitle: String? = null) {
+        if (!url.isNullOrEmpty()) {
+            hasRouteSettings = true
+            settings = SearchSettings.parseSettings(SearchSettings(), url)
+            scopedForumTitle = forumTitle?.takeIf { it.isNotBlank() }
         }
     }
 
@@ -97,71 +113,72 @@ class SearchViewModel(
         if (subscriptionsStarted) return
         subscriptionsStarted = true
 
-        topicPreferencesHolder
-                .observeShowAvatars()
-                .subscribe {
-                    searchView?.updateShowAvatarState(it)
+        scope.launch {
+            if (!hasRouteSettings) {
+                val savedSettings = otherPreferencesHolder.getSearchSettings()
+                if (savedSettings.isNotEmpty()) {
+                    settings = SearchSettings.parseSettings(SearchSettings(), savedSettings)
                 }
-                .also { rxSubscriptions.add(it) }
+            }
+            topicPreferencesHolder.observeShowAvatarsFlow().collect {
+                _uiEvents.emit(SearchUiEvent.UpdateShowAvatarState(it))
+            }
+        }
 
-        topicPreferencesHolder
-                .observeCircleAvatars()
-                .subscribe {
-                    searchView?.updateTypeAvatarState(it)
-                }
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            topicPreferencesHolder.observeCircleAvatarsFlow().collect {
+                _uiEvents.emit(SearchUiEvent.UpdateTypeAvatarState(it))
+            }
+        }
 
-        mainPreferencesHolder
-                .observeScrollButtonEnabled()
-                .subscribe {
-                    searchView?.updateScrollButtonState(it)
-                }
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            mainPreferencesHolder.observeWebViewFontSizeFlow().collect {
+                _uiEvents.emit(SearchUiEvent.SetFontSize(it))
+            }
+        }
 
-        mainPreferencesHolder
-                .observeWebViewFontSize()
-                .subscribe {
-                    searchView?.setFontSize(it)
-                }
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            mainPreferencesHolder.observeAppFontModeFlow().collect {
+                _uiEvents.emit(SearchUiEvent.SetAppFontMode(it))
+            }
+        }
 
-        templateManager
-                .observeThemeType()
-                .subscribe {
-                    searchView?.setStyleType(it)
-                }
-                .also { rxSubscriptions.add(it) }
-        searchView?.fillSettingsData(settings, fields)
+        scope.launch {
+            templateManager.observeThemeTypeFlow().collect {
+                _uiEvents.emit(SearchUiEvent.SetStyleType(it))
+            }
+        }
+        _uiEvents.tryEmit(SearchUiEvent.FillSettingsData(settings, fields))
         refreshData()
     }
 
     override fun onCleared() {
-        rxSubscriptions.clear()
         super.onCleared()
     }
 
     fun refreshData() {
-        if (settings.query.isEmpty() && settings.nick.isEmpty()) {
+        if (settings.query.isEmpty() && settings.nick.isNullOrEmpty() && settings.userId <= 0) {
+            scope.launch { _uiEvents.emit(SearchUiEvent.ShowInitialState) }
             return
         }
         val withHtml = settings.result == SearchSettings.RESULT_POSTS.first && settings.resourceType.equals(SearchSettings.RESOURCE_FORUM.first)
-        searchRepository
-                .getSearch(settings)
-                .map {
-                    if (withHtml) searchTemplate.mapEntity(it) else it
-                }
-                .doOnSubscribe {
-                    searchView?.setRefreshing(true)
-                    searchView?.onStartSearch(settings)
-                }
-                .doAfterTerminate { searchView?.setRefreshing(false) }
-                .subscribe({
-                    currentData = it
-                    searchView?.showData(it)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            _refreshing.value = true
+            _uiEvents.emit(SearchUiEvent.OnStartSearch(settings))
+            try {
+                val result = searchRepository.getSearch(settings)
+                expandedPostIds.retainAll(result.items.mapTo(mutableSetOf()) { it.id })
+                val data = if (withHtml) searchTemplate.mapEntity(result, expandedPostIds) else result
+                _currentData.value = data
+                _uiEvents.emit(SearchUiEvent.ShowData(data))
+            } catch (e: Exception) {
+                var message: String? = null
+                errorHandler.handle(e) { _, handledMessage -> message = handledMessage }
+                _uiEvents.emit(SearchUiEvent.ShowLoadError(message))
+            } finally {
+                _refreshing.value = false
+            }
+        }
     }
 
     fun search(query: String, nick: String) {
@@ -183,11 +200,11 @@ class SearchViewModel(
                 when {
                     checkName(name, SearchSettings.RESOURCE_NEWS) -> {
                         settings.resourceType = SearchSettings.RESOURCE_NEWS.first
-                        searchView?.setNewsMode()
+                        _uiEvents.tryEmit(SearchUiEvent.SetNewsMode)
                     }
                     checkName(name, SearchSettings.RESOURCE_FORUM) -> {
                         settings.resourceType = SearchSettings.RESOURCE_FORUM.first
-                        searchView?.setForumMode()
+                        _uiEvents.tryEmit(SearchUiEvent.SetForumMode)
                     }
                 }
             }
@@ -221,36 +238,46 @@ class SearchViewModel(
         return arg == pair.second
     }
 
-    fun saveSettings() {
+    suspend fun saveSettings() {
         val saveSettings = SearchSettings()
         saveSettings.resourceType = settings.resourceType
         saveSettings.result = settings.result
         saveSettings.sort = settings.sort
         saveSettings.source = settings.source
+        saveSettings.subforums = settings.subforums
+        settings.forums.forEach { saveSettings.addForum(it) }
+        settings.topics.forEach { saveSettings.addTopic(it) }
         val saveUrl = saveSettings.toUrl()
         otherPreferencesHolder.setSearchSettings(saveUrl)
     }
 
+    fun scopedForumTitleForUi(): String? = scopedForumTitle
+
     fun onItemClick(item: SearchItem) {
-        val url = if (settings.resourceType.equals(SearchSettings.RESOURCE_NEWS.first)) {
-            "https://4pda.to/index.php?p=${item.id}"
-        } else {
-            buildString {
-                append("https://4pda.to/forum/index.php?showtopic=${item.topicId}")
-                if (item.id != 0) {
-                    append("&view=findpost&p=${item.id}")
-                }
-            }
+        val url = buildItemClickUrl(item)
+        linkHandler.handle(url, router, themeOpenArgsForSearchUrl(url))
+    }
+
+    private fun buildItemClickUrl(item: SearchItem): String {
+        if (settings.resourceType == SearchSettings.RESOURCE_NEWS.first) {
+            return "https://4pda.to/index.php?p=${item.id}"
         }
-        linkHandler.handle(url, router)
+        if (settings.isBroadUserSearch() && item.topicId > 0) {
+            return settings.userPostsInTopicSearchUrl(item)
+        }
+        return if (item.id != 0) {
+            buildSearchFindPostTopicUrl(item.topicId, item.id)
+        } else {
+            "https://4pda.to/forum/index.php?showtopic=${item.topicId}"
+        }
     }
 
     fun onItemLongClick(item: SearchItem) {
-        searchView?.showItemDialogMenu(item, settings)
+        _uiEvents.tryEmit(SearchUiEvent.ShowItemDialogMenu(item, settings))
     }
 
     fun copyLink() {
-        Utils.copyToClipBoard(settings.toUrl())
+        clipboardHelper.copyToClipboard(settings.toUrl())
     }
 
     fun copyLink(item: IBaseForumPost) {
@@ -264,24 +291,49 @@ class SearchViewModel(
                 }
             }
         }
-        Utils.copyToClipBoard(url)
+        clipboardHelper.copyToClipboard(url)
     }
 
     fun openTopicBegin(item: IBaseForumPost) {
         linkHandler.handle(
-                topicUrlWithUnreadIfPlainOpen(
-                        Uri.parse("https://4pda.to/forum/index.php?showtopic=${item.topicId}")
-                ),
+                TopicOpenTargetResolver.resolve(
+                        TopicOpenContext(
+                                rawUrl = "https://4pda.to/forum/index.php?showtopic=${item.topicId}",
+                                setting = forpdateam.ru.forpda.common.Preferences.Main.TopicOpenTarget.FIRST_PAGE,
+                                sourceScreen = "search",
+                                userAction = TopicUserOpenAction.FIRST_PAGE
+                        )
+                ).url,
                 router
         )
     }
 
     fun openTopicNew(item: IBaseForumPost) {
-        linkHandler.handle("https://4pda.to/forum/index.php?showtopic=${item.topicId}&view=getnewpost", router)
+        linkHandler.handle(
+                TopicOpenTargetResolver.resolve(
+                        TopicOpenContext(
+                                rawUrl = "https://4pda.to/forum/index.php?showtopic=${item.topicId}",
+                                setting = forpdateam.ru.forpda.common.Preferences.Main.TopicOpenTarget.LAST_UNREAD,
+                                sourceScreen = "search",
+                                userAction = TopicUserOpenAction.UNREAD
+                        )
+                ).url,
+                router
+        )
     }
 
     fun openTopicLast(item: IBaseForumPost) {
-        linkHandler.handle("https://4pda.to/forum/index.php?showtopic=${item.topicId}&view=getlastpost", router)
+        linkHandler.handle(
+                TopicOpenTargetResolver.resolve(
+                        TopicOpenContext(
+                                rawUrl = "https://4pda.to/forum/index.php?showtopic=${item.topicId}",
+                                setting = forpdateam.ru.forpda.common.Preferences.Main.TopicOpenTarget.FIRST_PAGE,
+                                sourceScreen = "search",
+                                userAction = TopicUserOpenAction.LAST_POST
+                        )
+                ).url,
+                router
+        )
     }
 
     fun openForum(item: IBaseForumPost) {
@@ -289,14 +341,14 @@ class SearchViewModel(
     }
 
     fun onClickAddInFav(item: IBaseForumPost) {
-        searchView?.showAddInFavDialog(item)
+        _uiEvents.tryEmit(SearchUiEvent.ShowAddInFavDialog(item))
     }
 
     fun addTopicToFavorite(topicId: Int, subType: String) {
-        viewModelScope.launch {
+        scope.launch {
             runCatching {
                 favoritesRepository.editFavorites(FavoritesApi.ACTION_ADD, -1, topicId, subType)
-            }.onSuccess { searchView?.onAddToFavorite(it) }
+            }.onSuccess { _uiEvents.emit(SearchUiEvent.OnAddToFavorite(it)) }
                     .onFailure { errorHandler.handle(it) }
         }
     }
@@ -305,15 +357,17 @@ class SearchViewModel(
         router.showSystemMessage("Действие невозможно")
     }
 
-    override fun onPollResultsClick() = unavailableFunction()
+    override fun onPollResultsClick(url: String?) = unavailableFunction()
 
     override fun onPollClick() = unavailableFunction()
 
+    override fun onPollSubmit(action: String, method: String, encodedForm: String) = unavailableFunction()
+
     override fun onReplyPostClick(postId: Int) = unavailableFunction()
 
-    override fun onQuotePostClick(postId: Int, text: String) = unavailableFunction()
+    override fun onQuotePostClick(postId: Int, text: String, displayedDate: String?) = unavailableFunction()
 
-    override fun onQuoteFullPostClick(postId: Int) = unavailableFunction()
+    override fun onQuoteFullPostClick(postId: Int, displayedDate: String?) = unavailableFunction()
 
     override fun quoteFromBuffer(postId: Int) = unavailableFunction()
 
@@ -321,76 +375,111 @@ class SearchViewModel(
 
     override fun onHatHeaderClick(bValue: Boolean) = unavailableFunction()
 
+    override fun onPostContentToggle(postId: Int, expanded: Boolean) {
+        if (expanded) {
+            expandedPostIds.add(postId)
+        } else {
+            expandedPostIds.remove(postId)
+        }
+        // Persist expanded state for the next full HTML render (pagination/refresh).
+        // Visual toggle is handled in WebView JS; avoid reloading the page on each click.
+    }
+
     override fun setHistoryBody(index: Int, body: String) = unavailableFunction()
 
     override fun shareText(text: String) {
-        Utils.shareText(text)
+        Utils.shareText(context, text)
     }
 
-    private fun getPostById(postId: Int): IBaseForumPost? = currentData
+    private fun getPostById(postId: Int): IBaseForumPost? = _currentData.value
             ?.items
             ?.firstOrNull {
                 it.id == postId
             }
 
+    private fun selectPaginationPage(pageNumber: Int) {
+        settings.st = pageNumber
+        refreshData()
+    }
+
     override fun onFirstPageClick() {
-        searchView?.firstPage()
+        val pagination = _currentData.value?.pagination ?: return
+        if (pagination.current <= 1) return
+        selectPaginationPage(if (pagination.isForum) 0 else 1)
     }
 
     override fun onPrevPageClick() {
-        searchView?.prevPage()
+        val pagination = _currentData.value?.pagination ?: return
+        if (pagination.current <= 1) return
+        selectPaginationPage(pagination.getPage(pagination.current - if (pagination.isForum) 2 else 1))
     }
 
     override fun onNextPageClick() {
-        searchView?.nextPage()
+        val pagination = _currentData.value?.pagination ?: return
+        if (pagination.current == pagination.all) return
+        selectPaginationPage(pagination.getPage(pagination.current + if (pagination.isForum) 0 else 1))
     }
 
     override fun onLastPageClick() {
-        searchView?.lastPage()
+        val pagination = _currentData.value?.pagination ?: return
+        if (pagination.current == pagination.all) return
+        selectPaginationPage(pagination.getPage(pagination.all - if (pagination.isForum) 1 else 0))
     }
 
     override fun onSelectPageClick() {
-        searchView?.selectPage()
+        _uiEvents.tryEmit(SearchUiEvent.SelectPage)
+    }
+
+    override fun onSearchPageClick(st: Int) {
+        if (st < 0) return
+        selectPaginationPage(st)
     }
 
     override fun onUserMenuClick(postId: Int) {
-        getPostById(postId)?.let { searchView?.showUserMenu(it) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.ShowUserMenu(it)) }
     }
 
     override fun onReputationMenuClick(postId: Int) {
-        getPostById(postId)?.let { searchView?.showReputationMenu(it) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.ShowReputationMenu(it)) }
     }
 
     override fun onPostMenuClick(postId: Int) {
-        getPostById(postId)?.let { searchView?.showPostMenu(it) }
+        // Прогрев формы редактирования до клика по «Изменить» — см. ThemeViewModel.
+        editPostRepository.kickWarmNetworkLoad(postId)
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.ShowPostMenu(it)) }
     }
 
     override fun onReportPostClick(postId: Int) {
-        getPostById(postId)?.let { searchView?.reportPost(it) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.ReportPost(it)) }
     }
 
     override fun onDeletePostClick(postId: Int) {
-        getPostById(postId)?.let { searchView?.deletePost(it) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.DeletePost(it)) }
     }
 
     override fun onEditPostClick(postId: Int) {
-        getPostById(postId)?.let { searchView?.editPost(it) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.EditPost(it)) }
     }
 
     override fun onVotePostClick(postId: Int, type: Boolean) {
-        getPostById(postId)?.let { searchView?.votePost(it, type) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.VotePost(it, type)) }
     }
 
     override fun onSpoilerCopyLinkClick(postId: Int, spoilNumber: String) {
-        getPostById(postId)?.let { searchView?.openSpoilerLinkDialog(it, spoilNumber) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.OpenSpoilerLinkDialog(it, spoilNumber)) }
     }
 
     override fun onAnchorClick(postId: Int, name: String) {
-        getPostById(postId)?.let { searchView?.openAnchorDialog(it, name) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.OpenAnchorDialog(it, name)) }
+    }
+
+    override fun onOpenLink(url: String) {
+        if (BuildConfig.DEBUG) Timber.d("SearchViewModel.onOpenLink")
+        linkHandler.handle(url, router, themeOpenArgsForSearchUrl(url))
     }
 
     override fun copyText(text: String) {
-        Utils.copyToClipBoard(text)
+        clipboardHelper.copyToClipboard(text)
     }
 
     override fun toast(text: String) {
@@ -398,7 +487,7 @@ class SearchViewModel(
     }
 
     override fun log(text: String) {
-        searchView?.log(text)
+        _uiEvents.tryEmit(SearchUiEvent.Log(text))
     }
 
     override fun openProfile(postId: Int) {
@@ -418,6 +507,7 @@ class SearchViewModel(
             linkHandler.handle(SearchSettings().apply {
                 source = SearchSettings.SOURCE_ALL.first
                 nick = it.nick
+                userId = it.userId
                 result = SearchSettings.RESULT_TOPICS.first
             }.toUrl(), router)
         }
@@ -425,55 +515,51 @@ class SearchViewModel(
 
     override fun openSearchInTopic(postId: Int) {
         getPostById(postId)?.let {
-            linkHandler.handle(SearchSettings().apply {
-                addForum(Integer.toString(it.forumId))
-                addTopic(Integer.toString(it.topicId))
-                source = SearchSettings.SOURCE_CONTENT.first
-                nick = it.nick
-                result = SearchSettings.RESULT_POSTS.first
-                subforums = SearchSettings.SUB_FORUMS_FALSE
-            }.toUrl(), router)
+            linkHandler.handle(it.userPostsInTopicSearchUrl(), router)
         }
     }
 
     override fun openSearchUserMessages(postId: Int) {
         getPostById(postId)?.let {
             linkHandler.handle(SearchSettings().apply {
-                source = SearchSettings.SOURCE_CONTENT.first
+                source = SearchSettings.SOURCE_ALL.first
                 nick = it.nick
+                userId = it.userId
                 result = SearchSettings.RESULT_POSTS.first
-                subforums = SearchSettings.SUB_FORUMS_FALSE
+                subforums = SearchSettings.SUB_FORUMS_TRUE
             }.toUrl(), router)
         }
     }
 
+    override fun toggleForumBlacklist(postId: Int) = Unit
+
     override fun onChangeReputationClick(postId: Int, type: Boolean) {
-        getPostById(postId)?.let { searchView?.showChangeReputation(it, type) }
+        getPostById(postId)?.let { _uiEvents.tryEmit(SearchUiEvent.ShowChangeReputation(it, type)) }
     }
 
     override fun changeReputation(postId: Int, type: Boolean, message: String) {
-        getPostById(postId)?.let {
-            reputationRepository
-                    .changeReputation(it.id, it.userId, type, message)
-                    .subscribe({
-                        router.showSystemMessage(App.get().getString(R.string.reputation_changed))
-                    }, {
-                        errorHandler.handle(it)
-                    })
-                    .also { rxSubscriptions.add(it) }
+        getPostById(postId)?.let { post ->
+            scope.launch {
+                try {
+                    reputationRepository.changeReputation(post.id, post.userId, type, message)
+                    router.showSystemMessage(R.string.reputation_changed)
+                } catch (e: Exception) {
+                    errorHandler.handle(e)
+                }
+            }
         }
     }
 
     override fun votePost(postId: Int, type: Boolean) {
-        getPostById(postId)?.let {
-            themeRepository
-                    .votePost(it.id, type)
-                    .subscribe({
-                        router.showSystemMessage(it)
-                    }, {
-                        errorHandler.handle(it)
-                    })
-                    .also { rxSubscriptions.add(it) }
+        getPostById(postId)?.let { post ->
+            scope.launch {
+                try {
+                    val msg = themeRepository.votePost(post.id, type)
+                    router.showSystemMessage(msg)
+                } catch (e: Exception) {
+                    errorHandler.handle(e)
+                }
+            }
         }
     }
 
@@ -485,45 +571,43 @@ class SearchViewModel(
 
     override fun reportPost(postId: Int, message: String) {
         getPostById(postId)?.let { post ->
-            currentData?.let {
-                themeRepository
-                        .reportPost(post.topicId, post.id, message)
-                        .subscribe({
-                            router.showSystemMessage("Жалоба отправлена")
-                        }, {
-                            errorHandler.handle(it)
-                        })
-                        .also { rxSubscriptions.add(it) }
+            scope.launch {
+                try {
+                    themeRepository.reportPost(post.topicId, post.id, message)
+                    router.showSystemMessage("Жалоба отправлена")
+                } catch (e: Exception) {
+                    errorHandler.handle(e)
+                }
             }
         }
     }
 
     override fun deletePost(postId: Int) {
         getPostById(postId)?.let { post ->
-            themeRepository
-                    .deletePost(post.id)
-                    .subscribe({
-                        if (it) {
-                            searchView?.deletePostUi(post)
-                        }
-                        router.showSystemMessage(App.get().getString(R.string.message_deleted))
-                    }, {
-                        errorHandler.handle(it)
-                    })
-                    .also { rxSubscriptions.add(it) }
+            scope.launch {
+                if (BuildConfig.DEBUG) Timber.d("deletePost: requested postId=${post.id} action=delete source=search")
+                try {
+                    val success = themeRepository.deletePost(post.id)
+                    if (success) {
+                        if (BuildConfig.DEBUG) Timber.d("deletePost: success postId=${post.id} source=search")
+                        _uiEvents.tryEmit(SearchUiEvent.DeletePostUi(post))
+                        router.showSystemMessage(R.string.message_deleted)
+                    } else if (BuildConfig.DEBUG) {
+                        Timber.w("deletePost: failed without exception postId=${post.id} source=search")
+                    }
+                } catch (e: Exception) {
+                    if (BuildConfig.DEBUG) Timber.w(e, "deletePost: failed postId=${post.id} source=search")
+                    errorHandler.handle(e)
+                }
+            }
         }
     }
 
     override fun createNote(postId: Int) {
         getPostById(postId)?.let {
-            val topicTitle: String = if (it is SearchItem) {
-                it.title.orEmpty()
-            } else {
-                "пост из поиска_"
-            }
-            val title = String.format(App.get().getString(R.string.post_Topic_Nick_Number), topicTitle, it.nick, it.id)
+            val title = "пост ${it.topicId} ${it.nick} ${it.id}"
             val url = "https://4pda.to/forum/index.php?s=&showtopic=${it.topicId}&view=findpost&p=${it.id}"
-            searchView?.showNoteCreate(title, url)
+            _uiEvents.tryEmit(SearchUiEvent.ShowNoteCreate(title, url))
         }
     }
 
@@ -567,53 +651,53 @@ class SearchViewModel(
 
     override fun copyAnchorLink(postId: Int, name: String) {
         getPostById(postId)?.let {
-            val url = "https://4pda.to/forum/index.php?act=findpost&pid=${it.id}&anchor=$name"
+            val url = "https://4pda.to/forum/index.php?showtopic=${it.topicId}&act=findpost&pid=${it.id}&anchor=$name"
             copyText(url)
         }
     }
 
     override fun copySpoilerLink(postId: Int, spoilNumber: String) {
         getPostById(postId)?.let {
-            val url = "https://4pda.to/forum/index.php?act=findpost&pid=${it.id}&anchor=Spoil-${it.id}-$spoilNumber"
+            val url = "https://4pda.to/forum/index.php?showtopic=${it.topicId}&act=findpost&pid=${it.id}&anchor=Spoil-${it.id}-$spoilNumber"
             copyText(url)
         }
     }
 
-    class Factory(
-            private val searchRepository: SearchRepository,
-            private val editPostRepository: PostEditorRepository,
-            private val favoritesRepository: FavoritesRepository,
-            private val themeRepository: ThemeRepository,
-            private val reputationRepository: ReputationRepository,
-            private val topicPreferencesHolder: TopicPreferencesHolder,
-            private val mainPreferencesHolder: MainPreferencesHolder,
-            private val otherPreferencesHolder: OtherPreferencesHolder,
-            private val searchTemplate: SearchTemplate,
-            private val templateManager: TemplateManager,
-            private val router: TabRouter,
-            private val linkHandler: ILinkHandler,
-            private val errorHandler: IErrorHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != SearchViewModel::class.java) {
-                throw IllegalArgumentException("Unknown ViewModel class")
-            }
-            return SearchViewModel(
-                    searchRepository,
-                    editPostRepository,
-                    favoritesRepository,
-                    themeRepository,
-                    reputationRepository,
-                    topicPreferencesHolder,
-                    mainPreferencesHolder,
-                    otherPreferencesHolder,
-                    searchTemplate,
-                    templateManager,
-                    router,
-                    linkHandler,
-                    errorHandler
-            ) as T
-        }
-    }
+}
+
+sealed class SearchUiEvent {
+    data class UpdateShowAvatarState(val show: Boolean) : SearchUiEvent()
+    data class UpdateTypeAvatarState(val circle: Boolean) : SearchUiEvent()
+    data class UpdateScrollButtonState(val enabled: Boolean) : SearchUiEvent()
+    data class SetFontSize(val size: Int) : SearchUiEvent()
+    data class SetAppFontMode(val mode: forpdateam.ru.forpda.ui.AppFontMode) : SearchUiEvent()
+    data class SetStyleType(val styleType: String) : SearchUiEvent()
+    data class FillSettingsData(val settings: SearchSettings, val fields: Map<String, List<String>>) : SearchUiEvent()
+    data class OnStartSearch(val settings: SearchSettings) : SearchUiEvent()
+    data class ShowData(val data: SearchResult) : SearchUiEvent()
+    data class ShowLoadError(val message: String?) : SearchUiEvent()
+    object ShowInitialState : SearchUiEvent()
+    object SetNewsMode : SearchUiEvent()
+    object SetForumMode : SearchUiEvent()
+    data class ShowItemDialogMenu(val item: SearchItem, val settings: SearchSettings) : SearchUiEvent()
+    data class ShowAddInFavDialog(val item: IBaseForumPost) : SearchUiEvent()
+    data class OnAddToFavorite(val result: Boolean) : SearchUiEvent()
+    object FirstPage : SearchUiEvent()
+    object PrevPage : SearchUiEvent()
+    object NextPage : SearchUiEvent()
+    object LastPage : SearchUiEvent()
+    object SelectPage : SearchUiEvent()
+    data class ShowUserMenu(val post: IBaseForumPost) : SearchUiEvent()
+    data class ShowReputationMenu(val post: IBaseForumPost) : SearchUiEvent()
+    data class ShowPostMenu(val post: IBaseForumPost) : SearchUiEvent()
+    data class ReportPost(val post: IBaseForumPost) : SearchUiEvent()
+    data class DeletePost(val post: IBaseForumPost) : SearchUiEvent()
+    data class EditPost(val post: IBaseForumPost) : SearchUiEvent()
+    data class VotePost(val post: IBaseForumPost, val type: Boolean) : SearchUiEvent()
+    data class OpenSpoilerLinkDialog(val post: IBaseForumPost, val spoilNumber: String) : SearchUiEvent()
+    data class OpenAnchorDialog(val post: IBaseForumPost, val name: String) : SearchUiEvent()
+    data class Log(val text: String) : SearchUiEvent()
+    data class ShowChangeReputation(val post: IBaseForumPost, val type: Boolean) : SearchUiEvent()
+    data class DeletePostUi(val post: IBaseForumPost) : SearchUiEvent()
+    data class ShowNoteCreate(val title: String, val url: String) : SearchUiEvent()
 }

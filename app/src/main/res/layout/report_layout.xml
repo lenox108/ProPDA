@@ -9,11 +9,12 @@
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/report_input_layout"
+        style="@style/DialogTextInputStyle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="@string/report_text">
 
-        <androidx.appcompat.widget.AppCompatEditText
+        <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/report_text_field"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

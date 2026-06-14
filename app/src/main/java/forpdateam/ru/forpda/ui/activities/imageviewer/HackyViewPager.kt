@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.viewpager.widget.ViewPager
 import android.util.AttributeSet
 import android.view.MotionEvent
+import timber.log.Timber
 
 /**
  * Created by radiationx on 24.05.17.
@@ -22,7 +23,7 @@ class HackyViewPager : androidx.viewpager.widget.ViewPager {
             try {
                 return super.onInterceptTouchEvent(ev)
             } catch (e: IllegalArgumentException) {
-                e.printStackTrace()
+                Timber.e(e, "HackyViewPager intercept error")
                 return false
             }
 

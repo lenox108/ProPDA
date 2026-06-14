@@ -5,7 +5,8 @@
     android:id="@+id/news_full_item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?cards_background"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:foreground="?attr/selectableItemBackground">
 
 
@@ -23,7 +24,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:riv_corner_radius="@dimen/dp8"
+        app:riv_corner_radius="@dimen/list_plate_corner_radius"
         tools:src="@drawable/test_img" />
 
     <TextView
@@ -35,6 +36,9 @@
         android:layout_marginEnd="@dimen/content_padding_horizontal"
         android:lineSpacingMultiplier="0.9"
         android:textAppearance="@style/TextAppearance.AppCompat.Title"
+        android:textColor="?attr/default_text_color"
+        android:textSize="@dimen/list_news_title_text_size"
+        android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/news_full_item_cover"
@@ -50,6 +54,8 @@
         android:ellipsize="end"
         android:maxLines="3"
         android:textAppearance="@style/TextAppearance.AppCompat.Small"
+        android:textColor="?attr/default_text_color"
+        android:textSize="@dimen/list_topic_meta_text_size"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/news_full_item_title"
@@ -69,11 +75,12 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/news_full_item_description">
 
-        <de.hdodenhof.circleimageview.CircleImageView
+        <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/articleAvatar"
             android:layout_width="@dimen/list_avatar_compact_size"
             android:layout_height="@dimen/list_avatar_compact_size"
             android:layout_marginEnd="@dimen/content_spacing"
+            app:shapeAppearanceOverlay="@style/CircleImageViewStyle"
             tools:background="#eee" />
 
         <LinearLayout
@@ -87,9 +94,9 @@
                 android:id="@+id/news_full_item_username"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-medium"
                 android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                android:textColor="?second_text_color"
+                android:textColor="?attr/second_text_color"
+                android:textSize="@dimen/list_topic_meta_text_size"
                 tools:text="Вася в разносе" />
 
             <TextView
@@ -97,6 +104,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="@style/TextAppearance.AppCompat.Small"
+                android:textSize="@dimen/list_topic_meta_text_size"
                 android:visibility="gone"
                 tools:text="обзор" />
         </LinearLayout>
@@ -114,27 +122,20 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="@dimen/content_padding_horizontal"
-            android:fontFamily="sans-serif-medium"
             android:textAppearance="@style/TextAppearance.AppCompat.Small"
-            android:textColor="?second_text_color"
+            android:textColor="?attr/second_text_color"
+            android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="2560" />
 
         <TextView
             android:id="@+id/news_full_item_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:fontFamily="sans-serif-medium"
             android:textAppearance="@style/TextAppearance.AppCompat.Small"
-            android:textColor="?second_text_color"
+            android:textColor="?attr/second_text_color"
+            android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="20.09.1985" />
 
     </LinearLayout>
 
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/divider_thin"
-        android:layout_gravity="bottom"
-        android:background="?attr/divider_line"
-        app:layout_constraintBottom_toBottomOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

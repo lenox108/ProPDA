@@ -1,8 +1,9 @@
 package forpdateam.ru.forpda.presentation.qms.blacklist
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
+import forpdateam.ru.forpda.presentation.BaseViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
 import forpdateam.ru.forpda.entity.remote.qms.QmsContact
 import forpdateam.ru.forpda.model.interactors.qms.QmsInteractor
@@ -23,12 +24,13 @@ import kotlinx.coroutines.launch
 /**
  * Чёрный список QMS без Moxy.
  */
-class QmsBlackListViewModel(
+@HiltViewModel
+class QmsBlackListViewModel @Inject constructor(
         private val qmsInteractor: QmsInteractor,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
         private val errorHandler: IErrorHandler
-) : ViewModel() {
+) : BaseViewModel() {
 
     data class UiState(
             val contacts: List<QmsContact> = emptyList(),
@@ -47,7 +49,7 @@ class QmsBlackListViewModel(
     }
 
     fun loadContacts() {
-        viewModelScope.launch {
+        scope.launch {
             _uiState.update { it.copy(loading = true) }
             runCatching { qmsInteractor.getBlackList() }
                     .onSuccess { list ->
@@ -61,7 +63,7 @@ class QmsBlackListViewModel(
     }
 
     fun blockUser(nick: String) {
-        viewModelScope.launch {
+        scope.launch {
             runCatching { qmsInteractor.blockUser(nick) }
                     .onSuccess { list ->
                         _uiState.update { it.copy(contacts = list) }
@@ -72,7 +74,7 @@ class QmsBlackListViewModel(
     }
 
     fun unBlockUser(id: Int) {
-        viewModelScope.launch {
+        scope.launch {
             runCatching { qmsInteractor.unBlockUsers(id) }
                     .onSuccess { list ->
                         _uiState.update { it.copy(contacts = list) }
@@ -83,7 +85,7 @@ class QmsBlackListViewModel(
     }
 
     fun searchUser(nick: String) {
-        viewModelScope.launch {
+        scope.launch {
             runCatching { qmsInteractor.findUser(nick) }
                     .onSuccess { users ->
                         _uiState.update { it.copy(nickSuggestions = users) }
@@ -107,18 +109,4 @@ class QmsBlackListViewModel(
         })
     }
 
-    class Factory(
-            private val qmsInteractor: QmsInteractor,
-            private val router: TabRouter,
-            private val linkHandler: ILinkHandler,
-            private val errorHandler: IErrorHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != QmsBlackListViewModel::class.java) {
-                throw IllegalArgumentException("Unknown ViewModel class")
-            }
-            return QmsBlackListViewModel(qmsInteractor, router, linkHandler, errorHandler) as T
-        }
-    }
 }
