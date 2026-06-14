@@ -20,5 +20,29 @@
     <item name="action_mode_item_share" type="id" />
 
     <item name="menu_fav_mark_all_read" type="id" />
+    <item name="action_favorites_search" type="id" />
+
+    <item name="toolbar_opaque_underlay" type="id" />
+
+    <item name="action_theme_reply" type="id" />
+    <item name="action_theme_poll" type="id" />
+    <item name="action_theme_refresh_toolbar" type="id" />
+    <item name="action_theme_hat" type="id" />
+    <item name="action_theme_refresh_page" type="id" />
+    <item name="action_theme_poll_overflow" type="id" />
+    <item name="action_theme_copy_link" type="id" />
+    <item name="action_theme_search_on_page_overflow" type="id" />
+    <item name="action_theme_search_in_topic" type="id" />
+    <item name="action_theme_search_my_posts" type="id" />
+    <item name="action_theme_delete_favorite" type="id" />
+    <item name="action_theme_add_favorite" type="id" />
+    <item name="action_theme_open_forum" type="id" />
+
+    <item name="action_qms_chat_refresh" type="id" />
+
+    <item name="action_notes_select" type="id" />
+    <item name="action_notes_selection_select_all" type="id" />
+    <item name="action_notes_selection_move" type="id" />
+    <item name="action_notes_selection_delete" type="id" />
 
 </resources>

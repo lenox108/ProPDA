@@ -1,5 +1,7 @@
 package forpdateam.ru.forpda.ui.fragments.qms
 
+import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.common.getVecDrawable
 import android.os.Bundle
 import androidx.appcompat.widget.AppCompatAutoCompleteTextView
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -11,7 +13,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
@@ -28,37 +29,32 @@ import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
  * Created by radiationx on 22.03.17.
  */
 
+@AndroidEntryPoint
 class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<QmsContact> {
 
     private lateinit var nickField: AppCompatAutoCompleteTextView
     private lateinit var adapter: QmsContactsAdapter
     private val dialogMenu = DynamicDialogMenu<QmsBlackListFragment, QmsContact>()
 
-    private val viewModel: QmsBlackListViewModel by viewModels {
-        QmsBlackListViewModel.Factory(
-                App.get().Di().qmsInteractor,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler
-        )
-    }
+    private val viewModel: QmsBlackListViewModel by viewModels()
 
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_blacklist)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_blacklist)
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        val viewStub = findViewById(R.id.toolbar_content) as ViewStub
+        val viewStub = findViewById(R.id.toolbar_content) as? ViewStub ?: throw IllegalStateException("toolbar_content ViewStub not found")
         viewStub.layoutResource = R.layout.toolbar_qms_black_list
         viewStub.inflate()
-        nickField = findViewById(R.id.qms_black_list_nick_field) as AppCompatAutoCompleteTextView
+        nickField = findViewById(R.id.qms_black_list_nick_field) as? AppCompatAutoCompleteTextView ?: throw IllegalStateException("nickField not found")
         return viewFragment
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setScrollFlagsEnterAlways()
+        clearToolbarScrollFlags()
         nickField.addTextChangedListener(object : SimpleTextWatcher() {
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
                 viewModel.searchUser(s.toString())
@@ -105,7 +101,7 @@ class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
         menu.add(R.string.add)
-                .setIcon(App.getVecDrawable(context, R.drawable.ic_toolbar_add))
+                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_add))
                 .setOnMenuItemClickListener {
                     var nick = ""
                     if (nickField.text != null)
@@ -119,7 +115,7 @@ class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener
     private fun bindContactsList(items: List<QmsContact>) {
         if (items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
-                val funnyContent = FunnyContent(context)
+                val funnyContent = FunnyContent(requireContext())
                         .setImage(R.drawable.ic_contacts)
                         .setTitle(R.string.funny_blacklist_nodata_title)
                         .setDesc(R.string.funny_blacklist_nodata_desc)
@@ -136,14 +132,14 @@ class QmsBlackListFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener
     private fun bindSuggestions(items: List<ForumUser>) {
         if (context == null) return
         val nicks = items.map { it.nick.orEmpty() }
-        nickField.setAdapter(ArrayAdapter(context!!, android.R.layout.simple_dropdown_item_1line, nicks))
+        nickField.setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, nicks))
     }
 
     override fun onItemClick(item: QmsContact) {
         dialogMenu.apply {
             disallowAll()
             allowAll()
-            show(context, this@QmsBlackListFragment, item)
+            show(requireContext(), this@QmsBlackListFragment, item)
         }
     }
 

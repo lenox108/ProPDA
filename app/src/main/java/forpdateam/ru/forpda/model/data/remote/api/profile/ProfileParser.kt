@@ -4,7 +4,17 @@ import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import java.util.regex.Matcher
 import java.util.regex.Pattern
+
+/**
+ * Безопасные extension-функции для извлечения групп из Matcher.
+ * Возвращают null вместо краша при отсутствии группы или ошибке парсинга.
+ */
+private fun Matcher.groupInt(group: Int): Int? {
+    val value = this.group(group) ?: return null
+    return value.toIntOrNull()
+}
 
 class ProfileParser(
         private val patternProvider: IPatternProvider
@@ -14,7 +24,7 @@ class ProfileParser(
 
     fun parse(response: String, argUrl: String): ProfileModel = ProfileModel().also { profile ->
         Pattern.compile("showuser=(\\d+)").matcher(argUrl).findOnce { matcher ->
-            profile.id = matcher.group(1).toInt()
+            profile.id = matcher.groupInt(1) ?: 0
         }
         patternProvider
                 .getPattern(scope.scope, scope.main)

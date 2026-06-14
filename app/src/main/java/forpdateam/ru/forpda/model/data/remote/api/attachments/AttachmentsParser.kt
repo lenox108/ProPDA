@@ -33,10 +33,10 @@ class AttachmentsParser(
         fun addId(id: Int) {
             if (id <= 0 || !seen.add(id)) return
             out.add(AttachmentItem().apply {
-                setId(id)
-                setName("attachment_$id")
-                setLoadState(AttachmentItem.STATE_LOADED)
-                setStatus(AttachmentItem.STATUS_READY)
+                this.id = id
+                this.name = "attachment_$id"
+                loadState = AttachmentItem.STATE_LOADED
+                status = AttachmentItem.STATUS_READY
             })
         }
         fun addIdsFromCommaList(raw: String) {
@@ -104,23 +104,16 @@ class AttachmentsParser(
     }
 
     private fun fillAttachment(item: AttachmentItem, matcher: Matcher): AttachmentItem {
-        item.id = (matcher.group(1) ?: "0").toInt()
+        item.id = matcher.group(1)?.toIntOrNull() ?: 0
         item.name = matcher.group(2) ?: ""
-        /*try {
-            item.setName(URLDecoder.decode(matcher.group(2), "utf-8"));
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-        }*/
         item.extension = matcher.group(3) ?: ""
-        item.weight = readableFileSize(java.lang.Long.parseLong(matcher.group(5) ?: "0"))
+        item.weight = readableFileSize(matcher.group(5)?.toLongOrNull() ?: 0L)
         item.md5 = matcher.group(6) ?: ""
-        val temp = matcher.group(7)
-
-        if (temp != null) {
+        matcher.group(7)?.let { temp ->
             item.typeFile = AttachmentItem.TYPE_IMAGE
             item.imageUrl = "https:$temp"
-            item.width = (matcher.group(8) ?: "0").toInt()
-            item.height = (matcher.group(9) ?: "0").toInt()
+            item.width = matcher.group(8)?.toIntOrNull() ?: 0
+            item.height = matcher.group(9)?.toIntOrNull() ?: 0
         }
         item.loadState = AttachmentItem.STATE_LOADED
         return item

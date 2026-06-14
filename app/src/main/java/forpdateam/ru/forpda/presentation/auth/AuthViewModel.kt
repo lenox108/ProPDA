@@ -1,32 +1,32 @@
 package forpdateam.ru.forpda.presentation.auth
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
+import forpdateam.ru.forpda.presentation.BaseViewModel
+
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.entity.common.AuthData
 import forpdateam.ru.forpda.entity.common.AuthState
 import forpdateam.ru.forpda.entity.remote.auth.AuthForm
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
 import forpdateam.ru.forpda.model.AuthHolder
-import forpdateam.ru.forpda.model.SchedulersProvider
 import forpdateam.ru.forpda.model.repository.auth.AuthRepository
 import forpdateam.ru.forpda.model.repository.profile.ProfileRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ISystemLinkHandler
 import forpdateam.ru.forpda.presentation.TabRouter
-import io.reactivex.disposables.CompositeDisposable
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
-class AuthViewModel(
+@HiltViewModel
+class AuthViewModel @Inject constructor(
         private val authRepository: AuthRepository,
         private val profileRepository: ProfileRepository,
         private val router: TabRouter,
-        private val schedulers: SchedulersProvider,
         private val authHolder: AuthHolder,
         private val errorHandler: IErrorHandler,
         private val systemLinkHandler: ISystemLinkHandler
-) : ViewModel() {
+) : BaseViewModel() {
 
     @Volatile
     private var authView: AuthFragmentCallbacks? = null
@@ -39,7 +39,8 @@ class AuthViewModel(
         authView = null
     }
 
-    private val rxSubscriptions = CompositeDisposable()
+    private var formJob: Job? = null
+    private var signInJob: Job? = null
     private var subscriptionsStarted = false
 
     private var fieldsFilled = false
@@ -49,11 +50,6 @@ class AuthViewModel(
         if (subscriptionsStarted) return
         subscriptionsStarted = true
         loadForm()
-    }
-
-    override fun onCleared() {
-        rxSubscriptions.clear()
-        super.onCleared()
     }
 
     fun setFieldsFilled(isFilled: Boolean) {
@@ -72,30 +68,31 @@ class AuthViewModel(
             form.password = password
             form.captcha = captcha
             form.isHidden = isHidden
-            authRepository
-                    .signIn(form)
-                    .doOnSubscribe { authView?.setSendRefreshing(true) }
-                    .doAfterTerminate { authView?.setSendRefreshing(false) }
-                    .subscribe({
-                        authView?.onSuccessAuth()
-                        loadProfile("https://4pda.to/forum/index.php?showuser=${authHolder.get().userId}")
-                    }, {
-                        form.captcha = null
-                        authView?.onFormLoaded(form)
-                        loadForm()
-                        errorHandler.handle(it)
-                    })
-                    .also { rxSubscriptions.add(it) }
+            signInJob?.cancel()
+            signInJob = scope.launch {
+                authView?.setSendRefreshing(true)
+                try {
+                    authRepository.signIn(form)
+                    authView?.onSuccessAuth()
+                    loadProfile("https://4pda.to/forum/index.php?showuser=${authHolder.get().userId}")
+                } catch (e: Exception) {
+                    form.captcha = null
+                    authView?.onFormLoaded(form)
+                    loadForm()
+                    errorHandler.handle(e)
+                } finally {
+                    authView?.setSendRefreshing(false)
+                }
+            }
         }
     }
 
     fun onClickSkip() {
-        authHolder.set(authHolder.get().apply {
-            userId = AuthData.NO_ID
-            if (authHolder.get().state != AuthState.AUTH) {
-                state = AuthState.SKIP
-            }
-        })
+        val currentState = authHolder.get().state
+        authHolder.set(authHolder.get().copy(
+            userId = AuthData.NO_ID,
+            state = if (currentState != AuthState.AUTH) AuthState.SKIP else currentState
+        ))
         router.exit()
     }
 
@@ -104,25 +101,27 @@ class AuthViewModel(
     }
 
     private fun loadForm() {
-        authRepository
-                .loadForm()
-                .doOnSubscribe { authView?.setSendEnabled(false) }
-                .doAfterTerminate { authView?.setSendEnabled(fieldsFilled) }
-                .subscribe({
-                    it.apply {
-                        nick = authForm?.nick
-                        password = authForm?.password
-                    }
-                    authForm = it
-                    authView?.onFormLoaded(it)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        formJob?.cancel()
+        formJob = scope.launch {
+            authView?.setSendEnabled(false)
+            try {
+                val form = authRepository.loadForm()
+                form.apply {
+                    nick = authForm?.nick
+                    password = authForm?.password
+                }
+                authForm = form
+                authView?.onFormLoaded(form)
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            } finally {
+                authView?.setSendEnabled(fieldsFilled)
+            }
+        }
     }
 
     private fun loadProfile(url: String) {
-        viewModelScope.launch {
+        scope.launch {
             runCatching { profileRepository.loadProfile(url) }
                     .onSuccess { profile ->
                         authView?.showProfile(profile)
@@ -132,36 +131,11 @@ class AuthViewModel(
         }
     }
 
-    private fun delayedExit(@Suppress("UNUSED_PARAMETER") profile: ProfileModel) {
-        viewModelScope.launch {
+    private fun delayedExit(_profile: ProfileModel) {
+        scope.launch {
             delay(2000L)
             router.exit()
         }
     }
 
-    class Factory(
-            private val authRepository: AuthRepository,
-            private val profileRepository: ProfileRepository,
-            private val router: TabRouter,
-            private val schedulers: SchedulersProvider,
-            private val authHolder: AuthHolder,
-            private val errorHandler: IErrorHandler,
-            private val systemLinkHandler: ISystemLinkHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != AuthViewModel::class.java) {
-                throw IllegalArgumentException("Unknown ViewModel class")
-            }
-            return AuthViewModel(
-                    authRepository,
-                    profileRepository,
-                    router,
-                    schedulers,
-                    authHolder,
-                    errorHandler,
-                    systemLinkHandler
-            ) as T
-        }
-    }
 }

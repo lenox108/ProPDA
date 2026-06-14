@@ -1,32 +1,31 @@
 package forpdateam.ru.forpda.presentation.devdb.brands
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import forpdateam.ru.forpda.presentation.BaseViewModel
+
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.entity.remote.devdb.Brands
 import forpdateam.ru.forpda.model.repository.devdb.DevDbRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
-import io.reactivex.disposables.CompositeDisposable
 
-class BrandsViewModel(
+@HiltViewModel
+class BrandsViewModel @Inject constructor(
         private val devDbRepository: DevDbRepository,
         private val router: TabRouter,
         private val errorHandler: IErrorHandler
-) : ViewModel() {
+) : BaseViewModel() {
 
-    @Volatile
-    private var brandsView: BrandsView? = null
-
-    fun attachView(view: BrandsView) {
-        brandsView = view
-    }
-
-    fun detachView() {
-        brandsView = null
-    }
-
-    private val rxSubscriptions = CompositeDisposable()
+    private var loadJob: Job? = null
     private var subscriptionsStarted = false
 
     companion object {
@@ -45,6 +44,12 @@ class BrandsViewModel(
     private var currentCategory = categories[0]
     private var currentData: Brands? = null
 
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _uiEvents = MutableSharedFlow<BrandsUiEvent>(replay = 2)
+    val uiEvents: SharedFlow<BrandsUiEvent> = _uiEvents.asSharedFlow()
+
     fun initCategory(categoryId: String) {
         categories.firstOrNull { it == categoryId }?.let {
             currentCategory = it
@@ -58,27 +63,24 @@ class BrandsViewModel(
     fun start() {
         if (subscriptionsStarted) return
         subscriptionsStarted = true
-        brandsView?.initCategories(categories, categories.indexOf(currentCategory))
+        scope.launch { _uiEvents.emit(BrandsUiEvent.InitCategories(categories, categories.indexOf(currentCategory))) }
         loadBrands()
     }
 
-    override fun onCleared() {
-        rxSubscriptions.clear()
-        super.onCleared()
-    }
-
     fun loadBrands() {
-        devDbRepository
-                .getBrands(currentCategory)
-                .doOnSubscribe { brandsView?.setRefreshing(true) }
-                .doAfterTerminate { brandsView?.setRefreshing(false) }
-                .subscribe({
-                    currentData = it
-                    brandsView?.showData(it)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        loadJob?.cancel()
+        loadJob = scope.launch {
+            _refreshing.value = true
+            try {
+                val brands = devDbRepository.getBrands(currentCategory)
+                currentData = brands
+                _uiEvents.emit(BrandsUiEvent.ShowData(brands))
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            } finally {
+                _refreshing.value = false
+            }
+        }
     }
 
     fun openBrand(item: Brands.Item) {
@@ -93,16 +95,9 @@ class BrandsViewModel(
     fun openSearch() {
         router.navigateTo(Screen.DevDbSearch())
     }
+}
 
-    class Factory(
-            private val devDbRepository: DevDbRepository,
-            private val router: TabRouter,
-            private val errorHandler: IErrorHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != BrandsViewModel::class.java) throw IllegalArgumentException("Unknown ViewModel class")
-            return BrandsViewModel(devDbRepository, router, errorHandler) as T
-        }
-    }
+sealed class BrandsUiEvent {
+    data class InitCategories(val categories: Array<String>, val position: Int) : BrandsUiEvent()
+    data class ShowData(val brands: Brands) : BrandsUiEvent()
 }

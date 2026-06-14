@@ -9,6 +9,22 @@ import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
 import java.util.regex.Matcher
 
+/**
+ * Безопасные extension-функции для извлечения групп из Matcher.
+ * Возвращают null вместо краша при отсутствии группы или ошибке парсинга.
+ */
+private fun Matcher.groupInt(group: Int): Int? {
+    val value = this.group(group) ?: return null
+    return value.toIntOrNull()
+}
+
+private fun Matcher.groupOrEmpty(group: Int): String = this.group(group).orEmpty()
+
+private fun SearchParser.decodeHtmlText(value: String?): String? =
+        value?.takeUnless { it.isEmpty() }?.let {
+            if (it.indexOf('<') == -1 && it.indexOf('&') == -1) it else it.fromHtml()
+        }
+
 class SearchParser(
         private val patternProvider: IPatternProvider
 ) : BaseParser() {
@@ -28,13 +44,13 @@ class SearchParser(
         val g2 = group(2)
         val g3 = group(3)
         if (g2 != null && g3 != null) {
-            return g2.toInt() to g3.toInt()
+            return (g2.toIntOrNull() ?: 0) to (g3.toIntOrNull() ?: 0)
         }
         val block = group(0) ?: return 0 to 0
         val topicFromBlock = FORUM_POST_TOPIC_IN_MATCH.find(block)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-        val postFromP = FORUM_POST_P_IN_MATCH.find(block)?.groupValues?.get(1)?.toIntOrNull()
         val entryPostId = group(1)?.toIntOrNull()
-        val postId = postFromP ?: entryPostId ?: 0
+        val postFromP = FORUM_POST_P_IN_MATCH.find(block)?.groupValues?.get(1)?.toIntOrNull()
+        val postId = entryPostId ?: postFromP ?: 0
         return topicFromBlock to postId
     }
 
@@ -47,10 +63,10 @@ class SearchParser(
                     .matcher(response)
                     .findAll { matcher ->
                         result.items.add(SearchItem().apply {
-                            id = matcher.group(1).toInt()
+                            id = matcher.groupInt(1) ?: return@findAll
                             imageUrl = matcher.group(2)
                             date = matcher.group(3)
-                            userId = matcher.group(4).toInt()
+                            userId = matcher.groupInt(4) ?: return@findAll
                             nick = matcher.group(5).fromHtml()
                             title = matcher.group(6).fromHtml()
                             body = matcher.group(7)
@@ -63,12 +79,12 @@ class SearchParser(
                         .matcher(response)
                         .findAll { matcher ->
                             result.items.add(SearchItem().apply {
-                                topicId = matcher.group(1).toInt()
+                                topicId = matcher.groupInt(1) ?: return@findAll
                                 //setId(matcher.group(1).toInt());
                                 title = matcher.group(4).fromHtml()
                                 desc = matcher.group(5).fromHtml()
-                                forumId = matcher.group(6).toInt()
-                                userId = matcher.group(10).toInt()
+                                forumId = matcher.groupInt(6) ?: return@findAll
+                                userId = matcher.groupInt(10) ?: return@findAll
                                 nick = matcher.group(11).fromHtml()
                                 date = matcher.group(12)
                             })
@@ -82,28 +98,28 @@ class SearchParser(
                                 val (tid, pid) = matcher.resolveForumPostTopicIdAndPostId()
                                 topicId = tid
                                 id = pid
-                                title = matcher.group(4)?.fromHtml()
+                                title = decodeHtmlText(matcher.group(4))
                                 date = matcher.group(5)
                                 //setNumber(matcher.group(6).toInt());
-                                isOnline = matcher.group(7).contains("green")
+                                isOnline = matcher.groupOrEmpty(7).contains("green")
                                 matcher.group(8)?.also {
                                     if (!it.isEmpty()) {
                                         avatar = "https://s.4pda.to/forum/uploads/$it"
                                     }
                                 }
-                                nick = matcher.group(9).fromHtml()
-                                userId = matcher.group(10).toInt()
+                                nick = decodeHtmlText(matcher.group(9))
+                                userId = matcher.groupInt(10) ?: return@findAll
                                 isCurator = matcher.group(11) != null
                                 groupColor = matcher.group(12)
                                 group = matcher.group(13)
-                                canMinusRep = !matcher.group(14).isEmpty()
+                                canMinusRep = matcher.groupOrEmpty(14).isNotEmpty()
                                 reputation = matcher.group(15)
-                                canPlusRep = !matcher.group(16).isEmpty()
-                                canReport = !matcher.group(17).isEmpty()
-                                canEdit = !matcher.group(18).isEmpty()
-                                canDelete = !matcher.group(19).isEmpty()
-                                canQuote = !matcher.group(20).isEmpty()
-                                body = matcher.group(21)
+                                canPlusRep = matcher.groupOrEmpty(16).isNotEmpty()
+                                canReport = matcher.groupOrEmpty(17).isNotEmpty()
+                                canEdit = matcher.groupOrEmpty(18).isNotEmpty()
+                                canDelete = matcher.groupOrEmpty(19).isNotEmpty()
+                                canQuote = matcher.groupOrEmpty(20).isNotEmpty()
+                                body = matcher.groupOrEmpty(21)
                             })
                         }
             }

@@ -2,11 +2,21 @@ package forpdateam.ru.forpda.ui.fragments.settings
 
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.preference.Preference
 import androidx.preference.PreferenceGroup
+import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.PreferenceScreen
+import androidx.preference.PreferenceGroupAdapter
+import androidx.preference.PreferenceViewHolder
 import androidx.recyclerview.widget.RecyclerView
-import forpdateam.ru.forpda.App
+import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.dp2
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
 
 /**
@@ -22,10 +32,35 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
 
     }
 
+    override fun onCreateAdapter(preferenceScreen: PreferenceScreen): RecyclerView.Adapter<*> {
+        return object : PreferenceGroupAdapter(preferenceScreen) {
+            override fun onBindViewHolder(holder: PreferenceViewHolder, position: Int) {
+                super.onBindViewHolder(holder, position)
+                val pref = getItem(position)
+                val prevPref = if (position > 0) getItem(position - 1) else null
+                val nextPref = if (position + 1 < itemCount) getItem(position + 1) else null
+
+                when {
+                    pref is PreferenceCategory -> bindCategoryPlate(holder.itemView)
+                    pref?.key == "about.support_author" -> bindSupportAuthorPlate(holder.itemView, prevPref, nextPref)
+                    else -> bindPreferencePlate(holder.itemView, prevPref, nextPref)
+                }
+            }
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // Keep Settings background consistent with "Menu"/grouped lists:
+        // page = background_base, plates = cards_background (see pref_plate_*.xml).
+        view.setBackgroundColor(view.context.getColorFromAttr(R.attr.background_base))
         view.findViewById<androidx.recyclerview.widget.RecyclerView>(androidx.preference.R.id.recycler_view)?.also { list ->
-            list.setPadding(0, 0, 0, 0)
+            // Fix: Add padding for navigation bar to prevent bottom items from being covered
+            ViewCompat.setOnApplyWindowInsetsListener(list) { v, insets ->
+                val navBarInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBarInsets.bottom)
+                insets
+            }
             list.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                     super.onScrolled(recyclerView, dx, dy)
@@ -36,6 +71,60 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         }
         updateToolbarShadow()
         setDividerHeight(0)
+    }
+
+    private fun bindCategoryPlate(itemView: View) {
+        setListItemMargins(itemView, isCategory = true)
+        // Category view is just a header. Keep it transparent (no grey bars) and rely on padding/margins.
+        itemView.background = null
+    }
+
+    private fun bindPreferencePlate(itemView: View, prevPref: Preference?, nextPref: Preference?) {
+        val prevIsCategory = prevPref == null || prevPref is PreferenceCategory
+        val nextIsCategory = nextPref == null || nextPref is PreferenceCategory
+
+        // Rounded "plates" grouping (like in the design screenshot).
+        itemView.setBackgroundResource(drawableForPrefPlate(prevIsCategory, nextIsCategory))
+        setListItemMargins(itemView, isCategory = false, prevIsCategory = prevIsCategory, nextIsCategory = nextIsCategory)
+
+        // No inner dividers inside plates.
+        itemView.findViewById<View?>(R.id.prefRowDivider)?.visibility = View.GONE
+    }
+
+    private fun bindSupportAuthorPlate(itemView: View, prevPref: Preference?, nextPref: Preference?) {
+        val prevIsCategory = prevPref == null || prevPref is PreferenceCategory
+        val nextIsCategory = nextPref == null || nextPref is PreferenceCategory
+
+        itemView.background = null
+        setListItemMargins(itemView, isCategory = false, prevIsCategory = prevIsCategory, nextIsCategory = nextIsCategory)
+        itemView.findViewById<View?>(R.id.prefRowDivider)?.visibility = View.GONE
+    }
+
+    private fun setListItemMargins(itemView: View, isCategory: Boolean, prevIsCategory: Boolean = true, nextIsCategory: Boolean = true) {
+        val lp = itemView.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        val h = itemView.resources.getDimensionPixelSize(R.dimen.content_padding_horizontal)
+        val vBetween = itemView.resources.getDimensionPixelSize(R.dimen.content_spacing_half)
+        val vCategoryTop = itemView.resources.getDimensionPixelSize(R.dimen.content_padding_vertical)
+
+        lp.marginStart = h
+        lp.marginEnd = h
+        if (isCategory) {
+            lp.topMargin = vCategoryTop
+            lp.bottomMargin = 0
+        } else {
+            // When preferences are inside the same category, they form a single plate group.
+            // Only the first item gets a top gap; only the last item gets a bottom gap.
+            lp.topMargin = if (prevIsCategory) vBetween else 0
+            lp.bottomMargin = if (nextIsCategory) vBetween else 0
+        }
+        itemView.layoutParams = lp
+    }
+
+    private fun drawableForPrefPlate(prevIsCategory: Boolean, nextIsCategory: Boolean): Int = when {
+        prevIsCategory && nextIsCategory -> R.drawable.pref_plate_single
+        prevIsCategory && !nextIsCategory -> R.drawable.pref_plate_top
+        !prevIsCategory && nextIsCategory -> R.drawable.pref_plate_bottom
+        else -> R.drawable.pref_plate_middle
     }
 
     /**
@@ -108,6 +197,9 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         if (key.contains("network") || key.contains("http") || key.contains("timeout")) {
             addAll("сеть", "интернет", "таймаут", "повторы", "retry")
         }
+        if (key.contains("bottom_nav") || key.contains("menu_sequence")) {
+            addAll("нижнее меню", "панель", "вкладки", "новости", "избранное", "порядок", "таб", "bottom", "nav", "tab bar")
+        }
         return out
     }
 
@@ -131,7 +223,7 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
     private fun updateToolbarShadow() {
         val isVisible = listScrollY > 0
         if (lastIsVisible != isVisible) {
-            (activity as? SettingsActivity)?.supportActionBar?.elevation = if (isVisible) App.px2.toFloat() else 0f
+            (activity as? SettingsActivity)?.supportActionBar?.elevation = if (isVisible) dp2.toFloat() else 0f
             lastIsVisible = isVisible
         }
     }

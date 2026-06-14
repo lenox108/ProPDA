@@ -1,68 +1,39 @@
 package forpdateam.ru.forpda.model.data.remote.api.checker
 
 import forpdateam.ru.forpda.entity.remote.checker.UpdateData
-import org.json.JSONObject
+import forpdateam.ru.forpda.entity.remote.checker.UpdateDataJson
+import kotlinx.serialization.json.Json
 
 /**
  * Created by radiationx on 27.01.18.
  */
 class CheckerParser() {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     fun parse(httpResponse: String): UpdateData {
+        val responseJson = json.decodeFromString(UpdateDataJson.serializer(), httpResponse)
         val resData = UpdateData()
-        val responseJson = JSONObject(httpResponse)
-        val jsonUpdate = responseJson.getJSONObject("update")
 
-        resData.code = jsonUpdate.optInt("version_code", Int.MAX_VALUE)
-        resData.build = jsonUpdate.optInt("version_build", Int.MAX_VALUE)
-        resData.name = jsonUpdate.optString("version_name")
-        resData.date = jsonUpdate.optString("build_date")
+        resData.code = responseJson.update.versionCode
+        resData.build = responseJson.update.versionBuild
+        resData.name = responseJson.update.versionName
+        resData.date = responseJson.update.buildDate
 
-        jsonUpdate.optJSONArray("links")?.let { arr ->
-            for (i in 0 until arr.length()) {
-                arr.optJSONObject(i)?.let { linkJson ->
-                    resData.links.add(UpdateData.UpdateLink(
-                            linkJson.optString("name", "Unknown"),
-                            linkJson.optString("url", ""),
-                            linkJson.optString("type", "site")
-                    ))
-                }
-            }
+        responseJson.update.links.forEach { linkJson ->
+            resData.links.add(UpdateData.UpdateLink(
+                linkJson.name,
+                linkJson.url,
+                linkJson.type
+            ))
         }
 
-        jsonUpdate.optJSONArray("important")?.let { importantJson ->
-            for (i in 0 until importantJson.length()) {
-                importantJson.optString(i, null)?.let {
-                    resData.important.add(it)
-                }
-            }
-        }
+        resData.important.addAll(responseJson.update.important)
+        resData.added.addAll(responseJson.update.added)
+        resData.fixed.addAll(responseJson.update.fixed)
+        resData.changed.addAll(responseJson.update.changed)
 
-        jsonUpdate.optJSONArray("added")?.let { addedJson ->
-            for (i in 0 until addedJson.length()) {
-                addedJson.optString(i, null)?.let {
-                    resData.added.add(it)
-                }
-            }
-        }
-
-        jsonUpdate.optJSONArray("fixed")?.let { fixedJson ->
-            for (i in 0 until fixedJson.length()) {
-                fixedJson.optString(i, null)?.let {
-                    resData.fixed.add(it)
-                }
-            }
-        }
-
-        jsonUpdate.optJSONArray("changed")?.let { changedJson ->
-            for (i in 0 until changedJson.length()) {
-                changedJson.optString(i, null)?.let {
-                    resData.changed.add(it)
-                }
-            }
-        }
-
-        resData.patternsVersion = jsonUpdate.getInt("patternsVersion")
+        resData.patternsVersion = responseJson.update.patternsVersion
 
         return resData
     }

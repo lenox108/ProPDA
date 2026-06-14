@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.ui.navigation
+import forpdateam.ru.forpda.BuildConfig
 
-import android.util.Log
+import timber.log.Timber
 import forpdateam.ru.forpda.extensions.nullString
 import forpdateam.ru.forpda.presentation.Screen
 import org.json.JSONArray
@@ -93,6 +94,31 @@ class TabController {
 
     fun isCurrent(tag: String?): Boolean = currentTag == tag
 
+    fun getParentTag(tag: String?): String? {
+        if (tag == null) return null
+        return findTabItem(tag)?.parent?.tag
+    }
+
+    fun getParentScreenKey(tag: String?): String? {
+        if (tag == null) return null
+        return findTabItem(tag)?.parent?.screen?.key
+    }
+
+    fun getScreenKey(tag: String?): String? {
+        if (tag == null) return null
+        return findTabItem(tag)?.screen?.key
+    }
+
+    fun getThemeChainTagsToOrigin(tag: String?): List<String> {
+        val result = mutableListOf<String>()
+        var item = tag?.let { findTabItem(it) } ?: return emptyList()
+        while (item.screen?.key == Screen.Theme::class.java.simpleName) {
+            result.add(item.tag)
+            item = item.parent ?: return emptyList()
+        }
+        return if (result.size > 1) result else emptyList()
+    }
+
     fun getList(): List<TabItem> {
         val result = mutableListOf<TabItem>()
         tabs.forEach {
@@ -117,6 +143,11 @@ class TabController {
         } == true
     }
 
+    /** Единственная вкладка [Screen.Theme] в дереве (в т.ч. скрытая после «назад» в избранное). */
+    fun findThemeTab(): TabItem? = getList().firstOrNull {
+        it.screen?.key == Screen.Theme::class.java.simpleName
+    }
+
 
     fun addNew(tag: String, screen: Screen): TabItem {
         val item = findTabItem(currentTag)
@@ -134,7 +165,7 @@ class TabController {
         currentTag = tag
         // Логи дерева вкладок — очень шумные и могут подлагивать на OEM. Оставляем только в debug.
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
-            Log.d("TabController", "addNew t=$tag, s=$screen")
+            Timber.d("addNew t=$tag, s=$screen")
             printTabItems("TabController")
         }
         return newItem
@@ -154,11 +185,21 @@ class TabController {
             item.parent = null
         }
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
-            Log.d("TabController", "remove t=$tag")
+            Timber.d("remove t=$tag")
             if (print) {
                 printTabItems("TabController")
             }
         }
+    }
+
+    fun removeThemeChainToOrigin(tag: String): List<String> {
+        val tagsRemove = getThemeChainTagsToOrigin(tag)
+        tagsRemove.forEach { remove(it, false) }
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            Timber.d("removeThemeChainToOrigin t=$tag removed=${tagsRemove.size}")
+            printTabItems("TabController")
+        }
+        return tagsRemove
     }
 
     fun replace(tag: String, screen: Screen) {
@@ -182,7 +223,7 @@ class TabController {
         }
         currentTag = tag
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
-            Log.d("TabController", "replace t=$tag, s=$screen")
+            Timber.d("replace t=$tag, s=$screen")
             printTabItems("TabController")
         }
     }
@@ -201,7 +242,7 @@ class TabController {
             tagsRemove.forEach { remove(it, false) }
         }
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
-            Log.d("TabController", "backTo s=$screen")
+            Timber.d("backTo s=$screen")
             printTabItems("TabController")
         }
         return tagsRemove
@@ -254,8 +295,7 @@ class TabController {
             lal += printTabItemsTree(it, 1)
         }
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
-            System.out.print(lal)
-            Log.d(logTag, "tree:\n$lal")
+            Timber.d("tree:\n$lal")
         }
     }
 

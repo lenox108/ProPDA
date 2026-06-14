@@ -1,6 +1,6 @@
 package forpdateam.ru.forpda.model.data.remote.api.editpost
 
-import android.util.Log
+import timber.log.Timber
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPoll
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
@@ -10,8 +10,18 @@ import forpdateam.ru.forpda.common.normalizeEditPostBodyForEditor
 import forpdateam.ru.forpda.common.selectBestEditBodyCandidate
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import java.util.regex.Matcher
 
 private const val EDIT_POST_DIAG = "ForPDA.EditPost"
+
+/**
+ * Безопасные extension-функции для извлечения групп из Matcher.
+ * Возвращают null вместо краша при отсутствии группы или ошибке парсинга.
+ */
+private fun Matcher.groupInt(group: Int): Int? {
+    val value = this.group(group) ?: return null
+    return value.toIntOrNull()
+}
 
 private fun diagPreview(s: String, max: Int = 200): String =
         s.replace("\r\n", "\n").replace("\n", "↵").take(max)
@@ -99,11 +109,13 @@ class EditPostParser(
                 ?.let { selectBestEditBodyCandidate(it) }
                 ?.takeIf { it.isNotBlank() }
         form.message = fromMainEditor ?: selectBestFromRawTextareas(allRawTextareaContents(response))
-        Log.d(
-                EDIT_POST_DIAG,
-                "parseForm edTextareaMatches=${edMatches.size} fromMainEditorLen=${fromMainEditor?.length ?: 0} " +
-                        "finalLen=${form.message.length} hasOpenBracket=${form.message.contains('[')} " +
-                        "preview=${diagPreview(form.message)}"
+        Timber.d(
+                "parseForm edTextareaMatches=%d fromMainEditorLen=%d finalLen=%d hasOpenBracket=%s preview=%s",
+                edMatches.size,
+                fromMainEditor?.length ?: 0,
+                form.message.length,
+                form.message.contains('['),
+                diagPreview(form.message)
         )
 
         form.editReason = extractPostEditReason(response)?.trim()
@@ -123,7 +135,7 @@ class EditPostParser(
                         .matcher(matcher.group(2).orEmpty())
                         .findAll { jsonMatcher ->
                             poll.addQuestion(EditPoll.Question().apply {
-                                val questionIndex = jsonMatcher.group(1).orEmpty().toInt()
+                                val questionIndex = jsonMatcher.group(1).orEmpty().toIntOrNull() ?: return@findAll
                                 if (questionIndex > poll.baseIndexOffset) {
                                     poll.baseIndexOffset = questionIndex
                                 }
@@ -132,11 +144,11 @@ class EditPostParser(
                             })
                         }
                         .reset(matcher.group(3).orEmpty()).findAll { jsonMatcher ->
-                            val questionIndex = jsonMatcher.group(1).orEmpty().toInt()
+                            val questionIndex = jsonMatcher.group(1).orEmpty().toIntOrNull() ?: return@findAll
                             EditPoll.findQuestionByIndex(poll, questionIndex)?.also { question ->
                                 val choice = EditPoll.Choice()
 
-                                val choiceIndex = jsonMatcher.group(2).orEmpty().toInt()
+                                val choiceIndex = jsonMatcher.group(2).orEmpty().toIntOrNull() ?: return@findAll
                                 if (choiceIndex > question.baseIndexOffset) {
                                     question.baseIndexOffset = choiceIndex
                                 }
@@ -146,24 +158,24 @@ class EditPostParser(
                             }
                         }
                         .reset(matcher.group(4).orEmpty()).findAll { jsonMatcher ->
-                            val questionIndex = jsonMatcher.group(1).orEmpty().toInt()
+                            val questionIndex = jsonMatcher.group(1).orEmpty().toIntOrNull() ?: return@findAll
                             EditPoll.findQuestionByIndex(poll, questionIndex)?.also { question ->
-                                val choiceIndex = jsonMatcher.group(2).orEmpty().toInt()
+                                val choiceIndex = jsonMatcher.group(2).orEmpty().toIntOrNull() ?: return@findAll
                                 val choice = EditPoll.findChoiceByIndex(question, choiceIndex)
                                 if (choice != null) {
-                                    choice.votes = jsonMatcher.group(3).orEmpty().toInt()
+                                    choice.votes = jsonMatcher.group(3).orEmpty().toIntOrNull() ?: 0
                                 }
                             }
                         }
                         .reset(matcher.group(5).orEmpty()).findAll { jsonMatcher ->
-                            val questionIndex = jsonMatcher.group(1).orEmpty().toInt()
+                            val questionIndex = jsonMatcher.group(1).orEmpty().toIntOrNull() ?: return@findAll
                             EditPoll.findQuestionByIndex(poll, questionIndex)?.also { question ->
                                 question.isMulti = jsonMatcher.group(3).orEmpty() == "1"
                             }
                         }
 
-                poll.maxQuestions = matcher.group(6).orEmpty().toInt()
-                poll.maxChoices = matcher.group(7).orEmpty().toInt()
+                poll.maxQuestions = matcher.groupInt(6) ?: 0
+                poll.maxChoices = matcher.groupInt(7) ?: 0
                 poll.title = matcher.group(8).orEmpty().fromHtml().orEmpty()
                 poll
             }

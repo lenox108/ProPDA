@@ -1,5 +1,7 @@
 package forpdateam.ru.forpda.ui.fragments.other
 
+import javax.inject.Inject
+import forpdateam.ru.forpda.common.getVecDrawable
 import android.annotation.SuppressLint
 import android.app.SearchManager
 import android.content.Context
@@ -14,20 +16,20 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import android.widget.LinearLayout
 
+import android.widget.LinearLayout
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+
 import androidx.lifecycle.repeatOnLifecycle
 
 import java.util.ArrayList
-
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 
-import forpdateam.ru.forpda.App
+import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.dp48
 import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
 import forpdateam.ru.forpda.common.webview.DialogsHelper
@@ -37,28 +39,37 @@ import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.TabTopScroller
 import forpdateam.ru.forpda.ui.fragments.WebViewTopScroller
 import forpdateam.ru.forpda.ui.views.ExtendedWebView
-
+import forpdateam.ru.forpda.ui.views.WebViewSecurityProfile
+import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.presentation.ILinkHandler
+import forpdateam.ru.forpda.presentation.ISystemLinkHandler
+import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
+import forpdateam.ru.forpda.common.ClipboardHelper
+import forpdateam.ru.forpda.presentation.TabRouter
 /**
  * Created by radiationx on 16.10.17.
+ *
+ * Fragment для отображения объявлений.
+ *
+ * JS Bridge обоснование:
+ * - Не используется напрямую, но интерфейс добавлен для совместимости с шаблоном.
+ * - Контент: локально генерируемый HTML из API объявлений (доверенный статический контент).
+ * - Профиль безопасности: TRUSTED_STATIC_ARTICLE (JS включён, базовый bridge запрещён).
  */
-
+@AndroidEntryPoint
 class AnnounceFragment : TabFragment(), TabTopScroller {
+    @Inject lateinit var linkHandler: ILinkHandler
+    @Inject lateinit var router: TabRouter
+    @Inject lateinit var systemLinkHandler: ISystemLinkHandler
+    @Inject lateinit var clipboardHelper: ClipboardHelper
+    @Inject lateinit var avatarRepository: AvatarRepository
+
 
     private var searchViewTag = 0
     private lateinit var webView: ExtendedWebView
     private lateinit var topScroller: WebViewTopScroller
 
-    private val viewModel: AnnounceViewModel by viewModels {
-        val args = arguments ?: Bundle()
-        AnnounceViewModel.Factory(
-                args.getInt(ARG_ANNOUNCE_ID),
-                args.getInt(ARG_FORUM_ID),
-                App.get().Di().forumRepository,
-                App.get().Di().announceTemplate,
-                App.get().Di().templateManager,
-                App.get().Di().errorHandler
-        )
-    }
+    private val viewModel: AnnounceViewModel by viewModels()
 
     init {
         configuration.defaultTitle = "Объявление"
@@ -66,12 +77,16 @@ class AnnounceFragment : TabFragment(), TabTopScroller {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        webView = ExtendedWebView(context)
+        webView = ExtendedWebView(requireContext()).also {
+            it.systemLinkHandler = systemLinkHandler
+            it.init(WebViewSecurityProfile.TRUSTED_STATIC_ARTICLE)
+        }
         webView.setDialogsHelper(DialogsHelper(
                 webView.context,
-                App.get().Di().linkHandler,
-                App.get().Di().systemLinkHandler,
-                App.get().Di().router
+                linkHandler,
+                systemLinkHandler,
+                router,
+                clipboardHelper
         ))
         attachWebView(webView)
         fragmentContent.addView(webView)
@@ -81,8 +96,7 @@ class AnnounceFragment : TabFragment(), TabTopScroller {
     @SuppressLint("JavascriptInterface")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        webView.addJavascriptInterface(this, JS_INTERFACE)
-        webView.webViewClient = CustomWebViewClient()
+        webView.webViewClient = CustomWebViewClient(avatarRepository, linkHandler, systemLinkHandler)
         webView.webChromeClient = CustomWebChromeClient()
         webView.setJsLifeCycleListener(object : ExtendedWebView.JsLifeCycleListener {
             override fun onDomContentComplete(actions: ArrayList<String>) {
@@ -113,6 +127,7 @@ class AnnounceFragment : TabFragment(), TabTopScroller {
                         )
                     }
                     webView.evalJs("changeStyleType(\"${state.styleType}\")")
+                    webView.setAppFontMode(state.appFontMode)
                 }
             }
         }
@@ -132,25 +147,27 @@ class AnnounceFragment : TabFragment(), TabTopScroller {
         toolbar.inflateMenu(R.menu.theme_search_menu)
         val searchOnPageMenuItem = menu.findItem(R.id.action_search)
         searchOnPageMenuItem.setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        val searchView = searchOnPageMenuItem.actionView as SearchView
+        val searchView = searchOnPageMenuItem.actionView as? SearchView ?: SearchView(requireContext()).also {
+            searchOnPageMenuItem.actionView = it
+        }
         searchView.tag = searchViewTag
 
         searchView.setOnSearchClickListener { _ ->
             if (searchView.tag == searchViewTag) {
-                val searchClose = searchView.findViewById<View>(androidx.appcompat.R.id.search_close_btn) as ImageView?
+                val searchClose = searchView.findViewById<ImageView>(androidx.appcompat.R.id.search_close_btn)
                 if (searchClose != null)
-                    (searchClose.parent as ViewGroup).removeView(searchClose)
+                    (searchClose.parent as? ViewGroup ?: throw IllegalStateException("parent not ViewGroup")).removeView(searchClose)
 
-                val navButtonsParams = ViewGroup.LayoutParams(App.px48, App.px48)
+                val navButtonsParams = ViewGroup.LayoutParams(dp48, dp48)
                 val outValue = TypedValue()
                 context?.theme?.resolveAttribute(android.R.attr.actionBarItemBackground, outValue, true)
 
                 val btnNext = AppCompatImageButton(searchView.context)
-                btnNext.setImageDrawable(App.getVecDrawable(context, R.drawable.ic_toolbar_search_next))
+                btnNext.setImageDrawable(requireContext().getVecDrawable(R.drawable.ic_toolbar_search_next))
                 btnNext.setBackgroundResource(outValue.resourceId)
 
                 val btnPrev = AppCompatImageButton(searchView.context)
-                btnPrev.setImageDrawable(App.getVecDrawable(context, R.drawable.ic_toolbar_search_prev))
+                btnPrev.setImageDrawable(requireContext().getVecDrawable(R.drawable.ic_toolbar_search_prev))
                 btnPrev.setBackgroundResource(outValue.resourceId)
 
                 (searchView.getChildAt(0) as LinearLayout).addView(btnPrev, navButtonsParams)
@@ -162,8 +179,10 @@ class AnnounceFragment : TabFragment(), TabTopScroller {
             }
         }
 
-        val searchManager = activity?.getSystemService(Context.SEARCH_SERVICE) as SearchManager
-        searchView.setSearchableInfo(searchManager.getSearchableInfo(activity?.componentName))
+        val searchManager = activity?.getSystemService(Context.SEARCH_SERVICE) as? SearchManager
+        if (searchManager != null) {
+            searchView.setSearchableInfo(searchManager.getSearchableInfo(activity?.componentName))
+        }
 
         searchView.setIconifiedByDefault(true)
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
@@ -184,6 +203,11 @@ class AnnounceFragment : TabFragment(), TabTopScroller {
 
     private fun findText(text: String) {
         webView.findAllAsync(text)
+    }
+
+    override fun onDestroyView() {
+        webView.setJsLifeCycleListener(null)
+        super.onDestroyView()
     }
 
     override fun onDestroy() {

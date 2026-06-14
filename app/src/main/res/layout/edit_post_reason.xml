@@ -7,5 +7,6 @@
         android:id="@+id/edit_post_reason_field"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:autofillHints="contentDescription"
         android:layout_margin="@dimen/dp16" />
 </FrameLayout>

@@ -4,7 +4,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?cards_background"
     tools:layout_marginVertical="@dimen/dp12">
 
     <ImageView
@@ -18,7 +17,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0"
+        app:layout_constraintVertical_bias="0.5"
         app:srcCompat="@drawable/ic_info" />
 
     <TextView
@@ -42,9 +41,22 @@
         style="@style/Widget.AppCompat.Button.Borderless.Colored"
         android:layout_width="@dimen/dp48"
         android:layout_height="@dimen/dp48"
+        android:contentDescription="@string/close"
+        android:padding="@dimen/dp12"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0"
+        app:layout_constraintVertical_bias="0.5"
         app:srcCompat="@drawable/ic_close" />
+
+    <View
+        android:id="@+id/infoItemRowDivider"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/divider_thin"
+        android:layout_marginStart="@dimen/menu_icon_text_margin_start"
+        android:background="?divider_line"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

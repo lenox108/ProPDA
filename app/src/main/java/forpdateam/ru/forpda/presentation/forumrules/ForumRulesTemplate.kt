@@ -15,6 +15,7 @@ class ForumRulesTemplate(
         template.apply {
             templateManager.fillStaticStrings(this)
             setVariableOpt("style_type", templateManager.getThemeType())
+            setVariableOpt("theme_overrides_css", templateManager.getThemeOverridesCss())
             for (item in rules.items) {
                 setVariableOpt("type", if (item.isHeader) "header" else "")
                 setVariableOpt("number", item.number)

@@ -97,6 +97,7 @@ object ParserPatterns {
         const val thread_nick = "thread_nick";
         const val chat_info = "chat_info";
         const val chat_pattern = "chat_pattern";
+        const val chat_pattern_container = "chat_pattern_container";
         const val blacklist_main = "blacklist_main";
         const val blacklist_msg = "blacklist_msg";
         const val finduser = "finduser";

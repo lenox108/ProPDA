@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">ForPDA 2</string>
+    <string name="app_name" translatable="false">ProPDA</string>
     <string name="pager_bullet_separator" formatted="false">%s / %s</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
@@ -11,7 +11,7 @@
     <!-- Shortcuts -->
     <string name="shortcut_news">Новости</string>
     <string name="shortcut_favorites">Избранное</string>
-    <string name="shortcut_contacts">Контакты</string>
+    <string name="shortcut_contacts">QMS</string>
     <string name="shortcut_mentions">Ответы</string>
 
     <!-- Test -->
@@ -25,6 +25,21 @@
     <string name="test_topic_date" translatable="false">03.03.2017</string>
     <string name="test_nick" translatable="false">RadiationX</string>
     <string name="test_topic_section_title" translatable="false">Topic section title</string>
+    <string name="topic_last_message_desc">Последнее сообщение: %1$s, %2$s</string>
+    <string name="bottom_nav_item_with_count">%1$s, новых: %2$d</string>
+    <string name="bottom_nav_state_selected">Выбрано</string>
+    <string name="bottom_nav_state_not_selected">Не выбрано</string>
+    <string name="bottom_nav_toggle_open_tabs">Показать открытые вкладки</string>
+    <string name="other_menu_edit_mode_state">Режим настройки меню</string>
+    <string name="topic_row_desc">%1$s. %2$s%3$sПоследнее сообщение: %4$s, %5$s</string>
+    <string name="topic_unread_status">Есть новые сообщения. </string>
+    <string name="topic_closed_status">Тема закрыта. </string>
+    <string name="topic_poll_status">Есть опрос. </string>
+    <string name="pagination_current_page_desc">Страница %1$d из %2$d. Выбор страницы</string>
+    <string name="smart_nav_page_desc">Страница %1$d</string>
+    <string name="smart_nav_page_current_state">Текущая страница</string>
+    <string name="vote_post_good">Повысить репутацию поста</string>
+    <string name="vote_post_bad">Понизить репутацию поста</string>
 
     <!-- Base -->
     <string name="undefined" translatable="false">Undefined</string>
@@ -35,6 +50,7 @@
     <string name="cancel">Отмена</string>
     <string name="no">Нет</string>
     <string name="refresh">Обновить</string>
+    <string name="restart">Перезапустить</string>
     <string name="add">Добавить</string>
     <string name="close">Закрыть</string>
     <string name="send">Отправить</string>
@@ -48,9 +64,13 @@
     <string name="quote">Цитировать</string>
     <string name="all_text">Весь текст</string>
     <string name="share">Поделиться</string>
+    <string name="post_actions_title">Действия с сообщением</string>
+    <string name="copy_post_link">Скопировать ссылку на сообщение</string>
+    <string name="share_post_link">Поделиться ссылкой на сообщение</string>
     <string name="error">Ошибка</string>
     <string name="look">Посмотреть</string>
     <string name="reputation">Репутация</string>
+    <string name="post_rating">Рейтинг</string>
     <string name="reply">Ответить</string>
     <string name="report">Пожаловаться</string>
     <string name="attention">Внимание!</string>
@@ -68,17 +88,21 @@
     <string name="sorting_asc">Возрастание</string>
     <string name="sorting_desc">Убывание</string>
     <string name="action_complete">Действие выполнено</string>
+    <string name="link_copied">Ссылка скопирована</string>
     <string name="update_complete">Обновление прошло успешно</string>
     <string name="update_data_base">Обновление базы данных</string>
     <string name="sorting_title">Сортировка</string>
     <string name="sort_by">Сортировать по</string>
     <string name="sort_order">Порядок</string>
-    <string name="mark_all_read">Отметить все прочитанными</string>
+    <string name="mark_all_read">Отметить все прочитанными (работает с задержкой)</string>
     <string name="pref_title_quick_settings">Быстро</string>
     <string name="mark_read">Отметить прочитанным</string>
     <string name="refreshing">Обновление</string>
     <string name="loading_data">Загрузка данных</string>
     <string name="error_occurred">Произошла ошибка</string>
+    <string name="external_browser_not_found">Внешний браузер не найден</string>
+    <string name="image_viewer_server_unavailable">Сервер изображения временно недоступен</string>
+    <string name="image_viewer_auth_required">Не удалось открыть изображение: нужна авторизация</string>
     <string name="open_with">Открыть в</string>
     <string name="load_with">Загрузить через</string>
     <string name="action_not_available">Действие невозможно</string>
@@ -92,6 +116,18 @@
     <string name="user_themes">Темы пользователя</string>
     <string name="messages_in_this_theme">Сообщения в этой теме</string>
     <string name="user_messages">Сообщения пользователя</string>
+    <string name="forum_blacklist_add">Добавить в чёрный список форума</string>
+    <string name="forum_blacklist_remove">Убрать из чёрного списка форума</string>
+    <string name="forum_blacklist_added">Пользователь добавлен в чёрный список</string>
+    <string name="forum_blacklist_removed">Пользователь убран из чёрного списка</string>
+    <string name="fragment_title_forum_blacklist">Чёрный список</string>
+    <string name="pref_summary_forum_blacklist">Скрытые в темах форума пользователи</string>
+    <string name="forum_blacklist_user_id">ID: %d</string>
+    <string name="forum_blacklist_unknown_nick">Без ника</string>
+    <string name="funny_forum_blacklist_nodata_title">Чёрный список пуст</string>
+    <string name="funny_forum_blacklist_nodata_desc">Пользователи из этого списка скрыты в темах форума. Добавить можно из меню поста в теме.</string>
+    <string name="forum_blacklist_post_hidden">Сообщение скрыто</string>
+    <string name="forum_blacklist_posts_hidden">%d сообщений скрыто</string>
     <string name="search_in_theme">Найти в теме</string>
     <string name="search_my_posts">Найти мои посты</string>
     <string name="theme_options">Опции темы</string>
@@ -102,16 +138,30 @@
     <string name="user_nick">Ник пользователя</string>
     <string name="theme">Тема</string>
     <string name="no_network">Нет соединения</string>
+    <string name="qms_error_session">Сессия истекла. Войдите в аккаунт снова.</string>
+    <string name="qms_error_captcha">Требуется проверка captcha на сайте</string>
+    <string name="qms_error_parser">Не удалось разобрать ответ QMS</string>
+    <string name="qms_error_server">Ошибка сервера QMS</string>
+    <string name="qms_error_unknown">Не удалось загрузить диалог</string>
+    <string name="qms_error_webview">Сообщения загружены, но не отобразились. Нажмите «Обновить».</string>
+    <string name="qms_empty_title">Нет сообщений</string>
+    <string name="qms_empty_desc">В этом диалоге пока нет сообщений.</string>
+    <string name="qms_refresh_failed_keep_cached">Не удалось обновить, показаны сохранённые сообщения</string>
+    <string name="qms_cache_age_minutes">данные %d мин назад</string>
     <string name="group">Группа</string>
     <string name="menu">Меню</string>
     <string name="hat">Шапка темы</string>
     <string name="avatar">Аватар</string>
     <string name="vote_good">Хорошо</string>
     <string name="vote_bad">Плохо</string>
+    <string name="menu_item_qms">QMS</string>
+    <string name="other_menu_section_quick">Быстрый доступ</string>
+    <string name="other_menu_section_personal">Личное</string>
+    <string name="other_menu_section_tools">Инструменты</string>
 
     <!-- Other -->
     <string name="ask_close_other_tabs">Закрыть остальные вкладки?</string>
-    <string name="version_Build">Версия %s</string>
+    <string name="version_Build">Версия: %s</string>
     <string name="open_menu">Открыть меню</string>
     <string name="close_tab">Закрыть вкладку</string>
     <string name="report_to_post_Nick" formatted="false">Жалоба на пост %s</string>
@@ -124,9 +174,15 @@
     <string name="msg_panel_advanced_bbcode_desc">BBCode и смайлы: теги как при цитировании</string>
     <string name="msg_panel_clear_message">Очистить текст</string>
     <string name="msg_panel_delete_last_char">Удалить последний символ</string>
+    <string name="msg_panel_preview">Предпросмотр</string>
+    <string name="msg_panel_preview_empty">Введите текст для предпросмотра</string>
+    <string name="msg_panel_preview_note">Локальный предпросмотр: часть редких BBCode может отличаться от сайта.</string>
+    <string name="editor_clear_text_confirm_message">Удалить текст?</string>
+    <string name="editor_clear_text_confirm_positive">Удалить</string>
+    <string name="editor_clear_text_confirm_negative">Отмена</string>
     <string name="no_updates">Обновлений нет</string>
     <string name="updater_current_info" formatted="false">Версия %s\nСборка от %s</string>
-    <string name="updater_notification_title">Обновление ForPDA</string>
+    <string name="updater_notification_title">Обновление ProPDA</string>
     <string name="updater_notification_content_VerName">Новая версия: %s</string>
     <string name="close_other_tabs">Закрыть остальные</string>
     <string name="bottom_nav_open_tabs_section">Открытые вкладки</string>
@@ -140,6 +196,7 @@
     <string name="full_form">Полная форма</string>
     <string name="hide_form">Скрыть форму</string>
     <string name="loading_1">Загрузка…</string>
+    <string name="downloaded">Загружено</string>
     <string name="load_more">Загрузить больше</string>
     <string name="title">Заголовок</string>
     <string name="note_link_hint">Ссылка, не обязательно</string>
@@ -163,9 +220,10 @@
     <string name="fragment_title_mentions">Ответы</string>
     <string name="fragment_title_auth">Авторизация</string>
     <string name="fragment_title_news">Новости</string>
-    <string name="fragment_title_contacts">Контакты</string>
+    <string name="fragment_title_contacts">QMS</string>
     <string name="fragment_title_devdb" translatable="false">DevDB</string>
     <string name="fragment_title_search">Поиск</string>
+    <string name="search_scoped_forum_fallback">текущий раздел</string>
     <string name="fragment_title_notes">Закладки</string>
     <string name="fragment_title_blacklist">Изгои мира сего</string>
     <string name="fragment_title_chat">Чат</string>
@@ -176,8 +234,17 @@
     <string name="fragment_title_device_search">Поиск устройства</string>
     <string name="fragment_title_other_menu">Полное меню приложения</string>
     <string name="activity_title_settings">Настройки</string>
+    <string name="menu_item_exit">Выход</string>
 
     <string name="fragment_tab_title_theme" formatted="false">Тема \"%s\"</string>
+    <string name="theme_refresh_page">Обновить страницу</string>
+    <string name="theme_bottom_refresh_pull">Потяните, чтобы обновить</string>
+    <string name="theme_bottom_refresh_release">Отпустите, чтобы обновить</string>
+    <string name="theme_bottom_refresh_checking">Проверяем новые сообщения</string>
+    <string name="theme_page_swipe_pull_previous">Свайп к предыдущей странице</string>
+    <string name="theme_page_swipe_pull_next">Свайп к следующей странице</string>
+    <string name="theme_page_swipe_release_previous">Отпустите для предыдущей страницы</string>
+    <string name="theme_page_swipe_release_next">Отпустите для следующей страницы</string>
     <string name="fragment_tab_title_chat" formatted="false">@string/dialog_Title_Nick</string>
     <string name="fragment_tab_title_article" formatted="false">Новость \"%s\"</string>
 
@@ -247,13 +314,75 @@
     <string name="note_edit">Редактирование закладки</string>
     <string name="note_create">Создание закладки</string>
     <string name="note_enter_title">Напишите заголовок</string>
+    <string name="note_folder">Папка</string>
+    <string name="note_all_folders">Все</string>
+    <string name="note_without_folder">Без папки</string>
+    <string name="note_tree_view">Дерево папок</string>
+    <string name="note_folders_section">Папки</string>
+    <string name="note_search_hint">Поиск в закладках</string>
+    <string name="note_create_folder">Создать папку</string>
+    <string name="note_folder_name">Название папки</string>
+    <string name="note_folder_name_empty">Введите название папки</string>
+    <string name="note_select_folder">Выбрать папку</string>
+    <string name="note_manage_folders">Управление папками</string>
+    <string name="note_move_to_folder">Переместить в папку</string>
+    <string name="note_rename_folder">Переименовать папку</string>
+    <string name="note_delete_folder">Удалить папку</string>
+    <string name="note_delete_folder_message">Удалить папку «%1$s»? Закладки из нее будут перемещены в «Без папки».</string>
+    <string name="note_select_bookmarks">Выбрать</string>
+    <string name="note_select_all_bookmarks">Выбрать все</string>
+    <string name="note_clear_visible_selection">Снять выбор</string>
+    <string name="note_selected_count">Выбрано: %1$d</string>
+    <string name="note_delete_selected_title">Удалить закладки?</string>
+    <string name="note_delete_selected_message">Будет удалено: %1$d.</string>
+    <string name="note_sort_created">По дате создания</string>
+    <string name="note_sort_updated">По дате изменения</string>
+    <string name="note_sort_title">По алфавиту</string>
 
     <!-- News list-->
+    <string name="news_category_title">Категория новостей</string>
+    <string name="news_category_all">Все новости</string>
+    <string name="news_category_root">Главная</string>
+    <string name="news_category_tech">Техника</string>
+    <string name="news_category_tech_smartphones">Смартфоны</string>
+    <string name="news_category_tech_laptops">Ноутбуки</string>
+    <string name="news_category_tech_audio">Аудио</string>
+    <string name="news_category_tech_monitors">ТВ и мониторы</string>
+    <string name="news_category_tech_appliances">Бытовая техника</string>
+    <string name="news_category_tech_pc">ПК-железо</string>
+    <string name="news_category_articles">Статьи</string>
+    <string name="news_category_reviews">Обзоры</string>
+    <string name="news_category_reviews_smartphones">Смартфоны</string>
+    <string name="news_category_reviews_tablets">Планшеты</string>
+    <string name="news_category_reviews_smart_watches">Умные часы</string>
+    <string name="news_category_reviews_accessories">Аксессуары</string>
+    <string name="news_category_reviews_notebooks">Ноутбуки</string>
+    <string name="news_category_reviews_audio">Аудио</string>
+    <string name="news_category_games">Игры</string>
 
     <!-- News article-->
     <string name="news_page_content">Контент</string>
     <string name="news_page_comments">Комментарии</string>
+    <string name="news_show_comments">Показать комментарии</string>
+    <string name="news_inline_comments_show">Показать</string>
+    <string name="news_inline_comments_hide">Скрыть</string>
+    <string name="news_inline_comments_loading">Загружаем комментарии…</string>
+    <string name="news_inline_comments_description">Комментарии откроются прямо под статьей</string>
     <string name="comment_reply_warning">Уже имеется введёный текст, очистить?</string>
+    <string name="comment_actions_title">Действия с комментарием</string>
+    <string name="comment_open_profile">Открыть профиль</string>
+    <string name="comment_plus_karma">Плюс к карме</string>
+    <string name="comment_hide">Скрыть комментарий</string>
+    <string name="comment_reputation_plus">Репутация +</string>
+    <string name="comment_reputation_minus">Репутация -</string>
+    <string name="comment_edited_hint">Комментарий был отредактирован</string>
+    <string name="comment_reputation_reason">Причина изменения репутации</string>
+    <string name="comment_report_reason">Текст жалобы</string>
+    <string name="comment_delete_confirm">Удалить комментарий?</string>
+    <string name="comment_deleted">(Комментарий удален)</string>
+    <string name="comment_like_cannot_remove">Лайк нельзя отменить</string>
+    <string name="comment_action_unavailable">Действие недоступно</string>
+    <string name="comment_action_failed">Действие не применено сервером</string>
     <string name="comments">Комментарии</string>
     <string name="comments_do_swipe">Сделайте свайп справа налево</string>
 
@@ -262,6 +391,7 @@
     <string name="brands_category_tabs">Планшеты</string>
     <string name="brands_category_ebook">Эл. книги</string>
     <string name="brands_category_smartwatch">Смарт часы</string>
+    <string name="devdb_category_picker_prompt">Тип устройства DevDB</string>
     <string name="device_page_specs">Характеристики</string>
     <string name="device_page_comments" formatted="false">Отзывы (%d)</string>
     <string name="device_page_discussions" formatted="false">Обсуждения (%d)</string>
@@ -299,13 +429,25 @@
     <string name="fav_pin">Закрепить</string>
     <string name="fav_sort_last_post">Последнее сообщение</string>
     <string name="fav_sort_title">Название</string>
-    <string name="fav_mark_all_read">Прочитать все темы</string>
+    <string name="fav_mark_all_read">Прочитать все темы (работает с задержкой)</string>
+    <string name="fav_mark_all_read_title">Прочитать все темы</string>
+    <string name="fav_mark_all_read_confirm">Будет отмечено прочитанными: %1$d тем. Если включён поиск, действие применяется только к видимым результатам.</string>
+    <string name="fav_mark_all_read_button">Прочитать все</string>
+    <string name="fav_mark_all_read_progress">Отмечаем %1$d из %2$d</string>
+    <string name="fav_mark_all_read_result">Прочитано: %1$d</string>
+    <string name="fav_mark_all_read_result_with_errors">Прочитано: %1$d, ошибок: %2$d</string>
+    <string name="fav_mark_all_read_nothing">Нет непрочитанных тем</string>
     <string name="fav_unreaded_pinned">Непрочитанные закрепленные темы</string>
     <string name="fav_unreaded">Непрочитанные темы</string>
     <string name="fav_pinned">Закрепленные темы</string>
     <string name="fav_themes">Темы</string>
+    <string name="favorites_search_hint">Поиск по избранным темам</string>
     <string name="fav_new_posts_dot_cd">В теме есть новые сообщения</string>
     <string name="fav_change_subscribe_type">Изменить тип подписки</string>
+    <string name="fav_mute_notifications">Отключить уведомления для темы</string>
+    <string name="fav_unmute_notifications">Включить уведомления для темы</string>
+    <string name="fav_notifications_muted">Уведомления для темы отключены</string>
+    <string name="fav_notifications_unmuted">Уведомления для темы включены</string>
     <string name="add_to_favorites">Добавить в избранное</string>
     <string name="favorites_added">Добавлено в избранное</string>
     <string name="delete_from_favorites">Удалить из избранного</string>
@@ -319,6 +461,8 @@
     <string name="editpost_title_answer">Ответ</string>
     <string name="editpost_title_edit">Редактирование</string>
     <string name="editpost_lose_changes">Забыть изменения?</string>
+    <string name="editpost_unsaved_title">Сохранить изменения?</string>
+    <string name="editpost_discard">Не сохранять</string>
     <string name="editpost_sync">Синхронизировать изменения с полем ввода в теме?</string>
     <string name="editpost_error_edit">Вам нельзя редактировать это сообщение</string>
     <string name="editpost_reason">Причина редактирования</string>
@@ -332,6 +476,19 @@
     <string name="pagination_next">К следующей странице</string>
     <string name="pagination_last">К последней странице</string>
 
+    <!-- Smart Navigation Menu -->
+    <string name="smart_nav_current_page">Текущая</string>
+    <string name="smart_nav_start_topic">В начало темы</string>
+    <string name="smart_nav_unread">К непрочитанному</string>
+    <string name="smart_nav_end_topic">В конец темы</string>
+    <string name="smart_nav_end_unavailable">Не удалось перейти в конец темы</string>
+    <string name="theme_all_read_hint">Все сообщения прочитаны</string>
+    <string name="smart_nav_enter_page">Ввести номер</string>
+    <string name="smart_nav_page_input_hint">Номер страницы</string>
+    <string name="smart_nav_page_input_invalid">Введите номер от %1$d до %2$d</string>
+    <string name="smart_nav_hint">Умная кнопка ниже: нажмите для прокрутки вверх/вниз, удерживайте для перехода по страницам темы.</string>
+    <string name="smart_nav_hint_never_show">Больше не показывать</string>
+
     <!-- Attachments -->
     <string name="attachments">Вложения</string>
     <string name="attachments_count">Вложений: %d</string>
@@ -343,9 +500,26 @@
 
     <!-- Intent -->
     <string name="load_file" formatted="false">Загрузить файл %s?</string>
+    <string name="downloads">Загрузки</string>
+    <string name="downloads_clear_list">Очистить список</string>
     <string name="perform_request_link" formatted="false">Запрашиваю ссылку для загрузки %s</string>
     <string name="perform_loading" formatted="false">Выполняется загрузка %s</string>
     <string name="perform_loading_error">Произошла ошибка. Будет загружено через внешний загрузчик.</string>
+    <string name="download_method_title">Способ загрузки</string>
+    <string name="download_method_system">Системный загрузчик</string>
+    <string name="download_method_external_manager">Внешний менеджер загрузок</string>
+    <string name="download_method_browser">Браузер</string>
+    <string name="download_method_ask">Спрашивать каждый раз</string>
+    <string name="download_external_auth_warning">Файл может требовать авторизацию 4PDA. Внешний менеджер получит cookies, но не все приложения их поддерживают.</string>
+    <string name="download_external_not_found">Не найден внешний менеджер загрузок. Откройте файл в браузере или используйте системный загрузчик.</string>
+    <string name="storage_permission_required">Нужно разрешение на доступ к памяти для скачивания файлов</string>
+    <string name="storage_access">Доступ к памяти</string>
+    <string name="storage_permission_not_needed">Разрешение не требуется на вашей версии Android</string>
+    <string name="more">Ещё</string>
+    <string name="open">Открыть</string>
+    <string name="open_downloads_folder">Открыть папку</string>
+    <string name="delete_record">Удалить из списка</string>
+    <string name="delete_file">Удалить файл</string>
 
     <!-- Poll -->
     <string name="poll_answers_Max" formatted="false">Максимальное кол-во ответов: %d</string>
@@ -359,6 +533,7 @@
     <string name="poll_vote_btn">Голосовать</string>
     <string name="poll_results_btn">Результаты</string>
     <string name="poll_show_btn">Пункты опроса</string>
+    <string name="poll_unavailable">Голосование недоступно</string>
     <string name="poll">Опрос</string>
     <string name="poll_answer">Ответ</string>
     <string name="poll_question">Вопрос</string>
@@ -411,6 +586,8 @@
     <string name="change_post_reputation_Type_Nick" formatted="false">%s репутацию поста пользователя %s?</string>
     <string name="reputation_changed">Репутация изменена</string>
     <string name="reputation_reason">Причина изменения</string>
+    <string name="reputation_report">Жалоба</string>
+    <string name="reputation_appeal">Обжаловать</string>
 
     <!-- Topics -->
     <string name="forum_section">Разделы</string>
@@ -427,11 +604,24 @@
     <string name="notification_content_qms_Nick_Count" formatted="false">%s: %d непрочитанных сообщений</string>
     <string name="notification_content_mention_Title" formatted="false">Ответил Вам в теме \"%s\"</string>
     <string name="notification_content_theme_Title" formatted="false">Написал сообщение в теме \"%s\"</string>
+    <string name="notification_title_qms_from_Nick">Новое сообщение от %1$s</string>
+    <string name="notification_title_qms_fallback">Сообщения 4PDA</string>
+    <string name="notification_title_mention_Nick">%1$s ответил/упомянул вас</string>
+    <string name="notification_title_mention_fallback">Вас упомянули</string>
+    <string name="notification_title_favorite">Новые сообщения в избранной теме</string>
+    <string name="notification_content_mention_fallback">Откройте тему, чтобы посмотреть ответ</string>
+    <string name="notification_content_theme_fallback">Откройте избранное, чтобы посмотреть новые сообщения</string>
     <string name="notification_content_news">Вам ответили на комментарий на сайте</string>
     <string name="notification_summary_mention">Упоминание</string>
     <string name="notification_summary_qms">Чат QMS</string>
     <string name="notification_summary_fav">Избранное</string>
     <string name="notification_summary_comment">Комментарий</string>
+    <plurals name="notification_content_qms_count">
+        <item quantity="one">%d непрочитанное сообщение</item>
+        <item quantity="few">%d непрочитанных сообщения</item>
+        <item quantity="many">%d непрочитанных сообщений</item>
+        <item quantity="other">%d непрочитанных сообщения</item>
+    </plurals>
 
     <!-- Search -->
     <string name="search_settings_resource">Место поиска</string>
@@ -449,19 +639,55 @@
 
     <string name="pref_title_clear_menu_sequence">Восстановить меню</string>
     <string name="pref_summary_clear_menu_sequence">Восстановить последовательность пунктов меню</string>
+    <string name="pref_title_startup_screen">Экран при запуске</string>
+    <string name="pref_summary_startup_screen_news">При запуске открывается раздел «Новости».</string>
+    <string name="pref_summary_startup_screen_favorites">При запуске открывается раздел «Избранное».</string>
+    <string name="pref_summary_startup_screen_forum">При запуске открывается раздел «Форум».</string>
+    <string name="pref_summary_startup_screen_replies">При запуске открывается раздел «Ответы».</string>
+    <string name="pref_summary_startup_screen_qms">При запуске открывается раздел «QMS».</string>
+    <string name="pref_title_bottom_nav_order">Порядок нижнего меню</string>
+    <string name="pref_summary_bottom_nav_order">Выберите, какие разделы первыми показываются на нижней панели; остальные остаются в полном меню.</string>
+    <string name="bottom_nav_order_hint">Первые четыре пункта из списка показываются на нижней панели (ещё один значок открывает полное меню). Удерживайте строку и перетащите вверх или вниз.</string>
+    <string name="pref_title_bottom_nav_columns">Пункты в нижнем меню</string>
+    <string name="pref_summary_bottom_nav_columns">Сколько основных разделов показывать на нижней панели: 5 или 6. Старый порядок меню сохраняется.</string>
+    <string name="pref_value_bottom_nav_columns_5">5 колонок</string>
+    <string name="pref_value_bottom_nav_columns_6">6 колонок</string>
+    <string name="bottom_nav_order_drag_hint">Перетащить</string>
     <string name="pref_title_system_downloader">Системный загрузчик</string>
     <string name="pref_summary_system_downloader">Использовать системный загрузчик файлов</string>
+    <string name="pref_title_download_method">Способ загрузки файлов</string>
+    <string name="pref_title_download_folder">Папка сохранения файлов</string>
+    <string name="pref_summary_download_folder_default">По умолчанию: Download</string>
+    <string name="pref_summary_download_folder_selected" formatted="false">Выбрана папка: %s</string>
+    <string name="download_folder_choose">Выбрать папку загрузок</string>
+    <string name="download_folder_reset">Сбросить на Download</string>
+    <string name="download_folder_saved">Папка загрузок сохранена</string>
+    <string name="download_folder_reset_done">Папка загрузок сброшена</string>
+    <string name="download_folder_unavailable">Выбранная папка недоступна. Выберите папку загрузок заново.</string>
 
     <string name="pref_title_appereance">Внешний вид</string>
 
     <string name="pref_title_theme_mode">Тема приложения</string>
+    <string name="pref_summary_theme_mode_light">Светлый фон и обычные акценты.</string>
+    <string name="pref_summary_theme_mode_dark">Темный фон без полной черной AMOLED-подложки.</string>
+    <string name="pref_summary_theme_mode_amoled">Максимально темный экран: черный фон, минимум свечения, акценты остаются видимыми.</string>
+    <string name="pref_summary_theme_mode_system">Следует системной светлой или темной теме.</string>
+    <string name="pref_summary_theme_mode_system_amoled">Следует системе, а в темном режиме использует AMOLED-подложку.</string>
     <string name="pref_value_theme_mode_light">Светлая</string>
     <string name="pref_value_theme_mode_dark">Темная</string>
+    <string name="pref_value_theme_mode_amoled">AMOLED</string>
     <string name="pref_value_theme_mode_system">Системная</string>
+    <string name="pref_value_theme_mode_system_amoled">Системная AMOLED</string>
     <string name="pref_title_ui_palette">Цвета интерфейса</string>
-    <string name="pref_summary_ui_palette">Системный стиль (iOS) или классические цвета ForPDA</string>
+    <string name="pref_summary_ui_palette_system">Базовые цвета выбранной темы. В AMOLED остается максимально темный фон.</string>
+    <string name="pref_summary_ui_palette_sepia_reading">Теплая палитра для долгого чтения: мягче фон и акценты, без смены модели навигации.</string>
+    <string name="pref_summary_ui_palette_sepia_blue">Теплая сепия с приглушенными синими акцентами в стиле Telegram для светлой, темной и AMOLED-темы.</string>
+    <string name="pref_summary_ui_palette_minimal_reader">Минимум визуального шума: спокойнее акценты и разделители, фон берется из текущей темы.</string>
     <string name="pref_value_ui_palette_system">Системный стиль</string>
-    <string name="pref_value_ui_palette_classic">Классические цвета 4PDA</string>
+    <string name="pref_value_ui_palette_sepia_reading">Sepia / Reading</string>
+    <string name="pref_value_ui_palette_sepia_blue">Sepia Blue</string>
+    <string name="pref_value_ui_palette_minimal_reader">Minimal Reader UI</string>
+    <string name="pref_message_ui_palette_sepia_disabled">Сепия доступна для светлой, темной и системной темы</string>
 
     <string name="pref_title_show_bottom_arrow">Кнопка открытия нижнего меню</string>
     <string name="pref_summary_show_bottom_arrow">Включить, если в системе есть жесты снизу экрана</string>
@@ -469,14 +695,66 @@
     <string name="pref_title_text_size">Размер шрифта</string>
     <string name="pref_summary_text_size">Применяется для тем, поиска и чата</string>
 
+    <string name="pref_title_app_font">Шрифт приложения</string>
+    <string name="pref_summary_app_font_system">По умолчанию: системный шрифт устройства; полностью применится после перезапуска</string>
+    <string name="pref_summary_app_font_roboto">Roboto как отдельный вариант шрифта; полностью применится после перезапуска</string>
+    <string name="pref_summary_app_font_inter">Inter; полностью применится после перезапуска</string>
+    <string name="pref_summary_app_font_source_sans_3">Source Sans 3; полностью применится после перезапуска</string>
+    <string name="pref_summary_app_font_open_sans">Open Sans; полностью применится после перезапуска</string>
+    <string name="pref_value_app_font_system">Системный</string>
+    <string name="pref_value_app_font_roboto">Roboto</string>
+    <string name="pref_value_app_font_inter">Inter</string>
+    <string name="pref_value_app_font_source_sans_3">Source Sans 3</string>
+    <string name="pref_value_app_font_open_sans">Open Sans</string>
+    <string name="pref_app_font_restart_notice">Изменение шрифта полностью применится после перезапуска приложения</string>
+
     <string name="pref_title_monospace">Моноширинный шрифт</string>
     <string name="pref_summary_monospace">Шрифт редактора сообщений</string>
 
     <string name="pref_title_panel_hidden">Скрытый редактор сообщений</string>
     <string name="pref_summary_panel_hidden">По умолчанию скрыть редактор сообщений</string>
 
-    <string name="pref_title_scroll_button">Кнопка быстрого скролла</string>
-    <string name="pref_summary_scroll_button">Появляется при скролле в теме и поиске</string>
+    <string name="pref_title_scroll_button">Умная кнопка темы</string>
+    <string name="pref_summary_scroll_button">Показывает плавающую кнопку: короткое нажатие прокручивает тему, удержание открывает переход по страницам.</string>
+    <string name="pref_title_topic_pagination_panel">Панель страниц темы</string>
+    <string name="pref_summary_topic_pagination_panel">Показывает кнопки страниц под панелью темы. Удобно, если не пользоваться жестами.</string>
+    <string name="pref_title_topic_scroll_mode">Режим чтения тем</string>
+    <string name="pref_summary_topic_scroll_mode_hybrid">Гибридный: соседние страницы догружаются при прокрутке, чтение похоже на ленту.</string>
+    <string name="pref_summary_topic_scroll_mode_classic">Классический: открыта одна страница темы, переход только через панель, меню или жесты страниц.</string>
+    <string name="pref_value_topic_scroll_mode_hybrid">Гибридная</string>
+    <string name="pref_value_topic_scroll_mode_classic">Классическая</string>
+    <string name="pref_title_topic_post_density">Плотность интерфейса</string>
+    <string name="pref_value_topic_post_density_comfortable">Комфортная</string>
+    <string name="pref_value_topic_post_density_compact">Компактная</string>
+    <string name="pref_value_topic_post_density_super_compact">Супер компактная</string>
+    <string name="pref_summary_topic_post_density_comfortable">Комфортная</string>
+    <string name="pref_summary_topic_post_density_compact">Компактная: меньше отступов между постами и внутри блоков</string>
+    <string name="pref_summary_topic_post_density_super_compact">Супер компактная: максимальная плотность открытой темы</string>
+    <string name="pref_topic_toolbar_behavior_title">Верхний тулбар</string>
+    <string name="pref_topic_toolbar_behavior_pinned">Закреплён</string>
+    <string name="pref_topic_toolbar_behavior_hide_on_scroll">Скрывать при прокрутке</string>
+    <string name="pref_topic_toolbar_behavior_pinned_summary">Панель темы всегда видна.</string>
+    <string name="pref_topic_toolbar_behavior_hide_on_scroll_summary">Панель скрывается при прокрутке вниз и появляется при прокрутке вверх.</string>
+    <string name="pref_title_topic_page_swipe">Свайпы страниц</string>
+    <string name="pref_summary_topic_page_swipe">В классическом режиме: свайп влево открывает следующую страницу, вправо — предыдущую. Можно выключить здесь.</string>
+    <string name="pref_summary_topic_page_swipe_disabled">Доступно только в классическом режиме чтения тем.</string>
+    <string name="pref_title_topic_bottom_refresh_gesture">Обновление свайпом снизу</string>
+    <string name="pref_summary_topic_bottom_refresh_gesture">В теме: коротко потяните вверх от нижней границы, чтобы обновить текущую страницу. Жест можно выключить здесь.</string>
+    <string name="pref_title_topic_back_behavior">Поведение кнопки \"Назад\" в темах</string>
+    <string name="pref_value_topic_back_behavior_history">По истории переходов</string>
+    <string name="pref_value_topic_back_behavior_origin">К исходному разделу</string>
+    <string name="pref_summary_topic_back_behavior_history">Back закрывает темы по одной: связанная тема возвращает к предыдущей теме.</string>
+    <string name="pref_summary_topic_back_behavior_origin">Back из цепочки связанных тем сразу возвращает к разделу, откуда была открыта первая тема.</string>
+    <string name="pref_title_topic_open_target">При открытии темы</string>
+    <string name="pref_value_topic_open_target_first_page">Первая страница</string>
+    <string name="pref_value_topic_open_target_last_unread">Последняя непрочитанная</string>
+    <string name="pref_summary_topic_open_target_first_page">Обычные темы из списков открываются с первой страницы.</string>
+    <string name="pref_summary_topic_open_target_last_unread">Обычные темы из списков открываются с последней непрочитанной позиции.</string>
+    <string name="pref_title_topic_header_initial_state">Шапка темы при открытии</string>
+    <string name="pref_value_topic_header_initial_state_expanded">Открыта</string>
+    <string name="pref_value_topic_header_initial_state_collapsed">Скрыта</string>
+    <string name="pref_summary_topic_header_initial_state_expanded">При первом открытии темы шапка показана.</string>
+    <string name="pref_summary_topic_header_initial_state_collapsed">При первом открытии темы шапка скрыта.</string>
 
     <string name="pref_title_tab_bottom">Вкладки снизу</string>
     <string name="pref_title_notify_dot">Индикатор счетчиков</string>
@@ -487,29 +765,68 @@
     <string name="pref_title_show_avatars">Отображать аватарки</string>
     <string name="pref_title_circle_avatars">Круглые аватарки</string>
 
-    <string name="pref_title_history_snapback">История переходов на странице</string>
-    <string name="pref_summary_history_snapback">Сохраняет историю переходов snapback</string>
-
-    <string name="pref_title_hat_opened">Открытая шапка темы</string>
-    <string name="pref_summary_hat_opened">Всегда открытая шапка темы (первое сообщение)</string>
-
-    <string name="pref_title_lists">Списки</string>
     <string name="pref_title_unread_top">Непрочитанные сверху</string>
     <string name="pref_title_show_dot">Индикатор новых сообщений</string>
 
     <string name="pref_title_load_all">Весь список избранного</string>
     <string name="pref_summary_load_all">Загружать весь список избранного. Расходуется больше трафика.</string>
+    <string name="pref_title_favorites_unread_badge">Показывать счётчики непрочитанного в избранном</string>
+    <string name="pref_summary_favorites_unread_badge">Показывать красные индикаторы и цифры непрочитанных тем избранного.</string>
 
     <string name="pref_title_account">Аккаунт</string>
     <string name="pref_title_logout">Выйти</string>
     <string name="pref_title_about">О программе</string>
+    <string name="pref_title_support_author">Поддержать автора</string>
+    <string name="pref_title_app_update_check">Проверять обновления приложения</string>
+    <string name="pref_summary_app_update_check">Раз в сутки проверять тему ProPDA на 4PDA и уведомлять о новой версии.</string>
+    <string name="pref_title_app_update_check_now">Проверить сейчас</string>
+    <string name="pref_summary_app_update_check_now">Текущая версия: %s</string>
+    <string name="app_update_checking">Проверяем обновления…</string>
+    <string name="app_update_available">Доступна версия %s</string>
+    <string name="app_update_up_to_date">Обновлений нет. Текущая версия: %s</string>
+    <string name="app_update_check_failed">Не удалось проверить обновления</string>
+    <string name="app_update_check_failed_with_reason">Не удалось проверить обновления: %s</string>
+    <string name="app_update_check_failed_network">ошибка сети</string>
+    <string name="app_update_check_failed_rate_limited">сервер ограничил запросы</string>
+    <string name="app_update_check_failed_forbidden">страница недоступна или требует проверку</string>
+    <string name="app_update_check_failed_not_found">тема обновлений недоступна</string>
+    <string name="app_update_check_failed_parse">не удалось разобрать страницу обновлений</string>
+    <string name="app_update_check_failed_server">ошибка сервера 4PDA</string>
+    <string name="app_update_check_failed_unknown">неизвестная ошибка</string>
+    <string name="support_author_title">Поддержать автора</string>
+    <string name="support_author_message">Если приложение оказалось полезным, вы можете поддержать автора удобным способом. Нажмите на ссылку, чтобы открыть страницу оплаты, или на реквизиты ниже, чтобы скопировать их.</string>
+    <string name="support_author_card_label">Карта Т-Банк</string>
+    <string name="support_author_sber_label">Карта Сбер</string>
+    <string name="support_author_usdt_label">USDT Tron (TRC20)</string>
+    <string name="support_author_payment_link" translatable="false">https://tbank.ru/cf/8ZP7eQkWH91</string>
+    <string name="support_author_tbank_card" translatable="false">2200701047596389</string>
+    <string name="support_author_sber_card" translatable="false">2202208196717319</string>
+    <string name="support_author_usdt_trc20" translatable="false">TF2aHE8mSrqAqMKFPAZwigFbwNDUjvCpaZ</string>
+    <string name="copied">Скопировано</string>
     <!-- notifications -->
     <string name="pref_title_sound">Звук</string>
     <string name="pref_title_vibration">Вибрация</string>
     <string name="pref_title_indicator">Индикатор</string>
     <string name="pref_title_enable_avatars">Загружать аватары</string>
+    <string name="pref_summary_download_notifications">Уведомления о загрузках файлов</string>
+    <string name="pref_title_favorites_live_tab">Живой список</string>
+    <string name="pref_summary_favorites_live_tab">Обновлять данные во вкладке</string>
+    <string name="pref_title_bg_check">Фоновая проверка</string>
+    <string name="pref_summary_bg_check">Опрашивает сервер периодически, когда приложение закрыто. Без постоянной иконки.</string>
+    <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
+    <string name="pref_title_android_notification_settings">Системные настройки Android</string>
+    <string name="pref_title_open_android_notification_settings">Открыть настройки уведомлений</string>
+    <string name="pref_summary_android_notification_settings">Звук, вибрация, индикатор и показ на экране настраиваются в каналах Android</string>
+    <string name="pref_summary_android_notifications_disabled">Уведомления приложения выключены в Android</string>
+    <string name="pref_title_post_notifications_denied">Уведомления Android выключены</string>
+    <string name="pref_summary_post_notifications_denied">Разрешите уведомления в системных настройках Android, иначе QMS, ответы и избранное не появятся в шторке.</string>
+    <string name="pref_summary_channel_settings">Звук, вибрация, важность и показ на экране</string>
+    <string name="pref_title_channel_qms">Канал: QMS</string>
+    <string name="pref_title_channel_mentions">Канал: ответы и упоминания</string>
+    <string name="pref_title_channel_favorites">Канал: избранное</string>
+    <string name="pref_title_channel_downloads">Канал: загрузки</string>
     <string name="pref_title_favorites">Избранное</string>
-    <string name="pref_title_only_important">Только важные</string>
+    <string name="pref_title_only_important">Только закрепленные темы</string>
     <string name="pref_title_mentions">Ответы</string>
     <string name="pref_title_pm_qms">Личные сообщения QMS</string>
     <string name="pref_title_app_updates">Обновления программы</string>
@@ -528,6 +845,7 @@
     <string name="res_s_poll_vote_btn" translatable="false">@string/poll_vote_btn</string>
     <string name="res_s_poll_results_btn" translatable="false">@string/poll_results_btn</string>
     <string name="res_s_poll_show_btn" translatable="false">@string/poll_show_btn</string>
+    <string name="res_s_poll_unavailable" translatable="false">@string/poll_unavailable</string>
 
     <string name="res_s_search_post_btn" translatable="false">@string/search_post_btn</string>
 
@@ -535,6 +853,7 @@
 
     <string name="res_s_avatar" translatable="false">@string/avatar</string>
     <string name="res_s_reputation" translatable="false">@string/reputation</string>
+    <string name="res_s_post_rating" translatable="false">@string/post_rating</string>
     <string name="res_s_group" translatable="false">@string/group</string>
     <string name="res_s_menu" translatable="false">@string/menu</string>
 
@@ -556,32 +875,73 @@
     <!-- News article -->
     <string name="res_s_comments" translatable="false">@string/comments</string>
     <string name="res_s_comments_do_swipe" translatable="false">@string/comments_do_swipe</string>
+    <string name="funny_topics_nodata_title">В разделе пока нет тем</string>
+    <string name="funny_topics_nodata_desc">Потяните список для обновления или вернитесь на уровень выше и выберите другой раздел.</string>
+    <string name="funny_topics_error_title">Не удалось загрузить темы</string>
+    <string name="funny_topics_error_desc">Проверьте подключение и повторите загрузку.</string>
     <string name="funny_favorites_nodata_title">Нет избранных тем</string>
-    <string name="funny_favorites_nodata_desc">Добавьте тему в избранное, чтобы удобно отслеживать обновления в теме</string>
+    <string name="funny_favorites_nodata_desc">Добавьте тему в избранное через меню темы, чтобы быстро возвращаться к ней и видеть новые сообщения.</string>
+    <string name="funny_favorites_error_title">Не удалось загрузить избранное</string>
+    <string name="funny_favorites_error_desc">Проверьте подключение и повторите загрузку.</string>
     <string name="funny_history_nodata_title">История пуста</string>
     <string name="funny_history_nodata_desc">Тут будет отображаться история просмотра тем</string>
     <string name="funny_mentions_nodata_title">Нет упоминаний</string>
     <string name="funny_mentions_nodata_desc">Тут будут отображаться упоминания в темах и комментариях</string>
+    <string name="funny_mentions_error_title">Не удалось загрузить ответы</string>
+    <string name="funny_mentions_error_desc">Проверьте подключение и повторите загрузку.</string>
     <string name="funny_notes_nodata_title">Нет закладок</string>
     <string name="funny_blacklist_nodata_title">Черный список пуст</string>
     <string name="funny_blacklist_nodata_desc">Пользователи из этого списка не могут писать вам</string>
-    <string name="funny_contacts_nodata_title">Список контактов пуст</string>
+    <string name="funny_contacts_nodata_title">Нет диалогов QMS</string>
     <string name="funny_reputation_nodata_title">Нет репутации</string>
+    <string name="funny_news_nodata_title">Новостей пока нет</string>
+    <string name="funny_news_nodata_desc">Потяните список для обновления или повторите загрузку позже.</string>
+    <string name="funny_news_error_title">Не удалось загрузить новости</string>
+    <string name="funny_news_error_desc">Проверьте подключение и повторите загрузку.</string>
+    <string name="funny_search_initial_title">Введите запрос</string>
+    <string name="funny_search_initial_desc">Начните поиск по ключевым словам или нику пользователя.</string>
     <string name="funny_search_nodata_title">Ничего не найдено</string>
-    <string name="funny_search_nodata_desc">Настройте поисковой запрос иначе</string>
+    <string name="funny_search_nodata_desc">Измените запрос, раздел поиска или фильтры и попробуйте снова.</string>
+    <string name="funny_search_error_title">Не удалось выполнить поиск</string>
+    <string name="funny_search_error_desc">Проверьте подключение и повторите запрос.</string>
+    <string name="funny_theme_error_title">Не удалось загрузить тему</string>
+    <string name="funny_theme_error_desc">Проверьте подключение и повторите загрузку страницы.</string>
     <string name="funny_article_comments_nodata_title">Нет комментариев</string>
     <string name="favorites_subscribe_email">Уведомления на Email</string>
     <string name="quote_from_clipboard">Цитата из буфера обмена</string>
     <string name="quote_clipboard_empty">В буфере нет текста. Скопируйте фрагмент, затем снова выберите пункт меню.</string>
 
+    <plurals name="note_bookmarks_count">
+        <item quantity="one">%d закладка</item>
+        <item quantity="few">%d закладки</item>
+        <item quantity="many">%d закладок</item>
+        <item quantity="other">%d закладки</item>
+    </plurals>
+
     <!-- New res -->
 
     <!-- Closeable info -->
     <string name="closeable_info_other_menu_drag">Вы можете поменять порядок пунктов меню, для этого зажмите пункт меню и перенесите на нужное место</string>
-    <string name="closeable_info_notes_sync" translatable="false">Закладки не сонхринизируются с сервером и хронятся только локально. Чтобы не потерять, экспортируйте их (троеточие в углу экрана).</string>
+    <string name="closeable_info_notes_sync" translatable="false">Закладки не синхронизируются с сервером и хранятся только локально. Чтобы не потерять, экспортируйте их (троеточие в углу экрана).</string>
 
     <!-- Menu item -->
     <string name="menu_item_my_messages">Мои сообщения</string>
     <string name="search_post_btn">пост</string>
+    <string name="report_post_success">Жалоба отправлена</string>
+
+    <!-- New message notification -->
+    <string name="new_message_notification_title">Новое сообщение</string>
+    <string name="new_message_notification_close">Закрыть уведомление</string>
+    <string name="fab_scroll">Прокрутка вверх/вниз</string>
+
+    <!-- Layout hardcoded strings (T13) -->
+    <string name="contacts_list_empty">Список контактов пуст</string>
+    <string name="news_badge_new">new</string>
+    <string name="empty_layout_error">Oopss...</string>
+    <string name="empty_layout_version">version 3.x.x</string>
+    <string name="webview_not_found">Компонент Android System Webview не найден</string>
+    <string name="webview_not_found_retry">Попробовать запустить</string>
+    <string name="webview_not_found_or">или</string>
+    <string name="main_link_hint">Введите ссылку</string>
 
 </resources>

@@ -33,7 +33,7 @@ jobs:
         run: ./gradlew :app:assembleStableRelease --no-daemon
 
       - name: Lint (stableDebug)
-        run: ./gradlew :app:lintStableDebug --no-daemon
+        run: ./gradlew :app:lintStableDebug --no-daemon -Pforpda.strictLint=true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

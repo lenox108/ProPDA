@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#ffffffff</color>
+    <color name="white">#ffffff</color>
     <!-- Material palette (раньше из wada811:android-material-design-colors) -->
     <color name="md_red_400">#EF5350</color>
     <color name="md_green_400">#66BB6A</color>
@@ -15,16 +16,19 @@
     <!-- LIGHT — палитра ближе к iOS (системный сгруппированный фон, System Blue) -->
     <color name="light_colorPrimary">#FFFFFF</color>
     <color name="light_colorPrimaryDark">#E5E5EA</color>
-    <color name="light_colorAccent">#007AFF</color>
+    <color name="light_colorAccent">#757575</color>
     <color name="light_status_bar_color">#33000000</color>
-    <color name="light_navigation_bar_color">#F9F9F9</color>
+    <color name="light_navigation_bar_color">@color/light_card_background</color>
 
-    <color name="light_link_color">#007AFF</color>
+    <color name="light_link_color">#616161</color>
     <color name="light_link_color_contrast">#ffffff</color>
+    <color name="support_author_link_text">#0A84FF</color>
 
     <color name="light_default_text_color">#000000</color>
     <color name="light_contrast_text_color">@color/dark_default_text_color</color>
     <color name="light_second_text_color">#636366</color>
+    <!-- Подсказки в outlined TextInputLayout / диалогах (день) -->
+    <color name="dialog_textinput_hint">@color/light_second_text_color</color>
     <color name="light_drawer_item_text">@color/light_default_text_color</color>
     <color name="light_drawer_item_text_selected">@color/light_default_text_color</color>
 
@@ -48,32 +52,34 @@
     <color name="light_icon_toolbar_inverse">@color/dark_icon_toolbar</color>
 
     <color name="light_card_background">#ffffff</color>
+    <color name="light_main_toolbar_accent_surface">#EEF7F6</color>
 
     <color name="light_item_tab_close">@color/md_red_400</color>
 
 
     <!-- DARK — ближе к iOS (чёрный фон, elevated surface, System Blue) -->
-    <color name="dark_colorPrimary">#1C1C1E</color>
-    <color name="dark_colorPrimaryDark">#000000</color>
-    <color name="dark_colorAccent">#0A84FF</color>
+    <color name="dark_colorPrimary">#1E1E1E</color>
+    <color name="dark_colorPrimaryDark">#121212</color>
+    <color name="dark_colorAccent">#BDBDBD</color>
     <color name="dark_status_bar_color">#00000000</color>
-    <color name="dark_navigation_bar_color">@color/dark_background_base</color>
+    <color name="dark_navigation_bar_color">@color/dark_card_background</color>
 
-    <color name="dark_link_color">#0A84FF</color>
+    <color name="dark_link_color">#E0E0E0</color>
     <color name="dark_link_color_contrast">#ffffff</color>
 
     <color name="dark_default_text_color">#ffffff</color>
     <color name="dark_contrast_text_color">@color/light_default_text_color</color>
-    <color name="dark_second_text_color">#8E8E93</color>
+    <color name="dark_second_text_color">#98989F</color>
     <color name="dark_drawer_item_text">@color/dark_default_text_color</color>
     <color name="dark_drawer_item_text_selected">@color/dark_default_text_color</color>
 
-    <color name="dark_background_base">#000000</color>
-    <color name="dark_background_for_cards">#2C2C2E</color>
-    <color name="dark_background_for_lists">#000000</color>
+    <color name="dark_background_base">#121212</color>
+    <color name="dark_background_for_cards">#242424</color>
+    <!-- Как background_base: без «островов» #1C1C1E под списками и экранами вроде поиска. -->
+    <color name="dark_background_for_lists">#121212</color>
 
-    <color name="dark_divider_line">#1fffffff</color>
-    <color name="dark_divider_line_bottom_nav">#38383A</color>
+    <color name="dark_divider_line">#3A3A3C</color>
+    <color name="dark_divider_line_bottom_nav">#3A3A3C</color>
 
     <color name="dark_attachment_overlay_bg">#21000000</color>
     <color name="dark_attachment_description_bg">#44000000</color>
@@ -82,27 +88,71 @@
     <color name="dark_profile_overlay_bg">#44000000</color>
     <color name="dark_img_viewer_toolbar">#33000000</color>
 
-    <color name="dark_icon_base">#8E8E93</color>
+    <color name="dark_icon_base">#AEAEB2</color>
     <color name="dark_icon_base_inverse">@color/light_icon_base</color>
     <color name="dark_icon_toolbar">#ffffff</color>
     <color name="dark_icon_toolbar_inverse">@color/light_icon_toolbar</color>
 
-    <color name="dark_card_background">#1C1C1E</color>
+    <color name="dark_card_background">#242424</color>
+    <color name="dark_main_toolbar_accent_surface">#242424</color>
+    <color name="dark_main_toolbar_stroke">#3A3A3C</color>
+    <!-- Как body в dark_themes.css / light_themes.css: подложка WebView, иначе просвечивает lists (#000). -->
+    <color name="theme_html_body_dark">#121212</color>
+    <!-- Как light_background_for_lists / подложка темы — без светлой полосы под пагинацией относительно нативного gutter. -->
+    <color name="theme_html_body_light">#F2F2F7</color>
+
+    <!-- Switch (OFF state) — boosted contrast for dark/AMOLED -->
+    <!-- Track: semi-transparent white so it stays visible on both #242424 and #000000 -->
+    <color name="switch_track_off_night">#66FFFFFF</color>
+    <!-- Thumb: slightly dimmed white to separate from text but remain visible -->
+    <color name="switch_thumb_off_night">#FFE0E0E0</color>
+
+    <!-- Switch (ON state) — explicit color (don't rely on theme attrs in Preference theme overlays) -->
+    <!-- Slightly translucent green: visible on dark cards, still subtle on AMOLED -->
+    <color name="switch_track_on_night">#664CAF50</color>
+    <!-- Light theme ON track: a touch more saturated but not neon -->
+    <color name="switch_track_on_day">#6634A853</color>
+
+    <!-- AMOLED — везде #000; глубина через divider и list_plate_stroke, не серые «карточки». -->
+    <color name="amoled_colorPrimary">#000000</color>
+    <color name="amoled_colorPrimaryDark">#000000</color>
+    <color name="amoled_background_base">#000000</color>
+    <color name="amoled_background_for_cards">#000000</color>
+    <color name="amoled_background_for_lists">#000000</color>
+    <color name="amoled_card_background">#000000</color>
+    <color name="amoled_main_toolbar_accent_surface">#000000</color>
+    <color name="amoled_main_toolbar_stroke">#242424</color>
+    <color name="amoled_navigation_bar_color">#000000</color>
+    <color name="amoled_divider_line">#111111</color>
+    <color name="amoled_divider_line_bottom_nav">#111111</color>
+    <!-- Лёгкая обводка сгруппированных настроек на чёрном фоне -->
+    <color name="amoled_list_plate_stroke">#141414</color>
+    <!-- Плашка = фон #000; выбранный таб — по tint иконки (default vs second text). -->
+    <color name="amoled_bottom_nav_tab_active_fill">#000000</color>
+    <color name="theme_html_body_amoled">#000000</color>
+
+    <!-- Original DARK theme colors (for non-AMOLED dark theme) -->
+    <color name="original_dark_background_base">#000000</color>
+    <color name="original_dark_background_for_cards">#2C2C2E</color>
+    <color name="original_dark_background_for_lists">#000000</color>
+    <color name="original_dark_card_background">#1C1C1E</color>
+    <color name="original_dark_divider_line">#38383A</color>
 
     <color name="dark_item_tab_close">#8b2d26</color>
 
     <!-- Классическая палитра ForPDA (бирюза + нейтральные серые, светлая тема) -->
     <color name="classic_light_colorPrimary">#fafafa</color>
     <color name="classic_light_colorPrimaryDark">#e0e0e0</color>
-    <color name="classic_light_colorAccent">#219382</color>
+    <color name="classic_light_colorAccent">#757575</color>
     <color name="classic_light_navigation_bar_color">#f5f5f5</color>
-    <color name="classic_light_link_color">#1a7a6c</color>
+    <color name="classic_light_link_color">#616161</color>
     <color name="classic_light_default_text_color">#212121</color>
     <color name="classic_light_second_text_color">#757575</color>
     <color name="classic_light_background_base">#eeeeee</color>
     <color name="classic_light_background_for_cards">#e0e0e0</color>
     <color name="classic_light_background_for_lists">#eeeeee</color>
     <color name="classic_light_card_background">#ffffff</color>
+    <color name="classic_light_main_toolbar_accent_surface">#e0e0e0</color>
     <color name="classic_light_divider_line">#bdbdbd</color>
     <color name="classic_light_divider_line_bottom_nav">#bdbdbd</color>
     <color name="classic_light_icon_base">#757575</color>
@@ -112,16 +162,100 @@
     <!-- Классическая палитра (тёмная тема) -->
     <color name="classic_dark_colorPrimary">#424242</color>
     <color name="classic_dark_colorPrimaryDark">#212121</color>
-    <color name="classic_dark_colorAccent">#4db6ac</color>
-    <color name="classic_dark_link_color">#80cbc4</color>
+    <color name="classic_dark_colorAccent">#BDBDBD</color>
+    <color name="classic_dark_link_color">#E0E0E0</color>
     <color name="classic_dark_background_base">#212121</color>
     <color name="classic_dark_background_for_cards">#2d2d2d</color>
     <color name="classic_dark_background_for_lists">#212121</color>
     <color name="classic_dark_card_background">#303030</color>
+    <color name="classic_dark_main_toolbar_accent_surface">#303030</color>
+    <color name="classic_dark_main_toolbar_stroke">#4A4A4A</color>
     <color name="classic_dark_divider_line_bottom_nav">#424242</color>
     <color name="classic_dark_second_text_color">#b0b0b0</color>
     <color name="classic_dark_icon_base">#b0b0b0</color>
     <color name="classic_dark_msg_panel_tooltip_bg">#ee212121</color>
+
+    <!-- Sepia / Reading palette (warm light theme) -->
+    <color name="sepia_colorPrimary">#FFF3D7</color>
+    <color name="sepia_colorPrimaryDark">#D8C6A8</color>
+    <color name="sepia_colorAccent">#8A5A2B</color>
+    <color name="sepia_status_bar_color">#33000000</color>
+    <color name="sepia_navigation_bar_color">#F4ECD8</color>
+    <color name="sepia_link_color">#8A5A2B</color>
+    <color name="sepia_link_color_contrast">#FFF8E7</color>
+    <color name="sepia_default_text_color">#3A2E22</color>
+    <color name="sepia_contrast_text_color">#FFF8E7</color>
+    <color name="sepia_second_text_color">#7A6A58</color>
+    <color name="sepia_drawer_item_text">@color/sepia_default_text_color</color>
+    <color name="sepia_drawer_item_text_selected">@color/sepia_default_text_color</color>
+    <color name="sepia_background_base">#F4ECD8</color>
+    <color name="sepia_background_for_cards">#EFE3C8</color>
+    <color name="sepia_background_for_lists">#F4ECD8</color>
+    <color name="sepia_card_background">#FFF8E7</color>
+    <color name="sepia_divider_line">#D8C6A8</color>
+    <color name="sepia_divider_line_bottom_nav">#D8C6A8</color>
+    <color name="sepia_selection">#268A5A2B</color>
+    <color name="sepia_attachment_overlay_bg">#21000000</color>
+    <color name="sepia_attachment_description_bg">#44000000</color>
+    <color name="sepia_attachment_text">@color/sepia_contrast_text_color</color>
+    <color name="sepia_msg_panel_tooltip_bg">#eefff8e7</color>
+    <color name="sepia_profile_overlay_bg">#44000000</color>
+    <color name="sepia_img_viewer_toolbar">#33000000</color>
+    <color name="sepia_icon_base">#7A6A58</color>
+    <color name="sepia_icon_toolbar">#3A2E22</color>
+    <color name="sepia_main_toolbar_accent_surface">#FFF3D7</color>
+    <color name="sepia_main_toolbar_stroke">#D8C6A8</color>
+
+    <!-- Sepia Blue palette (Telegram-like warm light theme) -->
+    <color name="sepia_blue_colorPrimary">#F2E7D5</color>
+    <color name="sepia_blue_colorPrimaryDark">#D8C8B3</color>
+    <color name="sepia_blue_colorAccent">#4F7896</color>
+    <color name="sepia_blue_navigation_bar_color">#F1E8D8</color>
+    <color name="sepia_blue_link_color">#4F7896</color>
+    <color name="sepia_blue_link_color_contrast">#FFF9EE</color>
+    <color name="sepia_blue_default_text_color">#2F2A23</color>
+    <color name="sepia_blue_contrast_text_color">#FFF9EE</color>
+    <color name="sepia_blue_second_text_color">#766B5D</color>
+    <color name="sepia_blue_background_base">#F1E8D8</color>
+    <color name="sepia_blue_background_for_cards">#E8DBC7</color>
+    <color name="sepia_blue_background_for_lists">#F1E8D8</color>
+    <color name="sepia_blue_card_background">#FFF9EE</color>
+    <color name="sepia_blue_toolbar">#F6ECDD</color>
+    <color name="sepia_blue_divider_line">#D6C5AE</color>
+    <color name="sepia_blue_accent_soft">#D9E5EA</color>
+    <color name="sepia_blue_selection">#334F7896</color>
+    <color name="sepia_blue_msg_panel_tooltip_bg">#eeFFF9EE</color>
+    <color name="sepia_blue_icon_base">#766B5D</color>
+    <color name="sepia_blue_icon_toolbar">#2F2A23</color>
+    <color name="sepia_blue_main_toolbar_accent_surface">#F2E7D5</color>
+    <color name="sepia_blue_main_toolbar_stroke">#C7D7DF</color>
+
+    <!-- Minimal Reader UI palette (light/dark resources are selected by configuration) -->
+    <color name="minimal_reader_colorPrimary">#FAF8F4</color>
+    <color name="minimal_reader_colorPrimaryDark">#E4E1DA</color>
+    <color name="minimal_reader_colorAccent">#7C8FA1</color>
+    <color name="minimal_reader_navigation_bar_color">#F7F6F3</color>
+    <color name="minimal_reader_link_color">#7C8FA1</color>
+    <color name="minimal_reader_link_color_contrast">#FCFBF8</color>
+    <color name="minimal_reader_default_text_color">#1E1E1E</color>
+    <color name="minimal_reader_contrast_text_color">#FCFBF8</color>
+    <color name="minimal_reader_second_text_color">#6F6B63</color>
+    <color name="minimal_reader_muted_text_color">#9A958B</color>
+    <color name="minimal_reader_background_base">#F7F6F3</color>
+    <color name="minimal_reader_background_for_cards">#F1EFEA</color>
+    <color name="minimal_reader_background_for_lists">#F1EFEA</color>
+    <color name="minimal_reader_card_background">#FCFBF8</color>
+    <color name="minimal_reader_toolbar">#FAF8F4</color>
+    <color name="minimal_reader_divider_line">#E4E1DA</color>
+    <color name="minimal_reader_accent_soft">#D8E1E8</color>
+    <color name="minimal_reader_selection">#E8EEF2</color>
+    <color name="minimal_reader_error">#C96B5C</color>
+    <color name="minimal_reader_success">#6E8B74</color>
+    <color name="minimal_reader_msg_panel_tooltip_bg">#eeFCFBF8</color>
+    <color name="minimal_reader_icon_base">#6F6B63</color>
+    <color name="minimal_reader_icon_toolbar">#1E1E1E</color>
+    <color name="minimal_reader_main_toolbar_accent_surface">#FAF8F4</color>
+    <color name="minimal_reader_main_toolbar_stroke">#E4E1DA</color>
 
     <!-- OTHERS -->
     <color name="dislike_color">#f44336</color>

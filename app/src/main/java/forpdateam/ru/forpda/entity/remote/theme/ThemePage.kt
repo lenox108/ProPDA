@@ -25,11 +25,31 @@ class ThemePage {
     }*/
 
     var scrollY = 0
+    var anchorPostId: String? = null
+    var anchorOffsetTop: Double? = null
+    var scrollRatio: Double? = null
+    var wasNearBottom: Boolean = false
+    var refreshRestoreId: String? = null
+    var refreshRestoreMode: String? = null
+    var refreshRestoreSource: String? = null
+    var renderSignature: String? = null
+    var postsFragmentHtml: String? = null
     var isInFavorite = false
     var isCurator = false
     var canQuote = false
     var isHatOpen = false
+    var isInlineHatOpen = false
     var isPollOpen = false
+    var hasUnreadTarget = false
+    var ambiguousLastUnreadBottomRedirect = false
+    /**
+     * Read-resume / all-read bottom redirect resolved its anchor to the LAST post of the last page.
+     * The soft anchor scroll must then land on the BOTTOM of the page (like END navigation) instead
+     * of the top of that final post, otherwise the user stays mid-page on a tall final post.
+     */
+    var resumeToLastPageBottom = false
+    var openSessionKind: String? = null
+    var topicHatPost: ThemePost? = null
     val posts = ArrayList<ThemePost>()
     var pagination = Pagination()
     var poll: Poll? = null
@@ -38,7 +58,10 @@ class ThemePage {
         get() = if (anchors.isEmpty()) null else anchors[anchors.size - 1]
 
     val st: Int
-        get() = pagination.current * pagination.perPage
+        // pagination.current — 1-индексированный номер страницы; на 4PDA st — это 0-based offset
+        // (страница 1 → st=0, страница 2 → st=perPage, …). Иначе при возврате назад URL получает st
+        // на одну страницу больше реального; для последних страниц сервер клампит до последней.
+        get() = (pagination.current - 1).coerceAtLeast(0) * pagination.perPage
 
     fun addAnchor(anchor: String): Boolean {
         return anchors.add(anchor)

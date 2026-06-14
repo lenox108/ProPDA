@@ -9,6 +9,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone"
         tools:visibility="gone">
@@ -27,7 +28,8 @@
             android:paddingTop="@dimen/dp8"
             android:paddingBottom="@dimen/dp8"
             android:paddingEnd="@dimen/dp8"
-            android:paddingStart="@dimen/dp2"
+            android:paddingStart="@dimen/content_spacing_half"
+            android:textColor="?attr/second_text_color"
             android:textSize="@dimen/list_topic_meta_text_size"
             tools:ignore="HardcodedText"/>
     </LinearLayout>
@@ -36,12 +38,16 @@
 
     <Button
         android:id="@+id/nl_lm_btn"
-        style="@style/Widget.AppCompat.Button.Borderless.Colored"
+        style="@style/Widget.Material3.Button.TextButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/load_more"
         android:layout_gravity="center"
-        android:padding="@dimen/dp8"
+        android:minHeight="@dimen/dp40"
+        android:minWidth="@dimen/dp64"
+        android:paddingStart="@dimen/dp16"
+        android:paddingEnd="@dimen/dp16"
+        android:textColor="?attr/default_text_color"
         android:textSize="@dimen/list_section_header_text_size"
         tools:visibility="visible"
         tools:ignore="HardcodedText"/>

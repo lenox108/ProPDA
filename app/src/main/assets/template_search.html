@@ -32,13 +32,14 @@
     <link rel="stylesheet" type="text/css" href="file:///android_asset/fonts/fontello/import.css">
     <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/${style_type}/${style_type}_main.css">
     <link rel="stylesheet" type="text/css" href="file:///android_asset/forpda/styles/${style_type}/${style_type}_themes.css">
+    ${theme_overrides_css}
     <script type="text/javascript" src="file:///android_asset/forpda/scripts/z_emoticons.js"></script>
 </head>
 
 <body id="${body_type}" class="${enable_avatars} ${avatar_type}">
     <div class="posts_list">
         <!-- $BeginBlock post -->
-        <div name="entry${post_id}" class="post_container ${user_online} close" data-post-id="${post_id}" data-user-id="${user_id}" data-nick="${nick}">
+        <div name="entry${post_id}" class="post_container ${user_online} ${post_content_state_class}" data-post-id="${post_id}" data-user-id="${user_id}" data-nick="${nick}" data-open-url="${post_open_url}">
             <div class="post_title"><a href="${post_title_href}">${post_title}</a></div>
             <div class="post_header">
                 <div tabindex="-1" class="accessibility_anchor"></div>
@@ -50,29 +51,25 @@
                     </div>
                     <span class="inf nick">
                         <span class="aec" onclick="IThemePresenter.showUserMenu('${post_id}')"><b>${nick}</b></span>
-                            <span class="group aec" style="color:${group_color};" onclick="IThemePresenter.toast('${res_s_group}: ${group}')" role="button" aria-label="${res_s_group} ${group}"><span>${group}</span></span>
-                            </span>
-                    <span class="inf date"><span>${date}</span></span>
+                        <span class="online_dot" aria-hidden="true"></span>
+                    </span>
+                    <span class="inf post_meta">
+                        <span class="group_text aec" style="color:${group_color};" onclick="IThemePresenter.toast('${res_s_group}: ${group}')" role="button" aria-label="${res_s_group} ${group}"><span>${group}</span></span>
+                        <span class="date"><span>${date}</span></span>
+                    </span>
                     <a class="btn inf menu aec" onclick="IThemePresenter.showPostMenu('${post_id}')" role="button" aria-label="${res_s_menu}"><span>${res_s_menu}</span></a>
                 </div>
             </div>
-            <a class="btn hat_button aec" onclick="toggleButton(this, 'hat_content', 'search')" role="button" aria-label="${res_s_hat}"><span>Содержимое поста</span><i class="icon"></i></a>
-            <div class="hat_content close">
+            <a class="btn hat_button aec" onclick="toggleButton(this, 'hat_content', 'search')" role="button" aria-label="${res_s_hat}" aria-expanded="${post_content_expanded_bool}"><span>Содержимое поста</span><i class="icon"></i></a>
+            <div class="hat_content ${post_content_state_class}">
                 <div class="post_body emoticons">${body}</div>
             </div>
             <div class="search_jump_to_post" style="${search_jump_row_style}">
                 <span class="search_post_id_hint">id ${post_id}</span>
-                <a class="search_post_btn" href="${jump_to_post_url}">${res_s_search_post_btn}</a>
+                <a class="search_post_btn" href="${jump_to_post_url}" role="button" aria-label="пост"><i class="icon icon-right-dir-1"></i></a>
             </div>
         </div>
         <!-- $EndBlock post -->
-    </div>
-    <div class="navigation ${navigation_disable}">
-        <span class="button first ${first_disable}" onclick="IThemePresenter.firstPage()" role="button" aria-label="${res_s_first}"><i class="icon"></i></span>
-        <span class="button prev ${prev_disable}" onclick="IThemePresenter.prevPage()" role="button" aria-label="${res_s_prev}"><i class="icon"></i></span>
-        <span class="button page" onclick="IThemePresenter.selectPage()" role="button" aria-label="${res_s_select_desc}"><b>${res_s_select}</b><i class="icon"></i></span>
-        <span class="button next ${next_disable}" onclick="IThemePresenter.nextPage()" role="button" aria-label="${res_s_next}"><i class="icon"></i></span>
-        <span class="button last ${last_disable}" onclick="IThemePresenter.lastPage()" role="button" aria-label="${res_s_last}"><i class="icon"></i></span>
     </div>
     <!--<div id="padding_for_message_panel" style="padding-bottom: 4em;"></div>-->
     <script type="text/javascript">

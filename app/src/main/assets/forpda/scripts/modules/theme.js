@@ -1,42 +1,1831 @@
-console.log("LOAD JS SOURCE theme.js");
-const BACK_ACTION = "0";
-const REFRESH_ACTION = "1";
-const NORMAL_ACTION = "2";
+// Эти строки приходят из Java через setLoadAction(...) — Kotlin шлёт имя enum-константы
+// (ThemeViewModel.ActionState), а не числовой id. Раньше здесь сравнивались "0"/"1"/"2",
+// и условия никогда не срабатывали — сломана память позиции скролла при BACK/REFRESH.
+const BACK_ACTION = "BACK";
+const REFRESH_ACTION = "REFRESH";
+const NORMAL_ACTION = "NORMAL";
+const END_ACTION = "END";
 /** Задержки (мс) для повторного scrollToElement — вёрстка/картинки подгружаются после первого кадра. */
 var SCROLL_ANCHOR_RETRY_DELAYS_MS = [1, 120, 400, 900];
+var SCROLL_BOTTOM_RETRY_DELAYS_MS = [1, 80, 180, 420, 900, 1400, 2200];
+var END_NAV_TOP_SUPPRESS_MS = 5000;
+var END_SCROLL_MIN_Y_THRESHOLD = 480;
+/** Mirrors Kotlin [ThemeUnreadHybridAnchorGuardPolicy.ANCHOR_GUARD_MAX_BLOCK_MS]. */
+var UNREAD_ANCHOR_GUARD_MAX_MS = 3200;
 window.loadAction = NORMAL_ACTION;
 window.loadScrollY = 0;
+window.loadAnchorPostId = "";
+/** True only when Kotlin [hasUnreadTarget]; arms blocking unread hybrid guard. */
+window.loadAnchorUnreadTarget = false;
+/** True when ambiguous all-read bottom redirect (no unread target); blocks initial top bootstrap. */
+window.loadAmbiguousAllReadBottom = false;
+window.loadOpenSessionKind = "";
+window.loadAnchorOffsetTop = null;
+window.loadScrollRatio = null;
+window.loadWasNearBottom = false;
+window.refreshRestoreId = "";
+window.refreshRestoreMode = "";
+window.refreshRestoreSource = "";
+window.themeLastLinkSourceAnchor = null;
+window.__themeLastClickedPostAnchor = null;
 var anchorElem, elemToActivation;
-var corrector;
+var themeAnchorScrollGeneration = 0;
+var themeAnchorRetryPendingName = "";
+var themeRuntimeDestroyed = false;
+var themeRuntimeTimers = [];
+var themeRuntimeRafs = [];
+var themeInfiniteScroll = {
+    threshold: 800,
+    loadingTop: false,
+    loadingBottom: false,
+    lastVisiblePage: null,
+    suppressUntil: 0,
+    initialTopAutoloadSuppressedUntil: 0,
+    endScrollPending: false,
+    /** Blocks hybrid top autoload until INITIAL_ANCHOR unread scroll settles. */
+    unreadInitialAnchor: "",
+    unreadInitialAnchorPending: false,
+    unreadAnchorGuardStartedAt: 0,
+    userScrolled: false,
+    scrollRafPending: false,
+    visiblePageRafPending: false,
+    visiblePageThrottleTimer: null,
+    bootstrapTimers: []
+};
+var themeMediaImageLoadBatch = {
+    rafPending: false,
+    images: []
+};
+// Post action menu opens only via the explicit "..." button in the template.
+// Long-press on message body was removed: it conflicts with native text selection on Android WebView.
 
-
-function setLoadAction(loadAction) {
-    console.log("setLoadAction " + loadAction);
-    window.loadAction = loadAction;
+function isThemeRuntimeAlive() {
+    return themeRuntimeDestroyed !== true;
 }
 
-function setLoadScrollY(loadScrollY) {
-    console.log("setLoadScrollY " + loadScrollY);
-    window.loadScrollY = Number(loadScrollY);
+function themeRuntimeSetTimeout(callback, delayMs) {
+    if (!isThemeRuntimeAlive()) return null;
+    var timer = setTimeout(function () {
+        removeThemeRuntimeTimer(timer);
+        if (!isThemeRuntimeAlive()) return;
+        callback();
+    }, delayMs || 0);
+    themeRuntimeTimers.push(timer);
+    return timer;
 }
 
-function disableImages() {
-    var images = document.querySelectorAll(".linked-image");
-    console.log(images);
-    for (var i = 0; i < images.length; i++) {
-        var image = images[i];
-        var src = image.getAttribute("src");
-        image.removeAttribute("src");
-        image.setAttribute("data-src", src);
+function removeThemeRuntimeTimer(timer) {
+    if (!timer) return;
+    for (var i = themeRuntimeTimers.length - 1; i >= 0; i--) {
+        if (themeRuntimeTimers[i] === timer) {
+            themeRuntimeTimers.splice(i, 1);
+            return;
+        }
     }
 }
 
+function themeRuntimeRequestAnimationFrame(callback) {
+    if (!isThemeRuntimeAlive()) return null;
+    var raf = requestAnimationFrame(function () {
+        removeThemeRuntimeRaf(raf);
+        if (!isThemeRuntimeAlive()) return;
+        callback();
+    });
+    themeRuntimeRafs.push(raf);
+    return raf;
+}
+
+function removeThemeRuntimeRaf(raf) {
+    if (!raf) return;
+    for (var i = themeRuntimeRafs.length - 1; i >= 0; i--) {
+        if (themeRuntimeRafs[i] === raf) {
+            themeRuntimeRafs.splice(i, 1);
+            return;
+        }
+    }
+}
+
+function clearThemeRuntimeAsyncWork() {
+    while (themeRuntimeTimers.length) {
+        clearTimeout(themeRuntimeTimers.pop());
+    }
+    while (themeRuntimeRafs.length) {
+        cancelAnimationFrame(themeRuntimeRafs.pop());
+    }
+}
+
+function isThemeRenderDebugEnabled() {
+    return typeof PageInfo !== "undefined" && PageInfo.debug === true;
+}
+
+function logThemeRender(message) {
+    if (!isThemeRenderDebugEnabled()) return;
+    console.log("[ThemeRender] " + message);
+}
+
+function isReadTopicSoftAnchorOpen() {
+    return window.loadAnchorUnreadTarget !== true &&
+        window.loadAnchorPostId &&
+        window.loadAnchorPostId.length;
+}
+
+function isUnreadAnchorHybridBlocked() {
+    if (window.loadAnchorUnreadTarget !== true) {
+        return false;
+    }
+    if (themeInfiniteScroll.unreadInitialAnchorPending !== true) {
+        return false;
+    }
+    if (!themeInfiniteScroll.unreadInitialAnchor || !window.loadAnchorPostId) {
+        clearUnreadInitialAnchorScroll("guard_no_anchor_target");
+        return false;
+    }
+    if (themeInfiniteScroll.unreadAnchorGuardStartedAt > 0 &&
+        Date.now() - themeInfiniteScroll.unreadAnchorGuardStartedAt >= UNREAD_ANCHOR_GUARD_MAX_MS) {
+        clearUnreadAnchorHybridGuard("guard_timeout");
+        return false;
+    }
+    return true;
+}
+
+function logAnchorGuardBlocked(scope, reason) {
+    var msg = "FPDA_THEME_ANCHOR_GUARD blocked_" + scope + " reason=" + reason;
+    logThemeRender(msg);
+    if (hasThemePresenter() && typeof IThemePresenter.log === "function") {
+        IThemePresenter.log(msg);
+    }
+}
+
+function logThemeRuntimeWarning(scope, error) {
+    if (!isThemeRenderDebugEnabled()) return;
+    console.log("[" + scope + "] " + error);
+}
+
+window.__themeBlankDiagErrors = [];
+window.addEventListener("error", function (event) {
+    if (!isThemeRenderDebugEnabled()) return;
+    var message = event && event.message ? event.message : "unknown";
+    window.__themeBlankDiagErrors.push({
+        type: "error",
+        message: message,
+        source: event && event.filename ? event.filename : "",
+        line: event && event.lineno ? event.lineno : 0,
+        column: event && event.colno ? event.colno : 0
+    });
+    if (window.__themeBlankDiagErrors.length > 8) window.__themeBlankDiagErrors.shift();
+});
+window.addEventListener("unhandledrejection", function (event) {
+    if (!isThemeRenderDebugEnabled()) return;
+    var reason = event && event.reason ? String(event.reason) : "unknown";
+    window.__themeBlankDiagErrors.push({type: "promise", message: reason});
+    if (window.__themeBlankDiagErrors.length > 8) window.__themeBlankDiagErrors.shift();
+});
+
+function hasThemePresenter() {
+    return typeof IThemePresenter !== "undefined" && IThemePresenter !== null;
+}
+
+function hasBaseBridge() {
+    return typeof IBase !== "undefined" && IBase !== null;
+}
+
+function themeToast(message) {
+    if (hasThemePresenter() && typeof IThemePresenter.toast === "function") {
+        IThemePresenter.toast(message);
+    }
+}
+
+function getThemeRenderToken() {
+    return typeof window.__themeRenderToken === "string" ? window.__themeRenderToken : "";
+}
+
+function isRealThemePost(el) {
+    return !!(el &&
+        el.dataset &&
+        el.dataset.postId &&
+        el.classList &&
+        el.classList.contains("post_container") &&
+        !el.classList.contains("topic_hat_entry") &&
+        !el.classList.contains("topic_hat_fixed"));
+}
+
+function getThemeRenderedPostsState() {
+    var doc = document.documentElement || {};
+    var body = document.body || {};
+    var containers = document.querySelectorAll(".theme_page_container[data-page-number]");
+    var candidates = document.querySelectorAll(".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)");
+    var postCount = 0;
+    for (var i = 0; i < candidates.length; i++) {
+        if (isRealThemePost(candidates[i])) postCount++;
+    }
+    var clientHeight = window.innerHeight || doc.clientHeight || 0;
+    var scrollHeight = Math.max(doc.scrollHeight || 0, body.scrollHeight || 0);
+    var bodyTextLength = body && body.textContent ? body.textContent.trim().length : 0;
+    return {
+        ok: containers.length > 0 && postCount > 0 && scrollHeight > Math.max(120, clientHeight * 0.25),
+        postCount: postCount,
+        containerCount: containers.length,
+        hasPostContainer: postCount > 0,
+        hasPageContainer: containers.length > 0,
+        scrollHeight: scrollHeight,
+        clientHeight: clientHeight,
+        bodyTextLength: bodyTextLength,
+        readyState: document.readyState || ""
+    };
+}
+
+function getThemeBlankTopicDiagnostics() {
+    var doc = document.documentElement || {};
+    var body = document.body || {};
+    var posts = document.querySelectorAll(".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)");
+    var containers = document.querySelectorAll(".theme_page_container[data-page-number]");
+    var postsList = document.querySelector(".posts_list");
+    var firstPost = posts.length ? posts[0] : null;
+    var firstContainer = containers.length ? containers[0] : null;
+    var bodyStyle = body && window.getComputedStyle ? window.getComputedStyle(body) : null;
+    var postsListStyle = postsList && window.getComputedStyle ? window.getComputedStyle(postsList) : null;
+    var firstPostStyle = firstPost && window.getComputedStyle ? window.getComputedStyle(firstPost) : null;
+    var firstContainerStyle = firstContainer && window.getComputedStyle ? window.getComputedStyle(firstContainer) : null;
+    var firstPostRect = firstPost && firstPost.getBoundingClientRect ? firstPost.getBoundingClientRect() : null;
+    var scrollHeight = Math.max(doc.scrollHeight || 0, body.scrollHeight || 0);
+    return {
+        ok: getThemeRenderedPostsState().ok === true,
+        readyState: document.readyState || "",
+        runtimeDestroyed: themeRuntimeDestroyed === true,
+        bodyChildren: body && body.children ? body.children.length : 0,
+        postCount: posts.length,
+        containerCount: containers.length,
+        postsListExists: !!postsList,
+        scrollHeight: scrollHeight,
+        clientHeight: window.innerHeight || doc.clientHeight || 0,
+        bodyDisplay: bodyStyle ? bodyStyle.display : "",
+        bodyVisibility: bodyStyle ? bodyStyle.visibility : "",
+        bodyOpacity: bodyStyle ? bodyStyle.opacity : "",
+        postsListDisplay: postsListStyle ? postsListStyle.display : "",
+        postsListVisibility: postsListStyle ? postsListStyle.visibility : "",
+        postsListHeight: postsList ? postsList.offsetHeight : 0,
+        firstContainerDisplay: firstContainerStyle ? firstContainerStyle.display : "",
+        firstContainerVisibility: firstContainerStyle ? firstContainerStyle.visibility : "",
+        firstContainerHeight: firstContainer ? firstContainer.offsetHeight : 0,
+        firstPostId: firstPost && firstPost.dataset ? firstPost.dataset.postId || "" : "",
+        firstPostDisplay: firstPostStyle ? firstPostStyle.display : "",
+        firstPostVisibility: firstPostStyle ? firstPostStyle.visibility : "",
+        firstPostOpacity: firstPostStyle ? firstPostStyle.opacity : "",
+        firstPostOffsetHeight: firstPost ? firstPost.offsetHeight : 0,
+        firstPostRectTop: firstPostRect ? firstPostRect.top : null,
+        firstPostRectHeight: firstPostRect ? firstPostRect.height : null,
+        errors: window.__themeBlankDiagErrors.slice()
+    };
+}
+
+window.PropdaThemeRuntime = window.PropdaThemeRuntime || {};
+window.PropdaThemeRuntime.getRenderedPostsState = getThemeRenderedPostsState;
+window.PropdaThemeRuntime.getBlankTopicDiagnostics = getThemeBlankTopicDiagnostics;
+window.PropdaThemeRuntime.hasRenderedPosts = function () {
+    return getThemeRenderedPostsState().ok === true;
+};
+
+function bindThemeLinkSourceAnchorEvents() {
+    if (!isThemeRuntimeAlive()) return;
+    var events = ["pointerdown", "touchstart", "mousedown", "click"];
+    for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], rememberThemeLinkSourceAnchor, true);
+        document.addEventListener(events[i], rememberThemeLinkSourceAnchor, true);
+    }
+}
+
+function unbindThemeLinkSourceAnchorEvents() {
+    var events = ["pointerdown", "touchstart", "mousedown", "click"];
+    for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], rememberThemeLinkSourceAnchor, true);
+    }
+}
+
+function onThemeAnchorScrollCancelInput(event) {
+    if (!isThemeRuntimeAlive()) return;
+    themeInfiniteScroll.userScrolled = true;
+    cancelThemeAnchorScrollRetries();
+    logRefreshScroll("cancel userInput event=" + (event && event.type ? event.type : "") + " y=" + getScrollTop());
+}
+
+function bindThemeAnchorScrollCancelInputEvents() {
+    ["touchstart", "touchmove", "wheel"].forEach(function (name) {
+        window.removeEventListener(name, onThemeAnchorScrollCancelInput);
+        window.addEventListener(name, onThemeAnchorScrollCancelInput, {passive: true});
+    });
+}
+
+function unbindThemeAnchorScrollCancelInputEvents() {
+    ["touchstart", "touchmove", "wheel"].forEach(function (name) {
+        window.removeEventListener(name, onThemeAnchorScrollCancelInput);
+    });
+}
+
+function onThemeOverlayViewportChanged() {
+    if (!isThemeRuntimeAlive()) return;
+    updateThemeHatOverlayLayout();
+    updateThemePollOverlayLayout();
+}
+
+function initThemePostGestureActions() {
+    // No-op: kept for DOM bootstrap compatibility.
+}
+
+function destroyThemePostGestureActions() {
+    // No-op: long-press post menu removed.
+}
+
+var themeLayoutSanitizeToken = 0;
+var themeFixedContentSanitizedToken = -1;
+
+function bumpThemeLayoutSanitizeToken() {
+    themeLayoutSanitizeToken++;
+}
+
+function sanitizeThemeInteractiveLayout() {
+    sanitizeThemeOverlayState();
+    if (themeFixedContentSanitizedToken !== themeLayoutSanitizeToken) {
+        themeFixedContentSanitizedToken = themeLayoutSanitizeToken;
+        sanitizePostFixedPositionedContent();
+    }
+}
+
+function sanitizeThemeOverlayState() {
+    try {
+        var hat = document.querySelector(".topic_hat_fixed.top_hat_overlay_host");
+        if (hat) {
+            var hatBody = hat.querySelector(".hat_content");
+            var hostOpen = hat.classList.contains("open") && !hat.classList.contains("close");
+            var bodyOpen = !!(hatBody && hatBody.classList.contains("open") && !hatBody.classList.contains("close"));
+            if (hostOpen && bodyOpen) {
+                hat.style.pointerEvents = "";
+                document.body.classList.add("topic_hat_overlay_open");
+            } else {
+                hat.classList.remove("open");
+                hat.classList.add("close");
+                hat.style.pointerEvents = "none";
+                if (hatBody) {
+                    hatBody.classList.remove("open");
+                    hatBody.classList.add("close");
+                }
+                document.body.classList.remove("topic_hat_overlay_open");
+            }
+        }
+        var poll = document.getElementById("theme_poll_overlay_host") || document.querySelector(".poll.poll_overlay_host");
+        if (poll && !poll.classList.contains("open")) {
+            poll.classList.add("close");
+            poll.style.pointerEvents = "none";
+            document.body.classList.remove("theme_poll_overlay_open");
+        } else if (poll) {
+            poll.style.pointerEvents = "";
+        }
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeScrollGuard", "overlay state error " + ex);
+    }
+}
+
+function closeThemeToolbarOverlaysForNavigation(notifyNative) {
+    try {
+        var hat = document.querySelector(".topic_hat_fixed.top_hat_overlay_host");
+        if (hat) {
+            var hatBody = hat.querySelector(".hat_content");
+            if (typeof closeThemeHatOverlayHost === "function" && hatBody) {
+                closeThemeHatOverlayHost(hat, hatBody, notifyNative);
+            } else {
+                hat.classList.remove("open");
+                hat.classList.add("close");
+                hat.style.pointerEvents = "none";
+                if (hatBody) {
+                    hatBody.classList.remove("initial_open");
+                    hatBody.classList.remove("open");
+                    hatBody.classList.add("close");
+                }
+                document.body.classList.remove("topic_hat_overlay_open");
+                if (notifyNative !== false && typeof IThemePresenter !== "undefined") {
+                    IThemePresenter.setHatOpen("false");
+                }
+            }
+        }
+
+        var poll = document.getElementById("theme_poll_overlay_host") || document.querySelector(".poll.poll_overlay_host");
+        if (poll) {
+            var pollBody = poll.querySelector(".hat_content");
+            poll.classList.remove("open");
+            poll.classList.add("close");
+            poll.style.pointerEvents = "none";
+            if (pollBody) {
+                pollBody.classList.remove("open");
+                pollBody.classList.add("close");
+            }
+            document.body.classList.remove("theme_poll_overlay_open");
+            if (notifyNative !== false && typeof IThemePresenter !== "undefined") {
+                IThemePresenter.setPollOpen("false");
+            }
+        }
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeScrollGuard", "close overlays error " + ex);
+    }
+}
+
+function sanitizePostFixedPositionedContent() {
+    try {
+        var nodes = document.querySelectorAll(".post_body *");
+        for (var i = 0; i < nodes.length; i++) {
+            var node = nodes[i];
+            var style = window.getComputedStyle ? window.getComputedStyle(node) : null;
+            if (!style) continue;
+            var position = style.position;
+            if (position === "fixed" || position === "sticky") {
+                node.style.position = "relative";
+                node.style.top = "auto";
+                node.style.bottom = "auto";
+                node.style.left = "auto";
+                node.style.right = "auto";
+                node.style.zIndex = "auto";
+            }
+            if (style.pointerEvents !== "none" && parseFloat(style.opacity || "1") === 0) {
+                node.style.pointerEvents = "none";
+            }
+        }
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeScrollGuard", "fixed content error " + ex);
+    }
+}
+
+/**
+ * Votes post rating (+/-) for the post that contains the clicked button.
+ * Fixes cases when template ids desync due to DOM/layout quirks.
+ */
+function votePostFromEl(el, type) {
+    try {
+        if (!hasThemePresenter() || typeof IThemePresenter.votePost !== "function") return;
+        var node = el;
+        while (node && node.classList && !node.classList.contains("post_container") && !node.dataset.postId) {
+            node = node.parentElement;
+        }
+        var postId = node && node.dataset ? (node.dataset.postId || "") : "";
+        if (!postId && el && el.dataset) {
+            postId = el.dataset.postId || "";
+        }
+        if (window.__themeVoteDiag) {
+            console.log("[ThemeVoteDiag] type=" + type + " postId=" + postId);
+        }
+        if (postId) {
+            IThemePresenter.votePost("" + postId, Boolean(type), getThemeRenderToken());
+        }
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeVoteDiag", "error " + ex);
+    }
+}
+
+function submitThemePoll(form) {
+    try {
+        if (!hasThemePresenter() || typeof IThemePresenter.submitPoll !== "function") return true;
+        if (!form) return true;
+        if (form.classList && form.classList.contains("readonly")) {
+            themeToast("Голосование недоступно");
+            return false;
+        }
+        var checked = form.querySelector('input[type="radio"]:checked,input[type="checkbox"]:checked');
+        if (!checked) {
+            themeToast("Выберите вариант ответа");
+            return false;
+        }
+
+        var params = [];
+        var inputs = form.querySelectorAll("input[name]");
+        for (var i = 0; i < inputs.length; i++) {
+            var input = inputs[i];
+            var type = (input.getAttribute("type") || "").toLowerCase();
+            if ((type === "radio" || type === "checkbox") && !input.checked) continue;
+            params.push(encodeURIComponent(input.name) + "=" + encodeURIComponent(input.value || ""));
+        }
+        var action = form.getAttribute("action") || "https://4pda.to/forum/index.php";
+        IThemePresenter.submitPoll(action, (form.getAttribute("method") || "get").toLowerCase(), params.join("&"), getThemeRenderToken());
+        return false;
+    } catch (ex) {
+        logThemeRuntimeWarning("submitThemePoll", ex);
+        return true;
+    }
+}
+
+function buildUserPostCountHtml(count) {
+    var safeCount = Number(count);
+    if (!safeCount || safeCount <= 0) return "";
+    var accessibility = "Сообщений: " + safeCount;
+    return '<span class="inf user_post_count" aria-label="' + accessibility + '">' +
+        '<svg class="user_post_count_icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.5-5.6a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z"/></svg>' +
+        '<span>' + safeCount + '</span></span>';
+}
+
+/** Called from Android after deferred desktop metadata merge — avoids full page reload. */
+function applyUserPostCountPatch(postIdStr, userPostCount) {
+    try {
+        var id = String(postIdStr);
+        var html = buildUserPostCountHtml(userPostCount);
+        if (!html) return;
+        var containers = document.querySelectorAll('[data-post-id="' + id + '"]');
+        if (!containers || !containers.length) return;
+        for (var i = 0; i < containers.length; i++) {
+            var container = containers[i];
+            var header = container.querySelector(".post_header .header_wrapper");
+            if (!header) continue;
+            var existing = header.querySelector(".inf.user_post_count");
+            if (existing) {
+                existing.outerHTML = html;
+            } else {
+                var holder = document.createElement("span");
+                holder.innerHTML = html;
+                var node = holder.firstChild;
+                if (!node) continue;
+                var dateNode = header.querySelector(".inf.date");
+                if (dateNode && dateNode.parentNode === header) {
+                    header.insertBefore(node, dateNode);
+                } else {
+                    header.appendChild(node);
+                }
+            }
+        }
+    } catch (ex) {
+        logThemeRuntimeWarning("applyUserPostCountPatch", ex);
+    }
+}
+
+/** Called from Android after successful vote — avoids full page reload. */
+function applyPostRatingPatch(postIdStr, ratingText, canPlus, canMinus) {
+    try {
+        var id = String(postIdStr);
+        var containers = document.querySelectorAll('[data-post-id="' + id + '"]');
+        if (!containers || !containers.length) return;
+        var n = parseThemePostRatingNumber(ratingText);
+        for (var i = 0; i < containers.length; i++) {
+            var container = containers[i];
+            var span = container.querySelector(".post_rating");
+            if (span) {
+                var b = span.querySelector("b");
+                if (b) b.textContent = ratingText;
+                if (n === 0) {
+                    span.classList.add("post_rating_hidden");
+                    span.setAttribute("aria-hidden", "true");
+                } else {
+                    span.classList.remove("post_rating_hidden");
+                    span.removeAttribute("aria-hidden");
+                }
+            }
+            var up = container.querySelector(".btn.rep_up");
+            var down = container.querySelector(".btn.rep_down");
+            if (up) up.style.display = canPlus ? "" : "none";
+            if (down) down.style.display = canMinus ? "" : "none";
+        }
+    } catch (ex) {
+        logThemeRuntimeWarning("applyPostRatingPatch", ex);
+    }
+}
+
+function isThemePostMediaHeavy(post) {
+    if (post.dataset && post.dataset.themeMediaHeavy) {
+        return post.dataset.themeMediaHeavy === "true";
+    }
+    var body = post.querySelector(".post_body");
+    if (!body) return false;
+    var images = body.querySelectorAll("img, .linked-image").length;
+    var attachments = body.querySelectorAll(".ipb-attach, .attach_block").length;
+    var isHeavy = images + attachments >= 2;
+    if (post.dataset) post.dataset.themeMediaHeavy = isHeavy ? "true" : "false";
+    return isHeavy;
+}
+
+window.ThemeDomPatch = window.ThemeDomPatch || (function () {
+    function result(ok, reason, extra) {
+        var payload = extra || {};
+        payload.ok = !!ok;
+        payload.reason = reason || "";
+        return JSON.stringify(payload);
+    }
+
+    function parsePayload(payload) {
+        if (!payload) return null;
+        if (typeof payload === "string") {
+            return JSON.parse(payload);
+        }
+        return payload;
+    }
+
+    function postSelector(id) {
+        return '.post_container[data-post-id="' + String(id).replace(/"/g, '\\"') + '"]:not(.topic_hat_fixed):not(.topic_hat_entry)';
+    }
+
+    function firstPostFromHtml(html) {
+        var holder = document.createElement("div");
+        holder.innerHTML = html || "";
+        return holder.querySelector(".post_container[data-post-id]:not(.topic_hat_fixed):not(.topic_hat_entry)");
+    }
+
+    function appendPostHtml(pageContainer, html) {
+        var post = firstPostFromHtml(html);
+        if (!post) return false;
+        pageContainer.appendChild(post);
+        return true;
+    }
+
+    function applyPostsPatch(payload) {
+        try {
+            var data = parsePayload(payload);
+            if (!data) return result(false, "bad_payload");
+            if (typeof PageInfo === "undefined") return result(false, "page_info_missing");
+            if (Number(PageInfo.currentPage) !== Number(data.pageNumber)) return result(false, "page_mismatch");
+            if (Number(PageInfo.allPagesCount) !== Number(data.allPages)) return result(false, "all_pages_mismatch");
+
+            var pageContainer = document.querySelector('.theme_page_container[data-page-number="' + data.pageNumber + '"]');
+            if (!pageContainer) return result(false, "container_missing");
+
+            var expectedIds = data.expectedPostIds || [];
+            var actualPosts = pageContainer.querySelectorAll(".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)");
+            if (actualPosts.length !== expectedIds.length) {
+                return result(false, "post_count_mismatch", {actual: actualPosts.length, expected: expectedIds.length});
+            }
+            for (var i = 0; i < expectedIds.length; i++) {
+                var actualId = actualPosts[i].dataset ? String(actualPosts[i].dataset.postId || "") : "";
+                if (actualId !== String(expectedIds[i])) {
+                    return result(false, "post_order_mismatch", {index: i});
+                }
+            }
+
+            var changed = data.changedPosts || [];
+            for (var c = 0; c < changed.length; c++) {
+                var changedPost = changed[c];
+                var current = pageContainer.querySelector(postSelector(changedPost.id));
+                var replacement = firstPostFromHtml(changedPost.html);
+                if (!current || !replacement) return result(false, "changed_post_missing", {postId: changedPost.id});
+                current.parentNode.replaceChild(replacement, current);
+            }
+
+            var added = data.addedPosts || [];
+            for (var a = 0; a < added.length; a++) {
+                if (!appendPostHtml(pageContainer, added[a].html)) {
+                    return result(false, "added_post_invalid", {index: a});
+                }
+            }
+
+            PageInfo.postsOnPageCount = Number(data.postsOnPage) || PageInfo.postsOnPageCount;
+            PageInfo.currentPage = Number(data.pageNumber) || PageInfo.currentPage;
+            PageInfo.allPagesCount = Number(data.allPages) || PageInfo.allPagesCount;
+            if (data.restoreId && typeof setRefreshRestoreRequest === "function") {
+                setRefreshRestoreRequest(data.restoreId, data.restoreMode || "", data.restoreSource || "");
+            }
+            if (typeof setLoadScrollY === "function" && typeof data.restoreScrollY !== "undefined") {
+                setLoadScrollY(Number(data.restoreScrollY) || 0);
+            }
+            if (typeof setLoadAnchorPostId === "function") {
+                setLoadAnchorPostId(data.restoreAnchorPostId || "");
+            }
+            if (typeof setLoadAnchorOffsetTop === "function") {
+                setLoadAnchorOffsetTop(
+                    typeof data.restoreAnchorOffsetTop === "undefined" || data.restoreAnchorOffsetTop === null
+                        ? null
+                        : Number(data.restoreAnchorOffsetTop)
+                );
+            }
+            if (typeof setLoadScrollRatio === "function") {
+                setLoadScrollRatio(
+                    typeof data.restoreScrollRatio === "undefined" || data.restoreScrollRatio === null
+                        ? null
+                        : Number(data.restoreScrollRatio)
+                );
+            }
+            if (typeof setLoadWasNearBottom === "function") {
+                setLoadWasNearBottom(data.restoreWasNearBottom === true);
+            }
+            refreshThemeDynamicPostBlocks(pageContainer);
+            transformAnchor();
+            normalizeThemePageSeparators();
+            scheduleVisibleThemePageLayoutChecks();
+            if (data.keepBottom && typeof scrollToThemeBottomOnce === "function") {
+                themeRuntimeRequestAnimationFrame(function () {
+                    if (typeof restoreThemeToBottomAfterRefreshWithRetries === "function") {
+                        restoreThemeToBottomAfterRefreshWithRetries();
+                    } else {
+                        scrollToThemeBottomOnce();
+                    }
+                });
+            } else if (window.refreshRestoreId && typeof restoreThemeRefreshScrollAnchorWithRetries === "function") {
+                themeRuntimeRequestAnimationFrame(restoreThemeRefreshScrollAnchorWithRetries);
+            }
+            return result(true, "patched", {changed: changed.length, added: added.length});
+        } catch (ex) {
+            return result(false, "exception:" + ex);
+        }
+    }
+
+    return {
+        applyPostsPatch: applyPostsPatch
+    };
+})();
+
+function parseThemePostRatingNumber(s) {
+    if (s == null || s === "") return 0;
+    var t = String(s).trim().replace(/^\u2212|^\-|^–/, "-").replace(/^\+/, "");
+    var v = parseInt(t, 10);
+    return isNaN(v) ? 0 : v;
+}
+
+
+function setLoadAction(loadAction) {
+    logThemeRender("setLoadAction " + loadAction);
+    window.loadAction = loadAction;
+    if (loadAction == END_ACTION && typeof PageInfo !== "undefined") {
+        PageInfo.elemToScroll = "";
+        window.loadScrollY = 0;
+        window.loadScrollRatio = null;
+        window.loadWasNearBottom = true;
+        themeInfiniteScroll.endScrollPending = true;
+        themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + END_NAV_TOP_SUPPRESS_MS;
+        suppressThemeInfiniteScrollFor(END_NAV_TOP_SUPPRESS_MS);
+    } else if (loadAction != END_ACTION) {
+        themeInfiniteScroll.endScrollPending = false;
+    }
+}
+
+function setLoadScrollY(loadScrollY) {
+    logThemeRender("setLoadScrollY " + loadScrollY);
+    window.loadScrollY = Number(loadScrollY);
+}
+
+function setLoadAnchorUnreadTarget(isUnread) {
+    window.loadAnchorUnreadTarget = isUnread === true;
+    logThemeRender("setLoadAnchorUnreadTarget " + window.loadAnchorUnreadTarget);
+}
+
+function setLoadAmbiguousAllReadBottom(isAmbiguous) {
+    window.loadAmbiguousAllReadBottom = isAmbiguous === true;
+    logThemeRender("setLoadAmbiguousAllReadBottom " + window.loadAmbiguousAllReadBottom);
+}
+
+function setLoadOpenSessionKind(kind) {
+    window.loadOpenSessionKind = kind ? String(kind) : "";
+    logThemeRender("setLoadOpenSessionKind " + window.loadOpenSessionKind);
+}
+
+function setLoadAnchorPostId(postId) {
+    logThemeRender("setLoadAnchorPostId " + postId);
+    window.loadAnchorPostId = postId || "";
+    if (window.loadAnchorPostId && window.loadAnchorPostId.length && window.loadAnchorUnreadTarget === true) {
+        var anchorName = resolveThemeInitialAnchorName();
+        if (anchorName) {
+            armUnreadInitialAnchorScroll(anchorName);
+        }
+    }
+}
+
+/** Best-effort scroll after reveal for all-read last-read resume; does not block WebView alpha. */
+function scheduleSoftLoadAnchorScroll(postId) {
+    if (!postId) return;
+    var normalized = String(postId).replace(/^entry/i, "");
+    if (!normalized.length) return;
+    var anchorName = "entry" + normalized;
+    logThemeRender("scheduleSoftLoadAnchorScroll " + anchorName);
+    themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + 1800;
+    suppressThemeInfiniteScrollFor(1800);
+    var runSoftAnchorScroll = function () {
+        if (!isThemeRuntimeAlive()) return;
+        if (typeof scrollToElementWithRetries === "function") {
+            scrollToElementWithRetries(anchorName, false);
+        } else if (typeof scrollToElement === "function") {
+            scrollToElement(anchorName);
+        }
+        clearUnreadAnchorHybridGuard("soft_anchor_done");
+    };
+    // Called after resetThemeRuntimeState from Kotlin; defer one frame so layout height is stable.
+    if (typeof themeRuntimeRequestAnimationFrame === "function") {
+        themeRuntimeRequestAnimationFrame(runSoftAnchorScroll);
+    } else {
+        themeRuntimeSetTimeout(runSoftAnchorScroll, 16);
+    }
+}
+
+/**
+ * All-read bottom-redirect resume on the last page: bottom-align the resolved post (and fall back to
+ * document bottom) so the viewport lands at the END of the page, not at the top of a tall final post.
+ */
+function scheduleSoftLoadAnchorBottomScroll(postId) {
+    if (!postId) return;
+    var normalized = String(postId).replace(/^entry/i, "");
+    if (!normalized.length) return;
+    logThemeRender("scheduleSoftLoadAnchorBottomScroll entry" + normalized);
+    themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + 1800;
+    suppressThemeInfiniteScrollFor(1800);
+    var runSoftAnchorBottomScroll = function () {
+        if (!isThemeRuntimeAlive()) return;
+        if (typeof scrollToEndAnchorOrBottomWithRetries === "function") {
+            scrollToEndAnchorOrBottomWithRetries(normalized);
+        } else if (typeof scrollToElementWithRetries === "function") {
+            scrollToElementWithRetries("entry" + normalized, false);
+        } else if (typeof scrollToElement === "function") {
+            scrollToElement("entry" + normalized);
+        }
+        clearUnreadAnchorHybridGuard("soft_anchor_bottom_done");
+    };
+    if (typeof themeRuntimeRequestAnimationFrame === "function") {
+        themeRuntimeRequestAnimationFrame(runSoftAnchorBottomScroll);
+    } else {
+        themeRuntimeSetTimeout(runSoftAnchorBottomScroll, 16);
+    }
+}
+
+function setLoadAnchorOffsetTop(offsetTop) {
+    if (offsetTop === null || typeof offsetTop === "undefined") {
+        window.loadAnchorOffsetTop = null;
+        logThemeRender("setLoadAnchorOffsetTop null");
+        return;
+    }
+    var n = Number(offsetTop);
+    window.loadAnchorOffsetTop = isFinite(n) ? n : null;
+    logThemeRender("setLoadAnchorOffsetTop " + window.loadAnchorOffsetTop);
+}
+
+function setLoadScrollRatio(ratio) {
+    if (ratio === null || typeof ratio === "undefined") {
+        window.loadScrollRatio = null;
+        logThemeRender("setLoadScrollRatio null");
+        return;
+    }
+    var n = Number(ratio);
+    window.loadScrollRatio = isFinite(n) ? Math.max(0, Math.min(1, n)) : null;
+    logThemeRender("setLoadScrollRatio " + window.loadScrollRatio);
+}
+
+function setLoadWasNearBottom(wasNearBottom) {
+    window.loadWasNearBottom = wasNearBottom === true || wasNearBottom === "true";
+    logThemeRender("setLoadWasNearBottom " + window.loadWasNearBottom);
+}
+
+function setRefreshRestoreRequest(id, mode, source) {
+    window.refreshRestoreId = id || "";
+    window.refreshRestoreMode = mode || "";
+    window.refreshRestoreSource = source || "";
+    logRefreshScroll("setRestoreRequest id=" + window.refreshRestoreId + " mode=" + window.refreshRestoreMode + " source=" + window.refreshRestoreSource);
+}
+
+function maybeCompleteThemeScrollCommand(success, reason) {
+    var commandId = window.__themeScrollCommandId;
+    if (!commandId) return;
+    window.__themeScrollCommandId = "";
+    var reasonText = String(reason || "");
+    if (reasonText.indexOf("end_") === 0 || reasonText.indexOf("bottom") >= 0) {
+        themeInfiniteScroll.endScrollPending = false;
+    }
+    var metrics = getThemeScrollMetrics();
+    var detail = reasonText +
+        "|y=" + metrics.scrollY +
+        "|max=" + metrics.maxScroll +
+        "|lastPost=" + getLastRealThemePostIdInDom();
+    if (typeof logRefreshScroll === "function") {
+        logRefreshScroll("scrollCmdComplete id=" + commandId + " ok=" + (success === true || success === "true" || success === 1) + " " + detail);
+    }
+    if (hasThemePresenter() && typeof IThemePresenter.onScrollCommandComplete === "function") {
+        IThemePresenter.onScrollCommandComplete(
+            String(commandId),
+            success === true || success === "true" || success === 1,
+            detail
+        );
+    }
+}
+
+function executeThemeScrollCommand(payload) {
+    var data = payload;
+    if (typeof payload === "string") {
+        try {
+            data = JSON.parse(payload);
+        } catch (ex) {
+            data = null;
+        }
+    }
+    if (!data || !data.commandId) {
+        maybeCompleteThemeScrollCommand(false, "bad_payload");
+        return;
+    }
+    window.__themeScrollCommandId = data.commandId;
+    if (typeof logRefreshScroll === "function") {
+        logRefreshScroll("execScrollCmd kind=" + data.kind + " id=" + data.commandId + " restoreId=" + (data.restoreId || "") + " restoreMode=" + (data.restoreMode || "") + " anchor=" + (data.anchorPostId || "") + " alive=" + isThemeRuntimeAlive());
+    }
+    switch (data.kind) {
+        case "REFRESH_RESTORE":
+            if (data.restoreId && typeof setRefreshRestoreRequest === "function") {
+                setRefreshRestoreRequest(data.restoreId, data.restoreMode || "", window.refreshRestoreSource || "");
+            }
+            if (data.restoreMode === "BOTTOM" && typeof restoreThemeToBottomAfterRefreshWithRetries === "function") {
+                restoreThemeToBottomAfterRefreshWithRetries();
+            } else if (typeof restoreThemeRefreshScrollAnchorWithRetries === "function") {
+                restoreThemeRefreshScrollAnchorWithRetries();
+            } else {
+                maybeCompleteThemeScrollCommand(false, "missing_restore_fn");
+            }
+            break;
+        case "BOTTOM":
+            if (typeof scrollToThemeBottomWithRetries === "function") {
+                scrollToThemeBottomWithRetries();
+            } else {
+                window.scrollTo(0, document.documentElement.scrollHeight);
+                maybeCompleteThemeScrollCommand(true, "bottom");
+            }
+            break;
+        case "ANCHOR":
+            if (data.anchorPostId && typeof scrollToElementWithRetries === "function") {
+                scrollToElementWithRetries(data.anchorPostId);
+            } else {
+                maybeCompleteThemeScrollCommand(false, "missing_anchor");
+            }
+            break;
+        case "END_ANCHOR_OR_BOTTOM":
+            themeInfiniteScroll.endScrollPending = true;
+            themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + END_NAV_TOP_SUPPRESS_MS;
+            suppressThemeInfiniteScrollFor(END_NAV_TOP_SUPPRESS_MS);
+            if (typeof scrollToThemeBottomWithRetries === "function") {
+                scrollToThemeBottomWithRetries(5);
+            } else if (typeof scrollToEndAnchorOrBottomWithRetries === "function") {
+                scrollToEndAnchorOrBottomWithRetries(data.anchorPostId);
+            } else {
+                window.scrollTo(0, document.documentElement.scrollHeight);
+                maybeCompleteThemeScrollCommand(true, "bottom_fallback");
+            }
+            break;
+        case "INITIAL_ANCHOR":
+            if (themeInfiniteScroll.unreadInitialAnchorPending) {
+                var coalescedAnchor = resolveThemeInitialAnchorName() || themeInfiniteScroll.unreadInitialAnchor;
+                logRefreshScroll("coalesce INITIAL_ANCHOR id=" + window.__themeScrollCommandId + " anchor=" + coalescedAnchor);
+                if (coalescedAnchor && typeof scrollToElementWithRetries === "function") {
+                    scrollToElementWithRetries(coalescedAnchor, true);
+                } else if (coalescedAnchor && typeof scrollToElement === "function") {
+                    scrollToElement(coalescedAnchor);
+                    clearUnreadInitialAnchorScroll("initial_anchor_coalesced");
+                    maybeCompleteThemeScrollCommand(true, "initial_anchor_coalesced");
+                } else {
+                    clearUnreadAnchorHybridGuard("initial_anchor_coalesced_missing");
+                    maybeCompleteThemeScrollCommand(false, "initial_anchor_coalesced_missing");
+                }
+                break;
+            }
+            var initialAnchor = resolveThemeInitialAnchorName();
+            if (initialAnchor && typeof scrollToElementWithRetries === "function") {
+                if (window.loadAnchorUnreadTarget === true) {
+                    armUnreadInitialAnchorScroll(initialAnchor);
+                }
+                scrollToElementWithRetries(initialAnchor, true);
+            } else if (initialAnchor && typeof scrollToElement === "function") {
+                if (window.loadAnchorUnreadTarget === true) {
+                    armUnreadInitialAnchorScroll(initialAnchor);
+                }
+                scrollToElement(initialAnchor);
+                clearUnreadInitialAnchorScroll("initial_anchor_single");
+                maybeCompleteThemeScrollCommand(true, "initial_anchor");
+            } else {
+                maybeCompleteThemeScrollCommand(false, "missing_initial_anchor");
+            }
+            break;
+        default:
+            maybeCompleteThemeScrollCommand(false, "unsupported_kind");
+    }
+}
+
+function revealThemeAfterFirstRestore(id) {
+    window.__themeRevealAfterRestoreId = id || "";
+    document.documentElement.style.opacity = "0";
+    document.body.style.opacity = "0";
+    logRefreshScroll("reveal armed id=" + window.__themeRevealAfterRestoreId);
+}
+
+function notifyThemeRestoreApplied(reason) {
+    if (!window.__themeRevealAfterRestoreId) return;
+    if (window.__themeRevealAfterRestoreId !== window.refreshRestoreId) {
+        logRefreshScroll("reveal stale armed=" + window.__themeRevealAfterRestoreId + " current=" + window.refreshRestoreId);
+        return;
+    }
+    var armedId = window.__themeRevealAfterRestoreId;
+    window.__themeRevealAfterRestoreId = "";
+    themeRuntimeRequestAnimationFrame(function () {
+        if (window.refreshRestoreId !== armedId) return;
+        document.documentElement.style.opacity = "";
+        document.body.style.opacity = "";
+        logRefreshScroll("reveal applied id=" + armedId + " reason=" + reason + " y=" + getThemeScrollMetrics().scrollY);
+        if (window.__themeScrollCommandId) {
+            maybeCompleteThemeScrollCommand(true, String(reason || "restore"));
+        }
+    });
+}
+
+function cancelThemeAnchorScrollRetries() {
+    themeAnchorScrollGeneration++;
+    themeAnchorRetryPendingName = "";
+}
+
+function resolveThemeAnchorElement(name) {
+    if (typeof name !== 'string' || !name.length) return null;
+    var anchorData = /([^-]*)-([\d]*)-(\d+)/g.exec(name);
+    if (anchorData) {
+        anchorData[1] = anchorData[1].toLowerCase();
+        if (anchorData[1] === "spoiler") anchorData[1] = "spoil";
+        if (anchorData[1] === "hide") anchorData[1] = "hidden";
+        var entry = document.querySelector('[name="entry' + anchorData[2] + '"]');
+        return entry ? entry.querySelectorAll(".post-block." + anchorData[1])[Number(anchorData[3]) - 1] : null;
+    }
+    return document.querySelector('[name="' + name + '"]');
+}
+
+function isThemeAnchorNearViewportTop(anchorName, slackPx) {
+    var anchorElem = resolveThemeAnchorElement(anchorName);
+    if (!anchorElem) return false;
+    var rect = anchorElem.getBoundingClientRect();
+    var metrics = getThemeScrollMetrics();
+    var activationOffset = Math.max(1, Math.min(48, Math.round(metrics.clientHeight * 0.06)));
+    var slack = typeof slackPx === "number" ? slackPx : Math.max(96, activationOffset + 48);
+    return rect.top >= -8 && rect.top <= slack;
+}
+
+function scheduleThemeScrollAttempt(scrollGeneration, delayMs, action) {
+    themeRuntimeSetTimeout(function () {
+        themeRuntimeRequestAnimationFrame(function () {
+            if (!isThemeAnchorScrollCurrent(scrollGeneration)) return;
+            action();
+        });
+    }, delayMs || 0);
+}
+
+function logRefreshScroll(message) {
+    if (!isThemeRenderDebugEnabled()) return;
+    console.log("[RefreshScroll] " + message);
+}
+
+function logThemeHistory(message) {
+    if (!isThemeRenderDebugEnabled()) return;
+    console.log("[ThemeHistory] " + message);
+}
+
+function getThemeScrollMetrics() {
+    var scrollElement = document.scrollingElement || document.documentElement || document.body;
+    var scrollY = scrollElement ? scrollElement.scrollTop : getScrollTop();
+    var visualHeight = window.visualViewport ? window.visualViewport.height : 0;
+    var clientHeight = window.innerHeight || visualHeight || document.documentElement.clientHeight || 0;
+    var scrollHeight = Math.max(
+        getThemeDocumentScrollHeight(),
+        scrollElement ? scrollElement.scrollHeight : 0
+    );
+    var maxScroll = Math.max(0, scrollHeight - clientHeight);
+    return {
+        scrollY: scrollY,
+        clientHeight: clientHeight,
+        innerHeight: window.innerHeight || 0,
+        visualHeight: visualHeight,
+        elementClientHeight: scrollElement ? scrollElement.clientHeight : 0,
+        scrollHeight: scrollHeight,
+        elementScrollHeight: scrollElement ? scrollElement.scrollHeight : 0,
+        maxScroll: maxScroll,
+        ratio: maxScroll > 0 ? Math.max(0, Math.min(1, scrollY / maxScroll)) : 0
+    };
+}
+
+function isThemeBottomSpacerStable() {
+    if (typeof getExpectedBottomSpacerHeight !== "function") return true;
+    var expected = Math.max(0, Number(getExpectedBottomSpacerHeight()) || 0);
+    var actual = getThemeBottomSpacerHeight();
+    return Math.abs(actual - expected) <= 1;
+}
+
+function findThemeViewportAnchorPost() {
+    var metrics = getThemeScrollMetrics();
+    var viewportCenter = metrics.clientHeight / 2;
+    var posts = document.querySelectorAll(".post_container[data-post-id]");
+    var best = null;
+    var bestDistance = Number.MAX_VALUE;
+    for (var i = 0; i < posts.length; i++) {
+        var el = posts[i];
+        if (!isRealThemePost(el)) continue;
+        var rect = el.getBoundingClientRect();
+        var visible = rect.bottom > 0 && rect.top < metrics.clientHeight;
+        if (!visible) continue;
+        var clampedTop = Math.max(0, rect.top);
+        var clampedBottom = Math.min(metrics.clientHeight, rect.bottom);
+        var distance = Math.abs(((clampedTop + clampedBottom) / 2) - viewportCenter);
+        if (!best || distance < bestDistance) {
+            best = el;
+            bestDistance = distance;
+        }
+    }
+    return best;
+}
+
+function findThemePostContainer(el) {
+    while (el && el.classList && !el.classList.contains("post_container")) {
+        el = el.parentElement;
+    }
+    return isRealThemePost(el) ? el : null;
+}
+
+function findThemeLinkElement(el) {
+    while (el && el !== document && el.nodeType === 1) {
+        if (el.tagName && el.tagName.toLowerCase() === "a") {
+            if (el.classList && el.classList.contains("menu")) return null;
+            return el;
+        }
+        el = el.parentElement;
+    }
+    return null;
+}
+
+function findRealThemePostById(postId) {
+    if (!postId) return null;
+    var id = String(postId).replace(/^entry/i, "");
+    var posts = document.querySelectorAll('.post_container[data-post-id="' + id.replace(/"/g, '\\"') + '"]:not(.topic_hat_fixed):not(.topic_hat_entry)');
+    for (var i = 0; i < posts.length; i++) {
+        if (isRealThemePost(posts[i])) return posts[i];
+    }
+    return null;
+}
+
+function findFirstRealThemePostInDom() {
+    var posts = document.querySelectorAll(".post_container[data-post-id]");
+    for (var i = 0; i < posts.length; i++) {
+        if (isRealThemePost(posts[i])) return posts[i];
+    }
+    return null;
+}
+
+function findLastRealThemePostInDom() {
+    var posts = document.querySelectorAll(".post_container[data-post-id]");
+    for (var i = posts.length - 1; i >= 0; i--) {
+        if (isRealThemePost(posts[i])) return posts[i];
+    }
+    return null;
+}
+
+function findLastRealThemePostOnLastLoadedPageInDom() {
+    var bounds = getThemeLoadedPageBounds();
+    var pageNumber = bounds.maxPage;
+    if (!pageNumber) return findLastRealThemePostInDom();
+    var container = document.querySelector('.theme_page_container[data-page-number="' + String(pageNumber).replace(/"/g, '\\"') + '"]');
+    if (!container) return findLastRealThemePostInDom();
+    var posts = container.querySelectorAll(".post_container[data-post-id]");
+    for (var i = posts.length - 1; i >= 0; i--) {
+        if (isRealThemePost(posts[i])) return posts[i];
+    }
+    return findLastRealThemePostInDom();
+}
+
+function getFirstRealThemePostIdInDom() {
+    var post = findFirstRealThemePostInDom();
+    return post && post.dataset ? String(post.dataset.postId || "") : "";
+}
+
+function getLastRealThemePostIdInDom() {
+    var post = findLastRealThemePostOnLastLoadedPageInDom();
+    return post && post.dataset ? String(post.dataset.postId || "") : "";
+}
+
+function pickHigherThemePostId(left, right) {
+    var leftId = String(left || "").replace(/^entry/i, "");
+    var rightId = String(right || "").replace(/^entry/i, "");
+    if (!leftId.length) return rightId;
+    if (!rightId.length) return leftId;
+    var leftNum = parseInt(leftId, 10);
+    var rightNum = parseInt(rightId, 10);
+    if (!isNaN(leftNum) && !isNaN(rightNum)) {
+        return leftNum >= rightNum ? leftId : rightId;
+    }
+    return rightId;
+}
+
+function isThemeEndNavigationActive() {
+    return themeInfiniteScroll.endScrollPending || window.loadAction == END_ACTION;
+}
+
+function resolveEndScrollTargetPostId(postId) {
+    var normalized = String(postId || "").replace(/^entry/i, "");
+    var lastDomId = getLastRealThemePostIdInDom();
+    if (!normalized.length) return lastDomId;
+    if (isThemeEndNavigationActive() && lastDomId.length) {
+        var maxId = pickHigherThemePostId(normalized, lastDomId);
+        if (maxId !== normalized) {
+            logThemeRender("[ThemeScrollDiag] endAnchorRemap maxId from=" + normalized + " to=" + maxId);
+        }
+        normalized = maxId;
+    }
+    if (!lastDomId.length || normalized === lastDomId) return normalized;
+    var firstDomId = getFirstRealThemePostIdInDom();
+    if (firstDomId.length && normalized === firstDomId) {
+        logThemeRender("[ThemeScrollDiag] endAnchorRemap from=" + normalized + " to=" + lastDomId);
+        return lastDomId;
+    }
+    // getlastpost #entry is often the first post on the final page; in hybrid mode the DOM may
+    // start with an older page, so compare against loadAnchorPostId instead of firstDomId only.
+    if (isThemeEndNavigationActive() && window.loadAnchorPostId) {
+        var loadAnchor = String(window.loadAnchorPostId).replace(/^entry/i, "");
+        if (loadAnchor.length && normalized === loadAnchor && normalized !== lastDomId) {
+            logThemeRender("[ThemeScrollDiag] endAnchorRemap serverLoad=" + normalized + " to=" + lastDomId);
+            return lastDomId;
+        }
+    }
+    return normalized;
+}
+
+function getThemePostDisplayedDate(postId, sourceEl) {
+    try {
+        var post = null;
+        if (sourceEl) {
+            post = findThemePostContainer(sourceEl);
+            if (post && post.dataset && String(post.dataset.postId || "") !== String(postId)) {
+                post = null;
+            }
+        }
+        if (!post) {
+            post = findRealThemePostById(postId);
+        }
+        if (!post) return "";
+        var datasetDate = post.dataset ? (post.dataset.displayDate || "") : "";
+        if (datasetDate) return String(datasetDate).trim();
+        var header = null;
+        for (var i = 0; i < post.children.length; i++) {
+            var child = post.children[i];
+            if (child.classList && child.classList.contains("post_header")) {
+                header = child;
+                break;
+            }
+            if (child.classList && child.classList.contains("hat_content")) {
+                header = child.querySelector(".post_header");
+                if (header) break;
+            }
+        }
+        var date = header ? header.querySelector(".inf.date > span") : null;
+        if (!date) date = post.querySelector(".post_header .inf.date > span");
+        return date ? (date.textContent || "").trim() : "";
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeQuote", "displayed date error " + ex);
+        return "";
+    }
+}
+
+function quoteFullThemePost(postId, sourceEl) {
+    if (!hasThemePresenter() || typeof IThemePresenter.quoteFullPostWithDate !== "function") return;
+    var displayedDate = getThemePostDisplayedDate(postId, sourceEl);
+    logThemeRender("[ThemeQuote] full postId=" + postId + " displayDate=" + displayedDate);
+    IThemePresenter.quoteFullPostWithDate("" + postId, displayedDate, getThemeRenderToken());
+}
+
+function replyThemePost(postId) {
+    if (!hasThemePresenter() || typeof IThemePresenter.reply !== "function") return;
+    IThemePresenter.reply("" + postId, getThemeRenderToken());
+}
+
+function buildThemeAnchorSnapshot(post, metrics, source) {
+    var rect = post ? post.getBoundingClientRect() : null;
+    var selectedTop = rect ? rect.top : null;
+    var selectedDistance = rect ? Math.abs(((Math.max(0, rect.top) + Math.min(metrics.clientHeight, rect.bottom)) / 2) - (metrics.clientHeight / 2)) : null;
+    return {
+        postId: post && post.dataset ? (post.dataset.postId || "") : "",
+        offsetTop: rect ? rect.top : null,
+        selectedPostTop: selectedTop,
+        selectedDistance: selectedDistance,
+        scrollY: metrics.scrollY,
+        clientHeight: metrics.clientHeight,
+        scrollHeight: metrics.scrollHeight,
+        maxScroll: metrics.maxScroll,
+        ratio: metrics.ratio,
+        wasNearBottom: metrics.maxScroll <= 0 || metrics.scrollY >= metrics.maxScroll - 32,
+        containers: document.querySelectorAll(".theme_page_container[data-page-number]").length,
+        separators: document.querySelectorAll(".theme_page_separator[data-page-number]").length,
+        posts: document.querySelectorAll(".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)").length,
+        source: source || "viewport"
+    };
+}
+
+function rememberThemeLinkSourceAnchor(event) {
+    try {
+        var link = findThemeLinkElement(event.target);
+        if (!link) return;
+        var post = findThemePostContainer(link);
+        if (!post) return;
+        var metrics = getThemeScrollMetrics();
+        var eventType = event && event.type ? event.type : "unknown";
+        var data = buildThemeAnchorSnapshot(post, metrics, "link-" + eventType);
+        data.href = link.href || link.getAttribute("href") || "";
+        data.eventType = eventType;
+        data.time = Date.now();
+        window.themeLastLinkSourceAnchor = data;
+        window.__themeLastClickedPostAnchor = data;
+        logRefreshScroll("linkSource remember event=" + eventType + " href=" + data.href + " post=" + data.postId + " offset=" + data.offsetTop + " pageY=" + data.scrollY + " ratio=" + data.ratio);
+        logThemeHistory("JS " + eventType + " captured href=" + data.href + " sourcePostId=" + data.postId + " offsetTop=" + data.offsetTop + " ratio=" + data.ratio);
+        if (hasThemePresenter() && typeof IThemePresenter.rememberLinkSourceAnchor === "function") {
+            IThemePresenter.rememberLinkSourceAnchor(JSON.stringify(data));
+        }
+    } catch (ex) {
+        logRefreshScroll("linkSource remember error " + ex);
+    }
+}
+
+function captureThemeLinkSourceAnchor(targetUrl) {
+    try {
+        var data = window.themeLastLinkSourceAnchor;
+        if (!data || !data.postId) {
+            logRefreshScroll("linkSource missing target=" + (targetUrl || ""));
+            return "";
+        }
+        data.targetUrl = targetUrl || "";
+        data.ageMs = Date.now() - (data.time || 0);
+        if (data.ageMs > 5000) {
+            logRefreshScroll("linkSource stale target=" + data.targetUrl + " post=" + data.postId + " ageMs=" + data.ageMs);
+            window.themeLastLinkSourceAnchor = null;
+            return "";
+        }
+        logRefreshScroll("linkSource capture target=" + data.targetUrl + " post=" + data.postId + " offset=" + data.offsetTop + " pageY=" + data.scrollY + " ratio=" + data.ratio + " ageMs=" + data.ageMs);
+        logThemeHistory("link capture target=" + data.targetUrl + " sourcePostId=" + data.postId + " offset=" + data.offsetTop + " ratio=" + data.ratio + " ageMs=" + data.ageMs);
+        window.themeLastLinkSourceAnchor = null;
+        return JSON.stringify(data);
+    } catch (ex) {
+        logRefreshScroll("linkSource capture error " + ex);
+        return "";
+    }
+}
+
+function captureThemeRefreshScrollAnchor(source) {
+    try {
+        var metrics = getThemeScrollMetrics();
+        var anchor = source === "link-click" && window.themeLastLinkSourceAnchor && window.themeLastLinkSourceAnchor.postId
+            ? findRealThemePostById(window.themeLastLinkSourceAnchor.postId)
+            : findThemeViewportAnchorPost();
+        var data = buildThemeAnchorSnapshot(anchor, metrics, source || "viewport");
+        logRefreshScroll("capture source=" + window.refreshRestoreSource + " anchorSource=" + data.source + " domY=" + data.scrollY + " max=" + data.maxScroll + " height=" + data.scrollHeight + " viewport=" + data.clientHeight + " post=" + data.postId + " selectedTop=" + data.selectedPostTop + " selectedDistance=" + data.selectedDistance + " offset=" + data.offsetTop + " ratio=" + data.ratio + " wasNearBottom=" + data.wasNearBottom + " containers=" + data.containers + " separators=" + data.separators + " posts=" + data.posts);
+        return JSON.stringify(data);
+    } catch (ex) {
+        logRefreshScroll("capture error " + ex);
+        return "";
+    }
+}
+
+function restoreThemeRefreshScrollAnchorOnce(scrollGeneration, reason, allowMissingAnchorFallback) {
+    if (!isThemeAnchorScrollCurrent(scrollGeneration)) return false;
+    var metrics = getThemeScrollMetrics();
+    var targetY = null;
+    var method = "none";
+    var anchorId = window.loadAnchorPostId || "";
+    var isExplicitBottomRestore = window.refreshRestoreMode === "BOTTOM";
+    if (!isExplicitBottomRestore && window.loadWasNearBottom && anchorId && typeof resolveEndScrollTargetPostId === "function") {
+        anchorId = resolveEndScrollTargetPostId(anchorId);
+    }
+    if (!isExplicitBottomRestore && !window.loadWasNearBottom && anchorId && window.loadAnchorOffsetTop !== null) {
+        var post = findRealThemePostById(anchorId);
+        var anchor = post || document.querySelector('[name="entry' + anchorId + '"]');
+        if (anchor) {
+            var rect = (post || anchor).getBoundingClientRect();
+            targetY = metrics.scrollY + rect.top - Number(window.loadAnchorOffsetTop);
+            method = "anchor-offset";
+            logThemeHistory("restore found reason=" + reason + " post=" + anchorId + " method=" + method + " rectTop=" + rect.top + " targetY=" + targetY);
+        } else {
+            logRefreshScroll("restore anchorMissing reason=" + reason + " source=" + window.refreshRestoreSource + " post=" + anchorId + " ratio=" + window.loadScrollRatio + " savedY=" + window.loadScrollY);
+            logThemeHistory("restore missing reason=" + reason + " post=" + anchorId + " source=" + window.refreshRestoreSource + " savedY=" + window.loadScrollY);
+            if (window.loadAction == BACK_ACTION && !allowMissingAnchorFallback) return false;
+        }
+    }
+    if (targetY === null && (isExplicitBottomRestore || window.loadWasNearBottom)) {
+        targetY = metrics.maxScroll;
+        method = "bottom";
+    }
+    if (targetY === null && window.loadScrollRatio !== null) {
+        targetY = metrics.maxScroll * Number(window.loadScrollRatio);
+        method = "ratio";
+    }
+    if (targetY === null) {
+        targetY = Number(window.loadScrollY) || 0;
+        method = targetY > 0 ? "saved-scrollY" : "pageTop fallback";
+    }
+    targetY = Math.max(0, Math.min(metrics.maxScroll, targetY));
+    logRefreshScroll("restore " + reason + " method=" + method + " source=" + window.refreshRestoreSource + " fromY=" + metrics.scrollY + " toY=" + targetY + " max=" + metrics.maxScroll + " post=" + anchorId + " offset=" + window.loadAnchorOffsetTop + " ratio=" + window.loadScrollRatio + " wasNearBottom=" + window.loadWasNearBottom + " spacer=" + getThemeBottomSpacerHeight());
+    logThemeHistory("restore final reason=" + reason + " method=" + method + " post=" + anchorId + " fromY=" + metrics.scrollY + " toY=" + targetY + " max=" + metrics.maxScroll);
+    if (Math.abs(metrics.scrollY - targetY) > 2) {
+        window.scrollTo(0, targetY);
+    }
+    updateVisibleThemePage();
+    notifyThemeRestoreApplied(reason);
+    return true;
+}
+
+function getThemeBottomSpacerHeight() {
+    var spacer = document.getElementById("bottom_chrome_spacer");
+    if (!spacer) return 0;
+    var rect = spacer.getBoundingClientRect();
+    return rect ? rect.height : spacer.offsetHeight || 0;
+}
+
+function restoreThemeRefreshScrollAnchorWithRetries() {
+    cancelThemeAnchorScrollRetries();
+    if (!isThemeRuntimeAlive()) return;
+    if (typeof applyBottomSpacer === "function") {
+        applyBottomSpacer();
+    }
+    if (window.refreshRestoreMode === "BOTTOM") {
+        restoreThemeToBottomAfterRefreshWithRetries();
+        return;
+    }
+    var scrollGeneration = themeAnchorScrollGeneration;
+    suppressThemeInfiniteScrollFor(window.loadWasNearBottom ? 2600 : 1800);
+    var delays = window.refreshRestoreMode === "TARGET_POST"
+        ? [1, 80, 180, 420]
+        : window.loadWasNearBottom
+        ? [1, 80, 180, 420, 900, 1400, 2200]
+        : [1, 80, 180, 420, 900, 1400];
+    logRefreshScroll("restoreSchedule id=" + window.refreshRestoreId + " mode=" + window.refreshRestoreMode + " source=" + window.refreshRestoreSource + " action=" + window.loadAction + " delays=" + delays.join(",") + " anchor=" + (window.loadAnchorPostId || "") + " ratio=" + window.loadScrollRatio + " savedY=" + window.loadScrollY + " bottom=" + window.loadWasNearBottom);
+    for (var i = 0; i < delays.length; i++) {
+        (function (ms) {
+            themeRuntimeSetTimeout(function () {
+                themeRuntimeRequestAnimationFrame(function () {
+                    var isFinalRetry = ms === delays[delays.length - 1];
+                    restoreThemeRefreshScrollAnchorOnce(scrollGeneration, (isFinalRetry ? "final+" : "retry+") + ms, isFinalRetry);
+                    if (isFinalRetry) {
+                        maybeCompleteThemeScrollCommand(true);
+                    }
+                    if (window.loadWasNearBottom && ms >= 900) {
+                        var metrics = getThemeScrollMetrics();
+                        logRefreshScroll("final bottomCheck reason=retry+" + ms + " y=" + metrics.scrollY + " max=" + metrics.maxScroll);
+                    }
+                });
+            }, ms);
+        })(delays[i]);
+    }
+}
+
+function restoreThemeToBottomAfterRefreshWithRetries() {
+    cancelThemeAnchorScrollRetries();
+    if (!isThemeRuntimeAlive()) return;
+    if (typeof applyBottomSpacer === "function") {
+        applyBottomSpacer();
+    }
+    var scrollGeneration = themeAnchorScrollGeneration;
+    suppressThemeInfiniteScrollFor(2200);
+    var startedAt = Date.now();
+    var lastMaxScroll = -1;
+    var lastSpacer = -1;
+    var stableCount = 0;
+    var attempt = 0;
+    var minDurationMs = 420;
+    var maxDurationMs = 1800;
+    var intervalMs = 160;
+    var bottomTolerancePx = 2;
+
+    function scheduleNext(delayMs) {
+        themeRuntimeSetTimeout(function () {
+            themeRuntimeRequestAnimationFrame(runAttempt);
+        }, delayMs);
+    }
+
+    function runAttempt() {
+        if (!isThemeAnchorScrollCurrent(scrollGeneration)) return;
+        attempt++;
+        var elapsed = Date.now() - startedAt;
+        if (typeof applyBottomSpacer === "function") {
+            applyBottomSpacer();
+        }
+        var before = getThemeScrollMetrics();
+        var spacer = getThemeBottomSpacerHeight();
+        var spacerReady = isThemeBottomSpacerStable();
+        var targetY = Math.max(0, before.maxScroll);
+        var maxStable = Math.abs(before.maxScroll - lastMaxScroll) <= 2;
+        var spacerStable = Math.abs(spacer - lastSpacer) <= 1;
+        if (maxStable && spacerStable) {
+            stableCount++;
+        } else {
+            stableCount = 0;
+            lastMaxScroll = before.maxScroll;
+            lastSpacer = spacer;
+        }
+
+        if (Math.abs(before.scrollY - targetY) > bottomTolerancePx) {
+            window.scrollTo(0, targetY);
+        }
+        updateVisibleThemePage();
+
+        themeRuntimeSetTimeout(function () {
+            if (!isThemeAnchorScrollCurrent(scrollGeneration)) return;
+            var after = getThemeScrollMetrics();
+            var afterSpacer = getThemeBottomSpacerHeight();
+            var delta = Math.max(0, after.maxScroll - after.scrollY);
+            if (delta > bottomTolerancePx) {
+                window.scrollTo(0, after.maxScroll);
+                after = getThemeScrollMetrics();
+                delta = Math.max(0, after.maxScroll - after.scrollY);
+            }
+            var shouldContinue = elapsed < minDurationMs ||
+                    stableCount < 2 ||
+                    !spacerReady ||
+                    delta > bottomTolerancePx ||
+                    Math.abs(after.maxScroll - lastMaxScroll) > 2 ||
+                    Math.abs(afterSpacer - lastSpacer) > 1;
+            logRefreshScroll(
+                "bottomRestore attempt=" + attempt +
+                " elapsed=" + elapsed +
+                " source=" + window.refreshRestoreSource +
+                " fromY=" + before.scrollY +
+                " toY=" + targetY +
+                " y=" + after.scrollY +
+                " max=" + after.maxScroll +
+                " delta=" + delta +
+                " stable=" + stableCount +
+                " contentHeight=" + after.scrollHeight +
+                " elementHeight=" + after.elementScrollHeight +
+                " innerHeight=" + after.innerHeight +
+                " viewport=" + after.clientHeight +
+                " elementViewport=" + after.elementClientHeight +
+                " visualViewport=" + after.visualHeight +
+                " spacer=" + afterSpacer +
+                " spacerReady=" + spacerReady +
+                " bottomPadding=" + (typeof bottomChromePadding !== "undefined" ? bottomChromePadding : "null") +
+                " messagePadding=" + (typeof messagePanelPadding !== "undefined" ? messagePanelPadding : "null") +
+                " continue=" + shouldContinue
+            );
+            if (shouldContinue && elapsed < maxDurationMs) {
+                scheduleNext(intervalMs);
+            } else {
+                var finalTarget = getThemeScrollMetrics().maxScroll;
+                if (Math.abs(getThemeScrollMetrics().scrollY - finalTarget) > bottomTolerancePx) {
+                    window.scrollTo(0, finalTarget);
+                }
+                var finalMetrics = getThemeScrollMetrics();
+                logRefreshScroll("bottomRestore final y=" + finalMetrics.scrollY + " max=" + finalMetrics.maxScroll + " delta=" + Math.max(0, finalMetrics.maxScroll - finalMetrics.scrollY) + " attempts=" + attempt + " contentHeight=" + finalMetrics.scrollHeight + " viewport=" + finalMetrics.clientHeight + " spacer=" + getThemeBottomSpacerHeight());
+                notifyThemeRestoreApplied("bottomFinal");
+                maybeCompleteThemeScrollCommand(true);
+            }
+        }, 32);
+    }
+
+    scheduleNext(1);
+    [700, 1200, 1800].forEach(function (ms) {
+        themeRuntimeSetTimeout(function () {
+            themeRuntimeRequestAnimationFrame(function () {
+                if (!isThemeAnchorScrollCurrent(scrollGeneration)) return;
+                var metrics = getThemeScrollMetrics();
+                var delta = Math.max(0, metrics.maxScroll - metrics.scrollY);
+                if (delta > bottomTolerancePx) {
+                    window.scrollTo(0, metrics.maxScroll);
+                    metrics = getThemeScrollMetrics();
+                    delta = Math.max(0, metrics.maxScroll - metrics.scrollY);
+                }
+                logRefreshScroll("bottomRestore guard+" + ms + " y=" + metrics.scrollY + " max=" + metrics.maxScroll + " delta=" + delta + " contentHeight=" + metrics.scrollHeight + " elementHeight=" + metrics.elementScrollHeight + " innerHeight=" + metrics.innerHeight + " viewport=" + metrics.clientHeight + " spacer=" + getThemeBottomSpacerHeight() + " bottomPadding=" + (typeof bottomChromePadding !== "undefined" ? bottomChromePadding : "null") + " messagePadding=" + (typeof messagePanelPadding !== "undefined" ? messagePanelPadding : "null"));
+            });
+        }, ms);
+    });
+}
+
+bindThemeAnchorScrollCancelInputEvents();
+
+function suppressThemeInfiniteScrollFor(ms) {
+    themeInfiniteScroll.suppressUntil = Date.now() + (ms || 600);
+}
+
+function getThemeHatBottomPadding() {
+    if (typeof bottomChromePadding !== "undefined" || typeof messagePanelPadding !== "undefined") {
+        return Math.max(0, (Number(bottomChromePadding) || 0) + (Number(messagePanelPadding) || 0));
+    }
+    var cssValue = getComputedStyle(document.documentElement).getPropertyValue("--theme-bottom-chrome-padding");
+    return Math.max(0, parseFloat(cssValue) || 0);
+}
+
+function updateThemeHatOverlayLayout() {
+    var block = document.querySelector(".topic_hat_fixed.top_hat_overlay_host");
+    if (!block) return;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (!viewportHeight) return;
+    var topChrome = 0;
+    if (typeof topChromePadding !== "undefined") {
+        topChrome = Math.max(0, Number(topChromePadding) || 0);
+    } else {
+        var cssTop = getComputedStyle(document.documentElement).getPropertyValue("--theme-top-chrome-padding");
+        topChrome = Math.max(0, parseFloat(cssTop) || 0);
+    }
+    var bottomPadding = getThemeHatBottomPadding();
+    var maxHeight = Math.max(96, viewportHeight - topChrome - bottomPadding - 8);
+    block.style.setProperty("--theme-hat-max-height", maxHeight + "px");
+    block.style.top = "0";
+    var hatContent = block.querySelector(".hat_content");
+    if (hatContent) {
+        hatContent.style.paddingTop = topChrome + "px";
+    }
+}
+
+function openThemeHatOverlayHost(block, body) {
+    if (!block || !body) return false;
+    if (typeof updateThemeHatOverlayLayout === "function") {
+        updateThemeHatOverlayLayout();
+    }
+    block.classList.remove("initial_open", "close", "theme_hat_overlay_enter", "theme_hat_overlay_preparing");
+    body.classList.remove("initial_open", "close");
+    block.classList.add("open", "theme_hat_overlay_preparing");
+    body.classList.add("open");
+    block.style.pointerEvents = "";
+    block.style.display = "flex";
+    block.style.top = "0";
+    block.style.opacity = "0";
+    document.body.classList.add("topic_hat_overlay_open");
+    block.offsetHeight;
+    requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+            block.classList.remove("theme_hat_overlay_preparing");
+            block.classList.add("theme_hat_overlay_enter");
+            block.style.removeProperty("opacity");
+            block.style.removeProperty("transform");
+            block.style.removeProperty("display");
+        });
+    });
+    if (typeof IThemePresenter !== "undefined") {
+        IThemePresenter.setHatOpen("true");
+    }
+    return true;
+}
+
+function closeThemeHatOverlayHost(block, body, notifyNative) {
+    if (!block || !body) return false;
+    block.classList.remove("initial_open", "open", "theme_hat_overlay_enter", "theme_hat_overlay_preparing");
+    block.classList.add("close");
+    block.style.pointerEvents = "none";
+    block.style.removeProperty("opacity");
+    block.style.removeProperty("transform");
+    block.style.removeProperty("display");
+    block.style.removeProperty("top");
+    body.classList.remove("initial_open", "open");
+    body.classList.add("close");
+    body.style.removeProperty("padding-top");
+    document.body.classList.remove("topic_hat_overlay_open");
+    if (typeof updateThemeHatOverlayLayout === "function") {
+        updateThemeHatOverlayLayout();
+    }
+    if (notifyNative !== false && typeof IThemePresenter !== "undefined") {
+        IThemePresenter.setHatOpen("false");
+    }
+    return true;
+}
+
+function updateThemePollOverlayLayout() {
+    var block = document.getElementById("theme_poll_overlay_host") || document.querySelector(".poll.poll_overlay_host");
+    if (!block) return;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (!viewportHeight) return;
+    var rect = block.getBoundingClientRect();
+    var top = Math.max(0, rect.top);
+    var bottomPadding = getThemeHatBottomPadding();
+    var maxHeight = Math.max(96, viewportHeight - top - bottomPadding - 8);
+    block.style.setProperty("--theme-poll-max-height", maxHeight + "px");
+}
+
+window.removeEventListener("resize", onThemeOverlayViewportChanged);
+window.addEventListener("resize", onThemeOverlayViewportChanged);
+window.removeEventListener("orientationchange", onThemeOverlayViewportChanged);
+window.addEventListener("orientationchange", onThemeOverlayViewportChanged);
+
+function isThemeAnchorScrollCurrent(generation) {
+    return generation === themeAnchorScrollGeneration;
+}
+
+function isThemeAttachmentInOpenSpoiler(image) {
+    if (typeof findParentSpoilerBlock === "function") {
+        var spoiler = findParentSpoilerBlock(image);
+        return !!(spoiler && spoiler.classList.contains("open"));
+    }
+    var node = image ? image.parentElement : null;
+    while (node && node !== document.body) {
+        if (node.classList && node.classList.contains("post-block") && node.classList.contains("spoil")) {
+            return node.classList.contains("open");
+        }
+        node = node.parentElement;
+    }
+    return false;
+}
+
+function resolveThemeMediaImageLoading(image) {
+    if (typeof findParentSpoilerBlock === "function") {
+        var spoiler = findParentSpoilerBlock(image);
+        if (spoiler && spoiler.classList.contains("close")) {
+            return "lazy";
+        }
+    }
+    return "eager";
+}
+
+function initThemeMediaImageStability(root) {
+    if (!isThemeRuntimeAlive()) return;
+    var container = root && root.querySelectorAll ? root : document;
+    if (typeof promoteAttachmentImageSources === "function") {
+        promoteAttachmentImageSources(container);
+    }
+    var images = container.querySelectorAll("body#topic .post_body img.linked-image:not([data-theme-media-ready='true']), body#topic .post_body img.attach:not([data-theme-media-ready='true'])");
+    for (var i = 0; i < images.length; i++) {
+        prepareThemeMediaImage(images[i]);
+    }
+}
+
+function resetThemeMediaImageState(image) {
+    if (!image || !image.classList) return;
+    delete image.dataset.themeMediaReady;
+    image.classList.remove("theme-media-pending", "theme-media-loaded", "theme-media-has-ratio");
+    image.style.aspectRatio = "";
+    image.removeEventListener("load", onThemeMediaImageLoad);
+    image.removeEventListener("error", onThemeMediaImageError);
+}
+
+function prepareThemeMediaImage(image) {
+    if (!image) return;
+    if (typeof hasWorkingImageSrc === "function" && !hasWorkingImageSrc(image)) return;
+    if (image.dataset.themeMediaReady === "true") return;
+    image.dataset.themeMediaReady = "true";
+    image.setAttribute("loading", resolveThemeMediaImageLoading(image));
+    image.setAttribute("decoding", "async");
+    applyThemeMediaAspectRatio(image);
+    if (image.complete && image.naturalWidth > 0) {
+        queueThemeMediaImageLoaded(image);
+        return;
+    }
+    image.classList.add("theme-media-pending");
+    image.addEventListener("load", onThemeMediaImageLoad, {once: true});
+    image.addEventListener("error", onThemeMediaImageError, {once: true});
+    scheduleThemeMediaImageLoadedRecheck(image);
+}
+
+function scheduleThemeMediaImageLoadedRecheck(image) {
+    var delays = [16, 80, 240, 600, 1200, 2000, 4000];
+    for (var i = 0; i < delays.length; i++) {
+        (function (delay, isLast) {
+            themeRuntimeSetTimeout(function () {
+                if (!image || !image.classList) return;
+                if (!image.classList.contains("theme-media-pending")) return;
+                if (image.complete && image.naturalWidth > 0) {
+                    markThemeMediaImageLoaded(image);
+                    return;
+                }
+                if (isLast && typeof hasWorkingImageSrc === "function" && hasWorkingImageSrc(image)) {
+                    markThemeMediaImageLoaded(image);
+                }
+            }, delay);
+        })(delays[i], i === delays.length - 1);
+    }
+}
+
+function resetThemeMediaImageBatch() {
+    themeMediaImageLoadBatch.images.length = 0;
+    themeMediaImageLoadBatch.rafPending = false;
+}
+
+function clearThemeMediaImageListeners(root) {
+    try {
+        var container = root && root.querySelectorAll ? root : document;
+        var images = container.querySelectorAll("body#topic .post_body img[data-theme-media-ready='true']");
+        for (var i = 0; i < images.length; i++) {
+            images[i].removeEventListener("load", onThemeMediaImageLoad);
+            images[i].removeEventListener("error", onThemeMediaImageError);
+        }
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeMedia", "clear listeners error " + ex);
+    }
+}
+
+function applyThemeMediaAspectRatio(image) {
+    var width = parseFloat(image.getAttribute("width")) || image.naturalWidth || 0;
+    var height = parseFloat(image.getAttribute("height")) || image.naturalHeight || 0;
+    if (!width || !height || width < 2 || height < 2) return;
+    image.style.aspectRatio = width + " / " + height;
+    image.classList.add("theme-media-has-ratio");
+}
+
+function markThemeMediaImageLoaded(image) {
+    applyThemeMediaAspectRatio(image);
+    image.classList.remove("theme-media-pending");
+    image.classList.add("theme-media-loaded");
+}
+
+function queueThemeMediaImageLoaded(image) {
+    if (!image || !image.classList) return;
+    themeMediaImageLoadBatch.images.push(image);
+    if (themeMediaImageLoadBatch.rafPending) return;
+    themeMediaImageLoadBatch.rafPending = true;
+    themeRuntimeRequestAnimationFrame(function () {
+        themeMediaImageLoadBatch.rafPending = false;
+        var images = themeMediaImageLoadBatch.images.splice(0);
+        for (var i = 0; i < images.length; i++) {
+            markThemeMediaImageLoaded(images[i]);
+        }
+    });
+}
+
+function onThemeMediaImageLoad(event) {
+    var image = event.target;
+    image.removeEventListener("error", onThemeMediaImageError);
+    queueThemeMediaImageLoaded(image);
+}
+
+function onThemeMediaImageError(event) {
+    if (!event || !event.target || !event.target.classList) return;
+    var image = event.target;
+    image.removeEventListener("load", onThemeMediaImageLoad);
+    image.classList.remove("theme-media-pending");
+}
+
 //Вызывается при обновлении прогресса загрузке страницы и при загрузке её ресурсов
-//По идеи должна верно скроллить к нужному элементу, даже если пользователь прокрутил страницу
-//Как оно работает и работает ли вообще - объяснить не могу
+// Оставлен как публичная точка входа для Kotlin-моста; старый scroll-corrector больше ничего не делал.
 function onProgressChanged() {
-    if (corrector)
-        corrector.startObserver();
 }
 
 function getScrollTop() {
@@ -49,30 +1838,23 @@ function getScrollTop() {
 
 
 
-function scrollToElement(name) {
-    console.log("scrollToElement " + name);
+function scrollToElement(name, keepScrollGeneration) {
+    try {
+    logThemeRender("scrollToElement " + name);
+    if (keepScrollGeneration !== true) {
+        cancelThemeAnchorScrollRetries();
+    }
+    var scrollGeneration = themeAnchorScrollGeneration;
     // Явный якорь из Java (ссылка на пост, жест «Назад» по истории якорей) — всегда крутим к посту, не к loadScrollY при BACK.
     var explicitAnchor = (arguments.length > 0 && typeof name === 'string' && name.length > 0);
     if (typeof name != 'string') {
         name = PageInfo.elemToScroll;
     }
-    var anchorData = /([^-]*)-([\d]*)-(\d+)/g.exec(name);
-    if (anchorData) {
-        //anchorData[1] - name (spoil, quote, etc)
-        //anchorData[2] - post id
-        //anchorData[3] - number block of post, begin with 1
-        anchorData[1] = anchorData[1].toLowerCase();
-        if (anchorData[1] === "spoiler") anchorData[1] = "spoil";
-        if (anchorData[1] === "hide") anchorData[1] = "hidden";
-        anchorElem = document.querySelector('[name="entry' + anchorData[2] + '"]');
-        anchorElem = anchorElem.querySelectorAll(".post-block." + anchorData[1])[Number(anchorData[3]) - 1];
-    } else {
-        anchorElem = document.querySelector('[name="' + name + '"]');
-    }
+    anchorElem = resolveThemeAnchorElement(name);
     if (anchorElem) {
         //Открытие всех спойлеров
         var block = anchorElem;
-        while (block.classList && !block.classList.contains('post_body')) {
+        while (block && block.classList && !block.classList.contains('post_body')) {
             /*if (block.classList.contains('spoil')) {
                 block.classList.remove('close');
                 block.classList.add('open');
@@ -80,80 +1862,288 @@ function scrollToElement(name) {
             toggler("close", "open", block);
             block = block.parentNode;
         }
-        // Открытие шапки при скролле к якорю — только если в настройках включено «Открытая шапка темы».
-        // Иначе якорь на первый пост/шапку не должен разворачивать шапку (пользователь оставил её скрытой).
-        var mayOpenHatForAnchor = (typeof PageInfo.hatOpenedPref === 'undefined' || PageInfo.hatOpenedPref);
-        if (mayOpenHatForAnchor) {
-            block = anchorElem;
-            while (block.classList && !block.classList.contains('post_container')) {
-                block = block.parentNode;
-            }
-            if (block.classList.contains("close")) {
-                var button = block.querySelector(".hat_button");
-                toggleButton(button, "hat_content");
-            }
+        block = anchorElem;
+        while (block && block.classList && !block.classList.contains('post_container')) {
+            block = block.parentNode;
         }
-    } else {
+        if (block && block.classList && block.classList.contains("close")) {
+            var button = block.querySelector(".hat_button");
+            if (button) toggleButton(button, "hat_content");
+        }
+    } else if (!explicitAnchor && (window.loadAction == BACK_ACTION || window.loadAction == REFRESH_ACTION)) {
         anchorElem = document.documentElement;
     }
-    console.log("ANCHOR " + name);
-    console.log("loadAction " + window.loadAction);
-    console.log("loadScrollY " + window.loadScrollY);
+    logThemeRender("ANCHOR " + name);
+    logThemeRender("loadAction " + window.loadAction);
+    logThemeRender("loadScrollY " + window.loadScrollY);
+    logThemeRender("loadAnchorPostId " + window.loadAnchorPostId);
+    logThemeRender("loadAnchorOffsetTop " + window.loadAnchorOffsetTop);
+    logThemeRender("explicitAnchor " + explicitAnchor);
     if (!explicitAnchor && (window.loadAction == BACK_ACTION || window.loadAction == REFRESH_ACTION)) {
-        setTimeout(function () {
-            window.scrollTo(0, window.loadScrollY);
-        }, 1);
-        nativeEvents.addEventListener(nativeEvents.PAGE, function () {
-            //setTimeout(function () {
+        logThemeRender("BACK/REFRESH branch");
+        // При BACK: если есть anchorPostId — скроллим к посту (устойчиво к изменению высоты контента),
+        // иначе — к сохранённому scrollY.
+        var backAnchorPostId = window.loadAnchorPostId;
+        var hasPreciseBackSnapshot = window.loadAction == BACK_ACTION && (
+            window.loadWasNearBottom ||
+            (backAnchorPostId && backAnchorPostId.length > 0 && window.loadAnchorOffsetTop !== null) ||
+            window.loadScrollRatio !== null
+        );
+        if ((window.loadAction == REFRESH_ACTION && (window.loadWasNearBottom || backAnchorPostId || window.loadScrollRatio !== null || window.loadScrollY > 0)) || hasPreciseBackSnapshot) {
+            restoreThemeRefreshScrollAnchorWithRetries();
+        } else if (backAnchorPostId && backAnchorPostId.length > 0) {
+            var backElem = document.querySelector('[name="entry' + backAnchorPostId + '"]');
+            if (backElem) {
+                scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
+                    backElem.scrollIntoView();
+                });
+            } else {
+                scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
+                    window.scrollTo(0, window.loadScrollY);
+                });
+            }
+        } else {
+            scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
                 window.scrollTo(0, window.loadScrollY);
-            //}, 1);
-        });
+            });
+        }
+    } else if (window.loadAction == END_ACTION && !explicitAnchor) {
+        logThemeRender("END branch");
+        if (window.loadAnchorPostId && window.loadAnchorPostId.length && typeof scrollToEndAnchorOrBottomWithRetries === "function") {
+            scrollToEndAnchorOrBottomWithRetries(window.loadAnchorPostId);
+        } else if (typeof scrollToThemeBottomOnce === "function") {
+            scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
+                scrollToThemeBottomOnce();
+            });
+        }
     } else if (window.loadAction == NORMAL_ACTION || explicitAnchor) {
-        var scrollIntoTarget = resolveThemeScrollIntoTarget(anchorElem);
-        setTimeout(function () {
-            doScroll(anchorElem, scrollIntoTarget);
-        }, 1);
-        nativeEvents.addEventListener(nativeEvents.PAGE, function () {
-                doScroll(anchorElem, scrollIntoTarget);
-        });
+        logThemeRender("NORMAL/EXPLICIT branch");
+        var skipRedundantExplicitScroll = explicitAnchor &&
+            keepScrollGeneration === true &&
+            isThemeAnchorNearViewportTop(name);
+        if (!skipRedundantExplicitScroll) {
+            scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
+                doScroll(anchorElem);
+            });
+        }
+    }
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeScrollGuard", "scrollToElement error " + ex);
+        anchorElem = document.documentElement;
+    } finally {
+        sanitizeThemeInteractiveLayout();
+        scheduleThemeInfiniteScrollBootstrap(80);
+        scheduleVisibleThemePageLayoutChecks();
     }
 }
 
-/** При свёрнутой шапке и выключенной настройке «открытая шапка» — скролл к шапке поста, а не к якорю внутри скрытого тела. */
-function resolveThemeScrollIntoTarget(anchorEl) {
-    if (!anchorEl || typeof PageInfo === 'undefined' || PageInfo.bodyType !== 'topic') {
-        return anchorEl;
+function resolveThemeInitialAnchorName() {
+    if (typeof PageInfo !== "undefined" && PageInfo.elemToScroll && PageInfo.elemToScroll.length) {
+        return PageInfo.elemToScroll;
     }
-    var mayOpenHat = (typeof PageInfo.hatOpenedPref === 'undefined' || PageInfo.hatOpenedPref);
-    if (mayOpenHat) return anchorEl;
-    var pc = anchorEl;
-    while (pc && (!pc.classList || !pc.classList.contains('post_container'))) {
-        pc = pc.parentElement;
+    if (window.loadAnchorPostId && window.loadAnchorPostId.length) {
+        var postId = String(window.loadAnchorPostId).replace(/^entry/i, "");
+        return postId.length ? "entry" + postId : "";
     }
-    if (!pc) return anchorEl;
-    var hat = pc.querySelector('.hat_content');
-    if (!hat || !hat.classList.contains('close')) return anchorEl;
-    var header = pc.querySelector('.post_header');
-    return header || anchorEl;
+    return "";
+}
+
+var unreadInitialAnchorGuardTimer = null;
+
+function armUnreadInitialAnchorScroll(anchorName) {
+    if (!anchorName || !anchorName.length) return;
+    themeInfiniteScroll.unreadInitialAnchor = anchorName;
+    themeInfiniteScroll.unreadInitialAnchorPending = true;
+    themeInfiniteScroll.unreadAnchorGuardStartedAt = Date.now();
+    themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + 3200;
+    suppressThemeInfiniteScrollFor(1800);
+    logThemeRender("armUnreadInitialAnchor anchor=" + anchorName);
+    if (unreadInitialAnchorGuardTimer) {
+        clearTimeout(unreadInitialAnchorGuardTimer);
+    }
+    unreadInitialAnchorGuardTimer = themeRuntimeSetTimeout(function () {
+        unreadInitialAnchorGuardTimer = null;
+        if (!themeInfiniteScroll.unreadInitialAnchorPending) return;
+        logThemeRender("FPDA_THEME_ANCHOR_GUARD anchor_guard_timeout anchor=" + themeInfiniteScroll.unreadInitialAnchor);
+        clearUnreadAnchorHybridGuard("js_guard_timeout");
+    }, 3200);
+}
+
+function clearUnreadAnchorHybridGuard(reason) {
+    if (unreadInitialAnchorGuardTimer) {
+        clearTimeout(unreadInitialAnchorGuardTimer);
+        unreadInitialAnchorGuardTimer = null;
+    }
+    clearUnreadInitialAnchorScroll(reason || "guard_release");
+    window.__themeScrollCommandId = "";
+}
+
+function clearUnreadInitialAnchorScroll(reason) {
+    var wasPending = themeInfiniteScroll.unreadInitialAnchorPending === true;
+    themeInfiniteScroll.unreadInitialAnchorPending = false;
+    themeInfiniteScroll.unreadInitialAnchor = "";
+    themeInfiniteScroll.unreadAnchorGuardStartedAt = 0;
+    if (!wasPending && !reason) return;
+    logThemeRender("clearUnreadInitialAnchor reason=" + (reason || ""));
+    if (reason && String(reason).indexOf("initial_anchor") === 0) {
+        logThemeRender("FPDA_THEME_ANCHOR_GUARD anchor_scroll_settled reason=" + reason);
+    }
+}
+
+function maybeReanchorUnreadInitialAfterTopPrepend() {
+    if (!themeInfiniteScroll.unreadInitialAnchorPending) return;
+    var anchorName = themeInfiniteScroll.unreadInitialAnchor;
+    if (!anchorName || !resolveThemeAnchorElement(anchorName)) return;
+    var scrollGeneration = themeAnchorScrollGeneration;
+    scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
+        if (!themeInfiniteScroll.unreadInitialAnchorPending) return;
+        scrollToElement(anchorName, true);
+    });
 }
 
 /**
  * Повторы после сдвига вёрстки (картинки, шрифты): один вызов scrollToElement часто оставляет верх страницы.
  */
-function scrollToElementWithRetries(name) {
+function scrollToElementWithRetries(name, requireFinalRetry) {
     if (typeof name !== 'string' || !name.length) return;
+    cancelThemeAnchorScrollRetries();
+    themeAnchorRetryPendingName = name;
+    var scrollGeneration = themeAnchorScrollGeneration;
+    var completed = false;
+    var successfulScrolls = 0;
+    var finalDelay = SCROLL_ANCHOR_RETRY_DELAYS_MS[SCROLL_ANCHOR_RETRY_DELAYS_MS.length - 1];
     for (var i = 0; i < SCROLL_ANCHOR_RETRY_DELAYS_MS.length; i++) {
         (function (ms) {
-            setTimeout(function () {
-                scrollToElement(name);
-            }, ms);
+            scheduleThemeScrollAttempt(scrollGeneration, ms, function () {
+                if (completed) return;
+                if (!resolveThemeAnchorElement(name)) {
+                    if (ms === finalDelay) {
+                        logThemeRender("[ThemeScrollDiag] anchorMissing=" + name + " retryFinal=true scrollY=" + (window.pageYOffset || 0));
+                        if (requireFinalRetry) {
+                            completed = true;
+                            themeAnchorRetryPendingName = "";
+                            clearUnreadInitialAnchorScroll("initial_anchor_missing");
+                            maybeCompleteThemeScrollCommand(false, "initial_anchor_missing");
+                        }
+                    }
+                    return;
+                }
+                var nearTarget = isThemeAnchorNearViewportTop(name);
+                if (!(requireFinalRetry && ms !== finalDelay && nearTarget)) {
+                    scrollToElement(name, true);
+                }
+                successfulScrolls++;
+                if (requireFinalRetry && nearTarget && successfulScrolls > 0) {
+                    completed = true;
+                    themeAnchorRetryPendingName = "";
+                    cancelThemeAnchorScrollRetries();
+                    clearUnreadInitialAnchorScroll("initial_anchor_early");
+                    maybeCompleteThemeScrollCommand(true, "initial_anchor");
+                    return;
+                }
+                var shouldComplete = requireFinalRetry
+                    ? ms === finalDelay
+                    : (successfulScrolls >= 2 || ms >= 120);
+                if (shouldComplete) {
+                    completed = true;
+                    themeAnchorRetryPendingName = "";
+                    cancelThemeAnchorScrollRetries();
+                    if (requireFinalRetry) {
+                        clearUnreadInitialAnchorScroll("initial_anchor_final");
+                    }
+                    if (ms === finalDelay) {
+                        maybeCompleteThemeScrollCommand(successfulScrolls > 0, requireFinalRetry ? "initial_anchor" : "");
+                        if (successfulScrolls > 0 && requireFinalRetry) {
+                            scheduleThemeInfiniteScrollBootstrap(80);
+                        }
+                    }
+                }
+            });
         })(SCROLL_ANCHOR_RETRY_DELAYS_MS[i]);
     }
     if (window.__themeScrollAnchorDiag) {
         var maxMs = SCROLL_ANCHOR_RETRY_DELAYS_MS[SCROLL_ANCHOR_RETRY_DELAYS_MS.length - 1];
-        setTimeout(function () {
+        themeRuntimeSetTimeout(function () {
             logScrollAnchorDiag(name);
         }, maxMs + 150);
+    }
+}
+
+function isThemeScrollSettledNearBottom(minScrollY) {
+    var metrics = getThemeScrollMetrics();
+    var threshold = typeof minScrollY === "number" ? minScrollY : END_SCROLL_MIN_Y_THRESHOLD;
+    if (metrics.maxScroll <= 0) return metrics.scrollY >= threshold;
+    return metrics.scrollY >= Math.max(threshold, metrics.maxScroll - Math.max(96, themeInfiniteScroll.threshold / 2));
+}
+
+function scrollToEndAnchorOrBottomWithRetries(postId) {
+    var targetPostId = resolveEndScrollTargetPostId(postId);
+    if (!targetPostId.length) {
+        if (typeof scrollToThemeBottomWithRetries === "function") scrollToThemeBottomWithRetries();
+        return;
+    }
+    themeInfiniteScroll.endScrollPending = true;
+    themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + END_NAV_TOP_SUPPRESS_MS;
+    suppressThemeInfiniteScrollFor(END_NAV_TOP_SUPPRESS_MS);
+    cancelThemeAnchorScrollRetries();
+    var scrollGeneration = themeAnchorScrollGeneration;
+    var completed = false;
+    var finalDelay = SCROLL_ANCHOR_RETRY_DELAYS_MS[SCROLL_ANCHOR_RETRY_DELAYS_MS.length - 1];
+    for (var i = 0; i < SCROLL_ANCHOR_RETRY_DELAYS_MS.length; i++) {
+        (function (ms) {
+            scheduleThemeScrollAttempt(scrollGeneration, ms, function () {
+                if (completed) return;
+                var desiredPostId = resolveEndScrollTargetPostId(targetPostId);
+                if (!desiredPostId.length) {
+                    desiredPostId = getLastRealThemePostIdInDom();
+                }
+                var anchor = desiredPostId.length
+                    ? (findRealThemePostById(desiredPostId) || resolveThemeAnchorElement("entry" + String(desiredPostId).replace(/^entry/i, "")))
+                    : null;
+                if (anchor) {
+                    anchor.scrollIntoView(false);
+                    updateVisibleThemePage();
+                    var scrolledId = anchor.dataset ? String(anchor.dataset.postId || "") : "";
+                    var lastDomId = getLastRealThemePostIdInDom();
+                    var settledOnLastPost = !lastDomId.length || !scrolledId.length || scrolledId === lastDomId;
+                    if (!settledOnLastPost && ms < finalDelay) {
+                        return;
+                    }
+                    if (ms >= 120 && settledOnLastPost && isThemeScrollSettledNearBottom(END_SCROLL_MIN_Y_THRESHOLD)) {
+                        completed = true;
+                        cancelThemeAnchorScrollRetries();
+                        themeInfiniteScroll.endScrollPending = false;
+                        maybeCompleteThemeScrollCommand(true, "end_anchor");
+                        return;
+                    }
+                    if (ms >= finalDelay && settledOnLastPost && !isThemeScrollSettledNearBottom(END_SCROLL_MIN_Y_THRESHOLD)) {
+                        completed = true;
+                        logThemeRender("[ThemeScrollDiag] endAnchorLowY=" + (window.pageYOffset || 0) + " fallback=bottom anchor=" + desiredPostId);
+                        if (typeof scrollToThemeBottomWithRetries === "function") {
+                            scrollToThemeBottomWithRetries();
+                        } else {
+                            window.scrollTo(0, document.documentElement.scrollHeight);
+                            updateVisibleThemePage();
+                            themeInfiniteScroll.endScrollPending = false;
+                            maybeCompleteThemeScrollCommand(true, "end_bottom_fallback");
+                        }
+                    }
+                    return;
+                }
+                if (ms === finalDelay) {
+                    completed = true;
+                    logThemeRender("[ThemeScrollDiag] endAnchorMissing=" + desiredPostId + " fallback=bottom scrollY=" + (window.pageYOffset || 0));
+                    if (typeof scrollToThemeBottomWithRetries === "function") {
+                        scrollToThemeBottomWithRetries();
+                    } else {
+                        window.scrollTo(0, document.documentElement.scrollHeight);
+                        updateVisibleThemePage();
+                        themeInfiniteScroll.endScrollPending = false;
+                        maybeCompleteThemeScrollCommand(true, "end_bottom_fallback");
+                    }
+                }
+            });
+        })(SCROLL_ANCHOR_RETRY_DELAYS_MS[i]);
     }
 }
 
@@ -162,34 +2152,26 @@ function logScrollAnchorDiag(name) {
     try {
         var el = anchorElem;
         if (!el && typeof name === 'string') {
-            var anchorData = /([^-]*)-([\d]*)-(\d+)/g.exec(name);
-            if (anchorData) {
-                anchorData[1] = anchorData[1].toLowerCase();
-                if (anchorData[1] === "spoiler") anchorData[1] = "spoil";
-                if (anchorData[1] === "hide") anchorData[1] = "hidden";
-                el = document.querySelector('[name="entry' + anchorData[2] + '"]');
-                if (el) el = el.querySelectorAll(".post-block." + anchorData[1])[Number(anchorData[3]) - 1];
-            } else {
-                el = document.querySelector('[name="' + name + '"]');
-            }
+            el = resolveThemeAnchorElement(name);
         }
         var top = el ? el.getBoundingClientRect().top : null;
-        console.log("[ThemeScrollDiag] anchor=" + name + " found=" + !!el + " rectTop=" + top + " scrollY=" + (window.pageYOffset || 0));
+        logThemeRender("[ThemeScrollDiag] anchor=" + name + " found=" + !!el + " rectTop=" + top + " scrollY=" + (window.pageYOffset || 0));
     } catch (ex) {
-        console.log("[ThemeScrollDiag] error " + ex);
+        logThemeRuntimeWarning("ThemeScrollDiag", "error " + ex);
     }
 }
 
 function doScroll(tAnchorElem, scrollIntoElem) {
     var toScroll = scrollIntoElem || tAnchorElem;
+    if (!toScroll || typeof toScroll.scrollIntoView !== "function") return;
     try {
         toScroll.focus();
-        var access_anchor = tAnchorElem.querySelector(".accessibility_anchor");
+        var access_anchor = tAnchorElem && tAnchorElem.querySelector ? tAnchorElem.querySelector(".accessibility_anchor") : null;
         if (access_anchor) {
             access_anchor.focus();
         }
     } catch (ex) {
-        console.error(ex);
+        logThemeRuntimeWarning("ThemeScroll", ex);
     }
 
     toScroll.scrollIntoView();
@@ -199,10 +2181,8 @@ function doScroll(tAnchorElem, scrollIntoElem) {
         elemToActivation.classList.remove('active');
 
     var postElem = tAnchorElem;
-    console.log(postElem);
     while (postElem && !postElem.classList.contains("post_container")) {
         postElem = postElem.parentElement;
-        console.log(postElem);
     }
     elemToActivation = postElem;
     if (elemToActivation)
@@ -210,9 +2190,10 @@ function doScroll(tAnchorElem, scrollIntoElem) {
 }
 
 function selectionToQuote() {
+    if (!hasThemePresenter()) return;
     var selObj = window.getSelection();
     if (selObj.rangeCount === 0) {
-        IThemePresenter.toast("Для этого действия необходимо выбрать текст сообщения");
+        themeToast("Для этого действия необходимо выбрать текст сообщения");
         return;
     }
     var range = selObj.getRangeAt(0);
@@ -236,36 +2217,46 @@ function selectionToQuote() {
     }
     // innerText теряет спойлеры/теги — в цитату нужен HTML, Kotlin переведёт в BBCode ([spoiler], [img]).
     var selectedText = div.innerHTML || div.textContent || "";
-    IBase.onActionModeComplete();
+    if (hasBaseBridge() && typeof IBase.onActionModeComplete === "function") {
+        IBase.onActionModeComplete();
+    }
 
     var p = selObj.anchorNode.parentNode;
     while (p.classList && !p.classList.contains('post_container')) {
         p = p.parentNode;
     }
     if (typeof p === "undefined" || typeof p.dataset === "undefined") {
-        IThemePresenter.toast("Для этого действия необходимо выбрать текст сообщения");
+        themeToast("Для этого действия необходимо выбрать текст сообщения");
         return;
     }
     var postId = p.dataset.postId;
     if (selectedText != null && postId != null) {
-        IThemePresenter.quotePost(selectedText.trim(), "" + postId);
+        var displayedDate = getThemePostDisplayedDate(postId);
+        logThemeRender("[ThemeQuote] selection postId=" + postId + " displayDate=" + displayedDate);
+        IThemePresenter.quotePostWithDate(selectedText.trim(), "" + postId, displayedDate, getThemeRenderToken());
     } else {
-        IThemePresenter.toast("Ошибка создания цитаты: [" + selectedText + ", " + postId + "]");
+        themeToast("Ошибка создания цитаты: [" + selectedText + ", " + postId + "]");
         return;
     }
 }
 
 function copySelectedText() {
+    if (!hasThemePresenter()) return;
     var selectedText = window.getSelection().toString();
-    IBase.onActionModeComplete();
+    if (hasBaseBridge() && typeof IBase.onActionModeComplete === "function") {
+        IBase.onActionModeComplete();
+    }
     if (selectedText != null && selectedText) {
         IThemePresenter.copySelectedText(selectedText);
     }
 }
 
 function shareSelectedText() {
+    if (!hasThemePresenter()) return;
     var selectedText = window.getSelection().toString();
-    IBase.onActionModeComplete();
+    if (hasBaseBridge() && typeof IBase.onActionModeComplete === "function") {
+        IBase.onActionModeComplete();
+    }
     if (selectedText != null && selectedText) {
         IThemePresenter.shareSelectedText(selectedText);
     }
@@ -273,13 +2264,14 @@ function shareSelectedText() {
 
 
 function selectAllPostText() {
+    if (!hasThemePresenter()) return;
     var selObj = window.getSelection();
     var p = selObj.anchorNode.parentNode;
     while (p.classList && !p.classList.contains('post_body')) {
         p = p.parentNode;
     }
     if (typeof p.classList === "undefined" || !p.classList.contains('post_body')) {
-        IThemePresenter.toast("Для этого действия необходимо выбрать текст сообщения");
+        themeToast("Для этого действия необходимо выбрать текст сообщения");
         return;
     }
     var rng, sel;
@@ -296,167 +2288,1036 @@ function selectAllPostText() {
     }
 }
 
-function ScrollCorrector() {
-    console.log("Scroll Corrector initialized");
-    var postElements = document.querySelectorAll(".post_container");
-    var visibleElements = [];
-    var visibleElement = anchorElem;
-    var lastPosition = 0;
-    var frames = 60 * 1;
-    var frame = 0;
-    var observerId = 0;
-
-    for (var i = 0; i < postElements.length; i++) {
-        postElements[i].addEventListener("mousedown", downEvent);
-        postElements[i].addEventListener("touchdown", downEvent);
-    }
-
-    function downEvent(e) {
-
-        var elem = e.target;
-        while (!elem.classList.contains("post_container")) {
-            elem = elem.parentElement;
-        }
-        visibleElement = elem;
-        updateLastPosition();
-    }
-
-    this.startObserver = function () {
-        startObserver();
-    }
-
-    window.addEventListener("scroll", function () {
-        setVisible();
-        updateLastPosition();
-        frame = 0;
-    });
-
-    function updateLastPosition() {
-        lastPosition = getCoordinates(visibleElement).top;
-        //console.log("Update LastPosition: " + lastPosition);
-    }
-
-    function tryScroll() {
-
-        var delta = getCoordinates(visibleElement).top - lastPosition;
-        if (delta == 0)
-            return;
-        /*for (var i = 0; i < visibleElements.length; i++) {
-            var elem = visibleElements[i];
-            console.log("Elem [" + i + "]: " + getCoordinates(elem).top);
-        }*/
-        console.log("Scroll by delta: " + delta + ", lastPosition: " + lastPosition + ", visElemTop: " + getCoordinates(visibleElement).top);
-        window.scrollBy(0, delta);
-        updateLastPosition();
-        frame = 0;
-    }
-
-    function startObserver() {
-        if (observerId == 1) {
-            return;
-        }
-        setVisible();
-        console.log("Start Scroll Observer");
-
-        function observerLoop() {
-            tryScroll();
-            if (frame < frames) {
-                requestAnimationFrame(observerLoop);
-                frame++;
-            } else {
-                cancelAnimationFrame(observerLoop);
-                observerId = 0;
-                frame = 0;
-                console.log("Stop Scroll Observer");
-            }
-        }
-        observerId = 1;
-        observerLoop();
-    }
-
-    /*function setVisible(newVisible){
-        if (visibleElement) {
-            visibleElement.style.opacity = 1;
-        }
-        visibleElement = newVisible;
-        visibleElement.style.opacity = 0.5;
-    }*/
-
-    function setVisible() {
-        return;
-        visibleElements = getVisiblePosts();
-        if (visibleElement) {
-            visibleElement.style.opacity = 1;
-        }
-        /*if (visibleElements.length > 0) {
-            visibleElement = getNearest(visibleElements);
-        }*/
-        visibleElement = getNearest(visibleElements);
-        visibleElement.style.opacity = 0.5;
-    }
-
-    function getVisiblePosts() {
-        var scrollTop = getScrollTop();
-        var windowHeight = document.documentElement.clientHeight;
-        if (!visibleElement)
-            visibleElements = [];
-        visibleElements.length = 0;
-        for (var i = 0; i < postElements.length; i++) {
-            var el = postElements[i];
-            if (el.offsetHeight + el.offsetTop < scrollTop || el.offsetTop > scrollTop + windowHeight)
-                continue;
-            visibleElements.push(el);
-        }
-        return visibleElements;
-    }
-
-    function getNearest(visibleElements) {
-        var scrollTop = getScrollTop();
-        var windowHeight = document.documentElement.clientHeight;
-        var nearest = visibleElements[0];
-        var deltaHeight = windowHeight;
-        var delta = 0;
-        for (var i = 0; i < visibleElements.length; i++) {
-            var el = visibleElements[i];
-            var bottomY = Math.abs(el.offsetTop + el.offsetHeight - scrollTop - windowHeight);
-            if (deltaHeight - bottomY < delta) {
-                break;
-            }
-            delta = deltaHeight - bottomY;
-            deltaHeight = bottomY;
-            nearest = el;
-        }
-        return nearest;
-    }
-}
-
-function initScrollCorrector() {
-    corrector = new ScrollCorrector();
-}
-
 function transformAnchor() {
+    bumpThemeLayoutSanitizeToken();
     var anchors = [];
     var links = document.querySelectorAll(".post_container .post_body a[name][title]");
     for (var i = 0; i < links.length; i++) {
-        if (links[i].innerHTML === "ˇ") {
+        if (links[i].innerHTML === "ˇ" && links[i].dataset.themeAnchorBound !== "true") {
             anchors.push(links[i]);
         }
     }
 
     for (var i = 0; i < anchors.length; i++) {
         var item = anchors[i];
+        item.dataset.themeAnchorBound = "true";
         item.classList.add("anchor");
         item.innerHTML = "";
         item.addEventListener("click", function (event) {
+            if (!isThemeRuntimeAlive()) return;
             var t = event.target;
             while (!t.classList.contains('post_container')) {
                 t = t.parentElement;
             }
-            IThemePresenter.anchorDialog(t.dataset.postId, event.target.name);
+            if (hasThemePresenter() && typeof IThemePresenter.anchorDialog === "function") {
+                IThemePresenter.anchorDialog(t.dataset.postId, event.target.name);
+            }
         });
     }
 }
 
+function getForumBlacklistSingleLabel() {
+    if (typeof PageInfo !== "undefined" &&
+        PageInfo.forumBlacklist &&
+        PageInfo.forumBlacklist.single) {
+        return PageInfo.forumBlacklist.single;
+    }
+    return "Сообщение скрыто";
+}
+
+function getBlacklistedRevealedBucket() {
+    var topicId = typeof PageInfo !== "undefined" && PageInfo.topicId ? String(PageInfo.topicId) : "0";
+    var token = getThemeRenderToken() || "default";
+    var key = topicId + ":" + token;
+    if (!window.__blacklistedRevealedByTopic) {
+        window.__blacklistedRevealedByTopic = {};
+    }
+    if (!window.__blacklistedRevealedByTopic[key]) {
+        window.__blacklistedRevealedByTopic[key] = {};
+    }
+    return window.__blacklistedRevealedByTopic[key];
+}
+
+function updateBlacklistedPlaceholder(post, label) {
+    var placeholder = post.querySelector(".blacklisted_post_placeholder");
+    if (!placeholder) return;
+    var text = placeholder.querySelector(".blacklisted_post_placeholder_text");
+    if (text) {
+        text.textContent = label;
+    } else {
+        placeholder.textContent = label;
+    }
+    placeholder.hidden = false;
+    placeholder.setAttribute("aria-hidden", "false");
+    placeholder.setAttribute("aria-expanded", "false");
+}
+
+function prepareBlacklistedPostStub(post) {
+    post.classList.remove("blacklisted_post_group_leader", "blacklisted_post_group_member");
+    post.removeAttribute("data-blacklist-group");
+    updateBlacklistedPlaceholder(post, getForumBlacklistSingleLabel());
+}
+
+function prepareBlacklistedPostStubs(root) {
+    if (!isThemeRuntimeAlive()) return;
+    var posts = (root || document).querySelectorAll(".post_container.blacklisted_post:not(.revealed)");
+    for (var i = 0; i < posts.length; i++) {
+        prepareBlacklistedPostStub(posts[i]);
+    }
+}
+
+function rememberBlacklistedPostRevealed(postId) {
+    if (!postId) return;
+    getBlacklistedRevealedBucket()[String(postId)] = true;
+}
+
+function revealBlacklistedPost(container) {
+    if (!container || container.classList.contains("revealed")) return;
+    container.classList.add("revealed");
+    container.classList.remove("blacklisted_post_group_leader", "blacklisted_post_group_member");
+    var content = container.querySelector(".blacklisted_post_content");
+    var placeholder = container.querySelector(".blacklisted_post_placeholder");
+    if (content) {
+        content.hidden = false;
+        content.setAttribute("aria-hidden", "false");
+    }
+    if (placeholder) {
+        placeholder.hidden = true;
+        placeholder.setAttribute("aria-hidden", "true");
+        placeholder.setAttribute("aria-expanded", "true");
+    }
+    rememberBlacklistedPostRevealed(container.dataset.postId);
+}
+
+function restoreRevealedBlacklistedPosts(root) {
+    var bucket = getBlacklistedRevealedBucket();
+    var posts = (root || document).querySelectorAll(".post_container.blacklisted_post");
+    for (var i = 0; i < posts.length; i++) {
+        var postId = posts[i].dataset ? posts[i].dataset.postId : "";
+        if (postId && bucket[postId]) {
+            revealBlacklistedPost(posts[i]);
+        }
+    }
+}
+
+function findBlacklistedPostContainer(postId, triggerEl) {
+    var normalizedId = String(postId || "");
+    if (!normalizedId) return null;
+    if (triggerEl) {
+        var node = triggerEl.nodeType === 1 ? triggerEl : null;
+        while (node && node !== document) {
+            if (node.classList &&
+                node.classList.contains("post_container") &&
+                node.classList.contains("blacklisted_post") &&
+                String(node.dataset ? node.dataset.postId || "" : "") === normalizedId) {
+                return node;
+            }
+            node = node.parentElement;
+        }
+    }
+    var selector = '.post_container.blacklisted_post[data-post-id="' + normalizedId.replace(/"/g, '\\"') + '"]';
+    return document.querySelector(selector);
+}
+
+function resolveThemePostsListRoot(root) {
+    if (root && root.querySelectorAll) {
+        if (root.classList && root.classList.contains("posts_list")) {
+            return root;
+        }
+        var nestedList = root.querySelector(".posts_list");
+        if (nestedList) return nestedList;
+    }
+    return document.querySelector(".posts_list");
+}
+
+function dedupeThemePostContainers(root) {
+    var list = resolveThemePostsListRoot(root);
+    if (!list || !list.querySelectorAll) return;
+    var posts = list.querySelectorAll(
+        ".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)"
+    );
+    var postList = Array.prototype.slice.call(posts);
+    var seen = {};
+    for (var i = 0; i < postList.length; i++) {
+        var post = postList[i];
+        var postId = post.dataset ? String(post.dataset.postId || "") : "";
+        if (!postId) continue;
+        if (seen[postId]) {
+            if (post.parentNode) post.parentNode.removeChild(post);
+        } else {
+            seen[postId] = true;
+        }
+    }
+}
+
+function dedupeBlacklistedPostStubs(root) {
+    dedupeThemePostContainers(root);
+}
+
+function initBlacklistedPosts(root) {
+    if (!isThemeRuntimeAlive()) return;
+    dedupeBlacklistedPostStubs(root);
+    prepareBlacklistedPostStubs(root);
+    restoreRevealedBlacklistedPosts(root);
+}
+
+function toggleBlacklistedPost(postId, triggerEl) {
+    if (!postId) return false;
+    var container = findBlacklistedPostContainer(postId, triggerEl);
+    if (!container || container.classList.contains("revealed")) return false;
+    revealBlacklistedPost(container);
+    if (typeof refreshThemeDynamicPostBlocks === "function") {
+        refreshThemeDynamicPostBlocks(container);
+    }
+    return false;
+}
+
 nativeEvents.addEventListener(nativeEvents.DOM, transformAnchor);
-nativeEvents.addEventListener(nativeEvents.DOM, initScrollCorrector);
-nativeEvents.addEventListener(nativeEvents.DOM, scrollToElement);
+nativeEvents.addEventListener(nativeEvents.DOM, bindThemeLinkSourceAnchorEvents);
+nativeEvents.addEventListener(nativeEvents.DOM, function () {
+    initBlacklistedPosts(document);
+});
+nativeEvents.addEventListener(nativeEvents.DOM, function () {
+    if (!isThemeRuntimeAlive()) return;
+    if (window.loadAction == REFRESH_ACTION) {
+        logRefreshScroll("skip legacy scrollToElement during refresh id=" + window.refreshRestoreId + " source=" + window.refreshRestoreSource + " savedY=" + window.loadScrollY);
+        return;
+    }
+    if (window.loadAction == END_ACTION) {
+        if (typeof scrollToThemeBottomWithRetries === "function") {
+            scrollToThemeBottomWithRetries(5);
+        } else if (window.loadAnchorPostId && window.loadAnchorPostId.length && typeof scrollToEndAnchorOrBottomWithRetries === "function") {
+            scrollToEndAnchorOrBottomWithRetries(window.loadAnchorPostId);
+        } else {
+            window.scrollTo(0, document.documentElement.scrollHeight);
+            maybeCompleteThemeScrollCommand(true, "end_dom_bottom");
+        }
+        return;
+    }
+    if (window.loadAction == NORMAL_ACTION) {
+        if (window.__themeScrollCommandId || themeInfiniteScroll.unreadInitialAnchorPending) {
+            return;
+        }
+        var domInitialAnchor = resolveThemeInitialAnchorName();
+        if (domInitialAnchor && typeof scrollToElementWithRetries === "function") {
+            if (themeAnchorRetryPendingName === domInitialAnchor || isThemeAnchorNearViewportTop(domInitialAnchor)) {
+                logThemeRender("skip duplicate dom initial anchor " + domInitialAnchor);
+                return;
+            }
+            scrollToElementWithRetries(domInitialAnchor, true);
+        }
+        return;
+    }
+    scrollToElement();
+});
+nativeEvents.addEventListener(nativeEvents.DOM, initThemeInfiniteScroll);
+
+/**
+ * Возвращает dataset.postId первого видимого на экране поста.
+ * Используется при сохранении позиции скролла для точного возврата назад.
+ */
+function findFirstVisiblePostId() {
+    var windowHeight = document.documentElement.clientHeight;
+    var posts = document.querySelectorAll(".post_container[data-post-id]");
+    for (var i = 0; i < posts.length; i++) {
+        var el = posts[i];
+        if (!isRealThemePost(el)) continue;
+        var top = el.getBoundingClientRect().top;
+        var bottom = top + el.offsetHeight;
+        if (bottom > 0 && top < windowHeight) {
+            return el.dataset.postId || "";
+        }
+    }
+    return "";
+}
+
+function isThemeHybridScrollEnabled() {
+    return typeof PageInfo !== "undefined" && PageInfo.hybridScroll !== false && PageInfo.scrollMode !== "classic";
+}
+
+function initThemeInfiniteScroll() {
+    if (!isThemeRuntimeAlive()) return;
+    sanitizeThemeInteractiveLayout();
+    if (!isThemeHybridScrollEnabled()) {
+        window.removeEventListener("scroll", onThemeInfiniteScroll);
+        clearThemeInfiniteScrollBootstrapTimers();
+        return;
+    }
+    normalizeThemePageSeparators();
+    updateVisibleThemePage();
+    window.removeEventListener("scroll", onThemeInfiniteScroll);
+    window.addEventListener("scroll", onThemeInfiniteScroll, {passive: true});
+    if (!themeInfiniteScroll.userScrolled) {
+        // Keep the longer End-navigation guard from setLoadAction(); shortening it to 1400ms lets
+        // bootstrap+1450 fire requestInitialTop before scrollToEndAnchorOrBottomWithRetries lands.
+        // Read-topic soft anchor (hasUnreadTarget=false) must not arm the 3200ms top gate — it
+        // blocked manual scroll-up on device after getlastpost/getnewpost on a read row (log 665).
+        if (window.loadAnchorUnreadTarget === true && window.loadAnchorPostId && window.loadAnchorPostId.length) {
+            themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Math.max(
+                themeInfiniteScroll.initialTopAutoloadSuppressedUntil || 0,
+                Date.now() + 3200
+            );
+        } else if (window.loadAnchorUnreadTarget === true &&
+            typeof PageInfo !== "undefined" && PageInfo.elemToScroll && PageInfo.elemToScroll.length) {
+            themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Math.max(
+                themeInfiniteScroll.initialTopAutoloadSuppressedUntil || 0,
+                Date.now() + 3200
+            );
+        } else if (window.loadAction == END_ACTION || themeInfiniteScroll.endScrollPending) {
+            themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Math.max(
+                themeInfiniteScroll.initialTopAutoloadSuppressedUntil || 0,
+                Date.now() + END_NAV_TOP_SUPPRESS_MS
+            );
+        } else {
+            themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + 1400;
+        }
+    }
+    if (window.refreshRestoreId) {
+        suppressThemeInfiniteScrollFor(window.refreshRestoreMode === "BOTTOM" ? 2600 : 1800);
+        themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + 2600;
+        logRefreshScroll("suppress hybrid bootstrap id=" + window.refreshRestoreId + " source=" + window.refreshRestoreSource + " mode=" + window.refreshRestoreMode);
+    }
+    logThemeRender("initInfinite " + describeThemeRenderDom("init") + " suppressTopUntil=" + themeInfiniteScroll.initialTopAutoloadSuppressedUntil + " ambiguousAllRead=" + (window.loadAmbiguousAllReadBottom === true));
+    if (isUnreadAnchorHybridBlocked()) {
+        logAnchorGuardBlocked("bootstrap", "awaiting_anchor");
+        return;
+    }
+    if (window.loadAmbiguousAllReadBottom === true) {
+        logThemeRender("initInfinite skipBootstrap ambiguousAllRead");
+        return;
+    }
+    scheduleThemeInfiniteScrollBootstrap(0);
+    scheduleThemeInfiniteScrollBootstrap(180);
+    scheduleThemeInfiniteScrollBootstrap(600);
+    scheduleThemeInfiniteScrollBootstrap(1450);
+}
+
+function onThemeInfiniteScroll() {
+    if (!isThemeRuntimeAlive()) return;
+    if (!isThemeHybridScrollEnabled()) return;
+    if (!window.__themeScrollCommandId && !themeInfiniteScroll.unreadInitialAnchorPending) {
+        themeInfiniteScroll.userScrolled = true;
+    }
+    if (themeInfiniteScroll.scrollRafPending) return;
+    themeInfiniteScroll.scrollRafPending = true;
+    themeRuntimeRequestAnimationFrame(runThemeInfiniteScrollCheck);
+}
+
+function runThemeInfiniteScrollCheck() {
+    themeInfiniteScroll.scrollRafPending = false;
+    if (!isThemeRuntimeAlive()) return;
+    if (!isThemeHybridScrollEnabled()) return;
+    scheduleVisibleThemePageUpdate();
+    var scrollTop = getScrollTop();
+    var viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+    var height = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0);
+    var bounds = getThemeLoadedPageBounds();
+    // Exclude the bottom chrome spacer (message-panel padding) from the underfill check: a short last
+    // page that lands at the bottom must still be detected as underfilled even when the spacer inflates
+    // the document height, otherwise the upward "load previous" trigger never arms on first open.
+    var bottomSpacer = typeof getThemeBottomSpacerHeight === "function" ? getThemeBottomSpacerHeight() : 0;
+    var contentMaxScroll = Math.max(0, height - viewport - bottomSpacer);
+    var isUnderfilledInitialPage = bounds.hasPrevious &&
+        scrollTop <= themeInfiniteScroll.threshold &&
+        contentMaxScroll <= Math.max(24, themeInfiniteScroll.threshold);
+    // The generic suppression window is set by programmatic bottom scrolls (END / jump-to-bottom) to keep
+    // the BOTTOM trigger from immediately re-firing. It must NOT gate the upward trigger, which has its own
+    // guard (initialTopAutoloadSuppressedUntil): otherwise opening a topic that lands on the last page keeps
+    // re-extending suppressUntil via the bottom-scroll retries and leaves previous pages unreachable until
+    // the topic is reopened.
+    var bottomSuppressed = Date.now() < themeInfiniteScroll.suppressUntil && !isUnderfilledInitialPage;
+    var hasInitialAnchorTarget = (window.loadAnchorPostId && window.loadAnchorPostId.length) ||
+        (typeof PageInfo !== "undefined" && PageInfo.elemToScroll && PageInfo.elemToScroll.length);
+    var anchorHybridBlocked = isUnreadAnchorHybridBlocked();
+    var suppressInitialTop = !themeInfiniteScroll.userScrolled && (
+        window.loadAmbiguousAllReadBottom === true ||
+        anchorHybridBlocked ||
+        themeInfiniteScroll.unreadInitialAnchorPending ||
+        (hasInitialAnchorTarget &&
+            Date.now() < themeInfiniteScroll.initialTopAutoloadSuppressedUntil &&
+            scrollTop <= themeInfiniteScroll.threshold &&
+            !isUnderfilledInitialPage) ||
+        (window.loadAnchorUnreadTarget === true &&
+            hasInitialAnchorTarget &&
+            Date.now() < themeInfiniteScroll.initialTopAutoloadSuppressedUntil) ||
+        (Date.now() < themeInfiniteScroll.initialTopAutoloadSuppressedUntil &&
+            scrollTop <= themeInfiniteScroll.threshold &&
+            !isUnderfilledInitialPage &&
+            window.loadAnchorUnreadTarget === true)
+    );
+    var suppressInitialBottom = anchorHybridBlocked || themeInfiniteScroll.unreadInitialAnchorPending;
+    var blockTopForEndNavigation = isThemeEndNavigationActive();
+    if (bounds.hasPrevious && scrollTop <= themeInfiniteScroll.threshold && !themeInfiniteScroll.loadingTop && !suppressInitialTop && !blockTopForEndNavigation) {
+        logThemeRender("requestInitialTop direction=top underfilled=" + isUnderfilledInitialPage + " " + describeThemeRenderDom("beforeTopRequest") + " loaded=" + bounds.minPage + ".." + bounds.maxPage + "/" + bounds.allPages);
+        themeInfiniteScroll.loadingTop = true;
+        if (hasThemePresenter() && typeof IThemePresenter.infiniteScroll === "function") {
+            IThemePresenter.infiniteScroll("top");
+        }
+    } else if (anchorHybridBlocked && bounds.hasPrevious && scrollTop <= themeInfiniteScroll.threshold) {
+        logAnchorGuardBlocked("top", "awaiting_anchor");
+    }
+    if (!bottomSuppressed && !suppressInitialBottom && bounds.hasNext && (height - (scrollTop + viewport)) <= themeInfiniteScroll.threshold && !themeInfiniteScroll.loadingBottom) {
+        logThemeRender("requestBottom " + describeThemeRenderDom("beforeBottomRequest") + " loaded=" + bounds.minPage + ".." + bounds.maxPage + "/" + bounds.allPages);
+        themeInfiniteScroll.loadingBottom = true;
+        if (hasThemePresenter() && typeof IThemePresenter.infiniteScroll === "function") {
+            IThemePresenter.infiniteScroll("bottom");
+        }
+    } else if (anchorHybridBlocked && bounds.hasNext && (height - (scrollTop + viewport)) <= themeInfiniteScroll.threshold) {
+        logAnchorGuardBlocked("bottom", "awaiting_anchor");
+    }
+}
+
+function scheduleThemeInfiniteScrollBootstrap(delayMs) {
+    if (!isThemeRuntimeAlive()) return;
+    if (window.loadAmbiguousAllReadBottom === true && !themeInfiniteScroll.userScrolled) {
+        logThemeRender("bootstrap skip ambiguousAllRead delay=" + (delayMs || 0));
+        return;
+    }
+    if (isUnreadAnchorHybridBlocked()) {
+        logAnchorGuardBlocked("bootstrap", "awaiting_anchor");
+        return;
+    }
+    var timer = themeRuntimeSetTimeout(function () {
+        removeThemeInfiniteScrollBootstrapTimer(timer);
+        if (!isThemeHybridScrollEnabled()) return;
+        if (isUnreadAnchorHybridBlocked()) {
+            logAnchorGuardBlocked("bootstrap", "awaiting_anchor");
+            return;
+        }
+        logThemeRender("bootstrap+" + (delayMs || 0) + " " + describeThemeRenderDom("bootstrap"));
+        onThemeInfiniteScroll();
+    }, delayMs || 0);
+    themeInfiniteScroll.bootstrapTimers.push(timer);
+}
+
+function removeThemeInfiniteScrollBootstrapTimer(timer) {
+    var timers = themeInfiniteScroll.bootstrapTimers;
+    for (var i = timers.length - 1; i >= 0; i--) {
+        if (timers[i] === timer) {
+            timers.splice(i, 1);
+            return;
+        }
+    }
+}
+
+function clearThemeInfiniteScrollBootstrapTimers() {
+    var timers = themeInfiniteScroll.bootstrapTimers;
+    while (timers.length) {
+        var timer = timers.pop();
+        clearTimeout(timer);
+        removeThemeRuntimeTimer(timer);
+    }
+}
+
+function getThemeLoadedPageBounds() {
+    var containers = document.querySelectorAll(".theme_page_container[data-page-number]");
+    var minPage = typeof PageInfo !== "undefined" ? Number(PageInfo.currentPage) || 1 : 1;
+    var maxPage = minPage;
+    for (var i = 0; i < containers.length; i++) {
+        var page = parseInt(containers[i].dataset ? containers[i].dataset.pageNumber : "", 10);
+        if (isNaN(page)) continue;
+        minPage = Math.min(minPage, page);
+        maxPage = Math.max(maxPage, page);
+    }
+    var allPages = typeof PageInfo !== "undefined" ? Number(PageInfo.allPagesCount) || maxPage : maxPage;
+    return {
+        minPage: minPage,
+        maxPage: maxPage,
+        hasPrevious: minPage > 1,
+        hasNext: maxPage < allPages,
+        allPages: allPages
+    };
+}
+
+function describeThemeRenderDom(reason) {
+    if (!isThemeRenderDebugEnabled()) return "";
+    var doc = document.documentElement || {};
+    var body = document.body || {};
+    var scrollY = getScrollTop();
+    var clientHeight = window.innerHeight || doc.clientHeight || 0;
+    var scrollHeight = Math.max(doc.scrollHeight || 0, body.scrollHeight || 0);
+    var containers = document.querySelectorAll(".theme_page_container[data-page-number]").length;
+    var posts = document.querySelectorAll(".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)").length;
+    var separators = document.querySelectorAll(".theme_page_separator[data-page-number]").length;
+    var bounds = getThemeLoadedPageBounds();
+    return "reason=" + reason +
+        " y=" + scrollY +
+        " max=" + Math.max(0, scrollHeight - clientHeight) +
+        " scrollHeight=" + scrollHeight +
+        " viewport=" + clientHeight +
+        " containers=" + containers +
+        " posts=" + posts +
+        " separators=" + separators +
+        " loaded=" + bounds.minPage + ".." + bounds.maxPage + "/" + bounds.allPages;
+}
+
+function scheduleVisibleThemePageUpdate() {
+    if (!themeInfiniteScroll.visiblePageRafPending) {
+        themeInfiniteScroll.visiblePageRafPending = true;
+        themeRuntimeRequestAnimationFrame(function () {
+            themeInfiniteScroll.visiblePageRafPending = false;
+            updateVisibleThemePage();
+        });
+    }
+    if (themeInfiniteScroll.visiblePageThrottleTimer) {
+        clearTimeout(themeInfiniteScroll.visiblePageThrottleTimer);
+    }
+    themeInfiniteScroll.visiblePageThrottleTimer = themeRuntimeSetTimeout(function () {
+        themeInfiniteScroll.visiblePageThrottleTimer = null;
+        updateVisibleThemePage();
+    }, 140);
+}
+
+function scheduleVisibleThemePageLayoutChecks() {
+    var delays = [0, 80, 240, 600];
+    for (var i = 0; i < delays.length; i++) {
+        (function (delay) {
+            themeRuntimeSetTimeout(function () {
+                themeRuntimeRequestAnimationFrame(updateVisibleThemePage);
+            }, delay);
+        })(delays[i]);
+    }
+}
+
+function isThemePageSyncDebugEnabled() {
+    return window.__themePageSyncDebug === true ||
+        (typeof PageInfo !== "undefined" && PageInfo.debug === true);
+}
+
+function logThemePageSync(method, page, metrics, detail) {
+    if (!isThemePageSyncDebugEnabled()) return;
+    var y = metrics ? metrics.scrollY : getScrollTop();
+    console.log("[ThemePageSync] method=" + method + " page=" + page + " scrollY=" + y + (detail ? " " + detail : ""));
+}
+
+function emitVisibleThemePage(page, method, metrics, detail) {
+    if (!page) return;
+    logThemePageSync(method || "unknown", page, metrics, detail);
+    if (page === themeInfiniteScroll.lastVisiblePage) return;
+    themeInfiniteScroll.lastVisiblePage = page;
+    if (typeof PageInfo !== "undefined") {
+        PageInfo.currentPage = page;
+    }
+    if (hasThemePresenter() && typeof IThemePresenter.visiblePageChanged === "function") {
+        IThemePresenter.visiblePageChanged(String(page));
+    }
+}
+
+function updateVisibleThemePage() {
+    var containers = document.querySelectorAll(".theme_page_container[data-page-number]");
+    if (!containers || containers.length === 0) return;
+    var metrics = getThemeScrollMetrics();
+    var viewportHeight = metrics.clientHeight || window.innerHeight || document.documentElement.clientHeight || 0;
+    var activationOffset = Math.max(1, Math.min(48, Math.round(viewportHeight * 0.06)));
+    var activationY = metrics.scrollY + activationOffset;
+    var viewportBottomY = metrics.scrollY + viewportHeight;
+    var separators = document.querySelectorAll(".theme_page_separator[data-page-number]");
+    var visibleSeparator = null;
+    var visibleSeparatorTop = Number.MAX_VALUE;
+    var passedSeparator = null;
+    var passedSeparatorTop = -Number.MAX_VALUE;
+    var separatorTops = [];
+    for (var s = 0; s < separators.length; s++) {
+        var separator = separators[s];
+        var separatorTop = getThemeElementDocumentTop(separator, metrics);
+        separatorTops[s] = separatorTop;
+        var separatorHeight = separator.offsetHeight || separator.getBoundingClientRect().height || 0;
+        var separatorBottom = separatorTop + separatorHeight;
+        if (separatorBottom > metrics.scrollY && separatorTop < viewportBottomY && separatorTop < visibleSeparatorTop) {
+            visibleSeparatorTop = separatorTop;
+            visibleSeparator = separator;
+        }
+        if (separatorTop <= activationY && separatorTop >= passedSeparatorTop) {
+            passedSeparatorTop = separatorTop;
+            passedSeparator = separator;
+        }
+    }
+
+    var separatorSignal = visibleSeparator || passedSeparator;
+    if (separatorSignal && separatorSignal.dataset) {
+        var markerPage = parseThemePageNumber(separatorSignal.dataset.pageNumber);
+        if (markerPage) {
+            var method = visibleSeparator ? "separator-visible" : "separator";
+            var markerTop = visibleSeparator ? visibleSeparatorTop : passedSeparatorTop;
+            emitVisibleThemePage(markerPage, method, metrics, "activationY=" + activationY + " separatorTop=" + markerTop);
+            return;
+        }
+    }
+
+    var posts = document.querySelectorAll(".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)");
+    var bestPost = null;
+    var bestPostScore = Number.MAX_VALUE;
+    for (var p = 0; p < posts.length; p++) {
+        var post = posts[p];
+        var postTop = getThemeElementDocumentTop(post, metrics);
+        var postBottom = postTop + (post.offsetHeight || post.getBoundingClientRect().height || 0);
+        if (postBottom <= metrics.scrollY || postTop >= viewportBottomY) continue;
+        var clampedPostTop = Math.max(metrics.scrollY, postTop);
+        var score = Math.abs(clampedPostTop - activationY);
+        if (postTop <= activationY && postBottom > activationY) {
+            bestPost = post;
+            bestPostScore = -1;
+            break;
+        }
+        if (score < bestPostScore) {
+            bestPostScore = score;
+            bestPost = post;
+        }
+    }
+    if (bestPost) {
+        var postPage = getThemePageNumberForElement(bestPost, separators, metrics, separatorTops);
+        if (postPage) {
+            emitVisibleThemePage(postPage, "post", metrics, "activationY=" + activationY);
+            return;
+        }
+    }
+
+    var bestContainer = null;
+    var bestContainerScore = Number.MAX_VALUE;
+    for (var i = 0; i < containers.length; i++) {
+        var container = containers[i];
+        var top = getThemeElementDocumentTop(container, metrics);
+        var bottom = top + (container.offsetHeight || container.getBoundingClientRect().height || 0);
+        var intersectsReadingLine = top <= activationY && bottom > activationY;
+        var containerScore = intersectsReadingLine ? 0 : Math.min(Math.abs(top - activationY), Math.abs(bottom - activationY));
+        if (intersectsReadingLine) {
+            bestContainer = container;
+            break;
+        }
+        if (containerScore < bestContainerScore) {
+            bestContainerScore = containerScore;
+            bestContainer = container;
+        }
+    }
+    if (!bestContainer || !bestContainer.dataset) return;
+    var page = parseThemePageNumber(bestContainer.dataset.pageNumber);
+    emitVisibleThemePage(page, "container", metrics, "activationY=" + activationY);
+}
+
+function parseThemePageNumber(value) {
+    var page = parseInt(value, 10);
+    return isNaN(page) ? null : page;
+}
+
+function getThemeElementDocumentTop(element, metrics) {
+    var rect = element.getBoundingClientRect();
+    return (metrics ? metrics.scrollY : getScrollTop()) + rect.top;
+}
+
+function getThemePageNumberForElement(element, separators, metrics, separatorTops) {
+    var node = element;
+    while (node && node !== document) {
+        if (node.classList && node.classList.contains("theme_page_container") && node.dataset) {
+            var page = parseThemePageNumber(node.dataset.pageNumber);
+            if (page) return page;
+        }
+        node = node.parentElement;
+    }
+    var elementTop = getThemeElementDocumentTop(element, metrics);
+    var pageFromSeparator = null;
+    var separatorTop = -Number.MAX_VALUE;
+    for (var i = 0; i < separators.length; i++) {
+        var separator = separators[i];
+        var top = separatorTops && typeof separatorTops[i] === "number" ? separatorTops[i] : getThemeElementDocumentTop(separator, metrics);
+        if (top <= elementTop && top >= separatorTop && separator.dataset) {
+            var separatorPage = parseThemePageNumber(separator.dataset.pageNumber);
+            if (separatorPage) {
+                separatorTop = top;
+                pageFromSeparator = separatorPage;
+            }
+        }
+    }
+    return pageFromSeparator;
+}
+
+function normalizeThemePageSeparators() {
+    var list = document.querySelector(".posts_list");
+    if (!list) return;
+
+    var existingSeparators = list.querySelectorAll(".theme_page_separator");
+    for (var i = 0; i < existingSeparators.length; i++) {
+        existingSeparators[i].parentNode.removeChild(existingSeparators[i]);
+    }
+
+    var containers = list.querySelectorAll(".theme_page_container[data-page-number]");
+    for (var j = 1; j < containers.length; j++) {
+        var pageNumber = containers[j].dataset ? containers[j].dataset.pageNumber : "";
+        if (!pageNumber) continue;
+
+        var separator = document.createElement("div");
+        separator.className = "theme_page_separator";
+        separator.id = "theme_page_" + pageNumber;
+        separator.setAttribute("data-page-number", pageNumber);
+        separator.textContent = "Страница " + pageNumber;
+        list.insertBefore(separator, containers[j]);
+    }
+    initBlacklistedPosts(document);
+}
+
+function refreshThemeDynamicPostBlocks(root) {
+    if (typeof transformSnapbacks === "function") transformSnapbacks();
+    if (typeof transformQuotes === "function") transformQuotes();
+    if (typeof improveSpoilBlock === "function") improveSpoilBlock();
+    if (typeof improveCodeBlock === "function") improveCodeBlock();
+    if (typeof blocksOpenClose === "function") blocksOpenClose();
+    if (typeof removeImgesSrc === "function") removeImgesSrc();
+    if (typeof promoteAttachmentImageSources === "function") promoteAttachmentImageSources(root);
+    if (typeof addIcons === "function") addIcons();
+    if (typeof fixImagesSizeWithDensity === "function") fixImagesSizeWithDensity();
+    initThemeMediaImageStability(root);
+    initBlacklistedPosts(document);
+}
+
+function stripPrependedTopicHatFromList(hatPostId) {
+    if (!isThemeRuntimeAlive()) return 0;
+    var id = String(hatPostId || "");
+    if (!id || id === "0") return 0;
+    var removed = 0;
+    var selector = '.post_container[data-post-id="' + id.replace(/"/g, '\\"') + '"]:not(.topic_hat_fixed):not(.topic_hat_entry)';
+    var nodes = document.querySelectorAll(selector);
+    for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        if (node.parentNode) {
+            node.parentNode.removeChild(node);
+            removed++;
+        }
+    }
+    if (removed > 0) {
+        normalizeThemePageSeparators();
+        scheduleVisibleThemePageLayoutChecks();
+    }
+    return removed;
+}
+
+function injectTopicHatOverlayHost(overlayHostHtml, openAfterInject) {
+    if (!isThemeRuntimeAlive() || !overlayHostHtml) return false;
+    try {
+        var body = document.body;
+        if (!body) {
+            themeRuntimeSetTimeout(function () {
+                if (isThemeRuntimeAlive() && document.body) {
+                    injectTopicHatOverlayHost(overlayHostHtml, openAfterInject);
+                }
+            }, 50);
+            return false;
+        }
+        if (typeof suppressThemeInfiniteScrollFor === "function") {
+            suppressThemeInfiniteScrollFor(1200);
+        }
+        var holder = document.createElement("div");
+        holder.innerHTML = overlayHostHtml;
+        var incoming = holder.querySelector(".topic_hat_fixed.top_hat_overlay_host");
+        if (!incoming) return false;
+        var existing = document.querySelector(".topic_hat_fixed.top_hat_overlay_host");
+        if (existing && existing.parentNode) {
+            existing.parentNode.replaceChild(incoming, existing);
+        } else {
+            var spacer = document.getElementById("theme_top_chrome_spacer");
+            var insertParent = spacer && spacer.parentNode ? spacer.parentNode : body;
+            if (!insertParent) {
+                return false;
+            }
+            if (spacer && spacer.parentNode) {
+                insertParent.insertBefore(incoming, spacer.nextSibling);
+            } else {
+                insertParent.insertBefore(incoming, insertParent.firstChild);
+            }
+        }
+        transformAnchor();
+        refreshThemeDynamicPostBlocks(incoming);
+        if (openAfterInject === true) {
+            if (typeof toggleThemeHatFromFixed === "function") {
+                return toggleThemeHatFromFixed(true) === true;
+            }
+        }
+        return true;
+    } catch (ex) {
+        logThemeRuntimeWarning("injectTopicHatOverlayHost", ex);
+        return false;
+    }
+}
+
+function findThemePageContainerInHtml(html) {
+    if (!html) return null;
+    var holder = document.createElement("div");
+    holder.innerHTML = html;
+    return holder.querySelector(".theme_page_container[data-page-number]");
+}
+
+function applyThemeInfinitePage(direction, html) {
+    if (!isThemeRuntimeAlive()) return;
+    if (isUnreadAnchorHybridBlocked()) {
+        logAnchorGuardBlocked("prepend", "awaiting_anchor");
+        setThemeInfiniteState(direction, "idle", "");
+        return;
+    }
+    var list = document.querySelector(".posts_list");
+    if (!list || !html) {
+        setThemeInfiniteState(direction, "idle", "");
+        return;
+    }
+    var incomingContainer = findThemePageContainerInHtml(html);
+    if (incomingContainer && incomingContainer.dataset) {
+        var incomingPage = incomingContainer.dataset.pageNumber;
+        if (incomingPage && document.querySelector('.theme_page_container[data-page-number="' + incomingPage.replace(/"/g, '\\"') + '"]')) {
+            logThemeRender("applyInfiniteSkip duplicate page=" + incomingPage + " " + describeThemeRenderDom("duplicatePage"));
+            setThemeInfiniteState(direction, "idle", "");
+            initBlacklistedPosts(document);
+            return;
+        }
+    }
+    logThemeRender("applyInfiniteStart direction=" + direction + " fragmentHtml=" + html.length + " " + describeThemeRenderDom("beforeApply"));
+    if (direction === "top") {
+        var oldHeight = document.documentElement.scrollHeight;
+        var oldY = window.pageYOffset || document.documentElement.scrollTop || 0;
+        var topState = document.getElementById("theme_infinite_top");
+        var tempTop = document.createElement("div");
+        tempTop.innerHTML = html;
+        while (tempTop.firstChild) {
+            list.insertBefore(tempTop.firstChild, topState ? topState.nextSibling : list.firstChild);
+        }
+        normalizeThemePageSeparators();
+        if (typeof PageInfo !== "undefined" && PageInfo.topicHatPostId) {
+            stripPrependedTopicHatFromList(PageInfo.topicHatPostId);
+        }
+        themeRuntimeRequestAnimationFrame(function () {
+            var newHeight = document.documentElement.scrollHeight;
+            window.scrollTo(0, oldY + Math.max(0, newHeight - oldHeight));
+            maybeReanchorUnreadInitialAfterTopPrepend();
+            themeInfiniteScroll.loadingTop = false;
+            logThemeRender("applyInfiniteEnd direction=top oldHeight=" + oldHeight + " newHeight=" + newHeight + " " + describeThemeRenderDom("afterApplyTop"));
+            scheduleVisibleThemePageLayoutChecks();
+            if (!themeInfiniteScroll.unreadInitialAnchorPending) {
+                scheduleThemeInfiniteScrollBootstrap(80);
+            }
+        });
+    } else {
+        var bottomState = document.getElementById("theme_infinite_bottom");
+        var tempBottom = document.createElement("div");
+        tempBottom.innerHTML = html;
+        while (tempBottom.firstChild) {
+            list.insertBefore(tempBottom.firstChild, bottomState || null);
+        }
+        normalizeThemePageSeparators();
+        if (typeof PageInfo !== "undefined" && PageInfo.topicHatPostId) {
+            stripPrependedTopicHatFromList(PageInfo.topicHatPostId);
+        }
+        themeInfiniteScroll.loadingBottom = false;
+        logThemeRender("applyInfiniteEnd direction=bottom " + describeThemeRenderDom("afterApplyBottom"));
+        scheduleVisibleThemePageLayoutChecks();
+        scheduleThemeInfiniteScrollBootstrap(80);
+    }
+    transformAnchor();
+    dedupeThemePostContainers(document);
+    refreshThemeDynamicPostBlocks();
+    initBlacklistedPosts(document);
+}
+
+function setThemeInfiniteState(direction, state, message) {
+    if (!isThemeRuntimeAlive()) return;
+    var isTop = direction === "top";
+    var holder = document.getElementById(isTop ? "theme_infinite_top" : "theme_infinite_bottom");
+    if (!holder) return;
+    if (state === "loading") {
+        holder.style.display = "block";
+        holder.textContent = "Загрузка...";
+        holder.onclick = null;
+        if (isTop) themeInfiniteScroll.loadingTop = true;
+        else themeInfiniteScroll.loadingBottom = true;
+    } else if (state === "error") {
+        holder.style.display = "block";
+        holder.textContent = message || "Ошибка загрузки страницы. Нажмите, чтобы повторить.";
+        holder.onclick = function () {
+            if (hasThemePresenter() && typeof IThemePresenter.infiniteRetry === "function") {
+                IThemePresenter.infiniteRetry(direction);
+            }
+        };
+        if (isTop) themeInfiniteScroll.loadingTop = false;
+        else themeInfiniteScroll.loadingBottom = false;
+    } else {
+        holder.style.display = "none";
+        holder.textContent = "";
+        holder.onclick = null;
+        if (isTop) themeInfiniteScroll.loadingTop = false;
+        else themeInfiniteScroll.loadingBottom = false;
+        scheduleThemeInfiniteScrollBootstrap(80);
+    }
+}
+
+function scrollToThemePage(pageNumber) {
+    var page = Number(pageNumber);
+    if (!page || isNaN(page)) {
+        return false;
+    }
+    var target = document.querySelector('.theme_page_separator[data-page-number="' + page + '"]') ||
+        document.querySelector('.theme_page_container[data-page-number="' + page + '"]');
+    if (!target) {
+        return false;
+    }
+    target.scrollIntoView();
+    updateVisibleThemePage();
+    return true;
+}
+
+function scrollToThemePageAndBottom(pageNumber) {
+    var page = Number(pageNumber);
+    if (!page || isNaN(page)) {
+        maybeCompleteThemeScrollCommand(false, "bad_page_number");
+        return;
+    }
+    var hasPageInDom = !!document.querySelector('.theme_page_separator[data-page-number="' + page + '"]') ||
+        !!document.querySelector('.theme_page_container[data-page-number="' + page + '"]');
+    if (!hasPageInDom) {
+        maybeCompleteThemeScrollCommand(false, "page_not_in_dom");
+        return;
+    }
+    if (!scrollToThemePage(page)) {
+        maybeCompleteThemeScrollCommand(false, "page_scroll_failed");
+        return;
+    }
+    if (typeof scrollToThemeBottomWithRetries === "function") {
+        scrollToThemeBottomWithRetries();
+    } else {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        maybeCompleteThemeScrollCommand(true, "bottom_fallback");
+    }
+}
+
+function getThemeDocumentScrollHeight() {
+    return Math.max(
+        document.documentElement ? document.documentElement.scrollHeight : 0,
+        document.body ? document.body.scrollHeight : 0
+    );
+}
+
+function scrollToThemeBottomOnce() {
+    suppressThemeInfiniteScrollFor(1800);
+    var viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+    var targetY = Math.max(0, getThemeDocumentScrollHeight() - viewport);
+    window.scrollTo(0, targetY);
+    updateVisibleThemePage();
+}
+
+function scrollToThemeBottomWithRetries(maxRetries) {
+    cancelThemeAnchorScrollRetries();
+    themeInfiniteScroll.endScrollPending = true;
+    themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + END_NAV_TOP_SUPPRESS_MS;
+    suppressThemeInfiniteScrollFor(END_NAV_TOP_SUPPRESS_MS);
+    var retryCount = typeof maxRetries === "number" && maxRetries > 0
+        ? Math.min(maxRetries, SCROLL_BOTTOM_RETRY_DELAYS_MS.length)
+        : SCROLL_BOTTOM_RETRY_DELAYS_MS.length;
+    for (var i = 0; i < retryCount; i++) {
+        (function (ms) {
+            themeRuntimeSetTimeout(function () {
+                scrollToThemeBottomOnce();
+            }, ms);
+        })(SCROLL_BOTTOM_RETRY_DELAYS_MS[i]);
+    }
+    var lastBottomRetryMs = SCROLL_BOTTOM_RETRY_DELAYS_MS[retryCount - 1];
+    themeRuntimeSetTimeout(function () {
+        if (!isThemeScrollSettledNearBottom(END_SCROLL_MIN_Y_THRESHOLD)) {
+            var lastId = getLastRealThemePostIdInDom();
+            if (lastId.length) {
+                var lastPost = findRealThemePostById(lastId);
+                if (lastPost) {
+                    lastPost.scrollIntoView(false);
+                    updateVisibleThemePage();
+                }
+            }
+            scrollToThemeBottomOnce();
+        }
+        themeInfiniteScroll.endScrollPending = false;
+        maybeCompleteThemeScrollCommand(isThemeScrollSettledNearBottom(96), "bottom");
+        scheduleThemeInfiniteScrollBootstrap(0);
+    }, lastBottomRetryMs + 80);
+}
+
+function resetThemeRuntimeState() {
+    clearThemeRuntimeAsyncWork();
+    themeRuntimeDestroyed = false;
+    resetThemeMediaImageBatch();
+    cancelThemeAnchorScrollRetries();
+    clearThemeInfiniteScrollBootstrapTimers();
+    var preserveEndNavigation = window.loadAction == END_ACTION || themeInfiniteScroll.endScrollPending;
+    var preserveUnreadAnchor = window.loadAnchorUnreadTarget === true ? resolveThemeInitialAnchorName() : "";
+    if (themeInfiniteScroll.visiblePageThrottleTimer) {
+        clearTimeout(themeInfiniteScroll.visiblePageThrottleTimer);
+        removeThemeRuntimeTimer(themeInfiniteScroll.visiblePageThrottleTimer);
+    }
+    themeInfiniteScroll.loadingTop = false;
+    themeInfiniteScroll.loadingBottom = false;
+    themeInfiniteScroll.scrollRafPending = false;
+    themeInfiniteScroll.lastVisiblePage = null;
+    themeInfiniteScroll.suppressUntil = preserveEndNavigation ? Date.now() + END_NAV_TOP_SUPPRESS_MS : 0;
+    if (preserveUnreadAnchor && preserveUnreadAnchor.length) {
+        armUnreadInitialAnchorScroll(preserveUnreadAnchor);
+    } else {
+        themeInfiniteScroll.initialTopAutoloadSuppressedUntil = preserveEndNavigation ? Date.now() + END_NAV_TOP_SUPPRESS_MS : 0;
+        themeInfiniteScroll.unreadInitialAnchor = "";
+        themeInfiniteScroll.unreadInitialAnchorPending = false;
+        themeInfiniteScroll.unreadAnchorGuardStartedAt = 0;
+    }
+    themeInfiniteScroll.endScrollPending = preserveEndNavigation;
+    themeInfiniteScroll.userScrolled = false;
+    themeInfiniteScroll.visiblePageRafPending = false;
+    themeInfiniteScroll.visiblePageThrottleTimer = null;
+    window.__themeRevealAfterRestoreId = "";
+}
+
+function destroyThemeInfiniteScrollRuntime() {
+    window.removeEventListener("scroll", onThemeInfiniteScroll);
+    clearThemeInfiniteScrollBootstrapTimers();
+    if (themeInfiniteScroll.visiblePageThrottleTimer) {
+        clearTimeout(themeInfiniteScroll.visiblePageThrottleTimer);
+        removeThemeRuntimeTimer(themeInfiniteScroll.visiblePageThrottleTimer);
+        themeInfiniteScroll.visiblePageThrottleTimer = null;
+    }
+    themeInfiniteScroll.visiblePageRafPending = false;
+    themeInfiniteScroll.scrollRafPending = false;
+    themeInfiniteScroll.loadingTop = false;
+    themeInfiniteScroll.loadingBottom = false;
+}
+
+function destroyThemeRuntime(reason) {
+    if (themeRuntimeDestroyed) return;
+    themeRuntimeDestroyed = true;
+    logThemeLongSessionSnapshot("destroy:" + (reason || ""));
+    cancelThemeAnchorScrollRetries();
+    destroyThemePostGestureActions();
+    destroyThemeInfiniteScrollRuntime();
+    if (typeof destroyInlineTopicHeaderVisibilityObserver === "function") {
+        destroyInlineTopicHeaderVisibilityObserver();
+    }
+    unbindThemeLinkSourceAnchorEvents();
+    unbindThemeAnchorScrollCancelInputEvents();
+    window.removeEventListener("resize", onThemeOverlayViewportChanged);
+    window.removeEventListener("orientationchange", onThemeOverlayViewportChanged);
+    clearThemeMediaImageListeners(document);
+    resetThemeMediaImageBatch();
+    clearThemeRuntimeAsyncWork();
+    window.themeLastLinkSourceAnchor = null;
+    window.__themeLastClickedPostAnchor = null;
+    window.__themeRevealAfterRestoreId = "";
+    window.__themeRenderToken = "";
+    anchorElem = null;
+    elemToActivation = null;
+    logThemeRender("destroyRuntime reason=" + (reason || ""));
+}
+
+function logThemeLongSessionSnapshot(reason) {
+    if (!isThemeRenderDebugEnabled()) return;
+    try {
+        console.log("[ThemeLongSession] " + reason + " " + JSON.stringify({
+            timers: themeRuntimeTimers.length,
+            rafs: themeRuntimeRafs.length,
+            mediaBatch: themeMediaImageLoadBatch.images.length,
+            posts: document.querySelectorAll(".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)").length,
+            containers: document.querySelectorAll(".theme_page_container[data-page-number]").length,
+            images: document.querySelectorAll("body#topic .post_body img").length,
+            scrollHeight: getThemeDocumentScrollHeight(),
+            runtimeDestroyed: themeRuntimeDestroyed === true
+        }));
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeLongSession", "snapshot error " + ex);
+    }
+}

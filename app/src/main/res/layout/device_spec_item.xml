@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/profile_block_about"
     style="@style/CardStyle.Item.Wide"
     android:layout_width="match_parent"
@@ -26,6 +27,7 @@
         android:paddingStart="@dimen/content_padding_horizontal"
         android:paddingEnd="@dimen/content_padding_horizontal"
         android:paddingBottom="@dimen/content_block_padding_vertical"
+        android:textColor="?attr/default_text_color"
         android:textSize="@dimen/list_topic_title_text_size"
-        android:text="ajskldjklasjdlkajls;kjdklk;asd"/>
+        tools:text="ajskldjklasjdlkajls;kjdklk;asd"/>
 </androidx.cardview.widget.CardView>

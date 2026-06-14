@@ -7,6 +7,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:clickable="true"
+    android:focusable="true"
     android:foreground="?attr/selectableItemBackground">
 
     <RelativeLayout
@@ -31,6 +32,7 @@
             android:layout_toEndOf="@+id/item_image"
             android:maxLines="3"
             tools:text="@string/test_topic_title"
+            android:textColor="?attr/default_text_color"
             android:textSize="@dimen/list_topic_title_text_size" />
 
         <androidx.appcompat.widget.AppCompatTextView

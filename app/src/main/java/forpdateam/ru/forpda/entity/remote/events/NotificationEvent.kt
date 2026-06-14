@@ -67,7 +67,8 @@ data class NotificationEvent @JvmOverloads constructor(
 
     @JvmOverloads
     fun notifyId(type: Type? = this.type): Int {
-        return sourceId / 4 + type!!.value + type.value
+        val actualType = type ?: this.type
+        return sourceId / 4 + actualType.value + actualType.value
     }
 
     companion object {

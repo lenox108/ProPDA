@@ -1,7 +1,7 @@
 package forpdateam.ru.forpda.client
 
-import android.util.Log
-import forpdateam.ru.forpda.App
+import timber.log.Timber
+import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
@@ -18,47 +18,57 @@ class WebSocketController(
         private val listener: Listener
 ) {
 
+    private val lock = Any()
     private val webSockets = mutableListOf<WebSocketState>()
     private var currentId = NO_ID
 
     private val webSocketListener = object : WebSocketListener() {
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            val eventWebSocket = getByWebSocket(webSocket)
-            val currentWebSocket = getById(currentId)
-            Log.d(LOG_TAG, "WSListener onOpen; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
-            eventWebSocket?.connected = true
-            if (currentWebSocket == eventWebSocket) {
+            val shouldNotify = synchronized(lock) {
+                val eventWebSocket = getByWebSocketLocked(webSocket)
+                val currentWebSocket = getByIdLocked(currentId)
+                if (BuildConfig.DEBUG) Timber.d("WSListener onOpen; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
+                eventWebSocket?.connected = true
+                currentWebSocket == eventWebSocket
+            }
+            if (shouldNotify) {
                 listener.onConnected()
             }
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
-            val eventWebSocket = getByWebSocket(webSocket)
-            val currentWebSocket = getById(currentId)
-            Log.d(LOG_TAG, "WSListener onMessage: $text; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
-            eventWebSocket?.connected = true
-            if (currentWebSocket == eventWebSocket) {
+            val shouldNotify = synchronized(lock) {
+                val eventWebSocket = getByWebSocketLocked(webSocket)
+                val currentWebSocket = getByIdLocked(currentId)
+                if (BuildConfig.DEBUG) Timber.d("WSListener onMessage: hasPayload=${text.isNotEmpty()}; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
+                eventWebSocket?.connected = true
+                currentWebSocket == eventWebSocket
+            }
+            if (shouldNotify) {
                 listener.onMessage(text)
             }
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {}
 
-        override fun onFailure(webSocket: WebSocket, throwable: Throwable, response: Response?) {
-            val eventWebSocket = getByWebSocket(webSocket)
-            val currentWebSocket = getById(currentId)
-            Log.d(LOG_TAG, "WSListener onFailure: ${throwable.message} $response; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
-            eventWebSocket?.connected = false
-            eventWebSocket?.also {
-                try {
-                    webSockets.remove(eventWebSocket)
-                } catch (ex: Exception) {
-                    ex.printStackTrace()
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            val shouldNotify = synchronized(lock) {
+                val eventWebSocket = getByWebSocketLocked(webSocket)
+                val currentWebSocket = getByIdLocked(currentId)
+                if (BuildConfig.DEBUG) Timber.d("WSListener onFailure: code=${response?.code}; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
+                eventWebSocket?.connected = false
+                eventWebSocket?.also {
+                    try {
+                        webSockets.remove(eventWebSocket)
+                    } catch (ex: Exception) {
+                        Timber.e(ex, "WebSocket remove error")
+                    }
                 }
+                currentWebSocket == eventWebSocket
             }
-            if (currentWebSocket == eventWebSocket) {
-                listener.onDisconnected(throwable, response)
+            if (shouldNotify) {
+                listener.onDisconnected(t, response)
             }
         }
     }
@@ -67,33 +77,45 @@ class WebSocketController(
         val newId = (1000..16384).random()
         val newWebSocket = webClient.createWebSocketConnection(webSocketListener)
         val newWebSocketState = WebSocketState(newId, newWebSocket, true)
-        currentId = newId
-        webSockets.add(newWebSocketState)
+        synchronized(lock) {
+            currentId = newId
+            webSockets.add(newWebSocketState)
+        }
     }
 
     fun send(message: String) {
-        getById(currentId)?.webSocket?.send(message)
+        val webSocket = synchronized(lock) {
+            getByIdLocked(currentId)?.webSocket
+        }
+        webSocket?.send(message)
     }
 
     fun disconnectAll() {
-        webSockets.forEach {
-            it.webSocket.cancel()
-            it.connected = false
+        val sockets = synchronized(lock) {
+            val activeSockets = webSockets.onEach { it.connected = false }.map { it.webSocket }
+            webSockets.clear()
+            currentId = NO_ID
+            activeSockets
+        }
+        sockets.forEach {
+            it.cancel()
         }
     }
 
     fun isConnected(): Boolean {
-        return (currentId != NO_ID && getById(currentId)?.connected ?: false).also {
-
-            Log.d(LOG_TAG, "isConnected $currentId, ${getById(currentId)} ... $it")
+        return synchronized(lock) {
+            val currentWebSocket = getByIdLocked(currentId)
+            (currentId != NO_ID && currentWebSocket?.connected ?: false).also {
+                if (BuildConfig.DEBUG) Timber.d("isConnected $currentId, $currentWebSocket ... $it")
+            }
         }
     }
 
-    fun getCurrentId() = currentId
+    fun getCurrentId() = synchronized(lock) { currentId }
 
-    private fun getById(id: Int): WebSocketState? = webSockets.firstOrNull { it.id == id }
+    private fun getByIdLocked(id: Int): WebSocketState? = webSockets.firstOrNull { it.id == id }
 
-    private fun getByWebSocket(webSocket: WebSocket): WebSocketState? = webSockets.firstOrNull { it.webSocket == webSocket }
+    private fun getByWebSocketLocked(webSocket: WebSocket): WebSocketState? = webSockets.firstOrNull { it.webSocket == webSocket }
 
     private fun IntRange.random() = Random().nextInt((endInclusive + 1) - start) + start
 

@@ -11,13 +11,12 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import forpdateam.ru.forpda.App
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.databinding.ActivityUpdaterBinding
@@ -27,22 +26,25 @@ import forpdateam.ru.forpda.presentation.checker.CheckerViewModel
 import forpdateam.ru.forpda.ui.EdgeToEdge
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import kotlinx.coroutines.launch
+import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.presentation.ISystemLinkHandler
+import forpdateam.ru.forpda.common.PermissionHelper
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class UpdateCheckerActivity : AppCompatActivity() {
+    @Inject lateinit var systemLinkHandler: ISystemLinkHandler
+    @Inject lateinit var permissionHelper: PermissionHelper
+
 
     companion object {
         const val ARG_FORCE = "force"
     }
 
     private lateinit var binding: ActivityUpdaterBinding
-    private val systemLinkHandler = App.get().Di().systemLinkHandler
 
-    private val viewModel: CheckerViewModel by viewModels {
-        CheckerViewModel.Factory(
-                App.get().Di().checkerRepository,
-                App.get().Di().errorHandler
-        )
-    }
+    private val viewModel: CheckerViewModel by viewModels()
 
     private var pendingDownloadUrl: String? = null
 
@@ -52,7 +54,7 @@ class UpdateCheckerActivity : AppCompatActivity() {
         val url = pendingDownloadUrl
         pendingDownloadUrl = null
         if (granted && url != null) {
-            systemLinkHandler.handleDownload(url)
+            systemLinkHandler.handleDownload(url, uiContext = this)
         }
     }
 
@@ -118,7 +120,6 @@ class UpdateCheckerActivity : AppCompatActivity() {
             binding.updateContent.visibility = View.GONE
             binding.divider.visibility = View.GONE
         }
-        binding.updateButton.visibility = View.VISIBLE
         binding.updateButton.setOnClickListener {
             openDownloadDialog(update)
         }
@@ -133,12 +134,12 @@ class UpdateCheckerActivity : AppCompatActivity() {
             return
         }
         val titles = update.links.map { it.name }.toTypedArray()
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
                 .setTitle("Источник")
                 .setItems(titles) { _, which ->
                     decideDownload(update.links[which])
                 }
-                .show()
+                .showWithStyledButtons()
     }
 
     private fun decideDownload(link: UpdateData.UpdateLink) {
@@ -151,12 +152,12 @@ class UpdateCheckerActivity : AppCompatActivity() {
 
     private fun systemDownloadWithPermissionCheck(url: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            systemLinkHandler.handleDownload(url)
+            systemLinkHandler.handleDownload(url, uiContext = this)
             return
         }
         when {
             ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED -> {
-                systemLinkHandler.handleDownload(url)
+                systemLinkHandler.handleDownload(url, uiContext = this)
             }
             else -> {
                 pendingDownloadUrl = url
@@ -167,7 +168,7 @@ class UpdateCheckerActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        App.get().onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionHelper.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
     private fun addSection(title: String, array: List<String>) {

@@ -43,4 +43,14 @@ class MentionUrlPreferenceTest {
                 patchMentionLinkIfTopicOnly(link, row)
         )
     }
+
+    @Test
+    fun preferMentionPostUrl_prefersAnchorEntryPostId() {
+        val row = """<a href="index.php?showtopic=3">t</a> <a href="#entry88">post</a>"""
+        val primary = "https://4pda.to/forum/index.php?showtopic=3"
+        assertEquals(
+                "https://4pda.to/forum/index.php?showtopic=3&view=findpost&p=88",
+                patchMentionLinkIfTopicOnly(preferMentionPostUrl(row, primary), row)
+        )
+    }
 }

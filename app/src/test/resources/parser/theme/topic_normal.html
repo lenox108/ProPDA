@@ -1,0 +1,33 @@
+<html>
+<body>
+<script>
+    var topic_id = parseInt(42);
+    var forum_id = parseInt(7);
+    var per_page = parseInt(st*20);
+</script>
+<div class="topic-title">Snapshot topic</div>
+<div class="pagination"><span>2</span></div>
+<form class="topic_poll" action="/forum/index.php?showtopic=42&amp;st=20" method="post">
+    <input name="addpoll" value="1" type="hidden">
+    <input name="auth_key" value="token" type="hidden">
+    <div class="poll_question">
+        <strong>Poll question</strong>
+        <label><input value="1" name="poll_vote[1]" type="radio"> First option</label>
+    </div>
+    <button type="submit">Vote</button>
+</form>
+<a name="entry100"></a>
+<div class="post_container" data-post-id="100">
+    <span class="post_date">20.05.2026</span>
+    <span class="post_number">21</span>
+    <a href="https://4pda.to/forum/index.php?showuser=5">SnapshotUser</a>
+    <div class="post_body">
+        <blockquote>quoted text</blockquote>
+        <span class="spoil">spoiler text</span>
+        <pre><code>code()</code></pre>
+        <a href="https://4pda.to/forum/dl/post/1/file.txt">attachment</a>
+        <img src="https://4pda.to/forum/uploads/image.png">
+    </div>
+</div>
+</body>
+</html>

@@ -1,52 +1,61 @@
 package forpdateam.ru.forpda.ui.fragments.topics
 
+import javax.inject.Inject
+import forpdateam.ru.forpda.common.getVecDrawable
 import android.os.Bundle
 import com.google.android.material.tabs.TabLayout
-import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.view.*
-import android.widget.Toast
+import androidx.core.view.MenuItemCompat
+import forpdateam.ru.forpda.common.showSnackbar
 import androidx.fragment.app.viewModels
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.ClipboardHelper
+import forpdateam.ru.forpda.common.uriForOpeningTopicFromListing
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.topics.TopicItem
 import forpdateam.ru.forpda.entity.remote.topics.TopicsData
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
-import forpdateam.ru.forpda.presentation.topics.TopicsView
+import forpdateam.ru.forpda.presentation.topics.TopicsUiEvent
 import forpdateam.ru.forpda.presentation.topics.TopicsViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment
+import forpdateam.ru.forpda.ui.views.ContentController
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
+import forpdateam.ru.forpda.ui.views.FunnyContent
 import forpdateam.ru.forpda.ui.views.adapters.BaseSectionedAdapter
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.pagination.PaginationHelper
+import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.model.AuthHolder
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 
 /**
  * Created by radiationx on 01.03.17.
  */
 
-class TopicsFragment : RecyclerFragment(), TopicsView {
+@AndroidEntryPoint
+class TopicsFragment : RecyclerFragment() {
+    @Inject lateinit var authHolder: AuthHolder
+    @Inject lateinit var clipboardHelper: ClipboardHelper
+
 
     private lateinit var adapter: TopicsAdapter
     private lateinit var paginationHelper: PaginationHelper
     private lateinit var dialogMenu: DynamicDialogMenu<TopicsFragment, TopicItem>
-    private val authHolder = App.get().Di().authHolder
 
-    private val presenter: TopicsViewModel by viewModels {
-        TopicsViewModel.Factory(
-                App.get().Di().topicsRepository,
-                App.get().Di().forumRepository,
-                App.get().Di().favoritesRepository,
-                App.get().Di().crossScreenInteractor,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler
-        )
-    }
+    private val presenter: TopicsViewModel by viewModels()
+
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
 
     private val paginationListener = object : PaginationHelper.PaginationListener {
         override fun onTabSelected(tab: TabLayout.Tab): Boolean {
-            return refreshLayout.isRefreshing
+            // ViewModel cancels previous job automatically, no need to block UI
+            return false
         }
 
         override fun onSelectedPage(pageNumber: Int) {
@@ -60,42 +69,50 @@ class TopicsFragment : RecyclerFragment(), TopicsView {
         }
 
         override fun onItemLongClick(item: TopicItem): Boolean {
-            presenter.onItemLongClick(item)
-            return false
+            val url: String = if (item.isAnnounce) {
+                item.announceUrl ?: ""
+            } else {
+                uriForOpeningTopicFromListing(item.listingHref, item.id, item.isRelocated).toString()
+            }
+            clipboardHelper.copyToClipboard(url)
+            showSnackbar(R.string.link_copied)
+            return true
         }
-    }
-
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_topics)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_topics)
         arguments?.apply {
-            presenter.id = getInt(TOPICS_ID_ARG)
+            presenter.setId(getInt(TOPICS_ID_ARG))
         }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        paginationHelper = PaginationHelper(activity)
-        paginationHelper.addInToolbar(inflater, toolbarLayout, configuration.isFitSystemWindow)
+        paginationHelper = PaginationHelper(requireActivity(), dimensionsProvider)
+        paginationHelper.addInToolbar(
+                inflater = inflater,
+                target = toolbarLayout,
+                enablePadding = configuration.fitSystemWindow,
+                surfaceColorAttr = R.attr.main_toolbar_accent_surface,
+        )
         return viewFragment
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setScrollFlagsEnterAlways()
+        clearToolbarScrollFlags()
 
         dialogMenu = DynamicDialogMenu()
         dialogMenu.apply {
             addItem(getString(R.string.copy_link)) { _, data1 ->
                 val url: String = if (data1.isAnnounce) {
-                    data1.announceUrl
+                    data1.announceUrl ?: ""
                 } else {
-                    "https://4pda.to/forum/index.php?showtopic=" + data1.id
+                    uriForOpeningTopicFromListing(data1.listingHref, data1.id).toString()
                 }
-                Utils.copyToClipBoard(url)
+                clipboardHelper.copyToClipboard(url)
             }
             addItem(getString(R.string.open_theme_forum)) { _, _ ->
                 presenter.openTopicForum()
@@ -113,41 +130,120 @@ class TopicsFragment : RecyclerFragment(), TopicsView {
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
 
         adapter = TopicsAdapter()
+        adapter.paginationFooterBinder = { container ->
+            paginationHelper.addInList(layoutInflater, container)
+        }
         recyclerView.adapter = adapter
         adapter.setOnItemClickListener(adapterListener)
         paginationHelper.setListener(paginationListener)
 
-        presenter.attachView(this)
         presenter.start()
+        observeViewModel()
     }
 
     override fun onDestroyView() {
-        presenter.detachView()
         super.onDestroyView()
     }
 
-    override fun isShadowVisible(): Boolean {
-        return true
+    override fun useCompactToolbarPaginationChrome(): Boolean = true
+
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        refreshLayout.isRefreshing = isRefreshing
+                    }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
     }
 
-    override fun showTopics(data: TopicsData) {
+    private fun handleUiEvent(event: TopicsUiEvent) {
+        when (event) {
+            is TopicsUiEvent.ShowTopics -> showTopics(event.data)
+            is TopicsUiEvent.UpdateList -> adapter.notifyDataSetChanged()
+            is TopicsUiEvent.ShowItemDialogMenu -> showItemDialogMenu(event.item)
+            is TopicsUiEvent.OnAddToFavorite -> showSnackbar(if (event.result) getString(R.string.favorites_added) else getString(R.string.error_occurred))
+            is TopicsUiEvent.OnMarkRead -> showSnackbar(R.string.action_complete)
+            is TopicsUiEvent.ShowLoadError -> showLoadError(event.message)
+        }
+    }
+
+    private fun showTopics(data: TopicsData) {
+        contentController.hideContent(ContentController.TAG_ERROR)
         setTitle(data.title)
-        adapter.clear()
-        if (!data.forumItems.isEmpty())
-            adapter.addSection(getString(R.string.forum_section), data.forumItems)
-        if (!data.announceItems.isEmpty())
-            adapter.addSection(getString(R.string.announce_section), data.announceItems)
-        if (!data.pinnedItems.isEmpty())
-            adapter.addSection(getString(R.string.pinned_section), data.pinnedItems)
-        adapter.addSection(getString(R.string.themes_section), data.topicItems)
-        adapter.notifyDataSetChanged()
+        val forumItems = data.forumItems.deduplicateTopicItems()
+        val announceItems = data.announceItems.deduplicateTopicItems()
+        val pinnedItems = data.pinnedItems.deduplicateTopicItems()
+        val topicItems = data.topicItems
+                .filterNot { topic -> pinnedItems.any { it.id != 0 && it.id == topic.id } }
+                .deduplicateTopicItems()
+        val newSections = mutableListOf<android.util.Pair<String, List<TopicItem>>>()
+        if (forumItems.isNotEmpty())
+            newSections.add(android.util.Pair(getString(R.string.forum_section), forumItems))
+        if (announceItems.isNotEmpty())
+            newSections.add(android.util.Pair(getString(R.string.announce_section), announceItems))
+        if (pinnedItems.isNotEmpty())
+            newSections.add(android.util.Pair(getString(R.string.pinned_section), pinnedItems))
+        newSections.add(android.util.Pair(getString(R.string.themes_section), topicItems))
+        adapter.submitSections(newSections)
+
+        // Show empty state if no topics at all
+        val isEmpty = data.forumItems.isEmpty() && data.announceItems.isEmpty() &&
+                data.pinnedItems.isEmpty() && data.topicItems.isEmpty()
+        if (isEmpty) {
+            if (!contentController.contains(ContentController.TAG_NO_DATA)) {
+                val funnyContent = FunnyContent(requireContext())
+                        .setImage(R.drawable.ic_notify_mention)
+                        .setTitle(R.string.funny_topics_nodata_title)
+                        .setDesc(R.string.funny_topics_nodata_desc)
+                contentController.addContent(funnyContent, ContentController.TAG_NO_DATA)
+            }
+            contentController.showContent(ContentController.TAG_NO_DATA)
+        } else {
+            contentController.hideContent(ContentController.TAG_NO_DATA)
+        }
+
         paginationHelper.updatePagination(data.pagination)
-        setSubtitle(paginationHelper.title)
+        clearToolbarPaginationSubtitle()
         listScrollTop()
     }
 
-    override fun updateList() {
-        adapter.notifyDataSetChanged()
+    private fun showLoadError(message: String?) {
+        if (adapter.itemCount > 0) {
+            showSnackbar(message ?: getString(R.string.error_occurred))
+            return
+        }
+        contentController.hideContent(ContentController.TAG_NO_DATA)
+        if (!contentController.contains(ContentController.TAG_ERROR)) {
+            val funnyContent = FunnyContent(requireContext())
+                    .setImage(R.drawable.ic_toolbar_refresh)
+                    .setTitle(R.string.funny_topics_error_title)
+                    .setDesc(R.string.funny_topics_error_desc)
+                    .addAction(R.string.retry) { presenter.loadTopics() }
+            contentController.addContent(funnyContent, ContentController.TAG_ERROR)
+        }
+        contentController.showContent(ContentController.TAG_ERROR)
+        message?.let { showSnackbar(it) }
+    }
+
+    private fun List<TopicItem>.deduplicateTopicItems(): List<TopicItem> {
+        val seenIds = mutableSetOf<Int>()
+        val seenTitles = mutableSetOf<String>()
+        return filter { item ->
+            val normalizedTitle = item.title.orEmpty().trim().lowercase()
+            when {
+                item.id != 0 -> seenIds.add(item.id)
+                normalizedTitle.isNotEmpty() -> seenTitles.add(normalizedTitle)
+                else -> true
+            }
+        }
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
@@ -159,16 +255,19 @@ class TopicsFragment : RecyclerFragment(), TopicsView {
                     true
                 }
         if (authHolder.get().isAuth()) {
-            menu
+            val markReadItem = menu
                     .add(R.string.mark_read)
+                    .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_done))
                     .setOnMenuItemClickListener {
                         openMarkReadDialog()
                         true
                     }
+                    .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            MenuItemCompat.setContentDescription(markReadItem, getString(R.string.mark_read))
         }
 
         menu.add(R.string.fragment_title_search)
-                .setIcon(App.getVecDrawable(context, R.drawable.ic_toolbar_search))
+                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_search))
                 .setOnMenuItemClickListener {
                     presenter.openSearch()
                     true
@@ -177,47 +276,40 @@ class TopicsFragment : RecyclerFragment(), TopicsView {
     }
 
     private fun openAddForumToFavoriteDialog(forumId: Int) {
-        AlertDialog.Builder(context!!)
+        MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.favorites_subscribe_email)
-                .setItems(FavoritesFragment.SUB_NAMES) { _, which ->
+                .setItems(FavoritesFragment.getSubNames(requireContext())) { _, which ->
                     presenter.addForumToFavorite(forumId, FavoritesApi.SUB_TYPES[which])
                 }
-                .show()
+                .showWithStyledButtons()
     }
 
     private fun openAddTopicToFavoriteDialog(topicId: Int) {
-        AlertDialog.Builder(context!!)
+        MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.favorites_subscribe_email)
-                .setItems(FavoritesFragment.SUB_NAMES) { _, which ->
+                .setItems(FavoritesFragment.getSubNames(requireContext())) { _, which ->
                     presenter.addTopicToFavorite(topicId, FavoritesApi.SUB_TYPES[which])
                 }
-                .show()
+                .showWithStyledButtons()
     }
 
     private fun openMarkReadDialog() {
-        AlertDialog.Builder(context!!)
+        MaterialAlertDialogBuilder(requireContext())
                 .setMessage(getString(R.string.mark_read) + "?")
                 .setPositiveButton(R.string.ok) { _, _ ->
                     presenter.markRead()
                 }
                 .setNegativeButton(R.string.cancel, null)
-                .show()
+                .showWithStyledButtons()
     }
 
-    override fun onMarkRead() {
-        Toast.makeText(context, R.string.action_complete, Toast.LENGTH_SHORT).show()
-    }
-
-    override fun onAddToFavorite(result: Boolean) {
-        Toast.makeText(context, if (result) getString(R.string.favorites_added) else getString(R.string.error_occurred), Toast.LENGTH_SHORT).show()
-    }
 
     override fun onDestroy() {
         super.onDestroy()
         paginationHelper.destroy()
     }
 
-    override fun showItemDialogMenu(item: TopicItem) {
+    private fun showItemDialogMenu(item: TopicItem) {
         dialogMenu.apply {
             disallowAll()
             allow(0)
@@ -227,7 +319,7 @@ class TopicsFragment : RecyclerFragment(), TopicsView {
                     allow(2)
                 }
             }
-            show(context, this@TopicsFragment, item)
+            show(requireContext(), this@TopicsFragment, item)
         }
     }
 

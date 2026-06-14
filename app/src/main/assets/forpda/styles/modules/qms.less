@@ -1,5 +1,5 @@
 body {
-    background: @background_base;
+    background: @surface_background;
 }
 
 .wrapper {
@@ -8,19 +8,30 @@ body {
     left: 0;
     width: 100%;
     max-height: 100%;
+    background: transparent;
 }
 
 .mess_list {
+    background: transparent;
     >.mess_container {
-        margin: 8/16rem 16/16rem;
+        background: transparent;
+        margin: 10/16rem 16/16rem;
         .mess {
-            .mainBox();
             position: relative;
+            display: block;
             margin: 0;
-            border-radius: 8/16rem;
+            box-sizing: border-box;
+            border-radius: 16/16rem;
             max-width: 100%;
+            background: @surface_card;
+            box-shadow: 0 1/16rem 2/16rem fade(#000, 10%),
+                0 0 0 1/16rem fade(#000, 4%);
+            overflow: hidden;
             .content {
-                padding: 8/16rem 16/16rem;
+                background: transparent;
+                padding: 10/16rem 14/16rem;
+                line-height: 1.45;
+                color: @surface_text_primary;
                 -webkit-hyphens: auto;
                 -ms-hyphens: auto;
                 hyphens: auto;
@@ -36,6 +47,7 @@ body {
         .time {
             clear: both;
             font-size: 12/16rem;
+            line-height: 18/16rem;
             color: @second_text_color;
         }
         .status {
@@ -58,7 +70,7 @@ body {
         &.his {
             margin-right: 64/16em;
             .mess {
-                border-top-left-radius: 1/16rem;
+                border-radius: 16/16rem;
                 float: left;
             }
             .time {
@@ -73,7 +85,8 @@ body {
             margin-left: 64/16em;
             .mess {
                 float: right;
-                border-top-right-radius: 1/16rem;
+                border-radius: 16/16rem;
+                background: mix(@surface_accent, @surface_card, 10%);
             }
             .time {
                 float: right;

@@ -8,7 +8,6 @@ import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.editpost.EditPostParser
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeParser
-import java.io.ByteArrayInputStream
 import java.security.MessageDigest
 import java.util.Locale
 
@@ -53,23 +52,18 @@ class AttachmentsApi(
             val item = pending[i]
 
             file.requestName = "FILE_UPLOAD[]"
-            val messageDigest = MessageDigest.getInstance("MD5")
-            file.fileStream = file.fileStream.use {
-                val targetArray = ByteArray(it.available()).apply {
-                    it.read(this)
-                }
-                messageDigest.update(targetArray)
-                ByteArrayInputStream(targetArray)
-            }
-            val hash = messageDigest.digest()
+            val digestResult = calculateDigest(file)
+            val hash = digestResult.digest
             val md5 = byteArrayToHexString(hash)
             builder
                     .formHeader("md5", md5)
-                    .formHeader("size", file.fileStream.available().toString())
+                    .formHeader("size", (file.fileSize ?: digestResult.size).toString())
                     .formHeader("name", file.fileName)
 
             var response = webClient.request(builder.build())
             if (response.body == "0") {
+                file.fileStream = file.reopenStream()
+                    ?: throw IllegalStateException("Unable to reopen upload file stream")
                 val uploadRequest = NetworkRequest.Builder()
                         .url("https://4pda.to/forum/index.php?act=attach")
                         .xhrHeader()
@@ -93,6 +87,24 @@ class AttachmentsApi(
             item.status = AttachmentItem.STATUS_UPLOADED
         }
         return pending
+    }
+
+    private fun calculateDigest(file: RequestFile): DigestResult {
+        val messageDigest = MessageDigest.getInstance("MD5")
+        var size = 0L
+        file.openStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                messageDigest.update(buffer, 0, read)
+                size += read
+            }
+        }
+        if (!file.canOpenStreamAgain()) {
+            throw IllegalStateException("Upload file stream cannot be reopened after digest calculation")
+        }
+        return DigestResult(messageDigest.digest(), size)
     }
 
     private fun deleteFiles(
@@ -163,4 +175,9 @@ class AttachmentsApi(
         }
         return hexString.toString()
     }
+
+    private data class DigestResult(
+        val digest: ByteArray,
+        val size: Long
+    )
 }

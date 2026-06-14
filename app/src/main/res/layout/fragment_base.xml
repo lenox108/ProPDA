@@ -7,18 +7,24 @@
     android:layout_height="match_parent"
     android:background="?colorPrimary">
 
+    <!-- Панель ввода вынесена из coordinator: иначе при IME WRAP_CONTENT + ScrollingViewBehavior + WebView даёт нулевую/невидимую панель. -->
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:id="@+id/coordinator_layout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="?attr/background_for_lists">
+        android:layout_alignParentTop="true"
+        android:layout_above="@id/message_panel_host"
+        android:background="?attr/background_base"
+        android:clipChildren="false">
 
-        <!-- Верхний inset даёт activity (fragments_container fitsSystemWindows), иначе двойной отступ. -->
+        <!-- Верхний inset даёт MainActivity (paddingTop на fragments_container в updateDimens), иначе двойной отступ. -->
         <com.google.android.material.appbar.AppBarLayout
             android:id="@+id/appbar_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="?attr/chrome_plane_background"
             android:fitsSystemWindows="false"
+            android:stateListAnimator="@null"
             android:theme="?attr/app_bar_overlay"
             app:elevation="@dimen/dp0">
 
@@ -26,8 +32,8 @@
                 android:id="@+id/toolbar_layout"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                app:contentScrim="?attr/colorSurface"
-                app:layout_scrollFlags="scroll|exitUntilCollapsed"
+                android:background="?attr/chrome_plane_background"
+                app:contentScrim="@android:color/transparent"
                 app:statusBarScrim="@android:color/transparent"
                 app:titleEnabled="false">
 
@@ -39,6 +45,7 @@
                     android:id="@+id/toolbar_image_background"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
+                    android:visibility="gone"
                     android:scaleType="centerCrop"
                     android:transitionName="toolbarCover"
                     app:layout_collapseMode="parallax"/>
@@ -53,41 +60,52 @@
                     android:id="@+id/toolbar"
                     android:layout_width="match_parent"
                     android:layout_height="?attr/actionBarSize"
-                    app:layout_collapseMode="pin"
+                    android:background="?attr/chrome_plane_background"
+                    app:layout_collapseMode="parallax"
                     app:popupTheme="?attr/popup_overlay">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
+                        android:layout_gravity="center_vertical"
                         android:clipChildren="false"
                         android:clipToPadding="false"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
 
-                        <de.hdodenhof.circleimageview.CircleImageView
+                        <com.google.android.material.imageview.ShapeableImageView
                             android:id="@+id/toolbar_image_icon"
                             android:layout_width="@dimen/toolbar_avatar_size"
                             android:layout_height="@dimen/toolbar_avatar_size"
                             android:layout_marginEnd="@dimen/content_padding_horizontal"
-                            android:visibility="gone"/>
+                            android:contentDescription="@string/avatar"
+                            android:visibility="gone"
+                            app:shapeAppearanceOverlay="@style/CircleImageViewStyle"/>
 
                         <LinearLayout
                             android:id="@+id/toolbar_titles_wrapper"
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_gravity="center_vertical"
+                            android:layout_marginEnd="@dimen/dp8"
+                            android:layout_weight="1"
+                            android:minWidth="0dp"
                             android:orientation="horizontal"
                             android:visibility="visible">
 
                             <LinearLayout
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
+                                android:layout_gravity="center_vertical"
                                 android:layout_weight="1"
+                                android:minWidth="0dp"
+                                android:gravity="center_vertical"
                                 android:orientation="vertical">
 
                                 <androidx.appcompat.widget.AppCompatTextView
                                     android:id="@+id/toolbar_title"
-                                    android:layout_width="wrap_content"
+                                    android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:ellipsize="end"
                                     android:maxLines="1"
@@ -111,13 +129,28 @@
                                 android:layout_gravity="center_vertical"
                                 android:layout_marginEnd="@dimen/dp8"
                                 android:layout_marginStart="@dimen/dp8"
+                            android:contentDescription="@string/loading_data"
                                 android:visibility="invisible"/>
                         </LinearLayout>
 
+                        <!-- Category / filter: wrap_content at start of row; flex space is the trailing View so the
+                             control does not sit flush against the search action and remains tappable. -->
                         <androidx.appcompat.widget.AppCompatSpinner
                             android:id="@+id/toolbar_spinner"
                             android:layout_width="wrap_content"
                             android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:minWidth="@dimen/dp120"
+                            android:visibility="gone"/>
+
+                        <View
+                            android:id="@+id/toolbar_spinner_end_spacer"
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_weight="1"
+                            android:clickable="false"
+                            android:focusable="false"
+                            android:importantForAccessibility="no"
                             android:visibility="gone"/>
 
                     </LinearLayout>
@@ -132,9 +165,20 @@
             android:id="@+id/fragment_content"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:background="?attr/background_base"
             android:clipChildren="false"
             android:clipToPadding="false"
             app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
+
+        <!-- Host for in-activity bottom panels (e.g. fullscreen BBCode/emoji). -->
+        <FrameLayout
+            android:id="@+id/advanced_popup_host"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone" />
 
         <FrameLayout
             android:id="@+id/additional_content"
@@ -147,6 +191,7 @@
                 android:layout_width="@dimen/dp48"
                 android:layout_height="@dimen/dp48"
                 android:layout_gravity="center"
+                android:contentDescription="@string/loading_data"
                 android:visibility="gone"/>
 
         </FrameLayout>
@@ -166,8 +211,19 @@
             android:layout_gravity="bottom|end"
             android:layout_margin="@dimen/fab_margin"
             android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="@string/fab_scroll"
             android:visibility="gone"
+            app:backgroundTint="?attr/smart_nav_fab_background"
+            app:tint="?attr/smart_nav_fab_icon"
             app:fabSize="normal"/>
 
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+    <FrameLayout
+        android:id="@+id/message_panel_host"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true" />
+
 </RelativeLayout>

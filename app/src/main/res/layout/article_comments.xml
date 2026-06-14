@@ -2,6 +2,7 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
                 xmlns:app="http://schemas.android.com/apk/res-auto"
                 xmlns:tools="http://schemas.android.com/tools"
+                android:id="@+id/article_comments_root"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical">
@@ -13,7 +14,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@+id/comment_write_panel"
-        android:layout_alignParentTop="true"
         android:clickable="false"
         android:focusable="false"
         android:visibility="gone"/>
@@ -23,7 +23,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@+id/comment_write_panel"
-        android:layout_alignParentTop="true"
         android:clipChildren="false">
 
         <androidx.recyclerview.widget.RecyclerView
@@ -53,6 +52,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_toStartOf="@+id/send_container"
+            android:autofillHints="message"
             android:background="@android:color/transparent"
             android:gravity="center_vertical"
             android:hint="@string/msg_panel_hint_message"
@@ -67,29 +67,57 @@
             android:textSize="@dimen/list_topic_title_text_size"
             tools:text="jdkal;dsasd\n\n\njdklasjdlkas"/>
 
-        <FrameLayout
+        <LinearLayout
             android:id="@+id/send_container"
-            android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp48"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_alignBottom="@+id/message_field"
-            android:layout_alignParentEnd="true">
+            android:layout_alignParentEnd="true"
+            android:orientation="horizontal">
 
             <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/button_send"
+                android:id="@+id/button_close"
                 android:layout_width="@dimen/dp48"
                 android:layout_height="@dimen/dp48"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                app:srcCompat="@drawable/ic_send"/>
+                android:contentDescription="@string/close"
+                app:srcCompat="@drawable/ic_close"/>
 
-            <ProgressBar
-                android:id="@+id/send_progress"
+            <FrameLayout
                 android:layout_width="@dimen/dp48"
-                android:layout_height="@dimen/dp48"
-                android:clickable="false"
-                android:padding="@dimen/dp8"
-                android:visibility="gone"/>
-        </FrameLayout>
+                android:layout_height="@dimen/dp48">
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/button_send"
+                    android:layout_width="@dimen/dp48"
+                    android:layout_height="@dimen/dp48"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/send"
+                    app:srcCompat="@drawable/ic_send"/>
+
+                <ProgressBar
+                    android:id="@+id/send_progress"
+                    android:layout_width="@dimen/dp48"
+                    android:layout_height="@dimen/dp48"
+                    android:clickable="false"
+                    android:padding="@dimen/dp8"
+                    android:visibility="gone"/>
+            </FrameLayout>
+        </LinearLayout>
 
     </RelativeLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_write"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="@dimen/fab_margin"
+        android:visibility="gone"
+        android:contentDescription="@string/reply"
+        app:backgroundTint="?attr/colorAccent"
+        app:tint="?attr/colorOnSecondary"
+        app:srcCompat="@drawable/ic_fab_create" />
 
 </RelativeLayout>

@@ -42,6 +42,17 @@
             android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="4.09.17, 12:02" />
 
+        <TextView
+            android:id="@+id/comment_edited_marker"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/content_spacing_half"
+            android:text="✎"
+            android:textColor="?second_text_color"
+            android:textSize="@dimen/list_topic_meta_text_size"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
         <ImageView
             android:id="@+id/comment_like_image"
             android:layout_width="@dimen/list_avatar_compact_size"
@@ -61,6 +72,16 @@
             android:text="30"
             android:textColor="?second_text_color"
             android:textSize="@dimen/list_section_header_text_size" />
+
+        <ImageView
+            android:id="@+id/comment_more"
+            android:layout_width="@dimen/list_avatar_compact_size"
+            android:layout_height="@dimen/list_avatar_compact_size"
+            android:layout_marginStart="@dimen/content_spacing_half"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:padding="@dimen/content_spacing_half"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_more_vert" />
 
     </LinearLayout>
 

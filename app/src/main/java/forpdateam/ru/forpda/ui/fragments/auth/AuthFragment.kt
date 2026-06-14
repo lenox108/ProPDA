@@ -17,13 +17,13 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.TextView.OnEditorActionListener
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.github.rahatarmanahmed.cpv.CircularProgressView
+import com.google.android.material.progressindicator.CircularProgressIndicator
 import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ForPdaCoil
+import forpdateam.ru.forpda.databinding.FragmentAuthBinding
 import forpdateam.ru.forpda.common.simple.SimpleAnimationListener
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.entity.remote.auth.AuthForm
@@ -34,41 +34,36 @@ import forpdateam.ru.forpda.presentation.auth.AuthFragmentCallbacks
 import forpdateam.ru.forpda.presentation.auth.AuthViewModel
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * Created by radiationx on 29.07.16.
  */
+@AndroidEntryPoint
 class AuthFragment : TabFragment(), AuthFragmentCallbacks {
 
-    private lateinit var nick: EditText
-    private lateinit var password: EditText
-    private lateinit var captcha: EditText
-    private lateinit var captchaImage: ImageView
-    private lateinit var avatar: ImageView
-    private lateinit var sendButton: Button
-    private lateinit var skipButton: Button
-    private lateinit var regButton: Button
-    private lateinit var loginProgress: ProgressBar
-    private lateinit var captchaProgress: ProgressBar
-    private lateinit var hiddenAuth: CheckBox
+    private var _authBinding: FragmentAuthBinding? = null
+    private val authBinding get() = checkNotNull(_authBinding) { "Binding accessed after onDestroyView" }
 
-    private lateinit var mainForm: LinearLayout
-    private lateinit var complete: RelativeLayout
-    private lateinit var completeText: TextView
-    private lateinit var progressView: CircularProgressView
-    private lateinit var authTopButtons: View
+    // Legacy field accessors for backward compatibility
+    private val nick: EditText get() = authBinding.authLogin
+    private val password: EditText get() = authBinding.authPassword
+    private val captcha: EditText get() = authBinding.authCaptcha
+    private val captchaImage: ImageView get() = authBinding.captchaImage
+    private val avatar: ImageView get() = authBinding.authAvatar
+    private val sendButton: Button get() = authBinding.authSend
+    private val skipButton: Button get() = authBinding.authSkip
+    private val regButton: Button get() = authBinding.authReg
+    private val loginProgress: ProgressBar get() = authBinding.loginProgress
+    private val captchaProgress: ProgressBar get() = authBinding.captchaProgress
+    private val hiddenAuth: CheckBox get() = authBinding.authHidden
+    private val mainForm: LinearLayout get() = authBinding.authMainForm
+    private val complete: RelativeLayout get() = authBinding.authComplete
+    private val completeText: TextView get() = authBinding.authCompleteText
+    private val progressView: CircularProgressIndicator get() = authBinding.authProgress
+    private val authTopButtons: View get() = authBinding.authTopButtons
 
-    private val presenter: AuthViewModel by viewModels {
-        AuthViewModel.Factory(
-                App.get().Di().authRepository,
-                App.get().Di().profileRepository,
-                App.get().Di().router,
-                App.get().Di().schedulers,
-                App.get().Di().authHolder,
-                App.get().Di().errorHandler,
-                App.get().Di().systemLinkHandler
-        )
-    }
+    private val presenter: AuthViewModel by viewModels()
 
     private val loginTextWatcher = object : SimpleTextWatcher() {
         override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
@@ -77,30 +72,20 @@ class AuthFragment : TabFragment(), AuthFragmentCallbacks {
         }
     }
 
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_auth)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_auth)
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        baseInflateFragment(inflater, R.layout.fragment_auth)
-        nick = findViewById(R.id.auth_login) as EditText
-        password = findViewById(R.id.auth_password) as EditText
-        captcha = findViewById(R.id.auth_captcha) as EditText
-        captchaImage = findViewById(R.id.captchaImage) as ImageView
-        captchaProgress = findViewById(R.id.captcha_progress) as ProgressBar
-        avatar = findViewById(R.id.auth_avatar) as ImageView
-        mainForm = findViewById(R.id.auth_main_form) as LinearLayout
-        complete = findViewById(R.id.auth_complete) as RelativeLayout
-        completeText = findViewById(R.id.auth_complete_text) as TextView
-        progressView = findViewById(R.id.auth_progress) as CircularProgressView
-        loginProgress = findViewById(R.id.login_progress) as ProgressBar
-        hiddenAuth = findViewById(R.id.auth_hidden) as CheckBox
-        sendButton = findViewById(R.id.auth_send) as Button
-        skipButton = findViewById(R.id.auth_skip) as Button
-        regButton = findViewById(R.id.auth_reg) as Button
-        authTopButtons = findViewById(R.id.auth_top_buttons)
+        _authBinding = FragmentAuthBinding.inflate(inflater, fragmentContent, true)
         return viewFragment
+    }
+
+    override fun onDestroyViewBinding() {
+        _authBinding = null
+        super.onDestroyViewBinding()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -238,7 +223,6 @@ class AuthFragment : TabFragment(), AuthFragmentCallbacks {
             setAnimationListener(object : SimpleAnimationListener() {
                 override fun onAnimationEnd(animation: Animation) {
                     progressView.visibility = View.GONE
-                    progressView.stopAnimation()
                 }
             })
         })

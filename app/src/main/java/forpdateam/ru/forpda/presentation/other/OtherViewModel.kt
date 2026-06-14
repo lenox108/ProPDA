@@ -1,35 +1,37 @@
 package forpdateam.ru.forpda.presentation.other
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
+import forpdateam.ru.forpda.presentation.BaseViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+
 import forpdateam.ru.forpda.entity.app.CloseableInfo
 import forpdateam.ru.forpda.entity.app.other.AppMenuItem
 import forpdateam.ru.forpda.entity.app.profile.IUserHolder
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
+import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.CloseableInfoHolder
 import forpdateam.ru.forpda.model.interactors.other.MenuRepository
+import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
+import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
 import forpdateam.ru.forpda.model.repository.auth.AuthRepository
 import forpdateam.ru.forpda.model.repository.profile.ProfileRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
+import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuSection
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.rx2.asFlow
-import kotlinx.coroutines.rx2.await
-import java.io.UnsupportedEncodingException
-import java.net.URLEncoder
 
 /**
  * Экран «Полное меню» без Moxy.
  */
-class OtherViewModel(
+@HiltViewModel
+class OtherViewModel @Inject constructor(
         private val router: TabRouter,
         private val authRepository: AuthRepository,
         private val profileRepository: ProfileRepository,
@@ -37,19 +39,28 @@ class OtherViewModel(
         private val userHolder: IUserHolder,
         private val errorHandler: IErrorHandler,
         private val menuRepository: MenuRepository,
-        private val closeableInfoHolder: CloseableInfoHolder
-) : ViewModel() {
+        private val closeableInfoHolder: CloseableInfoHolder,
+        private val mainPreferencesHolder: MainPreferencesHolder,
+        private val otherPreferencesHolder: OtherPreferencesHolder
+) : BaseViewModel() {
 
     data class UiState(
+            val isReady: Boolean = false,
             val profileItem: ProfileModel? = null,
             val infoList: List<CloseableInfo> = emptyList(),
-            val menu: List<List<AppMenuItem>> = emptyList()
+            val menu: List<List<AppMenuItem>> = emptyList(),
+            val menuTileLayout: Map<OtherMenuSection, List<Int>> = emptyMap(),
+            val bottomNavDuplicateIds: Set<Int> = emptySet()
     )
 
     private val closeableInfoIds = arrayOf(CloseableInfoHolder.item_other_menu_drag)
 
     private var profileItem: ProfileModel? = null
     private var menuMap: Map<Int, List<AppMenuItem>> = emptyMap()
+    private var menuTileLayout: Map<OtherMenuSection, List<Int>> = emptyMap()
+    private var bottomNavColumns = mainPreferencesHolder.getBottomNavColumns()
+    private var isMenuLoaded = false
+    private var isMenuTileLayoutLoaded = false
     private val localCloseableInfo = mutableListOf<CloseableInfo>()
     private var isMenuDragMode = false
 
@@ -57,10 +68,10 @@ class OtherViewModel(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
+        scope.launch {
             runCatching { profileRepository.loadSelf() }
         }
-        viewModelScope.launch {
+        scope.launch {
             profileRepository.observeCurrentUser()
                     .catch { }
                     .collect { wrapper ->
@@ -68,7 +79,7 @@ class OtherViewModel(
                         publishMenu()
                     }
         }
-        viewModelScope.launch {
+        scope.launch {
             authHolder.observe()
                     .catch { }
                     .collect {
@@ -78,18 +89,25 @@ class OtherViewModel(
                         publishMenu()
                     }
         }
-        viewModelScope.launch {
+        scope.launch {
             menuRepository.observerMenu()
-                    .asFlow()
                     .catch { }
-                    .collect {
-                        menuMap = it
+                    .collect { menu ->
+                        menuMap = menu
+                        isMenuLoaded = true
                         publishMenu()
                     }
         }
-        viewModelScope.launch {
+        scope.launch {
+            mainPreferencesHolder.observeBottomNavColumnsFlow()
+                    .catch { }
+                    .collect { columns ->
+                        bottomNavColumns = columns
+                        publishMenu()
+                    }
+        }
+        scope.launch {
             closeableInfoHolder.observe()
-                    .asFlow()
                     .catch { }
                     .collect { info ->
                         localCloseableInfo.clear()
@@ -101,6 +119,11 @@ class OtherViewModel(
                         publishMenu()
                     }
         }
+        scope.launch {
+            menuTileLayout = otherPreferencesHolder.getOtherMenuTileLayout()
+            isMenuTileLayoutLoaded = true
+            publishMenu()
+        }
     }
 
     fun onMenuDragModeChange(isDragMode: Boolean) {
@@ -110,16 +133,30 @@ class OtherViewModel(
 
     private fun publishMenu() {
         if (isMenuDragMode) return
+        if (!isMenuLoaded || !isMenuTileLayoutLoaded) return
         _uiState.value = UiState(
+                isReady = true,
                 profileItem = profileItem,
                 infoList = localCloseableInfo.toList(),
-                menu = menuMap.map { it.value }
+                menu = menuMap.map { it.value },
+                menuTileLayout = menuTileLayout,
+                bottomNavDuplicateIds = resolveBottomNavDuplicateIds()
         )
     }
 
+    private fun resolveBottomNavDuplicateIds(): Set<Int> {
+        val visibleBottomSlots = (bottomNavColumns - 1).coerceAtLeast(0)
+        return menuMap[MenuRepository.group_main]
+                .orEmpty()
+                .filter { it.id != MenuRepository.item_auth }
+                .take(visibleBottomSlots)
+                .map { it.id }
+                .toSet()
+    }
+
     fun signOut() {
-        viewModelScope.launch {
-            runCatching { authRepository.signOut().await() }
+        scope.launch {
+            runCatching { authRepository.signOut() }
                     .onSuccess {
                         router.showSystemMessage("Данные авторизации удалены")
                     }
@@ -135,6 +172,10 @@ class OtherViewModel(
             menuRepository.setLastOpened(item.id)
         } else {
             when (item.id) {
+                MenuRepository.item_auth -> {
+                    onProfileClick()
+                    menuRepository.setLastOpened(item.id)
+                }
                 MenuRepository.item_my_messages -> {
                     if (!authHolder.get().isAuth()) {
                         router.navigateTo(Screen.Auth())
@@ -144,10 +185,13 @@ class OtherViewModel(
                             router.navigateTo(Screen.Auth())
                         } else {
                             try {
-                                val url = ("https://4pda.to/forum/index.php?act=search&source=pst&result=posts&username=" +
-                                        URLEncoder.encode(nick, "windows-1251"))
+                                val url = SearchSettings().apply {
+                                    source = SearchSettings.SOURCE_CONTENT.first
+                                    this.nick = nick
+                                    result = SearchSettings.RESULT_POSTS.first
+                                }.toUrl()
                                 router.navigateTo(Screen.Search().apply { searchUrl = url })
-                            } catch (e: UnsupportedEncodingException) {
+                            } catch (e: Exception) {
                                 errorHandler.handle(e)
                             }
                         }
@@ -166,39 +210,23 @@ class OtherViewModel(
         }
     }
 
-    fun onChangeMenuSequence(items: List<AppMenuItem>) {
-        menuRepository.setMainMenuSequence(items)
+    fun onChangeMenuSequence(layout: Map<OtherMenuSection, List<AppMenuItem>>) {
+        val sections = listOf(OtherMenuSection.QUICK, OtherMenuSection.PERSONAL, OtherMenuSection.TOOLS)
+        val visibleLayout = layout.mapValues { entry -> entry.value.map { it.id } }
+        val visibleIds = visibleLayout.values.flatten().toSet()
+        val previousHiddenLayout = menuTileLayout.mapValues { entry ->
+            entry.value.filterNot { visibleIds.contains(it) }
+        }
+        menuTileLayout = sections.associateWith { section ->
+            visibleLayout[section].orEmpty() + previousHiddenLayout[section].orEmpty()
+        }
+        scope.launch {
+            otherPreferencesHolder.setOtherMenuTileOrder(otherPreferencesHolder.encodeOtherMenuTileLayout(menuTileLayout))
+        }
     }
 
     fun onCloseInfo(item: CloseableInfo) {
         closeableInfoHolder.close(item)
     }
 
-    class Factory(
-            private val router: TabRouter,
-            private val authRepository: AuthRepository,
-            private val profileRepository: ProfileRepository,
-            private val authHolder: AuthHolder,
-            private val userHolder: IUserHolder,
-            private val errorHandler: IErrorHandler,
-            private val menuRepository: MenuRepository,
-            private val closeableInfoHolder: CloseableInfoHolder
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != OtherViewModel::class.java) {
-                throw IllegalArgumentException("Unknown ViewModel class")
-            }
-            return OtherViewModel(
-                    router,
-                    authRepository,
-                    profileRepository,
-                    authHolder,
-                    userHolder,
-                    errorHandler,
-                    menuRepository,
-                    closeableInfoHolder
-            ) as T
-        }
-    }
 }

@@ -11,37 +11,35 @@ import android.widget.ArrayAdapter
 import java.util.ArrayList
 
 import androidx.fragment.app.viewModels
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.devdb.Brands
-import forpdateam.ru.forpda.presentation.devdb.brands.BrandsView
+import forpdateam.ru.forpda.presentation.devdb.brands.BrandsUiEvent
 import forpdateam.ru.forpda.presentation.devdb.brands.BrandsViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 import forpdateam.ru.forpda.ui.views.adapters.BaseSectionedAdapter
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 
 /**
  * Created by radiationx on 08.08.17.
  */
 
-class BrandsFragment : RecyclerFragment(), BrandsView, BaseSectionedAdapter.OnItemClickListener<Brands.Item> {
+@AndroidEntryPoint
+class BrandsFragment : RecyclerFragment(), BaseSectionedAdapter.OnItemClickListener<Brands.Item> {
+
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
 
     private lateinit var adapter: BrandsAdapter
 
-    private val presenter: BrandsViewModel by viewModels {
-        BrandsViewModel.Factory(
-                App.get().Di().devDbRepository,
-                App.get().Di().router,
-                App.get().Di().errorHandler
-        )
-    }
-
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_brands)
-    }
+    private val presenter: BrandsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_brands)
         arguments?.apply {
             getString(ARG_CATEGORY_ID)?.also {
                 presenter.initCategory(it)
@@ -55,13 +53,15 @@ class BrandsFragment : RecyclerFragment(), BrandsView, BaseSectionedAdapter.OnIt
         refreshLayout.setOnRefreshListener { presenter.loadBrands() }
         titlesWrapper.visibility = View.GONE
         toolbarSpinner.visibility = View.VISIBLE
-        setScrollFlagsEnterAlways()
+        syncToolbarSpinnerEndSpacer()
+        clearToolbarScrollFlags()
 
         adapter = BrandsAdapter()
         recyclerView.adapter = adapter
 
 
-        toolbarSpinner.prompt = "Category"
+        toolbarSpinner.contentDescription = getString(R.string.devdb_category_picker_prompt)
+        toolbarSpinner.prompt = getString(R.string.devdb_category_picker_prompt)
         toolbarSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 presenter.selectCategory(position)
@@ -73,12 +73,11 @@ class BrandsFragment : RecyclerFragment(), BrandsView, BaseSectionedAdapter.OnIt
 
         adapter.setOnItemClickListener(this)
 
-        presenter.attachView(this)
         presenter.start()
+        observeViewModel()
     }
 
     override fun onDestroyView() {
-        presenter.detachView()
         super.onDestroyView()
     }
 
@@ -97,21 +96,45 @@ class BrandsFragment : RecyclerFragment(), BrandsView, BaseSectionedAdapter.OnIt
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
     }
 
-    override fun initCategories(categories: Array<String>, position: Int) {
-        val spinnerTitles = categories.map { getCategoryTitle(it) }
-        val spinnerAdapter = ArrayAdapter(context!!, android.R.layout.simple_spinner_item, spinnerTitles)
-        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        refreshLayout.isRefreshing = isRefreshing
+                    }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleUiEvent(event: BrandsUiEvent) {
+        when (event) {
+            is BrandsUiEvent.InitCategories -> initCategories(event.categories, event.position)
+            is BrandsUiEvent.ShowData -> showData(event.brands)
+        }
+    }
+
+    private fun initCategories(categories: Array<String>, position: Int) {
+        val spinnerTitles = categories.map { getCategoryTitle(it) ?: it }
+        val spinnerAdapter = ArrayAdapter(requireContext(), R.layout.toolbar_spinner_item, spinnerTitles)
+        spinnerAdapter.setDropDownViewResource(R.layout.toolbar_spinner_dropdown_item)
         toolbarSpinner.adapter = spinnerAdapter
         toolbarSpinner.setSelection(position)
     }
 
-    override fun showData(data: Brands) {
+    private fun showData(data: Brands) {
         setTitle(data.catTitle)
-        adapter.clear()
-        for ((key, value) in data.letterMap) {
-            adapter.addSection(key, value)
+        val newSections = data.letterMap.map { (key, value) -> android.util.Pair(key, value) }
+        // Delay submit to prevent RecyclerView crash during layout
+        recyclerView.post {
+            adapter.submitSections(newSections)
         }
-        adapter.notifyDataSetChanged()
     }
 
     override fun onItemClick(item: Brands.Item) {
@@ -124,10 +147,10 @@ class BrandsFragment : RecyclerFragment(), BrandsView, BaseSectionedAdapter.OnIt
 
     private fun getCategoryTitle(category: String): String? {
         when (category) {
-            BrandsViewModel.CATEGORY_PHONES -> return App.get().getString(R.string.brands_category_phones)
-            BrandsViewModel.CATEGORY_PAD -> return App.get().getString(R.string.brands_category_tabs)
-            BrandsViewModel.CATEGORY_EBOOK -> return App.get().getString(R.string.brands_category_ebook)
-            BrandsViewModel.CATEGORY_SMARTWATCH -> return App.get().getString(R.string.brands_category_smartwatch)
+            BrandsViewModel.CATEGORY_PHONES -> return getString(R.string.brands_category_phones)
+            BrandsViewModel.CATEGORY_PAD -> return getString(R.string.brands_category_tabs)
+            BrandsViewModel.CATEGORY_EBOOK -> return getString(R.string.brands_category_ebook)
+            BrandsViewModel.CATEGORY_SMARTWATCH -> return getString(R.string.brands_category_smartwatch)
         }
         return null
     }

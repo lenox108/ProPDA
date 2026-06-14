@@ -60,10 +60,10 @@ body {
     width: 100%;
     height: 100%;
     margin: 0;
-    background: @background_base;
-    font-family: @font;
+    background: @surface_background;
+    font-family: var(--app-font-family, @font);
     font-size: 1em;
-    color: @default_text_color;
+    color: @surface_text_primary;
     line-height: 20/16em;
     overflow-wrap: break-word;
     word-wrap: break-word;
@@ -102,7 +102,7 @@ li {
     position: relative;
     border-top: @border1;
     border-bottom: @border1;
-    background: @postBlockBg;
+    background: @surface_control;
     >.block-title {
         padding: 10/16rem 16/16rem;
         position: relative;
@@ -112,12 +112,16 @@ li {
         font-size: 14/16rem;
         line-height: 20/16rem;
         //text-transform: uppercase;
-        color: @colorAccent!important;
+        color: @surface_accent!important;
         >.block-controls {
-            float: right;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
             position: absolute;
             right: 40/16rem;
-            top: (40-36)/2/16rem;
+            top: 50%;
+            -webkit-transform: translateY(-50%);
+            transform: translateY(-50%);
             z-index: 3;
             .noselect();
             i {
@@ -125,7 +129,7 @@ li {
                 height: 36/16rem;
                 width: 36/16rem;
                 .bRad(2px);
-                float: right;
+                flex: 0 0 36/16rem;
                 margin-right: 8/16rem;
                 &.wrap {
                     &:after {
@@ -157,7 +161,7 @@ li {
                     background-position: center;
                 }
                 &:active {
-                    background-color: @tapColor;
+                    background-color: @surface_control_active;
                 }
             }
         }
@@ -168,11 +172,18 @@ li {
         z-index: 1;
     }
     &.spoil {
+        border-top-color: transparent;
+        border-bottom-color: transparent;
         >.block-title {
+            display: flex;
+            align-items: center;
+            box-sizing: border-box;
             padding-right: (40+40)/16rem;
-            color: @colorAccent;
+            background: transparent;
+            color: @surface_accent;
+            border-bottom: @border1;
             * {
-                color: @colorAccent!important;
+                color: @surface_accent!important;
                 font-size: 1em!important;
                 font-style: normal!important;
                 line-height: 1.25rem!important;
@@ -191,7 +202,7 @@ li {
                     -webkit-transform: scale(1) translateZ(0);
                     transform: scale(1) translateZ(0);
                 }
-                background: @tapColor;
+                background: @surface_control_active;
             }
             &:before {
                 //position: absolute;
@@ -207,7 +218,9 @@ li {
                 width: 40/16rem;
                 position: absolute;
                 right: 0;
-                top: 0;
+                top: 50%;
+                -webkit-transform: translateY(-50%);
+                transform: translateY(-50%);
                 -webkit-transition: 0.225s @curveStandard;
                 transition: 0.225s @curveStandard;
                 -webkit-transform-origin: center;
@@ -224,7 +237,7 @@ li {
                     box-sizing: border-box;
                     height: 8/16rem;
                     width: 8/16rem;
-                    border-color: @colorAccent;
+                    border-color: @surface_accent;
                     -webkit-transform: rotate(-45deg) translateY(-1/16rem) translateX(1/16rem);
                     transform: rotate(-45deg) translateY(-1/16rem) translateX(1/16rem);
                     -webkit-transform-origin: center;
@@ -239,7 +252,7 @@ li {
                     margin-top: -16/16rem;
                     height: 32/16rem;
                     width: 32/16rem;
-                    background: @colorAccent;
+                    background: @surface_accent;
                     .bRad(100%);
                     -webkit-transform: scale(0.5) translateZ(0);
                     transform: scale(0.5) translateZ(0);
@@ -279,7 +292,9 @@ li {
             }
         }
         &.close {
-            >.block-title {}
+            >.block-title {
+                border-bottom-color: transparent;
+            }
             >.block-body {
                 display: none;
             }
@@ -287,8 +302,8 @@ li {
         &.open {
             >.block-title {
                 .icon {
-                    -webkit-transform: rotateX(180deg) translateZ(0);
-                    transform: rotateX(180deg) translateZ(0);
+                    -webkit-transform: translateY(-50%) rotateX(180deg) translateZ(0);
+                    transform: translateY(-50%) rotateX(180deg) translateZ(0);
                 }
                 &:first-letter {
                     text-transform: uppercase;
@@ -308,10 +323,11 @@ li {
         }
     }
     &.quote {
-        background: none;
+        background: @quote_surface;
         border: none;
-        border-left: 4/16rem solid @quote_border_color;
+        border-left: 4/16rem solid @surface_accent;
         margin-left: 0;
+        .bRad(@radius_medium);
         >.block-title {
             text-transform: none;
             //font-style: italic;
@@ -410,6 +426,9 @@ li {
                     content: none;
                 }
                 &:after {
+                    content: none;
+                }
+                .icon:before {
                     content: none;
                 }
             }
@@ -519,10 +538,10 @@ li {
             padding-bottom: 0;
             margin-top: 0;
             margin-bottom: 0;
-            font-family: monospace;
             position: relative;
             padding: 4/16rem 0;
             padding-left: 48/16rem;
+            -webkit-font-smoothing: antialiased;
             .lines {
                 background: linear-gradient(rgba(130, 130, 130, 0.1) 20/16rem, transparent 20/16rem);
                 background-size: 100% 40/16rem;
@@ -531,17 +550,30 @@ li {
                 //outline: 1px solid red;
                 color: @code_text_color;
                 counter-reset: line;
-                overflow: hidden;
                 overflow-x: auto;
+                overflow-y: hidden;
+                -webkit-overflow-scrolling: touch;
+                display: inline-block;
+                min-width: 100%;
+                max-width: 100%;
+                box-sizing: border-box;
                 white-space: pre;
                 word-break: normal;
                 word-wrap: normal;
                 font-size: 12/16rem;
                 line-height: 20/16rem;
+                tab-size: 4;
+                -moz-tab-size: 4;
+                font-variant-ligatures: none;
+                -webkit-user-select: text;
+                user-select: text;
                 >div {
                     display: block;
                     counter-increment: list;
                     min-height: 20/16rem;
+                    padding-right: 12/16rem;
+                    -webkit-user-select: text;
+                    user-select: text;
                     &:before {
                         content: counter(list);
                         position: absolute;
@@ -585,7 +617,7 @@ li {
                 .lines {
                     white-space: pre-wrap;
                     word-break: break-word;
-                    word-wrap: normal;
+                    word-wrap: break-word;
                 }
             }
         }
@@ -674,7 +706,7 @@ a.snapback {
     .icon:before, {
         content: "@";
         position: relative;
-        font-family: @font;
+        font-family: var(--app-font-family, @font);
         z-index: 1;
     }
     &:after {
@@ -744,15 +776,15 @@ a.snapback {
     //margin-bottom: 8/16rem;
     //margin: 0 4/16rem;
     //margin-bottom: 4/16rem;
-    border: 1px solid @attachment_border;
-    background: @attachment_background;
-    border-radius: 2/16rem;
+    border: 1px solid @attachment_surface_border;
+    background: @attachment_surface;
+    border-radius: @radius_medium;
     text-align: left!important;
     font-size: 1rem!important;
     text-decoration: none!important;
     line-height: 20/16rem!important;
     font-style: normal!important;
-    font-family: @font;
+    font-family: var(--app-font-family, @font);
     .icon {
         position: absolute;
         top: 4/16rem;

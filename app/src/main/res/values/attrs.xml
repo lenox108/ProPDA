@@ -26,14 +26,34 @@
     <attr name="profile_overlay_bg" extension="reference" format="color" />
     <attr name="img_viewer_toolbar" extension="reference" format="color" />
     <attr name="icon_base" extension="reference" format="color" />
+    <attr name="menu_tile_icon" extension="reference" format="color" />
     <attr name="icon_base_inverse" extension="reference" format="color" />
     <attr name="icon_toolbar" extension="reference" format="color" />
     <attr name="icon_toolbar_inverse" extension="reference" format="color" />
     <attr name="count_background" extension="reference" />
     <attr name="cards_background" extension="reference" format="color" />
+    <!-- Toolbar plaque + BottomDrawer bar: surface/card color in light and regular dark; AMOLED may stay pure black. -->
+    <attr name="chrome_plane_background" extension="reference" format="color" />
+    <!-- Primary section top toolbar plate: soft accent-tinted surface, separate from popups/dialogs/bottom chrome. -->
+    <attr name="main_toolbar_accent_surface" extension="reference" format="color" />
+    <!-- Optional outline for primary section top toolbar plates; keeps dark/AMOLED rounded corners readable. -->
+    <attr name="main_toolbar_stroke_width" format="dimension" />
+    <attr name="main_toolbar_stroke_color" extension="reference" format="color" />
+    <!-- Обводка групп настроек (0dp / transparent вне AMOLED). -->
+    <attr name="list_plate_stroke_width" format="dimension" />
+    <attr name="list_plate_stroke_color" extension="reference" format="color" />
     <attr name="notify_dot_tab" extension="reference" />
     <attr name="item_tab_close_color" extension="reference" format="color" />
 
+    <!-- Bottom nav active pill: light = transparent (icon tint only); dark = same as colorSecondaryContainer -->
+    <attr name="bottom_nav_tab_active_fill" format="color" />
+    <!-- M3 surface для нижней полоски / BottomDrawer: верхние углы, низ без inset (edge-to-edge) -->
+    <attr name="bottom_nav_bar_shape_appearance" format="reference" />
+    <!-- Smart navigation FAB colors: AMOLED overrides surface/icon without affecting normal light/dark accents. -->
+    <attr name="smart_nav_fab_background" extension="reference" format="color" />
+    <attr name="smart_nav_fab_icon" extension="reference" format="color" />
+
+    <attr name="toolbar_color" format="color" />
     <attr name="app_bar_overlay" extension="reference" />
     <attr name="popup_overlay" extension="reference" />
     <attr name="bottom_sheet_dialog_theme" extension="reference" />
@@ -41,6 +61,8 @@
     <attr name="is_use_light_status_bar" format="boolean" />
 
     <attr name="ProfileToolbarTextStyle" extension="reference" />
+    <attr name="colorSwitchTrackNormal" format="color" />
+    <attr name="colorSwitchThumbNormal" format="color" />
 
     <declare-styleable name="AspectRatio">
         <attr name="aspectRatio" format="float" />

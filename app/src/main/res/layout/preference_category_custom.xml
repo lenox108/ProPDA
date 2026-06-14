@@ -1,32 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/title"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/background_for_cards"
-    android:orientation="vertical">
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/dp2"
-        android:layout_marginBottom="@dimen/dp6"
-        android:background="@drawable/pref_shadow_to_bottom" />
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/dp4"
-        android:visibility="gone"
-        android:background="@drawable/pref_shadow_bottom" />
-
-    <TextView xmlns:android="http://schemas.android.com/apk/res/android"
-        android:id="@android:id/title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="?colorPrimary"
-        android:paddingEnd="@dimen/content_padding_horizontal"
-        android:paddingStart="@dimen/content_padding_horizontal"
-        android:paddingTop="@dimen/content_block_padding_vertical"
-        android:textColor="?colorAccent"
-        android:textSize="@dimen/list_topic_meta_text_size"
-        android:textStyle="bold" />
-
-</LinearLayout>
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/content_padding_vertical"
+    android:paddingBottom="@dimen/content_spacing_half"
+    android:textColor="?colorAccent"
+    android:textSize="@dimen/list_topic_meta_text_size"
+    android:textStyle="bold" />

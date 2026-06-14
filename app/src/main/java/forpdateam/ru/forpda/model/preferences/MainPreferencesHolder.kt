@@ -1,95 +1,148 @@
 package forpdateam.ru.forpda.model.preferences
 
-import android.content.SharedPreferences
-import com.f2prateek.rx.preferences2.RxSharedPreferences
-import forpdateam.ru.forpda.common.Preferences
-import io.reactivex.Observable
-import kotlin.math.max
-import kotlin.math.min
+import android.content.Context
+import forpdateam.ru.forpda.common.Preferences as AppPreferences
+import forpdateam.ru.forpda.model.datastore.MainDataStore
+import forpdateam.ru.forpda.ui.AppFontMode
+import kotlinx.coroutines.flow.Flow
 
 class MainPreferencesHolder(
-        private val sharedPreferences: SharedPreferences
+        private val context: Context
 ) {
+    private val dataStore = MainDataStore(context)
 
-    private val rxPreferences = RxSharedPreferences.create(sharedPreferences)
+    // --- Flow-наблюдения ---
+    fun observeWebViewFontSizeFlow(): Flow<Int> = dataStore.observeWebViewFontSizeFlow()
 
-    private val webViewFontSize by lazy {
-        rxPreferences.getInteger(Preferences.Main.WEBVIEW_FONT_SIZE, 16)
-    }
+    fun observeScrollButtonEnabledFlow(): Flow<Boolean> = dataStore.observeScrollButtonEnabledFlow()
 
-    private val systemDownloader by lazy {
-        rxPreferences.getBoolean(Preferences.Main.IS_SYSTEM_DOWNLOADER, true)
-    }
+    fun observeTopicPaginationPanelEnabledFlow(): Flow<Boolean> = dataStore.observeTopicPaginationPanelEnabledFlow()
 
-    private val editorMonospace by lazy {
-        rxPreferences.getBoolean(Preferences.Main.IS_EDITOR_MONOSPACE, true)
-    }
+    fun observeTopicScrollModeFlow(): Flow<AppPreferences.Main.TopicScrollMode> = dataStore.observeTopicScrollModeFlow()
 
-    private val editorDefaultHidden by lazy {
-        rxPreferences.getBoolean(Preferences.Main.IS_EDITOR_DEFAULT_HIDDEN, true)
-    }
+    fun observeTopicPostDensityFlow(): Flow<AppPreferences.Main.TopicPostDensity> = dataStore.observeTopicPostDensityFlow()
 
-    private val scrollButtonEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Main.SCROLL_BUTTON_ENABLE, false)
-    }
+    fun observeTopicToolbarBehaviorFlow(): Flow<AppPreferences.Main.TopicToolbarBehavior> = dataStore.observeTopicToolbarBehaviorFlow()
 
-    private val themeMode by lazy {
-        rxPreferences.getEnum(
-                Preferences.Main.Theme.MODE,
-                Preferences.Main.ThemeMode.SYSTEM,
-                Preferences.Main.ThemeMode::class.java
-        )
-    }
+    fun observeTopicPageSwipeEnabledFlow(): Flow<Boolean> = dataStore.observeTopicPageSwipeEnabledFlow()
 
-    private val showBottomArrow by lazy {
-        rxPreferences.getBoolean(Preferences.Main.SHOW_BOTTOM_ARROW, false)
-    }
+    fun observeTopicBottomRefreshGestureEnabledFlow(): Flow<Boolean> = dataStore.observeTopicBottomRefreshGestureEnabledFlow()
 
-    private val uiPalette by lazy {
-        rxPreferences.getEnum(
-                Preferences.Main.UI_PALETTE,
-                Preferences.Main.UiPalette.SYSTEM,
-                Preferences.Main.UiPalette::class.java
-        )
-    }
+    fun observeTopicBackBehaviorFlow(): Flow<AppPreferences.Main.TopicBackBehavior> = dataStore.observeTopicBackBehaviorFlow()
 
-    fun observeWebViewFontSize(): Observable<Int> = webViewFontSize.asObservable()
-            .map { max(min(it, 64), 8) }
+    fun observeTopicOpenTargetFlow(): Flow<AppPreferences.Main.TopicOpenTarget> = dataStore.observeTopicOpenTargetFlow()
 
-    fun observeSystemDownloader(): Observable<Boolean> = systemDownloader.asObservable()
+    fun observeTopicHeaderInitialStateFlow(): Flow<AppPreferences.Main.TopicHeaderInitialState> = dataStore.observeTopicHeaderInitialStateFlow()
 
-    fun observeEditorMonospace(): Observable<Boolean> = editorMonospace.asObservable()
+    fun observeThemeModeFlow(): Flow<AppPreferences.Main.ThemeMode> = dataStore.observeThemeModeFlow()
 
-    fun observeEditorDefaultHidden(): Observable<Boolean> = editorDefaultHidden.asObservable()
+    fun observeUiPaletteFlow(): Flow<AppPreferences.Main.UiPalette> = dataStore.observeUiPaletteFlow()
 
-    fun observeScrollButtonEnabled(): Observable<Boolean> = scrollButtonEnabled.asObservable()
+    fun observeEditorMonospaceFlow(): Flow<Boolean> = dataStore.observeEditorMonospaceFlow()
 
-    fun observeThemeMode(): Observable<Preferences.Main.ThemeMode> = themeMode.asObservable()
+    fun observeShowBottomArrowFlow(): Flow<Boolean> = dataStore.observeShowBottomArrowFlow()
 
-    fun observeShowBottomArrow(): Observable<Boolean> = showBottomArrow.asObservable()
+    fun observeBottomNavColumnsFlow(): Flow<Int> = dataStore.observeBottomNavColumnsFlow()
 
-    fun observeUiPalette(): Observable<Preferences.Main.UiPalette> = uiPalette.asObservable()
+    fun observeUseSystemFontFlow(): Flow<Boolean> = dataStore.observeUseSystemFontFlow()
 
-    fun getWebViewFontSize(): Int = max(min(webViewFontSize.get(), 64), 8)
+    fun observeAppFontModeFlow(): Flow<AppFontMode> = dataStore.observeAppFontModeFlow()
 
-    fun getSystemDownloader(): Boolean = systemDownloader.get()
+    fun observeDownloadMethodFlow(): Flow<AppPreferences.Main.DownloadMethod> = dataStore.observeDownloadMethodFlow()
 
-    fun getEditorMonospace(): Boolean = editorMonospace.get()
+    fun observeDownloadFolderUriFlow(): Flow<String?> = dataStore.observeDownloadFolderUriFlow()
 
-    fun getEditorDefaultHidden(): Boolean = editorDefaultHidden.get()
+    // --- Геттеры (instant mirror reads, no runBlocking) ---
+    fun getWebViewFontSize(): Int = dataStore.getWebViewFontSizeImmediate()
 
-    fun getScrollButtonEnabled(): Boolean = scrollButtonEnabled.get()
+    fun getSystemDownloader(): Boolean = dataStore.getSystemDownloaderImmediate()
 
-    fun getThemeMode(): Preferences.Main.ThemeMode = themeMode.get()
+    fun getDownloadMethod(): AppPreferences.Main.DownloadMethod = dataStore.getDownloadMethodImmediate()
 
-    fun getShowBottomArrow(): Boolean = showBottomArrow.get()
+    fun getDownloadFolderUri(): String? = dataStore.getDownloadFolderUriImmediate()
 
-    fun getUiPalette(): Preferences.Main.UiPalette = uiPalette.get()
+    fun getEditorMonospace(): Boolean = dataStore.getEditorMonospaceImmediate()
 
-    fun setWebViewFontSize(size: Int): Unit = webViewFontSize.set(max(min(size, 64), 8))
+    fun getEditorDefaultHidden(): Boolean = dataStore.getEditorDefaultHiddenImmediate()
 
-    fun setThemeMode(mode: Preferences.Main.ThemeMode) = themeMode.set(mode)
+    fun getScrollButtonEnabled(): Boolean = dataStore.getScrollButtonEnabledImmediate()
 
-    fun setUiPalette(palette: Preferences.Main.UiPalette) = uiPalette.set(palette)
+    fun getTopicPaginationPanelEnabled(): Boolean = dataStore.getTopicPaginationPanelEnabledImmediate()
 
+    fun getTopicScrollMode(): AppPreferences.Main.TopicScrollMode = dataStore.getTopicScrollModeImmediate()
+
+    fun getTopicPostDensity(): AppPreferences.Main.TopicPostDensity = dataStore.getTopicPostDensityImmediate()
+
+    fun getTopicToolbarBehavior(): AppPreferences.Main.TopicToolbarBehavior = dataStore.getTopicToolbarBehaviorImmediate()
+
+    fun getTopicPageSwipeEnabled(): Boolean = dataStore.getTopicPageSwipeEnabledImmediate()
+
+    fun getTopicBottomRefreshGestureEnabled(): Boolean = dataStore.getTopicBottomRefreshGestureEnabledImmediate()
+
+    fun getTopicBackBehavior(): AppPreferences.Main.TopicBackBehavior = dataStore.getTopicBackBehaviorImmediate()
+
+    fun getTopicOpenTarget(): AppPreferences.Main.TopicOpenTarget = dataStore.getTopicOpenTargetImmediate()
+
+    fun getTopicHeaderInitialState(): AppPreferences.Main.TopicHeaderInitialState = dataStore.getTopicHeaderInitialStateImmediate()
+
+    fun getBottomNavColumns(): Int = dataStore.getBottomNavColumnsImmediate()
+
+    fun getThemeMode(): AppPreferences.Main.ThemeMode = dataStore.getThemeModeImmediate()
+
+    fun getShowBottomArrow(): Boolean = dataStore.getShowBottomArrowImmediate()
+
+    fun getUiPalette(): AppPreferences.Main.UiPalette = dataStore.getUiPaletteImmediate()
+
+    fun getUseSystemFont(): Boolean = dataStore.getUseSystemFontImmediate()
+
+    fun getAppFontMode(): AppFontMode = dataStore.getAppFontModeImmediate()
+
+    fun getStartupScreen(): AppPreferences.Main.StartupScreen = dataStore.getStartupScreenImmediate()
+
+    // --- Сеттеры (suspend — mirror updated inside DataStore) ---
+    suspend fun setWebViewFontSize(size: Int) = dataStore.setWebViewFontSize(size)
+
+    suspend fun setBottomNavColumns(columns: Int) = dataStore.setBottomNavColumns(columns)
+
+    suspend fun setThemeMode(mode: AppPreferences.Main.ThemeMode) = dataStore.setThemeMode(mode)
+
+    suspend fun setUiPalette(palette: AppPreferences.Main.UiPalette) = dataStore.setUiPalette(palette)
+
+    suspend fun setShowBottomArrow(value: Boolean) = dataStore.setShowBottomArrow(value)
+
+    suspend fun setScrollButtonEnabled(value: Boolean) = dataStore.setScrollButtonEnabled(value)
+
+    suspend fun setTopicPaginationPanelEnabled(value: Boolean) = dataStore.setTopicPaginationPanelEnabled(value)
+
+    suspend fun setTopicScrollMode(value: AppPreferences.Main.TopicScrollMode) = dataStore.setTopicScrollMode(value)
+
+    suspend fun setTopicPostDensity(value: AppPreferences.Main.TopicPostDensity) = dataStore.setTopicPostDensity(value)
+
+    suspend fun setTopicToolbarBehavior(value: AppPreferences.Main.TopicToolbarBehavior) = dataStore.setTopicToolbarBehavior(value)
+
+    suspend fun setTopicPageSwipeEnabled(value: Boolean) = dataStore.setTopicPageSwipeEnabled(value)
+
+    suspend fun setTopicBottomRefreshGestureEnabled(value: Boolean) = dataStore.setTopicBottomRefreshGestureEnabled(value)
+
+    suspend fun setTopicBackBehavior(value: AppPreferences.Main.TopicBackBehavior) = dataStore.setTopicBackBehavior(value)
+
+    suspend fun setTopicOpenTarget(value: AppPreferences.Main.TopicOpenTarget) = dataStore.setTopicOpenTarget(value)
+
+    suspend fun setTopicHeaderInitialState(value: AppPreferences.Main.TopicHeaderInitialState) = dataStore.setTopicHeaderInitialState(value)
+
+    suspend fun setEditorMonospace(value: Boolean) = dataStore.setEditorMonospace(value)
+
+    suspend fun setEditorDefaultHidden(value: Boolean) = dataStore.setEditorDefaultHidden(value)
+
+    suspend fun setSystemDownloader(value: Boolean) = dataStore.setSystemDownloader(value)
+
+    suspend fun setDownloadMethod(method: AppPreferences.Main.DownloadMethod) = dataStore.setDownloadMethod(method)
+
+    suspend fun setDownloadFolderUri(uri: String?) = dataStore.setDownloadFolderUri(uri)
+
+    suspend fun setUseSystemFont(value: Boolean) = dataStore.setUseSystemFont(value)
+
+    suspend fun setAppFontMode(mode: AppFontMode) = dataStore.setAppFontMode(mode)
+
+    suspend fun setStartupScreen(value: AppPreferences.Main.StartupScreen) = dataStore.setStartupScreen(value)
 }

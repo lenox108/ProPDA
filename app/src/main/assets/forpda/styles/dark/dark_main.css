@@ -91,7 +91,7 @@ body {
   height: 100%;
   margin: 0;
   background: #141414;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--app-font-family, var(--legacy-app-font-family, "ForPdaRoboto", Roboto, sans-serif));
   font-size: 1em;
   color: #ffffff;
   line-height: 1.25em;
@@ -99,8 +99,8 @@ body {
   word-wrap: break-word;
 }
 a {
-  color: #2177af;
-  -webkit-tap-highlight-color: rgba(33, 119, 175, 0.25);
+  color: #E0E0E0;
+  -webkit-tap-highlight-color: rgba(158, 158, 158, 0.25);
 }
 * {
   box-sizing: border-box;
@@ -126,9 +126,9 @@ li .post-block.hidden {
 .post-block {
   margin: 0.75rem -1rem;
   position: relative;
-  border-top: 0.0625rem solid rgba(255, 255, 255, 0.05);
-  border-bottom: 0.0625rem solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.05);
+  border-top: 0.0625rem solid rgba(255, 255, 255, 0.08);
+  border-bottom: 0.0625rem solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
 }
 .post-block > .block-title {
   padding: 0.625rem 1rem;
@@ -138,13 +138,23 @@ li .post-block.hidden {
   text-align: left!important;
   font-size: 0.875rem;
   line-height: 1.25rem;
-  color: #ffffff !important;
+  color: #E0E0E0 !important;
 }
 .post-block > .block-title > .block-controls {
-  float: right;
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-box-pack: end;
+  -webkit-justify-content: flex-end;
+  justify-content: flex-end;
   position: absolute;
   right: 2.5rem;
-  top: 0.125rem;
+  top: 50%;
+  -webkit-transform: translateY(-50%);
+  transform: translateY(-50%);
   z-index: 3;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -159,7 +169,9 @@ li .post-block.hidden {
   width: 2.25rem;
   -webkit-border-radius: 2px;
   border-radius: 2px;
-  float: right;
+  -webkit-box-flex: 0;
+  -webkit-flex: 0 0 2.25rem;
+  flex: 0 0 2.25rem;
   margin-right: 0.5rem;
 }
 .post-block > .block-title > .block-controls i.wrap:after {
@@ -186,7 +198,7 @@ li .post-block.hidden {
   background-position: center;
 }
 .post-block > .block-title > .block-controls i:active {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.16);
 }
 .post-block > .block-body {
   padding: 0.5rem 1rem 1rem 1rem;
@@ -194,11 +206,24 @@ li .post-block.hidden {
   z-index: 1;
 }
 .post-block.spoil > .block-title {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  box-sizing: border-box;
   padding-right: 5rem;
-  color: #ffffff;
+  background: transparent;
+  color: #E0E0E0;
+  border-bottom: 0.0625rem solid rgba(255, 255, 255, 0.08);
+}
+.post-block.spoil {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
 }
 .post-block.spoil > .block-title * {
-  color: #ffffff !important;
+  color: #E0E0E0 !important;
   font-size: 1em!important;
   font-style: normal!important;
   line-height: 1.25rem!important;
@@ -229,7 +254,9 @@ li .post-block.hidden {
   width: 2.5rem;
   position: absolute;
   right: 0;
-  top: 0;
+  top: 50%;
+  -webkit-transform: translateY(-50%);
+  transform: translateY(-50%);
   -webkit-transition: 0.225s cubic-bezier(0.4, 0, 0.2, 1);
   transition: 0.225s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-transform-origin: center;
@@ -294,20 +321,23 @@ li .post-block.hidden {
   text-transform: uppercase;
   font-weight: bold!important;
   font-style: normal!important;
-  color: #ffffff !important;
+  color: #E0E0E0 !important;
   -webkit-border-radius: 0.125rem;
   border-radius: 0.125rem;
   display: block;
 }
 .post-block.spoil > .block-body > .btns_container > .spoil_close:active {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.16);
 }
 .post-block.spoil.close > .block-body {
   display: none;
 }
+.post-block.spoil.close > .block-title {
+  border-bottom-color: transparent;
+}
 .post-block.spoil.open > .block-title .icon {
-  -webkit-transform: rotateX(180deg) translateZ(0);
-  transform: rotateX(180deg) translateZ(0);
+  -webkit-transform: translateY(-50%) rotateX(180deg) translateZ(0);
+  transform: translateY(-50%) rotateX(180deg) translateZ(0);
 }
 .post-block.spoil.open > .block-title:first-letter {
   text-transform: uppercase;
@@ -367,7 +397,7 @@ li .post-block.hidden {
   right: -0.0625rem;
   height: 1rem;
   width: 1rem;
-  background: #2177af;
+  background: #E0E0E0;
   -webkit-border-radius: 1rem;
   border-radius: 1rem;
   background-image: url(../../res/chevron-left-white.svg);
@@ -416,6 +446,9 @@ li .post-block.hidden {
   content: none;
 }
 .post-block.quote > .block-title .snapback:after {
+  content: none;
+}
+.post-block.quote > .block-title .snapback .icon:before {
   content: none;
 }
 .post-block.quote > .block-body {
@@ -511,10 +544,10 @@ li .post-block.hidden {
   padding-bottom: 0;
   margin-top: 0;
   margin-bottom: 0;
-  font-family: monospace;
   position: relative;
   padding: 0.25rem 0;
   padding-left: 3rem;
+  -webkit-font-smoothing: antialiased;
 }
 .post-block.code > .block-body .lines {
   background: linear-gradient(rgba(130, 130, 130, 0.1) 1.25rem, transparent 1.25rem);
@@ -523,18 +556,31 @@ li .post-block.hidden {
   background-repeat: repeat-y;
   color: #448d62;
   counter-reset: line;
-  overflow: hidden;
   overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: inline-block;
+  min-width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   white-space: pre;
   word-break: normal;
   word-wrap: normal;
   font-size: 0.75rem;
   line-height: 1.25rem;
+  tab-size: 4;
+  -moz-tab-size: 4;
+  font-variant-ligatures: none;
+  -webkit-user-select: text;
+  user-select: text;
 }
 .post-block.code > .block-body .lines > div {
   display: block;
   counter-increment: list;
   min-height: 1.25rem;
+  padding-right: 0.75rem;
+  -webkit-user-select: text;
+  user-select: text;
 }
 .post-block.code > .block-body .lines > div:before {
   content: counter(list);
@@ -563,12 +609,12 @@ li .post-block.hidden {
   transform: rotateX(180deg) translateZ(0);
 }
 .post-block.code.wrap > .block-title .block-controls .wrap {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.16);
 }
 .post-block.code.wrap .block-body .lines {
   white-space: pre-wrap;
   word-break: break-word;
-  word-wrap: normal;
+  word-wrap: break-word;
 }
 .post-block.hidden > .block-title {
   display: none;
@@ -581,10 +627,10 @@ li .post-block.hidden {
   vertical-align: middle;
 }
 .post-block.tbl a {
-  color: #2177af !important;
+  color: #E0E0E0 !important;
 }
 .post-block.tbl a > * {
-  color: #2177af !important;
+  color: #E0E0E0 !important;
 }
 .post-block.tbl > .block-title {
   text-align: center!important;
@@ -593,13 +639,6 @@ li .post-block.hidden {
 }
 .post-block.tbl > .block-title:before {
   font-size: 1.25rem;
-}
-.post-block.tbl > .block-body .post-block {
-  /*.bRad(2px);
-                border-left: @border1;
-                border-right: @border1;
-                margin-left: 0!important;
-                margin-right: 0!important;*/
 }
 .post-block.tbl.ex {
   background: rgba(231, 76, 60, 0.1);
@@ -647,7 +686,7 @@ a.snapback {
 a.snapback .icon:before {
   content: "@";
   position: relative;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--app-font-family, var(--legacy-app-font-family, "ForPdaRoboto", Roboto, sans-serif));
   z-index: 1;
 }
 a.snapback:after {
@@ -710,15 +749,15 @@ a.snapback:after {
   max-width: 100%;
   box-sizing: border-box;
   vertical-align: text-bottom;
-  border: 1px solid rgba(33, 119, 175, 0.1);
-  background: rgba(33, 119, 175, 0.05);
-  border-radius: 0.125rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
   text-align: left!important;
   font-size: 1rem!important;
   text-decoration: none!important;
   line-height: 1.25rem !important;
   font-style: normal!important;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--app-font-family, var(--legacy-app-font-family, "ForPdaRoboto", Roboto, sans-serif));
 }
 .attach_block .icon {
   position: absolute;
@@ -728,7 +767,7 @@ a.snapback:after {
   width: 2.5rem;
   -webkit-border-radius: 2.5rem;
   border-radius: 2.5rem;
-  background: #2177af;
+  background: #E0E0E0;
 }
 .attach_block .icon:after {
   content: "";

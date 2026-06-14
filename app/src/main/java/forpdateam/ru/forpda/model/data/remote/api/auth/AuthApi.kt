@@ -1,11 +1,13 @@
 package forpdateam.ru.forpda.model.data.remote.api.auth
 
-import forpdateam.ru.forpda.App
+import android.content.Context
+import androidx.preference.PreferenceManager
 import forpdateam.ru.forpda.entity.remote.auth.AuthForm
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.data.remote.api.NetworkRequest
-import java.net.URLEncoder
+import forpdateam.ru.forpda.common.Cp1251Codec
+import forpdateam.ru.forpda.common.SecureCookiesPreferences
 import java.util.regex.Pattern
 
 /**
@@ -13,6 +15,7 @@ import java.util.regex.Pattern
  */
 
 class AuthApi(
+        private val context: Context,
         private val webClient: IWebClient,
         private val authParser: AuthParser
 ) {
@@ -32,19 +35,19 @@ class AuthApi(
     fun login(form: AuthForm): AuthForm {
         val builder = NetworkRequest.Builder()
                 .url(AUTH_BASE_URL)
-                .formHeader("captcha-time", form.captchaTime)
-                .formHeader("captcha-sig", form.captchaSig)
-                .formHeader("captcha", form.captcha)
+                .formHeader("captcha-time", form.captchaTime ?: "")
+                .formHeader("captcha-sig", form.captchaSig ?: "")
+                .formHeader("captcha", form.captcha ?: "")
                 .formHeader("return", IWebClient.MINIMAL_PAGE)
-                .formHeader("login", URLEncoder.encode(form.nick, "windows-1251"), true)
-                .formHeader("password", URLEncoder.encode(form.password, "windows-1251"), true)
+                .formHeader("login", Cp1251Codec.encode(form.nick), true)
+                .formHeader("password", Cp1251Codec.encode(form.password), true)
                 .formHeader("remember", "1")
                 .formHeader("hidden", if (form.isHidden) "1" else "0")
 
         val response = webClient.request(builder.build())
         val matcher = errorPattern.matcher(response.body)
         if (matcher.find()) {
-            throw Exception(ApiUtils.fromHtml(matcher.group(1)).replace("\\.".toRegex(), ".\n").trim())
+            throw Exception(ApiUtils.fromHtml(matcher.group(1))?.replace("\\.".toRegex(), ".\n")?.trim() ?: "Ошибка авторизации")
         }
         if (!checkLogin(response.body)) {
             throw Exception("Ошибка при проверке авторизации")
@@ -53,14 +56,16 @@ class AuthApi(
     }
 
     fun logout(): Boolean {
-        val response = webClient.get("https://4pda.to/forum/index.php?act=logout&CODE=03&k=" + webClient.authKey)
+        val response = webClient.get("https://4pda.to/forum/index.php?act=logout&CODE=03&k=" + webClient.getAuthKey())
 
         val matcher = Pattern.compile("wr va-m text").matcher(response.body)
         if (matcher.find())
             throw Exception("You already logout")
 
         webClient.clearCookies()
-        App.get().preferences.edit().remove("cookie_member_id").remove("cookie_pass_hash").apply()
+        val securePrefs = SecureCookiesPreferences.getInstance(context)
+        securePrefs.remove("cookie_member_id")
+        securePrefs.remove("cookie_pass_hash")
 
         return !checkLogin(webClient.get(IWebClient.MINIMAL_PAGE).body)
     }
@@ -68,7 +73,7 @@ class AuthApi(
     private fun checkLogin(response: String): Boolean {
         val matcher = Pattern.compile("<i class=\"icon-profile\">[\\s\\S]*?<ul class=\"dropdown-menu\">[\\s\\S]*?showuser=(\\d+)\"[\\s\\S]*?action=logout[^\"]*?k=([a-z0-9]{32})").matcher(response)
         if (matcher.find()) {
-            App.get().preferences.edit().putString("auth_key", matcher.group(2)).apply()
+            PreferenceManager.getDefaultSharedPreferences(context).edit().putString("auth_key", matcher.group(2)).apply()
             return true
         }
         return false

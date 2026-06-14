@@ -22,15 +22,11 @@
         app:layout_collapseMode="parallax"
         tools:src="@drawable/test_img"/>
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="?attr/profile_overlay_bg"/>
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
+        android:background="@android:color/transparent"
         android:orientation="vertical"
         android:paddingBottom="@dimen/content_padding_vertical"
         android:paddingEnd="@dimen/content_padding_horizontal"

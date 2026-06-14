@@ -14,41 +14,151 @@
     <string-array name="entries_theme_mode">
         <item>@string/pref_value_theme_mode_light</item>
         <item>@string/pref_value_theme_mode_dark</item>
+        <item>@string/pref_value_theme_mode_amoled</item>
         <item>@string/pref_value_theme_mode_system</item>
+        <item>@string/pref_value_theme_mode_system_amoled</item>
     </string-array>
     <string-array name="entry_values_theme_mode">
         <item>LIGHT</item>
         <item>DARK</item>
+        <item>AMOLED</item>
         <item>SYSTEM</item>
+        <item>SYSTEM_AMOLED</item>
     </string-array>
 
     <string-array name="entries_ui_palette">
         <item>@string/pref_value_ui_palette_system</item>
-        <item>@string/pref_value_ui_palette_classic</item>
+        <item>@string/pref_value_ui_palette_minimal_reader</item>
+        <item>@string/pref_value_ui_palette_sepia_reading</item>
+        <item>@string/pref_value_ui_palette_sepia_blue</item>
     </string-array>
     <string-array name="entry_values_ui_palette">
         <item>SYSTEM</item>
-        <item>CLASSIC_4PDA</item>
+        <item>MINIMAL_READER</item>
+        <item>SEPIA_READING</item>
+        <item>SEPIA_BLUE</item>
     </string-array>
 
-    <string-array name="entries_notify_limit">
-        <item>10s</item>
-        <item>30s</item>
-        <item>1m</item>
-        <item>2m</item>
-        <item>5m</item>
-        <item>10m</item>
-        <item>30m</item>
-        <item>1h</item>
+    <string-array name="entries_app_font_mode">
+        <item>@string/pref_value_app_font_system</item>
+        <item>@string/pref_value_app_font_roboto</item>
+        <item>@string/pref_value_app_font_inter</item>
+        <item>@string/pref_value_app_font_source_sans_3</item>
+        <item>@string/pref_value_app_font_open_sans</item>
     </string-array>
-    <string-array name="entry_values_notify_limit">
-        <item>10</item>
+    <string-array name="entry_values_app_font_mode">
+        <item>SYSTEM</item>
+        <item>ROBOTO</item>
+        <item>INTER</item>
+        <item>SOURCE_SANS_3</item>
+        <item>OPEN_SANS</item>
+    </string-array>
+
+    <string-array name="entries_bottom_nav_columns">
+        <item>@string/pref_value_bottom_nav_columns_5</item>
+        <item>@string/pref_value_bottom_nav_columns_6</item>
+    </string-array>
+    <string-array name="entry_values_bottom_nav_columns">
+        <item>5</item>
+        <item>6</item>
+    </string-array>
+
+    <string-array name="entries_download_method">
+        <item>@string/download_method_system</item>
+        <item>@string/download_method_external_manager</item>
+        <item>@string/download_method_browser</item>
+        <item>@string/download_method_ask</item>
+    </string-array>
+    <string-array name="entry_values_download_method">
+        <item>SYSTEM</item>
+        <item>EXTERNAL_MANAGER</item>
+        <item>BROWSER</item>
+        <item>ASK</item>
+    </string-array>
+
+    <string-array name="entries_topic_scroll_mode">
+        <item>@string/pref_value_topic_scroll_mode_hybrid</item>
+        <item>@string/pref_value_topic_scroll_mode_classic</item>
+    </string-array>
+    <string-array name="entry_values_topic_scroll_mode">
+        <item>HYBRID</item>
+        <item>CLASSIC</item>
+    </string-array>
+
+    <string-array name="entries_topic_post_density">
+        <item>@string/pref_value_topic_post_density_comfortable</item>
+        <item>@string/pref_value_topic_post_density_compact</item>
+        <item>@string/pref_value_topic_post_density_super_compact</item>
+    </string-array>
+    <string-array name="entry_values_topic_post_density">
+        <item>comfortable</item>
+        <item>compact</item>
+        <item>super_compact</item>
+    </string-array>
+
+    <string-array name="entries_topic_toolbar_behavior">
+        <item>@string/pref_topic_toolbar_behavior_pinned</item>
+        <item>@string/pref_topic_toolbar_behavior_hide_on_scroll</item>
+    </string-array>
+    <string-array name="entry_values_topic_toolbar_behavior">
+        <item>PINNED</item>
+        <item>HIDE_ON_SCROLL</item>
+    </string-array>
+
+    <string-array name="entries_topic_back_behavior">
+        <item>@string/pref_value_topic_back_behavior_history</item>
+        <item>@string/pref_value_topic_back_behavior_origin</item>
+    </string-array>
+    <string-array name="entry_values_topic_back_behavior">
+        <item>HISTORY</item>
+        <item>ORIGIN</item>
+    </string-array>
+
+    <string-array name="entries_topic_open_target">
+        <item>@string/pref_value_topic_open_target_first_page</item>
+        <item>@string/pref_value_topic_open_target_last_unread</item>
+    </string-array>
+    <string-array name="entry_values_topic_open_target">
+        <item>FIRST_PAGE</item>
+        <item>LAST_UNREAD</item>
+    </string-array>
+
+    <string-array name="entries_topic_header_initial_state">
+        <item>@string/pref_value_topic_header_initial_state_expanded</item>
+        <item>@string/pref_value_topic_header_initial_state_collapsed</item>
+    </string-array>
+    <string-array name="entry_values_topic_header_initial_state">
+        <item>EXPANDED</item>
+        <item>COLLAPSED</item>
+    </string-array>
+
+    <string-array name="entries_startup_screen">
+        <item>@string/fragment_title_news_list</item>
+        <item>@string/fragment_title_favorite</item>
+        <item>@string/fragment_title_forum</item>
+        <item>@string/fragment_title_mentions</item>
+        <item>@string/menu_item_qms</item>
+    </string-array>
+    <string-array name="entry_values_startup_screen">
+        <item>NEWS</item>
+        <item>FAVORITES</item>
+        <item>FORUM</item>
+        <item>REPLIES</item>
+        <item>QMS</item>
+    </string-array>
+
+    <string-array name="entries_notify_bg_interval">
+        <item>15 минут</item>
+        <item>30 минут</item>
+        <item>1 час</item>
+        <item>2 часа</item>
+        <item>4 часа</item>
+    </string-array>
+    <string-array name="entry_values_notify_bg_interval">
+        <item>15</item>
         <item>30</item>
         <item>60</item>
         <item>120</item>
-        <item>300</item>
-        <item>600</item>
-        <item>1800</item>
-        <item>3600</item>
+        <item>240</item>
     </string-array>
 </resources>

@@ -1,15 +1,19 @@
 package forpdateam.ru.forpda.presentation
 
-import android.os.Handler
-import android.os.Looper
+import android.content.Context
 import android.widget.Toast
+import androidx.annotation.StringRes
 import com.github.terrakok.cicerone.Router
-import forpdateam.ru.forpda.App
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Обертка над Cicerone 6.x с прежними именами методов для приложения.
  */
-class TabRouter : Router() {
+class TabRouter(private val context: Context) : Router() {
+
+    private val mainScope = MainScope()
 
     fun newScreenChain(screen: Screen) {
         newRootChain(screen)
@@ -32,13 +36,24 @@ class TabRouter : Router() {
     }
 
     fun showSystemMessage(message: String) {
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(App.getContext(), message, Toast.LENGTH_SHORT).show()
+        mainScope.launch {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun showSystemMessage(@StringRes messageId: Int) {
+        mainScope.launch {
+            Toast.makeText(context, context.getString(messageId), Toast.LENGTH_SHORT).show()
         }
     }
 
     fun exitWithResult(key: String, data: Any) {
         sendResult(key, data)
         exit()
+    }
+
+    /** Отменяет scope. Вызывать при завершении приложения (необязательно для @Singleton). */
+    fun cleanup() {
+        mainScope.cancel()
     }
 }

@@ -68,7 +68,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="horizontal">
-            <de.hdodenhof.circleimageview.CircleImageView
+            <com.google.android.material.imageview.ShapeableImageView
                 android:id="@+id/news_list_item_user_avatar"
                 android:layout_width="@dimen/news_list_compat_avatar_size"
                 android:layout_height="@dimen/news_list_compat_avatar_size"
@@ -76,6 +76,7 @@
                 android:layout_marginStart="@dimen/content_padding_horizontal"
                 android:padding="@dimen/dp2"
                 android:visibility="invisible"
+                app:shapeAppearanceOverlay="@style/CircleImageViewStyle"
                 tools:src="@drawable/test_img"
                 tools:visibility="visible"
                 tools:ignore="RtlCompat"/>

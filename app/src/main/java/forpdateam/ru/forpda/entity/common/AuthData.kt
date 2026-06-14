@@ -1,13 +1,16 @@
 package forpdateam.ru.forpda.entity.common
 
-class AuthData {
-
+/**
+ * Immutable data class for authentication state.
+ * Use copy() to create modified instances.
+ */
+data class AuthData(
+    val userId: Int = NO_ID,
+    val state: AuthState = AuthState.NO_AUTH
+) {
     companion object {
         const val NO_ID = 0
     }
-
-    var userId: Int = NO_ID
-    var state = AuthState.NO_AUTH
 
     fun isAuth() = state == AuthState.AUTH
 }

@@ -1,5 +1,10 @@
 package forpdateam.ru.forpda.ui.fragments.devdb.device
 
+import forpdateam.ru.forpda.common.getDrawableAttr
+import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.databinding.FragmentDeviceBinding
+import forpdateam.ru.forpda.databinding.ToolbarDeviceBinding
+import forpdateam.ru.forpda.databinding.DeviceImagePageBinding
 import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
@@ -9,19 +14,26 @@ import com.google.android.material.tabs.TabLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.viewpager.widget.PagerAdapter
-import androidx.viewpager.widget.ViewPager
+import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.tabs.TabLayoutMediator
 import android.view.*
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.RelativeLayout
 import android.widget.TextView
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.common.ForPdaCoil
 import com.robohorse.pagerbullet.PagerBullet
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.dp2
+import forpdateam.ru.forpda.ui.dp48
 import forpdateam.ru.forpda.entity.remote.devdb.Device
-import forpdateam.ru.forpda.presentation.devdb.device.DeviceView
+import forpdateam.ru.forpda.presentation.devdb.device.DeviceUiEvent
 import forpdateam.ru.forpda.presentation.devdb.device.DeviceViewModel
 import forpdateam.ru.forpda.ui.DimensionHelper
 import forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
@@ -31,21 +43,36 @@ import forpdateam.ru.forpda.ui.fragments.devdb.device.comments.CommentsFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.device.posts.PostsFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.device.specs.SpecsFragment
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
+import forpdateam.ru.forpda.model.repository.note.NotesRepository
 import java.util.*
+import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.ui.DimensionsProvider
+import javax.inject.Inject
 
 /**
  * Created by radiationx on 08.08.17.
  */
 
-class DeviceFragment : TabFragment(), DeviceView {
+@AndroidEntryPoint
+class DeviceFragment : TabFragment() {
+
+    @Inject lateinit var notesRepository: NotesRepository
+
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
+
+    private var _deviceBinding: FragmentDeviceBinding? = null
+    private val deviceBinding get() = checkNotNull(_deviceBinding) { "Binding accessed after onDestroyView" }
+    private var _toolbarBinding: ToolbarDeviceBinding? = null
+    private val toolbarBinding get() = checkNotNull(_toolbarBinding) { "Binding accessed after onDestroyView" }
+
     private lateinit var imagesPager: PagerBullet
     private lateinit var tabLayout: TabLayout
     private lateinit var rating: TextView
-    private lateinit var fragmentsPager: androidx.viewpager.widget.ViewPager
+    private lateinit var fragmentsPager: ViewPager2
     private lateinit var progressBar: ProgressBar
+    private var tabLayoutMediator: TabLayoutMediator? = null
     private var toolbarContent: RelativeLayout? = null
 
-    private val dimensionsProvider = App.get().Di().dimensionsProvider
 
     private lateinit var copyLinkMenuItem: MenuItem
     private lateinit var shareMenuItem: MenuItem
@@ -55,21 +82,11 @@ class DeviceFragment : TabFragment(), DeviceView {
 
     private var appBarOffset = 0
 
-    private val presenter: DeviceViewModel by viewModels {
-        DeviceViewModel.Factory(
-                App.get().Di().devDbRepository,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler
-        )
-    }
-
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_device)
-    }
+    private val presenter: DeviceViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_device)
         arguments?.apply {
             presenter.deviceId = getString(ARG_DEVICE_ID, null)
         }
@@ -78,20 +95,22 @@ class DeviceFragment : TabFragment(), DeviceView {
         for (fragment in childFragmentManager.fragments) {
             transaction.remove(fragment)
         }
-        transaction.commit()
-        childFragmentManager.executePendingTransactions()
+        transaction.commitNow()
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        baseInflateFragment(inflater, R.layout.fragment_device)
-        val viewStub = findViewById(R.id.toolbar_content) as ViewStub
+        _deviceBinding = FragmentDeviceBinding.inflate(inflater, fragmentContent, true)
+
+        val viewStub = findViewById(R.id.toolbar_content) as? ViewStub ?: throw IllegalStateException("toolbar_content ViewStub not found")
         viewStub.layoutResource = R.layout.toolbar_device
-        toolbarContent = viewStub.inflate() as RelativeLayout
-        imagesPager = findViewById(R.id.images_pager) as PagerBullet
-        progressBar = findViewById(R.id.progress_bar) as ProgressBar
-        rating = findViewById(R.id.item_rating) as TextView
-        fragmentsPager = findViewById(R.id.view_pager) as androidx.viewpager.widget.ViewPager
+        toolbarContent = viewStub.inflate() as? RelativeLayout ?: throw IllegalStateException("toolbarContent not RelativeLayout")
+        _toolbarBinding = ToolbarDeviceBinding.bind(toolbarContent!!)
+
+        imagesPager = toolbarBinding.imagesPager
+        progressBar = deviceBinding.progressBar
+        rating = toolbarBinding.itemRating
+        fragmentsPager = deviceBinding.viewPager
 
         tabLayout = TabLayout(requireContext())
         val tabParams = CollapsingToolbarLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM)
@@ -105,54 +124,65 @@ class DeviceFragment : TabFragment(), DeviceView {
 
         val newParams = toolbar.layoutParams as CollapsingToolbarLayout.LayoutParams
         newParams.collapseMode = CollapsingToolbarLayout.LayoutParams.COLLAPSE_MODE_PIN
-        newParams.bottomMargin = App.px48
+        newParams.bottomMargin = dp48
         toolbar.layoutParams = newParams
         toolbar.requestLayout()
         return viewFragment
     }
 
+    override fun onDestroyViewBinding() {
+        _deviceBinding = null
+        _toolbarBinding = null
+        super.onDestroyViewBinding()
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        setCardsBackground()
-        toolbarTitleView.setShadowLayer(App.px2.toFloat(), 0f, 0f, App.getColorFromAttr(context, R.attr.colorPrimary))
-        toolbarSubtitleView.setShadowLayer(App.px2.toFloat(), 0f, 0f, App.getColorFromAttr(context, R.attr.colorPrimary))
+        setListsBackground()
+        toolbarTitleView.setShadowLayer(dp2.toFloat(), 0f, 0f, requireContext().getColorFromAttr(R.attr.colorPrimary))
+        toolbarSubtitleView.setShadowLayer(dp2.toFloat(), 0f, 0f, requireContext().getColorFromAttr(R.attr.colorPrimary))
 
         toolbarLayout.setExpandedTitleColor(Color.TRANSPARENT)
         toolbarLayout.setCollapsedTitleTextColor(Color.TRANSPARENT)
         toolbarLayout.isTitleEnabled = false
 
         tabLayout.tabMode = TabLayout.MODE_SCROLLABLE
-        tabLayout.setupWithViewPager(fragmentsPager)
+        tabLayout.setBackgroundColor(requireContext().getColorFromAttr(R.attr.cards_background))
+        tabLayout.setTabTextColors(
+                requireContext().getColorFromAttr(R.attr.second_text_color),
+                requireContext().getColorFromAttr(R.attr.default_text_color)
+        )
+        tabLayout.setSelectedTabIndicatorColor(requireContext().getColorFromAttr(R.attr.colorAccent))
 
-        imagesPager.setIndicatorTintColorScheme(App.getColorFromAttr(context, R.attr.default_text_color), App.getColorFromAttr(context, R.attr.second_text_color))
+        imagesPager.setIndicatorTintColorScheme(requireContext().getColorFromAttr(R.attr.default_text_color), requireContext().getColorFromAttr(R.attr.second_text_color))
 
         appBarLayout.addOnOffsetChangedListener(AppBarLayout.OnOffsetChangedListener { _, offset ->
             appBarOffset = offset
             updateToolbarShadow()
         })
 
-        if (configuration.isFitSystemWindow) {
-            disposables.add(
-                    dimensionsProvider
-                            .observeDimensions()
-                            .subscribe { dimensions ->
-                                toolbarContent?.post {
-                                    if (toolbarContent != null) {
-                                        updateDimens(dimensions)
-                                    }
-                                }
-                                updateDimens(dimensions)
-                            }
-            )
+        if (configuration.fitSystemWindow) {
+            lifecycleScope.launch {
+                dimensionsProvider.dimensionsFlow.collect { dimensions ->
+                    toolbarContent?.post {
+                        if (toolbarContent != null) {
+                            updateDimens(dimensions)
+                        }
+                    }
+                    updateDimens(dimensions)
+                }
+            }
         }
 
-        presenter.attachView(this)
         presenter.start()
+        observeViewModel()
     }
 
     override fun onDestroyView() {
-        presenter.detachView()
+        tabLayoutMediator?.detach()
+        tabLayoutMediator = null
+        fragmentsPager.adapter = null
         super.onDestroyView()
     }
 
@@ -165,6 +195,30 @@ class DeviceFragment : TabFragment(), DeviceView {
             val params = it.layoutParams as CollapsingToolbarLayout.LayoutParams
             params.topMargin = dimensions.statusBar
             it.layoutParams = params
+        }
+    }
+
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        progressBar.visibility = if (isRefreshing) View.VISIBLE else View.GONE
+                    }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleUiEvent(event: DeviceUiEvent) {
+        when (event) {
+            is DeviceUiEvent.ShowData -> showData(event.device)
+            is DeviceUiEvent.ShowCreateNote -> showCreateNote(event.title, event.url)
         }
     }
 
@@ -220,8 +274,7 @@ class DeviceFragment : TabFragment(), DeviceView {
         }
     }
 
-    override fun showData(data: Device) {
-        progressBar.visibility = View.GONE
+    private fun showData(data: Device) {
         toBrandMenuItem.title = "${data.catTitle} ${data.brandTitle}"
         toBrandsMenuItem.title = data.catTitle
         refreshToolbarMenuItems(true)
@@ -236,15 +289,19 @@ class DeviceFragment : TabFragment(), DeviceView {
             urls.add(pair.first)
             fullUrls.add(pair.second)
         }
-        val imagesAdapter = ImagesAdapter(context!!, urls, fullUrls)
+        val imagesAdapter = ImagesAdapter(requireContext(), urls, fullUrls)
         imagesPager.setAdapter(imagesAdapter)
 
-        val pagerAdapter = FragmentPagerAdapter(childFragmentManager, data)
+        val pagerAdapter = DevicePagerAdapter(this, data)
         fragmentsPager.adapter = pagerAdapter
+        tabLayoutMediator?.detach()
+        tabLayoutMediator = TabLayoutMediator(tabLayout, fragmentsPager) { tab, position ->
+            tab.text = pagerAdapter.getPageTitle(position)
+        }.also { it.attach() }
 
         if (data.rating > 0) {
             rating.text = data.rating.toString()
-            rating.background = App.getDrawableAttr(rating.context, R.attr.count_background)
+            rating.background = rating.context.getDrawableAttr(R.attr.count_background)
             rating.background.colorFilter = DevDbHelper.getColorFilter(data.rating)
             rating.visibility = View.VISIBLE
             if (!data.comments.isEmpty()) {
@@ -257,66 +314,52 @@ class DeviceFragment : TabFragment(), DeviceView {
         }
     }
 
-    override fun showCreateNote(title: String, url: String) {
-        NotesAddPopup.showAddNoteDialog(context, title, url)
+    private fun showCreateNote(title: String, url: String) {
+        NotesAddPopup.showAddNoteDialog(context, title, url, notesRepository)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        disposables.dispose()
     }
 
-    @Suppress("DEPRECATION")
-    private inner class FragmentPagerAdapter(fm: androidx.fragment.app.FragmentManager, private val device: Device) : androidx.fragment.app.FragmentPagerAdapter(fm) {
-        private val fragments = ArrayList<androidx.fragment.app.Fragment>()
-        private val titles = ArrayList<String>()
+    private class DevicePagerAdapter(host: Fragment, device: Device) : FragmentStateAdapter(host) {
 
-        init {
-            if (!this.device.specs.isEmpty()) {
-                fragments.add(SpecsFragment().setDevice(this.device))
-                titles.add(App.get().getString(R.string.device_page_specs))
+        private val pages: List<Pair<String, () -> Fragment>> = buildList {
+            val context = host.requireContext()
+            if (device.specs.isNotEmpty()) {
+                add(context.getString(R.string.device_page_specs) to { SpecsFragment().setDevice(device) })
             }
-            if (!this.device.comments.isEmpty()) {
-                fragments.add(CommentsFragment().setDevice(this.device))
+            if (device.comments.isNotEmpty()) {
                 val title = String.format(Locale.getDefault(),
-                        App.get().getString(R.string.device_page_comments),
-                        this.device.comments.size)
-                titles.add(title)
+                        context.getString(R.string.device_page_comments),
+                        device.comments.size)
+                add(title to { CommentsFragment().setDevice(device) })
             }
-            if (!this.device.discussions.isEmpty()) {
-                fragments.add(PostsFragment().setSource(PostsFragment.SRC_DISCUSSIONS).setDevice(this.device))
+            if (device.discussions.isNotEmpty()) {
                 val title = String.format(Locale.getDefault(),
-                        App.get().getString(R.string.device_page_discussions),
-                        this.device.discussions.size)
-                titles.add(title)
+                        context.getString(R.string.device_page_discussions),
+                        device.discussions.size)
+                add(title to { PostsFragment().setSource(PostsFragment.SRC_DISCUSSIONS).setDevice(device) })
             }
-            if (!this.device.news.isEmpty()) {
-                fragments.add(PostsFragment().setSource(PostsFragment.SRC_NEWS).setDevice(this.device))
+            if (device.news.isNotEmpty()) {
                 val title = String.format(Locale.getDefault(),
-                        App.get().getString(R.string.device_page_news),
-                        this.device.news.size)
-                titles.add(title)
+                        context.getString(R.string.device_page_news),
+                        device.news.size)
+                add(title to { PostsFragment().setSource(PostsFragment.SRC_NEWS).setDevice(device) })
             }
-            if (!this.device.firmwares.isEmpty()) {
-                fragments.add(PostsFragment().setSource(PostsFragment.SRC_FIRMWARES).setDevice(this.device))
+            if (device.firmwares.isNotEmpty()) {
                 val title = String.format(Locale.getDefault(),
-                        App.get().getString(R.string.device_page_firmwares),
-                        this.device.firmwares.size)
-                titles.add(title)
+                        context.getString(R.string.device_page_firmwares),
+                        device.firmwares.size)
+                add(title to { PostsFragment().setSource(PostsFragment.SRC_FIRMWARES).setDevice(device) })
             }
         }
 
-        override fun getItem(position: Int): androidx.fragment.app.Fragment {
-            return fragments[position]
-        }
+        override fun getItemCount(): Int = pages.size
 
-        override fun getCount(): Int {
-            return fragments.size
-        }
+        override fun createFragment(position: Int): Fragment = pages[position].second()
 
-        override fun getPageTitle(position: Int): CharSequence? {
-            return titles[position]
-        }
+        fun getPageTitle(position: Int): String = pages[position].first
     }
 
 
@@ -334,13 +377,13 @@ class DeviceFragment : TabFragment(), DeviceView {
         }
 
         override fun instantiateItem(container: ViewGroup, position: Int): Any {
-            val imageLayout = inflater.inflate(R.layout.device_image_page, container, false)
-            imageLayout.setOnClickListener {
-                ImageViewerActivity.startActivity(this@DeviceFragment.context!!, fullUrls, position)
+            val binding = DeviceImagePageBinding.inflate(inflater, container, false)
+            binding.root.setOnClickListener {
+                ImageViewerActivity.startActivity(this@DeviceFragment.requireContext(), fullUrls, position)
             }
-            container.addView(imageLayout, 0)
-            loadImage(imageLayout, position)
-            return imageLayout
+            container.addView(binding.root, 0)
+            loadImage(binding, position)
+            return binding.root
         }
 
         override fun destroyItem(container: ViewGroup, position: Int, `object`: Any) {
@@ -351,10 +394,8 @@ class DeviceFragment : TabFragment(), DeviceView {
             return view == `object`
         }
 
-        private fun loadImage(imageLayout: View, position: Int) {
-            val imageView = imageLayout.findViewById<ImageView>(R.id.image_view)
-            val progressBar = imageLayout.findViewById<ProgressBar>(R.id.progress_bar)
-            ForPdaCoil.loadIntoWithProgress(imageView, urls[position], progressBar)
+        private fun loadImage(binding: DeviceImagePageBinding, position: Int) {
+            ForPdaCoil.loadIntoWithProgress(binding.imageView, urls[position], binding.progressBar)
         }
     }
 

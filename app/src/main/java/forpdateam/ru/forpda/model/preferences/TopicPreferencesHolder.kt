@@ -1,46 +1,47 @@
 package forpdateam.ru.forpda.model.preferences
 
-import android.content.SharedPreferences
-import com.f2prateek.rx.preferences2.RxSharedPreferences
-import forpdateam.ru.forpda.common.Preferences
-import io.reactivex.Observable
+import android.content.Context
+import forpdateam.ru.forpda.model.datastore.TopicDataStore
+import kotlinx.coroutines.flow.Flow
 
 class TopicPreferencesHolder(
-        private val sharedPreferences: SharedPreferences
+        private val context: Context
 ) {
+    private val dataStore = TopicDataStore(context)
 
-    private val rxPreferences = RxSharedPreferences.create(sharedPreferences)
+    fun observeShowAvatarsFlow(): Flow<Boolean> = dataStore.observeShowAvatarsFlow()
 
-    private val showAvatars by lazy {
-        rxPreferences.getBoolean(Preferences.Theme.SHOW_AVATARS, true)
-    }
+    fun observeCircleAvatarsFlow(): Flow<Boolean> = dataStore.observeCircleAvatarsFlow()
 
-    private val circleAvatars by lazy {
-        rxPreferences.getBoolean(Preferences.Theme.CIRCLE_AVATARS, true)
-    }
+    fun observeForumBlacklistFlow(): Flow<List<ForumBlacklistedUser>> = dataStore.observeForumBlacklistFlow()
 
-    private val anchorHistory by lazy {
-        rxPreferences.getBoolean(Preferences.Theme.ANCHOR_HISTORY, true)
-    }
+    fun getShowAvatars(): Boolean = dataStore.getShowAvatarsImmediate()
 
-    private val hatOpened by lazy {
-        rxPreferences.getBoolean(Preferences.Theme.HAT_OPENED, false)
-    }
+    fun getCircleAvatars(): Boolean = dataStore.getCircleAvatarsImmediate()
 
-    fun observeShowAvatars(): Observable<Boolean> = showAvatars.asObservable()
+    fun getForumBlacklist(): List<ForumBlacklistedUser> = dataStore.getForumBlacklistImmediate()
 
-    fun observeCircleAvatars(): Observable<Boolean> = circleAvatars.asObservable()
+    fun isForumBlacklisted(userId: Int, nick: String?): Boolean = dataStore.isForumBlacklistedImmediate(userId, nick)
 
-    fun observeAnchorHistory(): Observable<Boolean> = anchorHistory.asObservable()
+    fun getAnchorHistory(): Boolean = dataStore.getAnchorHistoryImmediate()
 
-    fun observeHatOpened(): Observable<Boolean> = hatOpened.asObservable()
+    fun getHatOpened(): Boolean = dataStore.getHatOpenedImmediate()
 
-    fun getShowAvatars(): Boolean = showAvatars.get()
+    fun getInlineHatOpened(topicId: Int): Boolean = dataStore.getInlineHatOpenedImmediate(topicId)
 
-    fun getCircleAvatars(): Boolean = circleAvatars.get()
+    fun hasInlineHatPreference(topicId: Int): Boolean = dataStore.hasInlineHatPreferenceImmediate(topicId)
 
-    fun getAnchorHistory(): Boolean = anchorHistory.get()
+    suspend fun setShowAvatars(value: Boolean) = dataStore.setShowAvatars(value)
 
-    fun getHatOpened(): Boolean = hatOpened.get()
+    suspend fun setCircleAvatars(value: Boolean) = dataStore.setCircleAvatars(value)
 
+    suspend fun setAnchorHistory(value: Boolean) = dataStore.setAnchorHistory(value)
+
+    suspend fun setHatOpened(value: Boolean) = dataStore.setHatOpened(value)
+
+    suspend fun setInlineHatOpened(topicId: Int, value: Boolean) = dataStore.setInlineHatOpened(topicId, value)
+
+    suspend fun addForumBlacklistedUser(user: ForumBlacklistedUser) = dataStore.addForumBlacklistedUser(user)
+
+    suspend fun removeForumBlacklistedUser(user: ForumBlacklistedUser) = dataStore.removeForumBlacklistedUser(user)
 }

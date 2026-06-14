@@ -1,6 +1,3 @@
-console.log("LOAD JS SOURCE forum_rules.js");
-
-
 function setupListeners() {
     var items = document.querySelectorAll(".rules_list .item");
 

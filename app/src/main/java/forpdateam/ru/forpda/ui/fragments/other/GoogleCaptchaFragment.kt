@@ -2,32 +2,49 @@ package forpdateam.ru.forpda.ui.fragments.other
 
 import android.net.Uri
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
+import timber.log.Timber
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
+import forpdateam.ru.forpda.common.showSnackbar
 
 import java.util.regex.Pattern
 
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
 import forpdateam.ru.forpda.common.webview.DialogsHelper
 import forpdateam.ru.forpda.model.data.remote.api.NetworkRequest
 import forpdateam.ru.forpda.model.data.remote.api.NetworkResponse
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.fragments.TabFragment
+import android.webkit.WebView
 import forpdateam.ru.forpda.ui.views.ExtendedWebView
-import io.reactivex.Observable
-import io.reactivex.schedulers.Schedulers
+import forpdateam.ru.forpda.ui.views.WebViewSecurityProfile
+import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
+import forpdateam.ru.forpda.common.ClipboardHelper
+import forpdateam.ru.forpda.model.data.remote.IWebClient
+import forpdateam.ru.forpda.presentation.ILinkHandler
+import forpdateam.ru.forpda.presentation.ISystemLinkHandler
+import forpdateam.ru.forpda.presentation.TabRouter
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * Created by radiationx on 09.11.17.
  */
 
+@AndroidEntryPoint
 class GoogleCaptchaFragment : TabFragment() {
+    @Inject lateinit var linkHandler: ILinkHandler
+    @Inject lateinit var router: TabRouter
+    @Inject lateinit var systemLinkHandler: ISystemLinkHandler
+    @Inject lateinit var webClient: IWebClient
+    @Inject lateinit var clipboardHelper: ClipboardHelper
+    @Inject lateinit var avatarRepository: AvatarRepository
+
     private lateinit var webView: ExtendedWebView
     private var content = ""
 
@@ -44,12 +61,16 @@ class GoogleCaptchaFragment : TabFragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        webView = ExtendedWebView(context)
+        webView = ExtendedWebView(requireContext()).also {
+            it.systemLinkHandler = systemLinkHandler
+            it.init(WebViewSecurityProfile.UNTRUSTED_EXTERNAL)
+        }
         webView.setDialogsHelper(DialogsHelper(
                 webView.context,
-                App.get().Di().linkHandler,
-                App.get().Di().systemLinkHandler,
-                App.get().Di().router
+                linkHandler,
+                systemLinkHandler,
+                router,
+                clipboardHelper
         ))
         attachWebView(webView)
         fragmentContent.addView(webView)
@@ -63,30 +84,35 @@ class GoogleCaptchaFragment : TabFragment() {
         webView.loadDataWithBaseURL("https://4pda.to/forum/", content, "text/html", "utf-8", null)
     }
 
-    internal inner class CaptchaWebViewClient : CustomWebViewClient() {
-        override fun handleUri(uri: Uri): Boolean {
+    internal inner class CaptchaWebViewClient : CustomWebViewClient(avatarRepository, linkHandler, systemLinkHandler) {
+        override fun handleUri(view: WebView, uri: Uri): Boolean {
             if (Pattern.compile("https://4pda.to/cdn-cgi/l/chk_captcha").matcher(uri.toString()).find()) {
                 val nr = NetworkRequest.Builder().url(uri.toString()).withoutBody().build()
-                val disposable = Observable.fromCallable { App.get().Di().webClient.request(nr) }
-                        .onErrorReturn { NetworkResponse(null) }
-                        .subscribeOn(Schedulers.io())
-                        .subscribe { this@GoogleCaptchaFragment.onResponse() }
-                addToDisposable(disposable)
+                lifecycleScope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            webClient.request(nr)
+                        }
+                        onResponse()
+                    } catch (e: Exception) {
+                        Timber.e(e, "Captcha request failed")
+                    }
+                }
             }
             return true
         }
     }
 
     private fun onResponse() {
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(App.getContext(), "Приложение будет перезапущено", Toast.LENGTH_SHORT).show()
-            Handler(Looper.getMainLooper()).postDelayed({
-                val activity = App.getActivity()
-                if (activity == null) {
-                    Toast.makeText(App.getContext(), "Перезапустите приложение", Toast.LENGTH_SHORT).show()
-                }
+        showSnackbar("Приложение будет перезапущено")
+        lifecycleScope.launch {
+            kotlinx.coroutines.delay(1000)
+            val activity = activity
+            if (activity == null) {
+                showSnackbar("Перезапустите приложение")
+            } else {
                 MainActivity.restartApplication(activity)
-            }, 1000)
+            }
         }
     }
 }

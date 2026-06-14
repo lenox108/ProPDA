@@ -3,11 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:background="?attr/selectableItemBackground"
+    xmlns:tools="http://schemas/android.com/tools"
     android:clipChildren="false"
     android:clipToPadding="false"
     android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
     android:paddingBottom="@dimen/list_row_padding_vertical"
     android:paddingEnd="@dimen/list_row_padding_horizontal"
     android:paddingStart="@dimen/list_row_padding_horizontal"
@@ -20,6 +21,7 @@
         android:layout_marginBottom="@dimen/list_topic_title_bottom_spacing"
         android:layout_alignParentStart="true"
         android:layout_toStartOf="@+id/icons_block"
+        android:textColor="?attr/default_text_color"
         android:textSize="@dimen/list_topic_title_text_size"
         tools:text="@string/test_topic_title"/>
 
@@ -36,6 +38,7 @@
             android:id="@+id/topic_item_poll_icon"
             android:layout_width="@dimen/list_topic_icon_size"
             android:layout_height="@dimen/list_topic_icon_size"
+            android:importantForAccessibility="no"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_poll" />
 
@@ -43,6 +46,7 @@
             android:id="@+id/topic_item_forum_icon"
             android:layout_width="@dimen/list_topic_icon_size"
             android:layout_height="@dimen/list_topic_icon_size"
+            android:importantForAccessibility="no"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_forum" />
 
@@ -50,6 +54,7 @@
             android:id="@+id/topic_item_lock_icon"
             android:layout_width="@dimen/list_topic_icon_size"
             android:layout_height="@dimen/list_topic_icon_size"
+            android:importantForAccessibility="no"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_lock" />
 
@@ -62,14 +67,23 @@
             android:clipChildren="false"
             android:minWidth="@dimen/list_topic_unread_dot_gutter_min">
 
-            <View
+            <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/topic_item_unread_dot"
-                android:layout_width="@dimen/list_topic_unread_dot_size"
+                android:layout_width="wrap_content"
                 android:layout_height="@dimen/list_topic_unread_dot_size"
                 android:layout_gravity="center"
                 android:background="@drawable/fav_unread_dot"
                 android:contentDescription="@string/fav_new_posts_dot_cd"
+                android:gravity="center"
+                android:importantForAccessibility="no"
+                android:minWidth="@dimen/list_topic_unread_dot_size"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:textColor="@android:color/white"
+                android:textSize="9sp"
+                android:textStyle="bold"
                 android:visibility="gone"
+                tools:text="3"
                 tools:visibility="visible" />
         </FrameLayout>
     </LinearLayout>
@@ -85,10 +99,13 @@
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/topic_item_last_nick"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_below="@+id/topic_item_desc"
-        android:contentDescription="@string/user"
+        android:layout_toStartOf="@+id/topic_item_date"
+        android:importantForAccessibility="no"
+        android:ellipsize="end"
+        android:maxLines="1"
         android:textColor="?attr/second_text_color"
         android:textSize="@dimen/list_topic_meta_text_size"
         tools:text="@string/test_topic_last_nick" />
@@ -99,6 +116,7 @@
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="true"
         android:layout_below="@+id/topic_item_desc"
+        android:importantForAccessibility="no"
         android:textColor="?attr/second_text_color"
         android:textSize="@dimen/list_topic_meta_text_size"
         tools:text="@string/test_topic_date" />

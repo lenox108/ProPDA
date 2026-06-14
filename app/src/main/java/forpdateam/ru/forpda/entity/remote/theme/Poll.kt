@@ -9,6 +9,10 @@ import java.util.ArrayList
 class Poll {
     var title: String? = null
     var votesCount: Int = 0
+    var formAction: String? = null
+    var formMethod: String = "get"
+    val hiddenInputs = mutableListOf<Pair<String, String>>()
+    var resultsUrl: String? = null
     //true - result poll
     var isResult: Boolean = false
     var voteButton = false
@@ -16,7 +20,18 @@ class Poll {
     var showPollButton = false
     val questions = mutableListOf<PollQuestion>()
 
+    val hasVoteInputs: Boolean
+        get() = questions.any { question ->
+            question.questionItems.any { item ->
+                item.type.equals("radio", ignoreCase = true) ||
+                        item.type.equals("checkbox", ignoreCase = true)
+            }
+        }
+
+    val canVote: Boolean
+        get() = !isResult && (voteButton || hasVoteInputs)
+
     fun haveButtons(): Boolean {
-        return voteButton or showResultsButton or showPollButton
+        return canVote or showResultsButton or showPollButton
     }
 }

@@ -6,19 +6,21 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
-import android.util.Log
-import com.jakewharton.rxrelay2.BehaviorRelay
-import forpdateam.ru.forpda.App
+import forpdateam.ru.forpda.diagnostic.FpdaDebugLog
+import forpdateam.ru.forpda.diagnostic.NavBackstackTrace
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
 import forpdateam.ru.forpda.ui.activities.WebVewNotFoundActivity
 import forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
 import forpdateam.ru.forpda.ui.activities.updatechecker.UpdateCheckerActivity
+import forpdateam.ru.forpda.ui.fragments.search.SearchFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
+import forpdateam.ru.forpda.ui.fragments.qms.chat.QmsChatFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeFragmentWeb
-import io.reactivex.Observable
-import io.reactivex.disposables.CompositeDisposable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import com.github.terrakok.cicerone.Back
 import com.github.terrakok.cicerone.BackTo
@@ -31,57 +33,80 @@ class TabNavigator(
         private val activity: androidx.fragment.app.FragmentActivity,
         private val containerId: Int
 ) : Navigator {
-
     companion object {
         private const val TAG_PREFIX = "Tab_"
     }
 
     private val fragmentManager by lazy { activity.supportFragmentManager }
     val tabController by lazy { TabController() }
-    private val compositeDisposable = CompositeDisposable()
-    private val schedulers = App.get().Di().schedulers
 
-    private val subscribers = mutableListOf<TabFragment>()
-    private val subscribersRelay = BehaviorRelay.createDefault(subscribers as List<TabFragment>)
+    private val subscribersMap = mutableMapOf<String, TabFragment>()
+    private val _subscribersFlow = MutableStateFlow<List<TabFragment>>(emptyList())
+    val subscribersFlow: StateFlow<List<TabFragment>> = _subscribersFlow.asStateFlow()
+    
+    private fun updateSubscribersFlow() {
+        _subscribersFlow.value = subscribersMap.values.toList()
+    }
 
     init {
+        syncExistingFragments()
+    }
 
+    fun syncSubscribers() {
+        syncExistingFragments()
+    }
+
+    private fun syncExistingFragments() {
+        val allFragments = fragmentManager.fragments
+        val existingFragments = allFragments.filterIsInstance<TabFragment>()
+        existingFragments.forEach { fragment ->
+            val tag = fragment.tag ?: return@forEach
+            if (!subscribersMap.containsKey(tag)) {
+                subscribersMap[tag] = fragment
+            }
+        }
+        updateSubscribersFlow()
     }
 
     fun onRestoreInstanceState(savedInstanceState: Bundle) {
         savedInstanceState.getString("tab_controller_json")?.also {
-            Log.e("TabController", "restore tab_controller_json: $it")
             tabController.onRestoreInstanceState(JSONObject(it))
+            restoreSubscribers()
         }
+    }
+
+    private fun restoreSubscribers() {
+        subscribersMap.clear()
+        tabController.getList().forEach { tabItem ->
+            val fragment = getByTag(tabItem.tag)
+            if (fragment != null) {
+                subscribersMap[tabItem.tag] = fragment
+            }
+        }
+        updateSubscribersFlow()
     }
 
     fun onSaveInstanceState(outState: Bundle) {
-        tabController.onSaveInstanceState().toString().also {
-            Log.e("TabController", "save tab_controller_json: $it")
-            outState.putString("tab_controller_json", it)
-        }
+        outState.putString("tab_controller_json", tabController.onSaveInstanceState().toString())
     }
 
     fun subscribe(tab: TabFragment) {
-        Log.e("TabNavigator", "subscribe $tab")
-        subscribers.add(tab)
-        subscribersRelay.accept(subscribers)
+        val tag = tab.tag ?: return
+        subscribersMap[tag] = tab
+        updateSubscribersFlow()
     }
 
     fun unsubscribe(tab: TabFragment) {
-        Log.e("TabNavigator", "unsubscribe $tab")
-        subscribers.remove(tab)
-        subscribersRelay.accept(subscribers)
+        val tag = tab.tag ?: return
+        subscribersMap.remove(tag)
+        updateSubscribersFlow()
     }
 
     fun notifyUpdate(tab: TabFragment) {
-        Log.e("TabNavigator", "notifyUpdate $tab")
-        subscribersRelay.accept(subscribers)
+        val tag = tab.tag ?: return
+        subscribersMap[tag] = tab
+        updateSubscribersFlow()
     }
-
-    fun observeSubscribers(): Observable<List<TabFragment>> = subscribersRelay
-            .subscribeOn(schedulers.io())
-            .observeOn(schedulers.ui())
 
     fun getCurrentFragment(): TabFragment? {
         return tabController.getCurrent()?.let {
@@ -90,62 +115,87 @@ class TabNavigator(
     }
 
     fun select(tabTag: String?) {
-        if (tabTag == null) {
-            Log.e("TabNavigator", "select CANCEL: tabTag==null")
-            return
-        }
-        Log.e("TabNavigator", "select tag=$tabTag fr=${getByTag(tabTag)}")
+        if (tabTag == null) return
         tabController.setCurrent(tabTag)
         updateFragmentsState()
     }
 
+    fun selectOpenedTab(tabTag: String?) {
+        if (tabTag == null || tabController.isCurrent(tabTag)) return
+        tabController.setCurrent(tabTag)
+        updateFragmentsState(notifyThemeTabBecameCurrent = false)
+    }
+
+    fun selectParentOf(tabTag: String?): Boolean {
+        val parentTag = tabController.getParentTag(tabTag) ?: return false
+        tabController.setCurrent(parentTag)
+        updateFragmentsState()
+        return true
+    }
+
     fun close(tabTag: String?) {
-        if (tabTag == null) {
-            Log.e("TabNavigator", "close CANCEL: tabTag==null")
-            return
-        }
+        if (tabTag == null) return
         val fragment = getByTag(tabTag)
-        Log.e("TabNavigator", "close tag=$tabTag fr=$fragment")
         if (tabController.getList().size <= 1) {
             exit()
-        } else {
+        } else if (fragment != null && fragment.isAdded) {
             fragmentManager
                     .beginTransaction()
-                    .remove(fragment!!)
+                    .remove(fragment)
                     .commit()
-            // Иначе remove ещё не применён — show предыдущей вкладки в updateFragmentsState даёт пустой экран.
-            fragmentManager.executePendingTransactions()
             tabController.remove(tabTag)
+            // Обновляем subscribers для drawer
+            subscribersMap.remove(tabTag)
+            updateSubscribersFlow()
             updateFragmentsState()
             notifyThemeFragmentAfterChildRemoved()
         }
     }
 
+    fun closeThemeChainToOrigin(tabTag: String?): Boolean {
+        if (tabTag == null) return false
+        val tagsRemove = tabController.getThemeChainTagsToOrigin(tabTag)
+        if (tagsRemove.isEmpty()) return false
+        val transaction = fragmentManager.beginTransaction()
+        tagsRemove.forEach { tag ->
+            getByTag(tag)?.also { fragment ->
+                transaction.remove(fragment)
+            }
+            subscribersMap.remove(tag)
+        }
+        transaction.commitNow()
+        tabController.removeThemeChainToOrigin(tabTag)
+        updateSubscribersFlow()
+        updateFragmentsState()
+        return true
+    }
+
+    fun canCloseThemeChainToOrigin(tabTag: String?): Boolean =
+            tabController.getThemeChainTagsToOrigin(tabTag).isNotEmpty()
+
     fun closeOthers() {
         val transaction = fragmentManager.beginTransaction()
         val itemTags = tabController.getList().map { it.tag }.filter { it != tabController.getCurrent()?.tag }
-        Log.e("TabNavigator", "closeOthers")
         itemTags.forEach { itemTag ->
             getByTag(itemTag)?.also { fragment ->
-                Log.e("TabNavigator", "closeOthers item=${itemTag} fr=$fragment")
                 transaction.remove(fragment)
                 tabController.remove(itemTag)
+                // Обновляем subscribers для drawer
+                subscribersMap.remove(itemTag)
             }
         }
         transaction.commit()
-        fragmentManager.executePendingTransactions()
+        updateSubscribersFlow()
         updateFragmentsState()
     }
 
-    private fun updateFragmentsState() {
+    private fun updateFragmentsState(notifyThemeTabBecameCurrent: Boolean = true) {
         /*tabController.getCurrent()?.tag?.let { getByTag(it) }?.also { fragment ->
             fragmentManager
                     .beginTransaction()
                     .show(fragment)
                     .commit()
         }*/
-        tabController.printTabItems("TabNavigator")
-        Log.e("TabNavigator", "updateFragmentsState")
         val transaction = fragmentManager.beginTransaction()
 
         val itemFragments = tabController.getList().map { Pair(it, getByTag(it.tag)) }
@@ -161,10 +211,11 @@ class TabNavigator(
             }
         }
 
-        transaction.commit()
-        fragmentManager.executePendingTransactions()
-        notifyCurrentThemeTabJumpToUnread()
-        subscribersRelay.accept(subscribers)
+        transaction.commitNow()
+        if (notifyThemeTabBecameCurrent) {
+            notifyCurrentThemeTabJumpToUnread()
+        }
+        updateSubscribersFlow()
     }
 
     /** После каждого hide/show стека — getnewpost для текущей темы (в т.ч. повторный тап по той же вкладке). */
@@ -173,9 +224,7 @@ class TabNavigator(
     }
 
     private fun getByTag(tag: String): TabFragment? {
-        val result = fragmentManager.findFragmentByTag(tag) as TabFragment?
-        Log.e("TabNavigator", "getByTag tag=$tag, tab=${tabController.getCurrent()?.tag}, fr=$result")
-        return result
+        return fragmentManager.findFragmentByTag(tag) as TabFragment?
     }
 
     private fun genTag() = TAG_PREFIX + System.currentTimeMillis()
@@ -198,12 +247,34 @@ class TabNavigator(
 
     private fun forward(command: Forward) {
         val newScreen = command.screen as Screen
+        NavBackstackTrace.log(
+                event = "forward",
+                navigator = "TabNavigator",
+                command = "Forward",
+                tabCount = tabController.getList().size,
+                screenKey = newScreen.screenKey,
+                topicId = (newScreen as? Screen.Theme)?.themeUrl?.let {
+                    forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi.extractTopicIdFromUrl(it)
+                }
+        )
+        logQmsNavigation("forward", newScreen)
         createActivityIntent(activity, newScreen.screenKey, newScreen)?.also {
             checkAndStartActivity(newScreen.screenKey, it)
             return
         }
 
+        if (reuseExistingThemeTabForSameTopicFreshOpen(newScreen)) {
+            return
+        }
         if (reuseExistingThemeTabForSpecificPost(newScreen)) {
+            return
+        }
+
+        if (activateAloneThemeTabIfPresent(newScreen)) {
+            return
+        }
+
+        if (activateAloneQmsChatTabIfPresent(newScreen)) {
             return
         }
 
@@ -216,43 +287,50 @@ class TabNavigator(
         val newFragment = createFragment(newScreen.screenKey, newScreen)
         if (newFragment != null) {
             val tag = genTag()
-
-            Log.e("TabNavigator", "forward f=$newFragment")
             fragmentManager
                     .beginTransaction()
                     .add(containerId, newFragment, tag)
-                    .commit()
-            fragmentManager.executePendingTransactions()
+                    .commitNow()
             tabController.addNew(tag, newScreen)
             updateFragmentsState()
         }
     }
 
     private fun back() {
+        NavBackstackTrace.log(
+                event = "back",
+                navigator = "TabNavigator",
+                command = "Back",
+                tabCount = tabController.getList().size
+        )
         if (tabController.getList().size <= 1) {
             exit()
         } else {
             tabController.getCurrent()?.also { tab ->
                 val fragment = getByTag(tab.tag)
-
-                Log.e("TabNavigator", "back f=$fragment")
-                fragmentManager
-                        .beginTransaction()
-                        .remove(fragment!!)
-                        .commit()
-                fragmentManager.executePendingTransactions()
-                tabController.remove(tab.tag)
-                updateFragmentsState()
-                notifyThemeFragmentAfterChildRemoved()
+                if (fragment != null) {
+                    fragmentManager
+                            .beginTransaction()
+                            .remove(fragment)
+                            .commitNow()
+                    tabController.remove(tab.tag)
+                    updateFragmentsState()
+                    notifyThemeFragmentAfterChildRemoved()
+                }
             }
         }
     }
 
     private fun replace(command: Replace) {
         val newScreen = command.screen as Screen
+        logQmsNavigation("replace", newScreen)
         createActivityIntent(activity, newScreen.screenKey, newScreen)?.also {
             checkAndStartActivity(newScreen.screenKey, it)
             activity.finish()
+            return
+        }
+
+        if (activateAloneQmsChatTabIfPresent(newScreen)) {
             return
         }
 
@@ -260,15 +338,16 @@ class TabNavigator(
             val currentTag = tabController.getCurrent()?.tag.orEmpty()
             if (it.tag != currentTag) {
                 val fragment = getByTag(currentTag)
-                fragmentManager
-                        .beginTransaction()
-                        .remove(fragment!!)
-                        .commit()
-                fragmentManager.executePendingTransactions()
-                tabController.remove(currentTag)
-                tabController.setCurrent(it.tag)
-                updateFragmentsState()
-                return
+                if (fragment != null) {
+                    fragmentManager
+                            .beginTransaction()
+                            .remove(fragment)
+                            .commitNow()
+                    tabController.remove(currentTag)
+                    tabController.setCurrent(it.tag)
+                    updateFragmentsState()
+                    return
+                }
             }
         }
 
@@ -276,13 +355,13 @@ class TabNavigator(
         if (newFragment != null) {
             val tag = genTag()
             val fragment = getByTag(tabController.getCurrent()?.tag.orEmpty())
-            Log.e("TabNavigator", "replace nf=$newFragment, of=$fragment")
             fragmentManager
                     .beginTransaction()
-                    .remove(fragment!!)
+                    .apply {
+                        if (fragment != null) remove(fragment)
+                    }
                     .add(containerId, newFragment, tag)
-                    .commit()
-            fragmentManager.executePendingTransactions()
+                    .commitNow()
             tabController.replace(tag, newScreen)
             updateFragmentsState()
         }
@@ -294,14 +373,13 @@ class TabNavigator(
                 ?: return
         val tagsRemove = tabController.backTo(key)
         val transaction = fragmentManager.beginTransaction()
-        Log.e("TabNavigator", "backTo tags=${tagsRemove.size}")
         tagsRemove.forEach {
             val fragment = getByTag(it)
-            Log.e("TabNavigator", "backTo remove t=$fragment")
-            transaction.remove(fragment!!)
+            if (fragment != null) {
+                transaction.remove(fragment)
+            }
         }
         transaction.commit()
-        fragmentManager.executePendingTransactions()
         updateFragmentsState()
         notifyThemeFragmentAfterChildRemoved()
     }
@@ -311,7 +389,6 @@ class TabNavigator(
      * пустой до ручного refresh — дублируем то же действие, что и pull-to-refresh.
      */
     private fun notifyThemeFragmentAfterChildRemoved() {
-        fragmentManager.executePendingTransactions()
         val current = tabController.getCurrent() ?: return
         val fragment = getByTag(current.tag) ?: return
         (fragment as? ThemeFragmentWeb)?.onRestoredAfterChildFragmentRemoved()
@@ -337,8 +414,7 @@ class TabNavigator(
                 Intent(context, ImageViewerActivity::class.java).apply {
                     putExtra(ImageViewerActivity.IMAGE_URLS_KEY, ArrayList<String>(screen.urls))
                     putExtra(ImageViewerActivity.SELECTED_INDEX_KEY, screen.selected)
-                    flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
             is Screen.Settings ->
                 Intent(context, SettingsActivity::class.java).apply {
@@ -375,7 +451,140 @@ class TabNavigator(
                     ?: continue
             if (openTopicId != targetTopicId) continue
 
-            themeFr.loadThemeUrlFromNavigator(url)
+            applyThemeScreenToFragment(themeFr, screen)
+            themeFr.loadThemeUrlFromNavigator(
+                    url = url,
+                    sourceScreen = screen.topicOpenSource,
+                    openIntent = screen.topicOpenIntent,
+                    listHints = TabNavigatorThemeSwitchPolicy.listHintsFromThemeScreen(screen)
+            )
+            tabController.setCurrent(item.tag)
+            updateFragmentsState()
+            return true
+        }
+        return false
+    }
+
+    /**
+     * If the same topic is already open in another tab, treat navigation as a fresh open
+     * and force re-resolve the URL (e.g. apply LAST_UNREAD/getnewpost and suppress scroll restore).
+     *
+     * This prevents the "second open restores old scroll position" bug when the user re-opens
+     * the same topic from a list while an old instance is still in the tab tree.
+     */
+    /**
+     * [Screen.Theme] is [Screen.isAlone]: the second topic from a list must not only focus the
+     * existing theme tab — it must reload URL, list unread hints, and reset hybrid pagination state.
+     * Otherwise the WebView keeps topic A HTML and «В конец темы» uses stale [visibleCurrentPage].
+     */
+    /**
+     * [Screen.QmsChat] is alone: re-opening a dialog must update ids and reload WebView HTML,
+     * not only focus the existing tab (stale ViewModel + empty/stale WebView).
+     */
+    private fun activateAloneQmsChatTabIfPresent(screen: Screen): Boolean {
+        if (screen !is Screen.QmsChat) return false
+        val aloneTab = tabController.findAlone(screen) ?: return false
+        val chatFr = getByTag(aloneTab.tag) as? QmsChatFragment ?: return false
+        aloneTab.screen = TabScreen.fromScreen(screen)
+        // Show the tab before WebView reload — hidden (GONE) fragments measure WebView at 0×0
+        // and the QMS render pipeline can stall until the user leaves and re-enters the screen.
+        tabController.setCurrent(aloneTab.tag)
+        updateFragmentsState()
+        chatFr.applyChatScreenFromNavigator(screen)
+        FpdaDebugLog.logQms(
+                FpdaDebugLog.QmsArea.CHAT,
+                "alone_qms_chat_reuse",
+                mapOf(
+                        "tabTag" to aloneTab.tag,
+                        "userId" to screen.userId,
+                        "themeId" to screen.themeId
+                )
+        )
+        return true
+    }
+
+    private fun activateAloneThemeTabIfPresent(screen: Screen): Boolean {
+        if (screen !is Screen.Theme) return false
+        val aloneTab = tabController.findThemeTab() ?: return false
+        val themeFr = getByTag(aloneTab.tag) as? ThemeFragmentWeb ?: return false
+        val url = screen.themeUrl ?: return false
+        val targetTopicId = extractShowTopicId(url)
+        val openTopicId = themeFr.arguments?.getString(TabFragment.ARG_TAB)?.let { extractShowTopicId(it) }
+                ?: themeFr.getOpenTopicIdForReuse()
+        if (TabNavigatorThemeSwitchPolicy.mustReloadAloneThemeOnNavigation(screen.topicOpenIntent)) {
+            applyThemeScreenToFragment(themeFr, screen)
+            themeFr.loadThemeUrlFromNavigator(
+                    url = url,
+                    sourceScreen = screen.topicOpenSource,
+                    openIntent = screen.topicOpenIntent,
+                    listHints = TabNavigatorThemeSwitchPolicy.listHintsFromThemeScreen(screen)
+            )
+            FpdaDebugLog.log(
+                    FpdaDebugLog.TAG_TOPIC_SWITCH,
+                    event = "alone_theme_fresh_reload",
+                    fields = mapOf(
+                            "targetTopicId" to targetTopicId,
+                            "openTopicId" to openTopicId,
+                            "source" to screen.topicOpenSource,
+                            "tabTag" to aloneTab.tag
+                    )
+            )
+        } else {
+            FpdaDebugLog.log(
+                    FpdaDebugLog.TAG_TOPIC_SWITCH,
+                    event = "alone_theme_focus_only",
+                    fields = mapOf(
+                            "targetTopicId" to targetTopicId,
+                            "openTopicId" to openTopicId,
+                            "intent" to screen.topicOpenIntent
+                    )
+            )
+        }
+        tabController.setCurrent(aloneTab.tag)
+        updateFragmentsState()
+        return true
+    }
+
+    private fun applyThemeScreenToFragment(themeFr: ThemeFragmentWeb, screen: Screen.Theme) {
+        val url = screen.themeUrl ?: return
+        themeFr.arguments?.apply {
+            putString(TabFragment.ARG_TAB, url)
+            screen.screenTitle?.let { putString(TabFragment.ARG_TITLE, it) }
+            putString(Screen.Theme.ARG_TOPIC_OPEN_SOURCE, screen.topicOpenSource)
+            putString(Screen.Theme.ARG_TOPIC_OPEN_INTENT, screen.topicOpenIntent)
+            screen.unreadUrlFromList?.let { putString(Screen.Theme.ARG_UNREAD_URL_FROM_LIST, it) }
+                    ?: remove(Screen.Theme.ARG_UNREAD_URL_FROM_LIST)
+            screen.lastReadUrlFromList?.let { putString(Screen.Theme.ARG_LAST_READ_URL_FROM_LIST, it) }
+                    ?: remove(Screen.Theme.ARG_LAST_READ_URL_FROM_LIST)
+            if (screen.unreadPostIdFromList > 0) {
+                putInt(Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST, screen.unreadPostIdFromList)
+            } else {
+                remove(Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST)
+            }
+        }
+    }
+
+    private fun reuseExistingThemeTabForSameTopicFreshOpen(screen: Screen): Boolean {
+        if (getCurrentFragment() is SearchFragment) return false
+        if (screen !is Screen.Theme) return false
+        if (!TabNavigatorThemeSwitchPolicy.isFreshOpenForReuse(screen.topicOpenIntent)) return false
+        val url = screen.themeUrl ?: return false
+        val targetTopicId = extractShowTopicId(url) ?: return false
+
+        for (item in tabController.getList()) {
+            val themeFr = getByTag(item.tag) as? ThemeFragmentWeb ?: continue
+            val openTopicId = themeFr.arguments?.getString(TabFragment.ARG_TAB)?.let { extractShowTopicId(it) }
+                    ?: themeFr.getOpenTopicIdForReuse()
+                    ?: continue
+            if (openTopicId != targetTopicId) continue
+
+            applyThemeScreenToFragment(themeFr, screen)
+            themeFr.loadThemeUrlFromNavigator(
+                    url = url,
+                    sourceScreen = screen.topicOpenSource,
+                    openIntent = screen.topicOpenIntent,
+                    listHints = TabNavigatorThemeSwitchPolicy.listHintsFromThemeScreen(screen)
+            )
             tabController.setCurrent(item.tag)
             updateFragmentsState()
             return true
@@ -396,5 +605,19 @@ class TabNavigator(
         if (u.contains("view=findpost")) return true
         if (Regex("[?&]pid=\\d+").containsMatchIn(u)) return true
         return false
+    }
+
+    private fun logQmsNavigation(command: String, screen: Screen) {
+        if (screen !is Screen.QmsChat) return
+        FpdaDebugLog.logQms(
+                FpdaDebugLog.QmsArea.OPEN,
+                "nav_$command",
+                mapOf(
+                        "userId" to screen.userId,
+                        "themeId" to screen.themeId,
+                        "screenTitle" to screen.screenTitle?.take(32),
+                        "source" to "TabNavigator"
+                )
+        )
     }
 }

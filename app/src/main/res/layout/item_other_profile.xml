@@ -1,28 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?cards_background"
     android:clickable="true"
     android:focusable="true"
-    android:foreground="?selectableItemBackground">
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="?attr/cards_background"
+    app:cardCornerRadius="@dimen/card_corner_radius"
+    app:cardElevation="0dp"
+    app:strokeColor="?attr/list_plate_stroke_color"
+    app:strokeWidth="?attr/list_plate_stroke_width">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="@dimen/content_padding_vertical"
-        android:paddingEnd="@dimen/content_padding_vertical"
+        android:minHeight="88dp"
+        android:paddingBottom="@dimen/dp16"
+        android:paddingEnd="@dimen/content_padding_horizontal"
         android:paddingStart="@dimen/content_padding_horizontal"
-        android:paddingTop="@dimen/content_padding_vertical">
+        android:paddingTop="@dimen/dp16">
 
-        <de.hdodenhof.circleimageview.CircleImageView
+        <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/profileAvatar"
-            android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp48"
+            android:layout_width="@dimen/dp56"
+            android:layout_height="@dimen/dp56"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:shapeAppearanceOverlay="@style/CircleImageViewStyle" />
 
         <TextView
             android:id="@+id/profileNick"
@@ -46,16 +52,15 @@
             app:layout_constraintStart_toStartOf="@+id/profileNick"
             app:layout_constraintTop_toBottomOf="@+id/profileNick" />
 
-        <ImageButton
-            android:id="@+id/profileLogout"
-            android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp48"
-            android:background="?selectableItemBackgroundBorderless"
-            android:contentDescription="@string/pref_title_logout"
-            android:visibility="gone"
+        <ImageView
+            android:id="@+id/profileChevron"
+            android:layout_width="@dimen/dp24"
+            android:layout_height="@dimen/dp24"
+            android:contentDescription="@null"
+            app:tint="?attr/icon_base"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:srcCompat="@drawable/ic_link" />
+            app:srcCompat="@drawable/ic_arrow_right" />
     </androidx.constraintlayout.widget.ConstraintLayout>
-</FrameLayout>
+</com.google.android.material.card.MaterialCardView>

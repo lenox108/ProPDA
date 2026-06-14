@@ -76,4 +76,88 @@ class CheckerParserTest {
         assertEquals("", data.date)
         assertTrue(data.links.isEmpty())
     }
+
+    @Test
+    fun parse_multipleLinks_parsesAll() {
+        val json = """
+            {
+              "update": {
+                "patternsVersion": 1,
+                "links": [
+                  { "name": "APK", "url": "https://example.com/a.apk", "type": "direct" },
+                  { "name": "Source", "url": "https://github.com", "type": "site" }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val data = parser.parse(json)
+
+        assertEquals(2, data.links.size)
+        assertEquals("APK", data.links[0].name)
+        assertEquals("Source", data.links[1].name)
+    }
+
+    @Test
+    fun parse_multipleItemsInLists_parsesAll() {
+        val json = """
+            {
+              "update": {
+                "patternsVersion": 1,
+                "links": [],
+                "important": [ "Critical 1", "Critical 2" ],
+                "added": [ "Feature A", "Feature B" ],
+                "fixed": [ "Bug 1", "Bug 2" ],
+                "changed": [ "Tweak 1", "Tweak 2" ]
+              }
+            }
+        """.trimIndent()
+
+        val data = parser.parse(json)
+
+        assertEquals(2, data.important.size)
+        assertEquals(2, data.added.size)
+        assertEquals(2, data.fixed.size)
+        assertEquals(2, data.changed.size)
+    }
+
+    @Test
+    fun parse_missingOptionalList_returnsEmpty() {
+        val json = """
+            {
+              "update": {
+                "patternsVersion": 1
+              }
+            }
+        """.trimIndent()
+
+        val data = parser.parse(json)
+
+        assertTrue(data.links.isEmpty())
+        assertTrue(data.important.isEmpty())
+        assertTrue(data.added.isEmpty())
+        assertTrue(data.fixed.isEmpty())
+        assertTrue(data.changed.isEmpty())
+    }
+
+    @Test
+    fun parse_linkWithMissingFields_usesDefaults() {
+        val json = """
+            {
+              "update": {
+                "patternsVersion": 1,
+                "links": [
+                  { "url": "https://example.com/a.apk" }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val data = parser.parse(json)
+
+        assertEquals(1, data.links.size)
+        assertEquals("Unknown", data.links[0].name)
+        assertEquals("https://example.com/a.apk", data.links[0].url)
+        assertEquals("site", data.links[0].type)
+    }
 }

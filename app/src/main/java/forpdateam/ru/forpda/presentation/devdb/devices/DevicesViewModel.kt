@@ -1,38 +1,50 @@
 package forpdateam.ru.forpda.presentation.devdb.devices
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import android.content.Context
+import forpdateam.ru.forpda.presentation.BaseViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.devdb.Brand
 import forpdateam.ru.forpda.model.repository.devdb.DevDbRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
+import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
-import io.reactivex.disposables.CompositeDisposable
 
-class DevicesViewModel(
+@HiltViewModel
+class DevicesViewModel @Inject constructor(
+        @ApplicationContext private val context: Context,
         private val devDbRepository: DevDbRepository,
         private val router: TabRouter,
-        private val errorHandler: IErrorHandler
-) : ViewModel() {
+        private val linkHandler: ILinkHandler,
+        private val errorHandler: IErrorHandler,
+        private val clipboardHelper: ClipboardHelper
+) : BaseViewModel() {
 
-    @Volatile
-    private var devicesView: DevicesView? = null
-
-    fun attachView(view: DevicesView) {
-        devicesView = view
-    }
-
-    fun detachView() {
-        devicesView = null
-    }
-
-    private val rxSubscriptions = CompositeDisposable()
+    private var loadJob: Job? = null
     private var subscriptionsStarted = false
 
     var categoryId: String? = null
     var brandId: String? = null
-    var currentData: Brand? = null
+    private val _currentData = MutableStateFlow<Brand?>(null)
+    val currentData: StateFlow<Brand?> = _currentData.asStateFlow()
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _uiEvents = MutableSharedFlow<DevicesUiEvent>()
+    val uiEvents: SharedFlow<DevicesUiEvent> = _uiEvents.asSharedFlow()
 
     fun start() {
         if (subscriptionsStarted) return
@@ -40,27 +52,24 @@ class DevicesViewModel(
         loadBrand()
     }
 
-    override fun onCleared() {
-        rxSubscriptions.clear()
-        super.onCleared()
-    }
-
     fun loadBrand() {
-        devDbRepository
-                .getBrand(categoryId.orEmpty(), brandId.orEmpty())
-                .doOnSubscribe { devicesView?.setRefreshing(true) }
-                .doAfterTerminate { devicesView?.setRefreshing(false) }
-                .subscribe({
-                    currentData = it
-                    devicesView?.showData(it)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        loadJob?.cancel()
+        loadJob = scope.launch {
+            _refreshing.value = true
+            try {
+                val brand = devDbRepository.getBrand(categoryId.orEmpty(), brandId.orEmpty())
+                _currentData.value = brand
+                _uiEvents.emit(DevicesUiEvent.ShowData(brand))
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            } finally {
+                _refreshing.value = false
+            }
+        }
     }
 
     fun openDevice(item: Brand.DeviceItem) {
-        currentData?.let {
+        _currentData.value?.let {
             router.navigateTo(Screen.DevDbDevice().apply {
                 deviceId = item.id
             })
@@ -72,34 +81,27 @@ class DevicesViewModel(
     }
 
     fun copyLink(item: Brand.DeviceItem) {
-        currentData?.let {
-            Utils.copyToClipBoard("https://4pda.to/devdb/${item.id}")
+        _currentData.value?.let {
+            clipboardHelper.copyToClipboard("https://4pda.to/devdb/${item.id}")
         }
     }
 
     fun shareLink(item: Brand.DeviceItem) {
-        currentData?.let {
-            Utils.shareText("https://4pda.to/devdb/${item.id}")
+        _currentData.value?.let {
+            Utils.shareText(context, "https://4pda.to/devdb/${item.id}")
         }
     }
 
     fun createNote(item: Brand.DeviceItem) {
-        currentData?.let {
+        _currentData.value?.let {
             val title = "DevDb: ${it.title} ${item.title}"
             val url = "https://4pda.to/devdb/" + item.id
-            devicesView?.showCreateNote(title, url)
+            scope.launch { _uiEvents.emit(DevicesUiEvent.ShowCreateNote(title, url)) }
         }
     }
+}
 
-    class Factory(
-            private val devDbRepository: DevDbRepository,
-            private val router: TabRouter,
-            private val errorHandler: IErrorHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != DevicesViewModel::class.java) throw IllegalArgumentException("Unknown ViewModel class")
-            return DevicesViewModel(devDbRepository, router, errorHandler) as T
-        }
-    }
+sealed class DevicesUiEvent {
+    data class ShowData(val brand: Brand) : DevicesUiEvent()
+    data class ShowCreateNote(val title: String, val url: String) : DevicesUiEvent()
 }

@@ -7,6 +7,16 @@ import forpdateam.ru.forpda.entity.remote.devdb.Device
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import java.util.regex.Matcher
+
+/**
+ * Безопасные extension-функции для извлечения групп из Matcher.
+ * Возвращают null вместо краша при отсутствии группы или ошибке парсинга.
+ */
+private fun Matcher.groupInt(group: Int): Int? {
+    val value = this.group(group) ?: return null
+    return value.toIntOrNull()
+}
 
 class DevDbParser(
         private val patternProvider: IPatternProvider
@@ -19,15 +29,15 @@ class DevDbParser(
                 .getPattern(scope.scope, scope.brands_letters)
                 .matcher(response)
                 .findAll { matcher ->
-                    val letter = matcher.group(1)
+                    val letter = matcher.group(1) ?: ""
                     val items = patternProvider
                             .getPattern(scope.scope, scope.brands_items_in_letter)
-                            .matcher(matcher.group(2))
+                            .matcher(matcher.group(2) ?: "")
                             .map { itemsMatcher ->
                                 Brands.Item().apply {
-                                    id = itemsMatcher.group(1)
-                                    title = itemsMatcher.group(2).fromHtml()
-                                    count = itemsMatcher.group(3).toInt()
+                                    id = itemsMatcher.group(1) ?: ""
+                                    title = itemsMatcher.group(2)?.fromHtml()
+                                    count = itemsMatcher.group(3)?.toIntOrNull() ?: 0
                                 }
                             }
                     data.letterMap[letter] = items
@@ -39,15 +49,15 @@ class DevDbParser(
                 .findOnce { matcher ->
                     patternProvider
                             .getPattern(scope.scope, scope.main_breadcrumb)
-                            .matcher(matcher.group(1))
+                            .matcher(matcher.group(1) ?: "")
                             .findAll { bcMatcher ->
                                 if (bcMatcher.group(2) == null) {
-                                    data.catId = bcMatcher.group(1)
-                                    data.catTitle = bcMatcher.group(3)
+                                    data.catId = bcMatcher.group(1) ?: ""
+                                    data.catTitle = bcMatcher.group(3) ?: ""
                                 }
                             }
-                    data.actual = matcher.group(5).toInt()
-                    data.all = matcher.group(6).toInt()
+                    data.actual = matcher.group(5)?.toIntOrNull() ?: 0
+                    data.all = matcher.group(6)?.toIntOrNull() ?: 0
                 }
         return data
     }
@@ -73,7 +83,7 @@ class DevDbParser(
                             price = it
                         }
                         matcher.group(7)?.also {
-                            rating = it.toInt()
+                            rating = it.toIntOrNull() ?: 0
                         }
                     }
                 }
@@ -96,8 +106,8 @@ class DevDbParser(
                                 }
                             }
                     data.title = matcher.group(4)
-                    data.actual = matcher.group(5).toInt()
-                    data.all = matcher.group(6).toInt()
+                    data.actual = matcher.groupInt(5) ?: 0
+                    data.all = matcher.groupInt(6) ?: 0
                 }
         return data
     }
@@ -149,7 +159,7 @@ class DevDbParser(
                             }
 
                     matcher.group(2)?.also {
-                        data.rating = it.toInt()
+                        data.rating = it.toIntOrNull() ?: 0
                     }
 
                     data.title = matcher.group(4)
@@ -161,16 +171,17 @@ class DevDbParser(
                 .matcher(response)
                 .map { matcher ->
                     Device.Comment().apply {
-                        id = matcher.group(1).toInt()
-                        rating = matcher.group(3).toInt()
-                        userId = matcher.group(4).toInt()
+                        id = matcher.groupInt(1) ?: return@map null
+                        rating = matcher.groupInt(3) ?: 0
+                        userId = matcher.groupInt(4) ?: 0
                         nick = matcher.group(5).fromHtml()
                         date = matcher.group(6)
                         text = (matcher.group(9) ?: matcher.group(7))?.trim()
-                        likes = matcher.group(10).toInt()
-                        dislikes = matcher.group(11).toInt()
+                        likes = matcher.groupInt(10) ?: 0
+                        dislikes = matcher.groupInt(11) ?: 0
                     }
                 }
+                .filterNotNull()
         data.comments.addAll(comments)
 
         val news = patternProvider
@@ -178,7 +189,7 @@ class DevDbParser(
                 .matcher(response)
                 .map { matcher ->
                     Device.PostItem().apply {
-                        id = matcher.group(1).toInt()
+                        id = matcher.groupInt(1) ?: return@map null
                         image = matcher.group(2)
                         title = matcher.group(3).fromHtml()
                         date = matcher.group(4)
@@ -187,6 +198,7 @@ class DevDbParser(
                         }
                     }
                 }
+                .filterNotNull()
         data.news.addAll(news)
 
         patternProvider
@@ -198,7 +210,7 @@ class DevDbParser(
                             .matcher(it.group(1))
                             .map { matcher ->
                                 Device.PostItem().apply {
-                                    id = matcher.group(1).toInt()
+                                    id = matcher.groupInt(1) ?: return@map null
                                     title = matcher.group(2).fromHtml()
                                     date = matcher.group(3)
                                     matcher.group(4)?.also {
@@ -206,6 +218,7 @@ class DevDbParser(
                                     }
                                 }
                             }
+                            .filterNotNull()
                     data.discussions.addAll(discussions)
                 }
 
@@ -218,7 +231,7 @@ class DevDbParser(
                             .matcher(it.group(1))
                             .map { matcher ->
                                 Device.PostItem().apply {
-                                    id = matcher.group(1).toInt()
+                                    id = matcher.groupInt(1) ?: return@map null
                                     title = matcher.group(2).fromHtml()
                                     date = matcher.group(3)
                                     matcher.group(4)?.also {
@@ -226,6 +239,7 @@ class DevDbParser(
                                     }
                                 }
                             }
+                            .filterNotNull()
                     data.firmwares.addAll(firmwares)
                 }
         return data

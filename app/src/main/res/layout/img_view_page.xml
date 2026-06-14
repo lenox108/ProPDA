@@ -12,16 +12,17 @@
         android:layout_height="match_parent"
         android:layout_gravity="center" />
 
-    <com.github.rahatarmanahmed.cpv.CircularProgressView
+    <com.google.android.material.progressindicator.CircularProgressIndicator
         android:id="@+id/progress_bar"
         android:layout_width="@dimen/dp48"
         android:layout_height="@dimen/dp48"
         android:layout_gravity="center"
         android:clickable="false"
         android:visibility="gone"
-        app:cpv_color="?attr/colorAccent"
-        app:cpv_animAutostart="true"
-        app:cpv_indeterminate="true"/>
+        android:indeterminate="true"
+        app:indicatorColor="?attr/colorAccent"
+        app:trackColor="?attr/colorAccent"
+        app:trackThickness="@dimen/dp2" />
 
 
 </FrameLayout>

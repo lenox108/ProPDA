@@ -24,7 +24,7 @@ body {
   margin: 0.5em 0;
   box-shadow: 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12);
   padding: 1rem;
-  font-family: "Roboto Mono", monospace;
+  font-family: var(--app-font-family, var(--legacy-app-font-family, "ForPdaRoboto", Roboto, sans-serif));
 }
 .content .rules_list .item {
   padding-top: 0.25rem;

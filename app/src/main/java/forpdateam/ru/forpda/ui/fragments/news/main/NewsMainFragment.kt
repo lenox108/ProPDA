@@ -1,56 +1,67 @@
 package forpdateam.ru.forpda.ui.fragments.news.main
 
 import android.os.Bundle
-import androidx.recyclerview.widget.LinearLayoutManager
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
+import androidx.core.graphics.drawable.DrawableCompat
+import androidx.appcompat.widget.PopupMenu
 import androidx.fragment.app.viewModels
-import forpdateam.ru.forpda.App
+import androidx.recyclerview.widget.LinearLayoutManager
+import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.getVecDrawable
+import forpdateam.ru.forpda.common.showSnackbar
 import forpdateam.ru.forpda.entity.remote.news.NewsItem
-import forpdateam.ru.forpda.presentation.articles.list.ArticlesListView
+import forpdateam.ru.forpda.model.data.remote.api.news.Constants
+import forpdateam.ru.forpda.model.repository.note.NotesRepository
+import forpdateam.ru.forpda.presentation.articles.list.ArticlesListUiEvent
 import forpdateam.ru.forpda.presentation.articles.list.ArticlesListViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
+import forpdateam.ru.forpda.ui.views.ContentController
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
+import forpdateam.ru.forpda.ui.views.FunnyContent
+import javax.inject.Inject
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 
 /**
  * Created by isanechek on 8/8/17.
  */
 
-class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener, ArticlesListView {
+@AndroidEntryPoint
+class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
 
+    @Inject lateinit var notesRepository: NotesRepository
     private lateinit var adapter: NewsListAdapter
     private val dialogMenu = DynamicDialogMenu<NewsMainFragment, NewsItem>()
+    private lateinit var categories: List<NewsCategoryUi>
 
-    private val presenter: ArticlesListViewModel by viewModels {
-        ArticlesListViewModel.Factory(
-                App.get().Di().newsRepository,
-                App.get().Di().avatarRepository,
-                App.get().Di().authHolder,
-                App.get().Di().router,
-                App.get().Di().linkHandler,
-                App.get().Di().errorHandler,
-                App.get().Di().schedulers
-        )
-    }
+    private val presenter: ArticlesListViewModel by viewModels()
 
-    init {
-        configuration.defaultTitle = App.get().getString(R.string.fragment_title_news_list)
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        configuration.defaultTitle = getString(R.string.fragment_title_news)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        categories = createNewsCategories()
         setListsBackground()
+        pinStaticOpaqueToolbar()
         refreshLayout.setOnRefreshListener { presenter.refreshArticles() }
-        recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
-        //recyclerView.addItemDecoration(new DevicesFragment.SpacingItemDecoration(App.px8, true));
+        recyclerView.layoutManager = LinearLayoutManager(context)
+        //recyclerView.addItemDecoration(new DevicesFragment.SpacingItemDecoration(dp8, true));
         adapter = NewsListAdapter()
         adapter.setOnClickListener(this)
+        adapter.setOnItemDisplayListener { presenter.onItemDisplayed(it) }
         recyclerView.adapter = adapter
-
-        setScrollFlagsEnterAlways()
 
         dialogMenu.apply {
             addItem(getString(R.string.copy_link)) { _, data ->
@@ -64,19 +75,19 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener, 
             }
         }
 
-        presenter.attachView(this)
         presenter.start()
+        setupCategoryTitleDropdown()
+        observeViewModel()
     }
 
     override fun onDestroyView() {
-        presenter.detachView()
         super.onDestroyView()
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
         menu.add(R.string.fragment_title_search)
-                .setIcon(App.getVecDrawable(context, R.drawable.ic_toolbar_search))
+                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_search))
                 .setOnMenuItemClickListener {
                     presenter.openSearch()
                     true
@@ -84,33 +95,196 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener, 
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
     }
 
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        refreshLayout.isRefreshing = isRefreshing
+                    }
+                }
+                launch {
+                    presenter.selectedCategory.collect { category ->
+                        updateCategorySubtitle(category)
+                    }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleUiEvent(event: ArticlesListUiEvent) {
+        when (event) {
+            ArticlesListUiEvent.ClearNews -> clearNews()
+            is ArticlesListUiEvent.ShowNews -> showNews(event.items, event.withClear)
+            is ArticlesListUiEvent.UpdateItems -> updateItems(event.items)
+            is ArticlesListUiEvent.ShowCreateNote -> showCreateNote(event.title, event.url)
+            is ArticlesListUiEvent.ShowItemDialogMenu -> showItemDialogMenu(event.item)
+            is ArticlesListUiEvent.ShowLoadError -> showLoadError(event.message)
+        }
+    }
+
     override fun onLoadMoreClick() {
         presenter.loadMore()
     }
 
-    override fun showNews(items: List<NewsItem>, withClear: Boolean) {
-        if (withClear) {
-            if (!items.isEmpty()) {
-                adapter.clear()
-                adapter.addAll(items)
-            }
-        } else
-            adapter.insertMore(items)
+    private fun showNews(items: List<NewsItem>, withClear: Boolean) {
+        contentController.hideContent(ContentController.TAG_ERROR)
+        synchronized(adapter) {
+            if (withClear) {
+                if (items.isNotEmpty()) {
+                    adapter.setItemsDirect(items)
+                    contentController.hideContent(ContentController.TAG_NO_DATA)
+                } else {
+                    showEmptyNews()
+                }
+            } else
+                adapter.insertMore(items)
+        }
     }
 
-    override fun updateItems(items: List<NewsItem>) {
-        adapter.updateItems(items)
+    private fun clearNews() {
+        contentController.hideContent(ContentController.TAG_ERROR)
+        contentController.hideContent(ContentController.TAG_NO_DATA)
+        synchronized(adapter) {
+            adapter.setItemsDirect(emptyList())
+        }
     }
 
-    override fun showCreateNote(title: String, url: String) {
-        NotesAddPopup.showAddNoteDialog(context, title, url)
+    private fun showEmptyNews() {
+        if (!contentController.contains(ContentController.TAG_NO_DATA)) {
+            val funnyContent = FunnyContent(requireContext())
+                    .setImage(R.drawable.ic_newspaper)
+                    .setTitle(R.string.funny_news_nodata_title)
+                    .setDesc(R.string.funny_news_nodata_desc)
+                    .addAction(R.string.refresh) { presenter.refreshArticles() }
+            contentController.addContent(funnyContent, ContentController.TAG_NO_DATA)
+        }
+        contentController.showContent(ContentController.TAG_NO_DATA)
     }
 
-    override fun showItemDialogMenu(item: NewsItem) {
+    private fun showLoadError(message: String?) {
+        if (adapter.itemCount > 1) {
+            showSnackbar(message ?: getString(R.string.error_occurred))
+            return
+        }
+        contentController.hideContent(ContentController.TAG_NO_DATA)
+        if (!contentController.contains(ContentController.TAG_ERROR)) {
+            val funnyContent = FunnyContent(requireContext())
+                    .setImage(R.drawable.ic_toolbar_refresh)
+                    .setTitle(R.string.funny_news_error_title)
+                    .setDesc(R.string.funny_news_error_desc)
+                    .addAction(R.string.retry) { presenter.refreshArticles() }
+            contentController.addContent(funnyContent, ContentController.TAG_ERROR)
+        }
+        contentController.showContent(ContentController.TAG_ERROR)
+        message?.let { showSnackbar(it) }
+    }
+
+    private fun updateItems(items: List<NewsItem>) {
+        synchronized(adapter) {
+            adapter.updateItems(items)
+        }
+    }
+
+    private fun showCreateNote(title: String, url: String) {
+        NotesAddPopup.showAddNoteDialog(context, title, url, notesRepository)
+    }
+
+    private fun showItemDialogMenu(item: NewsItem) {
         dialogMenu.apply {
             disallowAll()
             allowAll()
-            show(context, this@NewsMainFragment, item)
+            show(requireContext(), this@NewsMainFragment, item)
+        }
+    }
+
+    private fun setupCategoryTitleDropdown() {
+        titlesWrapper.apply {
+            isClickable = true
+            setOnClickListener { showCategoryPopup() }
+        }
+        toolbarTitleView.apply {
+            isClickable = true
+            layoutParams = layoutParams.apply {
+                width = ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            compoundDrawablePadding = resources.getDimensionPixelSize(R.dimen.dp4)
+            val arrowDrawable = DrawableCompat.wrap(requireContext().getVecDrawable(R.drawable.ic_arrow_down)).mutate()
+            DrawableCompat.setTintList(arrowDrawable, textColors)
+            setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    null,
+                    null,
+                    arrowDrawable,
+                    null
+            )
+            setOnClickListener { showCategoryPopup() }
+        }
+        toolbarSubtitleView.apply {
+            isClickable = true
+            setOnClickListener { showCategoryPopup() }
+        }
+        updateCategorySubtitle(presenter.selectedCategory.value)
+    }
+
+    private fun showCategoryPopup() {
+        PopupMenu(requireContext(), toolbarTitleView).apply {
+            categories.forEachIndexed { index, category ->
+                menu.add(Menu.NONE, index, index, category.menuTitle)
+                        .setChecked(category.id == presenter.selectedCategory.value)
+                        .setOnMenuItemClickListener {
+                            val selectedCategory = categories.getOrNull(it.itemId) ?: return@setOnMenuItemClickListener false
+                            presenter.selectCategory(selectedCategory.id)
+                            true
+                        }
+            }
+            menu.setGroupCheckable(Menu.NONE, true, true)
+        }.show()
+    }
+
+    private fun updateCategorySubtitle(categoryId: String) {
+        setSubtitle(categories.firstOrNull { it.id == categoryId }?.subtitle
+                ?: getString(R.string.news_category_all))
+    }
+
+    private fun createNewsCategories(): List<NewsCategoryUi> = listOf(
+            category(Constants.NEWS_CATEGORY_ALL, R.string.news_category_all),
+            category(Constants.NEWS_CATEGORY_TECH, R.string.news_category_tech),
+            category(Constants.NEWS_SUBCATEGORY_TECH_SMARTPHONES, R.string.news_category_tech_smartphones, R.string.news_category_tech),
+            category(Constants.NEWS_SUBCATEGORY_TECH_LAPTOPS, R.string.news_category_tech_laptops, R.string.news_category_tech),
+            category(Constants.NEWS_SUBCATEGORY_TECH_AUDIO, R.string.news_category_tech_audio, R.string.news_category_tech),
+            category(Constants.NEWS_SUBCATEGORY_TECH_MONITORS, R.string.news_category_tech_monitors, R.string.news_category_tech),
+            category(Constants.NEWS_SUBCATEGORY_TECH_APPLIANCES, R.string.news_category_tech_appliances, R.string.news_category_tech),
+            category(Constants.NEWS_SUBCATEGORY_TECH_PC, R.string.news_category_tech_pc, R.string.news_category_tech),
+            category(Constants.NEWS_CATEGORY_REVIEWS, R.string.news_category_reviews),
+            category(Constants.NEWS_SUBCATEGORY_SMARTPHONES_REVIEWS, R.string.news_category_reviews_smartphones, R.string.news_category_reviews),
+            category(Constants.NEWS_SUBCATEGORY_TABLETS_REVIEWS, R.string.news_category_reviews_tablets, R.string.news_category_reviews),
+            category(Constants.NEWS_SUBCATEGORY_SMART_WATCH_REVIEWS, R.string.news_category_reviews_smart_watches, R.string.news_category_reviews),
+            category(Constants.NEWS_SUBCATEGORY_ACCESSORIES_REVIEWS, R.string.news_category_reviews_accessories, R.string.news_category_reviews),
+            category(Constants.NEWS_SUBCATEGORY_NOTEBOOKS_REVIEWS, R.string.news_category_reviews_notebooks, R.string.news_category_reviews),
+            category(Constants.NEWS_SUBCATEGORY_ACOUSTICS_REVIEWS, R.string.news_category_reviews_audio, R.string.news_category_reviews),
+            category(Constants.NEWS_CATEGORY_GAMES, R.string.news_category_games)
+    ).also(::validateNewsCategories)
+
+    private fun category(id: String, titleRes: Int, parentTitleRes: Int? = null): NewsCategoryUi {
+        val title = getString(titleRes)
+        val subtitle = parentTitleRes?.let { "${getString(it)}: $title" } ?: title
+        val menuTitle = if (parentTitleRes == null) title else MENU_SUBCATEGORY_PREFIX + title
+        return NewsCategoryUi(id, menuTitle, subtitle)
+    }
+
+    private fun validateNewsCategories(categories: List<NewsCategoryUi>) {
+        require(categories.map { it.id }.distinct().size == categories.size) {
+            "News category ids must be unique"
+        }
+        categories.forEach { category ->
+            require(Constants.isSelectableNewsCategory(category.id)) {
+                "News category has no URL mapping: ${category.id}"
+            }
         }
     }
 
@@ -125,5 +299,15 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener, 
 
     override fun onNickClick(view: View, item: NewsItem, position: Int) {
         presenter.openProfile(item)
+    }
+
+    private data class NewsCategoryUi(
+            val id: String,
+            val menuTitle: String,
+            val subtitle: String
+    )
+
+    private companion object {
+        private const val MENU_SUBCATEGORY_PREFIX = "  "
     }
 }

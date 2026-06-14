@@ -1,5 +1,7 @@
 package forpdateam.ru.forpda.ui.fragments.devdb.search
 
+import forpdateam.ru.forpda.common.dpToPx
+import forpdateam.ru.forpda.databinding.FragmentBrandBinding
 import android.app.SearchManager
 import android.content.Context
 import android.os.Bundle
@@ -9,75 +11,97 @@ import androidx.appcompat.widget.SearchView
 import android.view.*
 import android.widget.LinearLayout
 import androidx.fragment.app.viewModels
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.dp8
 import forpdateam.ru.forpda.entity.remote.devdb.Brand
+import forpdateam.ru.forpda.presentation.devdb.search.DevDbSearchUiEvent
 import forpdateam.ru.forpda.presentation.devdb.search.DevDbSearchViewModel
-import forpdateam.ru.forpda.presentation.devdb.search.SearchDevicesView
 import forpdateam.ru.forpda.ui.fragments.TabFragment
+import forpdateam.ru.forpda.ui.fragments.search.applyToolbarSearchPlateChrome
 import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesAdapter
+import timber.log.Timber
 import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesFragment
 import forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
+import forpdateam.ru.forpda.model.repository.note.NotesRepository
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 import forpdateam.ru.forpda.ui.views.messagepanel.AutoFitRecyclerView
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 
 /**
  * Created by radiationx on 09.11.17.
  */
 
-class DevDbSearchFragment : TabFragment(), SearchDevicesView, BaseAdapter.OnItemClickListener<Brand.DeviceItem> {
+@AndroidEntryPoint
+class DevDbSearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<Brand.DeviceItem> {
+    @Inject lateinit var notesRepository: NotesRepository
+    private var _searchBinding: FragmentBrandBinding? = null
+    private val searchBinding get() = checkNotNull(_searchBinding) { "Binding accessed after onDestroyView" }
+
+    override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
+
     private lateinit var adapter: DevicesAdapter
     private lateinit var refreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout
     private lateinit var recyclerView: AutoFitRecyclerView
-    private lateinit var searchView: SearchView
-    private lateinit var searchMenuItem: MenuItem
+    private var searchView: SearchView? = null
+    private var searchMenuItem: MenuItem? = null
     private val dialogMenu = DynamicDialogMenu<DevDbSearchFragment, Brand.DeviceItem>()
 
-    private val presenter: DevDbSearchViewModel by viewModels {
-        DevDbSearchViewModel.Factory(
-                App.get().Di().devDbRepository,
-                App.get().Di().router,
-                App.get().Di().errorHandler
-        )
-    }
+    private val presenter: DevDbSearchViewModel by viewModels()
 
     init {
         configuration.defaultTitle = "Поиск устройств"
     }
 
+    override fun useTopBarRoundedBottomCorners(): Boolean = false
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
-        baseInflateFragment(inflater, R.layout.fragment_brand)
-        refreshLayout = findViewById(R.id.swipe_refresh_list) as androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        recyclerView = findViewById(R.id.base_list) as AutoFitRecyclerView
+        _searchBinding = FragmentBrandBinding.inflate(inflater, fragmentContent, true)
+        refreshLayout = searchBinding.swipeRefreshList
+        recyclerView = searchBinding.baseList
         contentController.setMainRefresh(refreshLayout)
         return viewFragment
     }
 
+    override fun onDestroyViewBinding() {
+        _searchBinding = null
+        super.onDestroyViewBinding()
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setCardsBackground()
+        setListsBackground()
         refreshLayoutStyle(refreshLayout)
-        setScrollFlagsEnterAlways()
+        clearToolbarScrollFlags()
+        ensureOpaquePinnedToolbarUnderlay()
         refreshLayout.setOnRefreshListener { presenter.refresh() }
 
         adapter = DevicesAdapter()
-        recyclerView.setColumnWidth(App.get().dpToPx(144, recyclerView.context))
+        recyclerView.setColumnWidth(requireContext().dpToPx(144))
         recyclerView.adapter = adapter
         try {
             val gridLayoutManager = recyclerView.layoutManager as androidx.recyclerview.widget.GridLayoutManager
-            recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(gridLayoutManager, App.px8))
+            recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(gridLayoutManager, dp8))
         } catch (ex: Exception) {
-            ex.printStackTrace()
+            Timber.e(ex, "DevDbSearchFragment setup error")
         }
         tuneListRecyclerView(recyclerView)
 
         adapter.setItemClickListener(this)
 
-        val searchManager = activity?.getSystemService(Context.SEARCH_SERVICE) as SearchManager
-        searchView.setSearchableInfo(searchManager.getSearchableInfo(activity?.componentName))
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+        val toolbarSearchView = searchView ?: SearchView(requireContext()).also { searchView = it }
+
+        val searchManager = activity?.getSystemService(Context.SEARCH_SERVICE) as? SearchManager
+        if (searchManager != null) {
+            toolbarSearchView.setSearchableInfo(searchManager.getSearchableInfo(activity?.componentName))
+        }
+        toolbarSearchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
                 presenter.search(query)
                 return false
@@ -88,16 +112,18 @@ class DevDbSearchFragment : TabFragment(), SearchDevicesView, BaseAdapter.OnItem
             }
         })
 
-        searchView.queryHint = getString(R.string.search_keywords)
+        toolbarSearchView.queryHint = getString(R.string.search_keywords)
+        toolbarSearchView.maxWidth = Int.MAX_VALUE
+        toolbarSearchView.applyToolbarSearchPlateChrome()
 
-        val searchEditFrame = searchView.findViewById<View>(R.id.search_edit_frame) as LinearLayout
-        val params = searchEditFrame.layoutParams as LinearLayout.LayoutParams
+        val searchEditFrame = toolbarSearchView.findViewById<LinearLayout>(R.id.search_edit_frame) ?: throw IllegalStateException("searchEditFrame not found")
+        val params = searchEditFrame.layoutParams as? LinearLayout.LayoutParams ?: throw IllegalStateException("params not LinearLayout.LayoutParams")
         params.leftMargin = 0
 
-        val searchSrcText = searchView.findViewById<View>(R.id.search_src_text)
+        val searchSrcText = toolbarSearchView.findViewById<View>(R.id.search_src_text) ?: throw IllegalStateException("searchSrcText not found")
         searchSrcText.setPadding(0, searchSrcText.paddingTop, 0, searchSrcText.paddingBottom)
 
-        searchMenuItem.expandActionView()
+        searchMenuItem?.expandActionView()
 
         dialogMenu.apply {
             addItem(getString(R.string.copy_link)) { _, data ->
@@ -111,12 +137,11 @@ class DevDbSearchFragment : TabFragment(), SearchDevicesView, BaseAdapter.OnItem
             }
         }
 
-        presenter.attachView(this)
         presenter.start()
+        observeViewModel()
     }
 
     override fun onDestroyView() {
-        presenter.detachView()
         super.onDestroyView()
     }
 
@@ -124,17 +149,43 @@ class DevDbSearchFragment : TabFragment(), SearchDevicesView, BaseAdapter.OnItem
         super.addBaseToolbarMenu(menu)
         toolbar.inflateMenu(R.menu.qms_contacts_menu)
         searchMenuItem = menu.findItem(R.id.action_search)
-        searchView = searchMenuItem.actionView as SearchView
-        searchView.setIconifiedByDefault(true)
+        searchView = searchMenuItem?.actionView as? SearchView ?: SearchView(requireContext()).also {
+            searchMenuItem?.actionView = it
+        }
+        searchView?.setIconifiedByDefault(true)
     }
 
-    override fun showData(data: Brand, query: String) {
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    presenter.refreshing.collect { isRefreshing ->
+                        refreshLayout.isRefreshing = isRefreshing
+                    }
+                }
+                launch {
+                    presenter.uiEvents.collect { event ->
+                        handleUiEvent(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleUiEvent(event: DevDbSearchUiEvent) {
+        when (event) {
+            is DevDbSearchUiEvent.ShowData -> showData(event.brand, event.query)
+            is DevDbSearchUiEvent.ShowCreateNote -> showCreateNote(event.title, event.url)
+        }
+    }
+
+    private fun showData(data: Brand, query: String) {
         setTitle("Поиск $query")
         adapter.addAll(data.devices)
     }
 
-    override fun showCreateNote(title: String, url: String) {
-        NotesAddPopup.showAddNoteDialog(context, title, url)
+    private fun showCreateNote(title: String, url: String) {
+        NotesAddPopup.showAddNoteDialog(context, title, url, notesRepository)
     }
 
     override fun onItemClick(item: Brand.DeviceItem) {
@@ -145,7 +196,7 @@ class DevDbSearchFragment : TabFragment(), SearchDevicesView, BaseAdapter.OnItem
         dialogMenu.apply {
             disallowAll()
             allowAll()
-            show(context, this@DevDbSearchFragment, item)
+            show(requireContext(), this@DevDbSearchFragment, item)
         }
         return false
     }

@@ -7,6 +7,7 @@ import forpdateam.ru.forpda.entity.remote.qms.QmsContact
 import forpdateam.ru.forpda.entity.remote.qms.QmsMessage
 import forpdateam.ru.forpda.entity.remote.qms.QmsThemes
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
+import forpdateam.ru.forpda.model.data.remote.api.qms.QmsApi
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
 import forpdateam.ru.forpda.model.repository.qms.QmsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -16,17 +17,23 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class QmsInteractor(
         private val qmsRepository: QmsRepository,
-        private val eventsRepository: EventsRepository
+        private val eventsRepository: EventsRepository,
+        qmsApi: QmsApi
 ) {
+
+    private val chatOpenPipeline = QmsChatOpenPipeline(qmsApi)
 
     private val eventsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var eventsJob: Job? = null
 
     fun subscribeEvents() {
         if (eventsJob?.isActive == true) return
+        // Счётчики и меню — UI-состояние: [CountersHolder]/[MenuRepository] должны обновляться на Main,
+        // иначе бейдж QMS в нижней навигации не перерисовывается при WS-событии с фона (IO-поток).
         eventsJob = eventsScope.launch {
             eventsRepository.observeEventsTab().collect { qmsRepository.handleEvent(it) }
         }
@@ -53,6 +60,26 @@ class QmsInteractor(
     suspend fun deleteTheme(id: Int, themeId: Int): QmsThemes = qmsRepository.deleteTheme(id, themeId)
 
     suspend fun getChat(userId: Int, themeId: Int): QmsChatModel = qmsRepository.getChat(userId, themeId)
+
+    suspend fun loadChatThread(
+            userId: Int,
+            themeId: Int,
+            traceId: String,
+            requestId: Int,
+            bypassCache: Boolean = false,
+            sourceScreen: String = "qms_chat"
+    ): QmsChatLoadOutcome = withContext(Dispatchers.IO) {
+        // Pipeline calls QmsApi.fetchChat → Client.request (blocking OkHttp); must not run on Main
+        // (BaseViewModel.scope uses Dispatchers.Main.immediate).
+        chatOpenPipeline.loadChat(
+                userId = userId,
+                themeId = themeId,
+                traceId = traceId,
+                requestId = requestId,
+                bypassCache = bypassCache,
+                sourceScreen = sourceScreen
+        )
+    }
 
     suspend fun sendNewTheme(nick: String, title: String, mess: String, files: List<AttachmentItem>): QmsChatModel =
             qmsRepository.sendNewTheme(nick, title, mess, files)

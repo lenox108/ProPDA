@@ -1,139 +1,74 @@
 package forpdateam.ru.forpda.model.preferences
 
-import android.content.SharedPreferences
+import android.content.Context
 import androidx.collection.ArraySet
-import com.f2prateek.rx.preferences2.RxSharedPreferences
-import forpdateam.ru.forpda.common.Preferences
-import io.reactivex.Observable
+import forpdateam.ru.forpda.model.datastore.NotificationDataStore
+import kotlinx.coroutines.flow.Flow
 
 class NotificationPreferencesHolder(
-        private val sharedPreferences: SharedPreferences
+        private val context: Context
 ) {
+    private val dataStore = NotificationDataStore(context)
 
-    private val rxPreferences = RxSharedPreferences.create(sharedPreferences)
+    // --- Flow-наблюдения (реактивное обновление без RxJava) ---
+    fun favEnabledFlow(): Flow<Boolean> = dataStore.favEnabledFlow()
 
-    private val mainEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Main.ENABLED, true)
-    }
+    fun qmsEnabledFlow(): Flow<Boolean> = dataStore.qmsEnabledFlow()
 
-    private val mainSoundEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Main.SOUND_ENABLED, true)
-    }
+    fun mainEnabledFlow(): Flow<Boolean> = dataStore.mainEnabledFlow()
 
-    private val mainVibrationEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Main.VIBRATION_ENABLED, true)
-    }
+    fun bgCheckEnabledFlow(): Flow<Boolean> = dataStore.bgCheckEnabledFlow()
 
-    private val mainIndicatorEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Main.INDICATOR_ENABLED, true)
-    }
+    fun bgCheckIntervalMinFlow(): Flow<Long> = dataStore.bgCheckIntervalMinFlow()
 
-    private val mainAvatarsEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Main.AVATARS_ENABLED, true)
-    }
+    fun mutedTopicsFlow(): Flow<Set<Int>> = dataStore.mutedTopicsFlow()
 
-    private val mainLimit by lazy {
-        rxPreferences.getString(Preferences.Notifications.Main.LIMIT, "10")
-    }
+    // --- Bg-check / muted topics ---
+    fun getBgCheckEnabled(): Boolean = dataStore.getBgCheckEnabledSync()
 
-    private val favEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Favorites.ENABLED, true)
-    }
+    fun getBgCheckIntervalMin(): Long = dataStore.getBgCheckIntervalMinSync()
 
-    private val favOnlyImportant by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Favorites.ONLY_IMPORTANT, false)
-    }
+    fun isTopicMuted(topicId: Int): Boolean = dataStore.isTopicMutedSync(topicId)
 
-    private val favLiveTab by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Favorites.LIVE_TAB, true)
-    }
+    fun getMutedTopics(): Set<Int> = dataStore.getMutedTopicsSync()
 
-    private val qmsEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Qms.ENABLED, true)
-    }
+    fun muteTopic(topicId: Int) = dataStore.muteTopicSync(topicId)
 
-    private val mentionsEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Mentions.ENABLED, true)
-    }
+    fun unmuteTopic(topicId: Int) = dataStore.unmuteTopicSync(topicId)
 
-    private val updateEnabled by lazy {
-        rxPreferences.getBoolean(Preferences.Notifications.Update.ENABLED, true)
-    }
+    fun toggleTopicMute(topicId: Int): Boolean = dataStore.toggleTopicMuteSync(topicId)
 
-    private val dataQmsEvents by lazy {
-        rxPreferences.getStringSet(Preferences.Notifications.Data.QMS_EVENTS)
-    }
+    // --- Синхронные геттеры/сеттеры ---
+    fun setDataQmsEvents(value: Set<String>) = dataStore.setDataQmsEventsSync(value)
 
-    private val dataFavoritesEvents by lazy {
-        rxPreferences.getStringSet(Preferences.Notifications.Data.FAVORITES_EVENTS)
-    }
+    fun setDataFavoritesEvents(value: Set<String>) = dataStore.setDataFavoritesEventsSync(value)
 
+    fun getMainEnabled(): Boolean = dataStore.getMainEnabledSync()
 
-    fun observeMainEnabled(): Observable<Boolean> = mainEnabled.asObservable()
+    fun getMainSoundEnabled(): Boolean = dataStore.getMainSoundEnabledSync()
 
-    fun observeMainSoundEnabled(): Observable<Boolean> = mainSoundEnabled.asObservable()
+    fun getMainVibrationEnabled(): Boolean = dataStore.getMainVibrationEnabledSync()
 
-    fun observeMainVibrationEnabled(): Observable<Boolean> = mainVibrationEnabled.asObservable()
+    fun getMainIndicatorEnabled(): Boolean = dataStore.getMainIndicatorEnabledSync()
 
-    fun observeMainIndicatorEnabled(): Observable<Boolean> = mainIndicatorEnabled.asObservable()
+    fun getMainAvatarsEnabled(): Boolean = dataStore.getMainAvatarsEnabledSync()
 
-    fun observeMainAvatarsEnabled(): Observable<Boolean> = mainAvatarsEnabled.asObservable()
+    fun getFavEnabled(): Boolean = dataStore.getFavEnabledSync()
 
-    fun observeMainLimit(): Observable<Long> = mainLimit.asObservable()
-            .map { it.toLong() * 1000 }
+    fun getFavOnlyImportant(): Boolean = dataStore.getFavOnlyImportantSync()
 
-    fun observeFavEnabled(): Observable<Boolean> = favEnabled.asObservable()
+    fun getFavLiveTab(): Boolean = dataStore.getFavLiveTabSync()
 
-    fun observeFavOnlyImportant(): Observable<Boolean> = favOnlyImportant.asObservable()
+    fun getQmsEnabled(): Boolean = dataStore.getQmsEnabledSync()
 
-    fun observeFavLiveTab(): Observable<Boolean> = favLiveTab.asObservable()
+    fun getMentionsEnabled(): Boolean = dataStore.getMentionsEnabledSync()
 
-    fun observeQmsEnabled(): Observable<Boolean> = qmsEnabled.asObservable()
+    fun getDownloadsEnabled(): Boolean = dataStore.getDownloadsEnabledSync()
 
-    fun observeMentionsEnabled(): Observable<Boolean> = mentionsEnabled.asObservable()
+    fun getDataQmsEvents(): Set<String> = dataStore.getDataQmsEventsSync()
 
-    fun observeUpdateEnabled(): Observable<Boolean> = updateEnabled.asObservable()
-
-    fun observeDataQmsEvents(): Observable<Set<String>> = dataQmsEvents.asObservable()
-
-    fun observeDataFavoritesEvents(): Observable<Set<String>> = dataFavoritesEvents.asObservable()
-
-
-    fun setDataQmsEvents(value: Set<String>) = dataQmsEvents.set(value)
-
-    fun setDataFavoritesEvents(value: Set<String>) = dataFavoritesEvents.set(value)
-
-
-    fun getMainEnabled(): Boolean = mainEnabled.get()
-
-    fun getMainSoundEnabled(): Boolean = mainSoundEnabled.get()
-
-    fun getMainVibrationEnabled(): Boolean = mainVibrationEnabled.get()
-
-    fun getMainIndicatorEnabled(): Boolean = mainIndicatorEnabled.get()
-
-    fun getMainAvatarsEnabled(): Boolean = mainAvatarsEnabled.get()
-
-    fun getMainLimit(): Long = mainLimit.get().toLong() * 1000
-
-    fun getFavEnabled(): Boolean = favEnabled.get()
-
-    fun getFavOnlyImportant(): Boolean = favOnlyImportant.get()
-
-    fun getFavLiveTab(): Boolean = favLiveTab.get()
-
-    fun getQmsEnabled(): Boolean = qmsEnabled.get()
-
-    fun getMentionsEnabled(): Boolean = mentionsEnabled.get()
-
-    fun getUpdateEnabled(): Boolean = updateEnabled.get()
-
-    fun getDataQmsEvents(): Set<String> = dataQmsEvents.get()
-
-    fun getDataFavoritesEvents(): Set<String> = dataFavoritesEvents.get()
+    fun getDataFavoritesEvents(): Set<String> = dataStore.getDataFavoritesEventsSync()
 
     /** Нужны push-каналы (темы / QMS / упоминания) при включённых уведомлениях. */
-    fun wantsPushNotifications(): Boolean =
-            getMainEnabled() && (getFavEnabled() || getQmsEnabled() || getMentionsEnabled())
-
+    fun wantsPushNotifications(): Boolean = dataStore.wantsPushNotificationsSync()
 }

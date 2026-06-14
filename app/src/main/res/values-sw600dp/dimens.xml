@@ -3,6 +3,12 @@
     <!-- Планшеты / широкие экраны: чуть больше воздуха по горизонтали у списков -->
     <dimen name="list_row_padding_horizontal">24dp</dimen>
     <dimen name="list_row_padding_vertical">14dp</dimen>
+    <dimen name="ui_density_compact_item_padding_horizontal">20dp</dimen>
+    <dimen name="ui_density_compact_item_padding_vertical">10dp</dimen>
+    <dimen name="ui_density_compact_card_padding_vertical">12dp</dimen>
+    <dimen name="ui_density_comfortable_item_padding_horizontal">@dimen/list_row_padding_horizontal</dimen>
+    <dimen name="ui_density_comfortable_item_padding_vertical">16dp</dimen>
+    <dimen name="ui_density_comfortable_card_padding_vertical">20dp</dimen>
     <!-- Заголовки блоков в bottom sheet и т.п. -->
     <dimen name="content_block_padding_vertical">20dp</dimen>
     <dimen name="auth_form_max_width">560dp</dimen>

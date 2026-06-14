@@ -3,7 +3,7 @@ package forpdateam.ru.forpda.ui.fragments.other
 import androidx.recyclerview.widget.RecyclerView
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import com.hannesdorfmann.adapterdelegates3.AdapterDelegate
+import com.hannesdorfmann.adapterdelegates4.AdapterDelegate
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.databinding.ItemCloseableInfoBinding
 import forpdateam.ru.forpda.entity.app.CloseableInfo
@@ -19,7 +19,7 @@ class CloseableInfoDelegate(
 
     override fun onBindViewHolder(items: MutableList<ListItem>, position: Int, holder: RecyclerView.ViewHolder, payloads: MutableList<Any>) {
         val item = items[position] as CloseableInfoListItem
-        (holder as ViewHolder).bind(item.item)
+        (holder as ViewHolder).bind(item.item, items, position)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup): RecyclerView.ViewHolder {
@@ -38,9 +38,15 @@ class CloseableInfoDelegate(
             binding.infoItemClose.setOnClickListener { closeClickListener.invoke(currentItem) }
         }
 
-        fun bind(item: CloseableInfo) {
+        fun bind(item: CloseableInfo, items: MutableList<ListItem>, position: Int) {
             currentItem = item
             binding.infoItemTitle.setText(getStringRes(item))
+            binding.root.applyOtherMenuPlateMarginsAndBackground(
+                    items,
+                    position,
+                    { it is CloseableInfoListItem },
+                    binding.infoItemRowDivider,
+            )
         }
 
         private fun getStringRes(item: CloseableInfo): Int = when (item.id) {

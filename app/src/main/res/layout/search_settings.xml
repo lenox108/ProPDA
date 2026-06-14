@@ -1,25 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/search_settings_container"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
+    android:layout_height="match_parent"
+    android:descendantFocusability="blocksDescendants">
 
     <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/background_for_lists"
+        android:background="?attr/background_base"
         android:orientation="vertical"
         android:paddingTop="@dimen/content_block_padding_vertical">
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/search_nick_block"
+            style="@style/Widget.ForPDA.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingEnd="@dimen/content_padding_vertical"
-            android:paddingStart="@dimen/content_padding_vertical">
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal">
 
-            <androidx.appcompat.widget.AppCompatEditText
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/search_nick_field"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -29,97 +31,101 @@
                 android:textSize="@dimen/list_topic_title_text_size" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <LinearLayout
+        <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/search_resource_block"
+            style="@style/Widget.ForPDA.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/content_spacing"
-            android:orientation="vertical">
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:hint="@string/search_settings_resource"
+            app:endIconDrawable="@drawable/ic_arrow_down"
+            app:endIconTint="?attr/colorAccent"
+            app:endIconMode="custom">
 
-            <androidx.appcompat.widget.AppCompatTextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/content_padding_horizontal"
-                android:paddingStart="@dimen/content_padding_horizontal"
-                android:text="@string/search_settings_resource"
-                android:textColor="?attr/second_text_color" />
-
-            <androidx.appcompat.widget.AppCompatSpinner
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/search_resource_spinner"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/content_spacing"
-                android:paddingStart="@dimen/content_spacing" />
-        </LinearLayout>
+                android:layout_height="wrap_content"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:clickable="true"
+                android:cursorVisible="false"
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <LinearLayout
+        <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/search_result_block"
+            style="@style/Widget.ForPDA.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/content_spacing"
-            android:orientation="vertical">
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:hint="@string/search_settings_result"
+            app:endIconDrawable="@drawable/ic_arrow_down"
+            app:endIconTint="?attr/colorAccent"
+            app:endIconMode="custom">
 
-            <androidx.appcompat.widget.AppCompatTextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/content_padding_horizontal"
-                android:paddingStart="@dimen/content_padding_horizontal"
-                android:text="@string/search_settings_result"
-                android:textColor="?attr/second_text_color" />
-
-            <androidx.appcompat.widget.AppCompatSpinner
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/search_result_spinner"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/content_spacing"
-                android:paddingStart="@dimen/content_spacing" />
-        </LinearLayout>
+                android:layout_height="wrap_content"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:clickable="true"
+                android:cursorVisible="false"
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <LinearLayout
+        <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/search_sort_block"
+            style="@style/Widget.ForPDA.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/content_spacing"
-            android:orientation="vertical">
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:hint="@string/search_settings_sorting"
+            app:endIconDrawable="@drawable/ic_arrow_down"
+            app:endIconTint="?attr/colorAccent"
+            app:endIconMode="custom">
 
-            <androidx.appcompat.widget.AppCompatTextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/content_padding_horizontal"
-                android:paddingStart="@dimen/content_padding_horizontal"
-                android:text="@string/search_settings_sorting"
-                android:textColor="?attr/second_text_color" />
-
-            <androidx.appcompat.widget.AppCompatSpinner
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/search_sort_spinner"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/content_spacing"
-                android:paddingStart="@dimen/content_spacing" />
-        </LinearLayout>
+                android:layout_height="wrap_content"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:clickable="true"
+                android:cursorVisible="false"
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <LinearLayout
+        <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/search_source_block"
+            style="@style/Widget.ForPDA.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/content_spacing"
-            android:orientation="vertical">
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:hint="@string/search_settings_source"
+            app:endIconDrawable="@drawable/ic_arrow_down"
+            app:endIconTint="?attr/colorAccent"
+            app:endIconMode="custom">
 
-            <androidx.appcompat.widget.AppCompatTextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/content_padding_horizontal"
-                android:paddingStart="@dimen/content_padding_horizontal"
-                android:text="@string/search_settings_source"
-                android:textColor="?attr/second_text_color" />
-
-            <androidx.appcompat.widget.AppCompatSpinner
+            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/search_source_spinner"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/content_spacing"
-                android:paddingStart="@dimen/content_spacing" />
-        </LinearLayout>
+                android:layout_height="wrap_content"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:clickable="true"
+                android:cursorVisible="false"
+                android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -127,7 +133,9 @@
             android:gravity="end"
             android:orientation="horizontal"
             android:paddingEnd="@dimen/content_spacing"
-            android:paddingStart="@dimen/content_spacing">
+            android:paddingStart="@dimen/content_spacing"
+            android:paddingTop="@dimen/content_spacing"
+            android:paddingBottom="@dimen/content_spacing">
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/search_save_settings"
@@ -135,6 +143,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="@dimen/content_spacing"
+                android:minHeight="@dimen/dp40"
+                android:minWidth="@dimen/dp64"
                 android:text="@string/search_settings_btn_save" />
 
             <androidx.appcompat.widget.AppCompatButton
@@ -142,8 +152,10 @@
                 style="@style/Widget.AppCompat.Button.Borderless"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:minHeight="@dimen/dp40"
+                android:minWidth="@dimen/dp64"
                 android:text="@string/search_settings_btn_search" />
         </LinearLayout>
     </LinearLayout>
 
-</androidx.core.widget.NestedScrollView>
+</ScrollView>

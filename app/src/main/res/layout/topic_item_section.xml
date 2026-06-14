@@ -3,14 +3,16 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     xmlns:tools="http://schemas.android.com/tools"
-    android:background="?attr/background_for_cards"
-    android:orientation="vertical">
+    android:background="@android:color/transparent"
+    android:orientation="vertical"
+    android:paddingEnd="@dimen/list_plate_horizontal_inset"
+    android:paddingStart="@dimen/list_plate_horizontal_inset">
 
     <View
         android:id="@+id/topic_item_top_divider"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/divider_thin"
-        android:background="?attr/divider_line" />
+        android:layout_height="@dimen/dp0"
+        android:background="@android:color/transparent" />
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/topic_item_title"
@@ -19,14 +21,10 @@
         android:paddingBottom="@dimen/list_section_header_padding_bottom"
         android:paddingEnd="@dimen/list_row_padding_horizontal"
         android:paddingStart="@dimen/list_row_padding_horizontal"
-        android:paddingTop="@dimen/list_section_header_padding_top"
+        android:paddingTop="@dimen/dp8"
         android:textAllCaps="true"
         android:textColor="?attr/second_text_color"
         android:textSize="@dimen/list_section_header_text_size"
         tools:text="@string/test_topic_section_title"/>
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/divider_thin"
-        android:background="?attr/divider_line" />
 </LinearLayout>

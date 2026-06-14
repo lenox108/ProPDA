@@ -30,6 +30,7 @@
                     android:layout_marginEnd="@dimen/content_padding_horizontal"
                     android:layout_marginStart="@dimen/content_padding_horizontal"
                     android:layout_marginTop="@dimen/dp8"
+                    android:autofillHints="contentDescription"
                     android:hint="@string/poll_title"
                     android:textSize="@dimen/list_topic_title_text_size" />
 

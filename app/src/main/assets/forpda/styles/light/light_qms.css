@@ -17,7 +17,7 @@
   user-select: none;
 }
 body {
-  background: #fafafa;
+  background: #f2f2f7;
 }
 .wrapper {
   position: absolute;
@@ -25,21 +25,31 @@ body {
   left: 0;
   width: 100%;
   max-height: 100%;
+  background: transparent;
+}
+.mess_list {
+  background: transparent;
 }
 .mess_list > .mess_container {
-  margin: 0.5rem 1rem;
+  background: transparent;
+  margin: 0.625rem 1rem;
 }
 .mess_list > .mess_container .mess {
-  background: #ffffff;
-  margin: 0.5em 0;
-  box-shadow: 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12);
   position: relative;
+  display: block;
   margin: 0;
-  border-radius: 0.5rem;
+  box-sizing: border-box;
+  border-radius: 1rem;
   max-width: 100%;
+  background: #ffffff;
+  box-shadow: 0 0.0625rem 0.125rem rgba(0, 0, 0, 0.1), 0 0 0 0.0625rem rgba(0, 0, 0, 0.04);
+  overflow: hidden;
 }
 .mess_list > .mess_container .mess .content {
-  padding: 0.5rem 1rem;
+  background: transparent;
+  padding: 0.625rem 0.875rem;
+  line-height: 1.45;
+  color: #000000;
   -webkit-hyphens: auto;
   -ms-hyphens: auto;
   hyphens: auto;
@@ -54,6 +64,7 @@ body {
 .mess_list > .mess_container .time {
   clear: both;
   font-size: 0.75rem;
+  line-height: 1.125rem;
   color: #757575;
 }
 .mess_list > .mess_container .status {
@@ -69,7 +80,7 @@ body {
   margin-right: 4em;
 }
 .mess_list > .mess_container.his .mess {
-  border-top-left-radius: 0.0625rem;
+  border-radius: 1rem;
   float: left;
 }
 .mess_list > .mess_container.his .time {
@@ -84,7 +95,8 @@ body {
 }
 .mess_list > .mess_container.our .mess {
   float: right;
-  border-top-right-radius: 0.0625rem;
+  border-radius: 1rem;
+  background: #e9f1f7;
 }
 .mess_list > .mess_container.our .time {
   float: right;

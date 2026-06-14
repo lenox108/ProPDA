@@ -1,19 +1,21 @@
 package forpdateam.ru.forpda.model.repository.events
 
+import android.app.Application
 import android.content.Context
-import androidx.collection.ArraySet
 import android.util.Log
-import forpdateam.ru.forpda.App
+import timber.log.Timber
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.client.WebSocketController
+import forpdateam.ru.forpda.common.BatteryDebugLogger
 import forpdateam.ru.forpda.entity.app.TabNotification
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.AuthHolder
+import forpdateam.ru.forpda.model.CountersHolder
 import forpdateam.ru.forpda.model.NetworkStateProvider
-import forpdateam.ru.forpda.model.SchedulersProvider
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.data.remote.api.events.NotificationEventsApi
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
+import forpdateam.ru.forpda.model.repository.mentions.MentionsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,32 +26,46 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.rx2.asCoroutineDispatcher
 import okhttp3.Response
 import java.net.SocketTimeoutException
-import java.util.*
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 class EventsRepository(
-        @Suppress("UNUSED_PARAMETER") private val context: Context,
+        _context: Context,
+        private val application: Application,
         private val webClient: IWebClient,
         private val eventsApi: NotificationEventsApi,
-        private val schedulers: SchedulersProvider,
         private val networkStateProvider: NetworkStateProvider,
         private val authHolder: AuthHolder,
-        private val notificationPreferencesHolder: NotificationPreferencesHolder
+        private val countersHolder: CountersHolder,
+        private val notificationPreferencesHolder: NotificationPreferencesHolder,
+        private val mentionsRepository: MentionsRepository
 ) {
     companion object {
-        private const val LOG_TAG = "EventsRepository"
+        private const val NOTIFICATIONS_LOG_TAG = "Notifications"
+        // Internal aggregation window for websocket events. The old user preference
+        // is no longer exposed; keep batching stable and predictable.
+        private const val NOTIFICATION_AGGREGATION_PERIOD_MS = 60_000L
+
+        /**
+         * Максимальное количество событий для группового (stacked) уведомления.
+         * Если событий больше — отправляется summary-уведомление с количеством.
+         * Значение 4 подобрано эмпирически для оптимального UX на мобильных устройствах.
+         */
         private const val STACKED_MAX = 4
     }
 
-    private var timerPeriod = (10 * 1000).toLong()
+    private val timerPeriod = NOTIFICATION_AGGREGATION_PERIOD_MS
 
     private val repoJob = SupervisorJob()
     private val repoScope = CoroutineScope(repoJob + Dispatchers.Main.immediate)
-    private val ioDispatcher = schedulers.io().asCoroutineDispatcher()
+    private val ioDispatcher = Dispatchers.IO
+    @Volatile
+    private var foregroundRealtimeEnabled = false
+    private var reconnectAttempts = 0
 
     private val pendingEvents = mapOf<NotificationEvent.Source, MutableMap<Int, NotificationEvent>>(
             NotificationEvent.Source.QMS to mutableMapOf(),
@@ -57,7 +73,7 @@ class EventsRepository(
             NotificationEvent.Source.SITE to mutableMapOf()
     )
 
-    private var checkTimer: Timer? = null
+    private var pendingAggregationJob: Job? = null
     private val timerRunnable = {
         for (source in pendingEvents.keys) {
             handlePendingEvents(source)
@@ -86,37 +102,37 @@ class EventsRepository(
 
     private val controllerListener: WebSocketController.Listener = object : WebSocketController.Listener() {
         override fun onConnected() {
-            Log.d(LOG_TAG, "WSContr onConnected ${webSocketController.getCurrentId()},  ${webSocketController.isConnected()}")
+            if (BuildConfig.DEBUG) Timber.d("WSContr onConnected ${webSocketController.getCurrentId()},  ${webSocketController.isConnected()}")
             webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
             webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
         }
 
         override fun onMessage(text: String?) {
-            Log.d(LOG_TAG, "WSContr onMessage ${webSocketController.getCurrentId()}, ${webSocketController.isConnected()}, $text")
+            if (BuildConfig.DEBUG) Timber.d("WSContr onMessage ${webSocketController.getCurrentId()}, ${webSocketController.isConnected()}, hasPayload=${!text.isNullOrEmpty()}")
             try {
-                eventsApi.parseWebSocketEvent(text)?.also {
+                eventsApi.parseWebSocketEvent(text.orEmpty())?.also {
                     if (it.type != NotificationEvent.Type.HAT_EDITED) {
                         handleWebSocketEvent(it)
                     }
                 }
             } catch (ex: Exception) {
-                ex.printStackTrace()
+                Timber.e(ex, "Events parse error")
             }
         }
 
         override fun onDisconnected(throwable: Throwable, response: Response?) {
-            Log.d(LOG_TAG, "WSContr onDisconnected ${webSocketController.getCurrentId()}, ${webSocketController.isConnected()}, ${throwable.message}, $response")
+            if (BuildConfig.DEBUG) Timber.d("WSContr onDisconnected ${webSocketController.getCurrentId()}, ${webSocketController.isConnected()}, code=${response?.code}")
             if (response != null) {
-                Log.d(LOG_TAG, "WSContr onDisconnected: code=${response.code}")
+                if (BuildConfig.DEBUG) Timber.d("WSContr onDisconnected: code=${response.code}")
                 if (response.code == 403) {
-                    App.get().notifyForbidden(true)
+                    (application as forpdateam.ru.forpda.App).notifyForbidden(true)
                 }
             }
 
-            throwable.printStackTrace()
-            if (throwable is SocketTimeoutException || throwable is TimeoutException) {
-                Log.d(LOG_TAG, "start onFailure")
-                start(true)
+            Timber.e(throwable, "Events check error")
+            if (foregroundRealtimeEnabled && (throwable is SocketTimeoutException || throwable is TimeoutException)) {
+                if (BuildConfig.DEBUG) Timber.d("start onFailure")
+                start(checkEvents = false, force = false)
             }
         }
     }
@@ -129,9 +145,11 @@ class EventsRepository(
             networkStateProvider.observeState().collect { s ->
                 if (s == lastNet) return@collect
                 lastNet = s
-                if (s) {
-                    Log.d(LOG_TAG, "start networkStateProvider.observeState")
-                    start(true)
+                if (s && foregroundRealtimeEnabled) {
+                    if (BuildConfig.DEBUG) Timber.d("start networkStateProvider.observeState")
+                    start(checkEvents = true, force = true)
+                } else if (!s) {
+                    stop("network_lost")
                 }
             }
         }
@@ -141,17 +159,17 @@ class EventsRepository(
                 val now = auth.isAuth()
                 if (now == lastAuth) return@collect
                 if (BuildConfig.DEBUG) {
-                    Log.d(LOG_TAG, "authHolder.observe state=${auth.state}")
+                    Timber.d("authHolder.observe state=${auth.state}")
                 }
                 lastAuth = now
-                if (now) {
+                if (now && foregroundRealtimeEnabled) {
                     if (webSocketController.isConnected()) {
-                        stop()
+                        stop("auth_changed")
                     }
-                    Log.d(LOG_TAG, "start authHolder.observe")
-                    start(true)
+                    if (BuildConfig.DEBUG) Timber.d("start authHolder.observe")
+                    start(checkEvents = true, force = true)
                 } else {
-                    stop()
+                    stop("auth_lost_or_background")
                 }
             }
         }
@@ -159,15 +177,16 @@ class EventsRepository(
             var lastTimerStamp = System.currentTimeMillis()
             while (isActive) {
                 delay(60_000L)
-                Log.d(LOG_TAG, "start timer (${(System.currentTimeMillis() - lastTimerStamp) / 1000}), ${webSocketController.isConnected()}")
+                if (BuildConfig.DEBUG) Timber.d("start timer (${(System.currentTimeMillis() - lastTimerStamp) / 1000}), ${webSocketController.isConnected()}")
                 lastTimerStamp = System.currentTimeMillis()
+                if (!foregroundRealtimeEnabled) {
+                    continue
+                }
                 if (!webSocketController.isConnected()) {
-                    stop()
-                    start(false)
+                    start(checkEvents = false, force = false)
                 }
             }
         }
-        timerPeriod = notificationPreferencesHolder.getMainLimit()
     }
 
     fun observeEvents(): Flow<NotificationEvent> = notifyEventFlow.asSharedFlow()
@@ -179,29 +198,139 @@ class EventsRepository(
     fun observeEventsTab(): Flow<TabNotification> = notifyTabFlow.asSharedFlow()
 
     fun onDestroy() {
-        repoJob.cancel()
-    }
-
-    fun setTimerPeriod(period: Long) {
-        timerPeriod = period
-        resetTimer()
+        // Репозиторий живет как singleton, поэтому нельзя отменять repoScope:
+        // после stop/start он должен продолжать принимать события и публиковать notify-flow.
+        stop("destroy")
     }
 
     fun externalStart(checkEvents: Boolean) {
-        Log.e(LOG_TAG, "start externalStart")
-        start(checkEvents)
+        if (BuildConfig.DEBUG) Timber.d("start externalStart")
+        start(checkEvents = checkEvents, force = true)
+    }
+
+    fun isForegroundRealtimeActive(): Boolean = foregroundRealtimeEnabled
+
+    fun isWebSocketConnected(): Boolean = webSocketController.isConnected()
+
+    fun setForegroundRealtimeEnabled(enabled: Boolean, reason: String) {
+        if (foregroundRealtimeEnabled == enabled) {
+            BatteryDebugLogger.logState("EventsRepository", "foregroundRealtimeUnchanged", "enabled=$enabled reason=$reason")
+            return
+        }
+        foregroundRealtimeEnabled = enabled
+        BatteryDebugLogger.logState("EventsRepository", if (enabled) "foreground" else "background", "reason=$reason")
+        if (enabled) {
+            start(checkEvents = true, force = true)
+        } else {
+            stop("background:$reason")
+        }
     }
 
     fun updateEvents(source: NotificationEvent.Source) {
         hardHandleEvent(source)
     }
 
-    private fun start(checkEvents: Boolean) {
+    fun disableEvents(source: NotificationEvent.Source) {
+        val pending = pendingEvents[source]
+        pending?.clear()
+    }
+
+    /**
+     * Вызывается, когда пользователь напрямую из приложения открыл тему (и, значит,
+     * прочитал новые сообщения). Отменяем все связанные с этой темой уведомления
+     * в шторке, т.к. сервер не всегда присылает READ-событие через WebSocket сразу,
+     * и уведомления «повисали» даже после прочтения.
+     */
+    fun onTopicRead(topicId: Int) {
+        if (topicId <= 0) return
+        val toRemove = mutableListOf<Int>()
+        for ((key, event) in eventsHistory) {
+            if (event.fromTheme() && !event.isMention && event.sourceId == topicId) {
+                cancelEventFlow.tryEmit(event)
+                toRemove.add(key)
+                notifyTabs(TabNotification(
+                        event.source,
+                        NotificationEvent.Type.READ,
+                        event,
+                        true
+                ))
+            }
+        }
+        for (k in toRemove) {
+            eventsHistory.remove(k)
+        }
+        // Также очищаем pending события этой темы, чтобы повторный таймер
+        // не восстановил только что отменённые уведомления.
+        pendingEvents[NotificationEvent.Source.THEME]?.entries?.removeAll { (_, event) ->
+            !event.isMention && event.sourceId == topicId
+        }
+    }
+
+    /**
+     * Если пользователь открыл тему из избранного/форума/ссылки и на странице уже есть пост,
+     * где его упомянули, считаем это упоминание прочитанным без обязательного захода в раздел «Ответы».
+     */
+    fun onTopicPostsRead(topicId: Int, postIds: Collection<Int>) {
+        if (topicId <= 0 || postIds.isEmpty()) return
+        val visiblePostIds = postIds.asSequence().filter { it > 0 }.toSet()
+        if (visiblePostIds.isEmpty()) return
+
+        var readMentions = 0
+        val toRemove = mutableListOf<Int>()
+        for ((key, event) in eventsHistory) {
+            if (event.fromTheme() && event.isMention && event.sourceId == topicId && event.messageId in visiblePostIds) {
+                cancelEventFlow.tryEmit(event)
+                toRemove.add(key)
+                readMentions++
+                notifyTabs(TabNotification(
+                        event.source,
+                        NotificationEvent.Type.READ,
+                        event,
+                        true
+                ))
+            }
+        }
+        for (key in toRemove) {
+            eventsHistory.remove(key)
+        }
+        pendingEvents[NotificationEvent.Source.THEME]?.entries?.removeAll { (_, event) ->
+            event.isMention && event.sourceId == topicId && event.messageId in visiblePostIds
+        }
+
+        repoScope.launch(ioDispatcher) {
+            val (mentionStateChanged, snapshot) = mentionsRepository.markPostsReadAndRecomputeUnreadSnapshot(topicId, visiblePostIds)
+            if (readMentions > 0 || mentionStateChanged) {
+                countersHolder.setMentions(snapshot.unreadCount, source = "theme_posts_read_mentions")
+            }
+        }
+    }
+
+    private fun start(checkEvents: Boolean, force: Boolean) {
         if (BuildConfig.DEBUG) {
-            Log.d(LOG_TAG, "Start: net=${networkStateProvider.getState()} ws=${webSocketController.isConnected()} check=$checkEvents id=${webSocketController.getCurrentId()}")
+            Timber.d("Start: net=${networkStateProvider.getState()} ws=${webSocketController.isConnected()} check=$checkEvents id=${webSocketController.getCurrentId()}")
+        }
+        if (!foregroundRealtimeEnabled) {
+            BatteryDebugLogger.logState("EventsRepository", "skipStart", "background check=$checkEvents")
+            return
         }
         if (networkStateProvider.getState() && authHolder.get().isAuth()) {
             if (!webSocketController.isConnected()) {
+                if (!force && reconnectAttempts > 0) {
+                    val delayMs = reconnectBackoffMs()
+                    BatteryDebugLogger.logState("EventsRepository", "reconnectBackoff", "attempt=$reconnectAttempts delayMs=$delayMs")
+                    repoScope.launch {
+                        delay(delayMs)
+                        if (foregroundRealtimeEnabled && networkStateProvider.getState() && authHolder.get().isAuth() && !webSocketController.isConnected()) {
+                            start(checkEvents = false, force = true)
+                        }
+                    }
+                    reconnectAttempts++
+                    return
+                }
+                if (!force) {
+                    reconnectAttempts = 1
+                }
+                BatteryDebugLogger.logState("EventsRepository", "webSocketConnect", "check=$checkEvents")
                 webSocketController.connect()
             }
 
@@ -209,47 +338,64 @@ class EventsRepository(
                 hardHandleEvent(NotificationEvent.Source.THEME)
                 hardHandleEvent(NotificationEvent.Source.QMS)
             }
-            if (BuildConfig.DEBUG) {
-                Log.d(LOG_TAG, "timerPeriod=$timerPeriod")
-            }
-            resetTimer()
+        } else {
+            BatteryDebugLogger.logState("EventsRepository", "skipStart", "net=${networkStateProvider.getState()} auth=${authHolder.get().isAuth()}")
         }
     }
 
-    private fun stop() {
-        Log.d(LOG_TAG, "stop")
+    private fun stop(reason: String) {
+        if (BuildConfig.DEBUG) Timber.d("stop")
+        BatteryDebugLogger.logState("EventsRepository", "stopRealtime", reason)
+        if (!reason.startsWith("reconnect")) {
+            reconnectAttempts = 0
+        }
         cancelTimer()
         webSocketController.disconnectAll()
     }
 
-    private fun resetTimer() {
-        cancelTimer()
-        checkTimer = Timer().apply {
-            schedule(object : TimerTask() {
-                override fun run() {
-                    timerRunnable.invoke()
-                }
-            }, 0, timerPeriod)
+    private fun reconnectBackoffMs(): Long {
+        val seconds = 30L * (1L shl (reconnectAttempts - 1).coerceAtMost(3))
+        return TimeUnit.SECONDS.toMillis(seconds.coerceAtMost(5 * 60L))
+    }
+
+    private fun schedulePendingAggregationIfNeeded() {
+        if (!foregroundRealtimeEnabled) return
+        if (pendingEvents.values.none { it.isNotEmpty() }) return
+        if (pendingAggregationJob?.isActive == true) return
+        pendingAggregationJob = repoScope.launch {
+            delay(timerPeriod)
+            if (!foregroundRealtimeEnabled) return@launch
+            timerRunnable.invoke()
+            pendingAggregationJob = null
+            schedulePendingAggregationIfNeeded()
         }
     }
 
     private fun cancelTimer() {
-        checkTimer?.apply {
-            cancel()
-            purge()
-        }
-        checkTimer = null
+        pendingAggregationJob?.cancel()
+        pendingAggregationJob = null
     }
 
     private fun sendNotification(event: NotificationEvent) {
-        Log.e("events_lalala", "send notification rep " + event.sourceEventText + " : " + event.source + " : " + event.sourceTitle + " : " + event.userNick)
+        if (!notificationPreferencesHolder.getMainEnabled()) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: app preference disabled")
+            return
+        }
         if (event.userId == authHolder.get().userId) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: own user event")
+            return
+        }
+        // Per-topic mute (только для тем избранного). Mention из темы тоже глушим.
+        if (event.fromTheme() && notificationPreferencesHolder.isTopicMuted(event.sourceId)) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: topic muted")
             return
         }
         eventsHistory[event.notifyId()] = event
         if (!checkNotify(event, event.source)) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: category preference disabled")
             return
         }
+        if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Queue ${event.notificationLogCategory()} notification")
         notifyEventFlow.tryEmit(event)
     }
 
@@ -257,21 +403,34 @@ class EventsRepository(
         if (events.isEmpty()) {
             return
         }
-        if (events.size <= STACKED_MAX) {
-            for (event in events) {
+        // Применяем per-topic mute для стека (тем избранного).
+        val mutedIds = notificationPreferencesHolder.getMutedTopics()
+        val filtered = if (mutedIds.isEmpty() || tSource != NotificationEvent.Source.THEME) {
+            events
+        } else {
+            events.filterNot { it.sourceId in mutedIds }
+        }
+        if (filtered.isEmpty()) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${tSource.name} stacked events: all topics muted")
+            return
+        }
+        if (filtered.size <= STACKED_MAX) {
+            for (event in filtered) {
                 sendNotification(event)
             }
             return
         }
         if (!checkNotify(null, tSource)) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${tSource.name} stacked events: category preference disabled")
             return
         }
-        notifyStackFlow.tryEmit(events)
+        if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Queue ${tSource.name} stacked notification, count=${filtered.size}")
+        notifyStackFlow.tryEmit(filtered)
     }
 
     private fun notifyTabs(event: TabNotification) {
         if (BuildConfig.DEBUG) {
-            Log.d(LOG_TAG, "notifyTabs")
+            Timber.d("notifyTabs")
         }
         notifyTabFlow.tryEmit(event)
     }
@@ -293,6 +452,13 @@ class EventsRepository(
                 if (!notificationPreferencesHolder.getFavEnabled()) {
                     return false
                 }
+                if (event != null && notificationPreferencesHolder.getFavOnlyImportant() && !event.isImportant) {
+                    return false
+                }
+            }
+        } else if (NotificationEvent.fromSite(source)) {
+            if (!notificationPreferencesHolder.getMentionsEnabled()) {
+                return false
             }
         }
         return true
@@ -302,7 +468,7 @@ class EventsRepository(
         var oldEvent = eventsHistory[event.notifyId(NotificationEvent.Type.NEW)]
         var delete = false
         if (BuildConfig.DEBUG) {
-            Log.d(LOG_TAG, "checkOldEvent old=$oldEvent new=$event")
+            Timber.d("checkOldEvent old=$oldEvent new=$event")
         }
 
         if (event.fromTheme()) {
@@ -365,6 +531,11 @@ class EventsRepository(
     }
 
     private fun handleWebSocketEvent(event: NotificationEvent) {
+        if (!notificationPreferencesHolder.getMainEnabled()) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip websocket event: app preference disabled")
+            return
+        }
+
         if (event.isRead) {
             checkOldEvent(event)
             return
@@ -386,6 +557,7 @@ class EventsRepository(
             for (event in events) {
                 pending[event.sourceId] = event
             }
+            schedulePendingAggregationIfNeeded()
         }
     }
 
@@ -394,9 +566,11 @@ class EventsRepository(
     }
 
     private fun hardHandleEvent(events: List<NotificationEvent>, source: NotificationEvent.Source) {
-        if (BuildConfig.DEBUG) {
-            Log.d(LOG_TAG, "hardHandleEvent size=${events.size} source=$source")
+        if (!notificationPreferencesHolder.getMainEnabled()) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip hard event check: app preference disabled")
+            return
         }
+
         if (NotificationEvent.fromSite(source)) {
             if (notificationPreferencesHolder.getMentionsEnabled()) {
                 for (event in events) {
@@ -410,14 +584,14 @@ class EventsRepository(
         }
 
         repoScope.launch(ioDispatcher) {
-            val loadedEvents = runCatching {
+            val loadedEvents = runCatching<List<NotificationEvent>> {
                 if (NotificationEvent.fromQms(source)) {
-                    eventsApi.qmsEvents
+                    eventsApi.getQmsEvents()
                 } else {
-                    eventsApi.favoritesEvents
+                    eventsApi.getFavoritesEvents()
                 }
             }.getOrElse { e ->
-                e.printStackTrace()
+                Timber.e(e, "Favorites events error")
                 emptyList()
             }
 
@@ -522,18 +696,13 @@ class EventsRepository(
 
         if (NotificationEvent.fromTheme(source) && notificationPreferencesHolder.getFavOnlyImportant()) {
             val toRemove = mutableListOf<NotificationEvent>()
+            val mentionTopicIds = events
+                    .asSequence()
+                    .filter { it.isMention }
+                    .map { it.sourceId }
+                    .toSet()
             for (newEvent in newEvents) {
-                var remove = false
-                for (event in events) {
-                    if (!event.isMention && !newEvent.isImportant) {
-                        remove = true
-                        break
-                    }
-                }
-                if (!newEvent.isImportant) {
-                    remove = true
-                }
-                if (remove) {
+                if (!newEvent.isImportant && newEvent.sourceId !in mentionTopicIds) {
                     toRemove.add(newEvent)
                 }
             }
@@ -546,5 +715,19 @@ class EventsRepository(
         return newEvents
     }
 
+    /**
+     * Останавливает активную проверку событий без разрушения singleton-репозитория.
+     */
+    fun cleanup() {
+        stop("cleanup")
+    }
 
+}
+
+private fun NotificationEvent.notificationLogCategory(): String = when {
+    isMention -> "mention"
+    fromQms() -> "qms"
+    fromTheme() -> "favorite"
+    fromSite() -> "site"
+    else -> "unknown"
 }

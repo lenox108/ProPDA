@@ -4,19 +4,27 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <com.google.android.material.tabs.TabLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    <com.google.android.material.tabs.TabLayout
         android:id="@+id/selectorTabLayout"
         android:layout_width="match_parent"
         android:layout_height="@dimen/dp48"
-        android:layout_marginEnd="@dimen/dp48" />
+        android:layout_marginEnd="@dimen/dp48"
+        android:background="?attr/cards_background"
+        app:tabBackground="@android:color/transparent"
+        app:tabIconTint="@color/message_panel_selector_tab_icon"
+        app:tabIndicatorHeight="@dimen/dp2"
+        app:tabIndicatorColor="?attr/colorAccent"
+        app:tabSelectedTextColor="?attr/default_text_color"
+        app:tabTextColor="?attr/second_text_color" />
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/selectorReverse"
         android:layout_width="@dimen/dp48"
         android:layout_height="@dimen/dp48"
         android:layout_gravity="end"
-        android:background="?selectableItemBackground"
+        android:background="?attr/selectableItemBackgroundBorderless"
         android:clickable="true"
+        android:contentDescription="@string/sorting_title"
         android:focusable="true"
         android:scaleType="center"
         app:srcCompat="@drawable/ic_sort" />

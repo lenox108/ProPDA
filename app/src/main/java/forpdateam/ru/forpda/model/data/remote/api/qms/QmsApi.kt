@@ -1,6 +1,8 @@
 package forpdateam.ru.forpda.model.data.remote.api.qms
+import forpdateam.ru.forpda.BuildConfig
 
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
+import forpdateam.ru.forpda.entity.remote.editpost.ImgbbResponseJson
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
 import forpdateam.ru.forpda.entity.remote.qms.QmsChatModel
 import forpdateam.ru.forpda.entity.remote.qms.QmsContact
@@ -8,8 +10,12 @@ import forpdateam.ru.forpda.entity.remote.qms.QmsMessage
 import forpdateam.ru.forpda.entity.remote.qms.QmsThemes
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.data.remote.api.NetworkRequest
+import forpdateam.ru.forpda.model.data.remote.api.NetworkResponse
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
-import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import java.io.File
 import java.net.URLEncoder
 import java.util.*
 import java.util.regex.Pattern
@@ -24,6 +30,7 @@ class QmsApi(
 ) {
 
     private val imgBbPattern = Pattern.compile("PF\\.obj\\.config\\.json_api=\"([^\"]*?)\"[\\s\\S]*?PF\\.obj\\.config\\.auth_token=\"([^\"]*?)\"")
+    private val json = Json { ignoreUnknownKeys = true }
 
     fun getBlackList(): List<QmsContact> {
         val builder = NetworkRequest.Builder()
@@ -59,10 +66,57 @@ class QmsApi(
 
     fun getThemesList(id: Int): QmsThemes {
         val builder = NetworkRequest.Builder()
-                .url("https://4pda.to/forum/index.php?act=qms&mid=$id")
-                .formHeader("xhr", "body")
+        // The system contact "Сообщения 4PDA" lives in mailbox mid=0 (its threads, e.g.
+        // "Оповещения" t=282644, post to act=qms&mid=0&t=…). Requesting the QMS root (act=qms,
+        // the contacts page) returned no thread rows, so parseThemes synthesised a virtual id=0
+        // theme that the chat screen later rejected as invalid → empty alerts. Always address the
+        // mailbox by mid so the real thread ids are parsed.
+        val url = "https://4pda.to/forum/index.php?act=qms&mid=$id"
+        builder.url(url)
+        builder.xhrHeader()
         val response = webClient.request(builder.build())
-        return qmsParser.parseThemes(response.body, id)
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) timber.log.Timber.v("QMS_API getThemesList: id=$id, length=${response.body.length}")
+        val themes = qmsParser.parseThemes(response.body, id)
+        logThemesList(id, url, response, themes)
+        return themes
+    }
+
+    /**
+     * DEBUG-only: captures which themes-list URL was requested for a contact and what ids were
+     * parsed. For the system contact (id=0) this proves whether the "Оповещения" thread is parsed
+     * with a real thread id (>0) or whether parseThemes synthesised the virtual id=0 placeholder
+     * (which downstream is rejected as an invalid theme and surfaces as an empty alerts screen).
+     */
+    private fun logThemesList(
+            id: Int,
+            url: String,
+            response: NetworkResponse,
+            themes: QmsThemes
+    ) {
+        if (!BuildConfig.DEBUG) return
+        val parsedIds = themes.themes.joinToString(separator = ",") { theme ->
+            "${theme.id}:${theme.name?.take(24).orEmpty()}"
+        }
+        val syntheticVirtual = id == 0 &&
+                themes.themes.size == 1 &&
+                themes.themes.first().id == 0
+        forpdateam.ru.forpda.diagnostic.FpdaDebugLog.log(
+                forpdateam.ru.forpda.diagnostic.FpdaDebugLog.TAG_QMS_OPEN,
+                "themes_list_parsed",
+                mapOf(
+                        "contactId" to id,
+                        "mid" to id,
+                        "requestedUrlSanitized" to
+                                forpdateam.ru.forpda.diagnostic.FpdaDebugLog.sanitizeUrl(url),
+                        "httpStatus" to response.code,
+                        "redirectUrlSanitized" to
+                                forpdateam.ru.forpda.diagnostic.FpdaDebugLog.sanitizeUrl(response.redirect),
+                        "responseSizeBytes" to response.body.length,
+                        "parsedThemeCount" to themes.themes.size,
+                        "syntheticVirtualTheme" to syntheticVirtual,
+                        "parsedThemeIds" to parsedIds.take(200)
+                )
+        )
     }
 
     fun deleteTheme(id: Int, themeId: Int): QmsThemes {
@@ -75,14 +129,102 @@ class QmsApi(
         return qmsParser.parseThemes(response.body, id)
     }
 
-    fun getChat(userId: Int, themeId: Int): QmsChatModel {
+    suspend fun fetchChat(userId: Int, themeId: Int): NetworkResponse {
+        if (userId == 0) {
+            return fetchSystemAlertsChat(themeId)
+        }
         val builder = NetworkRequest.Builder()
                 .url("https://4pda.to/forum/index.php?act=qms&mid=$userId&t=$themeId")
-                .formHeader("xhr", "body")
-        val response = webClient.request(builder.build())
-        return qmsParser.parseChat(response.body)
+                .xhrHeader()
+        return webClient.request(builder.build())
     }
 
+    fun parseFetchedChat(body: String): QmsChatModel {
+        val parsed = qmsParser.parseChat(body)
+        logParsedChat(parsed, body)
+        return parsed
+    }
+
+    fun parseFetchedSystemChat(body: String, themeId: Int): QmsChatModel {
+        val parsed = qmsParser.parseChat(body)
+        parsed.userId = 0
+        parsed.themeId = themeId
+        if (parsed.nick.isNullOrBlank()) parsed.nick = "Сообщения 4PDA"
+        logParsedChat(parsed, body)
+        return parsed
+    }
+
+    suspend fun getChat(userId: Int, themeId: Int): QmsChatModel {
+        val response = fetchChat(userId, themeId)
+        timber.log.Timber.d(
+                "QmsApi.getChat: userId=%d themeId=%d code=%d redirect=%s bodyLen=%d",
+                userId, themeId, response.code, response.redirect, response.body.length
+        )
+        return if (userId == 0) {
+            parseFetchedSystemChat(response.body, themeId)
+        } else {
+            parseFetchedChat(response.body)
+        }
+    }
+
+    /**
+     * Suspend variant of the system-alerts chat fetch. When no valid thread id is provided, we
+     * resolve it from the themes-list and then issue the chat request with the resolved id.
+     * The themes-list and chat requests are NOT issued in parallel because the chat request
+     * needs the resolved themeId from the themes-list; running them concurrently would either
+     * double the network traffic (chat fired speculatively) or require cancellation logic
+     * that adds risk for a low-frequency fallback path.
+     */
+    private suspend fun fetchSystemAlertsChat(themeId: Int): NetworkResponse {
+        if (themeId > 0) {
+            return withContext(Dispatchers.IO) {
+                webClient.request(
+                        NetworkRequest.Builder()
+                                .url("https://4pda.to/forum/index.php?act=qms&mid=0&t=$themeId")
+                                .xhrHeader()
+                                .build()
+                )
+            }
+        }
+        val themes = withContext(Dispatchers.IO) { fetchSystemAlertsThemesList() }
+        val resolvedThemeId = themes.themes
+                .find { it.name?.contains("Оповещения") == true }
+                ?.id
+                ?.takeIf { it > 0 }
+                ?: themeId
+        return withContext(Dispatchers.IO) {
+            webClient.request(
+                    NetworkRequest.Builder()
+                            .url("https://4pda.to/forum/index.php?act=qms&mid=0&t=$resolvedThemeId")
+                            .xhrHeader()
+                            .build()
+            )
+        }
+    }
+
+    private fun fetchSystemAlertsThemesList(): forpdateam.ru.forpda.entity.remote.qms.QmsThemes {
+        val themesBuilder = NetworkRequest.Builder()
+                .url("https://4pda.to/forum/index.php?act=qms&mid=0")
+                .xhrHeader()
+        val themesResponse = webClient.request(themesBuilder.build())
+        return qmsParser.parseThemes(themesResponse.body, 0)
+    }
+
+    private fun logParsedChat(parsed: QmsChatModel, body: String) {
+        timber.log.Timber.d(
+                "QmsApi.getChat parsed: messages=%d nick=%s title=%s parsedThemeId=%d parsedUserId=%d",
+                parsed.messages.size, parsed.nick, parsed.title, parsed.themeId, parsed.userId
+        )
+        if (BuildConfig.DEBUG && parsed.messages.isEmpty() && body.isNotEmpty()) {
+            val fields = forpdateam.ru.forpda.diagnostic.FpdaDebugLog.classifyHtml(body) +
+                    mapOf("parsedMessages" to parsed.messages.size)
+            forpdateam.ru.forpda.diagnostic.FpdaDebugLog.warn(
+                    forpdateam.ru.forpda.diagnostic.FpdaDebugLog.TAG_QMS_PARSE,
+                    "chat_empty_parse",
+                    fields
+            )
+        }
+    }
     fun findUser(nick: String): List<ForumUser> {
         val encodedNick = URLEncoder.encode(nick, "UTF-8")
         val builder = NetworkRequest.Builder()
@@ -156,8 +298,8 @@ class QmsApi(
         val baseResponse = webClient.get(baseUrl)
         val baseMatcher = imgBbPattern.matcher(baseResponse.body)
         if (baseMatcher.find()) {
-            uploadUrl = baseMatcher.group(1)
-            authToken = baseMatcher.group(2)
+            uploadUrl = baseMatcher.group(1) ?: ""
+            authToken = baseMatcher.group(2) ?: ""
         }
 
 
@@ -180,18 +322,18 @@ class QmsApi(
                     .file(file)
             val response = webClient.request(builder.build(), item.itemProgressListener)
 
-            val responseJson = JSONObject(response.body)
-            forpdateam.ru.forpda.common.Utils.longLog(responseJson.toString(4))
-            if (responseJson.getInt("status_code") == 200) {
-                val imageJson = responseJson.getJSONObject("image")
-                item.name = imageJson.getString("filename")
+            val responseJson = json.decodeFromString(ImgbbResponseJson.serializer(), response.body)
+            forpdateam.ru.forpda.common.Utils.longLog(responseJson.toString())
+            if (responseJson.statusCode == 200) {
+                val imageJson = responseJson.image
+                item.name = imageJson?.filename ?: ""
                 item.id = 0
-                item.extension = imageJson.getString("extension")
-                item.weight = imageJson.getString("size_formatted")
+                item.extension = imageJson?.extension ?: ""
+                item.weight = imageJson?.sizeFormatted ?: ""
                 item.typeFile = AttachmentItem.TYPE_IMAGE
                 item.loadState = AttachmentItem.STATE_LOADED
-                item.imageUrl = imageJson.getJSONObject("medium").getString("url")
-                item.url = imageJson.getJSONObject("image").getString("url")
+                item.imageUrl = imageJson?.medium?.url ?: ""
+                item.url = imageJson?.image?.url ?: ""
             }
         }
 

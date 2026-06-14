@@ -8,6 +8,22 @@ import org.junit.Test
 class ForumPostTextTest {
 
     @Test
+    fun appendEditedMarkerInline_insertsBeforeClosingParagraph() {
+        val html = """<p class="content">Hello world</p>"""
+        val marker = """<span class="edited">✎</span>"""
+        val out = appendEditedMarkerInline(html, marker)
+
+        assertEquals("""<p class="content">Hello world<span class="edited">✎</span></p>""", out)
+    }
+
+    @Test
+    fun appendEditedMarkerInline_appendsWhenNoBlockTag() {
+        val out = appendEditedMarkerInline("Plain text", "<span>✎</span>")
+
+        assertEquals("Plain text<span>✎</span>", out)
+    }
+
+    @Test
     fun stripHtmlQuoteBlocks_removesPostBlockQuoteWithBlockBody() {
         val html = """<div class="post_body">AAA<div class="post-block quote"><div class="block-body">OLDQUOTE</div></div>BBB</div>"""
         val out = stripHtmlQuoteBlocks(html)
@@ -36,5 +52,12 @@ class ForumPostTextTest {
     fun stripBbcodeQuotes_plainTextUnchanged() {
         val text = "hello world"
         assertEquals("hello world", stripBbcodeQuotes(text))
+    }
+
+    @Test
+    fun renderBbcodeLineBreakTagsInPostHtml_convertsBrTags() {
+        val html = """<p>строка1[br][br]строка2[BR /]строка3</p>"""
+        val out = renderBbcodeLineBreakTagsInPostHtml(html)
+        assertEquals("""<p>строка1<br><br>строка2<br>строка3</p>""", out)
     }
 }

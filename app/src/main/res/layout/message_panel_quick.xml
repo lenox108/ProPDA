@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/message_panel_quick_content"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_gravity="center_vertical"
+    android:background="@drawable/bg_message_panel_quick"
+    android:clipToOutline="true"
     android:paddingBottom="@dimen/dp2">
 
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/button_advanced_input"
         android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp40"
+        android:layout_height="@dimen/dp48"
         android:layout_below="@+id/message_wrapper"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/codes_and_smiles"
@@ -18,7 +20,7 @@
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/button_attachments"
         android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp40"
+        android:layout_height="@dimen/dp48"
         android:layout_below="@+id/message_wrapper"
         android:layout_marginStart="@dimen/message_panel_button_overlap"
         android:layout_toEndOf="@+id/button_advanced_input"
@@ -36,6 +38,7 @@
         android:layout_marginEnd="@dimen/content_spacing_half"
         android:background="@drawable/notify_dot_menu"
         android:gravity="center"
+        android:importantForAccessibility="no"
         android:maxLines="1"
         android:minWidth="@dimen/dp16"
         android:minHeight="@dimen/dp16"
@@ -44,12 +47,12 @@
         android:text="1"
         android:textColor="@color/white"
         android:textSize="@dimen/news_list_compat_meta_text_size"
-        android:visibility="visible" />
+        android:visibility="gone" />
 
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/button_full"
         android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp40"
+        android:layout_height="@dimen/dp48"
         android:layout_below="@+id/message_wrapper"
         android:layout_marginStart="@dimen/message_panel_button_overlap"
         android:layout_toEndOf="@+id/button_attachments"
@@ -60,7 +63,7 @@
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/button_hide"
         android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp40"
+        android:layout_height="@dimen/dp48"
         android:layout_below="@+id/message_wrapper"
         android:layout_marginStart="@dimen/message_panel_button_overlap"
         android:layout_toEndOf="@+id/button_full"
@@ -74,7 +77,8 @@
         android:id="@+id/message_wrapper"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fillViewport="true"
+        android:minHeight="@dimen/dp56"
+        android:fillViewport="false"
         android:scrollbars="vertical">
 
         <FrameLayout
@@ -83,6 +87,7 @@
 
             <forpdateam.ru.forpda.ui.views.CodeEditor
                 android:id="@+id/message_field"
+                style="@style/Widget.ForPDA.CodeEditor"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@android:color/transparent"
@@ -104,24 +109,34 @@
     <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/button_clear_message"
         android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp40"
+        android:layout_height="@dimen/dp48"
         android:layout_below="@+id/message_wrapper"
-        android:layout_toStartOf="@+id/send_container"
+        android:layout_toStartOf="@+id/button_preview"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/msg_panel_clear_message"
         app:srcCompat="@drawable/ic_clear" />
 
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/button_preview"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp48"
+        android:layout_below="@+id/message_wrapper"
+        android:layout_toStartOf="@+id/send_container"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/msg_panel_preview"
+        app:srcCompat="@drawable/ic_visibility" />
+
     <FrameLayout
         android:id="@+id/send_container"
         android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp40"
+        android:layout_height="@dimen/dp48"
         android:layout_alignParentEnd="true"
         android:layout_below="@+id/message_wrapper">
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_send"
             android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp40"
+            android:layout_height="@dimen/dp48"
             android:contentDescription="@string/send_message"
             android:background="?attr/selectableItemBackgroundBorderless"
             app:srcCompat="@drawable/ic_send" />
@@ -129,8 +144,9 @@
         <ProgressBar
             android:id="@+id/send_progress"
             android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp40"
+            android:layout_height="@dimen/dp48"
             android:clickable="false"
+            android:contentDescription="@string/send_message"
             android:padding="@dimen/dp8"
             android:visibility="gone" />
     </FrameLayout>

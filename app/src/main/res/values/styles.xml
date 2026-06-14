@@ -1,7 +1,103 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <style name="TreeNodeStyleCustom">
-        <item name="android:paddingLeft">16dp</item>
+    <style name="CircleImageViewStyle" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
+    <!-- Material3 по умолчанию красит выбранный таб colorPrimary — на тёмном toolbar/card он сливается с фоном -->
+    <style name="Widget.ForPDA.TabLayout" parent="Widget.Material3.TabLayout">
+        <item name="tabTextColor">?attr/second_text_color</item>
+        <item name="tabSelectedTextColor">?attr/default_text_color</item>
+        <item name="tabIndicatorColor">?attr/colorAccent</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.PaginationPage" parent="TextAppearance.Material3.TitleSmall">
+        <item name="android:textSize">@dimen/pagination_page_autosize_max_text_size</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">none</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+
+    <style name="ThemeOverlay.ForPDA.AppFont" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.ForPDA.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.ForPDA.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.ForPDA.BodySmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.ForPDA.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.ForPDA.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.ForPDA.TitleSmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.ForPDA.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.ForPDA.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.ForPDA.LabelSmall</item>
+    </style>
+
+    <style name="ThemeOverlay.ForPDA.SystemFont" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">sans-serif</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+
+    <style name="ThemeOverlay.ForPDA.InterFont" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">@font/forpda_inter</item>
+        <item name="android:fontFamily">@font/forpda_inter</item>
+    </style>
+
+    <style name="ThemeOverlay.ForPDA.SourceSans3Font" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">@font/forpda_source_sans_3</item>
+        <item name="android:fontFamily">@font/forpda_source_sans_3</item>
+    </style>
+
+    <style name="ThemeOverlay.ForPDA.OpenSansFont" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">@font/forpda_open_sans</item>
+        <item name="android:fontFamily">@font/forpda_open_sans</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.BodySmall" parent="TextAppearance.Material3.BodySmall">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.LabelMedium" parent="TextAppearance.Material3.LabelMedium">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.LabelSmall" parent="TextAppearance.Material3.LabelSmall">
+        <item name="fontFamily">@font/forpda_roboto</item>
+        <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
     <style name="SplashTheme" parent="DayNightAppTheme.NoActionBar">
@@ -22,6 +118,30 @@
         <item name="colorOnSecondary">@android:color/white</item>
         <item name="colorSurface">@color/light_card_background</item>
         <item name="colorOnSurface">@color/light_default_text_color</item>
+        <!-- Explicit Material 3 tonal colors to prevent broken auto-computation when colorPrimary is white -->
+        <item name="colorOnPrimary">@color/light_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/light_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/light_default_text_color</item>
+        <item name="colorSecondaryContainer">@color/light_background_for_cards</item>
+        <item name="bottom_nav_tab_active_fill">@android:color/transparent</item>
+        <item name="colorOnSecondaryContainer">@color/light_default_text_color</item>
+        <item name="colorSurfaceVariant">@color/light_background_for_cards</item>
+        <item name="colorOnSurfaceVariant">@color/light_second_text_color</item>
+        <item name="colorControlHighlight">#1F000000</item>
+        <item name="android:colorControlHighlight">#1F000000</item>
+        <!-- Toolbar icon colors -->
+        <item name="colorControlNormal">?icon_toolbar</item>
+        <item name="android:colorControlNormal">?icon_toolbar</item>
+        <!-- Switch/CheckBox active color — same as buttons -->
+        <item name="colorControlActivated">?attr/colorAccent</item>
+        <item name="android:colorControlActivated">?attr/colorAccent</item>
+        <item name="android:textCursorDrawable">@drawable/text_cursor</item>
+        <item name="android:textSelectHandle">@drawable/text_select_handle</item>
+        <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left</item>
+        <item name="android:textSelectHandleRight">@drawable/text_select_handle_right</item>
+        <item name="android:textSelectHandleWindowStyle">@style/Widget.ForPDA.TextSelectHandleWindow</item>
+        <item name="actionBarTheme">@style/DayNightAppTheme.AppBarOverlay</item>
+        <item name="toolbarStyle">@style/ToolbarStyle.Light</item>
 
         <!-- Colors attr settings-->
         <item name="status_bar_color">@color/light_status_bar_color</item>
@@ -43,32 +163,57 @@
         <item name="profile_overlay_bg">@color/light_profile_overlay_bg</item>
         <item name="img_viewer_toolbar">@color/light_img_viewer_toolbar</item>
         <item name="icon_base">@color/light_icon_base</item>
+        <item name="menu_tile_icon">?attr/icon_base</item>
         <item name="icon_base_inverse">@color/light_icon_base_inverse</item>
         <item name="icon_toolbar">@color/light_icon_toolbar</item>
         <item name="icon_toolbar_inverse">@color/light_icon_toolbar_inverse</item>
         <item name="count_background">@drawable/count_background_light</item>
         <item name="cards_background">@color/light_card_background</item>
+        <item name="chrome_plane_background">@color/light_card_background</item>
+        <item name="main_toolbar_accent_surface">@color/light_main_toolbar_accent_surface</item>
+        <item name="main_toolbar_stroke_width">0dp</item>
+        <item name="main_toolbar_stroke_color">@android:color/transparent</item>
+        <item name="list_plate_stroke_width">0dp</item>
+        <item name="list_plate_stroke_color">@android:color/transparent</item>
+        <item name="bottom_nav_bar_shape_appearance">@style/ShapeAppearance.ForPDA.BottomNavBar</item>
+        <item name="smart_nav_fab_background">?attr/colorAccent</item>
+        <item name="smart_nav_fab_icon">?attr/contrast_text_color</item>
         <item name="divider_line_bottom_nav">@color/light_divider_line_bottom_nav</item>
         <item name="notify_dot_tab">@drawable/notify_dot_tab_light</item>
         <item name="is_use_light_status_bar">true</item>
         <item name="item_tab_close_color">@color/light_item_tab_close</item>
 
         <!-- Styles settings-->
+        <item name="toolbar_color">@color/light_card_background</item>
         <item name="app_bar_overlay">@style/DayNightAppTheme.AppBarOverlay</item>
         <item name="popup_overlay">@style/DayNightAppTheme.PopupOverlay</item>
         <item name="bottom_sheet_dialog_theme">@style/DayNightAppTheme.BottomSheetDialog</item>
+        <item name="tabStyle">@style/Widget.ForPDA.TabLayout</item>
+        <item name="popupMenuStyle">@style/Widget.ForPDA.PopupMenu</item>
+        <item name="android:popupMenuStyle">@style/Widget.ForPDA.PopupMenu</item>
+        <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
+        <item name="popupWindowStyle">@style/Widget.ForPDA.PopupWindow</item>
+        <item name="android:popupWindowStyle">@style/Widget.ForPDA.PopupWindow</item>
+        <item name="listPopupWindowStyle">@style/Widget.ForPDA.ListPopupWindow</item>
+        <item name="android:listPopupWindowStyle">@style/Widget.ForPDA.ListPopupWindow</item>
+        <item name="dropDownListViewStyle">@style/Widget.ForPDA.DropDownListView</item>
+        <item name="android:dropDownListViewStyle">@style/Widget.ForPDA.DropDownListView</item>
+        <item name="actionOverflowMenuStyle">@style/Widget.ForPDA.PopupMenu.Overflow</item>
+        <item name="panelMenuListTheme">@style/DayNightAppTheme.PopupOverlay</item>
 
         <!-- Other settings -->
         <item name="ProfileToolbarTextStyle">@style/ProfileToolbarTextStyle</item>
         <item name="android:textViewStyle">@style/MyTextViewStyle</item>
+        <item name="radioButtonStyle">@style/Widget.ForPDA.RadioButton</item>
         <item name="windowActionModeOverlay">true</item>
         <!--<item name="actionModeStyle">@style/ActionModeStyle</item>-->
-        <item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
+        <item name="preferenceTheme">@style/PreferenceThemeOverlay.ForPDA</item>
 
         <item name="actionModeBackground">@color/light_colorPrimary</item>
         <item name="actionModeCloseButtonStyle">@style/actionModeCloseButtonStyle</item>
         <item name="actionOverflowButtonStyle">@style/OverFlow</item>
         <item name="alertDialogTheme">@style/DayNightAppTheme.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/DayNightAppTheme.Dialog</item>
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.BottomSheetDialog</item>
         <item name="android:windowBackground">@color/light_background_base</item>
         <item name="android:navigationBarColor">@color/light_navigation_bar_color</item>
@@ -80,12 +225,47 @@
         <item name="android:colorBackground">@color/light_card_background</item>
         <item name="colorAccent">@color/light_colorAccent</item>
         <item name="colorPrimary">@color/light_link_color</item>
+        <item name="colorOnPrimary">@color/light_link_color</item>
         <item name="colorOnSurface">@color/light_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/light_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/light_link_color</item>
+        <item name="colorSurface">@color/light_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/light_second_text_color</item>
+        <item name="colorOutline">@color/light_divider_line</item>
+        <item name="colorOutlineVariant">@color/light_divider_line</item>
+        <item name="colorControlActivated">@color/light_link_color</item>
+        <item name="colorControlNormal">@color/light_divider_line</item>
         <item name="android:textColorPrimary">@color/light_default_text_color</item>
         <item name="android:textColorSecondary">@color/light_second_text_color</item>
+        <item name="android:textColorHint">@color/dialog_textinput_hint</item>
+        <item name="buttonBarButtonStyle">@style/Widget.ForPDA.DialogButton</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+    </style>
+
+    <style name="DialogTextInputStyle" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="colorPrimary">@color/light_link_color</item>
+        <item name="colorControlActivated">@color/light_link_color</item>
+        <item name="colorControlNormal">@color/light_icon_base</item>
+        <item name="boxStrokeColor">@color/light_icon_base</item>
+        <item name="hintTextColor">@color/dialog_textinput_hint</item>
+    </style>
+
+    <style name="Widget.ForPDA.TextInputLayout.OutlinedBox" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">@color/forpda_textfield_stroke</item>
+        <item name="hintTextColor">@color/dialog_textinput_hint</item>
+    </style>
+
+    <style name="Widget.ForPDA.TextInputLayout.FilledBox" parent="Widget.Material3.TextInputLayout.FilledBox">
+        <item name="boxStrokeColor">@color/forpda_textfield_stroke</item>
+        <item name="hintTextColor">@color/dialog_textinput_hint</item>
     </style>
 
     <style name="DayNightAppTheme.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:colorBackground">@color/light_colorPrimary</item>
+        <item name="colorSurface">@color/light_colorPrimary</item>
+        <item name="colorOnSurface">@color/light_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/light_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
     </style>
 
@@ -100,13 +280,72 @@
 
     <style name="DayNightAppTheme.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
         <item name="android:singleLine">true</item>
+        <!-- Плашка вкладок = ?attr/cards_background — ripple/surface совпадают с карточками списков -->
+        <item name="colorSurface">?attr/cards_background</item>
+        <item name="colorControlNormal">?icon_toolbar</item>
+        <item name="colorOnSurface">?icon_toolbar</item>
+        <item name="actionMenuTextColor">?icon_toolbar</item>
+        <item name="android:textColorPrimary">?icon_toolbar</item>
+        <item name="android:textColorSecondary">?icon_toolbar</item>
+        <item name="colorPrimary">@color/light_link_color</item>
+        <item name="colorPrimaryContainer">@color/light_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/light_default_text_color</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.PopupOverlay</item>
+    </style>
+
+    <style name="ToolbarStyle.Light" parent="Widget.Material3.Toolbar">
+        <item name="titleTextColor">?icon_toolbar</item>
+        <item name="subtitleTextColor">?icon_toolbar</item>
+        <item name="navigationIconTint">?icon_toolbar</item>
+        <item name="colorControlNormal">?icon_toolbar</item>
+        <item name="android:colorControlNormal">?icon_toolbar</item>
+        <item name="iconTint">?icon_toolbar</item>
     </style>
 
     <style name="DayNightAppTheme.PopupOverlay" parent="ThemeOverlay.Material3">
         <item name="elevation">0dp</item>
+        <item name="colorSurface">?attr/cards_background</item>
+        <item name="colorOnSurface">?attr/default_text_color</item>
+        <item name="colorOnSurfaceVariant">?attr/second_text_color</item>
+        <item name="android:textColorPrimary">?attr/default_text_color</item>
+        <item name="android:textColorSecondary">?attr/second_text_color</item>
+        <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
+        <item name="popupMenuStyle">@style/Widget.ForPDA.PopupMenu</item>
+        <item name="android:popupMenuStyle">@style/Widget.ForPDA.PopupMenu</item>
+        <item name="popupWindowStyle">@style/Widget.ForPDA.PopupWindow</item>
+        <item name="android:popupWindowStyle">@style/Widget.ForPDA.PopupWindow</item>
+        <item name="listPopupWindowStyle">@style/Widget.ForPDA.ListPopupWindow</item>
+        <item name="android:listPopupWindowStyle">@style/Widget.ForPDA.ListPopupWindow</item>
+        <item name="dropDownListViewStyle">@style/Widget.ForPDA.DropDownListView</item>
+        <item name="android:dropDownListViewStyle">@style/Widget.ForPDA.DropDownListView</item>
+        <item name="actionOverflowMenuStyle">@style/Widget.ForPDA.PopupMenu.Overflow</item>
+    </style>
+
+    <!--
+        Inherits from the Material variant so it keeps the same row metrics
+        (paddings, icon space, etc.) as the rest of the preference list.
+        Only the switch widget itself is replaced via android:widgetLayout
+        so we control the SwitchCompat tints explicitly.
+    -->
+    <style name="SwitchPreferenceCompatStyle" parent="Preference.SwitchPreferenceCompat.Material">
+        <item name="android:widgetLayout">@layout/preference_widget_switch_forpda</item>
+    </style>
+
+    <!--
+        Root preference overlay for the app. The default androidx
+        @style/PreferenceThemeOverlay sets switchPreferenceCompatStyle, which
+        SHADOWS the activity-theme-level override defined in
+        DayNightPreferenceTheme. PreferenceFragmentCompat reads
+        ?attr/preferenceTheme and uses that overlay's attributes when
+        inflating preferences, so we must override the attribute here too,
+        otherwise our custom widgetLayout never reaches the SwitchCompat.
+    -->
+    <style name="PreferenceThemeOverlay.ForPDA" parent="PreferenceThemeOverlay">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
     </style>
 
     <style name="DayNightPreferenceTheme" parent="DayNightAppTheme">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
         <!--<item name="textAppearanceListItem">@style/CodeFont</item>
         <item name="android:textAppearanceListItem">@style/CodeFont</item>
         <item name="textAppearanceListItemSmall">@style/CodeFont</item>
@@ -114,6 +353,32 @@
         <!--<item name="android:listDivider">@color/md_amber_800</item>
         <item name="android:dividerHeight">1dp</item>-->
     </style>
+
+    <!--
+        AMOLED THEME - Fallback in values/ to prevent Resources$NotFoundException
+        Overridden in values-night/styles.xml with actual AMOLED colors
+    -->
+    <style name="AmoledAppTheme" parent="DayNightAppTheme">
+        <!-- Base fallback - will be overridden by values-night -->
+        <item name="colorControlNormal">?icon_toolbar</item>
+        <item name="android:colorControlNormal">?icon_toolbar</item>
+        <item name="actionBarTheme">@style/AmoledAppTheme.AppBarOverlay</item>
+        <item name="toolbarStyle">@style/ToolbarStyle.Light</item>
+    </style>
+
+    <style name="AmoledAppTheme.NoActionBarBase" parent="AmoledAppTheme">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/light_navigation_bar_color</item>
+    </style>
+
+    <style name="AmoledAppTheme.NoActionBar" parent="AmoledAppTheme.NoActionBarBase" />
+
+    <style name="AmoledAppTheme.AppBarOverlay" parent="DayNightAppTheme.AppBarOverlay" />
+    <style name="AmoledAppTheme.PopupOverlay" parent="DayNightAppTheme.PopupOverlay" />
+    <style name="AmoledAppTheme.Dialog" parent="DayNightAppTheme.Dialog" />
+    <style name="AmoledAppTheme.BottomSheetDialog" parent="DayNightAppTheme.BottomSheetDialog" />
 
 
     <!-- OTHER -->
@@ -127,12 +392,50 @@
         <item name="android:tint">?icon_toolbar</item>
     </style>
 
+    <style name="Widget.ForPDA.CodeEditor" parent="Widget.AppCompat.EditText">
+        <item name="android:textCursorDrawable">@drawable/text_cursor</item>
+        <item name="android:textSelectHandle">@drawable/text_select_handle</item>
+        <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left</item>
+        <item name="android:textSelectHandleRight">@drawable/text_select_handle_right</item>
+    </style>
+
+    <style name="Widget.ForPDA.TextSelectHandleWindow" parent="@android:style/Widget.PopupWindow">
+        <item name="android:popupBackground">@android:color/transparent</item>
+    </style>
+
+    <style name="Widget.ForPDA.PopupWindow" parent="Widget.AppCompat.PopupWindow">
+        <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
+    </style>
+
+    <style name="Widget.ForPDA.PopupMenu" parent="Widget.Material3.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
+        <item name="android:colorBackground">?attr/cards_background</item>
+        <item name="android:textColorPrimary">?attr/default_text_color</item>
+        <item name="android:textColorSecondary">?attr/second_text_color</item>
+    </style>
+
+    <style name="Widget.ForPDA.PopupMenu.Overflow" parent="Widget.ForPDA.PopupMenu" />
+
+    <style name="Widget.ForPDA.ListPopupWindow" parent="Widget.AppCompat.ListPopupWindow">
+        <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
+        <item name="android:dropDownListViewStyle">@style/Widget.ForPDA.DropDownListView</item>
+    </style>
+
+    <style name="Widget.ForPDA.DropDownListView" parent="Widget.AppCompat.ListView.DropDown">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:cacheColorHint">@android:color/transparent</item>
+        <item name="android:listSelector">?attr/selectableItemBackground</item>
+        <item name="android:divider">@android:color/transparent</item>
+        <item name="android:dividerHeight">0dp</item>
+    </style>
+
     <style name="actionModeCloseButtonStyle" parent="Widget.AppCompat.Light.ActionButton.CloseMode">
         <item name="android:tint">?icon_toolbar</item>
     </style>
 
     <style name="MyTextViewStyle" parent="android:Widget.TextView">
         <item name="android:textColor">?default_text_color</item>
+        <item name="android:fontFamily">?android:fontFamily</item>
     </style>
 
     <style name="ProfileToolbarTextStyle">
@@ -144,6 +447,19 @@
         <!--<item name="android:textAlignment" tools:ignore="NewApi">center</item>-->
     </style>
 
+    <!-- RadioButton: выбранный кружок должен быть виден — используем colorAccent вместо colorPrimary -->
+    <style name="Widget.ForPDA.RadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
+        <item name="colorPrimary">?attr/colorAccent</item>
+        <item name="colorOnSurface">?attr/second_text_color</item>
+    </style>
+
+    <style name="Widget.ForPDA.DialogButton" parent="Widget.Material3.Button.TextButton.Dialog">
+        <item name="android:minHeight">@dimen/dp40</item>
+        <item name="android:minWidth">@dimen/dp64</item>
+        <item name="android:paddingStart">@dimen/dp16</item>
+        <item name="android:paddingEnd">@dimen/dp16</item>
+        <item name="android:textColor">?attr/link_color</item>
+    </style>
 
     <style name="CardStyle.Item" parent="CardView">
         <item name="cardCornerRadius">@dimen/card_corner_radius</item>
@@ -185,6 +501,10 @@
     </style>
 
     <style name="MessagePanelAdvancedTabText" parent="TextAppearance.Material3.LabelLarge">
+        <!-- Иначе LabelLarge тянет colorPrimary — на тёмном colorPrimary таб «сливается» с фоном -->
+        <item name="fontFamily">?fontFamily</item>
+        <item name="android:fontFamily">?android:fontFamily</item>
+        <item name="android:textColor">?attr/default_text_color</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
     </style>
@@ -202,6 +522,14 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSizeTopLeft">16dp</item>
         <item name="cornerSizeTopRight">16dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+    <!-- Нижняя панель вкладок / drawer: как pref_plate / list_plate_corner_radius (~card_corner_radius) -->
+    <style name="ShapeAppearance.ForPDA.BottomNavBar" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">@dimen/list_plate_corner_radius</item>
+        <item name="cornerSizeTopRight">@dimen/list_plate_corner_radius</item>
         <item name="cornerSizeBottomLeft">0dp</item>
         <item name="cornerSizeBottomRight">0dp</item>
     </style>

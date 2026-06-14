@@ -1,8 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments
 
 import com.google.android.material.appbar.AppBarLayout
-import androidx.recyclerview.widget.LinearLayoutManager
-import android.util.Log
 import forpdateam.ru.forpda.ui.views.ExtendedWebView
 
 class WebViewTopScroller(
@@ -14,12 +12,13 @@ class WebViewTopScroller(
     private var scrolledToTop = false
 
     init {
-        webView.setOnScrollListener { scrollX, scrollY, oldScrollX, oldScrollY ->
-            Log.e("webosina", "setOnScrollListener $scrolledToTop, $lastScrollY, ${webView.scrollY}")
-            if (scrolledToTop && webView.scrollY > 0) {
-                resetState()
+        webView.setOnScrollListener(object : ExtendedWebView.OnScrollListener {
+            override fun onScrollChange(scrollX: Int, scrollY: Int, oldScrollX: Int, oldScrollY: Int) {
+                if (scrolledToTop && webView.scrollY > 0) {
+                    resetState()
+                }
             }
-        }
+        })
     }
 
     fun resetState() {

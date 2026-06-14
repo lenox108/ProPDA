@@ -16,6 +16,9 @@ interface IBaseForumPost {
     val group: String?
     val userId: Int
     val reputation: String?
+    val postRating: String?
+    val canMinusPostRating: Boolean
+    val canPlusPostRating: Boolean
     val body: String?
     val isCurator: Boolean
     val isOnline: Boolean

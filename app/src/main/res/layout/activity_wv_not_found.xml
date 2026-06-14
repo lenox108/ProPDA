@@ -3,17 +3,22 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?background_for_lists"
+    android:fillViewport="true"
     android:scrollbars="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:padding="@dimen/dp32">
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingTop="@dimen/dp32"
+        android:paddingBottom="@dimen/dp32">
 
         <ImageView
-            android:layout_width="@dimen/profile_toolbar_avatar_size"
-            android:layout_height="@dimen/profile_toolbar_avatar_size"
+            android:layout_width="@dimen/empty_state_illustration_size"
+            android:layout_height="@dimen/empty_state_illustration_size"
             android:layout_gravity="center_horizontal"
             android:src="@drawable/icon_webview" />
 
@@ -22,8 +27,9 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/dp24"
             android:gravity="center"
-            android:text="Компонент Android System Webview не найден"
-            android:textSize="@dimen/profile_stat_value_text_size"
+            android:text="@string/webview_not_found"
+            android:textColor="?attr/default_text_color"
+            android:textSize="@dimen/empty_state_title_text_size"
             android:textStyle="bold" />
 
         <TextView
@@ -38,15 +44,21 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="@dimen/dp24"
-            android:text="Попробовать запустить" />
+            android:layout_marginTop="@dimen/content_spacing"
+            android:minHeight="@dimen/dp40"
+            android:minWidth="@dimen/dp64"
+            android:paddingStart="@dimen/dp16"
+            android:paddingEnd="@dimen/dp16"
+            android:text="@string/webview_not_found_retry" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/content_spacing"
             android:gravity="center"
-            android:text="или"
-            android:textSize="@dimen/empty_state_title_text_size" />
+            android:text="@string/webview_not_found_or"
+            android:textColor="?attr/second_text_color"
+            android:textSize="@dimen/empty_state_subtitle_text_size" />
 
         <ImageView
             android:id="@+id/get_in_gp"
@@ -59,9 +71,11 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/content_spacing"
             android:gravity="center"
-            android:text="или"
-            android:textSize="@dimen/empty_state_title_text_size" />
+            android:text="@string/webview_not_found_or"
+            android:textColor="?attr/second_text_color"
+            android:textSize="@dimen/empty_state_subtitle_text_size" />
 
         <ImageView
             android:id="@+id/get_in_4pda"
@@ -69,6 +83,7 @@
             android:layout_height="@dimen/dp64"
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="@dimen/dp16"
+            android:contentDescription="@string/webview_not_found_or"
             android:src="@drawable/icon_4pda" />
     </LinearLayout>
 </ScrollView>

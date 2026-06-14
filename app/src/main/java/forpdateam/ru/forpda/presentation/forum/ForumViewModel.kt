@@ -1,140 +1,166 @@
 package forpdateam.ru.forpda.presentation.forum
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
+import forpdateam.ru.forpda.presentation.BaseViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+
+import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.remote.forum.ForumItemTree
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
+import forpdateam.ru.forpda.model.interactors.CrossScreenInteractor
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.forum.ForumRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
-import io.reactivex.disposables.CompositeDisposable
+import forpdateam.ru.forpda.presentation.search.forumSectionSearchUrl
+import forpdateam.ru.forpda.ui.fragments.forum.ForumTreeRecyclerAdapter
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-class ForumViewModel(
+@HiltViewModel
+class ForumViewModel @Inject constructor(
         private val forumRepository: ForumRepository,
         private val favoritesRepository: FavoritesRepository,
+        private val crossScreenInteractor: CrossScreenInteractor,
         private val router: TabRouter,
-        private val errorHandler: IErrorHandler
-) : ViewModel() {
+        private val errorHandler: IErrorHandler,
+        private val clipboardHelper: ClipboardHelper
+) : BaseViewModel() {
 
-    @Volatile
-    private var forumView: ForumView? = null
-
-    fun attachView(view: ForumView) {
-        forumView = view
-    }
-
-    fun detachView() {
-        forumView = null
-    }
-
-    private val rxSubscriptions = CompositeDisposable()
+    private var loadJob: Job? = null
     private var subscriptionsStarted = false
 
     var targetForumId = -1
+    var forumListState: ForumTreeRecyclerAdapter.State? = null
+    var recyclerState: android.os.Parcelable? = null
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    private val _uiEvents = MutableSharedFlow<ForumUiEvent>()
+    val uiEvents: SharedFlow<ForumUiEvent> = _uiEvents.asSharedFlow()
+    /** Флаг: была ли просмотрена хотя бы одна тема — при возврате на форум обновим данные с сервера. */
+    var needsRefresh = false
+        private set
+
+    /**
+     * Вызывается при каждом attach view. Нельзя одноразово «запоминать» флагом:
+     * при пересоздании view (поворот, back stack) ViewModel жива, а [detachView] уже был —
+     * иначе [start] больше не вызывает загрузку, экран остаётся пустым.
+     */
     fun start() {
-        if (subscriptionsStarted) return
-        subscriptionsStarted = true
+        if (!subscriptionsStarted) {
+            subscriptionsStarted = true
+            scope.launch {
+                crossScreenInteractor.observeTopic().collect {
+                    needsRefresh = true
+                }
+            }
+        }
+        // Кэш Realm; при пустом дереве getCacheForums вызовет loadForums().
         getCacheForums()
-        loadForums()
     }
 
-    override fun onCleared() {
-        rxSubscriptions.clear()
-        super.onCleared()
+    /** Сбросить флаг после обновления. */
+    fun clearNeedsRefresh() {
+        needsRefresh = false
     }
 
     fun loadForums() {
-        forumRepository
-                .getForums()
-                .doOnSubscribe { forumView?.setRefreshing(true) }
-                .doAfterTerminate { forumView?.setRefreshing(false) }
-                .subscribe({
-                    forumView?.showForums(it)
-                    scrollToTarget()
-                    saveCacheForums(it)
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        loadJob?.cancel()
+        loadJob = scope.launch {
+            _refreshing.value = true
+            try {
+                val tree = forumRepository.getForums()
+                _uiEvents.emit(ForumUiEvent.ShowForums(tree))
+                scrollToTarget()
+                saveCacheForums(tree)
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            } finally {
+                _refreshing.value = false
+            }
+        }
     }
 
     private fun getCacheForums() {
-        forumRepository
-                .getCache()
-                .doOnSubscribe { forumView?.setRefreshing(true) }
-                .doAfterTerminate { forumView?.setRefreshing(false) }
-                .subscribe({ it ->
-                    if (it.forums == null) {
-                        loadForums()
-                    } else {
-                        forumView?.showForums(it)
-                        scrollToTarget()
-                    }
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        loadJob?.cancel()
+        loadJob = scope.launch {
+            _refreshing.value = true
+            try {
+                val tree = forumRepository.getCache()
+                if (!tree.forums.isNullOrEmpty()) {
+                    _uiEvents.emit(ForumUiEvent.ShowForums(tree))
+                    scrollToTarget()
+                }
+                // Всегда тянем сеть: иначе после смены парсера/дерева пользователь видит старый Realm до ручного «Обновить».
+                loadForums()
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            } finally {
+                _refreshing.value = false
+            }
+        }
     }
 
     private fun scrollToTarget() {
         if (targetForumId != -1) {
-            forumView?.scrollToForum(targetForumId)
+            scope.launch { _uiEvents.emit(ForumUiEvent.ScrollToForum(targetForumId)) }
             targetForumId = -1
         }
     }
 
     private fun saveCacheForums(rootForum: ForumItemTree) {
-        forumRepository
-                .saveCache(rootForum)
-                .doOnTerminate { forumView?.setRefreshing(true) }
-                .doAfterTerminate { forumView?.setRefreshing(false) }
-                .subscribe({
-
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            try {
+                forumRepository.saveCache(rootForum)
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            }
+        }
     }
 
     fun markRead(id: Int) {
-        forumRepository
-                .markRead(id)
-                .subscribe({
-                    forumView?.onMarkRead()
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            try {
+                forumRepository.markRead(id)
+                _uiEvents.emit(ForumUiEvent.OnMarkRead)
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            }
+        }
     }
 
     fun markAllRead() {
-        forumRepository
-                .markAllRead()
-                .subscribe({
-                    forumView?.onMarkAllRead()
-                }, {
-                    errorHandler.handle(it)
-                })
-                .also { rxSubscriptions.add(it) }
+        scope.launch {
+            try {
+                forumRepository.markAllRead()
+                _uiEvents.emit(ForumUiEvent.OnMarkAllRead)
+            } catch (e: Exception) {
+                errorHandler.handle(e)
+            }
+        }
     }
 
     fun addToFavorite(forumId: Int, subType: String) {
-        viewModelScope.launch {
+        scope.launch {
             runCatching {
                 favoritesRepository.editFavorites(FavoritesApi.ACTION_ADD_FORUM, -1, forumId, subType)
-            }.onSuccess { forumView?.onAddToFavorite(it) }
+            }.onSuccess { _uiEvents.emit(ForumUiEvent.OnAddToFavorite(it)) }
                     .onFailure { errorHandler.handle(it) }
         }
     }
 
     fun copyLink(item: ForumItemTree) {
-        Utils.copyToClipBoard("https://4pda.to/forum/index.php?showforum=${item.id}")
+        clipboardHelper.copyToClipboard("https://4pda.to/forum/index.php?showforum=${item.id}")
     }
 
     fun navigateToForum(item: ForumItemTree) {
@@ -144,21 +170,18 @@ class ForumViewModel(
     }
 
     fun navigateToSearch(item: ForumItemTree) {
+        if (item.id <= 0) return
         router.navigateTo(Screen.Search().apply {
-            searchUrl = "https://4pda.to/forum/index.php?act=search&source=all&forums%5B%5D=${item.id}"
+            searchUrl = forumSectionSearchUrl(item.id)
+            screenSubTitle = item.title
         })
     }
+}
 
-    class Factory(
-            private val forumRepository: ForumRepository,
-            private val favoritesRepository: FavoritesRepository,
-            private val router: TabRouter,
-            private val errorHandler: IErrorHandler
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass != ForumViewModel::class.java) throw IllegalArgumentException("Unknown ViewModel class")
-            return ForumViewModel(forumRepository, favoritesRepository, router, errorHandler) as T
-        }
-    }
+sealed class ForumUiEvent {
+    data class ShowForums(val tree: ForumItemTree) : ForumUiEvent()
+    data class ScrollToForum(val forumId: Int) : ForumUiEvent()
+    object OnMarkRead : ForumUiEvent()
+    object OnMarkAllRead : ForumUiEvent()
+    data class OnAddToFavorite(val result: Boolean) : ForumUiEvent()
 }

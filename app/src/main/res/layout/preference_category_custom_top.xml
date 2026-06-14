@@ -1,20 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/title"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/background_for_cards"
-    android:orientation="vertical">
-
-    <TextView xmlns:android="http://schemas.android.com/apk/res/android"
-        android:id="@android:id/title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="?colorPrimary"
-        android:paddingStart="@dimen/content_padding_horizontal"
-        android:paddingTop="@dimen/content_padding_horizontal"
-        android:paddingEnd="@dimen/content_padding_horizontal"
-        android:textColor="?colorAccent"
-        android:textSize="@dimen/list_topic_meta_text_size"
-        android:textStyle="bold" />
-
-</LinearLayout>
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/content_padding_vertical"
+    android:paddingBottom="@dimen/content_spacing_half"
+    android:textColor="?colorAccent"
+    android:textSize="@dimen/list_topic_meta_text_size"
+    android:textStyle="bold" />

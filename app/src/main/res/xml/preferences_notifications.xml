@@ -44,14 +44,13 @@
             android:title="@string/pref_title_enable_avatars"
             app:iconSpaceReserved="false" />
 
-        <ListPreference
-            android:dialogTitle="Раз в"
-            android:entries="@array/entries_notify_limit"
-            android:entryValues="@array/entry_values_notify_limit"
-            android:key="notifications.main.limit_period"
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
+            android:dependency="notifications.main.enabled"
+            android:key="notifications.downloads.enabled"
             android:layout="@layout/preference_custom"
-            android:summary="%s"
-            android:title="Ограничение частоты"
+            android:summary="@string/pref_summary_download_notifications"
+            android:title="@string/downloads"
             app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
@@ -79,8 +78,8 @@
             android:dependency="notifications.fav.enabled"
             android:key="notifications.fav.live_tab"
             android:layout="@layout/preference_custom"
-            android:summary="Обновлять данные во вкладке"
-            android:title="Живой список"
+            android:summary="@string/pref_summary_favorites_live_tab"
+            android:title="@string/pref_title_favorites_live_tab"
             app:iconSpaceReserved="false" />
 
     </PreferenceCategory>
@@ -113,13 +112,63 @@
 
     <PreferenceCategory
         android:layout="@layout/preference_category_custom"
-        android:title="@string/pref_title_app_updates">
+        android:title="@string/pref_title_bg_check">
+
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"
-            android:key="notifications.update.enabled"
+            android:dependency="notifications.main.enabled"
+            android:key="notifications.bg.enabled"
             android:layout="@layout/preference_custom"
-            android:title="@string/pref_title_notify"
+            android:summary="@string/pref_summary_bg_check"
+            android:title="@string/pref_title_bg_check"
             app:iconSpaceReserved="false" />
 
+        <ListPreference
+            android:defaultValue="15"
+            android:dependency="notifications.bg.enabled"
+            android:dialogTitle="@string/pref_title_bg_check_interval"
+            android:entries="@array/entries_notify_bg_interval"
+            android:entryValues="@array/entry_values_notify_bg_interval"
+            android:key="notifications.bg.interval_min"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_bg_check_interval"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="notifications.system.category"
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/pref_title_android_notification_settings">
+        <Preference
+            android:key="notifications.system.app"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_android_notification_settings"
+            android:title="@string/pref_title_open_android_notification_settings"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="notifications.system.channel.qms"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_channel_qms"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="notifications.system.channel.mentions"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_channel_mentions"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="notifications.system.channel.favorites"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_channel_favorites"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="notifications.system.channel.downloads"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_channel_downloads"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
 </PreferenceScreen>

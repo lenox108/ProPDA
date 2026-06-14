@@ -15,6 +15,7 @@ class AnnounceTemplate(
         template.apply {
             templateManager.fillStaticStrings(this)
             setVariableOpt("style_type", templateManager.getThemeType())
+            setVariableOpt("theme_overrides_css", templateManager.getThemeOverridesCss())
             setVariableOpt("body", announce.html)
         }
 

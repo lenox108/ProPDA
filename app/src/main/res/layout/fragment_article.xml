@@ -6,17 +6,8 @@
     android:layout_height="match_parent"
     app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-    <ProgressBar
-        android:id="@+id/progress_bar"
-        android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp48"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="@dimen/dp24"
-        android:visibility="gone" />
-
-    <androidx.viewpager.widget.ViewPager xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:id="@+id/view_pager"
+    <FrameLayout
+        android:id="@+id/article_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />

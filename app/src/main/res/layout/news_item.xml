@@ -70,9 +70,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center_horizontal"
-                        android:text="new"
-                        android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                        tools:ignore="HardcodedText"
+                        android:text="@string/news_badge_new"
                         tools:text="new" />
 
                 </LinearLayout>
@@ -95,10 +93,11 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <de.hdodenhof.circleimageview.CircleImageView
+            <com.google.android.material.imageview.ShapeableImageView
                 android:id="@+id/articleAvatar"
                 android:layout_width="@dimen/list_avatar_compact_size"
-                android:layout_height="@dimen/list_avatar_compact_size" />
+                android:layout_height="@dimen/list_avatar_compact_size"
+                app:shapeAppearanceOverlay="@style/CircleImageViewStyle" />
 
             <LinearLayout
                 android:layout_width="0dp"

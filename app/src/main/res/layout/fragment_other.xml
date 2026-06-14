@@ -2,12 +2,15 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?background_for_cards">
+    android:background="?attr/background_base">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipToPadding="false"
         android:overScrollMode="never"
+        android:paddingTop="@dimen/dp8"
+        android:paddingBottom="@dimen/other_menu_plate_vertical_gap"
         android:transitionGroup="true" />
 </FrameLayout>

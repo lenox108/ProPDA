@@ -29,25 +29,24 @@
                 android:paddingEnd="@dimen/dp32"
                 android:visibility="gone">
 
-                <de.hdodenhof.circleimageview.CircleImageView xmlns:app="http://schemas.android.com/apk/res-auto"
+                <com.google.android.material.imageview.ShapeableImageView
                     android:id="@+id/auth_avatar"
                     android:layout_width="@dimen/profile_toolbar_avatar_size"
                     android:layout_height="@dimen/profile_toolbar_avatar_size"
                     android:layout_centerHorizontal="true"
                     android:layout_marginTop="@dimen/dp2"
                     android:scaleType="centerCrop"
-                    app:civ_border_color="#00000000"
-                    app:civ_border_width="@dimen/dp0" />
+                    app:shapeAppearanceOverlay="@style/CircleImageViewStyle" />
 
-                <com.github.rahatarmanahmed.cpv.CircularProgressView
+                <com.google.android.material.progressindicator.CircularProgressIndicator
                     android:id="@+id/auth_progress"
                     android:layout_width="@dimen/profile_toolbar_progress_ring_size"
                     android:layout_height="@dimen/profile_toolbar_progress_ring_size"
                     android:layout_centerHorizontal="true"
-                    android:scaleType="centerCrop"
-                    app:cpv_animAutostart="true"
-                    app:cpv_color="#000000"
-                    app:cpv_indeterminate="true" />
+                    android:indeterminate="true"
+                    app:indicatorColor="#000000"
+                    app:trackColor="#000000"
+                    app:trackThickness="@dimen/dp2" />
 
                 <androidx.appcompat.widget.AppCompatTextView
                     android:id="@+id/auth_complete_text"
@@ -73,6 +72,7 @@
                 android:paddingEnd="@dimen/dp32">
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.ForPDA.TextInputLayout.FilledBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
 
@@ -91,6 +91,7 @@
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.ForPDA.TextInputLayout.FilledBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     app:passwordToggleDrawable="@drawable/ic_visibility"
@@ -132,6 +133,7 @@
 
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.ForPDA.TextInputLayout.FilledBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content">
 

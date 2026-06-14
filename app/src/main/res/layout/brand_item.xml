@@ -6,6 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:clickable="true"
+    android:focusable="true"
     android:foreground="?attr/selectableItemBackground">
 
     <RelativeLayout
@@ -54,7 +55,7 @@
             android:minWidth="@dimen/dp32"
             android:paddingEnd="@dimen/bottom_tab_badge_padding_horizontal"
             android:paddingStart="@dimen/bottom_tab_badge_padding_horizontal"
-            android:text="10"
+            tools:text="10"
             android:textColor="@color/white"
             android:textStyle="bold"
             android:visibility="gone"

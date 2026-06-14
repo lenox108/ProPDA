@@ -4,7 +4,7 @@ import forpdateam.ru.forpda.entity.remote.devdb.Brand
 import forpdateam.ru.forpda.entity.remote.devdb.Brands
 import forpdateam.ru.forpda.entity.remote.devdb.Device
 import forpdateam.ru.forpda.model.data.remote.IWebClient
-import java.net.URLDecoder
+import forpdateam.ru.forpda.common.Cp1251Codec
 
 /**
  * Created by radiationx on 06.08.17.
@@ -31,13 +31,7 @@ class DevDbApi(
     }
 
     fun search(query: String): Brand {
-        val reqQuery = query.let {
-            try {
-                URLDecoder.decode(query, "windows-1251")
-            } catch (ignore: Exception) {
-                it
-            }
-        }
+        val reqQuery = Cp1251Codec.decode(query)
         val response = webClient.get("https://4pda.to/devdb/search?s=$reqQuery")
         return devDbParser.parseSearch(response.body)
     }

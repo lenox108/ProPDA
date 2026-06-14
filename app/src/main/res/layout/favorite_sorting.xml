@@ -1,81 +1,118 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/search_settings_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?attr/background_for_lists"
         android:orientation="vertical"
         android:paddingTop="@dimen/content_block_padding_vertical">
 
-        <LinearLayout
+        <androidx.appcompat.widget.AppCompatTextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/content_spacing"
-            android:orientation="vertical">
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingTop="@dimen/content_spacing"
+            android:text="@string/sort_by"
+            android:textAllCaps="true"
+            android:textColor="?attr/second_text_color" />
 
-            <androidx.appcompat.widget.AppCompatTextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/content_padding_horizontal"
-                android:paddingStart="@dimen/content_padding_horizontal"
-                android:text="@string/sort_by"
-                android:textColor="?attr/second_text_color" />
-
-            <androidx.appcompat.widget.AppCompatSpinner
-                android:id="@+id/sorting_key"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/content_spacing"
-                android:paddingStart="@dimen/content_spacing" />
-        </LinearLayout>
-
-        <LinearLayout
+        <RadioGroup
+            android:id="@+id/sorting_key"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/content_spacing"
-            android:orientation="vertical">
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/content_padding_horizontal">
 
-            <androidx.appcompat.widget.AppCompatTextView
+            <com.google.android.material.radiobutton.MaterialRadioButton
+                android:id="@+id/sorting_key_last_post"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingEnd="@dimen/content_padding_horizontal"
-                android:paddingStart="@dimen/content_padding_horizontal"
-                android:text="@string/sort_order"
-                android:textColor="?attr/second_text_color" />
+                android:minHeight="@dimen/dp48"
+                android:text="@string/fav_sort_last_post"
+                android:textColor="?attr/default_text_color"
+                app:buttonTint="@color/favorite_sorting_radio_button" />
 
-            <androidx.appcompat.widget.AppCompatSpinner
-                android:id="@+id/sorting_order"
+            <com.google.android.material.radiobutton.MaterialRadioButton
+                android:id="@+id/sorting_key_title"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/dp48"
-                android:paddingEnd="@dimen/content_spacing"
-                android:paddingStart="@dimen/content_spacing" />
-        </LinearLayout>
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/dp48"
+                android:text="@string/fav_sort_title"
+                android:textColor="?attr/default_text_color"
+                app:buttonTint="@color/favorite_sorting_radio_button" />
+        </RadioGroup>
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:paddingTop="@dimen/content_spacing"
+            android:text="@string/sort_order"
+            android:textAllCaps="true"
+            android:textColor="?attr/second_text_color" />
+
+        <RadioGroup
+            android:id="@+id/sorting_order"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/content_padding_horizontal">
+
+            <com.google.android.material.radiobutton.MaterialRadioButton
+                android:id="@+id/sorting_order_asc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/dp48"
+                android:text="@string/sorting_asc"
+                android:textColor="?attr/default_text_color"
+                app:buttonTint="@color/favorite_sorting_radio_button" />
+
+            <com.google.android.material.radiobutton.MaterialRadioButton
+                android:id="@+id/sorting_order_desc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="@dimen/dp48"
+                android:text="@string/sorting_desc"
+                android:textColor="?attr/default_text_color"
+                app:buttonTint="@color/favorite_sorting_radio_button" />
+        </RadioGroup>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="end"
             android:orientation="horizontal"
+            android:paddingStart="@dimen/content_spacing"
             android:paddingEnd="@dimen/content_spacing"
-            android:paddingStart="@dimen/content_spacing">
+            android:paddingTop="@dimen/content_spacing"
+            android:paddingBottom="@dimen/content_spacing">
 
-            <androidx.appcompat.widget.AppCompatButton
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/sorting_reset"
-                style="@style/Widget.AppCompat.Button.Borderless"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/fav_sorting_reset" />
+                android:minHeight="@dimen/dp40"
+                android:minWidth="@dimen/dp64"
+                android:text="@string/fav_sorting_reset"
+                android:textColor="@color/favorite_sorting_action_text" />
 
-            <androidx.appcompat.widget.AppCompatButton
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/sorting_apply"
-                style="@style/Widget.AppCompat.Button.Borderless"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/apply" />
+                android:minHeight="@dimen/dp40"
+                android:minWidth="@dimen/dp64"
+                android:text="@string/apply"
+                android:textColor="@color/favorite_sorting_action_text" />
         </LinearLayout>
     </LinearLayout>
 

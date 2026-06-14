@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/background_base">
+    android:background="?attr/cards_background">
 
     <androidx.viewpager.widget.ViewPager
         android:id="@+id/pager"
@@ -19,11 +19,22 @@
         android:background="?attr/colorPrimary"
         android:elevation="@dimen/card_elevation">
 
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/sheet_keyboard_button"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp48"
+            android:layout_alignParentStart="true"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/msg_panel_show_keyboard"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_keyboard" />
+
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tab_layout"
             android:layout_width="match_parent"
             android:layout_height="@dimen/dp48"
-            android:layout_marginEnd="@dimen/message_panel_advanced_trailing_margin"
+            android:layout_toEndOf="@+id/sheet_keyboard_button"
+            android:layout_toStartOf="@+id/delete_button"
             android:background="@android:color/transparent"
             android:clipToPadding="true"
             app:layout_collapseMode="pin"
@@ -32,19 +43,9 @@
             app:tabMode="fixed"
             app:tabPaddingEnd="@dimen/content_spacing"
             app:tabPaddingStart="@dimen/content_spacing"
-            app:tabSelectedTextColor="?attr/colorAccent"
+            app:tabSelectedTextColor="?attr/default_text_color"
             app:tabTextAppearance="@style/MessagePanelAdvancedTabText"
             app:tabTextColor="?attr/second_text_color"/>
-
-        <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/keyboard_button"
-            android:layout_width="@dimen/dp56"
-            android:layout_height="@dimen/dp48"
-            android:layout_alignParentEnd="true"
-            android:layout_marginEnd="@dimen/dp56"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/msg_panel_show_keyboard"
-            app:srcCompat="@drawable/ic_keyboard" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/delete_button"

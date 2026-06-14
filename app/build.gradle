@@ -4,8 +4,10 @@ import java.text.SimpleDateFormat
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.25'
     id 'kotlin-kapt'
-    id 'realm-android'
+    id 'dagger.hilt.android.plugin'
+    id 'io.gitlab.arturbosch.detekt' version '1.23.4'
 }
 
 static def getDateTime() {
@@ -25,15 +27,27 @@ if (parallelKeystorePropertiesFile.exists()) {
     parallelKeystoreProperties.load(new FileInputStream(parallelKeystorePropertiesFile))
 }
 
+def strictLint = System.getenv("CI") == "true" || project.findProperty("forpda.strictLint") == "true"
+def hasUpstreamReleaseKeystore = keystorePropertiesFile.exists()
+        && keystoreProperties['RELEASE_STORE_FILE'] != null
+        && !keystoreProperties['RELEASE_STORE_FILE'].toString().trim().isEmpty()
+        && keystoreProperties['RELEASE_STORE_PASSWORD'] != null
+        && keystoreProperties['RELEASE_KEY_ALIAS'] != null
+        && keystoreProperties['RELEASE_KEY_PASSWORD'] != null
+
 android {
     namespace 'forpdateam.ru.forpda'
-    compileSdk 36
+    compileSdk 35
 
-    def versionNumber = 301
+    buildFeatures {
+        buildConfig = true
+        viewBinding = true
+    }
+
+    def versionNumber = 349
     def versionMajor = "2"
-    def versionMinor = "0"
-    def versionPatch = "1"
-
+    def versionMinor = "9"
+    def versionPatch = "3"
     def versionBuild = 1
     def versionPropsFile = file('version.properties')
     if (versionPropsFile.canRead()) {
@@ -49,11 +63,10 @@ android {
         // По умолчанию — stable (ForPDA 2, ru.forpdateam.forpda.parallel). Оригинальный id Play: flavor store.
         applicationId "ru.forpdateam.forpda.parallel"
         versionCode versionNumber
-        versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild})"
+        versionName "${versionMajor}.${versionMinor}.${versionPatch}"
         minSdk 24
-        targetSdk 36
+        targetSdk 35
         vectorDrawables.useSupportLibrary = true
-        multiDexEnabled true
         buildConfigField "String", 'BUILD_DATE', '"' + getDateTime() + '"'
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
@@ -86,12 +99,20 @@ android {
                 keyAlias keystoreProperties['DEBUG_KEY_ALIAS']
                 keyPassword keystoreProperties['DEBUG_KEY_PASSWORD']
             }
-            upstreamRelease {
-                storeFile rootProject.file(keystoreProperties['DEBUG_STORE_FILE'])
-                storePassword keystoreProperties['DEBUG_STORE_PASSWORD']
-                keyAlias keystoreProperties['DEBUG_KEY_ALIAS']
-                keyPassword keystoreProperties['DEBUG_KEY_PASSWORD']
+            if (hasUpstreamReleaseKeystore) {
+                upstreamRelease {
+                    storeFile rootProject.file(keystoreProperties['RELEASE_STORE_FILE'].toString().trim())
+                    storePassword keystoreProperties['RELEASE_STORE_PASSWORD']
+                    keyAlias keystoreProperties['RELEASE_KEY_ALIAS']
+                    keyPassword keystoreProperties['RELEASE_KEY_PASSWORD']
+                }
             }
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
         }
     }
 
@@ -101,7 +122,6 @@ android {
         release {
             minifyEnabled true
             shrinkResources true
-            // Подпись только в productFlavors: иначе signingConfig здесь перекрывает stable.parallel (AGP).
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -110,11 +130,10 @@ android {
     productFlavors {
         stable {
             dimension "channel"
-            // Только stable: отдельный ключ ForPDA 2 (parallel).
+            // Только stable: всегда ключ ForPDA 2 (parallel). Без keystore.parallel.properties
+            // сборка stable APK/AAB блокируется (см. taskGraph.whenReady ниже).
             if (parallelKeystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.parallel
-            } else if (keystorePropertiesFile.exists()) {
-                signingConfig signingConfigs.upstreamRelease
             } else {
                 signingConfig signingConfigs.debug
             }
@@ -122,9 +141,9 @@ android {
         store {
             dimension "channel"
             applicationId 'ru.forpdateam.forpda'
-            versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild})"
+            versionName "${versionMajor}.${versionMinor}.${versionPatch}"
             // Оригинальный пакет Play — тот же keystore.properties (debug/release как в проекте).
-            if (keystorePropertiesFile.exists()) {
+            if (hasUpstreamReleaseKeystore) {
                 signingConfig signingConfigs.upstreamRelease
             } else {
                 signingConfig signingConfigs.debug
@@ -134,7 +153,7 @@ android {
             dimension "channel"
             applicationId 'ru.forpdateam.forpda.beta'
             versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild}) beta"
-            if (keystorePropertiesFile.exists()) {
+            if (hasUpstreamReleaseKeystore) {
                 signingConfig signingConfigs.upstreamRelease
             } else {
                 signingConfig signingConfigs.debug
@@ -144,7 +163,7 @@ android {
             dimension "channel"
             applicationId 'ru.forpdateam.forpda.debug'
             versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild}) dev"
-            if (keystorePropertiesFile.exists()) {
+            if (hasUpstreamReleaseKeystore) {
                 signingConfig signingConfigs.upstreamRelease
             } else {
                 signingConfig signingConfigs.debug
@@ -153,13 +172,19 @@ android {
     }
 
     buildFeatures {
-        viewBinding true
-        buildConfig true
+        viewBinding = true
+        buildConfig = true
+        compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.15"
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
     }
     kotlinOptions {
         jvmTarget = '17'
@@ -167,7 +192,6 @@ android {
 
     packaging {
         resources {
-            pickFirsts += ['META-INF/rxjava.properties']
             excludes += [
                     'META-INF/DEPENDENCIES.txt',
                     'META-INF/LICENSE.txt',
@@ -182,11 +206,20 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+
     lint {
+        // RestrictedApi disabled for AppMetrica and other libraries' internal APIs
         disable 'RestrictedApi'
-        checkReleaseBuilds false
-        // Накопленные ошибки (permissions, MissingPermission и др.) — см. reports/lint-results-*.html; чинить точечно.
-        abortOnError false
+        checkReleaseBuilds = true
+        // CI/strict builds must fail on lint errors; local builds keep quick iteration.
+        abortOnError = strictLint
+        // Check all issues including new Android SDK deprecations
+        checkDependencies = true
+        xmlReport = true
+        htmlReport = true
     }
 
     // AAB в Play: отдельные APK по ABI — меньше размер загрузки для пользователя.
@@ -198,64 +231,130 @@ android {
 
     applicationVariants.configureEach { variant ->
         variant.outputs.configureEach { output ->
-            output.outputFileName = "ForPDA-${versionMajor}.${versionMinor}.${versionPatch}-${variant.name}.apk"
+            output.outputFileName = "ProPDA-${versionMajor}.${versionMinor}.${versionPatch}-${variant.name}.apk"
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def needsParallelStable = graph.allTasks.any { task ->
+        def n = task.name
+        if (!n.contains("Stable")) {
+            return false
+        }
+        return n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package") || n.startsWith("install") || n.startsWith("publish")
+    }
+    if (needsParallelStable && !parallelKeystorePropertiesFile.exists()) {
+        throw new GradleException(
+                "Сборка варианта stable требует keystore.parallel.properties в корне репозитория " +
+                        "(подпись ru.forpdateam.forpda.parallel). См. keystore.parallel.properties.example")
+    }
+    def needsOfficialStoreRelease = graph.allTasks.any { task ->
+        def n = task.name
+        return n.contains("StoreRelease") && (n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package") || n.startsWith("publish"))
+    }
+    if (needsOfficialStoreRelease && !hasUpstreamReleaseKeystore) {
+        throw new GradleException(
+                "Сборка официального store-варианта требует RELEASE_* ключи в keystore.properties; " +
+                        "debug-подпись для storeRelease запрещена.")
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core:1.13.1'
     }
 }
 
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
 
-    implementation 'androidx.core:core-ktx:1.15.0'
-    implementation 'androidx.activity:activity-ktx:1.9.3'
-    implementation 'androidx.fragment:fragment-ktx:1.8.5'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+
+    implementation "androidx.core:core-ktx:1.13.1"
+    implementation 'androidx.activity:activity-ktx:1.10.1'
+    implementation 'androidx.fragment:fragment-ktx:1.8.6'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-process:2.8.7'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
     implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'androidx.cardview:cardview:1.0.0'
     implementation 'androidx.preference:preference-ktx:1.2.1'
+    implementation 'androidx.documentfile:documentfile:1.0.1'
     implementation 'androidx.palette:palette-ktx:1.0.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     implementation 'androidx.viewpager:viewpager:1.0.0'
-    implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'androidx.viewpager2:viewpager2:1.1.0'
     implementation 'androidx.profileinstaller:profileinstaller:1.4.1'
     implementation 'androidx.work:work-runtime:2.10.2'
+    // FIXME: Using alpha due to API changes in 1.0.x stable. Consider migrating to Tink directly.
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+
+    implementation "androidx.datastore:datastore-preferences:1.1.1"
+    implementation "androidx.room:room-runtime:2.6.1"
+    implementation "androidx.room:room-ktx:2.6.1"
+    kapt "androidx.room:room-compiler:2.6.1"
+
+    implementation platform('androidx.compose:compose-bom:2024.12.01')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
+    implementation 'androidx.activity:activity-compose'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
 
     implementation 'com.google.android.material:material:1.12.0'
 
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:okhttp-brotli:4.12.0'
 
-    implementation 'io.reactivex.rxjava2:rxandroid:2.1.1'
-    implementation 'io.reactivex.rxjava2:rxjava:2.2.21'
-
-    implementation 'io.coil-kt:coil:2.6.0'
+    implementation 'io.coil-kt:coil:2.7.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-rx2:1.8.1'
-    implementation 'com.github.rahatarmanahmed:circularprogressview:2.5.0'
-    implementation 'de.hdodenhof:circleimageview:3.1.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3'
     implementation 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
     implementation 'org.bsc.util:minitemplator-repackaged:1.2'
-    implementation 'com.github.bmelnychuk:atv:1.2.9'
     implementation 'com.afollestad:sectioned-recyclerview:0.5.0'
 
     implementation 'com.github.chrisbanes:PhotoView:2.3.0'
-    implementation 'com.thebluealliance:spectrum:0.7.1'
-    implementation 'com.github.douglasjunior:android-simple-tooltip:0.2.0'
 
-    implementation 'com.jakewharton.rxrelay2:rxrelay:2.1.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlin_version}"
 
     implementation 'com.github.terrakok:cicerone:6.6'
-    implementation 'com.hannesdorfmann:adapterdelegates3:3.1.0'
-    implementation 'com.f2prateek.rx.preferences2:rx-preferences:2.0.1'
+    implementation 'com.hannesdorfmann:adapterdelegates4:4.3.2'
 
     implementation 'io.appmetrica.analytics:analytics:6.5.0'
 
     implementation 'com.makeramen:roundedimageview:2.3.0'
+    implementation 'com.jakewharton.timber:timber:5.0.1'
+
+    implementation 'com.google.dagger:hilt-android:2.51.1'
+    kapt 'com.google.dagger:hilt-android-compiler:2.51.1'
+    implementation 'androidx.hilt:hilt-work:1.2.0'
+    kapt 'androidx.hilt:hilt-compiler:1.2.0'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation "androidx.room:room-testing:2.6.1"
+    testImplementation 'io.mockk:mockk:1.13.13'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1'
+    testImplementation 'app.cash.turbine:turbine:1.1.0'
+    testImplementation 'androidx.arch.core:core-testing:2.2.0'
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config = files("$rootDir/detekt.yml")
+    baseline = file("$rootDir/detekt-baseline.xml")
+}
+
+dependencies {
+    detektPlugins "io.gitlab.arturbosch.detekt:detekt-formatting:1.23.4"
 }

@@ -7,6 +7,7 @@ import forpdateam.ru.forpda.entity.remote.others.pagination.Pagination
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import timber.log.Timber
 
 /**
  * Совпадение regex — часто только кусок ячейки; `data-post-id` и «правильные» href бывают в родительском `<tr>`.
@@ -40,6 +41,11 @@ internal fun preferMentionPostUrl(rowHtml: String, primaryHref: String): String 
     val normRow = rowHtml.replace("&amp;", "&")
     val normPrimary = primaryHref.replace("&amp;", "&")
 
+    // Если primaryHref уже содержит findpost, возвращаем её сразу
+    if (Regex("(?i)findpost|view=findpost").containsMatchIn(normPrimary)) {
+        return normPrimary
+    }
+
     fun firstMatchingHref(predicate: (String) -> Boolean): String? {
         Regex("""(?i)href\s*=\s*"([^"]*)"""").findAll(normRow).forEach { mr ->
             val u = mr.groupValues[1]
@@ -53,27 +59,37 @@ internal fun preferMentionPostUrl(rowHtml: String, primaryHref: String): String 
     }
 
     firstMatchingHref { u -> Regex("(?i)findpost|view=findpost").containsMatchIn(u) }
-            ?.let { return absolutizeForumHref(it) }
+            ?.let {
+                val result = absolutizeForumHref(it)
+                return result
+            }
 
     firstMatchingHref { u ->
         Regex("(?i)showtopic=").containsMatchIn(u) &&
                 (Regex("(?i)[?&]p=\\d+").containsMatchIn(u) || Regex("(?i)[?&]pid=\\d+").containsMatchIn(u))
-    }?.let { return absolutizeForumHref(it) }
+    }?.let {
+        val result = absolutizeForumHref(it)
+        return result
+    }
 
     Regex("""(?i)https?://[^\s"'<>]+(?:findpost|view=findpost)[^\s"'<>]*""")
             .find(normRow)
             ?.value
-            ?.let { return it }
+            ?.let {
+                return it
+            }
 
     val showtopic = Regex("""(?i)showtopic=(\d+)""").find(normRow)?.groupValues?.get(1)
             ?: Regex("""(?i)showtopic=(\d+)""").find(normPrimary)?.groupValues?.get(1)
     val postId = Regex("""(?i)[?&]p=(\d+)""").find(normRow)?.groupValues?.get(1)
             ?: Regex("""(?i)[?&]pid=(\d+)""").find(normRow)?.groupValues?.get(1)
     if (showtopic != null && postId != null) {
-        return "${SiteUrls.BASE_HTTPS}/forum/index.php?showtopic=$showtopic&view=findpost&p=$postId"
+        val result = "${SiteUrls.BASE_HTTPS}/forum/index.php?showtopic=$showtopic&view=findpost&p=$postId"
+        return result
     }
 
-    return absolutizeForumHref(normPrimary)
+    val result = absolutizeForumHref(normPrimary)
+    return result
 }
 
 class MentionsParser(
@@ -82,7 +98,8 @@ class MentionsParser(
 
     private val scope = ParserPatterns.Mentions
 
-    fun parse(response: String): MentionsData = MentionsData().also { data ->
+    fun parse(response: String): MentionsData {
+        val data = MentionsData()
         patternProvider
                 .getPattern(scope.scope, scope.main)
                 .matcher(response)
@@ -93,19 +110,22 @@ class MentionsParser(
                             matcher.end(),
                             matcher.group(0).orEmpty()
                     )
-                    var link = preferMentionPostUrl(rowHtml, matcher.group(3).orEmpty())
+                    val primaryHref = matcher.group(3).orEmpty()
+                    var link = preferMentionPostUrl(rowHtml, primaryHref)
                     link = patchMentionLinkIfTopicOnly(link, rowHtml)
+                    val title = matcher.group(4).fromHtml()
                     data.items.add(MentionItem().apply {
                         state = if (matcher.group(1) == "read") MentionItem.STATE_READ else MentionItem.STATE_UNREAD
                         type = if (matcher.group(2).equals("Форум", ignoreCase = true)) MentionItem.TYPE_TOPIC else MentionItem.TYPE_NEWS
                         this.link = link
-                        title = matcher.group(4).fromHtml()
+                        this.title = title
                         desc = matcher.group(5).fromHtml()
                         date = matcher.group(6)
                         nick = matcher.group(7).fromHtml()
                     })
                 }
         data.pagination = Pagination.parseForum(response)
+        return data
     }
 }
 
@@ -113,7 +133,9 @@ class MentionsParser(
  * Если в строке есть id поста (data-атрибут, якорь, findpost в onclick), а в ссылке только showtopic.
  */
 internal fun patchMentionLinkIfTopicOnly(link: String, rowHtml: String): String {
-    if (Regex("(?i)findpost|view=findpost").containsMatchIn(link)) return link
+    if (Regex("(?i)findpost|view=findpost").containsMatchIn(link)) {
+        return link
+    }
     if (Regex("(?i)(?:[?&])p=\\d+").containsMatchIn(link) || Regex("(?i)(?:[?&])pid=\\d+").containsMatchIn(link)) {
         return link
     }
@@ -123,6 +145,8 @@ internal fun patchMentionLinkIfTopicOnly(link: String, rowHtml: String): String 
     val postFromData = Regex("""(?i)data-post-id\s*=\s*["']?(\d+)["']?""").find(norm)?.groupValues?.get(1)
             ?: Regex("""(?i)data-post\s*=\s*["']?(\d+)["']?""").find(norm)?.groupValues?.get(1)
     val postFromAnchor = Regex("""(?i)name\s*=\s*["']entry(\d+)["']""").find(norm)?.groupValues?.get(1)
+            ?: Regex("""(?i)href\s*=\s*["']#entry(\d+)["']""").find(norm)?.groupValues?.get(1)
     val postId = postFromData ?: postFromAnchor ?: return link
-    return "${SiteUrls.BASE_HTTPS}/forum/index.php?showtopic=$topicId&view=findpost&p=$postId"
+    val result = "${SiteUrls.BASE_HTTPS}/forum/index.php?showtopic=$topicId&view=findpost&p=$postId"
+    return result
 }

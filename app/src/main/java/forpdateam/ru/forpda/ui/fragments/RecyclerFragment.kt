@@ -1,14 +1,15 @@
 package forpdateam.ru.forpda.ui.fragments
 
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import com.google.android.material.appbar.AppBarLayout
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.recyclerview.widget.RecyclerView
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.lifecycle.lifecycleScope
 
 import forpdateam.ru.forpda.R
 
@@ -28,14 +29,15 @@ abstract class RecyclerFragment : TabFragment(), TabTopScroller {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
         baseInflateFragment(inflater, R.layout.fragment_base_list)
-        refreshLayout = findViewById(R.id.swipe_refresh_list) as androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        recyclerView = findViewById(R.id.base_list) as androidx.recyclerview.widget.RecyclerView
+        refreshLayout = findViewById(R.id.swipe_refresh_list) as? androidx.swiperefreshlayout.widget.SwipeRefreshLayout ?: throw IllegalStateException("refreshLayout not found")
+        recyclerView = findViewById(R.id.base_list) as? androidx.recyclerview.widget.RecyclerView ?: throw IllegalStateException("recyclerView not found")
         contentController.setMainRefresh(refreshLayout)
         return viewFragment
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        pinStaticOpaqueToolbar()
         setListsBackground()
         tuneListRecyclerView(recyclerView)
         refreshLayoutStyle(refreshLayout)
@@ -56,12 +58,14 @@ abstract class RecyclerFragment : TabFragment(), TabTopScroller {
     }
 
     override fun isShadowVisible(): Boolean {
-        //Log.e("kololo", "isShadowVisible " + appBarOffset + " " + listScrollY + " -> " + (appBarOffset != 0 || listScrollY > 0));
         return appBarOffset != 0 || listScrollY > 0
     }
 
     protected fun listScrollTop() {
-        Handler(Looper.getMainLooper()).postDelayed({ recyclerView.smoothScrollToPosition(0) }, 225)
+        lifecycleScope.launch {
+            delay(225)
+            recyclerView.smoothScrollToPosition(0)
+        }
     }
 
     override fun toggleScrollTop() {
