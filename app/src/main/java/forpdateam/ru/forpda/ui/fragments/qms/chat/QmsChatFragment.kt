@@ -129,11 +129,25 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
 
     private val uploadQueue: ArrayDeque<Pair<List<RequestFile>, List<AttachmentItem>>> = ArrayDeque()
     private var uploadInProgress = false
-    private var lastWindowInsets: WindowInsetsCompat? = null
     private var visibleFrameLayoutObserver: ViewTreeObserver? = null
+    private val imeInsetsController: QmsChatImeInsetsController by lazy {
+        QmsChatImeInsetsController(
+                messagePanelHost = messagePanelHost,
+                messagePanel = messagePanel,
+                dimensionsProvider = dimensionsProvider,
+                densityPx = resources.displayMetrics.density,
+                viewReadyProvider = { isViewReadyForCallbacks() },
+                visibleFrameProvider = {
+                    val rect = Rect()
+                    val decor = activity?.window?.decorView ?: fragmentContainer.rootView
+                    decor.getWindowVisibleDisplayFrame(rect)
+                    rect
+                }
+        )
+    }
     private val visibleFrameLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
         if (!isViewReadyForCallbacks()) return@OnGlobalLayoutListener
-        applyMessagePanelImeInsets(lastWindowInsets)
+        imeInsetsController.reapply()
     }
 
     private lateinit var topScroller: WebViewTopScroller
@@ -250,7 +264,8 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         ViewCompat.setTranslationZ(webView, 0f)
         ViewCompat.setElevation(fab, 12f * resources.displayMetrics.density)
         ViewCompat.setOnApplyWindowInsetsListener(coordinatorLayout) { v, insets ->
-            lastWindowInsets = insets
+            // Hand the inset to the controller so it can reapply it later
+            // (e.g. on global layout) and compute the panel bottom margin.
             applyMessagePanelImeInsets(insets)
             // MessagePanelHost is moved by MessagePanelHelper via bottomMargin. Do not add the
             // same IME height as inner padding here, or the compact editor gets a blank IME-sized
@@ -277,56 +292,11 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
     }
 
     private fun applyMessagePanelImeInsets(insets: WindowInsetsCompat?) {
-        if (!isViewReadyForCallbacks()) return
-        val bottomMargin = if (
-            !messagePanel.isCompactBbcodeLayoutHoldActive()
-        ) {
-            resolveImeBottom(insets)
-        } else {
-            0
-        }
-        messagePanelHost.updateLayoutParams<RelativeLayout.LayoutParams> {
-            if (this.bottomMargin != bottomMargin) {
-                this.bottomMargin = bottomMargin
-            }
-        }
+        imeInsetsController.applyMessagePanelImeInsets(insets)
     }
 
-    private fun resolveImeBottom(insets: WindowInsetsCompat?): Int {
-        val imeBottom = insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
-        val imeVisible = insets?.isVisible(WindowInsetsCompat.Type.ime()) == true
-        val dimensions = dimensionsProvider.getDimensions()
-        val dimensionBottom = if (dimensions.isKeyboardShow()) {
-            maxOf(dimensions.imeInsetBottom, dimensions.keyboardHeight)
-        } else {
-            0
-        }
-        if (imeVisible && imeBottom > 0) {
-            // DimensionHelper cross-checks visible display frame and decays stale IME insets.
-            return maxOf(imeBottom, dimensionBottom)
-        }
-
-        // API 24/25 often reports no Type.ime() inset under edge-to-edge/fullscreen flags.
-        // Use the same visible display frame signal as DimensionHelper, but only as a legacy
-        // fallback so Android 11+ keeps the platform IME inset as the source of truth.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return 0
-        }
-
-        return maxOf(dimensionBottom, visibleFrameKeyboardHeightPx())
-    }
-
-    private fun visibleFrameKeyboardHeightPx(): Int {
-        if (!isViewReadyForCallbacks()) return 0
-        val rect = Rect()
-        val decor = activity?.window?.decorView ?: fragmentContainer.rootView
-        decor.getWindowVisibleDisplayFrame(rect)
-        val rawDelta = (decor.rootView.height - rect.bottom).coerceAtLeast(0)
-        val navBottom = dimensionsProvider.getDimensions().navigationBar
-        val delta = (rawDelta - navBottom).coerceAtLeast(0)
-        val minKeyboard = (48f * resources.displayMetrics.density).roundToInt().coerceAtLeast(1)
-        return if (delta >= minKeyboard) delta else 0
-    }
+    private fun resolveImeBottom(insets: WindowInsetsCompat?): Int =
+            imeInsetsController.resolveImeBottom(insets)
 
     private fun attachVisibleFrameLayoutListener() {
         if (visibleFrameLayoutObserver != null) return
@@ -352,8 +322,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
 
     override fun onDestroyView() {
         detachVisibleFrameLayoutListener()
-        ViewCompat.setOnApplyWindowInsetsListener(coordinatorLayout, null)
-        lastWindowInsets = null
+        imeInsetsController.detach(coordinatorLayout)
         messagePanel.heightChangeListener = null
         attachmentsPopup = null
         clearMessagePanelTextDialog?.dismiss()
