@@ -227,9 +227,6 @@ class ArticleParser(
         val renderedPollContainerTagNames = setOf("form", "div", "section", "aside")
         val optionContainerTagNames = setOf("label", "li", "p")
         val htmlEntityRegex = Regex("""&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]+);""")
-        val categoryHrefRegex = Regex("""(?i)/category/([^/?#"'<>]+)/?""")
-        val articleSectionMetaRegex = Regex("""(?is)<meta\b(?=[^>]*(?:property|name)\s*=\s*["']article:section["'])(?=[^>]*content\s*=\s*(["'])(.*?)\1)[^>]*>""")
-        val sectionHrefRegex = Regex("""(?i)^/([a-z0-9_-]+)/?$""")
         val youtubeIdRegexes = listOf(
                 Regex("""(?i)(?:youtube\.com/(?:watch\?(?:[^"'<>#&amp;]*[&amp;])*v=|embed/|shorts/)|youtube-nocookie\.com/embed/)([A-Za-z0-9_-]{11})"""),
                 Regex("""(?i)youtu\.be/([A-Za-z0-9_-]{11})""")
@@ -1442,7 +1439,7 @@ class ArticleParser(
             val hasInlineHeroMedia: Boolean
     )
 
-    private data class ArticleTaxonomy(
+    internal data class ArticleTaxonomy(
             val category: Tag?
     )
 
@@ -1813,6 +1810,13 @@ class ArticleParser(
             isUsablePollText = ::isUsablePollText,
             pollVoteCookieAnswers = ::pollVoteCookieAnswers,
             articleFromHtml = { input -> input.articleFromHtml() }
+    )
+
+    private val taxonomyParser = ArticleTaxonomyParser(
+            patternProvider = patternProvider,
+            articleFromHtml = { input -> input.articleFromHtml() },
+            cleanPollText = ::cleanPollText,
+            articleHtmlEncode = ::articleHtmlEncode
     )
 
     private fun parseDataSitePoll(encodedPayload: String): DataSitePoll? =
@@ -2449,179 +2453,14 @@ class ArticleParser(
         return null
     }
 
-    private fun parseMaterials(source: String): List<Material> = patternProvider
-            .getPattern(scope.scope, scope.materials)
-            .matcher(source)
-            .map {
-                Material().apply {
-                    imageUrl = it.group(1)
-                    id = it.group(2).orEmpty().toIntOrNull() ?: 0
-                    title = it.group(3).orEmpty().articleFromHtml()
-                }
-            }
+    private fun parseMaterials(source: String): List<Material> =
+            taxonomyParser.parseMaterials(source)
 
-    private fun parseTags(source: String): List<Tag> {
-        val parsed = patternProvider
-                .getPattern(scope.scope, scope.tags)
-                .matcher(source)
-                .map {
-                    val slug = it.group(1).orEmpty()
-                    Tag().apply {
-                        tag = slug
-                        title = it.group(2).orEmpty().articleFromHtml()
-                        url = tagUrlFromSlug(slug)
-                    }
-                }
-        val fallback = parseListTagsFallback(source)
-        if (fallback.isNotEmpty()) return fallback
-        return parsed
-    }
+    private fun parseTags(source: String): List<Tag> =
+            taxonomyParser.parseTags(source)
 
-    private fun parseListTagsFallback(source: String): List<Tag> =
-            Regex("""(?is)<a\b(?=[^>]*\bhref\s*=\s*(["'])(.*?)\1)[^>]*>([\s\S]*?)</a>""")
-                    .findAll(source)
-                    .mapNotNull { match ->
-                        val href = match.groupValues.getOrNull(2).orEmpty().articleFromHtml().orEmpty()
-                        val title = cleanPollText(match.groupValues.getOrNull(3).orEmpty())
-                        val tagUrl = normalize4pdaTagUrl(href)
-                        val slug = tagUrl
-                                ?.let { Regex("""(?i)/tag/([^/?#"'<>]+)/?""").find(it)?.groupValues?.getOrNull(1) }
-                                .orEmpty()
-                        if (title.isBlank() || slug.isBlank()) {
-                            null
-                        } else {
-                            Tag(
-                                    tag = slug,
-                                    title = title,
-                                    url = tagUrl
-                            )
-                        }
-                    }
-                    .toList()
-    private fun parseArticleSectionFallback(source: String): Tag? =
-            Regex("""(?is)<a\b(?=[^>]*\bdata-article-section\s*=\s*["']true["'])[^>]*>([\s\S]*?)</a>""")
-                    .find(source)
-                    ?.let { match ->
-                        cleanPollText(match.groupValues.getOrNull(1).orEmpty())
-                                .takeIf { it.isNotBlank() }
-                                ?.let { title ->
-                                    Tag(tag = "category/${title.lowercase().replace(Regex("""\s+"""), "-")}", title = title)
-                                }
-                    }
-
-    private fun parseCategories(source: String): List<Tag> =
-            parseLinkedCategories(source).ifEmpty {
-                parseArticleSectionFallback(source)?.let { listOf(it) }.orEmpty()
-            }
-
-    private fun parseLinkedCategories(source: String): List<Tag> =
-            Regex("""(?is)<a\b(?=[^>]*\bhref\s*=\s*(["'])(.*?)\1)[^>]*>([\s\S]*?)</a>""")
-                    .findAll(source)
-                    .mapNotNull { match ->
-                        val href = match.groupValues.getOrNull(2).orEmpty().articleFromHtml().orEmpty()
-                        val title = cleanPollText(match.groupValues.getOrNull(3).orEmpty())
-                        val categoryUrl = normalize4pdaCategoryUrl(href)
-                        val slug = categoryUrl
-                                ?.substringAfter("4pda.to", "")
-                                ?.substringBefore('?')
-                                ?.substringBefore('#')
-                                ?.let { path ->
-                                    sectionHrefRegex.find(path)?.groupValues?.getOrNull(1)
-                                            ?: categoryHrefRegex.find(path)?.groupValues?.getOrNull(1)
-                                }
-                                .orEmpty()
-                        if (title.isBlank() || slug.isBlank()) {
-                            null
-                        } else {
-                            Tag(tag = "category/$slug", title = title, url = categoryUrl)
-                        }
-                    }
-                    .toList()
-
-    private fun parseArticleTaxonomy(response: String, primarySource: String? = null): ArticleTaxonomy {
-        val categories = linkedMapOf<String, Tag>()
-        primarySource?.let { addCategories(categories, parseCategories(it)) }
-        taxonomyContainers(response).forEach { container ->
-            addCategories(categories, parseCategories(container))
-        }
-
-        val category = categories.values.firstOrNull { !isGenericNewsSection(it) }
-                ?: categories.values.firstOrNull()
-        return ArticleTaxonomy(category)
-    }
-
-    private fun addCategories(
-            categoryTarget: LinkedHashMap<String, Tag>,
-            categories: List<Tag>
-    ) {
-        categories.forEach { tag ->
-            val key = tag.tag.orEmpty().lowercase().ifBlank { tag.title.orEmpty().lowercase() }
-            if (key.isBlank()) return@forEach
-            categoryTarget.putIfAbsent(key, tag)
-        }
-    }
-
-    private fun taxonomyContainers(response: String): List<String> {
-        val result = mutableListOf<String>()
-        Regex("""(?is)<(?:div|nav|ul|section|footer)\b(?=[^>]*\bclass\s*=\s*(["'])(?:(?!\1).)*(?:tags|tag-list|category|categories|breadcrumb|rubric|article-footer-tags|meta)(?:(?!\1).)*\1)[^>]*>[\s\S]*?</(?:div|nav|ul|section|footer)>""")
-                .findAll(response)
-                .forEach { result += it.value }
-        articleSectionMetaRegex
-                .find(response)
-                ?.groupValues
-                ?.getOrNull(2)
-                ?.articleFromHtml()
-                ?.takeIf { it.isNotBlank() }
-                ?.let { section ->
-                    result += """<a data-article-section="true">${articleHtmlEncode(section)}</a>"""
-                }
-        return result
-    }
-
-    private fun isGenericNewsSection(tag: Tag): Boolean {
-        val path = tag.url.orEmpty()
-                .substringAfter("4pda.to", tag.url.orEmpty())
-                .substringBefore('?')
-                .substringBefore('#')
-                .trim('/')
-                .lowercase()
-        return path == "news" || path.isBlank()
-    }
-
-    private fun tagUrlFromSlug(slug: String): String? =
-            slug.takeIf { it.isNotBlank() }?.let { "https://4pda.to/tag/$it/" }
-
-    private fun normalize4pdaTagUrl(rawHref: String): String? {
-        val absolute = normalize4pdaUrl(rawHref) ?: return null
-        val path = absolute.substringAfter("4pda.to", "").substringBefore('?').substringBefore('#')
-        if (!path.contains("/tag/", ignoreCase = true)) {
-            return null
-        }
-        return absolute
-    }
-
-    private fun normalize4pdaCategoryUrl(rawHref: String): String? {
-        val absolute = normalize4pdaUrl(rawHref) ?: return null
-        val path = absolute.substringAfter("4pda.to", "").substringBefore('?').substringBefore('#')
-        if (!path.contains("/category/", ignoreCase = true) && !sectionHrefRegex.matches(path)) {
-            return null
-        }
-        return absolute
-    }
-
-    private fun normalize4pdaUrl(rawHref: String): String? {
-        val href = rawHref.trim().takeIf { it.isNotBlank() } ?: return null
-        return when {
-            href.startsWith("https://4pda.to/", ignoreCase = true) -> href
-            href.startsWith("http://4pda.to/", ignoreCase = true) ->
-                "https://4pda.to/" + href.substringAfter("://").substringAfter("/")
-            href.startsWith("//4pda.to/", ignoreCase = true) -> "https:$href"
-            href.startsWith("/") -> "https://4pda.to$href"
-            href.startsWith("comment.php", ignoreCase = true) ||
-                    href.startsWith("admin-ajax.php", ignoreCase = true) -> "https://4pda.to/wp-admin/$href"
-            else -> return null
-        }
-    }
+    private fun parseArticleTaxonomy(response: String, primarySource: String? = null): ArticleTaxonomy =
+            taxonomyParser.parseArticleTaxonomy(response, primarySource)
 
     fun parseKarmaMap(source: String): SparseArray<Comment.Karma> {
         val result = SparseArray<Comment.Karma>()
