@@ -246,4 +246,91 @@ class AppUpdateParserTest {
     fun semanticCompare_handlesTwoDigitMinor() {
         assertTrue(SemanticVersion.parse("2.10.0")!! > SemanticVersion.parse("2.9.9")!!)
     }
+
+    @Test
+    fun downloadSection_extractsApkLinkFromHeader() {
+        val html = """
+            <div class="post" id="entry${AppUpdateParser.HEADER_POST_ID}">
+                ProPDA<br>
+                Скачать:<br>
+                <a class="attach_block" href="https://4pda.to/forum/dl/post/143179849/ProPDA-2.9.3-stableRelease.apk">
+                    <span class="icon"></span>
+                    <span class="title">ProPDA-2.9.3-stableRelease.apk</span>
+                    <span class="desc">6,19 МБ, скачиваний: 124</span>
+                </a>
+                <br>
+                Версия: 2.9.3 Исправления и добавления (Lenox30).
+            </div>
+        """.trimIndent()
+
+        val candidate = parser.findBestCandidate(html, AppUpdateParser.HEADER_POST_URL)
+
+        assertEquals(SemanticVersion(2, 9, 3), candidate?.version)
+        assertEquals(1, candidate?.downloads?.size)
+        val link = candidate?.downloads?.first()
+        assertEquals(
+            "https://4pda.to/forum/dl/post/143179849/ProPDA-2.9.3-stableRelease.apk",
+            link?.url
+        )
+        assertEquals("ProPDA-2.9.3-stableRelease.apk", link?.fileName)
+        // 6,19 МБ = (6.19 * 1024 * 1024).toLong() = 6_490_685 байт
+        assertEquals(6_490_685L, link?.sizeBytes)
+    }
+
+    @Test
+    fun downloadSection_extractsMultipleApkLinks() {
+        val html = """
+            <div class="post" id="entry${AppUpdateParser.HEADER_POST_ID}">
+                Скачать:<br>
+                <a href="https://4pda.to/forum/dl/post/143179849/ProPDA-2.9.3-stableRelease.apk">
+                    <span class="title">ProPDA-2.9.3-stableRelease.apk</span>
+                    <span class="desc">6,19 МБ</span>
+                </a>
+                <a href="https://4pda.to/forum/dl/post/143179849/ProPDA-2.9.3-parallel.apk">
+                    <span class="title">ProPDA-2.9.3-parallel.apk</span>
+                    <span class="desc">6,18 МБ</span>
+                </a>
+                Версия: 2.9.3
+            </div>
+        """.trimIndent()
+
+        val candidate = parser.findBestCandidate(html, AppUpdateParser.HEADER_POST_URL)
+
+        assertEquals(2, candidate?.downloads?.size)
+        val names = candidate?.downloads?.map { it.fileName }
+        assertTrue(names?.contains("ProPDA-2.9.3-stableRelease.apk") == true)
+        assertTrue(names?.contains("ProPDA-2.9.3-parallel.apk") == true)
+    }
+
+    @Test
+    fun downloadSection_returnsEmptyDownloadsWhenNoApkLinks() {
+        val html = """
+            <div class="post" id="entry${AppUpdateParser.HEADER_POST_ID}">
+                Скачать:<br>
+                Версия: 2.9.3 Исправления и добавления.
+            </div>
+        """.trimIndent()
+
+        val candidate = parser.findBestCandidate(html, AppUpdateParser.HEADER_POST_URL)
+
+        assertEquals(SemanticVersion(2, 9, 3), candidate?.version)
+        assertTrue(candidate?.downloads?.isEmpty() == true)
+    }
+
+    @Test
+    fun downloadSection_decodesPercentEncodedFileName() {
+        val html = """
+            <div class="post" id="entry${AppUpdateParser.HEADER_POST_ID}">
+                Скачать:<br>
+                <a href="https://4pda.to/forum/dl/post/143179849/ProPDA%20v2.9.3.apk">
+                    <span class="title">ProPDA v2.9.3.apk</span>
+                </a>
+                Версия: 2.9.3
+            </div>
+        """.trimIndent()
+
+        val candidate = parser.findBestCandidate(html, AppUpdateParser.HEADER_POST_URL)
+
+        assertEquals("ProPDA v2.9.3.apk", candidate?.downloads?.firstOrNull()?.fileName)
+    }
 }

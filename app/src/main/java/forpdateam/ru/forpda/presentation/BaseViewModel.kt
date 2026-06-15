@@ -44,7 +44,7 @@ abstract class BaseViewModel : ViewModel() {
     protected val scope: CoroutineScope =
         CoroutineScope(job + Dispatchers.Main.immediate + coroutineExceptionHandler)
 
-    open fun clear() {
+    open fun onUserClear() {
         // Override point for subclasses
     }
 

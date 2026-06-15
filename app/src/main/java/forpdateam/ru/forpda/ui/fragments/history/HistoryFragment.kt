@@ -94,7 +94,7 @@ class HistoryFragment : RecyclerFragment() {
         super.addBaseToolbarMenu(menu)
         menu.add("Удалить историю")
                 .setOnMenuItemClickListener {
-                    viewModel.clear()
+                    viewModel.onUserClear()
                     false
                 }
     }

@@ -1855,17 +1855,13 @@ body#topic .post-block.quote {
   line-height: 1.44;
   overflow: hidden;
   touch-action: pan-y;
-  padding-left: 0.25rem;
+  padding-left: 0;
+  background: var(--surface-control, rgba(0, 0, 0, 0.1));
+  -webkit-border-radius: 0.75rem;
+  border-radius: 0.75rem;
 }
 body#topic .post-block.quote:before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 0.25rem;
-  background: #616161;
-  pointer-events: none;
+  content: none;
 }
 body#topic .post-block.quote > .block-title {
   padding: 0.625rem 0.75rem 0.3125rem 0.75rem;
@@ -1883,7 +1879,7 @@ body#topic .post-block.quote > .block-body {
 body#topic .post-block.quote > .block-body > .post-block.quote {
   margin-top: 0.5rem;
   margin-bottom: 0.25rem;
-  margin-left: -0.25rem;
+  margin-left: 0;
 }
 body#topic .post-block.code > .block-body .lines {
   font-size: var(--topic-code-font-size);

@@ -4,13 +4,20 @@ import android.text.Html
 
 class AppUpdateParser {
 
+    data class DownloadLink(
+        val url: String,
+        val fileName: String,
+        val sizeBytes: Long? = null
+    )
+
     data class Candidate(
         val version: SemanticVersion,
         val url: String,
         val postId: Long?,
         val confidence: Int,
         val description: String? = null,
-        val sourceSt: Int? = null
+        val sourceSt: Int? = null,
+        val downloads: List<DownloadLink> = emptyList()
     )
 
     fun findBestCandidate(
@@ -71,16 +78,54 @@ class AppUpdateParser {
 
     private fun findCandidatesInHtml(html: String, url: String, postId: Long?, sourceSt: Int?): List<Candidate> {
         val text = htmlToText(html)
+        val downloads = extractDownloadLinks(html)
         val candidates = mutableListOf<Candidate>()
 
-        candidates += parseNewVersionPost(text, url, postId, sourceSt)
-        candidates += parseDownloadSection(text, url, postId, sourceSt)
-        candidates += parseWeightedVersions(text, url, postId, sourceSt)
+        candidates += parseNewVersionPost(text, url, postId, sourceSt, downloads)
+        candidates += parseDownloadSection(text, url, postId, sourceSt, downloads)
+        candidates += parseWeightedVersions(text, url, postId, sourceSt, downloads)
 
         return candidates
     }
 
-    private fun parseNewVersionPost(text: String, url: String, postId: Long?, sourceSt: Int?): List<Candidate> {
+    private fun extractDownloadLinks(html: String): List<DownloadLink> {
+        val result = mutableListOf<DownloadLink>()
+        val seen = HashSet<String>()
+        for (match in APK_LINK_REGEX.findAll(html)) {
+            val url = match.groupValues[1]
+            if (!seen.add(url)) continue
+            val fileName = url.substringAfterLast('/').let {
+                runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it)
+            }.ifBlank { url.substringAfterLast('/') }
+            val sizeBytes = findSizeAfter(html, match.range.last)
+            result += DownloadLink(url = url, fileName = fileName, sizeBytes = sizeBytes)
+        }
+        return result
+    }
+
+    private fun findSizeAfter(html: String, fromIndex: Int): Long? {
+        val windowEnd = minOf(html.length, fromIndex + SIZE_CONTEXT_CHARS)
+        val window = html.substring(fromIndex, windowEnd)
+        val match = SIZE_REGEX.find(window) ?: return null
+        val raw = match.groupValues[1].replace(',', '.')
+        val value = raw.toDoubleOrNull() ?: return null
+        val unit = match.groupValues[2].lowercase()
+        val multiplier = when {
+            "гб" in unit || "gb" in unit -> 1024L * 1024L * 1024L
+            "мб" in unit || "mb" in unit -> 1024L * 1024L
+            "кб" in unit || "kb" in unit -> 1024L
+            else -> 1L
+        }
+        return (value * multiplier).toLong()
+    }
+
+    private fun parseNewVersionPost(
+        text: String,
+        url: String,
+        postId: Long?,
+        sourceSt: Int?,
+        downloads: List<DownloadLink>
+    ): List<Candidate> {
         if (!TYPE_NEW_VERSION_REGEX.containsMatchIn(text)) return emptyList()
         return VERSION_LINE_REGEX.findAll(text).map { match ->
             val version = parseAppVersion(match.groupValues[1]) ?: return@map null
@@ -90,12 +135,19 @@ class AppUpdateParser {
                 postId = postId,
                 confidence = CONFIDENCE_NEW_VERSION_POST,
                 description = extractDescription(text, match.range.last),
-                sourceSt = sourceSt
+                sourceSt = sourceSt,
+                downloads = downloads
             )
         }.filterNotNull().toList()
     }
 
-    private fun parseDownloadSection(text: String, url: String, postId: Long?, sourceSt: Int?): List<Candidate> {
+    private fun parseDownloadSection(
+        text: String,
+        url: String,
+        postId: Long?,
+        sourceSt: Int?,
+        downloads: List<DownloadLink>
+    ): List<Candidate> {
         val downloadIndex = text.indexOf("Скачать", ignoreCase = true)
         if (downloadIndex < 0) return emptyList()
         val section = text.substring(downloadIndex, minOf(text.length, downloadIndex + DOWNLOAD_SECTION_LIMIT))
@@ -107,12 +159,19 @@ class AppUpdateParser {
                 postId = postId,
                 confidence = CONFIDENCE_DOWNLOAD_SECTION,
                 description = section.lineAt(match.range.first)?.substringAfter(match.groupValues[1], "")?.trim()?.ifBlank { null },
-                sourceSt = sourceSt
+                sourceSt = sourceSt,
+                downloads = downloads
             )
         }.filterNotNull().toList()
     }
 
-    private fun parseWeightedVersions(text: String, url: String, postId: Long?, sourceSt: Int?): List<Candidate> {
+    private fun parseWeightedVersions(
+        text: String,
+        url: String,
+        postId: Long?,
+        sourceSt: Int?,
+        downloads: List<DownloadLink>
+    ): List<Candidate> {
         return VERSION_ANYWHERE_REGEX.findAll(text).map { match ->
             val version = parseAppVersion(match.value) ?: return@map null
             val windowStart = maxOf(0, match.range.first - CONTEXT_WINDOW)
@@ -129,7 +188,8 @@ class AppUpdateParser {
                 postId = postId,
                 confidence = confidence,
                 description = null,
-                sourceSt = sourceSt
+                sourceSt = sourceSt,
+                downloads = downloads
             )
         }.filterNotNull().toList()
     }
@@ -250,6 +310,7 @@ class AppUpdateParser {
         private const val DEFAULT_PER_PAGE = 20
         private const val DOWNLOAD_SECTION_LIMIT = 6_000
         private const val CONTEXT_WINDOW = 80
+        private const val SIZE_CONTEXT_CHARS = 400
         private const val CONFIDENCE_NEW_VERSION_POST = 100
         private const val CONFIDENCE_DOWNLOAD_SECTION = 90
         private const val CONFIDENCE_WEIGHTED_CONTEXT = 60
@@ -265,6 +326,8 @@ class AppUpdateParser {
         private val POST_ID_REGEX = Regex("""[?&]p=(\d+)""")
         private val ENTRY_ID_REGEX = Regex("""#entry(\d+)""")
         private val ST_PARAM_REGEX = Regex("""[?&]st=(\d+)""")
+        private val APK_LINK_REGEX = Regex("""(?i)(https?://4pda\.to/forum/dl/post/\d+/[^\s"'<>)]+\.apk)""")
+        private val SIZE_REGEX = Regex("""(\d+(?:[.,]\d+)?)\s*(КБ|МБ|ГБ|KB|MB|GB)""", RegexOption.IGNORE_CASE)
         private val FORUM_PAGINATION_REGEX = Regex(
             """parseInt\((\d*)\)[\s\S]*?parseInt\(st\*(\d*)\)[\s\S]*?pagination">[\s\S]*?<span[^>]*?>([^<]*?)<\/span>"""
         )

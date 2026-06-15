@@ -1878,16 +1878,11 @@ body#topic {
         line-height: 1.44;
         overflow: hidden;
         touch-action: pan-y;
-        padding-left: 4/16rem;
+        padding-left: 0;
+        background: var(--surface-control, @quote_surface);
+        .bRad(@radius_medium);
         &:before {
-            content: "";
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            width: 4/16rem;
-            background: @surface_accent;
-            pointer-events: none;
+            content: none;
         }
         >.block-title {
             padding: var(--topic-quote-title-padding-top) var(--topic-block-title-padding-x) var(--topic-quote-title-padding-bottom) var(--topic-block-title-padding-x);
@@ -1905,7 +1900,7 @@ body#topic {
         >.block-body >.post-block.quote {
             margin-top: var(--topic-quote-gap);
             margin-bottom: var(--topic-inline-block-gap);
-            margin-left: -4/16rem;
+            margin-left: 0;
         }
     }
     .post-block.code >.block-body .lines {

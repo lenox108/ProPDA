@@ -14,8 +14,6 @@ import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsApi
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsParser
 import forpdateam.ru.forpda.model.data.remote.api.auth.AuthApi
 import forpdateam.ru.forpda.model.data.remote.api.auth.AuthParser
-import forpdateam.ru.forpda.model.data.remote.api.checker.CheckerApi
-import forpdateam.ru.forpda.model.data.remote.api.checker.CheckerParser
 import forpdateam.ru.forpda.model.data.remote.api.devdb.DevDbApi
 import forpdateam.ru.forpda.model.data.remote.api.devdb.DevDbParser
 import forpdateam.ru.forpda.model.data.remote.api.editpost.EditPostApi
@@ -70,7 +68,6 @@ object NetworkModule {
     @Provides @Singleton fun provideReputationParser(pp: IPatternProvider) = ReputationParser(pp)
     @Provides @Singleton fun provideSearchParser(pp: IPatternProvider) = SearchParser(pp)
     @Provides @Singleton fun provideTopicsParser(pp: IPatternProvider) = TopicsParser(pp)
-    @Provides @Singleton fun provideCheckerParser() = CheckerParser()
     @Provides @Singleton fun provideAttachmentsParser(pp: IPatternProvider) = AttachmentsParser(pp)
     // endregion
 
@@ -89,7 +86,6 @@ object NetworkModule {
     @Provides @Singleton fun provideReputationApi(wc: IWebClient, p: ReputationParser) = ReputationApi(wc, p)
     @Provides @Singleton fun provideSearchApi(wc: IWebClient, p: SearchParser) = SearchApi(wc, p)
     @Provides @Singleton fun provideTopicsApi(wc: IWebClient, p: TopicsParser) = TopicsApi(wc, p)
-    @Provides @Singleton fun provideCheckerApi(wc: IWebClient, p: CheckerParser) = CheckerApi(wc, p)
     @Provides @Singleton fun provideAttachmentsApi(wc: IWebClient, p: AttachmentsParser) = AttachmentsApi(wc, p)
     // endregion
 }

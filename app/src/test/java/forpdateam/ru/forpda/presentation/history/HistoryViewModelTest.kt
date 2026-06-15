@@ -174,7 +174,7 @@ class HistoryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        vm.clear()
+        vm.onUserClear()
         advanceUntilIdle()
 
         coVerify { historyRepository.clear() }
@@ -190,7 +190,7 @@ class HistoryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
-        vm.clear()
+        vm.onUserClear()
         advanceUntilIdle()
 
         verify { errorHandler.handle(error, null) }

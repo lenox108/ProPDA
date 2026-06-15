@@ -71,6 +71,7 @@ private const val SMART_END_TAG = "FPDA_THEME_SMART_END"
 private const val THEME_RENDER_TAG = "ThemeRender"
 private const val THEME_HISTORY_TAG = "ThemeHistory"
 private const val THEME_QUOTE_TAG = "ThemeQuote"
+private const val MAX_REMEMBERED_TOPIC_TITLES = 32
 
 data class ThemeLinkSourceAnchor(
         val href: String,
@@ -556,6 +557,14 @@ class ThemeViewModel @Inject constructor(
     private var initialAnchorScrollSettledTraceId: String? = null
     /** Topic title preserved across deep hybrid pages when pagination HTML omits it. */
     private var sessionTopicTitle: String? = null
+    /**
+     * Durable last-known toolbar title keyed by topicId. Unlike [sessionTopicTitle] this survives
+     * session bumps ([infiniteSession]++ on every loadData), same-topic reloads and cross-topic
+     * switches, so a deep page that arrives without [ThemePage.title] can always recover the label
+     * for ITS topic even if the async first-page fetch lost a session race. Gated by topicId so a
+     * stale title never leaks onto a different topic.
+     */
+    private val lastKnownTopicTitleByTopicId = linkedMapOf<Int, String>()
     /** Title from favorites/topics navigator args; survives [resetTransientStateForNewTopic]. */
     private var navigationTopicTitle: String? = null
     private var titleFromFirstPageJob: Job? = null
@@ -1111,7 +1120,17 @@ class ThemeViewModel @Inject constructor(
 
     fun getId() = currentPage?.id ?: -1
 
-    fun getSessionTopicTitle(): String? = sessionTopicTitle?.trim()?.takeIf { it.isNotEmpty() }
+    fun getSessionTopicTitle(): String? =
+            sessionTopicTitle?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: lastKnownTopicTitle(currentPage?.id ?: activeLoadedTopicId)
+
+    /**
+     * Last-known title for the topic the toolbar is loading, used by the fragment to avoid showing
+     * an empty toolbar for a page whose HTML omitted the title. Gated by topicId so cross-topic
+     * switches never inherit the previous topic's label.
+     */
+    fun getLastKnownTopicTitleForToolbar(page: ThemePage): String? =
+            lastKnownTopicTitle(page.id)
 
     fun setNavigationTopicTitle(title: String?) {
         navigationTopicTitle = title?.trim()?.takeIf { it.isNotEmpty() }
@@ -2618,7 +2637,31 @@ class ThemeViewModel @Inject constructor(
     }
 
     private fun rememberSessionTopicTitle(title: String?) {
-        title?.trim()?.takeIf { it.isNotEmpty() }?.let { sessionTopicTitle = it }
+        title?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            sessionTopicTitle = it
+            // Also cache per-topic so the label survives session bumps / same-topic reloads.
+            (currentPage?.id ?: activeLoadedTopicId)?.takeIf { id -> id > 0 }?.let { id ->
+                rememberLastKnownTopicTitle(id, it)
+            }
+        }
+    }
+
+    /** Records the last-known toolbar title for [topicId]; bounded LRU to avoid unbounded growth. */
+    private fun rememberLastKnownTopicTitle(topicId: Int, title: String?) {
+        if (topicId <= 0) return
+        val clean = title?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        lastKnownTopicTitleByTopicId.remove(topicId)
+        lastKnownTopicTitleByTopicId[topicId] = clean
+        while (lastKnownTopicTitleByTopicId.size > MAX_REMEMBERED_TOPIC_TITLES) {
+            val oldest = lastKnownTopicTitleByTopicId.keys.firstOrNull() ?: break
+            lastKnownTopicTitleByTopicId.remove(oldest)
+        }
+    }
+
+    /** Last-known title for [topicId] regardless of session — never returns another topic's title. */
+    private fun lastKnownTopicTitle(topicId: Int?): String? {
+        val id = topicId?.takeIf { it > 0 } ?: return null
+        return lastKnownTopicTitleByTopicId[id]?.trim()?.takeIf { it.isNotEmpty() }
     }
 
     private fun tryMergeTitleFromLoadedFirstPage(page: ThemePage): Boolean {
@@ -2643,18 +2686,31 @@ class ThemeViewModel @Inject constructor(
             emitTopicToolbarTitleUpdate(page)
             return
         }
+        // Recover from the durable per-topic cache before touching the network. This closes the
+        // race where a previous async first-page fetch was discarded by a session bump (infiniteSession++
+        // on every loadData) and never retried, leaving the toolbar empty for the same topic.
+        lastKnownTopicTitle(page.id)?.let { cached ->
+            page.title = cached
+            rememberSessionTopicTitle(cached)
+            emitTopicToolbarTitleUpdate(page)
+            return
+        }
         if (titleFromFirstPageJob?.isActive == true) return
         val topicId = page.id
-        val traceId = themeLoadTraceId
-        val session = infiniteSession
         val hatOpen = userHatOpenOverride ?: false
         val pollOpen = page.isPollOpen
         titleFromFirstPageJob = scope.launch {
             when (val result = themeUseCase.loadTheme(buildCleanThemeUrl(topicId, 0), hatOpen, pollOpen)) {
                 is ThemeUseCase.LoadResult.Success -> {
-                    if (session != infiniteSession || traceId != themeLoadTraceId) return@launch
                     val firstPage = result.page
                     if (firstPage.id != topicId) return@launch
+                    // Cache the resolved title even if the user has paginated/scrolled away in the
+                    // meantime — a later same-topic page can recover it without another fetch.
+                    firstPage.title?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                        rememberLastKnownTopicTitle(topicId, it)
+                    }
+                    // Gate the live toolbar update on topicId (not session): as long as the user is
+                    // still on this topic, a late first-page fetch must still fill an empty toolbar.
                     val current = currentPage ?: return@launch
                     if (current.id != topicId) return@launch
                     ThemeToolbarTitlePolicy.mergeTitleFromFirstPage(current, firstPage)
