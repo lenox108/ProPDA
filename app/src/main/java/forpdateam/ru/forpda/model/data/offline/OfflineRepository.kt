@@ -83,6 +83,41 @@ class OfflineRepository(
     suspend fun totalSizeBytes(): Long = dao.sumSize()
 
     /**
+     * Phase 2 + Phase 5 combined save flow: persists the rendered
+     * HTML, then runs the [imageDownloader] to fetch and rewrite
+     * images, and finally updates the row to [OfflineItemStatus.COMPLETE].
+     *
+     * The caller (Phase 2 menu action / WorkManager worker) supplies
+     * the [imageDownloader]; in production that is the Hilt-provided
+     * singleton. Tests can inject a fake.
+     */
+    suspend fun saveWithImages(
+            id: String,
+            type: String,
+            sourceUrl: String,
+            title: String,
+            html: String,
+            modelJson: String,
+            imageDownloader: OfflineImageDownloader,
+    ): SaveResult {
+        save(id, type, sourceUrl, title, html, modelJson)
+        val download = imageDownloader.downloadAndRewrite(id, html)
+        // Persist the rewritten HTML so subsequent reads see local
+        // image references (avoids re-downloading on every load).
+        storage.writeHtml(id, download.rewrittenHtml)
+        markStatus(id, OfflineItemStatus.COMPLETE, sizeBytes = null)
+        return SaveResult(
+                downloadedImages = download.imagesDownloaded,
+                failedImages = download.imagesFailed,
+        )
+    }
+
+    data class SaveResult(
+            val downloadedImages: Int,
+            val failedImages: Int,
+    )
+
+    /**
      * Phase 6 — LRU-by-savedAtMs eviction. Deletes the oldest
      * saved items until the total on-disk size is at or below
      * [maxBytes]. Returns the number of items removed.
