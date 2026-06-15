@@ -11,7 +11,6 @@ versionPatch = "4"
 agp = "8.11.1"
 kotlin = "1.9.25"
 hilt = "2.51.1"
-realm = "10.19.0"
 
 # AndroidX
 androidx-core = "1.15.0"
@@ -156,7 +155,6 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
-realm = { id = "io.realm", version.ref = "realm" }
 
 [bundles]
 androidx = [
