@@ -31,6 +31,7 @@ class TemplateManager(
 
     private val staticStrings = mutableMapOf<String, String>()
     private val templates = mutableMapOf<String, MiniTemplator>()
+    private val paletteResolver = TemplatePaletteResolver(mainPreferencesHolder, dayNightHelper)
 
     fun setStaticStrings(strings: Map<String, String>) {
         staticStrings.clear()
@@ -48,32 +49,13 @@ class TemplateManager(
         return if (dayNightHelper.isNight()) "dark" else "light"
     }
 
-    fun isSepiaReading(): Boolean {
-        return UiThemeStyles.effectivePalette(
-                mainPreferencesHolder.getUiPalette()
-        ) == Preferences.Main.UiPalette.SEPIA_READING
-    }
+    fun isSepiaReading(): Boolean = paletteResolver.isSepiaReading()
 
-    fun isSepiaBlue(): Boolean {
-        return UiThemeStyles.effectivePalette(
-                mainPreferencesHolder.getUiPalette()
-        ) == Preferences.Main.UiPalette.SEPIA_BLUE
-    }
+    fun isSepiaBlue(): Boolean = paletteResolver.isSepiaBlue()
 
-    fun isMinimalReader(): Boolean {
-        return UiThemeStyles.effectivePalette(
-                mainPreferencesHolder.getUiPalette()
-        ) == Preferences.Main.UiPalette.MINIMAL_READER
-    }
+    fun isMinimalReader(): Boolean = paletteResolver.isMinimalReader()
 
-    fun isAmoled(): Boolean {
-        if (!dayNightHelper.isNight()) return false
-        return when (mainPreferencesHolder.getThemeMode()) {
-            Preferences.Main.ThemeMode.AMOLED,
-            Preferences.Main.ThemeMode.SYSTEM_AMOLED -> true
-            else -> false
-        }
-    }
+    fun isAmoled(): Boolean = paletteResolver.isAmoled()
 
     /**
      * Возвращает inline CSS-оверрайды для WebView-шаблонов.
