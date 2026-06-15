@@ -67,6 +67,7 @@ class MainDataStore(private val context: Context) {
         val APP_FONT_MODE = stringPreferencesKey("app_font_mode")
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
         val STARTUP_SCREEN = stringPreferencesKey("startup_screen")
+        val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
     }
 
     fun observeWebViewFontSizeFlow(): Flow<Int> =
@@ -200,6 +201,11 @@ class MainDataStore(private val context: Context) {
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
                 parseAppFontMode(preferences[PreferencesKeys.APP_FONT_MODE] ?: getLegacySharedAppFontMode())
             }, FontController.DEFAULT_FONT_MODE)
+
+    fun observeUseMaterialYouFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.USE_MATERIAL_YOU] ?: false
+            }, false)
 
     fun observeDownloadMethodFlow(): Flow<AppPreferences.Main.DownloadMethod> =
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
@@ -519,6 +525,13 @@ class MainDataStore(private val context: Context) {
             .apply()
     }
 
+    suspend fun setUseMaterialYou(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.USE_MATERIAL_YOU] = value
+        }
+        mirrorPrefs.edit().putBoolean("use_material_you", value).apply()
+    }
+
     suspend fun getWebViewFontSize(): Int =
             observeWebViewFontSizeFlow().map { it }.first()
 
@@ -614,6 +627,8 @@ class MainDataStore(private val context: Context) {
     fun getUseSystemFontImmediate(): Boolean {
         return getAppFontModeImmediate() == AppFontMode.SYSTEM
     }
+
+    fun getUseMaterialYouImmediate(): Boolean = mirrorPrefs.getBoolean("use_material_you", false)
 
     fun getAppFontModeImmediate(): AppFontMode {
         val mirrored = mirrorPrefs.getString("app_font_mode", null)

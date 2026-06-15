@@ -52,6 +52,8 @@ class MainPreferencesHolder(
 
     fun observeDownloadFolderUriFlow(): Flow<String?> = dataStore.observeDownloadFolderUriFlow()
 
+    fun observeUseMaterialYouFlow(): Flow<Boolean> = dataStore.observeUseMaterialYouFlow()
+
     // --- Геттеры (instant mirror reads, no runBlocking) ---
     fun getWebViewFontSize(): Int = dataStore.getWebViewFontSizeImmediate()
 
@@ -60,6 +62,8 @@ class MainPreferencesHolder(
     fun getDownloadMethod(): AppPreferences.Main.DownloadMethod = dataStore.getDownloadMethodImmediate()
 
     fun getDownloadFolderUri(): String? = dataStore.getDownloadFolderUriImmediate()
+
+    fun getUseMaterialYou(): Boolean = dataStore.getUseMaterialYouImmediate()
 
     fun getEditorMonospace(): Boolean = dataStore.getEditorMonospaceImmediate()
 
@@ -145,4 +149,6 @@ class MainPreferencesHolder(
     suspend fun setAppFontMode(mode: AppFontMode) = dataStore.setAppFontMode(mode)
 
     suspend fun setStartupScreen(value: AppPreferences.Main.StartupScreen) = dataStore.setStartupScreen(value)
+
+    suspend fun setUseMaterialYou(value: Boolean) = dataStore.setUseMaterialYou(value)
 }
