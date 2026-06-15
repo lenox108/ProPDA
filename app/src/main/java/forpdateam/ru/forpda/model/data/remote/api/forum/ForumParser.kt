@@ -12,10 +12,12 @@ import java.util.*
 import java.util.regex.Matcher
 
 class ForumParser(
-        private val patternProvider: IPatternProvider
+        private val patternProvider: IPatternProvider,
+        private val useJsoup: Boolean = false,
 ) : BaseParser() {
 
     private val scope = ParserPatterns.Forum
+    private val jsoupParser = ForumJsoupParser()
 
     /** Ссылка «отметить прочитанным» — надёжнее, чем первый fromforum в строке (в lastpost бывают другие URL). */
     private val reMarkForumParams = Regex(
@@ -38,7 +40,11 @@ class ForumParser(
      * Каждая [fo_] в порядке страницы — прямой потомок корня; подфорумы — дети своего [fo_].
      * Страница act=search больше не отдаёт &lt;select name="forums[]"&gt; — старый парсер оставлен как запасной.
      */
-    fun parseForums(response: String): ForumItemTree {
+    fun parseForums(response: String): ForumItemTree =
+            if (useJsoup) jsoupParser.parseForums(response)
+            else parseForumsWithRegex(response)
+
+    private fun parseForumsWithRegex(response: String): ForumItemTree {
         val flat = buildFlatFromForumIndex(response)
         if (flat.isNotEmpty()) {
             return ForumItemTree().also { root -> buildForumTreeFromFlatList(flat, root) }
