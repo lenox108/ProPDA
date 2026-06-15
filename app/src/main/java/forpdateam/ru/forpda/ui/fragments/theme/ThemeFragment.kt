@@ -708,7 +708,11 @@ abstract class ThemeFragment : TabFragment() {
                 sessionTitle = presenter.getSessionTopicTitle(),
                 argTitle = arguments?.getString(ARG_TITLE),
                 currentTitle = toolbarTitleView.text?.toString() ?: getTitle(),
-        )
+        ).ifBlank {
+            // Last resort for a same-topic page whose HTML omitted the title and whose async
+            // first-page fetch lost a session race: recover the durable per-topic label.
+            presenter.getLastKnownTopicTitleForToolbar(page).orEmpty()
+        }
         if (resolvedTitle.isNotEmpty()) {
             setTitle(resolvedTitle)
             presenter.rememberSessionTopicTitleFromFragment(resolvedTitle)

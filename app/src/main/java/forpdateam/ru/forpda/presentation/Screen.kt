@@ -25,9 +25,6 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
     }
 
     class WebViewNotFound : Screen()
-    class UpdateChecker : Screen() {
-        var jsonSource: String? = null
-    }
 
     class ImageViewer : Screen() {
         var urls: MutableList<String> = mutableListOf()

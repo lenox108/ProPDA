@@ -23,8 +23,9 @@ class AppUpdateRepository @Inject constructor(
     sealed class CheckResult {
         data class UpdateAvailable(
             val version: SemanticVersion,
-            val url: String,
-            val description: String?
+            val topicUrl: String,
+            val description: String?,
+            val downloads: List<AppUpdateParser.DownloadLink> = emptyList()
         ) : CheckResult()
 
         data class UpToDate(val latestVersion: SemanticVersion?) : CheckResult()
@@ -58,7 +59,12 @@ class AppUpdateRepository @Inject constructor(
         preferences.setLastFoundVersion(candidate?.version?.toString())
 
         val result = if (candidate != null && candidate.version > currentVersion) {
-            CheckResult.UpdateAvailable(candidate.version, candidate.url, candidate.description)
+            CheckResult.UpdateAvailable(
+                version = candidate.version,
+                topicUrl = AppUpdateParser.TOPIC_URL,
+                description = candidate.description,
+                downloads = candidate.downloads
+            )
         } else {
             CheckResult.UpToDate(candidate?.version)
         }
@@ -79,6 +85,35 @@ class AppUpdateRepository @Inject constructor(
 
     fun markNotified(version: SemanticVersion) {
         preferences.setLastNotifiedVersion(version.toString())
+    }
+
+    /**
+     * Из списка APK в шапке темы выбирает наиболее подходящий под текущий flavor.
+     * Если ни один не подходит — берёт первый, иначе null.
+     */
+    fun pickPreferredDownload(
+        downloads: List<AppUpdateParser.DownloadLink>,
+        flavor: String = BuildConfig.FLAVOR
+    ): AppUpdateParser.DownloadLink? {
+        if (downloads.isEmpty()) return null
+        val scored = downloads.map { link ->
+            link to flavorScore(link.fileName, flavor)
+        }
+        val minScore = scored.minOf { it.second }
+        val best = scored.firstOrNull { it.second == minScore }?.first
+        return best ?: downloads.first()
+    }
+
+    private fun flavorScore(fileName: String, flavor: String): Int {
+        val name = fileName.lowercase()
+        val markers = when (flavor) {
+            "store" -> listOf("store", "stable")
+            "parallel" -> listOf("parallel", "stable")
+            "beta" -> listOf("beta")
+            "dev" -> listOf("dev", "debug")
+            else -> emptyList()
+        }
+        return markers.indexOfFirst { name.contains(it) }.let { if (it < 0) Int.MAX_VALUE else it }
     }
 
     private fun loadBestCandidate(verbose: Boolean): AppUpdateParser.Candidate? {

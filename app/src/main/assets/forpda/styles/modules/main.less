@@ -325,7 +325,6 @@ li {
     &.quote {
         background: @quote_surface;
         border: none;
-        border-left: 4/16rem solid @surface_accent;
         margin-left: 0;
         .bRad(@radius_medium);
         >.block-title {
@@ -334,7 +333,8 @@ li {
             //padding-left: 48/16rem;
             font-weight: bold;
             //padding-left: 48/16rem;
-            padding-left: 8/16rem;
+            padding-left: 12/16rem;
+            padding-right: 12/16rem;
             padding-top: 8/16rem;
             padding-bottom: 8/16rem;
             min-height: auto;
@@ -354,7 +354,7 @@ li {
             }*/
             .avatar {
                 position: absolute;
-                left: 8/16rem;
+                left: 12/16rem;
                 top: 6/16rem;
                 height: 36/16rem;
                 width: 36/16rem;
@@ -401,7 +401,7 @@ li {
                 //height: 32/16rem;
                 display: block;
                 >* {
-                    padding-left: (48-4)/16rem;
+                    padding-left: (48+4)/16rem;
                     display: block;
                     //background: red;
                 }
@@ -434,11 +434,12 @@ li {
             }
         }
         >.block-body {
-            padding-left: 8/16rem;
-            padding-bottom: 8/16rem;
+            padding-left: 12/16rem;
+            padding-right: 12/16rem;
+            padding-bottom: 10/16rem;
             padding-top: 4/16rem;
             >.post-block {
-                margin-left: -8/16rem;
+                margin-left: 0;
             }
         }
     }

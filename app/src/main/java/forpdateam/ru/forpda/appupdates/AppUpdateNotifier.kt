@@ -40,32 +40,52 @@ class AppUpdateNotifier @Inject constructor(
             return
         }
 
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(result.url))
+        val topicIntent = Intent(Intent.ACTION_VIEW, Uri.parse(result.topicUrl))
             .setClass(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val pendingIntent = PendingIntent.getActivity(
+        val topicPendingIntent = PendingIntent.getActivity(
             context,
             NOTIFICATION_ID,
-            intent,
+            topicIntent,
             NotificationsService.activityPendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT)
         )
         val content = result.description
             ?.takeIf { it.isNotBlank() }
             ?: context.getString(R.string.updater_notification_content_VerName, result.version.toString())
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notify_mention)
             .setContentTitle(context.getString(R.string.updater_notification_title))
             .setContentText(content)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content))
-            .setContentIntent(pendingIntent)
+            .setContentIntent(topicPendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .build()
 
-        manager.notify(NOTIFICATION_ID, notification)
-        log("notification posted version=${result.version} url=${result.url} openActionRegistered=true openActionFired=false")
+        result.downloads.firstOrNull()?.let { link ->
+            val downloadIntent = Intent(Intent.ACTION_VIEW, Uri.parse(link.url))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val downloadPendingIntent = PendingIntent.getActivity(
+                context,
+                NOTIFICATION_ID + 1,
+                downloadIntent,
+                NotificationsService.activityPendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT)
+            )
+            builder.addAction(
+                R.drawable.ic_notify_mention,
+                context.getString(R.string.app_update_action_download),
+                downloadPendingIntent
+            )
+        }
+        builder.addAction(
+            R.drawable.ic_notify_mention,
+            context.getString(R.string.app_update_action_open_topic),
+            topicPendingIntent
+        )
+
+        manager.notify(NOTIFICATION_ID, builder.build())
+        log("notification posted version=${result.version} topicUrl=${result.topicUrl} downloads=${result.downloads.size} openActionRegistered=true openActionFired=false")
     }
 
     private fun log(message: String) {
@@ -89,3 +109,4 @@ class AppUpdateNotifier @Inject constructor(
         private const val NOTIFICATION_ID = 1121483
     }
 }
+

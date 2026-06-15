@@ -13,7 +13,6 @@ import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
 import forpdateam.ru.forpda.ui.activities.WebVewNotFoundActivity
 import forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
-import forpdateam.ru.forpda.ui.activities.updatechecker.UpdateCheckerActivity
 import forpdateam.ru.forpda.ui.fragments.search.SearchFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.qms.chat.QmsChatFragment
@@ -406,8 +405,6 @@ class TabNavigator(
                 Intent(context, MainActivity::class.java).apply {
                     putExtra(MainActivity.ARG_CHECK_WEBVIEW, screen.checkWebView)
                 }
-            is Screen.UpdateChecker ->
-                Intent(context, UpdateCheckerActivity::class.java)
             is Screen.WebViewNotFound ->
                 Intent(context, WebVewNotFoundActivity::class.java)
             is Screen.ImageViewer ->

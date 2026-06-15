@@ -32,7 +32,6 @@ import forpdateam.ru.forpda.model.data.providers.UserSourceProvider
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsApi
 import forpdateam.ru.forpda.model.data.remote.api.auth.AuthApi
-import forpdateam.ru.forpda.model.data.remote.api.checker.CheckerApi
 import forpdateam.ru.forpda.model.data.remote.api.devdb.DevDbApi
 import forpdateam.ru.forpda.model.data.remote.api.editpost.EditPostApi
 import forpdateam.ru.forpda.model.data.remote.api.events.NotificationEventsApi
@@ -53,7 +52,6 @@ import forpdateam.ru.forpda.model.interactors.other.MenuRepository
 import forpdateam.ru.forpda.model.preferences.*
 import forpdateam.ru.forpda.model.repository.auth.AuthRepository
 import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
-import forpdateam.ru.forpda.model.repository.checker.CheckerRepository
 import forpdateam.ru.forpda.model.repository.devdb.DevDbRepository
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
@@ -269,9 +267,6 @@ object DataModule {
             listsPreferencesHolder: ListsPreferencesHolder
     ) = MenuRepository(preferences, authHolder, countersHolder, listsPreferencesHolder)
 
-    @Provides @Singleton
-    fun provideCheckerRepository(api: CheckerApi, pp: IPatternProvider) =
-            CheckerRepository(api, pp)
     // endregion
 
     // region Interactors

@@ -1104,7 +1104,12 @@ body#topic .post-block.spoil.close > .block-title {
 blockquote,
 .quote,
 #news > .content blockquote {
-    border-left: 2px solid var(--sepia-blue-link) !important;
+    border-left: 0 !important;
+    border-radius: 0.75rem !important;
+    background: var(--sepia-blue-secondary-bg) !important;
+}
+.post-block.quote:before {
+    content: none !important;
 }
 .post-block.code,
 pre,
@@ -1629,8 +1634,12 @@ body#topic .post_body > .postcolor > .post-block:not(.quote):not(.spoil):not(.hi
 blockquote,
 .quote,
 #news > .content blockquote {
-    border-left: 2px solid var(--minimal-reader-accent) !important;
-    border-radius: 0.875rem !important;
+    border-left: 0 !important;
+    border-radius: 0.75rem !important;
+    background: var(--minimal-reader-secondary-bg) !important;
+}
+.post-block.quote:before {
+    content: none !important;
 }
 .post-block.code,
 pre,

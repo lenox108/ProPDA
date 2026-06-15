@@ -783,6 +783,9 @@
     <string name="pref_summary_app_update_check_now">Текущая версия: %s</string>
     <string name="app_update_checking">Проверяем обновления…</string>
     <string name="app_update_available">Доступна версия %s</string>
+    <string name="app_update_available_with_size">Доступна версия %1$s (%2$s)</string>
+    <string name="app_update_action_download">Скачать</string>
+    <string name="app_update_action_open_topic">Открыть тему</string>
     <string name="app_update_up_to_date">Обновлений нет. Текущая версия: %s</string>
     <string name="app_update_check_failed">Не удалось проверить обновления</string>
     <string name="app_update_check_failed_with_reason">Не удалось проверить обновления: %s</string>

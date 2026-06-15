@@ -80,7 +80,7 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    override fun clear() {
+    override fun onUserClear() {
         scope.launch {
             _uiState.update { it.copy(loading = true) }
             try {

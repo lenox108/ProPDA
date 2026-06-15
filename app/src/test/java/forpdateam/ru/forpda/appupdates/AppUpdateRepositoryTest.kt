@@ -10,6 +10,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,10 +54,83 @@ class AppUpdateRepositoryTest {
 
         assertTrue(result is AppUpdateRepository.CheckResult.UpdateAvailable)
         assertEquals(SemanticVersion(2, 8, 2), (result as AppUpdateRepository.CheckResult.UpdateAvailable).version)
+        assertEquals(AppUpdateParser.TOPIC_URL, result.topicUrl)
         assertEquals(listOf(AppUpdateParser.HEADER_POST_URL), webClient.requestedUrls)
         assertFalse(webClient.requestedUrls.any { it.contains("&st=") })
         assertFalse(webClient.requestedUrls.contains(AppUpdateParser.TOPIC_URL))
     }
+
+    @Test
+    fun check_topicUrlIsAlwaysTopicFirstPage() = runTest {
+        val webClient = HeaderOnlyWebClient(
+            headerHtml = """
+                <div class="post" id="entry${AppUpdateParser.HEADER_POST_ID}">
+                    Скачать:<br>
+                    Версия: 2.9.0<br>
+                </div>
+            """.trimIndent()
+        )
+        val repository = AppUpdateRepository(
+            webClient = webClient,
+            preferences = AppUpdatePreferences(
+                RuntimeEnvironment.getApplication().getSharedPreferences("app-update-test-2", Context.MODE_PRIVATE)
+            ),
+            parser = AppUpdateParser()
+        )
+
+        val result = repository.check(currentVersionName = "2.8.0", manual = true)
+
+        assertTrue(result is AppUpdateRepository.CheckResult.UpdateAvailable)
+        val update = result as AppUpdateRepository.CheckResult.UpdateAvailable
+        assertEquals(AppUpdateParser.TOPIC_URL, update.topicUrl)
+        assertFalse(update.topicUrl.contains("view=findpost"))
+        assertFalse(update.topicUrl.contains("&st="))
+    }
+
+    @Test
+    fun pickPreferredDownload_emptyListReturnsNull() {
+        val repository = newRepository()
+        assertNull(repository.pickPreferredDownload(emptyList(), flavor = "parallel"))
+    }
+
+    @Test
+    fun pickPreferredDownload_picksMatchingFlavor() {
+        val repository = newRepository()
+        val downloads = listOf(
+            AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3-stableRelease.apk", "ProPDA-2.9.3-stableRelease.apk"),
+            AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3-parallel.apk", "ProPDA-2.9.3-parallel.apk")
+        )
+        val chosen = repository.pickPreferredDownload(downloads, flavor = "parallel")
+        assertEquals("ProPDA-2.9.3-parallel.apk", chosen?.fileName)
+    }
+
+    @Test
+    fun pickPreferredDownload_fallsBackToFirstWhenNoMatch() {
+        val repository = newRepository()
+        val downloads = listOf(
+            AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3-stableRelease.apk", "ProPDA-2.9.3-stableRelease.apk"),
+            AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3-beta.apk", "ProPDA-2.9.3-beta.apk")
+        )
+        val chosen = repository.pickPreferredDownload(downloads, flavor = "store")
+        // store: "store" не в именах, "stable" — в первом.
+        assertEquals("ProPDA-2.9.3-stableRelease.apk", chosen?.fileName)
+    }
+
+    @Test
+    fun pickPreferredDownload_singleLinkReturnsThatLink() {
+        val repository = newRepository()
+        val only = AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3.apk", "ProPDA-2.9.3.apk")
+        val chosen = repository.pickPreferredDownload(listOf(only), flavor = "dev")
+        assertEquals(only.url, chosen?.url)
+    }
+
+    private fun newRepository(): AppUpdateRepository = AppUpdateRepository(
+        webClient = HeaderOnlyWebClient(headerHtml = ""),
+        preferences = AppUpdatePreferences(
+            RuntimeEnvironment.getApplication().getSharedPreferences("app-update-pref-test", Context.MODE_PRIVATE)
+        ),
+        parser = AppUpdateParser()
+    )
 
     private class HeaderOnlyWebClient(
         private val headerHtml: String

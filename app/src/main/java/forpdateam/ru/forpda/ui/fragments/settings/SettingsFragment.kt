@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import android.content.SharedPreferences
 import forpdateam.ru.forpda.model.AuthHolder
+import forpdateam.ru.forpda.appupdates.AppUpdateParser
 import forpdateam.ru.forpda.appupdates.AppUpdatePreferences
 import forpdateam.ru.forpda.appupdates.AppUpdateRepository
 import forpdateam.ru.forpda.appupdates.AppUpdateScheduler
@@ -920,14 +921,17 @@ class SettingsFragment : BaseSettingFragment() {
                 .onSuccess { result ->
                     when (result) {
                         is AppUpdateRepository.CheckResult.UpdateAvailable -> {
+                            val preferred = appUpdateRepository.pickPreferredDownload(result.downloads)
                             Log.i(
                                 AppUpdateRepository.LOG_TAG,
-                                "manual UI result update_available version=${result.version} url=${result.url} openActionRegistered=true openActionFired=false"
+                                "manual UI result update_available version=${result.version} topicUrl=${result.topicUrl} downloads=${result.downloads.size} preferredUrl=${preferred?.url} openActionRegistered=true openActionFired=false"
                             )
                             Timber.tag(AppUpdateRepository.LOG_TAG).i(
-                                "manual UI result update_available version=%s url=%s openActionRegistered=true openActionFired=false",
+                                "manual UI result update_available version=%s topicUrl=%s downloads=%d preferredUrl=%s openActionRegistered=true openActionFired=false",
                                 result.version,
-                                result.url
+                                result.topicUrl,
+                                result.downloads.size,
+                                preferred?.url
                             )
                             showAppUpdateAvailableSnackbar(result)
                         }
@@ -955,32 +959,74 @@ class SettingsFragment : BaseSettingFragment() {
 
     private fun showAppUpdateAvailableSnackbar(result: AppUpdateRepository.CheckResult.UpdateAvailable) {
         view?.let { root ->
-            root.makeSnackbarAboveSystemBars(
-                getString(R.string.app_update_available, result.version.toString()),
-                Snackbar.LENGTH_LONG
-            )
-                .setAction(R.string.open) {
-                    Log.i(
-                        AppUpdateRepository.LOG_TAG,
-                        "manual UI open action fired version=${result.version} url=${result.url}"
-                    )
-                    Timber.tag(AppUpdateRepository.LOG_TAG).i(
-                        "manual UI open action fired version=%s url=%s",
-                        result.version,
-                        result.url
-                    )
-                    openAppUpdateUrl(result.url)
+            val preferred = appUpdateRepository.pickPreferredDownload(result.downloads)
+            val message = if (preferred != null) {
+                getString(
+                    R.string.app_update_available_with_size,
+                    result.version.toString(),
+                    formatSize(preferred.sizeBytes)
+                )
+            } else {
+                getString(R.string.app_update_available, result.version.toString())
+            }
+            root.makeSnackbarAboveSystemBars(message, Snackbar.LENGTH_LONG)
+                .setAction(
+                    if (preferred != null) R.string.app_update_action_download
+                    else R.string.app_update_action_open_topic
+                ) {
+                    if (preferred != null) {
+                        Log.i(
+                            AppUpdateRepository.LOG_TAG,
+                            "manual UI download action fired version=${result.version} url=${preferred.url}"
+                        )
+                        Timber.tag(AppUpdateRepository.LOG_TAG).i(
+                            "manual UI download action fired version=%s url=%s",
+                            result.version,
+                            preferred.url
+                        )
+                        startApkDownload(preferred)
+                    } else {
+                        Log.i(
+                            AppUpdateRepository.LOG_TAG,
+                            "manual UI open topic action fired version=${result.version} url=${result.topicUrl}"
+                        )
+                        Timber.tag(AppUpdateRepository.LOG_TAG).i(
+                            "manual UI open topic action fired version=%s url=%s",
+                            result.version,
+                            result.topicUrl
+                        )
+                        openAppUpdateTopicUrl(result.topicUrl)
+                    }
                 }
                 .show()
         }
     }
 
-    private fun openAppUpdateUrl(url: String) {
+    private fun startApkDownload(link: AppUpdateParser.DownloadLink) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link.url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { startActivity(intent) }
+            .onFailure {
+                showSnackbarAboveSystemBars(
+                    getString(R.string.app_update_check_failed_unknown)
+                )
+            }
+    }
+
+    private fun openAppUpdateTopicUrl(url: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             setClass(requireContext(), MainActivity::class.java)
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         startActivity(intent)
+    }
+
+    private fun formatSize(bytes: Long?): String {
+        if (bytes == null) return "—"
+        val mb = bytes / 1024.0 / 1024.0
+        return if (mb >= 1) String.format("%.2f МБ", mb)
+        else String.format("%d КБ", bytes / 1024)
     }
 
     private fun appUpdateCheckErrorMessage(error: Throwable): String {

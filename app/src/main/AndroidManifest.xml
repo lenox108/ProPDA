@@ -121,12 +121,6 @@
             android:launchMode="singleTop"
             android:theme="@style/DayNightAppTheme.NoActionBar" />
 
-        <activity
-            android:name=".ui.activities.updatechecker.UpdateCheckerActivity"
-            android:exported="false"
-            android:launchMode="singleTop"
-            android:theme="@style/DayNightAppTheme.NoActionBar" />
-
         <service
             android:name=".notifications.NotificationsService"
             android:exported="false" />
