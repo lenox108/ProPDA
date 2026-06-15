@@ -131,6 +131,60 @@ class OfflineRepositoryEvictionTest {
         assertEquals(false, storage.htmlFile("article:delete-me").exists())
     }
 
+    @Test
+    fun saveWithImages_persistsAndMarksComplete_evenIfNoImages() = runBlocking {
+        val downloader = OfflineImageDownloader(okhttp3.OkHttpClient(), storage)
+        val html = "<html><body>no images here</body></html>"
+        val result = repository.saveWithImages(
+                id = "article:combo",
+                type = OfflineItemType.ARTICLE,
+                sourceUrl = "https://4pda.to/news/combo",
+                title = "Combo",
+                html = html,
+                modelJson = "{}",
+                imageDownloader = downloader,
+        )
+        assertEquals(0, result.downloadedImages)
+        assertEquals(0, result.failedImages)
+        val row = repository.getById("article:combo")
+        assertTrue(row != null)
+        assertEquals(OfflineItemStatus.COMPLETE, row!!.status)
+        // HTML is persisted and readable.
+        val persisted = repository.readHtml("article:combo")
+        assertTrue(persisted != null)
+        assertTrue(persisted!!.contains("no images here"))
+    }
+
+    @Test
+    fun saveWithImages_idempotentOnSecondRun() = runBlocking {
+        val downloader = OfflineImageDownloader(okhttp3.OkHttpClient(), storage)
+        val html = "<html><body><img src=\"images/photo.png\"></body></html>"
+        val first = repository.saveWithImages(
+                id = "article:idem",
+                type = OfflineItemType.ARTICLE,
+                sourceUrl = "https://4pda.to/news/idem",
+                title = "Idem",
+                html = html,
+                modelJson = "{}",
+                imageDownloader = downloader,
+        )
+        val second = repository.saveWithImages(
+                id = "article:idem",
+                type = OfflineItemType.ARTICLE,
+                sourceUrl = "https://4pda.to/news/idem",
+                title = "Idem",
+                html = html,
+                modelJson = "{}",
+                imageDownloader = downloader,
+        )
+        // No external images, so the downloader is a no-op and
+        // reports zero downloads on both runs.
+        assertEquals(0, first.downloadedImages)
+        assertEquals(0, second.downloadedImages)
+        val row = repository.getById("article:idem")
+        assertEquals(OfflineItemStatus.COMPLETE, row!!.status)
+    }
+
     private suspend fun seedItem(
             id: String,
             status: String,

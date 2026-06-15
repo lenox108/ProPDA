@@ -142,6 +142,33 @@ object DataModule {
     fun provideOfflineRepository(dao: OfflineItemDao, storage: OfflineStorage): OfflineRepository =
             OfflineRepository(dao, storage)
 
+    /**
+     * Phase 5 image-downloader HTTP client. Reuses the long-lived
+     * `forpdateam.ru.forpda.client.Client` OkHttp instance via the
+     * `okHttpClient` provider, sharing the cookie jar and DNS cache
+     * so we don't bypass the forum auth state.
+     */
+    @Provides @Singleton
+    fun provideOfflineImageDownloader(
+            httpClient: okhttp3.OkHttpClient,
+            storage: OfflineStorage,
+    ): forpdateam.ru.forpda.model.data.offline.OfflineImageDownloader =
+            forpdateam.ru.forpda.model.data.offline.OfflineImageDownloader(httpClient, storage)
+
+    /**
+     * Shared OkHttp client for the offline subsystem. Kept
+     * deliberately independent of [forpdateam.ru.forpda.client.Client]
+     * to avoid coupling the offline flow to the main app client's
+     * auth-cookie pipeline; image downloads are public, no
+     * `auth_key` is required.
+     */
+    @Provides @Singleton
+    fun provideOfflineOkHttpClient(): okhttp3.OkHttpClient =
+            okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+
     @Provides @Singleton fun provideNotesCacheRoom(noteItemDao: NoteItemDao, noteFolderDao: NoteFolderDao) =
             NotesCacheRoom(noteItemDao, noteFolderDao)
     @Provides @Singleton fun provideHistoryCacheRoom(historyItemDao: HistoryItemDao) = HistoryCacheRoom(historyItemDao)
