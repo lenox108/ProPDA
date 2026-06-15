@@ -1113,45 +1113,24 @@ class ArticleParser(
         return null
     }
 
+    // --- Thin delegating wrappers to ArticleAttachmentsParser (§1.1 decomposition) ---
+
     private fun firstBodyImageUrl(contentHtml: String?): String? =
-            articleLightboxImageRegex.find(contentHtml.orEmpty())?.value?.let { selectArticleImageUrl(it, null) }
-                    ?: firstImageTagRegex.find(contentHtml.orEmpty())?.value?.let { selectArticleImageUrl(it, null) }
+            attachmentsParser.firstBodyImageUrl(contentHtml)
 
     private fun firstBodyLightboxImageUrl(contentHtml: String?): String? =
-            articleLightboxImageRegex.find(contentHtml.orEmpty())?.value?.let { selectArticleImageUrl(it, null) }
+            attachmentsParser.firstBodyLightboxImageUrl(contentHtml)
 
-    private fun selectImageUrlFromHtml(html: String): String? {
-        firstSourceTagRegex.find(html)?.value?.let { source ->
-            parseSrcset(getAttribute(source, "srcset") ?: getAttribute(source, "data-srcset"))
-                    ?.let { return it }
-            getAttribute(source, "data-src")?.let { return it }
-            getAttribute(source, "src")?.let { return it }
-        }
-        return firstImageTagRegex.find(html)?.value?.let { selectArticleImageUrl(it, null) }
-    }
+    private fun selectImageUrlFromHtml(html: String): String? =
+            attachmentsParser.selectImageUrlFromHtml(html)
 
-    private fun normalizeArticleImageUrl(rawUrl: String?, response: String): String? {
-        val url = rawUrl?.articleFromHtml()?.trim()?.takeIf { it.isNotBlank() } ?: return null
-        return when {
-            url.startsWith("https://", ignoreCase = true) -> url
-            url.startsWith("http://", ignoreCase = true) -> url.replaceFirst("http://", "https://")
-            url.startsWith("//") -> "https:$url"
-            url.startsWith("/") -> "https://4pda.to$url"
-            else -> articleUrlFromResponse(response)
-                    ?.substringBeforeLast('/')
-                    ?.let { "$it/$url" }
-        }
-    }
+    private fun normalizeArticleImageUrl(rawUrl: String?, response: String): String? =
+            attachmentsParser.normalizeArticleImageUrl(rawUrl, response)
 
-    private fun urlsReferToSameImage(first: String?, second: String?): Boolean {
-        if (first.isNullOrBlank() || second.isNullOrBlank()) return false
-        fun key(url: String): String =
-                url.substringBefore('?')
-                        .substringBefore('#')
-                        .replace(Regex("""-\d+x\d+(?=\.[a-zA-Z0-9]+$)"""), "")
-                        .lowercase()
-        return key(first) == key(second)
-    }
+    private fun urlsReferToSameImage(first: String?, second: String?): Boolean =
+            attachmentsParser.urlsReferToSameImage(first, second)
+
+
 
 
     // --- Thin delegating wrappers to ArticleBodyParser (§1.1 decomposition) ---
@@ -1571,6 +1550,17 @@ class ArticleParser(
     private val commentParser = ArticleCommentParser(
             patternProvider = patternProvider,
             commentNumericIdRegex = commentNumericIdRegex
+    )
+
+    private val attachmentsParser = ArticleAttachmentsParser(
+            articleFromHtml = { input -> input.articleFromHtml() },
+            articleLightboxImageRegex = articleLightboxImageRegex,
+            firstImageTagRegex = firstImageTagRegex,
+            firstSourceTagRegex = firstSourceTagRegex,
+            articleUrlFromResponse = { response -> articleUrlFromResponse(response) },
+            selectArticleImageUrl = { block, fallback -> selectArticleImageUrl(block, fallback) },
+            parseSrcset = { srcset -> parseSrcset(srcset) },
+            getAttribute = { tag, name -> getAttribute(tag, name) }
     )
 
     private fun parseDataSitePoll(encodedPayload: String): DataSitePoll? =
