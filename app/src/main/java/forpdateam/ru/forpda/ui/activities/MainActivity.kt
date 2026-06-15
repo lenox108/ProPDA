@@ -36,6 +36,7 @@ import forpdateam.ru.forpda.notifications.NotificationsService
 import forpdateam.ru.forpda.presentation.main.MainActivityCallbacks
 import forpdateam.ru.forpda.presentation.main.MainViewModel
 import forpdateam.ru.forpda.ui.BottomNavWindowInset
+import forpdateam.ru.forpda.ui.EdgeToEdge
 import forpdateam.ru.forpda.ui.DimensionHelper
 import forpdateam.ru.forpda.ui.FontController
 import forpdateam.ru.forpda.ui.SystemBarAppearance
@@ -137,7 +138,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         setContentView(binding.root)
 
         // Enable edge-to-edge; insets (statusBar top, navBar bottom) applied per-container in updateDimens()
-        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Use the unified EdgeToEdge.apply helper so behaviour is consistent across all 4 Activities.
+        EdgeToEdge.apply(this, binding.root, padTop = false, padBottom = false)
 
         syncStatusBarIconContrast()
         syncNavigationBarAppearance()
