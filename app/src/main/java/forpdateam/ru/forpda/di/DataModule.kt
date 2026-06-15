@@ -24,9 +24,12 @@ import forpdateam.ru.forpda.entity.db.history.HistoryItemDao
 import forpdateam.ru.forpda.entity.db.favorites.FavItemDao
 import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatDao
 import forpdateam.ru.forpda.entity.db.ForumUserDao
+import forpdateam.ru.forpda.entity.db.offline.OfflineItemDao
 import forpdateam.ru.forpda.entity.db.qms.QmsContactDao
 import forpdateam.ru.forpda.entity.db.qms.QmsThemeDao
 import forpdateam.ru.forpda.entity.db.qms.QmsThemesDao
+import forpdateam.ru.forpda.model.data.offline.OfflineRepository
+import forpdateam.ru.forpda.model.data.offline.OfflineStorage
 import androidx.room.Room
 import forpdateam.ru.forpda.model.data.providers.UserSourceProvider
 import forpdateam.ru.forpda.model.data.remote.IWebClient
@@ -95,7 +98,8 @@ object DataModule {
             NotesMigrations.MIGRATION_2_3,
             NotesMigrations.MIGRATION_3_4,
             NotesMigrations.MIGRATION_4_5,
-            NotesMigrations.MIGRATION_5_6
+            NotesMigrations.MIGRATION_5_6,
+            NotesMigrations.MIGRATION_6_7
         )
             .build()
     }
@@ -126,6 +130,17 @@ object DataModule {
 
     @Provides @Singleton
     fun provideForumUserDao(database: AppDatabase): ForumUserDao = database.forumUserDao()
+
+    @Provides @Singleton
+    fun provideOfflineItemDao(database: AppDatabase): OfflineItemDao = database.offlineItemDao()
+
+    @Provides @Singleton
+    fun provideOfflineStorage(@ApplicationContext context: Context): OfflineStorage =
+            OfflineStorage(context)
+
+    @Provides @Singleton
+    fun provideOfflineRepository(dao: OfflineItemDao, storage: OfflineStorage): OfflineRepository =
+            OfflineRepository(dao, storage)
 
     @Provides @Singleton fun provideNotesCacheRoom(noteItemDao: NoteItemDao, noteFolderDao: NoteFolderDao) =
             NotesCacheRoom(noteItemDao, noteFolderDao)
