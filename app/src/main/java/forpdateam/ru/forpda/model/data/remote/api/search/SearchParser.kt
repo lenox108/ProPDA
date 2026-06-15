@@ -26,10 +26,12 @@ private fun SearchParser.decodeHtmlText(value: String?): String? =
         }
 
 class SearchParser(
-        private val patternProvider: IPatternProvider
+        private val patternProvider: IPatternProvider,
+        private val useJsoup: Boolean = false,
 ) : BaseParser() {
 
     private val scope = ParserPatterns.Search
+    private val jsoupParser = SearchJsoupParser()
 
     companion object {
         private val FORUM_POST_TOPIC_IN_MATCH = Regex("""showtopic=(\d+)""")
@@ -58,6 +60,10 @@ class SearchParser(
         val isNews = settings.resourceType == SearchSettings.RESOURCE_NEWS.first
         val resultTopics = settings.result == SearchSettings.RESULT_TOPICS.first
         if (isNews) {
+            if (useJsoup) {
+                jsoupParser.parseArticles(response, settings, result)
+                return@also
+            }
             patternProvider
                     .getPattern(scope.scope, scope.articles)
                     .matcher(response)
