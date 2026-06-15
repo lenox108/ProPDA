@@ -218,37 +218,37 @@ class NewsApi(
         val probePoll = !articleHasRenderablePoll && shouldProbeDesktopPoll(originalUrl, probeUrl, article)
         if (!probeComments && !probePoll) return@coroutineScope article
 
-        val startedAt = System.currentTimeMillis()
-        val commentsDeferred = if (probeComments) {
-            async(Dispatchers.IO) { loadDesktopArticleBody(probeUrl, bypassCache = false) }
-        } else null
         if (probePoll) {
             syncPollVoteCookies()
         }
-        val pollDeferred = if (probePoll) {
-            async(Dispatchers.IO) { loadDesktopArticleBody(probeUrl, bypassCache = false) }
-        } else null
+
+        val startedAt = System.currentTimeMillis()
+        // Comments and poll need the same desktop body; fetch it once and
+        // share the result. Previously each branch scheduled its own
+        // loadDesktopArticleBody(probeUrl, ...) which doubled the network
+        // round-trip and any side effects (cache writes, log emissions).
+        val bodyDeferred = async(Dispatchers.IO) {
+            loadDesktopArticleBody(probeUrl, bypassCache = false)
+        }
 
         var commentsError: Throwable? = null
         var pollError: Throwable? = null
-        commentsDeferred?.let { deferred ->
-            val body = runCatching { deferred.await() }.getOrElse { e ->
-                logDeferredExtrasError("comments", e)
-                commentsError = e
-                null
-            }
-            if (body != null) {
+        val body = runCatching { bodyDeferred.await() }.getOrElse { e ->
+            logDeferredExtrasError("desktop_body", e)
+            commentsError = e
+            pollError = e
+            null
+        }
+        if (body != null) {
+            if (probeComments) {
                 article.desktopCommentsSource = articleParser.extractCommentsSourceFromPage(body)
                         ?.takeIf { it.contains("comment", ignoreCase = true) }
+                        ?: run {
+                            commentsError = IllegalStateException("no comments source in body")
+                            null
+                        }
             }
-        }
-        pollDeferred?.let { deferred ->
-            val body = runCatching { deferred.await() }.getOrElse { e ->
-                logDeferredExtrasError("poll", e)
-                pollError = e
-                null
-            }
-            if (body != null) {
+            if (probePoll) {
                 articleParser.appendPollFromResponse(article, body)
             }
         }
