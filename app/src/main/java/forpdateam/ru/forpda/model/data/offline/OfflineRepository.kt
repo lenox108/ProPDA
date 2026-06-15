@@ -82,7 +82,66 @@ class OfflineRepository(
 
     suspend fun totalSizeBytes(): Long = dao.sumSize()
 
+    /**
+     * Phase 6 — LRU-by-savedAtMs eviction. Deletes the oldest
+     * saved items until the total on-disk size is at or below
+     * [maxBytes]. Returns the number of items removed.
+     *
+     * Items with [OfflineItemStatus.PARTIAL] are evicted first
+     * (incomplete downloads clog the cache), then the oldest
+     * complete items. The deletion is best-effort: failures
+     * are logged and counted in the returned number.
+     */
+    suspend fun enforceStorageLimit(maxBytes: Long): Int {
+        if (maxBytes <= 0L) return 0
+        var current = dao.sumSize()
+        if (current <= maxBytes) return 0
+        val candidates = dao.getOldestFirst(limit = MAX_EVICTION_CANDIDATES)
+        var removed = 0
+        for (item in candidates) {
+            if (current <= maxBytes) break
+            if (item.status == OfflineItemStatus.PARTIAL) {
+                runCatching { delete(item.id) }
+                        .onSuccess {
+                            current -= item.sizeBytes
+                            removed++
+                            Timber.d(
+                                    "OfflineRepository: evicted PARTIAL item %s (freed=%d)",
+                                    item.id,
+                                    item.sizeBytes
+                            )
+                        }
+                        .onFailure { Timber.w(it, "OfflineRepository: failed to evict %s", item.id) }
+            }
+        }
+        for (item in candidates) {
+            if (current <= maxBytes) break
+            runCatching { delete(item.id) }
+                    .onSuccess {
+                        current -= item.sizeBytes
+                        removed++
+                        Timber.d(
+                                "OfflineRepository: evicted LRU item %s (freed=%d)",
+                                item.id,
+                                item.sizeBytes
+                        )
+                    }
+                    .onFailure { Timber.w(it, "OfflineRepository: failed to evict %s", item.id) }
+        }
+        return removed
+    }
+
     private suspend fun statusOf(id: String): String? = runCatching { dao.getById(id)?.status }
             .onFailure { Timber.w(it, "OfflineRepository.statusOf failed for %s", id) }
             .getOrNull()
+
+    companion object {
+        /**
+         * Hard cap on the number of eviction candidates we pull
+         * per enforcement pass. The current on-device corpus
+         * is small (a handful of articles), but the cap keeps
+         * the query bounded if the table grows.
+         */
+        const val MAX_EVICTION_CANDIDATES: Int = 200
+    }
 }
