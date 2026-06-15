@@ -93,12 +93,16 @@ internal fun preferMentionPostUrl(rowHtml: String, primaryHref: String): String 
 }
 
 class MentionsParser(
-        private val patternProvider: IPatternProvider
+        private val patternProvider: IPatternProvider,
+        private val useJsoup: Boolean = false,
 ) : BaseParser() {
 
     private val scope = ParserPatterns.Mentions
+    private val jsoupParser = MentionsJsoupParser()
 
-    fun parse(response: String): MentionsData {
+    fun parse(response: String): MentionsData = if (useJsoup) jsoupParser.parse(response) else parseWithRegex(response)
+
+    private fun parseWithRegex(response: String): MentionsData {
         val data = MentionsData()
         patternProvider
                 .getPattern(scope.scope, scope.main)
