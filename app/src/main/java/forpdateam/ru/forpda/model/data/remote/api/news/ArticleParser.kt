@@ -1568,6 +1568,11 @@ class ArticleParser(
             extractYoutubeVideoId = { url -> extractYoutubeVideoId(url) }
     )
 
+    private val commentParser = ArticleCommentParser(
+            patternProvider = patternProvider,
+            commentNumericIdRegex = commentNumericIdRegex
+    )
+
     private fun parseDataSitePoll(encodedPayload: String): DataSitePoll? =
             dataSitePollParser.parse(encodedPayload)
 
@@ -2257,88 +2262,23 @@ class ArticleParser(
 
     private fun parseKarma(source: String): SparseArray<Comment.Karma> = parseKarmaMap(source)
 
-    private fun stripCommentForm(comments: String?): String? {
-        val raw = comments ?: return null
-        return patternProvider
-                .getPattern(scope.scope, scope.exclude_form_comment)
-                .matcher(raw)
-                .replaceFirst("")
-    }
+    // --- Thin delegating wrappers to ArticleCommentParser (§1.1 decomposition) ---
 
-    /**
-     * Если группа detail/detail_v2 не совпала с вёрсткой 4PDA, вытаскиваем &lt;ul/ol class="…comment-list…"&gt; из полного HTML.
-     */
-    private fun extractCommentsUlHtmlFromPage(pageContext: ArticlePageContext): String? {
-        if (pageContext.response.isBlank()) return null
-        return try {
-            val doc = pageContext.documentOrNull() ?: return null
-            val ul = findUlCommentList(doc)
-            if (ul == null) return null
-            Parser.getHtml(ul, false)
-        } catch (ex: Exception) {
-            if (BuildConfig.DEBUG) {
-                Timber.w(ex, "extractCommentsUlHtmlFromPage")
-            }
-            null
-        }
-    }
+    private fun stripCommentForm(comments: String?): String? = commentParser.stripCommentForm(comments)
 
-    private fun findUlCommentList(node: Node?): Node? {
-        if (node == null) return null
-        if (Parser.isNotElement(node)) return null
-        if ("ul".equals(node.name, ignoreCase = true) || "ol".equals(node.name, ignoreCase = true)) {
-            val cls = node.getAttribute("class")
-            if (cls != null && (cls.contains("comment-list") || cls.contains("comments-list"))) return node
-        }
-        val nodes = node.getNodes() ?: return null
-        for (i in 0 until nodes.size) {
-            findUlCommentList(nodes[i])?.let { return it }
-        }
-        return null
-    }
+    private fun extractCommentsUlHtmlFromPage(pageContext: ArticlePageContext): String? =
+            commentParser.extractCommentsUlHtmlFromPage(pageContext)
 
-    private fun findCommentAnchorNode(li: Node): Node? {
-        Parser.findNode(li, "div", "id", "comment-")?.let { return it }
-        Parser.findNode(li, "article", "id", "comment-")?.let { return it }
-        Parser.findNode(li, "a", "id", "comment")?.let { anchor ->
-            commentNumericIdFromAttribute(anchor.getAttribute("id"))?.let { return anchor }
-        }
-        commentNumericIdFromAttribute(li.getAttribute("data-comment-id"))?.let { return li }
-        commentNumericIdFromAttribute(li.getAttribute("data-comment"))?.let { return li }
-        return findNodeWithCommentId(li)
-    }
+    private fun findUlCommentList(node: Node?): Node? = commentParser.findUlCommentList(node)
 
-    private fun commentNumericIdFromAttribute(raw: String?): Int? {
-        val value = raw?.trim().orEmpty()
-        if (value.isBlank()) return null
-        commentNumericIdRegex.find(value)?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it > 0 }?.let { return it }
-        return value.toIntOrNull()?.takeIf { it > 0 }
-    }
+    private fun findCommentAnchorNode(li: Node): Node? = commentParser.findCommentAnchorNode(li)
 
-    /** Обход, если id вынесен не на div (например data-атрибуты меняли вёрстку). */
-    private fun findNodeWithCommentId(node: Node?): Node? {
-        if (node == null || Parser.isNotElement(node)) return null
-        val id = node.getAttribute("id")
-        if (id != null && id.contains("comment-")) {
-            val m = patternProvider.getPattern(scope.scope, scope.comment_id).matcher(id)
-            if (m.find()) return node
-        }
-        val nodes = node.getNodes() ?: return null
-        for (i in 0 until nodes.size) {
-            findNodeWithCommentId(nodes[i])?.let { return it }
-        }
-        return null
-    }
+    private fun commentNumericIdFromAttribute(raw: String?): Int? =
+            commentParser.commentNumericIdFromAttribute(raw)
 
-    private fun findCommentContentNode(scope: Node): Node? {
-        // Prefer explicit comment body containers. Generic ".content" is too broad and may capture
-        // nested article blocks or wrappers, leading to "duplicated article" inside comment body.
-        Parser.findNode(scope, "div", "class", "comment-content")?.let { return it }
-        Parser.findNode(scope, "p", "class", "comment-content")?.let { return it }
-        Parser.findNode(scope, "p", "class", "content")?.let { return it }
-        Parser.findNode(scope, "div", "class", "content")?.let { return it }
-        return null
-    }
+    private fun findNodeWithCommentId(node: Node?): Node? = commentParser.findNodeWithCommentId(node)
+
+    private fun findCommentContentNode(scope: Node): Node? = commentParser.findCommentContentNode(scope)
 
     fun parseComments(karmaMap: SparseArray<Comment.Karma>, source: String?): Comment {
         val comments = Comment()
