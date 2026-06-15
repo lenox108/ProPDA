@@ -76,6 +76,7 @@ import javax.inject.Inject
 import android.os.SystemClock
 import forpdateam.ru.forpda.model.interactors.news.ArticleReadingProgressStore
 import forpdateam.ru.forpda.model.interactors.news.ArticleDeferredExtrasMerger
+import forpdateam.ru.forpda.ui.fragments.news.details.modules.ArticleReadingProgressController
 import forpdateam.ru.forpda.diagnostic.ArticleCacheTrace
 import forpdateam.ru.forpda.diagnostic.StateRaceTrace
 import forpdateam.ru.forpda.presentation.articles.detail.ArticleOpenTrace
@@ -158,8 +159,21 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     private var renderLoadStartedAt: Long = 0L
     private var renderPageFinishedRequestId: Int = -1
     private var renderPageStartedRequestId: Int = -1
-    private var lastSavedScrollPercent: Int = -1
-    private var lastScrollSaveAtMs: Long = 0L
+
+    private val readingProgressController: ArticleReadingProgressController by lazy {
+        ArticleReadingProgressController(
+                store = readingProgressStore,
+                webViewProvider = { if (::webView.isInitialized) webView else null },
+                currentArticleIdProvider = { lastDomConfirmedArticleId },
+                isWebViewReadyProvider = { isWebViewReady() },
+                postDelayed = { runnable, delayMs ->
+                    if (::webView.isInitialized) {
+                        webView.postDelayed(runnable, delayMs)
+                        true
+                    } else false
+                },
+        )
+    }
 
     private val viewModel: ArticleContentViewModel by viewModels {
         val interactor = (parentFragment as NewsDetailsFragment).provideChildInteractor()
@@ -202,7 +216,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         webView.webChromeClient = CustomWebChromeClient()
         webView.setOnScrollListener(object : ExtendedWebView.OnScrollListener {
             override fun onScrollChange(scrollX: Int, scrollY: Int, oldScrollX: Int, oldScrollY: Int) {
-                maybeSaveReadingProgress(scrollY)
+                readingProgressController.onScrollChanged(scrollY)
             }
         })
         attachNewsBridge()
@@ -1536,7 +1550,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 )
         )
         webView.postDelayed({ verifyRenderedContentOrRetry() }, BLANK_RENDER_VERIFY_DELAY_MS)
-        restoreReadingProgress(articleId)
+        readingProgressController.restoreFor(articleId)
         FpdaDebugLog.log(
                 FpdaDebugLog.TAG_ARTICLE_WEBVIEW,
                 "render_confirmed",
@@ -1580,42 +1594,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                         "hasCommentsSource" to patch.hasCommentsSource
                 )
         )
-    }
-
-    private fun maybeSaveReadingProgress(scrollY: Int) {
-        val articleId = lastDomConfirmedArticleId.takeIf { it > 0 } ?: return
-        val contentHeightPx = (webView.contentHeight * webView.scale).toInt()
-        val viewportHeightPx = webView.height
-        if (contentHeightPx <= 0 || viewportHeightPx <= 0) return
-        val maxScroll = (contentHeightPx - viewportHeightPx).coerceAtLeast(1)
-        val percent = ArticleReadingProgressStore.scrollPercentFrom(scrollY, maxScroll)
-        val now = SystemClock.elapsedRealtime()
-        if (percent == lastSavedScrollPercent && now - lastScrollSaveAtMs < READING_PROGRESS_SAVE_INTERVAL_MS) {
-            return
-        }
-        lastSavedScrollPercent = percent
-        lastScrollSaveAtMs = now
-        readingProgressStore.saveScrollPercent(articleId, percent)
-    }
-
-    private fun restoreReadingProgress(articleId: Int) {
-        val percent = readingProgressStore.readScrollPercent(articleId)
-        if (percent <= 0 || !isWebViewReady()) return
-        webView.postDelayed({
-            if (!isWebViewReady() || lastDomConfirmedArticleId != articleId) return@postDelayed
-            webView.evaluateJavascript(
-                    """(function(){
-                      var doc=document.documentElement||{};
-                      var body=document.body||{};
-                      var scrollHeight=Math.max(doc.scrollHeight||0,body.scrollHeight||0);
-                      var clientHeight=window.innerHeight||doc.clientHeight||0;
-                      var maxScroll=Math.max(0,scrollHeight-clientHeight);
-                      if(maxScroll<=0) return;
-                      window.scrollTo(0, Math.round(maxScroll * ($percent / 100)));
-                    })();""",
-                    null
-            )
-        }, READING_PROGRESS_RESTORE_DELAY_MS)
     }
 
     private fun sanitizeAndLogNestedArticleDom(requestId: Int, source: String) {
@@ -3013,7 +2991,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
 
     override fun onPause() {
         if (::webView.isInitialized && isWebViewReady()) {
-            maybeSaveReadingProgress(webView.scrollY)
+            readingProgressController.onScrollChanged(webView.scrollY)
         }
         super.onPause()
         webView.onPause()
@@ -3467,8 +3445,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         private const val WEBVIEW_RENDER_EARLY_RELOAD_MS = 4_000L
         private const val WEBVIEW_RENDER_HARD_TIMEOUT_MS = 30_000L
         private const val WEBVIEW_RENDER_PROBE_INTERVAL_MS = 2_000L
-        private const val READING_PROGRESS_SAVE_INTERVAL_MS = 1_500L
-        private const val READING_PROGRESS_RESTORE_DELAY_MS = 120L
         private const val INLINE_COMMENTS_EXPAND_JS = """(function(){
                   var root=document.querySelector('#news-comments-section');
                   if(typeof newsInlineCommentsSetCollapsed==='function'){
