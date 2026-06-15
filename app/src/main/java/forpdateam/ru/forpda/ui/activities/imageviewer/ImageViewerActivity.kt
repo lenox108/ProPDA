@@ -17,6 +17,7 @@ import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.databinding.ActivityImgViewerBinding
+import forpdateam.ru.forpda.ui.EdgeToEdge
 
 class ImageViewerActivity : AppCompatActivity() {
 
@@ -36,7 +37,8 @@ class ImageViewerActivity : AppCompatActivity() {
         setTheme(R.style.ImageViewTheme)
         binding = ActivityImgViewerBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_IMMERSIVE
+        // Edge-to-edge: fullscreen image viewer; system bars stay transparent.
+        EdgeToEdge.apply(this, binding.root, padTop = false, padBottom = false)
         window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
 
         binding.imageViewerPullBack.setCallback(pullBackCallback)
