@@ -1,8 +1,8 @@
 [versions]
 # Build tools
 agp = "8.11.1"
-kotlin = "1.9.25"
-ksp = "1.9.25-1.0.20"
+kotlin = "2.0.21"
+ksp = "2.0.21-1.0.28"
 hilt = "2.51.1"
 detekt = "1.23.4"
 desugar = "2.1.5"
@@ -200,6 +200,7 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

@@ -4,8 +4,9 @@ import java.text.SimpleDateFormat
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.25'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.21'
     alias libs.plugins.ksp
+    alias libs.plugins.kotlin.compose
     alias libs.plugins.hilt.android
     id 'io.gitlab.arturbosch.detekt' version '1.23.4'
 }
@@ -178,7 +179,8 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
+        // Kotlin 2.0+: compose compiler version is provided by
+        // org.jetbrains.kotlin.plugin.compose (see plugins block).
     }
 
     compileOptions {
