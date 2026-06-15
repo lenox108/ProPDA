@@ -11,10 +11,12 @@ import timber.log.Timber
 import java.util.regex.Pattern
 
 class TopicsParser(
-        private val patternProvider: IPatternProvider
+        private val patternProvider: IPatternProvider,
+        private val useJsoup: Boolean = false,
 ) : BaseParser() {
 
     private val scope = ParserPatterns.Topics
+    private val jsoupParser = TopicsJsoupParser()
     private val showtopicIdRegex: Pattern = Pattern.compile("showtopic=(\\d+)", Pattern.CASE_INSENSITIVE)
     private val showtopicHrefRegex: Pattern = Pattern.compile("href=\"([^\"]*?showtopic=\\d+[^\"]*?)\"", Pattern.CASE_INSENSITIVE)
     private val topicTitleBlockRegex: Pattern = Pattern.compile(
@@ -34,7 +36,11 @@ class TopicsParser(
             Pattern.CASE_INSENSITIVE
     )
 
-    fun parse(response: String, argId: Int): TopicsData = TopicsData().also { data ->
+    fun parse(response: String, argId: Int): TopicsData =
+            if (useJsoup) jsoupParser.parse(response, argId)
+            else parseWithRegex(response, argId)
+
+    private fun parseWithRegex(response: String, argId: Int): TopicsData = TopicsData().also { data ->
         patternProvider
                 .getPattern(scope.scope, scope.title)
                 .matcher(response)
