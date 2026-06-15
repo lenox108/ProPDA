@@ -189,6 +189,16 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
         var forumId: Int = NO_ID
     }
 
+    /**
+     * Phase 3 list screen for §5.1 (offline reading). The
+     * fragment that hosts this Screen is registered in
+     * [forpdateam.ru.forpda.ui.navigation.TabHelper] in a
+     * follow-up commit; the data layer is in place.
+     */
+    class OfflineList : Screen() {
+        override var isAlone: Boolean = true
+    }
+
     class OtherMenu() : Screen() {
         override var fromMenu = true
         override var isAlone = true
