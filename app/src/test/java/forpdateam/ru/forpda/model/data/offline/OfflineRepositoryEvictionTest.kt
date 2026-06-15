@@ -185,6 +185,66 @@ class OfflineRepositoryEvictionTest {
         assertEquals(OfflineItemStatus.COMPLETE, row!!.status)
     }
 
+    @Test
+    fun saveWithImages_withMaxBytes_enforcesStorageLimit() = runBlocking {
+        val downloader = OfflineImageDownloader(okhttp3.OkHttpClient(), storage)
+        // Pre-seed an old large item that should be evicted when the
+        // cap is lowered below its size.
+        seedItem(
+                id = "article:stale",
+                status = OfflineItemStatus.COMPLETE,
+                savedAtMs = 1L,
+                sizeBytes = 10_000L,
+        )
+        seedItem(
+                id = "article:fresh",
+                status = OfflineItemStatus.COMPLETE,
+                savedAtMs = System.currentTimeMillis(),
+                sizeBytes = 5_000L,
+        )
+        val result = repository.saveWithImages(
+                id = "article:new",
+                type = OfflineItemType.ARTICLE,
+                sourceUrl = "https://4pda.to/news/new",
+                title = "New",
+                html = "<html><body>new</body></html>",
+                modelJson = "{}",
+                imageDownloader = downloader,
+                maxBytes = 6_000L,
+        )
+        assertEquals(0, result.downloadedImages)
+        // The stale item (saved earliest, largest) is evicted to make room.
+        assertNull(repository.getById("article:stale"))
+        // The fresh item survives because it's smaller and newer.
+        assertTrue(repository.getById("article:fresh") != null)
+        assertTrue(repository.getById("article:new") != null)
+    }
+
+    @Test
+    fun saveWithImages_withZeroMaxBytes_isNoop() = runBlocking {
+        val downloader = OfflineImageDownloader(okhttp3.OkHttpClient(), storage)
+        seedItem(
+                id = "article:huge",
+                status = OfflineItemStatus.COMPLETE,
+                savedAtMs = 1L,
+                sizeBytes = 1_000_000L,
+        )
+        // A non-positive maxBytes must not evict anything.
+        val result = repository.saveWithImages(
+                id = "article:keep",
+                type = OfflineItemType.ARTICLE,
+                sourceUrl = "https://4pda.to/news/keep",
+                title = "Keep",
+                html = "<html><body>keep</body></html>",
+                modelJson = "{}",
+                imageDownloader = downloader,
+                maxBytes = 0L,
+        )
+        assertEquals(0, result.downloadedImages)
+        assertTrue(repository.getById("article:huge") != null)
+        assertTrue(repository.getById("article:keep") != null)
+    }
+
     private suspend fun seedItem(
             id: String,
             status: String,

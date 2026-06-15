@@ -112,6 +112,33 @@ class OfflineRepository(
         )
     }
 
+    /**
+     * Backwards-compatible overload of [saveWithImages] that also
+     * enforces the storage cap ([maxBytes]) after a successful
+     * save. Phase 5+ callers (WorkManager worker, menu action)
+     * can use this so the cache stays bounded without an extra
+     * post-save invocation. A `maxBytes <= 0` value is a no-op
+     * and falls back to the unlimited behaviour of the original
+     * saveWithImages contract.
+     */
+    suspend fun saveWithImages(
+            id: String,
+            type: String,
+            sourceUrl: String,
+            title: String,
+            html: String,
+            modelJson: String,
+            imageDownloader: OfflineImageDownloader,
+            maxBytes: Long,
+    ): SaveResult {
+        val result = saveWithImages(id, type, sourceUrl, title, html, modelJson, imageDownloader)
+        if (maxBytes > 0L) {
+            runCatching { enforceStorageLimit(maxBytes) }
+                    .onFailure { Timber.w(it, "OfflineRepository: enforceStorageLimit failed after save") }
+        }
+        return result
+    }
+
     data class SaveResult(
             val downloadedImages: Int,
             val failedImages: Int,
