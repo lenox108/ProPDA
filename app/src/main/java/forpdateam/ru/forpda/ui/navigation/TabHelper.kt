@@ -137,7 +137,11 @@ object TabHelper {
                 }
                 createFragment(EditPostFragment::class.java, arguments)
             }
-            is Screen.Favorites -> createFragment(FavoritesFragment::class.java, args)
+            is Screen.Favorites -> if (useComposeFavorites) {
+                createFragment(forpdateam.ru.forpda.ui.fragments.favorites.FavoritesComposeFragment::class.java, args)
+            } else {
+                createFragment(FavoritesFragment::class.java, args)
+            }
             is Screen.Forum -> {
                 createFragment(ForumFragment::class.java, args.apply {
                     putInt(ForumFragment.ARG_FORUM_ID, screen.forumId)
@@ -145,7 +149,11 @@ object TabHelper {
             }
             is Screen.History -> createFragment(HistoryFragment::class.java, args)
             is Screen.Mentions -> createFragment(MentionsFragment::class.java, args)
-            is Screen.ArticleList -> createFragment(NewsMainFragment::class.java, args)
+            is Screen.ArticleList -> if (useComposeArticleList) {
+                createFragment(forpdateam.ru.forpda.ui.fragments.news.main.NewsMainComposeFragment::class.java, args)
+            } else {
+                createFragment(NewsMainFragment::class.java, args)
+            }
             is Screen.ArticleDetail -> {
                 createFragment(NewsDetailsFragment::class.java, args.apply {
                     putInt(NewsDetailsFragment.ARG_NEWS_ID, screen.articleId)
