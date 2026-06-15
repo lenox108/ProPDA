@@ -130,6 +130,9 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     @Inject lateinit var clipboardHelper: ClipboardHelper
     @Inject lateinit var avatarRepository: AvatarRepository
     @Inject lateinit var offlineSaveController: forpdateam.ru.forpda.model.data.offline.OfflineSaveController
+    @Inject lateinit var offlineArticleSource: forpdateam.ru.forpda.model.data.offline.OfflineArticleSource
+    @Inject lateinit var offlineRepository: forpdateam.ru.forpda.model.data.offline.OfflineRepository
+    @Inject lateinit var offlineStorage: forpdateam.ru.forpda.model.data.offline.OfflineStorage
     private var topicTitlePopup: PopupWindow? = null
     private var currentTrustedThemeHtml: String? = null
 
