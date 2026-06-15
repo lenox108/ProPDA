@@ -23,12 +23,16 @@ private fun Matcher.groupInt(group: Int): Int? {
 }
 
 class ReputationParser(
-        private val patternProvider: IPatternProvider
+        private val patternProvider: IPatternProvider,
+        private val useJsoup: Boolean = false,
 ) : BaseParser() {
 
     private val scope = ParserPatterns.Reputation
+    private val jsoupParser = ReputationJsoupParser()
 
-    fun parse(response: String): RepData = RepData().also { data ->
+    fun parse(response: String): RepData = if (useJsoup) jsoupParser.parse(response) else parseWithRegex(response)
+
+    private fun parseWithRegex(response: String): RepData = RepData().also { data ->
         patternProvider
                 .getPattern(scope.scope, scope.info)
                 .matcher(response)
@@ -70,6 +74,11 @@ class ReputationParser(
     }
 
     fun parseReportForm(response: String, sourceReportUrl: String, reputationId: Int): ReputationReportForm {
+        return if (useJsoup) jsoupParser.parseReportForm(response, sourceReportUrl, reputationId)
+        else parseReportFormWithRegex(response, sourceReportUrl, reputationId)
+    }
+
+    private fun parseReportFormWithRegex(response: String, sourceReportUrl: String, reputationId: Int): ReputationReportForm {
         val document = Parser.parse(response)
         var fallback: ReputationReportForm? = null
         walkElements(document) { node ->
