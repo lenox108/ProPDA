@@ -18,6 +18,10 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.core.view.MenuProvider
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -106,6 +110,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     @Inject lateinit var authHolder: AuthHolder
     @Inject lateinit var readingProgressStore: ArticleReadingProgressStore
     @Inject lateinit var articleTemplate: ArticleTemplate
+    @Inject lateinit var offlineSaveController: forpdateam.ru.forpda.model.data.offline.OfflineSaveController
 
     private lateinit var contentRoot: View
     private lateinit var webView: ExtendedWebView
@@ -355,6 +360,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        registerOfflineSaveMenu()
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
@@ -1004,6 +1010,49 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
 
     fun hostFragment(): NewsDetailsFragment =
             parentFragment as NewsDetailsFragment
+
+    /**
+     * §5.1 — exposes a "Save for offline" overflow item to the host activity toolbar. The
+     * data-layer call is fire-and-forget (see [OfflineSaveController]); the UI just shows a
+     * Snackbar with the result.
+     */
+    private fun registerOfflineSaveMenu() {
+        val host = activity ?: return
+        val provider = object : MenuProvider {
+            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                menuInflater.inflate(R.menu.article_details, menu)
+            }
+
+            override fun onMenuItemSelected(menuItem: MenuItem): Boolean = when (menuItem.itemId) {
+                R.id.action_save_offline -> {
+                    saveCurrentArticleForOffline()
+                    true
+                }
+                else -> false
+            }
+        }
+        host.addMenuProvider(provider, viewLifecycleOwner, Lifecycle.State.RESUMED)
+    }
+
+    private fun saveCurrentArticleForOffline() {
+        val article = hostFragment().currentArticle() ?: return
+        val html = currentTrustedArticleHtml ?: return
+        val id = forpdateam.ru.forpda.model.data.offline.OfflineSaveController.articleId(article.id)
+        offlineSaveController.save(
+                id = id,
+                type = forpdateam.ru.forpda.entity.db.offline.OfflineItemType.ARTICLE,
+                sourceUrl = article.url ?: "",
+                title = article.title.orEmpty(),
+                html = html,
+                modelJson = "",
+                onSuccess = {
+                    view?.showSnackbar(R.string.offline_saved)
+                },
+                onError = {
+                    view?.showSnackbar(R.string.offline_save_error)
+                }
+        )
+    }
 
     private fun isWebViewReady(): Boolean =
             isAdded && view != null && ::webView.isInitialized && !webView.isDestroyedForReuse()

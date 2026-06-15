@@ -949,4 +949,9 @@
     <string name="webview_not_found_or">или</string>
     <string name="main_link_hint">Введите ссылку</string>
 
+    <!-- Offline reading (§5.1 of REFACTOR_PLAN.md) -->
+    <string name="save_for_offline">Сохранить для оффлайна</string>
+    <string name="offline_saved">Сохранено</string>
+    <string name="offline_save_error">Ошибка</string>
+
 </resources>

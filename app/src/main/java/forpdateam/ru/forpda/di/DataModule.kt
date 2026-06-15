@@ -159,6 +159,13 @@ object DataModule {
     ): forpdateam.ru.forpda.model.data.offline.OfflineImageDownloader =
             forpdateam.ru.forpda.model.data.offline.OfflineImageDownloader(httpClient, storage)
 
+    @Provides @Singleton
+    fun provideOfflineSaveController(
+            repository: forpdateam.ru.forpda.model.data.offline.OfflineRepository,
+            imageDownloader: forpdateam.ru.forpda.model.data.offline.OfflineImageDownloader,
+    ): forpdateam.ru.forpda.model.data.offline.OfflineSaveController =
+            forpdateam.ru.forpda.model.data.offline.OfflineSaveController(repository, imageDownloader)
+
     /**
      * Shared OkHttp client for the offline subsystem. Kept
      * deliberately independent of [forpdateam.ru.forpda.client.Client]

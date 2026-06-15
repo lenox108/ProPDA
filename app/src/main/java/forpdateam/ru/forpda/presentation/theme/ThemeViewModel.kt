@@ -133,6 +133,10 @@ class ThemeViewModel @Inject constructor(
     private var pendingEndNavigation: Boolean = false
     private var pendingPostedPageScrollCommand: Boolean = false
     private var currentPage: ThemePage? = null
+
+    /** §5.1 — read-only accessor for the offline-save UI. Returns the most recently loaded page. */
+    fun currentData(): ThemePage? = currentPage
+
     private var visibleCurrentPage: Int? = null
     private val explicitTargetPostIds = java.util.WeakHashMap<ThemePage, Int>()
     private var currentTopicScrollMode = AppPreferences.Main.TopicScrollMode.HYBRID
