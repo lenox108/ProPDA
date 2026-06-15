@@ -47,6 +47,15 @@ object TabHelper {
     @Volatile
     var useComposeQmsContacts: Boolean = false
 
+    /**
+     * A/B flag for the offline-reading list (§5.1 of REFACTOR_PLAN.md). When
+     * `true`, [forpdateam.ru.forpda.ui.fragments.offline.OfflineListComposeFragment]
+     * is used; otherwise a future legacy fragment path takes over. Flip the
+     * flag to roll back to legacy in case of regressions.
+     */
+    @Volatile
+    var useComposeOfflineList: Boolean = false
+
     private fun createFragment(tabClass: Class<out TabFragment>, args: Bundle? = null): TabFragment {
         return tabClass.getDeclaredConstructor().newInstance().apply {
             args?.let { arguments = it }
@@ -195,6 +204,20 @@ object TabHelper {
             }
             is Screen.OtherMenu -> {
                 createFragment(OtherFragment::class.java)
+            }
+            is Screen.OfflineList -> if (useComposeOfflineList) {
+                createFragment(
+                        forpdateam.ru.forpda.ui.fragments.offline.OfflineListComposeFragment::class.java,
+                        args
+                )
+            } else {
+                // No legacy offline-list fragment is shipping yet — fall back to the
+                // Compose host. The A/B flag exists so the legacy path can be wired
+                // in later without changing the routing.
+                createFragment(
+                        forpdateam.ru.forpda.ui.fragments.offline.OfflineListComposeFragment::class.java,
+                        args
+                )
             }
             else -> {
                 // Не падаем в проде из-за неизвестного экрана: открываем меню как безопасный fallback.
