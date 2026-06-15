@@ -129,7 +129,9 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     @Inject lateinit var systemLinkHandler: ISystemLinkHandler
     @Inject lateinit var clipboardHelper: ClipboardHelper
     @Inject lateinit var avatarRepository: AvatarRepository
+    @Inject lateinit var offlineSaveController: forpdateam.ru.forpda.model.data.offline.OfflineSaveController
     private var topicTitlePopup: PopupWindow? = null
+    private var currentTrustedThemeHtml: String? = null
 
     override fun useTopBarHorizontalPlaqueInset(): Boolean = true
     override fun shouldShowHatToolbarButton(): Boolean = true
@@ -140,6 +142,42 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             } else {
                 0
             }
+
+    override fun addBaseToolbarMenu(menu: android.view.Menu) {
+        super.addBaseToolbarMenu(menu)
+        menu.add(
+                android.view.Menu.NONE,
+                R.id.action_save_offline,
+                android.view.Menu.NONE,
+                R.string.save_for_offline
+        ).setOnMenuItemClickListener {
+            saveCurrentThemeForOffline()
+            true
+        }
+    }
+
+    private fun saveCurrentThemeForOffline() {
+        val page = presenter.currentData() ?: return
+        val html = currentTrustedThemeHtml ?: return
+        val id = forpdateam.ru.forpda.model.data.offline.OfflineSaveController.themeId(
+                page.id,
+                page.pagination.current
+        )
+        offlineSaveController.save(
+                id = id,
+                type = forpdateam.ru.forpda.entity.db.offline.OfflineItemType.THEME,
+                sourceUrl = page.url ?: "",
+                title = page.title.orEmpty(),
+                html = html,
+                modelJson = "",
+                onSuccess = {
+                    view?.showSnackbar(R.string.offline_saved)
+                },
+                onError = {
+                    view?.showSnackbar(R.string.offline_save_error)
+                }
+        )
+    }
 
     override fun editPost(post: IBaseForumPost) {
         if (!::webView.isInitialized) return
@@ -1097,6 +1135,9 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         renderGuard.invalidate()
         themeBlankRetryCount = 0
         val renderStarted = webController.renderThemePage(page, force = true)
+        // §5.1 — remember the rendered HTML so the "Save for offline" menu action can
+        // hand it to OfflineSaveController without re-fetching from the page model.
+        currentTrustedThemeHtml = page.html
         TopicScrollTrace.render(
                 event = if (renderStarted) "render_start" else "render_skipped",
                 traceId = presenter.getThemeLoadTraceId(),
