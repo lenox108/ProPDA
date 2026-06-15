@@ -269,83 +269,83 @@ configurations.all {
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
 
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    coreLibraryDesugaring libs.desugar.jdk.libs
 
-    implementation "androidx.core:core-ktx:1.13.1"
-    implementation 'androidx.activity:activity-ktx:1.10.1'
-    implementation 'androidx.fragment:fragment-ktx:1.8.6'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
-    implementation 'androidx.lifecycle:lifecycle-process:2.8.7'
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
-    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
-    implementation 'androidx.recyclerview:recyclerview:1.4.0'
-    implementation 'androidx.cardview:cardview:1.0.0'
-    implementation 'androidx.preference:preference-ktx:1.2.1'
-    implementation 'androidx.documentfile:documentfile:1.0.1'
-    implementation 'androidx.palette:palette-ktx:1.0.0'
-    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-    implementation 'androidx.viewpager:viewpager:1.0.0'
-    implementation 'androidx.viewpager2:viewpager2:1.1.0'
-    implementation 'androidx.profileinstaller:profileinstaller:1.4.1'
-    implementation 'androidx.work:work-runtime:2.10.2'
+    implementation libs.androidx.core.ktx
+    implementation libs.androidx.activity.ktx
+    implementation libs.androidx.fragment.ktx
+    implementation libs.androidx.lifecycle.viewmodel.ktx
+    implementation libs.androidx.lifecycle.runtime.ktx
+    implementation libs.androidx.lifecycle.process
+    implementation libs.androidx.appcompat
+    implementation libs.androidx.constraintlayout
+    implementation libs.androidx.coordinatorlayout
+    implementation libs.androidx.recyclerview
+    implementation libs.androidx.cardview
+    implementation libs.androidx.preference.ktx
+    implementation libs.androidx.documentfile
+    implementation libs.androidx.palette.ktx
+    implementation libs.androidx.swiperefreshlayout
+    implementation libs.androidx.viewpager
+    implementation libs.androidx.viewpager2
+    implementation libs.androidx.profileinstaller
+    implementation libs.androidx.work.runtime
     // FIXME: Using alpha due to API changes in 1.0.x stable. Consider migrating to Tink directly.
-    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation libs.androidx.security.crypto
 
-    implementation "androidx.datastore:datastore-preferences:1.1.1"
-    implementation "androidx.room:room-runtime:2.6.1"
-    implementation "androidx.room:room-ktx:2.6.1"
-    kapt "androidx.room:room-compiler:2.6.1"
+    implementation libs.androidx.datastore.preferences
+    implementation libs.androidx.room.runtime
+    implementation libs.androidx.room.ktx
+    kapt libs.androidx.room.compiler
 
-    implementation platform('androidx.compose:compose-bom:2024.12.01')
-    implementation 'androidx.compose.ui:ui'
-    implementation 'androidx.compose.ui:ui-graphics'
-    implementation 'androidx.compose.ui:ui-tooling-preview'
-    implementation 'androidx.compose.material3:material3'
-    implementation 'androidx.compose.material:material-icons-extended'
-    implementation 'androidx.activity:activity-compose'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose'
-    implementation 'androidx.lifecycle:lifecycle-runtime-compose'
-    debugImplementation 'androidx.compose.ui:ui-tooling'
-    debugImplementation 'androidx.compose.ui:ui-test-manifest'
+    implementation platform(libs.androidx.compose.bom)
+    implementation libs.androidx.compose.ui
+    implementation libs.androidx.compose.ui.graphics
+    implementation libs.androidx.compose.ui.tooling.preview
+    implementation libs.androidx.compose.material3
+    implementation libs.androidx.compose.material.icons.extended
+    implementation libs.androidx.activity.compose
+    implementation libs.androidx.lifecycle.viewmodel.compose
+    implementation libs.androidx.lifecycle.runtime.compose
+    debugImplementation libs.androidx.compose.ui.tooling
+    debugImplementation libs.androidx.compose.ui.test.manifest
 
-    implementation 'com.google.android.material:material:1.12.0'
+    implementation libs.google.material
 
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    implementation 'com.squareup.okhttp3:okhttp-brotli:4.12.0'
+    implementation libs.okhttp
+    implementation libs.okhttp.brotli
 
-    implementation 'io.coil-kt:coil:2.7.0'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
-    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3'
-    implementation 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
-    implementation 'org.bsc.util:minitemplator-repackaged:1.2'
-    implementation 'com.afollestad:sectioned-recyclerview:0.5.0'
+    implementation libs.coil
+    implementation libs.kotlinx.coroutines.android
+    implementation libs.kotlinx.serialization.json
+    implementation libs.tagsoup
+    implementation libs.minitemplator
+    implementation libs.sectionedRecyclerview
 
-    implementation 'com.github.chrisbanes:PhotoView:2.3.0'
+    implementation libs.photoView
 
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:${rootProject.ext.kotlin_version}"
+    implementation libs.kotlin.stdlib
 
-    implementation 'com.github.terrakok:cicerone:6.6'
-    implementation 'com.hannesdorfmann:adapterdelegates4:4.3.2'
+    implementation libs.navigation.cicerone
+    implementation libs.adapterdelegates
 
-    implementation 'io.appmetrica.analytics:analytics:6.5.0'
+    implementation libs.appmetrica
 
-    implementation 'com.makeramen:roundedimageview:2.3.0'
-    implementation 'com.jakewharton.timber:timber:5.0.1'
+    implementation libs.roundedImageview
+    implementation libs.timber
 
-    implementation 'com.google.dagger:hilt-android:2.51.1'
-    kapt 'com.google.dagger:hilt-android-compiler:2.51.1'
-    implementation 'androidx.hilt:hilt-work:1.2.0'
-    kapt 'androidx.hilt:hilt-compiler:1.2.0'
+    implementation libs.hilt.android
+    kapt libs.hilt.compiler
+    implementation libs.hilt.work
+    kapt libs.hilt.work.compiler
 
-    testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.robolectric:robolectric:4.14.1'
-    testImplementation "androidx.room:room-testing:2.6.1"
-    testImplementation 'io.mockk:mockk:1.13.13'
-    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1'
-    testImplementation 'app.cash.turbine:turbine:1.1.0'
-    testImplementation 'androidx.arch.core:core-testing:2.2.0'
+    testImplementation libs.junit
+    testImplementation libs.robolectric
+    testImplementation libs.androidx.room.testing
+    testImplementation libs.mockk
+    testImplementation libs.kotlinx.coroutines.test
+    testImplementation libs.turbine
+    testImplementation libs.androidx.test.core
 }
 
 detekt {
@@ -356,5 +356,5 @@ detekt {
 }
 
 dependencies {
-    detektPlugins "io.gitlab.arturbosch.detekt:detekt-formatting:1.23.4"
+    detektPlugins libs.detekt.formatting
 }

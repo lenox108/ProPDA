@@ -1,63 +1,71 @@
 [versions]
-# Android Core
-compileSdk = "35"
-minSdk = "21"
-targetSdk = "35"
-versionMajor = "2"
-versionMinor = "5"
-versionPatch = "4"
-
 # Build tools
 agp = "8.11.1"
 kotlin = "1.9.25"
+ksp = "1.9.25-1.0.20"
 hilt = "2.51.1"
+detekt = "1.23.4"
+desugar = "2.1.5"
+
+# Android SDK
+compileSdk = "35"
+minSdk = "24"
+targetSdk = "35"
+
+# App version
+versionMajor = "2"
+versionMinor = "9"
+versionPatch = "4"
 
 # AndroidX
-androidx-core = "1.15.0"
-androidx-activity = "1.9.3"
-androidx-fragment = "1.8.5"
-androidx-lifecycle = "2.8.7"
-androidx-appcompat = "1.7.0"
-androidx-constraintlayout = "2.2.0"
-androidx-coordinatorlayout = "1.2.0"
-androidx-recyclerview = "1.4.0"
-androidx-cardview = "1.0.0"
-androidx-preference = "1.2.1"
-androidx-palette = "1.0.0"
-androidx-swiperefreshlayout = "1.1.0"
-androidx-viewpager = "1.0.0"
-androidx-viewpager2 = "1.1.0"
-androidx-profileinstaller = "1.4.1"
-androidx-work = "2.10.2"
-androidx-hilt-work = "1.2.0"
-androidx-test-core = "2.2.0"
+androidxCore = "1.13.1"
+androidxActivity = "1.10.1"
+androidxFragment = "1.8.6"
+androidxLifecycle = "2.8.7"
+androidxAppcompat = "1.7.0"
+androidxConstraintlayout = "2.2.0"
+androidxCoordinatorlayout = "1.2.0"
+androidxRecyclerview = "1.4.0"
+androidxCardview = "1.0.0"
+androidxPreference = "1.2.1"
+androidxDocumentfile = "1.0.1"
+androidxPalette = "1.0.0"
+androidxSwiperefreshlayout = "1.1.0"
+androidxViewpager = "1.0.0"
+androidxViewpager2 = "1.1.0"
+androidxProfileinstaller = "1.4.1"
+androidxWork = "2.10.2"
+hiltWork = "1.2.0"
+androidxSecurityCrypto = "1.1.0-alpha06"
+androidxDatastore = "1.1.1"
+androidxRoom = "2.6.1"
+androidxTestCore = "2.2.0"
 
-# UI
+# Compose
+composeBom = "2024.12.01"
+
+# Material
 material = "1.12.0"
-photoView = "2.3.0"
-spectrum = "0.7.1"
-simple-tooltip = "0.2.0"
-circular-progress = "2.5.0"
-circle-imageview = "3.1.0"
-rounded-imageview = "2.3.0"
-sectioned-recyclerview = "0.5.0"
 
 # Network
 okhttp = "4.12.0"
 
 # Image
-coil = "2.6.0"
+coil = "2.7.0"
 
 # Coroutines
 coroutines = "1.8.1"
 
+# Serialization
+serialization = "1.6.3"
+
 # Navigation
 cicerone = "6.6"
 
-# RecyclerView Adapter Delegates
+# Adapter Delegates
 adapterdelegates = "4.3.2"
 
-# Parser
+# Parsing
 tagsoup = "1.2.1"
 minitemplator = "1.2"
 
@@ -67,6 +75,13 @@ appmetrica = "6.5.0"
 # Logging
 timber = "5.0.1"
 
+# UI Components
+photoView = "2.3.0"
+roundedImageview = "2.3.0"
+sectionedRecyclerview = "0.5.0"
+
+# Hilt (versions declared above)
+
 # Testing
 junit = "4.13.2"
 robolectric = "4.14.1"
@@ -74,41 +89,80 @@ mockk = "1.13.13"
 turbine = "1.1.0"
 
 [libraries]
-# AndroidX Core
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidx-core" }
-androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "androidx-activity" }
-androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "androidx-fragment" }
+# Core
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCore" }
+androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "androidxActivity" }
+androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "androidxFragment" }
 
-# AndroidX Lifecycle
-androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "androidx-lifecycle" }
-androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidx-lifecycle" }
-androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "androidx-lifecycle" }
+# Lifecycle
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "androidxLifecycle" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "androidxLifecycle" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
 
-# AndroidX UI
-androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidx-appcompat" }
-androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "androidx-constraintlayout" }
-androidx-coordinatorlayout = { group = "androidx.coordinatorlayout", name = "coordinatorlayout", version.ref = "androidx-coordinatorlayout" }
-androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "androidx-recyclerview" }
-androidx-cardview = { group = "androidx.cardview", name = "cardview", version.ref = "androidx-cardview" }
-androidx-preference-ktx = { group = "androidx.preference", name = "preference-ktx", version.ref = "androidx-preference" }
-androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = "androidx-palette" }
-androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "androidx-swiperefreshlayout" }
-androidx-viewpager = { group = "androidx.viewpager", name = "viewpager", version.ref = "androidx-viewpager" }
-androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "androidx-viewpager2" }
-androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "androidx-profileinstaller" }
-androidx-work-runtime = { group = "androidx.work", name = "work-runtime", version.ref = "androidx-work" }
+# UI
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidxAppcompat" }
+androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "androidxConstraintlayout" }
+androidx-coordinatorlayout = { group = "androidx.coordinatorlayout", name = "coordinatorlayout", version.ref = "androidxCoordinatorlayout" }
+androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "androidxRecyclerview" }
+androidx-cardview = { group = "androidx.cardview", name = "cardview", version.ref = "androidxCardview" }
+androidx-preference-ktx = { group = "androidx.preference", name = "preference-ktx", version.ref = "androidxPreference" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "androidxDocumentfile" }
+androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = "androidxPalette" }
+androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "androidxSwiperefreshlayout" }
+androidx-viewpager = { group = "androidx.viewpager", name = "viewpager", version.ref = "androidxViewpager" }
+androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "androidxViewpager2" }
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "androidxProfileinstaller" }
+androidx-work-runtime = { group = "androidx.work", name = "work-runtime", version.ref = "androidxWork" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "androidxSecurityCrypto" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "androidxDatastore" }
 
-# Material Design
-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+# Room
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "androidxRoom" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "androidxRoom" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "androidxRoom" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "androidxRoom" }
+
+# Compose
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose" }
+
+# Material
+google-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
 # Network
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-brotli = { group = "com.squareup.okhttp3", name = "okhttp-brotli", version.ref = "okhttp" }
 
-# Image Loading
+# Image
 coil = { group = "io.coil-kt", name = "coil", version.ref = "coil" }
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+
+# Serialization
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+
+# Parsing
+tagsoup = { group = "org.ccil.cowan.tagsoup", name = "tagsoup", version.ref = "tagsoup" }
+minitemplator = { group = "org.bsc.util", name = "minitemplator-repackaged", version.ref = "minitemplator" }
+
+# UI Components
+photoView = { group = "com.github.chrisbanes", name = "PhotoView", version.ref = "photoView" }
+roundedImageview = { group = "com.makeramen", name = "roundedimageview", version.ref = "roundedImageview" }
+sectionedRecyclerview = { group = "com.afollestad", name = "sectioned-recyclerview", version.ref = "sectionedRecyclerview" }
+
+# Kotlin stdlib (matches rootProject.ext.kotlin_version)
+kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
 
 # Navigation
 navigation-cicerone = { group = "com.github.terrakok", name = "cicerone", version.ref = "cicerone" }
@@ -116,83 +170,36 @@ navigation-cicerone = { group = "com.github.terrakok", name = "cicerone", versio
 # Adapter Delegates
 adapterdelegates = { group = "com.hannesdorfmann", name = "adapterdelegates4", version.ref = "adapterdelegates" }
 
-# Parsers
-tagsoup = { group = "org.ccil.cowan.tagsoup", name = "tagsoup", version.ref = "tagsoup" }
-minitemplator = { group = "org.bsc.util", name = "minitemplator-repackaged", version.ref = "minitemplator" }
-
 # Analytics
 appmetrica = { group = "io.appmetrica.analytics", name = "analytics", version.ref = "appmetrica" }
 
 # Logging
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 
-# UI Components
-photoView = { group = "com.github.chrisbanes", name = "PhotoView", version.ref = "photoView" }
-spectrum = { group = "com.thebluealliance", name = "spectrum", version.ref = "spectrum" }
-simple-tooltip = { group = "com.github.douglasjunior", name = "android-simple-tooltip", version.ref = "simple-tooltip" }
-circular-progress = { group = "com.github.rahatarmanahmed", name = "circularprogressview", version.ref = "circular-progress" }
-circle-imageview = { group = "de.hdodenhof", name = "circleimageview", version.ref = "circle-imageview" }
-rounded-imageview = { group = "com.makeramen", name = "roundedimageview", version.ref = "rounded-imageview" }
-sectioned-recyclerview = { group = "com.afollestad", name = "sectioned-recyclerview", version.ref = "sectioned-recyclerview" }
-
-# Hilt Dependency Injection
+# Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "androidx-hilt-work" }
-hilt-work-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "androidx-hilt-work" }
+hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
+hilt-work-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
+
+# Desugaring
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugar" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
-kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
-androidx-test-core = { group = "androidx.arch.core", name = "core-testing", version.ref = "androidx-test-core" }
+androidx-test-core = { group = "androidx.arch.core", name = "core-testing", version.ref = "androidxTestCore" }
+
+# Detekt
+detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
-
-[bundles]
-androidx = [
-    "androidx-core-ktx",
-    "androidx-activity-ktx",
-    "androidx-fragment-ktx",
-    "androidx-lifecycle-viewmodel-ktx",
-    "androidx-lifecycle-runtime-ktx",
-    "androidx-lifecycle-process",
-    "androidx-appcompat",
-    "androidx-constraintlayout",
-    "androidx-coordinatorlayout",
-    "androidx-recyclerview",
-    "androidx-cardview",
-    "androidx-preference-ktx",
-    "androidx-palette-ktx",
-    "androidx-swiperefreshlayout",
-    "androidx-viewpager2",
-    "androidx-profileinstaller",
-    "androidx-work-runtime"
-]
-
-ui = [
-    "material",
-    "photoView",
-    "spectrum",
-    "simple-tooltip",
-    "circular-progress",
-    "circle-imageview",
-    "rounded-imageview",
-    "sectioned-recyclerview"
-]
-
-testing = [
-    "junit",
-    "robolectric",
-    "mockk",
-    "kotlinx-coroutines-test",
-    "turbine",
-    "androidx-test-core"
-]
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

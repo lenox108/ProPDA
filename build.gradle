@@ -4,10 +4,10 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.11.1'
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.25'
-        classpath 'com.google.dagger:hilt-android-gradle-plugin:2.51.1'
+        classpath "com.android.tools.build:gradle:${libs.versions.agp.get()}"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${libs.versions.kotlin.get()}"
+        classpath "com.google.dagger:hilt-android-gradle-plugin:${libs.versions.hilt.get()}"
     }
 }
 
-ext.kotlin_version = '1.9.25'
+ext.kotlin_version = libs.versions.kotlin.get()
