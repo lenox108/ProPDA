@@ -647,6 +647,8 @@
     <string name="pref_summary_startup_screen_qms">При запуске открывается раздел «QMS».</string>
     <string name="pref_title_bottom_nav_order">Порядок нижнего меню</string>
     <string name="pref_summary_bottom_nav_order">Выберите, какие разделы первыми показываются на нижней панели; остальные остаются в полном меню.</string>
+    <string name="pref_title_use_material_you">Цвета системы (Material You)</string>
+    <string name="pref_summary_use_material_you">Использовать акцент из обоев системы (Android 12+). Действует только для палитры «Системная» и не меняет шрифты в WebView.</string>
     <string name="bottom_nav_order_hint">Первые четыре пункта из списка показываются на нижней панели (ещё один значок открывает полное меню). Удерживайте строку и перетащите вверх или вниз.</string>
     <string name="pref_title_bottom_nav_columns">Пункты в нижнем меню</string>
     <string name="pref_summary_bottom_nav_columns">Сколько основных разделов показывать на нижней панели: 5 или 6. Старый порядок меню сохраняется.</string>

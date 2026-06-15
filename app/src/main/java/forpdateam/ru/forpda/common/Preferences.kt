@@ -51,6 +51,7 @@ object Preferences {
         const val APP_FONT_MODE = PREFIX + "app_font_mode"
         const val USE_SYSTEM_FONT = PREFIX + "use_system_font"
         const val STARTUP_SCREEN = PREFIX + "startup_screen"
+        const val USE_MATERIAL_YOU = PREFIX + "use_material_you"
 
         object Theme {
             private const val PREFIX = Main.PREFIX + "theme."

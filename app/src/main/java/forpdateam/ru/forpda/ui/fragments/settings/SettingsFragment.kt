@@ -247,6 +247,15 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.USE_MATERIAL_YOU) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setUseMaterialYou(value)
+                    activity?.recreate()
+                }
+            }
+        }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.DOWNLOAD_METHOD) {
             val value = sharedPrefs.getString(key, Preferences.Main.DownloadMethod.SYSTEM.name)
             val method = try {
@@ -296,6 +305,8 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = mainPreferencesHolder.observeEditorMonospaceFlow().first()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.IS_EDITOR_DEFAULT_HIDDEN)
                 ?.isChecked = mainPreferencesHolder.getEditorDefaultHidden()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.USE_MATERIAL_YOU)
+                ?.isChecked = mainPreferencesHolder.getUseMaterialYou()
             findPreference<ListPreference>(Preferences.Main.APP_FONT_MODE)
                 ?.let {
                     val mode = mainPreferencesHolder.observeAppFontModeFlow().first()
