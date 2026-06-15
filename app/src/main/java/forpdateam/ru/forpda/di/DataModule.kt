@@ -142,6 +142,10 @@ object DataModule {
     fun provideOfflineRepository(dao: OfflineItemDao, storage: OfflineStorage): OfflineRepository =
             OfflineRepository(dao, storage)
 
+    @Provides @Singleton
+    fun provideOfflineArticleSource(repository: OfflineRepository) =
+            forpdateam.ru.forpda.model.data.offline.OfflineArticleSource(repository)
+
     /**
      * Phase 5 image-downloader HTTP client. Reuses the long-lived
      * `forpdateam.ru.forpda.client.Client` OkHttp instance via the
