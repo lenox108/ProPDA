@@ -37,4 +37,14 @@ interface OfflineItemDao {
     /** Sum of sizeBytes across all saved items, for storage-limit UI. */
     @Query("SELECT IFNULL(SUM(sizeBytes), 0) FROM offline_items")
     suspend fun sumSize(): Long
+
+    /**
+     * Phase 6 (storage-limit / LRU eviction). Returns the saved
+     * items ordered oldest first (smallest [OfflineItemRoom.savedAtMs]
+     * first), so the caller can delete the LRU candidates until the
+     * total size falls under the configured budget. The list is
+     * capped at [limit] rows for cheap queries.
+     */
+    @Query("SELECT * FROM offline_items ORDER BY savedAtMs ASC LIMIT :limit")
+    suspend fun getOldestFirst(limit: Int): List<OfflineItemRoom>
 }
