@@ -161,4 +161,19 @@
         <item>120</item>
         <item>240</item>
     </string-array>
+
+    <string-array name="entries_offline_max_bytes">
+        <item>@string/pref_summary_offline_max_bytes_50</item>
+        <item>@string/pref_summary_offline_max_bytes_100</item>
+        <item>@string/pref_summary_offline_max_bytes_200</item>
+        <item>@string/pref_summary_offline_max_bytes_500</item>
+        <item>@string/pref_summary_offline_max_bytes_1024</item>
+    </string-array>
+    <string-array name="entry_values_offline_max_bytes">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1024</item>
+    </string-array>
 </resources>
