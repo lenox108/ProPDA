@@ -69,4 +69,33 @@ object NotesMigrations {
             )
         }
     }
+
+    /**
+     * Adds the [forpdateam.ru.forpda.entity.db.offline.OfflineItemRoom]
+     * table for §5.1 (offline reading) Phase 1 — data layer only.
+     * HTML and images stay on the filesystem; this table only holds
+     * metadata + a serialized model + the path to the HTML file.
+     */
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS offline_items (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        type TEXT NOT NULL,
+                        sourceUrl TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        savedAtMs INTEGER NOT NULL,
+                        sizeBytes INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        htmlPath TEXT NOT NULL,
+                        modelJson TEXT NOT NULL
+                    )
+                    """.trimIndent()
+            )
+            db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_offline_items_savedAtMs ON offline_items (savedAtMs DESC)"
+            )
+        }
+    }
 }

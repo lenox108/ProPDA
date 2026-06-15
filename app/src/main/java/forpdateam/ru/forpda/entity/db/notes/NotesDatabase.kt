@@ -10,6 +10,8 @@ import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatDao
 import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatRoom
 import forpdateam.ru.forpda.entity.db.history.HistoryItemDao
 import forpdateam.ru.forpda.entity.db.history.HistoryItemRoom
+import forpdateam.ru.forpda.entity.db.offline.OfflineItemDao
+import forpdateam.ru.forpda.entity.db.offline.OfflineItemRoom
 import forpdateam.ru.forpda.entity.db.qms.QmsContactDao
 import forpdateam.ru.forpda.entity.db.qms.QmsContactRoom
 import forpdateam.ru.forpda.entity.db.qms.QmsThemeDao
@@ -27,9 +29,10 @@ import forpdateam.ru.forpda.entity.db.qms.QmsThemesRoom
         QmsThemesRoom::class,
         FavItemRoom::class,
         ForumItemFlatRoom::class,
-        ForumUserRoom::class
+        ForumUserRoom::class,
+        OfflineItemRoom::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,4 +45,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun favItemDao(): FavItemDao
     abstract fun forumItemFlatDao(): ForumItemFlatDao
     abstract fun forumUserDao(): ForumUserDao
+    abstract fun offlineItemDao(): OfflineItemDao
 }
