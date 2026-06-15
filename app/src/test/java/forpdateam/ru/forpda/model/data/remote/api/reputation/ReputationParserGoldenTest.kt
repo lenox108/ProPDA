@@ -106,7 +106,40 @@ class ReputationParserGoldenTest {
         assertTrue(form.actionUrl.isNotBlank())
     }
 
-    private fun parser(): ReputationParser = ReputationParser(loadProductionPatterns())
+    /**
+     * Jsoup path: the new implementation must produce the same
+     * observable model fields as the legacy regex path on the golden
+     * fixture. This is the §2.1 parity check that lets us flip the
+     * default in [ReputationParser] from regex to Jsoup.
+     */
+    @Test
+    fun jsoupPath_matchesRegexPath_onGolden() {
+        val html = loadFixture("parser/reputation/reputation_basic.html")
+        val regex = parser(useJsoup = false).parse(html)
+        val jsoup = parser(useJsoup = true).parse(html)
+
+        assertEquals(regex.id, jsoup.id)
+        assertEquals(regex.nick, jsoup.nick)
+        assertEquals(regex.positive, jsoup.positive)
+        assertEquals(regex.negative, jsoup.negative)
+        assertEquals(regex.items.size, jsoup.items.size)
+        regex.items.forEachIndexed { idx, expected ->
+            val actual = jsoup.items[idx]
+            assertEquals(expected.id, actual.id)
+            assertEquals(expected.userId, actual.userId)
+            assertEquals(expected.userNick, actual.userNick)
+            assertEquals(expected.title, actual.title)
+            assertEquals(expected.sourceUrl, actual.sourceUrl)
+            assertEquals(expected.sourceTitle, actual.sourceTitle)
+            assertEquals(expected.image, actual.image)
+            assertEquals(expected.isPositive, actual.isPositive)
+            assertEquals(expected.date, actual.date)
+            assertEquals(expected.reportActionUrl, actual.reportActionUrl)
+        }
+    }
+
+    private fun parser(useJsoup: Boolean = false): ReputationParser =
+            ReputationParser(loadProductionPatterns(), useJsoup = useJsoup)
 
     private fun loadFixture(path: String): String =
             requireNotNull(javaClass.classLoader!!.getResourceAsStream(path)) {

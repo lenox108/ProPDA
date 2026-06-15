@@ -3,7 +3,7 @@
 agp = "8.11.1"
 kotlin = "2.0.21"
 ksp = "2.0.21-1.0.28"
-hilt = "2.51.1"
+hilt = "2.53.1"
 detekt = "1.23.4"
 desugar = "2.1.5"
 
@@ -66,6 +66,7 @@ cicerone = "6.6"
 adapterdelegates = "4.3.2"
 
 # Parsing
+jsoup = "1.18.3"
 tagsoup = "1.2.1"
 minitemplator = "1.2"
 
@@ -153,6 +154,7 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 
 # Parsing
+jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 tagsoup = { group = "org.ccil.cowan.tagsoup", name = "tagsoup", version.ref = "tagsoup" }
 minitemplator = { group = "org.bsc.util", name = "minitemplator-repackaged", version.ref = "minitemplator" }
 

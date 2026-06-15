@@ -320,6 +320,7 @@ dependencies {
     implementation libs.coil
     implementation libs.kotlinx.coroutines.android
     implementation libs.kotlinx.serialization.json
+    implementation libs.jsoup
     implementation libs.tagsoup
     implementation libs.minitemplator
     implementation libs.sectionedRecyclerview
