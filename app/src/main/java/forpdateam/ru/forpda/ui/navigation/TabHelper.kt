@@ -56,6 +56,26 @@ object TabHelper {
     @Volatile
     var useComposeOfflineList: Boolean = false
 
+    /**
+     * §3.2 flag: when true, [Screen.ArticleList] routes through the
+     * Compose-based [forpdateam.ru.forpda.ui.fragments.news.main.NewsMainComposeFragment];
+     * when false (default) it falls back to the legacy
+     * [forpdateam.ru.forpda.ui.fragments.news.main.NewsMainFragment].
+     * Flip this single line to roll back to legacy in case of regressions.
+     */
+    @Volatile
+    var useComposeArticleList: Boolean = false
+
+    /**
+     * §3.2 flag: when true, [Screen.Favorites] routes through the
+     * Compose-based favorites fragment (FavoritesComposeFragment);
+     * when false (default) it falls back to the legacy
+     * [forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment].
+     * Flip this single line to roll back to legacy in case of regressions.
+     */
+    @Volatile
+    var useComposeFavorites: Boolean = false
+
     private fun createFragment(tabClass: Class<out TabFragment>, args: Bundle? = null): TabFragment {
         return tabClass.getDeclaredConstructor().newInstance().apply {
             args?.let { arguments = it }
