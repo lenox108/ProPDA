@@ -5,8 +5,8 @@ plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.25'
-    id 'kotlin-kapt'
-    id 'dagger.hilt.android.plugin'
+    alias libs.plugins.ksp
+    alias libs.plugins.hilt.android
     id 'io.gitlab.arturbosch.detekt' version '1.23.4'
 }
 
@@ -296,7 +296,7 @@ dependencies {
     implementation libs.androidx.datastore.preferences
     implementation libs.androidx.room.runtime
     implementation libs.androidx.room.ktx
-    kapt libs.androidx.room.compiler
+    ksp libs.androidx.room.compiler
 
     implementation platform(libs.androidx.compose.bom)
     implementation libs.androidx.compose.ui
@@ -335,9 +335,9 @@ dependencies {
     implementation libs.timber
 
     implementation libs.hilt.android
-    kapt libs.hilt.compiler
+    ksp libs.hilt.compiler
     implementation libs.hilt.work
-    kapt libs.hilt.work.compiler
+    ksp libs.hilt.work.compiler
 
     testImplementation libs.junit
     testImplementation libs.robolectric
@@ -346,6 +346,11 @@ dependencies {
     testImplementation libs.kotlinx.coroutines.test
     testImplementation libs.turbine
     testImplementation libs.androidx.test.core
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "true")
 }
 
 detekt {
