@@ -8,7 +8,14 @@ import forpdateam.ru.forpda.common.webview.WebViewLoadDispatchPolicy
 object QmsWebRenderPolicy {
 
     const val MAX_BLANK_RENDER_RETRIES = 10
-    const val MAX_DOM_READY_ATTEMPTS = 28
+    /**
+     * Cap matches [DOM_READY_BACKOFF_MS] lastIndex (10). Past the 10th
+     * iteration the backoff would stay at 1500ms per probe, so up to
+     * 28 attempts would burn ~30s of post-render wall time on a stuck
+     * WebView. Earlier bailout → faster auto-recovery path that
+     * reloads the shell (see [shouldReloadOnDomWatchdog]).
+     */
+    const val MAX_DOM_READY_ATTEMPTS = 10
     const val MAX_LAYOUT_WAIT_ATTEMPTS = 20
     const val DOM_READY_RETRY_MS = 100L
     const val DOM_READY_WATCHDOG_MS = 1_500L
