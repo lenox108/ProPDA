@@ -79,24 +79,38 @@ class ArticleBodyParserTest {
     @Test
     fun normalizeArticleText_stripsWhitespaceAndLowercases() {
         val parser = newBodyParser()
-        val out = parser.normalizeArticleText("<p>  Hello&nbsp;World  </p>")
-        assertEquals("helloworld", out)
+        val out = parser.normalizeArticleText("<p>  Hello World  </p>")
+        assertEquals("hello world", out)
+    }
+
+    @Test
+    fun normalizeArticleText_replacesNonBreakingSpaceWithSpace() {
+        val parser = newBodyParser()
+        val nbsp = '\u00A0'
+        val out = parser.normalizeArticleText("<p>Hello${nbsp}World</p>")
+        assertEquals("hello world", out)
     }
 
     @Test
     fun extractArticleContent_delegatesToResolveArticleBodyContent() {
         val parser = newBodyParser()
-        val regexFallback = "<p>delegated</p>"
+        val html = """
+            <html><body>
+              <div class="article-body">
+                <p>Delegated body</p>
+              </div>
+            </body></html>
+        """.trimIndent()
         val viaExtract = parser.extractArticleContent(
-                pageContext = ArticleParser.ArticlePageContext("irrelevant"),
+                pageContext = ArticleParser.ArticlePageContext(html),
                 phase = ArticleParsePhase.FULL
         )
         val viaResolve = parser.resolveArticleBodyContent(
-                pageContext = ArticleParser.ArticlePageContext("irrelevant"),
-                phase = ArticleParsePhase.FULL,
-                regexFallback = regexFallback
+                pageContext = ArticleParser.ArticlePageContext(html),
+                phase = ArticleParsePhase.FULL
         )
         assertEquals(viaResolve.html, viaExtract.html)
-        assertEquals(regexFallback, viaExtract.html)
+        assertNotNull(viaExtract.html)
+        assertTrue(viaExtract.html!!.contains("Delegated body"))
     }
 }
