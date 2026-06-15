@@ -12,12 +12,18 @@ import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
 
 class FavoritesParser(
-        private val patternProvider: IPatternProvider
+        private val patternProvider: IPatternProvider,
+        private val useJsoup: Boolean = false,
 ) : BaseParser() {
 
     private val scope = ParserPatterns.Favorites
+    private val jsoupParser = FavoritesJsoupParser()
 
-    fun parseFavorites(response: String): FavData = FavData().also { data ->
+    fun parseFavorites(response: String): FavData =
+            if (useJsoup) jsoupParser.parseFavorites(response)
+            else parseFavoritesWithRegex(response)
+
+    private fun parseFavoritesWithRegex(response: String): FavData = FavData().also { data ->
         val list = patternProvider
                 .getPattern(scope.scope, scope.main)
                 .matcher(response)
