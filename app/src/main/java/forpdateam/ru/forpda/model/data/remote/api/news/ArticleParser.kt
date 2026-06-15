@@ -302,7 +302,7 @@ class ArticleParser(
     private val scope = ParserPatterns.Articles
 
     /** Reuses one [Parser.parse] per article page instead of parsing the same HTML repeatedly. */
-    private class ArticlePageContext(val response: String) {
+    internal class ArticlePageContext(val response: String) {
         private var document: Document? = null
         private var documentResolved = false
 
@@ -1153,288 +1153,23 @@ class ArticleParser(
         return key(first) == key(second)
     }
 
-    /**
-     * Phase-1 tap-to-open: prefer detail-regex / lightweight regex extraction and skip full-page
-     * [Parser.parse] — mobile article HTML is ~350KB and DOM walks blocked first paint (~3.5s in logs).
-     */
+
+    // --- Thin delegating wrappers to ArticleBodyParser (§1.1 decomposition) ---
+
     private fun resolveArticleBodyContent(
             pageContext: ArticlePageContext,
             phase: ArticleParsePhase,
             regexFallback: String? = null
-    ): ArticleContent {
-        regexFallback?.trim()?.takeIf { it.isNotBlank() }?.let { return ArticleContent(it, false) }
-        extractArticleContentByRegex(pageContext)?.let { return it }
-        if (phase == ArticleParsePhase.FIRST_RENDER) {
-            return ArticleContent(null, false)
-        }
-        extractOrderedArticleContent(pageContext)?.let { return it }
-        return ArticleContent(null, false)
-    }
+    ): ArticleContent = bodyParser.resolveArticleBodyContent(pageContext, phase, regexFallback)
 
     private fun extractArticleContent(
             pageContext: ArticlePageContext,
             phase: ArticleParsePhase = ArticleParsePhase.FULL
-    ): ArticleContent = resolveArticleBodyContent(pageContext, phase)
+    ): ArticleContent = bodyParser.extractArticleContent(pageContext, phase)
 
-    private fun extractArticleContentByRegex(pageContext: ArticlePageContext): ArticleContent? {
-        for (pattern in articleContentRegexes) {
-            pattern.find(pageContext.response)?.groupValues?.get(1)?.let { body ->
-                if (body.isNotBlank()) return ArticleContent(body, false)
-            }
-        }
-        return null
-    }
+    fun normalizeArticleText(html: String): String = bodyParser.normalizeArticleText(html)
 
-    private fun extractOrderedArticleContent(pageContext: ArticlePageContext): ArticleContent? {
-        val document = pageContext.documentOrNull() ?: return null
-        val article = findArticleNode(document) ?: return null
-        val blocks = mutableListOf<String>()
-        val seenTextBlocks = mutableSetOf<String>()
-        var hasInlineHeroMedia = false
-
-        for (child in article.getNodes()) {
-            if (Parser.isTextNode(child)) {
-                appendArticleBlock(Parser.getHtml(child, false), blocks, seenTextBlocks)
-                continue
-            }
-            if (Parser.isNotElement(child)) continue
-            if (isArticleFooterNode(child)) continue
-            if (isArticleHeaderNode(child)) {
-                appendArticleHeaderLead(child, blocks, seenTextBlocks)
-                continue
-            }
-            if (shouldSkipArticleChild(child)) continue
-
-            when {
-                isArticleBodyNode(child) -> {
-                    if (appendArticleBodyChildren(child, blocks, seenTextBlocks)) {
-                        hasInlineHeroMedia = true
-                    }
-                }
-                isLeadNode(child) || isArticleMediaNode(child) -> {
-                    if (isArticleMediaNode(child)) hasInlineHeroMedia = true
-                    appendArticleBlock(Parser.getHtml(child, false), blocks, seenTextBlocks)
-                }
-                hasArticleContentMarker(child) -> {
-                    appendArticleBlock(Parser.getHtml(child, false), blocks, seenTextBlocks)
-                }
-            }
-        }
-
-        return blocks
-                .takeIf { it.isNotEmpty() }
-                ?.joinToString("\n")
-                ?.let { ArticleContent(it, hasInlineHeroMedia) }
-    }
-
-    private fun appendArticleBodyChildren(
-            node: Node,
-            blocks: MutableList<String>,
-            seenTextBlocks: MutableSet<String>
-    ): Boolean {
-        var hasInlineMedia = false
-        node.getNodes().forEach { child ->
-            if (Parser.isNotElement(child)) {
-                appendArticleBlock(Parser.getHtml(child, false), blocks, seenTextBlocks)
-                return@forEach
-            }
-            if (shouldSkipArticleBodyChild(child)) return@forEach
-            if (isArticleMediaNode(child)) hasInlineMedia = true
-            appendArticleBlock(Parser.getHtml(child, false), blocks, seenTextBlocks)
-        }
-        return hasInlineMedia
-    }
-
-    private fun appendArticleHeaderLead(
-            node: Node,
-            blocks: MutableList<String>,
-            seenTextBlocks: MutableSet<String>
-    ) {
-        node.getNodes().forEach { child ->
-            if (Parser.isNotElement(child)) return@forEach
-            if (isArticleAnonsNode(child) || isLeadNode(child)) {
-                appendArticleLeadChildren(child, blocks, seenTextBlocks)
-            }
-        }
-    }
-
-    private fun appendArticleLeadChildren(
-            node: Node,
-            blocks: MutableList<String>,
-            seenTextBlocks: MutableSet<String>
-    ) {
-        node.getNodes().forEach { child ->
-            if (Parser.isNotElement(child)) {
-                appendArticleBlock(Parser.getHtml(child, false), blocks, seenTextBlocks)
-                return@forEach
-            }
-            if (isArticleMetaNode(child)) return@forEach
-            appendArticleBlock(Parser.getHtml(child, false), blocks, seenTextBlocks)
-        }
-    }
-
-    private fun appendArticleBlock(
-            html: String,
-            blocks: MutableList<String>,
-            seenTextBlocks: MutableSet<String>
-    ) {
-        val trimmed = html.trim()
-        if (trimmed.isBlank()) return
-        val textKey = normalizeArticleText(trimmed)
-        if (textKey.isNotBlank() && !seenTextBlocks.add(textKey)) return
-        blocks += trimmed
-    }
-
-    private fun findArticleNode(node: Node?): Node? {
-        if (node == null || Parser.isNotElement(node)) return null
-        if (isMainArticleNode(node)) return node
-        node.getNodes().forEach { child ->
-            findArticleNode(child)?.let { return it }
-        }
-        return null
-    }
-
-    private fun isMainArticleNode(node: Node): Boolean {
-        val tag = node.name.orEmpty()
-        val classes = node.getAttribute("class").orEmpty()
-        if (!tag.equals("article", ignoreCase = true) &&
-                !hasClassMarker(classes, listOf("article"))) {
-            return false
-        }
-        if (hasClassMarker(classes, listOf("article-header", "article-footer"))) return false
-        return hasDescendant(node) { child ->
-            isArticleBodyNode(child) || isLeadNode(child) || isArticleMediaNode(child)
-        }
-    }
-
-    private fun hasDescendant(node: Node, predicate: (Node) -> Boolean): Boolean {
-        node.getNodes().forEach { child ->
-            if (Parser.isNotElement(child)) return@forEach
-            if (predicate(child) || hasDescendant(child, predicate)) return true
-        }
-        return false
-    }
-
-    private fun isArticleBodyNode(node: Node): Boolean {
-        val classes = node.getAttribute("class").orEmpty()
-        return hasClassMarker(classes, articleBodyClassMarkers) ||
-                node.getAttribute("itemprop").orEmpty().equals("articleBody", ignoreCase = true)
-    }
-
-    private fun isLeadNode(node: Node): Boolean =
-            hasClassMarker(node.getAttribute("class").orEmpty(), leadClassMarkers)
-
-    private fun isArticleHeaderNode(node: Node): Boolean =
-            hasClassMarker(node.getAttribute("class").orEmpty(), listOf("article-header"))
-
-    private fun isArticleAnonsNode(node: Node): Boolean =
-            hasClassMarker(node.getAttribute("class").orEmpty(), listOf("article-anons"))
-
-    private fun isArticleMetaNode(node: Node): Boolean =
-            hasClassMarker(node.getAttribute("class").orEmpty(), listOf("article-meta"))
-
-    private fun isArticleMediaNode(node: Node): Boolean {
-        val tag = node.name.orEmpty()
-        if (tag.equals("figure", ignoreCase = true) ||
-                tag.equals("picture", ignoreCase = true) ||
-                tag.equals("video", ignoreCase = true) ||
-                tag.equals("iframe", ignoreCase = true) ||
-                tag.equals("embed", ignoreCase = true) ||
-                tag.equals("object", ignoreCase = true) ||
-                tag.equals("oembed", ignoreCase = true) ||
-                tag.equals("img", ignoreCase = true)) {
-            return true
-        }
-        val classes = node.getAttribute("class").orEmpty()
-        if (hasClassMarker(classes, articleMediaClassMarkers)) {
-            return true
-        }
-        return findYoutubeUrlInNode(node) != null
-    }
-
-    private fun hasArticleContentMarker(node: Node): Boolean {
-        val tag = node.name.orEmpty()
-        if (tag.equals("p", ignoreCase = true) ||
-                tag.equals("blockquote", ignoreCase = true) ||
-                contentHeadingTagNames.any { tag.equals(it, ignoreCase = true) } ||
-                tag.equals("pre", ignoreCase = true) ||
-                tag.equals("hr", ignoreCase = true) ||
-                tag.equals("ul", ignoreCase = true) ||
-                tag.equals("ol", ignoreCase = true)) {
-            return normalizeArticleText(Parser.getHtml(node, true)).isNotBlank()
-        }
-        return false
-    }
-
-    private fun isArticleFooterNode(node: Node): Boolean =
-            hasClassMarker(node.getAttribute("class").orEmpty(), listOf("article-footer"))
-
-    private fun shouldSkipArticleChild(node: Node): Boolean =
-            hasClassMarker(node.getAttribute("class").orEmpty(), skippedArticleClassMarkers) ||
-                    node.name.orEmpty().equals("meta", ignoreCase = true) ||
-                    node.name.orEmpty().equals("script", ignoreCase = true) ||
-                    node.name.orEmpty().equals("style", ignoreCase = true)
-
-    private fun shouldSkipArticleBodyChild(node: Node): Boolean {
-        if (shouldSkipArticleChild(node) || isArticleHeaderNode(node)) return true
-        val tag = node.name.orEmpty()
-        val classes = node.getAttribute("class").orEmpty()
-        return tag.equals("time", ignoreCase = true) ||
-                tag.equals("h1", ignoreCase = true) ||
-                hasArticleBodyMetaClass(classes)
-    }
-
-    private fun findYoutubeUrlInNode(node: Node): String? {
-        if (Parser.isNotElement(node)) return null
-        val tag = node.name.orEmpty()
-        if (tag.equals("iframe", ignoreCase = true) || tag.equals("embed", ignoreCase = true)) {
-            listOf("src", "data-src").forEach { attr ->
-                node.getAttribute(attr)
-                        ?.articleFromHtml()
-                        ?.takeIf { extractYoutubeVideoId(it) != null }
-                        ?.let { return it }
-            }
-        }
-        if (tag.equals("oembed", ignoreCase = true)) {
-            node.getAttribute("url")
-                    ?.articleFromHtml()
-                    ?.takeIf { extractYoutubeVideoId(it) != null }
-                    ?.let { return it }
-        }
-        if (tag.equals("a", ignoreCase = true)) {
-            node.getAttribute("href")
-                    ?.articleFromHtml()
-                    ?.takeIf { extractYoutubeVideoId(it) != null }
-                    ?.let { return it }
-        }
-        node.getNodes().forEach { child ->
-            findYoutubeUrlInNode(child)?.let { return it }
-        }
-        return null
-    }
-
-    private fun hasClassMarker(classes: String, markers: List<String>): Boolean {
-        val normalizedClasses = classes.lowercase()
-        return markers.any { marker -> normalizedClasses.contains(marker.lowercase()) }
-    }
-
-    private fun hasArticleBodyMetaClass(classes: String): Boolean {
-        val tokens = classes
-                .lowercase()
-                .split(Regex("\\s+"))
-                .filter { it.isNotBlank() }
-                .toSet()
-        return articleBodyMetaClassMarkers.any { marker -> marker.lowercase() in tokens }
-    }
-
-    private fun normalizeArticleText(html: String): String =
-            cleanPollText(html)
-                    .replace('\u00A0', ' ')
-                    .replace(whitespaceRegex, " ")
-                    .trim()
-                    .lowercase()
-
-    private data class ArticleContent(
+    internal data class ArticleContent(
             val html: String?,
             val hasInlineHeroMedia: Boolean
     )
@@ -1817,6 +1552,20 @@ class ArticleParser(
             articleFromHtml = { input -> input.articleFromHtml() },
             cleanPollText = ::cleanPollText,
             articleHtmlEncode = ::articleHtmlEncode
+    )
+
+    private val bodyParser = ArticleBodyParser(
+            articleFromHtml = { input -> input.articleFromHtml() },
+            cleanPollText = ::cleanPollText,
+            articleContentRegexes = articleContentRegexes,
+            leadClassMarkers = leadClassMarkers,
+            articleBodyClassMarkers = articleBodyClassMarkers,
+            articleMediaClassMarkers = articleMediaClassMarkers,
+            skippedArticleClassMarkers = skippedArticleClassMarkers,
+            articleBodyMetaClassMarkers = articleBodyMetaClassMarkers,
+            contentHeadingTagNames = contentHeadingTagNames,
+            whitespaceRegex = whitespaceRegex,
+            extractYoutubeVideoId = { url -> extractYoutubeVideoId(url) }
     )
 
     private fun parseDataSitePoll(encodedPayload: String): DataSitePoll? =
