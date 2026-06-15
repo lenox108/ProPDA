@@ -3183,23 +3183,13 @@ class ThemeViewModel @Inject constructor(
                 ?: themeUrl
                 .replaceFirst("#[^&]*", "")
                         .replace("&mode=show", "") + "&mode=show"
-        loadUrl(appendPollOpen(target))
+        loadUrl(ThemePollUrlPolicy.appendPollOpen(target))
     }
 
-    private fun appendPollOpen(url: String): String {
-        val clean = url
-                .replace("&poll_open=true", "")
-                .replace("?poll_open=true&", "?")
-                .replace("?poll_open=true", "")
-        return clean + if (clean.contains("?")) "&poll_open=true" else "?poll_open=true"
-    }
+    private fun appendPollOpen(url: String): String = ThemePollUrlPolicy.appendPollOpen(url)
 
     override fun onPollClick() {
-        val url = themeUrl
-                .replaceFirst("#[^&]*", "")
-                .replace("&mode=show", "")
-                .replace("&poll_open=true", "") + "&poll_open=true"
-        loadUrl(url)
+        loadUrl(ThemePollUrlPolicy.buildPollOpenUrl(themeUrl))
     }
 
     override fun onPollSubmit(action: String, method: String, encodedForm: String) {
@@ -4100,19 +4090,12 @@ class ThemeViewModel @Inject constructor(
     private fun normalizeThemeImageUrl(url: String): String = FourPdaImageUrls.normalizeAbsolute(url)
 
     private fun checkIsPoll(url: String): Boolean {
-        currentPage?.let {
-            val m = Pattern.compile("4pda.to.*?addpoll=1").matcher(url)
-            if (m.find()) {
-                var uri = Uri.parse(url)
-                uri = uri.buildUpon()
-                        .appendQueryParameter("showtopic", Integer.toString(it.id))
-                        .appendQueryParameter("st", "" + it.pagination.current * it.pagination.perPage)
-                        .build()
-                loadUrl(uri.toString())
-                return true
-            }
-        }
-        return false
+        val page = currentPage ?: return false
+        val stOffset = page.pagination.current * page.pagination.perPage
+        val rewritten = ThemePollUrlPolicy.rewriteAddPoll(url, page.id, stOffset)
+                ?: return false
+        loadUrl(rewritten)
+        return true
     }
 
 
