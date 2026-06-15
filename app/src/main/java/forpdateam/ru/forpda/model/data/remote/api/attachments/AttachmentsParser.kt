@@ -13,6 +13,27 @@ class AttachmentsParser(
 
     private val scope = ParserPatterns.EditPost
 
+    /**
+     * §2.1 finding: this parser is **intentionally NOT a Jsoup
+     * migration candidate**.
+     *
+     * The 4PDA edit-post attach response uses a non-HTML, STX/ETX
+     * tokenised format. The single primary regex (`editpost/attachments`
+     * in `patterns.json`) is anchored on the byte separator 0x02 (STX),
+     * with 0x03/0x04 (ETX) framing optional sub-records (see
+     * `fillAttachment` for the capture-group layout). Jsoup has no
+     * notion of these bytes, so a Jsoup migration of the primary
+     * path is meaningless.
+     *
+     * A regex-based HTML fallback ([parseAttachmentsFallback]) does
+     * exist for the rare case where the server's response shape
+     * changes, but it is explicitly a *fuzzy* heuristic
+     * (id-from-`[attachment=N:..]` BBCode, `removeAttach(N)` JS
+     * references, `/forum/dl/post/N/...` URLs, `data-fileid` /
+     * `data-attach-id` data attributes, etc.) — not a structured
+     * DOM tree. Jsoup would not improve it; the heuristics are
+     * already what we want.
+     */
     fun parseAttachments(response: String): List<AttachmentItem> {
         val primary = patternProvider
                 .getPattern(scope.scope, scope.attachments)
@@ -26,6 +47,7 @@ class AttachmentsParser(
 
     /**
      * Если ответ форума сменился и STX-шаблон не матчится — вытаскиваем id вложений эвристиками.
+     * Intentional regex heuristics, NOT a Jsoup target (§2.1).
      */
     private fun parseAttachmentsFallback(body: String): List<AttachmentItem> {
         val seen = LinkedHashSet<Int>()
@@ -81,6 +103,10 @@ class AttachmentsParser(
         return out
     }
 
+    /**
+     * Parses the per-file upload response. Same STX/ETX tokenised
+     * format as [parseAttachments] — see the class-level KDoc.
+     */
     fun parseAttachment(response: String, item: AttachmentItem?): AttachmentItem {
         val result = item ?: AttachmentItem()
         val filled = patternProvider
