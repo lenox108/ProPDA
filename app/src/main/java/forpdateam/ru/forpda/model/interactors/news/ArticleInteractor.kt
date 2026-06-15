@@ -524,7 +524,7 @@ class ArticleInteractor(
                 // Phase-1 may already have template-mapped HTML in fetch.page; poll merge must run on
                 // the parser body snapshot, otherwise appendPollFromResponse mutates mapped HTML and
                 // isBodyUnchanged(fetch.page, enriched) is always true (same object reference).
-                val extrasFetch = buildDeferredExtrasFetch(fetch)
+                val extrasFetch = ArticleDeferredExtrasHelpers.buildDeferredExtrasFetch(fetch)
                 val bodyBeforeExtras = extrasFetch.page.html
                 val enriched = newsRepository.enrichDesktopExtras(extrasFetch)
                 if (generation != articleGeneration.get()) return@launch
@@ -539,9 +539,9 @@ class ArticleInteractor(
                             mapOf(
                                     "articleId" to enriched.id,
                                     "bodyUnchanged" to bodyUnchanged,
-                                    "hadPollBefore" to hasPollBodyMarker(bodyBeforeExtras),
-                                    "hasPollAfter" to hasPollBodyMarker(enriched.html),
-                                    "hasNormalizedPollAfter" to hasNormalizedPollBodyMarker(enriched.html),
+                                    "hadPollBefore" to ArticleDeferredExtrasHelpers.hasPollBodyMarker(bodyBeforeExtras),
+                                    "hasPollAfter" to ArticleDeferredExtrasHelpers.hasPollBodyMarker(enriched.html),
+                                    "hasNormalizedPollAfter" to ArticleDeferredExtrasHelpers.hasNormalizedPollBodyMarker(enriched.html),
                                     "bodyLenBefore" to (bodyBeforeExtras?.length ?: 0),
                                     "bodyLenAfter" to (enriched.html?.length ?: 0)
                             )
@@ -628,39 +628,6 @@ class ArticleInteractor(
         }
     }
 
-    private fun buildDeferredExtrasFetch(fetch: ArticleFetchResult): ArticleFetchResult {
-        val parsedBody = fetch.parsedBodyHtml.ifBlank { fetch.page.html.orEmpty() }
-        val extrasPage = DetailsPage().apply {
-            id = fetch.page.id
-            title = fetch.page.title
-            url = fetch.page.url
-            imgUrl = fetch.page.imgUrl
-            date = fetch.page.date
-            author = fetch.page.author
-            authorId = fetch.page.authorId
-            commentsCount = fetch.page.commentsCount
-            commentsSource = fetch.page.commentsSource
-            desktopCommentsSource = fetch.page.desktopCommentsSource
-            category = fetch.page.category
-            karmaMap = fetch.page.karmaMap
-            html = parsedBody
-        }
-        return fetch.copy(page = extrasPage)
-    }
-
-    private fun hasPollBodyMarker(html: String?): Boolean {
-        val source = html.orEmpty()
-        return source.contains("poll", ignoreCase = true) ||
-                source.contains("answer[]", ignoreCase = true) ||
-                source.contains("pages/poll", ignoreCase = true)
-    }
-
-    private fun hasNormalizedPollBodyMarker(html: String?): Boolean {
-        val source = html.orEmpty()
-        return source.contains("news-poll-normalized", ignoreCase = true) ||
-                source.contains("data-normalized-poll", ignoreCase = true) ||
-                source.contains("data-poll-fallback", ignoreCase = true)
-    }
 
     private fun preserveCommentsForSameArticle(article: DetailsPage) {
         if (cachedCommentsArticleId > 0 &&
