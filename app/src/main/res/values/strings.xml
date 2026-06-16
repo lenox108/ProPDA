@@ -825,6 +825,7 @@
     <string name="pref_summary_android_notifications_disabled">Уведомления приложения выключены в Android</string>
     <string name="pref_title_post_notifications_denied">Уведомления Android выключены</string>
     <string name="pref_summary_post_notifications_denied">Разрешите уведомления в системных настройках Android, иначе QMS, ответы и избранное не появятся в шторке.</string>
+    <string name="notification_foreground_channel_name">Служебный канал</string>
     <string name="pref_summary_channel_settings">Звук, вибрация, важность и показ на экране</string>
     <string name="pref_title_channel_qms">Канал: QMS</string>
     <string name="pref_title_channel_mentions">Канал: ответы и упоминания</string>

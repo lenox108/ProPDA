@@ -123,7 +123,8 @@
 
         <service
             android:name=".notifications.NotificationsService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- WorkManager foreground downloads require explicit type on Android 14+ -->
         <service
