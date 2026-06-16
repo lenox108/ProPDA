@@ -36,11 +36,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @HiltViewModel
+@OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class FavoritesViewModel @Inject constructor(
         private val favoritesRepository: FavoritesRepository,
         private val eventsRepository: EventsRepository,
@@ -117,6 +119,7 @@ class FavoritesViewModel @Inject constructor(
 
         scope.launch {
             eventsRepository.observeEventsTab()
+                    .debounce(200L)
                     .collect { handleEvent(it) }
         }
 
