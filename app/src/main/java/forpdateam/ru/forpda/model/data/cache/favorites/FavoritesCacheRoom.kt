@@ -70,7 +70,6 @@ class FavoritesCacheRoom(private val favItemDao: FavItemDao) {
     }
 
     suspend fun saveFavorites(items: List<FavItem>) {
-        favItemDao.deleteAllFavorites()
         val favItemsRoom = items.map { FavItemRoom(
             favId = it.favId,
             topicId = it.topicId,
@@ -100,7 +99,9 @@ class FavoritesCacheRoom(private val favItemDao: FavItemDao) {
             localReadPostId = it.localReadPostId,
             localReadPostDateMillis = it.localReadPostDateMillis
         ) }
-        favItemDao.insertFavorites(favItemsRoom)
+        // Атомарный wipe+insert в одной Room-транзакции — раньше это были
+        // два write-цикла, что давало окно для гонки при чтении StateFlow.
+        favItemDao.replaceFavorites(favItemsRoom)
         publishItems()
     }
 

@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -32,4 +33,20 @@ interface FavItemDao {
 
     @Query("DELETE FROM favorites")
     suspend fun deleteAllFavorites()
+
+    /**
+     * Атомарная замена всего набора избранного: важно для пути
+     * FavoritesCacheRoom.saveFavorites, который раньше делал два
+     * отдельных write-цикла (DELETE + INSERT). Без транзакции
+     * concurrent-чтение через Flow.observeItems() могло увидеть
+     * пустой список между двумя write'ами и пересоздать
+     * RecyclerView-стейт.
+     */
+    @Transaction
+    suspend fun replaceFavorites(favorites: List<FavItemRoom>) {
+        deleteAllFavorites()
+        if (favorites.isNotEmpty()) {
+            insertFavorites(favorites)
+        }
+    }
 }
