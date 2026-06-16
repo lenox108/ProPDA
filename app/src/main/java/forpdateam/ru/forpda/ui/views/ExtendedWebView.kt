@@ -375,6 +375,21 @@ open class ExtendedWebView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Synchronously delivers the bottom-chrome padding to JS without waiting for
+     * scroll-idle. Use only on cold page load (e.g. onDomContentComplete) so the
+     * spacer is in place when the first 1ms scroll attempt fires; otherwise prefer
+     * [setBottomChromePadding] which defers to avoid resize-during-scroll jank.
+     */
+    fun setBottomChromePaddingImmediate(padding: Int) {
+        val p = padding.coerceAtLeast(0)
+        if (p == bottomChromePaddingValue) return
+        bottomChromePaddingValue = p
+        val density = resources.displayMetrics.density
+        val cssPx = (p / density) * (1 / fontScale)
+        evalJs("if (typeof setBottomChromePadding === 'function') setBottomChromePadding($cssPx);", null)
+    }
+
     fun setPaddingBottom(padding: Int) {
         setPaddingBottom(padding, force = false)
     }
