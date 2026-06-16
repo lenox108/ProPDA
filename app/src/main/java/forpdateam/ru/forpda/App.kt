@@ -243,10 +243,10 @@ class App : Application(), androidx.work.Configuration.Provider {
             if (BuildConfig.DEBUG) Timber.d("AppMetrica disabled: flavor=$flavor")
             return
         }
-        val config = AppMetricaConfig.newConfigBuilder("a94d9236-cdf3-4a5e-af30-d6dbffaea362").build()
-        AppMetrica.activate(applicationContext, config)
-        AppMetrica.enableActivityAutoTracking(this)
-
+        // Тяжёлая инициализация AppMetrica (I/O по сети, чтение конфига) уходим
+        // с главного потока, чтобы cold start не блокировался аналитикой.
+        // Установка UncaughtExceptionHandler должна быть как можно раньше — её
+        // оставляем на main (она дешёвая и нужна в первые мгновения).
         val defaultUncaught = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, ex ->
             try {
@@ -257,6 +257,15 @@ class App : Application(), androidx.work.Configuration.Provider {
                 // ignore
             }
             defaultUncaught?.uncaughtException(thread, ex)
+        }
+        appScope.launch(Dispatchers.IO) {
+            try {
+                val config = AppMetricaConfig.newConfigBuilder("a94d9236-cdf3-4a5e-af30-d6dbffaea362").build()
+                AppMetrica.activate(applicationContext, config)
+                AppMetrica.enableActivityAutoTracking(this@App)
+            } catch (t: Throwable) {
+                Timber.w(t, "AppMetrica async init failed")
+            }
         }
     }
     
