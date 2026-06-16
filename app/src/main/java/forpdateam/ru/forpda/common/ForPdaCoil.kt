@@ -79,8 +79,9 @@ object ForPdaCoil {
                 .diskCache {
                     DiskCache.Builder()
                         .directory(application.cacheDir.resolve("image_cache"))
-                        // 256MB: для аватаров/превью и быстрого скролла
-                        .maxSizeBytes(256L * 1024L * 1024L)
+                        // 128MB: хватает для аватаров/превью, и в 2 раза меньше
+                        // постоянной записи на флеш по сравнению с прежним 256MB.
+                        .maxSizeBytes(128L * 1024L * 1024L)
                         .build()
                 }
                 .build()
