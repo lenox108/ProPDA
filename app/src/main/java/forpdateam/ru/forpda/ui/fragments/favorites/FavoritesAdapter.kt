@@ -1,6 +1,8 @@
 package forpdateam.ru.forpda.ui.fragments.favorites
 
 import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -32,6 +34,10 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
     companion object {
         private const val VIEW_TYPE_PAGINATION_FOOTER = 1
         private const val VIEW_TYPE_EMPTY_FOOTER = 2
+        // Дебаунс для сеттеров prefs (sorting, unread-top, showDot, showUnreadIndicators).
+        // Без него каждый чих пользователя в настройках пересоздаёт snapshot и заново
+        // сортирует весь список, что на 100+ избранных видно как jank и жрёт батарею.
+        private const val PREFS_REBIND_DEBOUNCE_MS = 100L
 
         internal fun itemIdentity(item: FavItem): Long {
             val type = if (item.isForum) 1L else 0L
@@ -181,24 +187,34 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
         }
     }
 
+    private val prefsRebindHandler = Handler(Looper.getMainLooper())
+    private val prefsRebindRunnable = Runnable {
+        currentItems?.let { bindItems(it) }
+    }
+
     fun setShowDot(showDot: Boolean) {
         this.showDot = showDot
-        currentItems?.let { bindItems(it) }
+        schedulePrefsRebind()
     }
 
     fun setShowUnreadIndicators(show: Boolean) {
         showUnreadIndicators = show
-        currentItems?.let { bindItems(it) }
+        schedulePrefsRebind()
     }
 
     fun setUnreadTop(unreadTop: Boolean) {
         this.unreadTop = unreadTop
-        currentItems?.let { bindItems(it) }
+        schedulePrefsRebind()
     }
 
     fun setSorting(sorting: Sorting) {
         this.sorting = Sorting(sorting.key, sorting.order)
-        currentItems?.let { bindItems(it) }
+        schedulePrefsRebind()
+    }
+
+    private fun schedulePrefsRebind() {
+        prefsRebindHandler.removeCallbacks(prefsRebindRunnable)
+        prefsRebindHandler.postDelayed(prefsRebindRunnable, PREFS_REBIND_DEBOUNCE_MS)
     }
 
     fun setOnItemClickListener(listener: BaseSectionedAdapter.OnItemClickListener<FavItem>) {
