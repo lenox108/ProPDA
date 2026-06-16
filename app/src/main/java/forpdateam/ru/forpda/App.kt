@@ -405,12 +405,14 @@ class App : Application(), androidx.work.Configuration.Provider {
         val wm = androidx.work.WorkManager.getInstance(this)
         val mainEnabled = notificationPreferencesHolder.getMainEnabled()
         val bgEnabled = notificationPreferencesHolder.getBgCheckEnabled()
-        if (!mainEnabled || !bgEnabled) {
+        if (!mainEnabled || !bgEnabled || !notificationPreferencesHolder.wantsPushNotifications()) {
             wm.cancelUniqueWork(forpdateam.ru.forpda.notifications.EventsCheckWorker.UNIQUE_NAME)
             Timber.d("EventsCheckWorker: cancelled (main=$mainEnabled bg=$bgEnabled)")
             return
         }
-        val intervalMin = notificationPreferencesHolder.getBgCheckIntervalMin().coerceAtLeast(15L)
+        // Минимум 30 мин: 15 мин при 4 HTTP-запросах = 96 пробуждений/день, что лишнее
+        // для push-канала, на котором пользователь может не заметить минутной задержки.
+        val intervalMin = notificationPreferencesHolder.getBgCheckIntervalMin().coerceAtLeast(30L)
         val constraints = androidx.work.Constraints.Builder()
                 .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
                 .setRequiresBatteryNotLow(true)
