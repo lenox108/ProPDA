@@ -221,6 +221,14 @@ class EventsRepository(
             BatteryDebugLogger.logState("EventsRepository", "foregroundRealtimeUnchanged", "enabled=$enabled reason=$reason")
             return
         }
+        // При выключенных уведомлениях realtime-WS не нужен: пинги каждые 30с держат
+        // радио в активном состоянии. Никогда не поднимаем WS, если уведомления выключены.
+        if (enabled && !notificationPreferencesHolder.wantsPushNotifications()) {
+            foregroundRealtimeEnabled = false
+            BatteryDebugLogger.logState("EventsRepository", "skipForeground", "notifications disabled reason=$reason")
+            stop("notifications_disabled")
+            return
+        }
         foregroundRealtimeEnabled = enabled
         BatteryDebugLogger.logState("EventsRepository", if (enabled) "foreground" else "background", "reason=$reason")
         if (enabled) {
