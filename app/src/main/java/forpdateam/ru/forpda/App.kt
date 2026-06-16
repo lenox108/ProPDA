@@ -235,10 +235,18 @@ class App : Application(), androidx.work.Configuration.Provider {
     }
     
     private fun setupAppMetrica() {
+        // Аналитика включена только в store-флейворе (тот, что публикуется на Google Play).
+        // В dev/beta/parallel/stable — отключаем, чтобы лишний исходящий трафик
+        // и periodic-пакеты AppMetrica не жгли батарею.
+        val flavor = BuildConfig.FLAVOR
+        if (flavor != "store") {
+            if (BuildConfig.DEBUG) Timber.d("AppMetrica disabled: flavor=$flavor")
+            return
+        }
         val config = AppMetricaConfig.newConfigBuilder("a94d9236-cdf3-4a5e-af30-d6dbffaea362").build()
         AppMetrica.activate(applicationContext, config)
         AppMetrica.enableActivityAutoTracking(this)
-        
+
         val defaultUncaught = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, ex ->
             try {
