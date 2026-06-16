@@ -161,6 +161,12 @@ class NotificationsService : Service() {
             return START_NOT_STICKY
         }
 
+        // Поднимаемся в foreground-сервис, чтобы Android не убивал нас во время
+        // background-опроса событий (Android 14+ жёстко требует foregroundServiceType
+        // в течение 5 секунд после startForegroundService()). Канал — отдельный
+        // внутренний с минимальной важностью, чтобы не показывать ничего в шторке.
+        promoteToForegroundIfNeeded()
+
         var checkEvents = intent?.action != null && intent.action == CHECK_LAST_EVENTS
         val time = System.currentTimeMillis()
 
@@ -176,10 +182,52 @@ class NotificationsService : Service() {
         return START_NOT_STICKY
     }
 
+    private var foregroundPromoted = false
+
+    private fun promoteToForegroundIfNeeded() {
+        if (foregroundPromoted) return
+        val channel = NotificationChannel(
+                FOREGROUND_CHANNEL_ID,
+                getString(R.string.notification_foreground_channel_name),
+                NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            setShowBadge(false)
+            enableLights(false)
+            enableVibration(false)
+        }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        val notification = NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notify_favorites)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                    FOREGROUND_NOTIFICATION_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            startForeground(FOREGROUND_NOTIFICATION_ID, notification)
+        }
+        foregroundPromoted = true
+    }
+
     override fun onDestroy() {
         BatteryDebugLogger.logState("NotificationsService", "destroy")
         serviceScope.cancel()  // Отменяем все корутины
         serviceJob.cancel()
+        if (foregroundPromoted) {
+            // Убираем foreground-уведомление, чтобы шторка не залипала после остановки
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            foregroundPromoted = false
+        }
         // EventsRepository является singleton'ом. Не отменяем его repoScope из lifecycle
         // сервиса, иначе последующие события обновляют вкладки, но уже не доходят до notify().
         super.onDestroy()
@@ -519,6 +567,8 @@ class NotificationsService : Service() {
         private const val NOTIFY_STACKED_QMS_ID = -123
         private const val NOTIFY_STACKED_FAV_ID = -234
         private const val STACKED_MAX = 4
+        private const val FOREGROUND_CHANNEL_ID = "forpda_foreground_service"
+        private const val FOREGROUND_NOTIFICATION_ID = -345
 
         /** API 31+: обязателен FLAG_IMMUTABLE или FLAG_MUTABLE; для открытия активности по тапу достаточно IMMUTABLE. */
         @JvmStatic
@@ -578,7 +628,14 @@ class NotificationsService : Service() {
                 BatteryDebugLogger.logState("NotificationsService", "startAndCheckNoBind")
                 val intent = Intent(context, NotificationsService::class.java)
                         .setAction(CHECK_LAST_EVENTS)
-                context.startService(intent)
+                // На API 26+ запуск в фоне с background-опросом требует
+                // startForegroundService: иначе нас прибьют во время опроса,
+                // и уведомления о QMS/ответах просто не дойдут.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
             } catch (ignore: Exception) {
             }
         }
