@@ -2174,7 +2174,29 @@ function doScroll(tAnchorElem, scrollIntoElem) {
         logThemeRuntimeWarning("ThemeScroll", ex);
     }
 
-    toScroll.scrollIntoView();
+    // Manual scroll: align post BOTTOM to viewport bottom if post is taller than viewport,
+    // otherwise align post TOP to viewport top. Accounts for the bottom-chrome/tabbar spacer
+    // and the open message panel so the post action bar (like/quote/reply/share) stays visible.
+    try {
+        var postRect = toScroll.getBoundingClientRect();
+        var postTopAbs = postRect.top + window.pageYOffset;
+        var postHeight = postRect.height;
+        var viewport = window.innerHeight;
+        var bottomReserve = (typeof bottomChromePadding !== 'undefined' ? bottomChromePadding : 0)
+            + (typeof messagePanelPadding !== 'undefined' ? messagePanelPadding : 0);
+        var availableViewport = Math.max(0, viewport - bottomReserve);
+        var maxY = Math.max(0, document.documentElement.scrollHeight - viewport);
+        var y;
+        if (postHeight > availableViewport) {
+            y = postTopAbs + postHeight - viewport; // align post bottom to viewport bottom
+        } else {
+            y = postTopAbs; // post fits in viewport, align top
+        }
+        window.scrollTo(0, Math.max(0, Math.min(maxY, y)));
+    } catch (ex) {
+        logThemeRuntimeWarning("ThemeScroll", ex);
+        toScroll.scrollIntoView();
+    }
 
     //Активация элементов, убирается класс active с уже активированных
     if (elemToActivation)
