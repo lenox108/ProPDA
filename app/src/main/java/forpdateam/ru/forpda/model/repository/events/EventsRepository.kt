@@ -182,6 +182,10 @@ class EventsRepository(
                 if (!foregroundRealtimeEnabled) {
                     continue
                 }
+                // Без включённых уведомлений пропускаем таймер, чтобы не будить процесс.
+                if (!notificationPreferencesHolder.wantsPushNotifications()) {
+                    continue
+                }
                 if (!webSocketController.isConnected()) {
                     start(checkEvents = false, force = false)
                 }
