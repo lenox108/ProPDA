@@ -1808,6 +1808,13 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         }
         actions.add(jsApi.setBottomChromePaddingInline(bottomSpacerCssPx))
         actions.add(jsApi.setTopChromePaddingInline(currentTopChromePaddingCssPx()))
+        // Pre-flush sync: deliver bottom-chrome spacer to JS BEFORE the pending scroll
+        // command fires (1ms in theme.js), so the post BOTTOM is correctly aligned
+        // against the bottom nav/tabbar (otherwise the first scroll sees a zero spacer
+        // and long posts' .post_footer is clipped).
+        if (::webView.isInitialized) {
+            webView.setBottomChromePaddingImmediate(currentBottomChromeSpacerPadding)
+        }
         actions.add(jsApi.setLoadAction(
                 if (isEndNavigation) {
                     forpdateam.ru.forpda.presentation.theme.ThemeLoadAction.End.toString()
