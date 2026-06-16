@@ -25,6 +25,13 @@ class CookieManager(
     private val clientCookies = ConcurrentHashMap<String, Cookie>()
     private val mobileCookie: Cookie? = safeParseMobileCookie()
 
+    /**
+     * Cache of the last cookie value already written to EncryptedSharedPreferences
+     * (key = "cookie_<name>"). Used to skip the AES-256-GCM re-encryption on every
+     * response when the server keeps resending the same cookie value.
+     */
+    private val lastSavedCookieValues = ConcurrentHashMap<String, String>()
+
     private val lastStaleCheck = java.util.concurrent.atomic.AtomicLong(0L)
 
     companion object {
@@ -79,11 +86,19 @@ class CookieManager(
                 val editor = PreferenceManager.getDefaultSharedPreferences(context).edit()
 
                 for (cookie in cookies) {
+                    val key = "cookie_${cookie.name}"
                     if (cookie.value == "deleted" || cookie.expiresAt <= System.currentTimeMillis()) {
-                        securePrefs.remove("cookie_${cookie.name}")
+                        if (lastSavedCookieValues.remove(cookie.name) != null) {
+                            securePrefs.remove(key)
+                        }
                         clientCookies.remove(cookie.name)
                     } else {
-                        securePrefs.putString("cookie_${cookie.name}", cookieToPref(url.toString(), cookie))
+                        val encoded = cookieToPref(url.toString(), cookie)
+                        // Skip the AES roundtrip if we already wrote the same value last time.
+                        if (lastSavedCookieValues[cookie.name] != encoded) {
+                            securePrefs.putString(key, encoded)
+                            lastSavedCookieValues[cookie.name] = encoded
+                        }
 
                         if (cookie.name == "member_id") {
                             editor.putString("member_id", cookie.value)
@@ -137,6 +152,7 @@ class CookieManager(
 
     fun clearCookies() {
         clientCookies.clear()
+        lastSavedCookieValues.clear()
         putCookieIfValid(mobileCookie)
         // Удаляем auth cookies из SecurePrefs
         val securePrefs = SecureCookiesPreferences.getInstance(context)
@@ -163,6 +179,7 @@ class CookieManager(
                     (cookie.expiresAt < now || cookie.value.isEmpty() || cookie.value == "null")
             if (isStale) {
                 securePrefs.remove("cookie_$name")
+                lastSavedCookieValues.remove(name)
             }
             isStale
         }
