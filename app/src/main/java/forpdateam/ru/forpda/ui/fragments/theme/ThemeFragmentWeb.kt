@@ -19,6 +19,8 @@ import android.widget.TextView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import timber.log.Timber
 import kotlinx.coroutines.launch
 import android.view.ActionMode
@@ -2254,13 +2256,17 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         if (expectedPosts == 0) return
         val generation = ++renderWatchdogGeneration
         val delayMs = renderWatchdogDelayMs(page.html?.length ?: 0)
-        webView.postDelayed({
-            if (!isAdded || view == null || !::webView.isInitialized) return@postDelayed
-            if (generation != renderWatchdogGeneration) return@postDelayed
-            if (renderKey != lastRenderKey) return@postDelayed
+        // Корутины в viewLifecycleOwner.lifecycleScope автоматически отменяются
+        // в onDestroyView, поэтому "забытые" watchdog'и не держат WebViewHandler
+        // и не едят батарею, когда пользователь ушёл с экрана.
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main.immediate) {
+            delay(delayMs)
+            if (!isAdded || view == null || !::webView.isInitialized) return@launch
+            if (generation != renderWatchdogGeneration) return@launch
+            if (renderKey != lastRenderKey) return@launch
             if (webController.hasCompletedRender(renderKey)) {
                 revealThemeContentIfReady("renderWatchdogAlreadyComplete")
-                return@postDelayed
+                return@launch
             }
             if (BuildConfig.DEBUG) {
                 Log.w(
@@ -2271,21 +2277,22 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             forceRevealIfDomHasPosts("renderWatchdogDomProbe")
             webController.probeMissedFullLifecycleIfStuck()
             verifyThemeRenderedOrRetry()
-        }, delayMs)
+        }
     }
 
     private fun scheduleAlphaRevealSafetyWatchdog(renderKey: String, page: ThemePage) {
         val expectedPosts = expectedListPostsForReveal(page)
         if (expectedPosts == 0) return
         val generation = ++alphaRevealWatchdogGeneration
-        webView.postDelayed({
-            if (!isAdded || view == null || !::webView.isInitialized) return@postDelayed
-            if (generation != alphaRevealWatchdogGeneration) return@postDelayed
-            if (renderKey != lastRenderKey) return@postDelayed
-            if (webView.alpha >= 1f) return@postDelayed
-            if (!presenter.isPageLoaded()) return@postDelayed
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main.immediate) {
+            delay(THEME_ALPHA_REVEAL_SAFETY_DELAY_MS)
+            if (!isAdded || view == null || !::webView.isInitialized) return@launch
+            if (generation != alphaRevealWatchdogGeneration) return@launch
+            if (renderKey != lastRenderKey) return@launch
+            if (webView.alpha >= 1f) return@launch
+            if (!presenter.isPageLoaded()) return@launch
             forceRevealIfDomHasPosts("alphaRevealSafety")
-        }, THEME_ALPHA_REVEAL_SAFETY_DELAY_MS)
+        }
     }
 
     private fun forceRevealIfDomHasPosts(reason: String) {
@@ -2351,19 +2358,20 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     private fun scheduleInitialAnchorGuardReleaseIfNeeded(renderKey: String) {
         val generation = ++initialAnchorGuardWatchdogGeneration
         val delayMs = ThemeUnreadHybridAnchorGuardPolicy.ANCHOR_GUARD_MAX_BLOCK_MS
-        webView.postDelayed({
-            if (!isAdded || view == null || !::webView.isInitialized) return@postDelayed
-            if (generation != initialAnchorGuardWatchdogGeneration) return@postDelayed
-            if (renderKey != lastRenderKey) return@postDelayed
-            if (!presenter.expectsInitialAnchorScrollOnOpen()) return@postDelayed
-            if (presenter.hasBlockingScrollPending()) return@postDelayed
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main.immediate) {
+            delay(delayMs)
+            if (!isAdded || view == null || !::webView.isInitialized) return@launch
+            if (generation != initialAnchorGuardWatchdogGeneration) return@launch
+            if (renderKey != lastRenderKey) return@launch
+            if (!presenter.expectsInitialAnchorScrollOnOpen()) return@launch
+            if (presenter.hasBlockingScrollPending()) return@launch
             Log.i(
                     ThemeUnreadHybridAnchorGuardPolicy.LOG_TAG,
                     "anchor_guard_timeout trace=${presenter.getThemeLoadTraceId()}"
             )
             presenter.releaseUnreadAnchorHybridGuard("render_watchdog_timeout")
             revealThemeContentIfReady("anchorGuardTimeout")
-        }, delayMs)
+        }
     }
 
     private fun scheduleBlockingScrollStuckRevealIfNeeded(renderKey: String) {
@@ -2375,23 +2383,24 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         } else {
             0
         }
-        webView.postDelayed({
-            if (!isAdded || view == null || !::webView.isInitialized) return@postDelayed
-            if (generation != blockingScrollStuckWatchdogGeneration) return@postDelayed
-            if (renderKey != lastRenderKey) return@postDelayed
-            if (webView.alpha >= 1f) return@postDelayed
-            if (!presenter.isPageLoaded()) return@postDelayed
-            if (!webController.hasCompletedRender(renderKey)) return@postDelayed
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main.immediate) {
+            delay(delayMs)
+            if (!isAdded || view == null || !::webView.isInitialized) return@launch
+            if (generation != blockingScrollStuckWatchdogGeneration) return@launch
+            if (renderKey != lastRenderKey) return@launch
+            if (webView.alpha >= 1f) return@launch
+            if (!presenter.isPageLoaded()) return@launch
+            if (!webController.hasCompletedRender(renderKey)) return@launch
             if (!presenter.hasBlockingScrollPending()) {
                 revealThemeContentIfReady("scrollSettled")
-                return@postDelayed
+                return@launch
             }
             val blockingKind = presenter.getPendingScrollCommand()?.kind
             if (!ThemeUnreadHybridAnchorGuardPolicy.shouldAbandonBlockingScrollForSafetyReveal(blockingKind) &&
                     anchorAttempt < MAX_INITIAL_ANCHOR_REVEAL_ATTEMPTS
             ) {
                 scheduleBlockingScrollStuckRevealIfNeeded(renderKey)
-                return@postDelayed
+                return@launch
             }
             if (blockingKind == ThemeScrollCommand.Kind.INITIAL_ANCHOR) {
                 Log.i(
@@ -2401,7 +2410,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             }
             presenter.abandonBlockingScrollForSafetyReveal("scrollStuckReveal")
             forceRevealIfDomHasPosts("scrollStuckReveal")
-        }, delayMs)
+        }
     }
 
     private fun verifyThemeRenderedOrRetry() {
