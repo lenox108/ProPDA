@@ -1609,6 +1609,12 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     override fun onResumeOrShow() {
         super.onResumeOrShow()
         uiBinder.onResumeMessagePanel()
+        if (::webView.isInitialized) {
+            // Парный вызов к onPause() в onPauseOrHide: возобновляем рендер WebView
+            // и его таймеры, чтобы контент снова мог рендериться и обновляться.
+            webView.onResume()
+            webView.resumeTimers()
+        }
         webController.restoreScrollYAfterImageViewer()
         // Fix: Force hide keyboard and reset IME insets after returning from search
         hideKeyboard()
@@ -1709,6 +1715,10 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             webController.saveScrollYOnHide()
             webController.clearFocusAndHideKeyboard()
             hideKeyboard()
+            // Остановить рендер WebView: критично для батареи — иначе фоновый
+            // renderer-поток продолжает работу и не даёт процессу уйти в Doze.
+            webView.onPause()
+            webView.pauseTimers()
         }
         // Fix phantom white area: reset messagePanelHost padding and margin when leaving theme
         uiBinder.resetMessagePanelHostPadding()
@@ -1759,6 +1769,18 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             unregisterForContextMenu(webView)
             webView.setOnTouchListener(null)
             webView.animate().cancel()
+            // Полное освобождение WebView: останавливаем рендер, очищаем историю
+            // и грузим about:blank — иначе renderer-процесс WebView удерживается
+            // в фоне и не даёт процессу приложения уйти в Doze (батарея).
+            try {
+                webView.stopLoading()
+                webView.loadUrl("about:blank")
+                webView.clearHistory()
+                webView.removeAllViews()
+                webView.destroy()
+            } catch (_: Throwable) {
+                // WebView может быть уже в нестабильном состоянии — игнорируем.
+            }
         }
         bottomRefreshController = null
         pageSwipeDetector = null
