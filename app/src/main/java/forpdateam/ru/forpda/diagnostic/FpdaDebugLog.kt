@@ -45,8 +45,11 @@ object FpdaDebugLog {
     const val TAG_ARTICLE_WEBVIEW = TAG_ARTICLE_RENDER
     const val TAG_SMART_BUTTON = "FPDA_SMART_BUTTON"
     const val TAG_WEBVIEW_BLANK = "FPDA_WEBVIEW_BLANK"
+    /** Shared cross-pipeline WebView render lifecycle (Theme/Search/QMS/News) diagnostics. */
+    const val TAG_WEBVIEW_SESSION = "FPDA_WEBVIEW_SESSION"
     const val TAG_FAVORITES_UNREAD = "FPDA_FAVORITES_UNREAD"
     const val TAG_THEME_POST_READ_STATE = "FPDA_THEME_POST_READ_STATE"
+    const val TAG_TOPIC_HIGHLIGHT = "PPDA_TOPIC_HIGHLIGHT"
 
     private val sensitiveQueryKeys = setOf(
             "auth_key",
