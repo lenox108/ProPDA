@@ -31,6 +31,9 @@ import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
 import forpdateam.ru.forpda.common.webview.DialogsHelper
 import forpdateam.ru.forpda.common.webview.WebViewLoadDispatchPolicy
+import forpdateam.ru.forpda.common.webview.WebViewRenderController
+import forpdateam.ru.forpda.common.webview.WebViewRenderSession
+import forpdateam.ru.forpda.diagnostic.WebViewRenderDiagnostics
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
 import forpdateam.ru.forpda.entity.remote.qms.QmsChatModel
@@ -336,6 +339,8 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
             webView.setJsLifeCycleListener(null)
             webView.endWork()
         }
+        sharedRenderController.cleanup()
+        sharedRenderSession = null
         _chatBinding = null
         super.onDestroyView()
     }
@@ -882,6 +887,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
                 requestId = generation,
                 extra = mapOf("pendingRender" to qmsPendingWebRender)
         )
+        beginSharedQmsRender(generation, 0, "switch_fast")
         evalJsWhenReady(
                 """(function(){
                     if(typeof resetQmsMessageList==='function'){resetQmsMessageList();}
@@ -940,6 +946,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
                 extra = mapOf("pendingRender" to qmsPendingWebRender)
         )
         qmsShellHtml = qmsChatTemplate.generateHtmlBase()
+        beginSharedQmsRender(generation, qmsShellHtml.hashCode(), "load_base_container")
         scheduleQmsShellLoad(generation)
         scheduleQmsDomReadyWatchdog(generation)
     }
@@ -972,6 +979,14 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         qmsBasePageFinished = false
         qmsShellLoadDispatched = true
         webView.loadDataWithBaseURL("https://4pda.to/forum/", qmsShellHtml, "text/html", "utf-8", null)
+        sharedRenderSession?.let { session ->
+            if (session.targetId == generation) {
+                sharedRenderController.markLoadDispatched(session)
+                if (BuildConfig.DEBUG) {
+                    WebViewRenderDiagnostics.log(session, WebViewRenderDiagnostics.Event.LOAD_DISPATCHED)
+                }
+            }
+        }
     }
 
     private var qmsShellLayoutDispatchGeneration = -1
@@ -1270,6 +1285,30 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
     private var qmsLayoutWaitAttempts = 0
     private var qmsLoadGeneration = 0
     private var qmsLoadChatKey = ""
+
+    /**
+     * Additive shared-controller mirror (Phase 9, QMS). Runs alongside the existing
+     * [qmsLoadGeneration] / [isCurrentQmsLoad] system without changing any dispatch decision —
+     * diagnostics only. The existing per-feature logic stays authoritative.
+     */
+    private val sharedRenderController = WebViewRenderController()
+    private var sharedRenderSession: WebViewRenderSession? = null
+
+    private fun beginSharedQmsRender(generation: Int, contentHash: Int, source: String) {
+        val session = sharedRenderController.beginRender(
+                owner = WebViewRenderSession.Owner.QMS,
+                targetId = generation,
+                contentHash = contentHash,
+        )
+        sharedRenderSession = session
+        if (BuildConfig.DEBUG) {
+            WebViewRenderDiagnostics.log(
+                    session,
+                    WebViewRenderDiagnostics.Event.RENDER_REQUESTED,
+                    mapOf("source" to source, "qmsLoadGeneration" to generation),
+            )
+        }
+    }
     private var qmsWebMessagesApplied = false
     private var qmsPendingWebRender = false
     private var isNetworkRefreshing = false
@@ -1724,6 +1763,18 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
     private fun markQmsDomReadyAndFlush(generation: Int, source: String) {
         if (!isCurrentQmsLoad(generation) || qmsDomReady) return
         qmsDomReady = true
+        sharedRenderSession?.let { session ->
+            if (session.targetId == generation) {
+                sharedRenderController.markDomConfirmed(session)
+                if (BuildConfig.DEBUG) {
+                    WebViewRenderDiagnostics.log(
+                            session,
+                            WebViewRenderDiagnostics.Event.DOM_CONFIRMED,
+                            mapOf("source" to source),
+                    )
+                }
+            }
+        }
         val chatKey = currentQmsChatKey()
         val pending: List<String>
         synchronized(pendingQmsJs) {
