@@ -52,6 +52,9 @@ import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.presentation.search.SearchViewModel
 import forpdateam.ru.forpda.presentation.search.SearchJsInterface
 import forpdateam.ru.forpda.common.webview.WebViewLoadDispatchPolicy
+import forpdateam.ru.forpda.common.webview.WebViewRenderController
+import forpdateam.ru.forpda.common.webview.WebViewRenderSession
+import forpdateam.ru.forpda.diagnostic.WebViewRenderDiagnostics
 import forpdateam.ru.forpda.presentation.search.SearchWebRenderPolicy
 import forpdateam.ru.forpda.ui.fragments.search.SearchQueryHelper
 import forpdateam.ru.forpda.ui.fragments.TabFragment
@@ -158,6 +161,14 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
     private var searchLayoutDispatchGeneration = -1
     private var searchLayoutDispatchListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     private var searchBlankVerifyRunnable: Runnable? = null
+
+    /**
+     * Additive shared-controller mirror (Phase 9). Runs alongside the existing
+     * [searchRenderGeneration] / [WebViewLoadDispatchPolicy] system without changing any dispatch
+     * decision — diagnostics only. The existing per-feature logic stays authoritative.
+     */
+    private val sharedRenderController = WebViewRenderController()
+    private var sharedRenderSession: WebViewRenderSession? = null
 
     private val presenter: SearchViewModel by viewModels()
 
@@ -617,6 +628,8 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
         pendingSearchHtml = null
         pendingSearchHtmlHash = 0
         searchLoadDispatched = false
+        sharedRenderController.cleanup()
+        sharedRenderSession = null
         super.onDestroyView()
     }
 
@@ -668,6 +681,19 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
         searchLoadDispatched = false
         searchDomConfirmedGeneration = 0
         searchBlankRetryCount = 0
+        val sharedSession = sharedRenderController.beginRender(
+                owner = WebViewRenderSession.Owner.SEARCH,
+                targetId = searchRenderGeneration,
+                contentHash = htmlHash,
+        )
+        sharedRenderSession = sharedSession
+        if (BuildConfig.DEBUG) {
+            WebViewRenderDiagnostics.log(
+                    sharedSession,
+                    WebViewRenderDiagnostics.Event.RENDER_REQUESTED,
+                    mapOf("searchRenderGeneration" to searchRenderGeneration),
+            )
+        }
         scheduleSearchHtmlLoad()
     }
 
@@ -712,6 +738,14 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
                 "utf-8",
                 null
         )
+        sharedRenderSession?.let { session ->
+            if (session.targetId == generation) {
+                sharedRenderController.markLoadDispatched(session)
+                if (BuildConfig.DEBUG) {
+                    WebViewRenderDiagnostics.log(session, WebViewRenderDiagnostics.Event.LOAD_DISPATCHED)
+                }
+            }
+        }
     }
 
     private fun scheduleSearchLayoutDispatch(generation: Int) {
@@ -787,6 +821,18 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
             if (SearchWebRenderPolicy.isBodyVisible(contentHeight, domPostCount)) {
                 searchDomConfirmedGeneration = generation
                 searchBlankRetryCount = 0
+                sharedRenderSession?.let { session ->
+                    if (session.targetId == generation) {
+                        sharedRenderController.markDomConfirmed(session)
+                        if (BuildConfig.DEBUG) {
+                            WebViewRenderDiagnostics.log(
+                                    session,
+                                    WebViewRenderDiagnostics.Event.DOM_CONFIRMED,
+                                    mapOf("source" to source, "posts" to domPostCount),
+                            )
+                        }
+                    }
+                }
                 if (BuildConfig.DEBUG) {
                     Timber.d(
                             "SEARCH render confirmed source=%s generation=%d contentHeight=%d posts=%d",
