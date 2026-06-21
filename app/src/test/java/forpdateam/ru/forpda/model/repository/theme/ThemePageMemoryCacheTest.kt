@@ -63,4 +63,59 @@ class ThemePageMemoryCacheTest {
         assertTrue(ThemePageMemoryCache.shouldSkipCache("https://4pda.to/forum/index.php?showtopic=1&view=findpost&p=2"))
         assertFalse(ThemePageMemoryCache.shouldSkipCache("https://4pda.to/forum/index.php?showtopic=1&st=0"))
     }
+
+    @Test
+    fun get_withMatchingSignature_returnsHit() {
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        cache.put(key, ThemePage().apply { id = 1; renderSignature = "sig-A" })
+        assertNotNull(cache.get(key, expectedSignature = "sig-A"))
+    }
+
+    @Test
+    fun get_withDifferentSignature_missesAndEvicts() {
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        cache.put(key, ThemePage().apply { id = 1; renderSignature = "sig-A" })
+        // Stale-styled page must not be returned when the current signature changed.
+        assertNull(cache.get(key, expectedSignature = "sig-B"))
+        // It was evicted, so even a later no-signature read misses.
+        assertNull(cache.get(key))
+    }
+
+    @Test
+    fun get_withNullExpectedSignature_skipsSignatureCheck() {
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        cache.put(key, ThemePage().apply { id = 1; renderSignature = "sig-A" })
+        // Legacy behavior: null expected signature returns the entry regardless of its signature.
+        assertNotNull(cache.get(key, expectedSignature = null))
+    }
+
+    @Test
+    fun invalidateOnSignatureChange_clearsCacheWhenSignatureChanges() {
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        // First call only records the signature (no clear).
+        assertFalse(cache.invalidateOnSignatureChange("theme-1"))
+        cache.put(key, ThemePage().apply { id = 1 })
+        assertNotNull(cache.get(key))
+        // Same signature: no clear.
+        assertFalse(cache.invalidateOnSignatureChange("theme-1"))
+        assertNotNull(cache.get(key))
+        // Changed signature: whole cache cleared.
+        assertTrue(cache.invalidateOnSignatureChange("theme-2"))
+        assertNull(cache.get(key))
+    }
+
+    @Test
+    fun invalidateOnSignatureChange_ignoresNullSignature() {
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        cache.invalidateOnSignatureChange("theme-1")
+        cache.put(key, ThemePage().apply { id = 1 })
+        // Null signature never wipes a valid cache.
+        assertFalse(cache.invalidateOnSignatureChange(null))
+        assertNotNull(cache.get(key))
+    }
 }
