@@ -598,6 +598,8 @@
     <string name="pref_summary_panel_hidden">Hide the post typing field by default</string>
     <string name="pref_title_scroll_button">Smart topic button</string>
     <string name="pref_summary_scroll_button">Shows a floating button: tap to scroll the topic, hold to open page navigation.</string>
+    <string name="pref_title_smart_preload">Smart page preload</string>
+    <string name="pref_summary_smart_preload">Preloads the next topic page while scrolling down so jumping to it is instant. Disabled in WebView compatibility mode.</string>
     <string name="pref_title_topic_pagination_panel">Topic page panel</string>
     <string name="pref_summary_topic_pagination_panel">Shows page buttons below the topic toolbar. Useful if you do not use gestures.</string>
     <string name="pref_title_topic_scroll_mode">Topic reading mode</string>

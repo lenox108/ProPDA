@@ -69,6 +69,7 @@ class MainDataStore(private val context: Context) {
         val STARTUP_SCREEN = stringPreferencesKey("startup_screen")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
         val WEBVIEW_COMPATIBILITY_MODE = booleanPreferencesKey("webview_compatibility_mode")
+        val WEBVIEW_SMART_PRELOAD = booleanPreferencesKey("webview_smart_preload")
     }
 
     fun observeWebViewFontSizeFlow(): Flow<Int> =
@@ -213,6 +214,14 @@ class MainDataStore(private val context: Context) {
                 preferences[PreferencesKeys.WEBVIEW_COMPATIBILITY_MODE]
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
                         .getBoolean(AppPreferences.Main.WEBVIEW_COMPATIBILITY_MODE, false)
+            }, false)
+
+    /** Smart Preload of the next topic page (Phase 8). Kill switch, default OFF. */
+    fun observeSmartPreloadFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.WEBVIEW_SMART_PRELOAD]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Main.WEBVIEW_SMART_PRELOAD, false)
             }, false)
 
     fun observeDownloadMethodFlow(): Flow<AppPreferences.Main.DownloadMethod> =
@@ -480,6 +489,29 @@ class MainDataStore(private val context: Context) {
         return false
     }
 
+    suspend fun setSmartPreload(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.WEBVIEW_SMART_PRELOAD] = value
+        }
+        mirrorPrefs.edit().putBoolean("webview_smart_preload", value).apply()
+        context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                .edit().putBoolean(AppPreferences.Main.WEBVIEW_SMART_PRELOAD, value).apply()
+    }
+
+    fun getSmartPreloadImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.WEBVIEW_SMART_PRELOAD)) {
+            return legacy.getBoolean(AppPreferences.Main.WEBVIEW_SMART_PRELOAD, false)
+        }
+        if (mirrorPrefs.contains("webview_smart_preload")) {
+            return mirrorPrefs.getBoolean("webview_smart_preload", false)
+        }
+        return false
+    }
+
     suspend fun setWebViewFontSize(size: Int) {
         val clamped = max(min(size, 64), 8)
         safeEdit { preferences ->
@@ -674,6 +706,9 @@ class MainDataStore(private val context: Context) {
 
     suspend fun getCompatibilityMode(): Boolean =
             observeCompatibilityModeFlow().map { it }.first()
+
+    suspend fun getSmartPreload(): Boolean =
+            observeSmartPreloadFlow().map { it }.first()
 
     suspend fun getTopicPaginationPanelEnabled(): Boolean =
             observeTopicPaginationPanelEnabledFlow().map { it }.first()
