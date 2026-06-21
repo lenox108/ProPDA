@@ -27,6 +27,7 @@ import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.BatteryDebugLogger
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.common.webview.DialogsHelper
+import forpdateam.ru.forpda.common.webview.WebViewJsBatchMetrics
 import forpdateam.ru.forpda.common.webview.UrlDecision
 import forpdateam.ru.forpda.common.webview.UrlPolicy
 import forpdateam.ru.forpda.common.webview.jsinterfaces.IBase
@@ -78,6 +79,11 @@ open class ExtendedWebView @JvmOverloads constructor(
 
     private var onDirectionListener: OnDirectionListener? = null
     private var onScrollListener: OnScrollListener? = null
+    // Состояние «поиска на странице». Хранит активный запрос и счётчик совпадений,
+    // чтобы findNext выполнялся только после успешного findAllAsync (см. FindOnPageState).
+    private val findOnPageState = forpdateam.ru.forpda.presentation.theme.FindOnPageState()
+    private var findResultListener: OnFindResultListener? = null
+    private var findListenerInstalled = false
     private var audioManager: AudioManager? = null
     private val mHandler: Handler = Handler(Looper.getMainLooper())
     private var mUiThread: Thread? = null
@@ -87,18 +93,30 @@ open class ExtendedWebView @JvmOverloads constructor(
     var systemLinkHandler: ISystemLinkHandler? = null
     private var securityProfile: WebViewSecurityProfile = WebViewSecurityProfile.UNTRUSTED_EXTERNAL
     private var destroyedForReuse: Boolean = false
-    private var timersPaused: Boolean = false
+    // Стартуем в "paused" состоянии: WebView не учтён в глобальном счётчике активных,
+    // пока его фрагмент не вызовет onResume(). Это держит баланс счётчика
+    // activeTimerWebViews (первый onResume инкрементит, парный onPause декрементит).
+    private var timersPaused: Boolean = true
 
     private val jsBatchLock = Any()
     private val pendingJs = StringBuilder()
     private var jsFlushPosted = false
+    /** Number of commands currently buffered in [pendingJs] (guarded by [jsBatchLock]). */
+    private var pendingJsCommandCount = 0
+    /** DEBUG-oriented batching metrics (Phase 5). Counters are cheap; logging is DEBUG-gated. */
+    val jsBatchMetrics = WebViewJsBatchMetrics()
     private val jsFlushRunnable = Runnable {
-        val script = synchronized(jsBatchLock) {
+        val pair = synchronized(jsBatchLock) {
             jsFlushPosted = false
             if (pendingJs.isEmpty()) return@Runnable
-            pendingJs.toString().also { pendingJs.setLength(0) }
+            val batch = pendingJs.toString()
+            val count = pendingJsCommandCount
+            pendingJs.setLength(0)
+            pendingJsCommandCount = 0
+            batch to count
         }
-        evalJsImmediate(script)
+        jsBatchMetrics.onFlush(pair.second.toLong())
+        evalJsImmediate(pair.first)
     }
 
     interface OnDirectionListener {
@@ -119,6 +137,11 @@ open class ExtendedWebView @JvmOverloads constructor(
         fun onClick(actionMode: ActionMode, item: MenuItem): Boolean
     }
 
+    /** Уведомляет о результате «поиска на странице»: индекс активного совпадения и их общее число. */
+    interface OnFindResultListener {
+        fun onFindResult(activeMatchIndex: Int, matchCount: Int)
+    }
+
     fun init(profile: WebViewSecurityProfile = WebViewSecurityProfile.UNTRUSTED_EXTERNAL) {
         destroyedForReuse = false
         securityProfile = profile
@@ -130,7 +153,13 @@ open class ExtendedWebView @JvmOverloads constructor(
         settings.minimumFontSize = 1
         settings.minimumLogicalFontSize = 1
         settings.defaultFontSize = 16
-        settings.textZoom = 100
+        // X-04: compute the user-font-scale-adjusted text zoom **once**, before
+        // the WebView lays out its first page. The previous code path set
+        // textZoom=100 here and only later reset it to `fontScale * 100`
+        // further down, causing a visible "jumps from 100% → 130%" glitch
+        // on the first paint of any theme/news screen. Setting it here means
+        // the WebView never paints at the wrong size.
+        settings.textZoom = (resources.configuration.fontScale * 100).toInt()
         
         // JavaScript включается в зависимости от профиля безопасности
         settings.javaScriptEnabled = when (profile) {
@@ -148,10 +177,19 @@ open class ExtendedWebView @JvmOverloads constructor(
         settings.allowContentAccess = false
         settings.allowFileAccessFromFileURLs = false
         settings.allowUniversalAccessFromFileURLs = false
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        // S-07: in release builds, refuse mixed (http inside https) content
+        // outright. In debug builds, keep the legacy compatibility mode so QA
+        // can see what would have been blocked before shipping — this catches
+        // CDN regressions locally instead of after a release.
+        settings.mixedContentMode = if (BuildConfig.DEBUG) {
+            WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        } else {
+            WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        }
         setRelativeFontSize(16)
         setBackgroundColor(context.getColorFromAttr(R.attr.background_base))
-        settings.textZoom = (resources.configuration.fontScale * 100).toInt()
+        // Note: textZoom is set earlier (X-04) so the first paint uses the
+        // correct font scale. Do not reset it here.
 
         val systemLinkHandler = this.systemLinkHandler
         if (systemLinkHandler != null) {
@@ -238,10 +276,18 @@ open class ExtendedWebView @JvmOverloads constructor(
         super.onPause()
         if (!timersPaused) {
             timersPaused = true
-            pauseTimers()
+            // pauseTimers()/resumeTimers() в Android — ПРОЦЕССНО-ГЛОБАЛЬНЫЕ: они
+            // замораживают JS/таймеры во ВСЕХ WebView приложения, а не только в этом.
+            // Поэтому глобальную паузу ставим лишь когда на паузу ушёл последний
+            // активный WebView. Иначе фоновый WebView (например, тема в бэкстеке)
+            // заморозит JS у видимого WebView поиска и контент не отрендерится.
+            val remaining = activeTimerWebViews.updateAndGet { if (it > 0) it - 1 else 0 }
+            if (remaining == 0) {
+                pauseTimers()
+                BatteryDebugLogger.logState("WebView", "pauseTimers", "profile=$securityProfile")
+            }
         }
         clearQueuedJs()
-        BatteryDebugLogger.logState("WebView", "pauseTimers", "profile=$securityProfile")
         if (BuildConfig.DEBUG) Timber.v("onPause $this")
     }
 
@@ -249,9 +295,12 @@ open class ExtendedWebView @JvmOverloads constructor(
         super.onResume()
         if (timersPaused) {
             timersPaused = false
-            resumeTimers()
+            // Возобновляем глобальные таймеры при появлении первого активного WebView.
+            if (activeTimerWebViews.incrementAndGet() == 1) {
+                resumeTimers()
+                BatteryDebugLogger.logState("WebView", "resumeTimers", "profile=$securityProfile")
+            }
         }
-        BatteryDebugLogger.logState("WebView", "resumeTimers", "profile=$securityProfile")
         if (BuildConfig.DEBUG) Timber.v("onResume $this")
     }
 
@@ -261,6 +310,71 @@ open class ExtendedWebView @JvmOverloads constructor(
 
     fun setOnScrollListener(onScrollListener: OnScrollListener?) {
         this.onScrollListener = onScrollListener
+    }
+
+    /**
+     * Слушатель результатов «поиска на странице». Нужен, чтобы UI (строка поиска)
+     * мог показать счётчик совпадений / включить кнопки prev/next.
+     * Установка слушателя также регистрирует нативный [FindListener] (см. [ensureFindListener]).
+     */
+    fun setOnFindResultListener(listener: OnFindResultListener?) {
+        this.findResultListener = listener
+        if (listener != null) ensureFindListener()
+    }
+
+    /**
+     * Регистрирует нативный [WebView.FindListener]. БЕЗ него [findAllAsync] на многих
+     * устройствах не подсвечивает совпадения и не скроллит к ним — это и есть корневая
+     * причина неработающего «поиска на странице». Ставим один раз (идемпотентно).
+     */
+    private fun ensureFindListener() {
+        if (findListenerInstalled) return
+        findListenerInstalled = true
+        setFindListener { activeMatchOrdinal, numberOfMatches, _ ->
+            findOnPageState.onFindResult(activeMatchOrdinal, numberOfMatches)
+            if (BuildConfig.DEBUG) {
+                Timber.d("onFindResult numberOfMatches=%d active=%d", numberOfMatches, activeMatchOrdinal)
+            }
+            findResultListener?.onFindResult(
+                findOnPageState.activeMatchIndex,
+                findOnPageState.matchCount
+            )
+        }
+    }
+
+    /**
+     * Запускает «поиск на странице». Сначала очищает прошлую подсветку, затем
+     * запускает [findAllAsync] для непустого запроса (FindListener подсветит совпадения).
+     * Пустая строка трактуется как очистка.
+     */
+    fun findOnPage(text: String) {
+        ensureFindListener()
+        if (BuildConfig.DEBUG) Timber.d("findOnPage len=%d", text.trim().length)
+        when (val decision = findOnPageState.onTextChanged(text)) {
+            is forpdateam.ru.forpda.presentation.theme.FindOnPageState.Decision.Clear -> {
+                clearMatches()
+                findResultListener?.onFindResult(-1, 0)
+            }
+            is forpdateam.ru.forpda.presentation.theme.FindOnPageState.Decision.Find -> {
+                // clearMatches перед новым запросом — иначе на части устройств остаётся
+                // старая подсветка и счётчик не пересчитывается.
+                clearMatches()
+                findAllAsync(decision.query)
+            }
+        }
+    }
+
+    /** Переход к следующему/предыдущему совпадению. Работает только после успешного [findOnPage]. */
+    fun findOnPageNext(next: Boolean) {
+        if (!findOnPageState.canFindNext()) return
+        findNext(next)
+    }
+
+    /** Очищает подсветку и сбрасывает состояние «поиска на странице» (закрытие панели). */
+    fun clearFindOnPage() {
+        findOnPageState.reset()
+        clearMatches()
+        findResultListener?.onFindResult(-1, 0)
     }
 
     override fun onScrollChanged(scrollX: Int, scrollY: Int, oldScrollX: Int, oldScrollY: Int) {
@@ -410,21 +524,44 @@ open class ExtendedWebView @JvmOverloads constructor(
     }
 
     fun evalJs(script: String, resultCallback: ValueCallback<String>?) {
+        if (destroyedForReuse) {
+            jsBatchMetrics.onIgnoredAfterDestroy()
+            if (BuildConfig.DEBUG) Timber.w("evalJs(callback) ignored after destroy")
+            resultCallback?.onReceiveValue(null)
+            return
+        }
         syncWithJs { evaluateJavascript(script, resultCallback) }
     }
 
     private fun enqueueEvalJs(script: String?) {
         if (script == null || script.isEmpty()) return
+        // Phase 5: never enqueue JS after the WebView was torn down; it can never run and
+        // would only leak runnables/memory.
+        if (destroyedForReuse) {
+            jsBatchMetrics.onIgnoredAfterDestroy()
+            if (BuildConfig.DEBUG) Timber.w("evalJs ignored after destroy")
+            return
+        }
+        jsBatchMetrics.onCommandEnqueued()
+        var overflow = false
         synchronized(jsBatchLock) {
             pendingJs.append(script)
             val t = script.trim()
             if (!t.endsWith(";")) {
                 pendingJs.append(';')
             }
-            if (!jsFlushPosted) {
+            pendingJsCommandCount++
+            // Cap the buffer: a runaway producer must not build an unbounded script string.
+            if (pendingJs.length >= MAX_PENDING_JS_LENGTH) {
+                overflow = true
+            } else if (!jsFlushPosted) {
                 jsFlushPosted = true
-                mHandler.postDelayed(jsFlushRunnable, 16)
+                mHandler.postDelayed(jsFlushRunnable, JS_BATCH_DELAY_MS)
             }
+        }
+        if (overflow) {
+            // Flush synchronously on the UI thread (idempotent; runnable re-checks emptiness).
+            flushQueuedJs()
         }
     }
 
@@ -435,10 +572,14 @@ open class ExtendedWebView @JvmOverloads constructor(
 
     fun clearQueuedJs() {
         mHandler.removeCallbacks(jsFlushRunnable)
-        synchronized(jsBatchLock) {
+        val dropped = synchronized(jsBatchLock) {
+            val count = pendingJsCommandCount
             pendingJs.setLength(0)
+            pendingJsCommandCount = 0
             jsFlushPosted = false
+            count
         }
+        jsBatchMetrics.onClear(dropped.toLong())
         actionsForWebView.clear()
     }
 
@@ -449,6 +590,22 @@ open class ExtendedWebView @JvmOverloads constructor(
             Timber.e(error, "WebView evaluateJS error")
             loadUrl("javascript:$script")
         }
+    }
+
+    /**
+     * Phase 5: explicit immediate (non-batched) fire-and-forget eval for commands that must not
+     * be delayed by the 16ms batch window. Still respects the destroy guard. Use sparingly —
+     * most commands should go through the batched [evalJs].
+     */
+    fun evalJsNow(script: String?) {
+        if (script.isNullOrEmpty()) return
+        if (destroyedForReuse) {
+            jsBatchMetrics.onIgnoredAfterDestroy()
+            if (BuildConfig.DEBUG) Timber.w("evalJsNow ignored after destroy")
+            return
+        }
+        jsBatchMetrics.onForcedImmediate()
+        evalJsImmediate(script)
     }
 
     @JavascriptInterface
@@ -729,6 +886,25 @@ open class ExtendedWebView @JvmOverloads constructor(
         const val DIRECTION_NONE = 0
         const val DIRECTION_UP = 1
         const val DIRECTION_DOWN = 2
+
+        /** Batch window for queued JS commands (ms). */
+        private const val JS_BATCH_DELAY_MS = 16L
+        /**
+         * Upper bound on the buffered JS script length before a forced early flush. Protects
+         * against an unbounded producer building a giant script string between flushes.
+         */
+        private const val MAX_PENDING_JS_LENGTH = 256 * 1024
+
+        /**
+         * Число WebView в состоянии "resumed/active" во всём процессе.
+         *
+         * [android.webkit.WebView.pauseTimers]/[android.webkit.WebView.resumeTimers]
+         * — ГЛОБАЛЬНЫЕ для процесса: пауза одного WebView замораживает JS/таймеры во
+         * всех WebView приложения. Чтобы фоновый WebView (тема в бэкстеке) не замораживал
+         * видимый (поиск/другая вкладка), глобальную паузу ставим только когда активных
+         * WebView не осталось, а возобновляем — при появлении первого активного.
+         */
+        private val activeTimerWebViews = java.util.concurrent.atomic.AtomicInteger(0)
     }
 }
 

@@ -114,14 +114,20 @@ class ThemeJsApi(
         webView.evalJs(script)
     }
 
-    /** Execute JS immediately. */
+    /**
+     * Fire-and-forget JS execution. Phase 5: routed through [ExtendedWebView.evalJsNow] instead of
+     * a raw [android.webkit.WebView.evaluateJavascript]. This preserves the previous IMMEDIATE
+     * timing/ordering (so it stays correct relative to [evalWithResult] sequences) while gaining
+     * the shared post-destroy guard and batch metrics. Pure batched queuing is available via
+     * [queue] for callers that explicitly want coalescing.
+     */
     fun eval(script: String) {
-        webView.evaluateJavascript(script, null)
+        webView.evalJsNow(script)
     }
 
-    /** Execute JS immediately with a result callback. */
+    /** Execute JS immediately with a result callback (must not be batched). */
     fun evalWithResult(script: String, callback: ValueCallback<String>) {
-        webView.evaluateJavascript(script, callback)
+        webView.evalJs(script, callback)
     }
 
     fun flushQueued() {
@@ -257,6 +263,48 @@ class ThemeJsApi(
     fun revealAfterFirstRestore(id: String): String {
         val idJs = JSONObject.quote(id)
         return "if(typeof revealThemeAfterFirstRestore==='function'){revealThemeAfterFirstRestore($idJs);}"
+    }
+
+    /**
+     * Re-applies the topic-post highlight from native code once the WebView is
+     * interactive. The static class is already embedded in [template_theme.html]
+     * by the renderer, but this call re-asserts it after any post-render DOM
+     * mutation (e.g. smart-patch, infinite-scroll append). Generation id matches
+     * [HighlightTarget] / `renderGenerationId` so stale callbacks (e.g. superseded
+     * renders) are filtered out by the JS guard.
+     */
+    fun applyHighlight(postId: Long, type: String, generationId: Int): String {
+        val postIdJs = postId.toString()
+        val typeJs = JSONObject.quote(type)
+        return "if(typeof window.PPDA_applyHighlight==='function'){window.PPDA_applyHighlight($postIdJs,$typeJs,$generationId);}"
+    }
+
+    /**
+     * Arms the JS-side fade-out timer that strips the visible highlight class
+     * after [delayMs] milliseconds for a given render [generationId].
+     *
+     * Called once per render event (topic open / page change / refresh) from
+     * [forpdateam.ru.forpda.ui.fragments.theme.modules.ThemeWebController]
+     * right after [applyHighlight]. The JS implementation:
+     *  - cancels any prior pending timer so a stale fadeout can never fire
+     *    on top of a fresh render;
+     *  - sets a new 2-second (configurable via [delayMs]) setTimeout that adds
+     *    `post-highlight-fading` (CSS animates opacity to 0 over ~300ms) and
+     *    strips the base class on `transitionend`;
+     *  - reports back via `IThemePresenter.highlightFadeoutCompleted(generationId)`
+     *    so the `highlight_fadeout_completed` diagnostic can be emitted.
+     *
+     * Idempotent for the same generation: re-calling with the same id before
+     * the timer fires does NOT extend the deadline (the existing timer is
+     * preserved). This guards against a JS re-apply from clobbering a
+     * mid-fade transition.
+     */
+    fun scheduleHighlightFadeout(generationId: Int, delayMs: Int): String {
+        return "if(typeof window.PPDA_scheduleHighlightFadeout==='function'){window.PPDA_scheduleHighlightFadeout($generationId,$delayMs);}"
+    }
+
+    fun setReadPosObserverEnabled(enabled: Boolean): String {
+        return "if(typeof window.PPDA_enableReadPosObserver==='function'){window.PPDA_enableReadPosObserver($enabled);}"
     }
 
     fun setBottomChromePaddingImmediate(paddingCssPx: Float): String {
