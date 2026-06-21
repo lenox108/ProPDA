@@ -24,6 +24,8 @@ import forpdateam.ru.forpda.model.interactors.CrossScreenInteractor
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.theme.ThemeRepository
+import forpdateam.ru.forpda.presentation.theme.ThemeBackRestoreUrlPolicy
+import forpdateam.ru.forpda.presentation.theme.ThemeSmartPreloadPolicy
 import forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.ForumBlacklistedUser
@@ -344,6 +346,78 @@ class ThemeUseCase @Inject constructor(
     fun invalidateTopicPageCache(topicId: Int) {
         if (topicId > 0) {
             themeRepository.invalidateTopicPageCache(topicId)
+        }
+    }
+
+    // --- Smart Preload of the next topic page (Phase 8). Behind kill switch, default OFF. ---
+
+    @Volatile
+    private var smartPreloadInFlight = false
+    @Volatile
+    private var smartPreloadTopicId = 0
+    @Volatile
+    private var smartPreloadFailures = 0
+
+    /**
+     * Decides (via [ThemeSmartPreloadPolicy]) whether to preload the next page of [topicId] and, if
+     * so, performs a best-effort fetch into the shared [forpdateam.ru.forpda.model.repository.theme.ThemePageMemoryCache].
+     * Pure-policy decision; all I/O is best-effort and never surfaces an error to the user.
+     *
+     * Returns true if a preload was actually started. The caller passes live scroll/refresh/topic
+     * state; this method owns only the in-flight + failure-count bookkeeping.
+     */
+    suspend fun preloadNextPageIfAllowed(
+            topicId: Int,
+            currentPage: Int,
+            totalPages: Int,
+            perPage: Int,
+            scrollFraction: Float,
+            isRefreshing: Boolean,
+            isTopicOpening: Boolean,
+            hatOpen: Boolean,
+            pollOpen: Boolean,
+            nextPageAlreadyAvailable: Boolean,
+    ): Boolean {
+        val slowModeEnabled = runCatching { mainPreferencesHolder.getCompatibilityMode() }.getOrDefault(false)
+        val featureEnabled = runCatching { mainPreferencesHolder.getSmartPreload() }.getOrDefault(false)
+        if (smartPreloadTopicId != topicId) {
+            // Topic switched: reset per-topic failure bookkeeping (do not preload after topic switch).
+            smartPreloadFailures = 0
+            smartPreloadTopicId = topicId
+        }
+        val input = ThemeSmartPreloadPolicy.Input(
+                featureEnabled = featureEnabled,
+                slowModeEnabled = slowModeEnabled,
+                currentTopicId = topicId,
+                currentPage = currentPage,
+                totalPages = totalPages,
+                scrollFraction = scrollFraction,
+                isRefreshing = isRefreshing,
+                isTopicOpening = isTopicOpening,
+                isPreloadInFlight = smartPreloadInFlight,
+                nextPageAlreadyAvailable = nextPageAlreadyAvailable,
+                consecutiveFailures = smartPreloadFailures,
+        )
+        val nextPage = ThemeSmartPreloadPolicy.nextPageToPreload(input)
+        if (!ThemeSmartPreloadPolicy.shouldStartPreload(input) || nextPage == null) {
+            return false
+        }
+        smartPreloadInFlight = true
+        try {
+            val st = (nextPage - 1).coerceAtLeast(0) * perPage.coerceAtLeast(1)
+            val url = ThemeBackRestoreUrlPolicy.buildCleanThemeUrl(topicId, st)
+            val result = themeRepository.preloadTheme(url, hatOpen, pollOpen)
+            val usable = result != null && ThemeSmartPreloadPolicy.isPreloadResultUsable(
+                    requestedTopicId = topicId,
+                    requestedPage = nextPage,
+                    resultTopicId = result.id,
+                    resultPage = result.pagination.current,
+                    currentTopicId = smartPreloadTopicId,
+            )
+            smartPreloadFailures = if (usable) 0 else (smartPreloadFailures + 1)
+            return usable
+        } finally {
+            smartPreloadInFlight = false
         }
     }
 

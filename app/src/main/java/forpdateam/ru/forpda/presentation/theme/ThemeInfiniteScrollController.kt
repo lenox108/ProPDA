@@ -202,6 +202,9 @@ class ThemeInfiniteScrollController(
                     scope.launch {
                         themeUseCase.syncFavoriteLastPost(loaded)
                     }
+                    if (dir == InfiniteDirection.BOTTOM) {
+                        maybeSmartPreloadAfter(loaded, loadedNumber, session)
+                    }
                 }
                 is ThemeUseCase.LoadResult.Error -> {
                     if (session != infiniteSession) return@launch
@@ -221,6 +224,41 @@ class ThemeInfiniteScrollController(
             infiniteTopJob = job
         } else {
             infiniteBottomJob = job
+        }
+    }
+
+    /**
+     * Smart Preload (Phase 8, behind kill switch — default OFF): after a BOTTOM page is appended via
+     * hybrid scroll, warm exactly ONE page ahead into the shared ThemePageMemoryCache so the next
+     * natural bottom-reach is instant. Fully best-effort: any failure is swallowed by the use case,
+     * and the kill switch / Slow WebView Mode gating lives in ThemeSmartPreloadPolicy.
+     */
+    private fun maybeSmartPreloadAfter(loaded: ThemePage, loadedNumber: Int, session: Int) {
+        val topicId = loaded.id
+        if (topicId <= 0) return
+        val totalPages = loaded.pagination.all
+        val perPage = loaded.pagination.perPage.coerceAtLeast(1)
+        val nextPage = loadedNumber + 1
+        val nextAlreadyAvailable = loadedPages[nextPage]?.id == topicId
+        val hatOpen = getUserHatOpenOverride() ?: false
+        scope.launch {
+            if (session != infiniteSession) return@launch
+            runCatching {
+                themeUseCase.preloadNextPageIfAllowed(
+                    topicId = topicId,
+                    currentPage = loadedNumber,
+                    totalPages = totalPages,
+                    perPage = perPage,
+                    // A bottom infinite-scroll insert means the user crossed the scroll trigger, so the
+                    // threshold is satisfied by construction; the policy still enforces all other gates.
+                    scrollFraction = ThemeSmartPreloadPolicy.DEFAULT_PRELOAD_THRESHOLD,
+                    isRefreshing = false,
+                    isTopicOpening = false,
+                    hatOpen = hatOpen,
+                    pollOpen = loaded.isPollOpen,
+                    nextPageAlreadyAvailable = nextAlreadyAvailable,
+                )
+            }
         }
     }
 

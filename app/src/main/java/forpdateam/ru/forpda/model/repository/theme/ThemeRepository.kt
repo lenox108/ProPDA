@@ -99,6 +99,45 @@ class ThemeRepository(
         pageMemoryCache.invalidateTopic(topicId)
     }
 
+    /**
+     * Best-effort Smart Preload of one topic page (Phase 8). Fetches [url] through the normal
+     * [getTheme] path so the result lands in [ThemePageMemoryCache] (the single shared store — no
+     * parallel preload cache). Returns the resolved page on success so the caller can verify it
+     * against the still-current topic before relying on it; returns null on any failure (the caller
+     * treats this as a preload miss and never surfaces an error to the user).
+     *
+     * The kill switch and all "should I preload" gating live in [ThemeSmartPreloadPolicy]; this
+     * method assumes the decision has already been made and only performs the fetch.
+     */
+    suspend fun preloadTheme(
+            url: String,
+            hatOpen: Boolean,
+            pollOpen: Boolean,
+    ): ThemePage? = withContext(Dispatchers.IO) {
+        if (ThemePageMemoryCache.shouldSkipCache(url)) return@withContext null
+        runCatching {
+            FpdaDebugLog.logTheme(
+                    FpdaDebugLog.ThemeArea.LOAD,
+                    "smart_preload_started",
+                    mapOf(
+                            "url" to FpdaDebugLog.sanitizeUrl(url),
+                            "hatOpen" to hatOpen,
+                            "pollOpen" to pollOpen,
+                    ),
+            )
+            getTheme(url, _withHtml = true, hatOpen = hatOpen, pollOpen = pollOpen)
+        }.onFailure { error ->
+            FpdaDebugLog.logTheme(
+                    FpdaDebugLog.ThemeArea.LOAD,
+                    "smart_preload_miss",
+                    mapOf(
+                            "url" to FpdaDebugLog.sanitizeUrl(url),
+                            "error" to FpdaDebugLog.errorClass(error),
+                    ),
+            )
+        }.getOrNull()
+    }
+
     suspend fun reportPost(themeId: Int, postId: Int, message: String): Boolean = withContext(Dispatchers.IO) {
         themeApi.reportPost(themeId, postId, message)
     }

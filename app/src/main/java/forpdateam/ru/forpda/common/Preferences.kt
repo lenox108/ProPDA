@@ -53,6 +53,7 @@ object Preferences {
         const val STARTUP_SCREEN = PREFIX + "startup_screen"
         const val USE_MATERIAL_YOU = PREFIX + "use_material_you"
         const val WEBVIEW_COMPATIBILITY_MODE = PREFIX + "webview.compatibility_mode"
+        const val WEBVIEW_SMART_PRELOAD = PREFIX + "webview.smart_preload"
 
         object Theme {
             private const val PREFIX = Main.PREFIX + "theme."

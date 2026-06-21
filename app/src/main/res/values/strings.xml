@@ -720,6 +720,8 @@
 
     <string name="pref_title_scroll_button">Умная кнопка темы</string>
     <string name="pref_summary_scroll_button">Показывает плавающую кнопку: короткое нажатие прокручивает тему, удержание открывает переход по страницам.</string>
+    <string name="pref_title_smart_preload">Умная предзагрузка страниц</string>
+    <string name="pref_summary_smart_preload">Заранее подгружает следующую страницу темы при прокрутке вниз, чтобы переход был мгновенным. Отключается в режиме совместимости WebView.</string>
     <string name="pref_title_topic_pagination_panel">Панель страниц темы</string>
     <string name="pref_summary_topic_pagination_panel">Показывает кнопки страниц под панелью темы. Удобно, если не пользоваться жестами.</string>
     <string name="pref_title_topic_scroll_mode">Режим чтения тем</string>

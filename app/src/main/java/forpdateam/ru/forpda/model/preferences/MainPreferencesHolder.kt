@@ -56,6 +56,8 @@ class MainPreferencesHolder(
 
     fun observeCompatibilityModeFlow(): Flow<Boolean> = dataStore.observeCompatibilityModeFlow()
 
+    fun observeSmartPreloadFlow(): Flow<Boolean> = dataStore.observeSmartPreloadFlow()
+
     // --- Геттеры (instant mirror reads, no runBlocking) ---
     fun getWebViewFontSize(): Int = dataStore.getWebViewFontSizeImmediate()
 
@@ -74,6 +76,8 @@ class MainPreferencesHolder(
     fun getScrollButtonEnabled(): Boolean = dataStore.getScrollButtonEnabledImmediate()
 
     fun getCompatibilityMode(): Boolean = dataStore.getCompatibilityModeImmediate()
+
+    fun getSmartPreload(): Boolean = dataStore.getSmartPreloadImmediate()
 
     fun getTopicPaginationPanelEnabled(): Boolean = dataStore.getTopicPaginationPanelEnabledImmediate()
 
@@ -121,6 +125,8 @@ class MainPreferencesHolder(
     suspend fun setScrollButtonEnabled(value: Boolean) = dataStore.setScrollButtonEnabled(value)
 
     suspend fun setCompatibilityMode(value: Boolean) = dataStore.setCompatibilityMode(value)
+
+    suspend fun setSmartPreload(value: Boolean) = dataStore.setSmartPreload(value)
 
     suspend fun setTopicPaginationPanelEnabled(value: Boolean) = dataStore.setTopicPaginationPanelEnabled(value)
 
