@@ -16,19 +16,28 @@ import android.webkit.WebViewClient
 import androidx.core.view.ViewCompat
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.diagnostic.FpdaDebugLog
+import forpdateam.ru.forpda.diagnostic.TopicHighlightDiagnostics
 import forpdateam.ru.forpda.diagnostic.TopicScrollTrace
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ArticleLinkResolver
+import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.SiteUrls
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.common.getVecDrawable
 import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
+import forpdateam.ru.forpda.common.webview.WebViewRenderController
+import forpdateam.ru.forpda.common.webview.WebViewRenderSession
+import forpdateam.ru.forpda.diagnostic.WebViewRenderDiagnostics
 import forpdateam.ru.forpda.entity.remote.IBaseForumPost
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.ISystemLinkHandler
+import forpdateam.ru.forpda.presentation.theme.HighlightArmingPolicy
+import forpdateam.ru.forpda.presentation.theme.ReadPositionSaveGate
+import forpdateam.ru.forpda.presentation.theme.ThemeLinkNavigationAction
+import forpdateam.ru.forpda.presentation.theme.ThemeLinkNavigationPolicy
 import forpdateam.ru.forpda.presentation.theme.ThemeHtmlMetrics
 import forpdateam.ru.forpda.presentation.theme.ThemeMissedPageLifecyclePolicy
 import forpdateam.ru.forpda.presentation.theme.ThemeRenderCompletePolicy
@@ -73,6 +82,16 @@ class ThemeWebController(
         private const val THEME_HISTORY_TAG = "ThemeHistory"
         private const val WEBVIEW_BLANK_CONTENT_HEIGHT_THRESHOLD = 4
         private val SMART_SCROLL_RETRY_DELAYS_MS = longArrayOf(0L, 48L, 120L, 280L, 520L, 900L)
+        /**
+         * Default visible window for the topic-post highlight (the user
+         * wants a ~2-second flash, not a permanent state). The JS-side
+         * fade-out arms a 300ms CSS transition (opacity/background/
+         * border-left) right after this deadline; the class is then
+         * stripped on `transitionend`. See `template_theme.html`'s
+         * `PPDA_scheduleHighlightFadeout` and the `post-highlight-fading`
+         * CSS rule in the per-theme stylesheets.
+         */
+        const val HIGHLIGHT_FADEOUT_DELAY_MS = 2000
     }
 
     private lateinit var webViewClient: WebViewClient
@@ -91,6 +110,26 @@ class ThemeWebController(
     private var renderGeneration: Int = 0
     private var domLifecycleGeneration: Int = 0
     private var pageLifecycleGeneration: Int = 0
+    /**
+     * Render generation for which the topic-post highlight JS (apply +
+     * fadeout-schedule) has already been armed. The highlight can be triggered
+     * from more than one render-completion path (the `onPageComplete` →
+     * [onDomRendered] lifecycle path AND the DOM-posts-verified fallback path
+     * [markRenderVerifiedFromDom] used when the native page-loaded lifecycle is
+     * missed/late). This guard makes [reapplyTopicHighlight] idempotent for a
+     * given generation so whichever path wins arms it exactly once — no double
+     * eval, no double diagnostics, and no re-flash on scroll (scroll does not
+     * bump the generation).
+     */
+    private var highlightArmedGeneration: Int = 0
+    /** Generation for which the JS fade-out timer has been armed (independent of apply). */
+    private var highlightFadeoutScheduledGeneration: Int = 0
+    /**
+     * Render generation for which the native-side fallback already replayed the
+     * `nativeEvents` JS queues from [markRenderVerifiedFromDom]. Prevents double-flushes
+     * when both the fallback and the eventual `IBase.domContentLoaded` race to run.
+     */
+    private var missedLifecycleFlushGeneration: Int = 0
     private var lastProgressJsAt: Long = 0L
     private var progressCallbackCount: Int = 0
     private var progressJsNotifyCount: Int = 0
@@ -100,6 +139,15 @@ class ThemeWebController(
     private var smartScrollRetryGeneration = 0
     private var flushingPendingScrollCommand = false
     private var pendingSmartScrollYBefore = 0
+
+    /**
+     * Phase 4 (additive only): shared cross-pipeline render controller. Runs ALONGSIDE the
+     * existing [renderGeneration]/ThemeRenderGuard/ThemeRenderSession systems purely as a
+     * diagnostic/guard layer. It does NOT drive any Theme behavior; DEBUG logs surface
+     * disagreements between the old and new generation systems.
+     */
+    private val sharedRenderController = WebViewRenderController()
+    private var sharedRenderSession: WebViewRenderSession? = null
 
     override fun init() {
         disposed = false
@@ -192,11 +240,11 @@ class ThemeWebController(
     }
 
     fun findNext(next: Boolean) {
-        webView.findNext(next)
+        webView.findOnPageNext(next)
     }
 
     fun findText(text: String) {
-        webView.findAllAsync(text)
+        webView.findOnPage(text)
     }
 
     fun setStyleType(type: String) {
@@ -254,6 +302,35 @@ class ThemeWebController(
         renderGeneration++
         domLifecycleGeneration = 0
         pageLifecycleGeneration = 0
+        highlightArmedGeneration = HighlightArmingPolicy.armedGenerationAfterNewRender()
+        highlightFadeoutScheduledGeneration = 0
+        // Additive shared-controller mirror (Phase 4): no behavior change, diagnostics only.
+        val sharedSession = sharedRenderController.beginRender(
+                owner = WebViewRenderSession.Owner.THEME,
+                targetId = page.id,
+                contentHash = (page.html?.hashCode() ?: 0),
+                bridgeToken = null,
+                createdAt = startedAt,
+        )
+        sharedRenderSession = sharedSession
+        if (BuildConfig.DEBUG) {
+            WebViewRenderDiagnostics.log(
+                    sharedSession,
+                    WebViewRenderDiagnostics.Event.RENDER_REQUESTED,
+                    mapOf(
+                            "controllerGeneration" to renderGeneration,
+                            "renderKey" to renderKey,
+                    )
+            )
+            if (sharedSession.renderGeneration != renderGeneration) {
+                WebViewRenderDiagnostics.log(
+                        sharedSession,
+                        "generation_disagreement",
+                        mapOf("controllerGeneration" to renderGeneration),
+                        warn = true,
+                )
+            }
+        }
         webView.clearQueuedJs()
         loadDataCount++
         lastLoadDataAt = startedAt
@@ -261,6 +338,7 @@ class ThemeWebController(
         progressCallbackCount = 0
         progressJsNotifyCount = 0
         lastProgressCallbackAt = 0L
+        logRenderHighlightApplied(page)
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
@@ -278,7 +356,9 @@ class ThemeWebController(
             )
         }
         webView.loadDataWithBaseURL(ArticleLinkResolver.THEME_WEBVIEW_BASE_URL, page.html ?: "", "text/html", "utf-8", null)
+        sharedRenderController.markLoadDispatched(sharedSession)
         if (BuildConfig.DEBUG) {
+            WebViewRenderDiagnostics.log(sharedSession, WebViewRenderDiagnostics.Event.LOAD_DISPATCHED)
             Log.i(
                     REFRESH_SCROLL_TAG,
                     "controller loadDataEnd trace=${presenter.getThemeLoadTraceId()} callMs=${SystemClock.uptimeMillis() - startedAt} html=${page.html?.length ?: 0}"
@@ -307,6 +387,23 @@ class ThemeWebController(
         if (!webView.isJsReady || domPosts <= 0) return false
         completedRenderKey = renderKey
         completedRenderHasPosts = true
+        // The native page-loaded lifecycle (`onPageComplete` → onDomRendered)
+        // can be missed/late on rapid loadDataWithBaseURL; this DOM-posts
+        // fallback is then the only path that confirms a usable render. Arm the
+        // topic-post highlight here too so the JS apply + fadeout schedule run
+        // regardless of which completion path wins. The per-generation guard in
+        // [reapplyTopicHighlight] keeps it a single arming.
+        reapplyTopicHighlight()
+        // Safety net: when the page-loaded lifecycle is missed/late, JS modules that
+        // hook into the `nativeEvents.DOM`/`nativeEvents.PAGE` queues (e.g. delegated
+        // link-anchor listeners, post re-bindings) may not have been flushed. Force
+        // a flush from native so the queue is drained exactly once for this render
+        // generation. `IBase` is guaranteed to be defined at this point (the
+        // `webView.isJsReady` guard above is set by [IBase.domContentLoaded]), so
+        // the in-process call to [IBase.domContentLoaded] will reach JS and replay
+        // the queued callbacks. The replay is idempotent — the JS side guards the
+        // click-listener re-bind with `removeEventListener` first.
+        flushMissedJsLifecycleQueues()
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
@@ -314,6 +411,23 @@ class ThemeWebController(
             )
         }
         return true
+    }
+
+    /**
+     * Replays the `nativeDomComplete` / `nativePageComplete` queues from the JS side
+     * without going through [IBase.domContentLoaded]/[IBase.onPageLoaded] (those have
+     * already done their work for this render). The script also handles the case where
+     * the document `DOMContentLoaded` event itself never fired.
+     */
+    private fun flushMissedJsLifecycleQueues() {
+        if (disposed || fragment.view == null) return
+        if (!webView.isJsReady) return
+        if (renderGeneration <= 0) return
+        // Only flush once per render generation. The probe + `IBase` lifecycle already
+        // cover the normal path; this is the fallback for the late/missed-lifecycle case.
+        if (missedLifecycleFlushGeneration == renderGeneration) return
+        missedLifecycleFlushGeneration = renderGeneration
+        webView.evalJs("nativeEvents.onNativeDomComplete();nativeEvents.onNativePageComplete();")
     }
 
     fun probeMissedFullLifecycleIfStuck() {
@@ -344,6 +458,8 @@ class ThemeWebController(
         completedRenderHasPosts = false
         domLifecycleGeneration = 0
         pageLifecycleGeneration = 0
+        highlightArmedGeneration = 0
+        missedLifecycleFlushGeneration = 0
         if (BuildConfig.DEBUG) Log.i(REFRESH_SCROLL_TAG, "controller resetRenderState")
     }
 
@@ -352,8 +468,19 @@ class ThemeWebController(
         if (domLifecycleGeneration == renderGeneration) return false
         if (domLifecycleGeneration != 0) return false
         domLifecycleGeneration = renderGeneration
+        sharedRenderSession?.let { session ->
+            sharedRenderController.markDomConfirmed(session)
+            if (BuildConfig.DEBUG) {
+                WebViewRenderDiagnostics.log(session, WebViewRenderDiagnostics.Event.DOM_CONFIRMED)
+            }
+        }
         return true
     }
+
+    fun wasDomLifecycleClaimedForCurrentRender(): Boolean =
+            renderGeneration > 0 && domLifecycleGeneration == renderGeneration
+
+    fun getControllerRenderGeneration(): Int = renderGeneration
 
     fun tryClaimPageLifecycle(): Boolean {
         if (renderGeneration <= 0) return false
@@ -361,6 +488,12 @@ class ThemeWebController(
         if (pageLifecycleGeneration == renderGeneration) return false
         if (pageLifecycleGeneration != 0) return false
         pageLifecycleGeneration = renderGeneration
+        sharedRenderSession?.let { session ->
+            sharedRenderController.markPageConfirmed(session)
+            if (BuildConfig.DEBUG) {
+                WebViewRenderDiagnostics.log(session, WebViewRenderDiagnostics.Event.PAGE_CONFIRMED)
+            }
+        }
         return true
     }
 
@@ -1092,7 +1225,19 @@ class ThemeWebController(
                     )
                 }
                 if (currentPage != null) {
-                    presenter.updatePageHistoryHtml(currentPage, "", scrollY, postId, offsetTop, domRatio, domWasNearBottom)
+                    // Не затираем ранний снапшот пустым DOM-якорём: если JS не
+                    // нашёл пост-якорь (postId пуст), сохраняем только уточнённые
+                    // ratio/wasNearBottom, оставив anchorPostId из раннего прохода.
+                    val safePostId = postId?.takeIf { it.isNotBlank() }
+                    presenter.updatePageHistoryHtml(
+                            currentPage,
+                            "",
+                            scrollY,
+                            safePostId,
+                            if (safePostId != null) offsetTop else null,
+                            domRatio,
+                            domWasNearBottom
+                    )
                 }
             }
         } else {
@@ -1107,6 +1252,8 @@ class ThemeWebController(
     fun cleanup() {
         if (disposed) return
         disposed = true
+        sharedRenderController.cleanup()
+        sharedRenderSession = null
         webView.clearQueuedJs()
         pendingCaptureTimeouts.forEach(webView::removeCallbacks)
         pendingCaptureTimeouts.clear()
@@ -1145,18 +1292,32 @@ class ThemeWebController(
                         THEME_HISTORY_TAG,
                         "WebViewClient internal navigation target=$resolved sourceTopic=${sourcePage?.id} sourceSt=${sourcePage?.st} sourcePage=${sourcePage?.pagination?.current} sourcePostId=${sourceAnchor?.postId} sourceEvent=${sourceAnchor?.eventType}"
                 )
-                updateHistoryLastHtml(linkSourceUrl = resolved, authoritativeLinkAnchor = sourceAnchor, onCaptured = {
-                    val capturedSourcePage = presenter.getRefreshCapturePageInstance()
-                    Log.i(
-                            THEME_HISTORY_TAG,
-                            "link captured sourceTopic=${capturedSourcePage?.id} sourceSt=${capturedSourcePage?.st} sourcePage=${capturedSourcePage?.pagination?.current} historyEntryPost=${capturedSourcePage?.anchorPostId} historyEntryOffset=${capturedSourcePage?.anchorOffsetTop} historyEntryUrl=${capturedSourcePage?.url} target=$resolved"
-                    )
-                    closeToolbarOverlaysBeforeNavigation()
-                    val viewerUrl = forpdateam.ru.forpda.common.FourPdaImageUrls
-                            .resolveViewerUrl(resolved, sourceAnchor?.href)
-                    presenter.handleNewUrl(Uri.parse(viewerUrl), sourceAnchor?.href)
-                })
-                return true
+                val navigation = ThemeLinkNavigationPolicy.resolve(resolved, sourceAnchor?.href)
+                when (navigation.action) {
+                    ThemeLinkNavigationAction.DOWNLOAD_URL -> {
+                        closeToolbarOverlaysBeforeNavigation()
+                        systemLinkHandler.handleDownload(navigation.url, null, webView.context, null)
+                        return true
+                    }
+                    ThemeLinkNavigationAction.NAVIGATE_TO_URL,
+                    ThemeLinkNavigationAction.OPEN_IMAGE_VIEWER -> {
+                        updateHistoryLastHtml(
+                                linkSourceUrl = resolved,
+                                authoritativeLinkAnchor = sourceAnchor,
+                                onCaptured = {
+                                    val capturedSourcePage = presenter.getRefreshCapturePageInstance()
+                                    Log.i(
+                                            THEME_HISTORY_TAG,
+                                            "link captured sourceTopic=${capturedSourcePage?.id} sourceSt=${capturedSourcePage?.st} sourcePage=${capturedSourcePage?.pagination?.current} historyEntryPost=${capturedSourcePage?.anchorPostId} historyEntryOffset=${capturedSourcePage?.anchorOffsetTop} historyEntryUrl=${capturedSourcePage?.url} target=${navigation.url}"
+                                    )
+                                    presenter.markLinkHistoryCaptured()
+                                    closeToolbarOverlaysBeforeNavigation()
+                                    presenter.handleNewUrl(Uri.parse(navigation.url), sourceAnchor?.href)
+                                }
+                        )
+                        return true
+                    }
+                }
             }
             closeToolbarOverlaysBeforeNavigation()
             linkHandler.handle(resolved, null)
@@ -1249,6 +1410,9 @@ class ThemeWebController(
             }
             completedRenderKey = renderKey
             completedRenderHasPosts = hasExpectedPosts
+            if (hasExpectedPosts) {
+                reapplyTopicHighlight()
+            }
             flushPendingScrollCommand()
             if (hasExpectedPosts) {
                 presenter.revealThemeContentAfterDomRendered()
@@ -1265,6 +1429,148 @@ class ThemeWebController(
                         "controller domRendered trace=${presenter.getThemeLoadTraceId()} renderKey=$renderKey expectedPosts=$expectedPosts domPosts=$domPosts containers=$domContainers complete=$hasExpectedPosts"
                 )
             }
+        }
+    }
+
+    /**
+     * Re-applies the topic-post highlight on the live WebView once the DOM posts are
+     * confirmed present. The renderer already stamps the `post-highlight-*` class
+     * into the static HTML in [template_theme.html], so this is a defensive
+     * re-assertion that survives smart-patch / infinite-scroll DOM mutations and
+     * also lights up the diagnostic `js_highlight_applied` / `native_highlight_bound`
+     * events the QA checklist requires.
+     *
+     * Stale generations are filtered by the JS guard in `window.PPDA_applyHighlight`
+     * which calls back into [onJsStaleHighlight] via [IThemePresenter.reportStaleHighlight].
+     */
+    /**
+     * Re-arm the highlight after programmatic scroll settles or the WebView becomes
+     * visible. Clears only the apply guard so [reapplyTopicHighlight] can re-assert
+     * the JS class when scroll deferred the first arm. The fade-out timer is never
+     * reset here — [highlightFadeoutScheduledGeneration] stays idempotent per render
+     * generation so the original 2-second deadline is preserved.
+     */
+    fun reapplyTopicHighlightAfterScrollSettled() {
+        highlightArmedGeneration = 0
+        reapplyTopicHighlight()
+    }
+
+    /** Called when the WebView alpha flips to visible; skips while scroll is pending. */
+    fun onWebViewContentRevealed() {
+        if (HighlightArmingPolicy.shouldDeferUntilScrollSettled(presenter.hasBlockingScrollPending())) {
+            return
+        }
+        reapplyTopicHighlightAfterScrollSettled()
+    }
+
+    private fun reapplyTopicHighlight() {
+        if (disposed || fragment.view == null) return
+        val page = presenter.getCurrentPageInstance() ?: return
+        val highlight = page.highlightTarget ?: return
+        if (highlight is forpdateam.ru.forpda.presentation.theme.HighlightTarget.None) return
+        val topicId = page.id
+        if (topicId <= 0) return
+        val generation = page.renderGenerationId
+        if (generation <= 0) return
+        val postId = highlight.postId
+        if (postId <= 0L) return
+        val typeName = highlight.type.jsName
+        val deferApply = HighlightArmingPolicy.shouldDeferUntilScrollSettled(presenter.hasBlockingScrollPending())
+        val shouldScheduleFadeout = highlightFadeoutScheduledGeneration != generation
+        val shouldApply = !deferApply && highlightArmedGeneration != generation
+        if (!shouldScheduleFadeout && !shouldApply) return
+        val js = buildString {
+            append(jsApi.setReadPosObserverEnabled(false))
+            if (shouldApply) {
+                append('\n')
+                append(jsApi.applyHighlight(postId, typeName, generation))
+            }
+            if (shouldScheduleFadeout) {
+                append('\n')
+                append(jsApi.scheduleHighlightFadeout(generation, HIGHLIGHT_FADEOUT_DELAY_MS))
+            }
+        }
+        jsApi.eval(js)
+        if (shouldScheduleFadeout) {
+            highlightFadeoutScheduledGeneration = generation
+            ReadPositionSaveGate.onHighlightArmed(generation)
+            TopicHighlightDiagnostics.highlightFadeoutScheduled(
+                    topicId = topicId.toLong(),
+                    page = page.pagination.current,
+                    renderGenerationId = generation,
+                    delayMs = HIGHLIGHT_FADEOUT_DELAY_MS,
+                    highlightType = typeName,
+                    postId = highlight.postId
+            )
+        }
+        if (shouldApply) {
+            highlightArmedGeneration = generation
+            TopicHighlightDiagnostics.nativeHighlightBound(
+                    topicId = topicId.toLong(),
+                    page = page.pagination.current,
+                    renderGenerationId = generation,
+                    highlightType = typeName,
+                    postId = postId
+            )
+            TopicHighlightDiagnostics.jsHighlightApplied(
+                    topicId = topicId.toLong(),
+                    page = page.pagination.current,
+                    renderGenerationId = generation,
+                    highlightType = typeName,
+                    postAnchorExists = true
+            )
+        }
+    }
+
+    /**
+     * Emits the `render_highlight_applied` diagnostic after the renderer stamps
+     * the static `post-highlight-*` class into the page HTML. `appliedSuccessfully`
+     * is true when the highlight target post is present in the rendered page list
+     * (so the static class will be present in the DOM); false when the target
+     * post is missing from this page (e.g. the user landed on a different page
+     * than the highlight target). This is the post-render counterpart of the JS
+     * `js_highlight_applied` event that fires from [reapplyTopicHighlight].
+     */
+    private fun logRenderHighlightApplied(page: ThemePage) {
+        val highlight = page.highlightTarget
+        val topicId = page.id.toLong()
+        val pageNumber = page.pagination.current
+        val generation = page.renderGenerationId
+        if (highlight == null || highlight is forpdateam.ru.forpda.presentation.theme.HighlightTarget.None) {
+            if (BuildConfig.DEBUG && generation > 0 && topicId > 0L) {
+                TopicHighlightDiagnostics.renderHighlightApplied(
+                        topicId = topicId,
+                        page = pageNumber,
+                        renderGenerationId = generation,
+                        mode = "none",
+                        highlightType = "none",
+                        appliedSuccessfully = false,
+                        postAnchorExists = false
+                )
+            }
+            return
+        }
+        if (generation <= 0 || topicId <= 0L) return
+        val postId = highlight.postId
+        val postAnchorExists = postId > 0L && page.posts.any { it.id.toLong() == postId }
+        TopicHighlightDiagnostics.renderHighlightApplied(
+                topicId = topicId,
+                page = pageNumber,
+                renderGenerationId = generation,
+                mode = "static",
+                highlightType = highlight.type.jsName,
+                appliedSuccessfully = postAnchorExists,
+                postAnchorExists = postAnchorExists
+        )
+        if (!postAnchorExists) {
+            TopicHighlightDiagnostics.highlightFailedPostNotFound(
+                    topicId = topicId,
+                    page = pageNumber,
+                    renderGenerationId = generation,
+                    highlightType = highlight.type.jsName,
+                    expectedPostId = postId,
+                    failureReason = "post_not_in_page"
+            )
         }
     }
 
