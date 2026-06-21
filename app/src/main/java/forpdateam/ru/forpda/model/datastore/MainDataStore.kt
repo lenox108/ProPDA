@@ -811,10 +811,8 @@ class MainDataStore(private val context: Context) {
     }
 
     private fun parseUiPalette(value: String): AppPreferences.Main.UiPalette = try {
-        when (val palette = AppPreferences.Main.UiPalette.valueOf(value)) {
-            AppPreferences.Main.UiPalette.CLASSIC_4PDA -> AppPreferences.Main.UiPalette.SYSTEM
-            else -> palette
-        }
+        // Unknown / legacy values (e.g. the removed CLASSIC_4PDA) fall back to SYSTEM below.
+        AppPreferences.Main.UiPalette.valueOf(value)
     } catch (_: IllegalArgumentException) {
         AppPreferences.Main.UiPalette.SYSTEM
     }

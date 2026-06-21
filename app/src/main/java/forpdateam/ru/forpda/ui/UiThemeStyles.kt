@@ -17,12 +17,14 @@ object UiThemeStyles {
         else -> false
     }
 
+    /**
+     * Kept as the single normalization point for the active palette. Historically it collapsed the
+     * now-removed CLASSIC_4PDA into SYSTEM; today it is an identity, but callers keep routing through
+     * it so any future palette aliasing has one home.
+     */
     fun effectivePalette(
             palette: Preferences.Main.UiPalette
-    ): Preferences.Main.UiPalette = when {
-        palette == Preferences.Main.UiPalette.CLASSIC_4PDA -> Preferences.Main.UiPalette.SYSTEM
-        else -> palette
-    }
+    ): Preferences.Main.UiPalette = palette
 
     @StyleRes
     fun mainNoActionBar(
