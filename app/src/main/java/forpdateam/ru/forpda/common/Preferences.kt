@@ -61,7 +61,7 @@ object Preferences {
         }
 
         enum class ThemeMode { LIGHT, DARK, AMOLED, SYSTEM, SYSTEM_AMOLED }
-        enum class UiPalette { SYSTEM, CLASSIC_4PDA, SEPIA_READING, SEPIA_BLUE, MINIMAL_READER }
+        enum class UiPalette { SYSTEM, SEPIA_READING, SEPIA_BLUE, MINIMAL_READER }
         enum class DownloadMethod { SYSTEM, EXTERNAL_MANAGER, BROWSER, ASK }
         enum class TopicScrollMode { HYBRID, CLASSIC }
         enum class TopicPostDensity { COMFORTABLE, COMPACT, SUPER_COMPACT }
