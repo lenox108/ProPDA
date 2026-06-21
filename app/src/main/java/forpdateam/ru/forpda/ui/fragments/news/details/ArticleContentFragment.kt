@@ -36,6 +36,9 @@ import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
 import forpdateam.ru.forpda.common.webview.DialogsHelper
 import forpdateam.ru.forpda.common.webview.WebViewLoadDispatchPolicy
+import forpdateam.ru.forpda.common.webview.WebViewRenderController
+import forpdateam.ru.forpda.common.webview.WebViewRenderSession
+import forpdateam.ru.forpda.diagnostic.WebViewRenderDiagnostics
 import forpdateam.ru.forpda.common.webview.UrlDecision
 import forpdateam.ru.forpda.common.webview.UrlPolicy
 import forpdateam.ru.forpda.entity.remote.news.DetailsPage
@@ -147,6 +150,15 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     private var layoutConfirmAttempts: Int = 0
     private var articleRequestId: Int = 0
     private var domContentLoadedRequestId: Int = 0
+
+    /**
+     * Additive shared-controller mirror (Phase 9, News). Runs alongside the existing
+     * [articleRequestId] / [confirmArticleRenderFromWebView] system without changing any dispatch
+     * decision — diagnostics only. The existing per-feature logic stays authoritative.
+     */
+    private val sharedRenderController = WebViewRenderController()
+    private var sharedRenderSession: WebViewRenderSession? = null
+
     private var renderTimeoutRunnable: Runnable? = null
     private var renderProbeToken: Int = 0
     private var articleRenderErrorShown: Boolean = false
@@ -931,6 +943,19 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 webView.stopLoading()
                 webView.clearQueuedJs()
                 val requestId = ++articleRequestId
+                val sharedSession = sharedRenderController.beginRender(
+                        owner = WebViewRenderSession.Owner.NEWS,
+                        targetId = requestId,
+                        contentHash = htmlHash,
+                )
+                sharedRenderSession = sharedSession
+                if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                    WebViewRenderDiagnostics.log(
+                            sharedSession,
+                            WebViewRenderDiagnostics.Event.RENDER_REQUESTED,
+                            mapOf("articleId" to article.id, "articleRequestId" to requestId),
+                    )
+                }
                 runCommentsCoordinator { commentsExpandCoordinator.onWebViewLoadStarted(requestId) }
                 val startedAt = SystemClock.elapsedRealtime()
                 hostFragment().provideChildInteractor().openSession?.markWebViewLoadStart(requestId)
@@ -955,6 +980,14 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                         "utf-8",
                         null
                 )
+                sharedRenderSession?.let { session ->
+                    if (session.targetId == requestId) {
+                        sharedRenderController.markLoadDispatched(session)
+                        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                            WebViewRenderDiagnostics.log(session, WebViewRenderDiagnostics.Event.LOAD_DISPATCHED)
+                        }
+                    }
+                }
                 forceWebViewRepaint()
                 renderTimeoutRunnable?.let(webView::removeCallbacks)
                 renderLoadStartedAt = startedAt
@@ -1024,6 +1057,8 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         commentsFooterInDom = false
         commentsJsReady = false
         commentsFooterMountAttempted = false
+        sharedRenderController.cleanup()
+        sharedRenderSession = null
         super.onDestroyView()
     }
 
@@ -1510,6 +1545,18 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         if (!isWebViewReady() || requestId != articleRequestId) return
         if (domContentLoadedRequestId == requestId) return
         domContentLoadedRequestId = requestId
+        sharedRenderSession?.let { session ->
+            if (session.targetId == requestId) {
+                sharedRenderController.markDomConfirmed(session)
+                if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                    WebViewRenderDiagnostics.log(
+                            session,
+                            WebViewRenderDiagnostics.Event.DOM_CONFIRMED,
+                            mapOf("source" to source, "articleId" to articleId),
+                    )
+                }
+            }
+        }
         renderLoadDispatched = false
         blankRetryArticleId = -1
         // The article WebView uses TRUSTED_STATIC_ARTICLE, which never enables the IBase bridge, so
