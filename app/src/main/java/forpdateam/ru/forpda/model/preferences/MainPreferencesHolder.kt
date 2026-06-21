@@ -54,6 +54,8 @@ class MainPreferencesHolder(
 
     fun observeUseMaterialYouFlow(): Flow<Boolean> = dataStore.observeUseMaterialYouFlow()
 
+    fun observeCompatibilityModeFlow(): Flow<Boolean> = dataStore.observeCompatibilityModeFlow()
+
     // --- Геттеры (instant mirror reads, no runBlocking) ---
     fun getWebViewFontSize(): Int = dataStore.getWebViewFontSizeImmediate()
 
@@ -70,6 +72,8 @@ class MainPreferencesHolder(
     fun getEditorDefaultHidden(): Boolean = dataStore.getEditorDefaultHiddenImmediate()
 
     fun getScrollButtonEnabled(): Boolean = dataStore.getScrollButtonEnabledImmediate()
+
+    fun getCompatibilityMode(): Boolean = dataStore.getCompatibilityModeImmediate()
 
     fun getTopicPaginationPanelEnabled(): Boolean = dataStore.getTopicPaginationPanelEnabledImmediate()
 
@@ -115,6 +119,8 @@ class MainPreferencesHolder(
     suspend fun setShowBottomArrow(value: Boolean) = dataStore.setShowBottomArrow(value)
 
     suspend fun setScrollButtonEnabled(value: Boolean) = dataStore.setScrollButtonEnabled(value)
+
+    suspend fun setCompatibilityMode(value: Boolean) = dataStore.setCompatibilityMode(value)
 
     suspend fun setTopicPaginationPanelEnabled(value: Boolean) = dataStore.setTopicPaginationPanelEnabled(value)
 

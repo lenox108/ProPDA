@@ -27,18 +27,6 @@ object Preferences {
         const val SMART_NAV_LONG_PRESS_HINT_DISABLED = "smart_nav_long_press_hint_disabled"
     }
 
-    object Offline {
-        private const val PREFIX = "offline."
-        /**
-         * Storage cap in megabytes for the offline-reading cache.
-         * Read by the preference screen and passed to
-         * [forpdateam.ru.forpda.model.data.offline.OfflineRepository.enforceStorageLimit].
-         * Default: 200 MB.
-         */
-        const val MAX_BYTES_MB = PREFIX + "max_bytes_mb"
-        const val DEFAULT_MAX_BYTES_MB: Int = 200
-    }
-
     object Main {
         private const val PREFIX = "main."
         const val WEBVIEW_FONT_SIZE = PREFIX + "webview.font_size_v2"
@@ -64,6 +52,7 @@ object Preferences {
         const val USE_SYSTEM_FONT = PREFIX + "use_system_font"
         const val STARTUP_SCREEN = PREFIX + "startup_screen"
         const val USE_MATERIAL_YOU = PREFIX + "use_material_you"
+        const val WEBVIEW_COMPATIBILITY_MODE = PREFIX + "webview.compatibility_mode"
 
         object Theme {
             private const val PREFIX = Main.PREFIX + "theme."
