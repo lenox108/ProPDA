@@ -68,6 +68,7 @@ class MainDataStore(private val context: Context) {
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
         val STARTUP_SCREEN = stringPreferencesKey("startup_screen")
         val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
+        val WEBVIEW_COMPATIBILITY_MODE = booleanPreferencesKey("webview_compatibility_mode")
     }
 
     fun observeWebViewFontSizeFlow(): Flow<Int> =
@@ -207,6 +208,13 @@ class MainDataStore(private val context: Context) {
                 preferences[PreferencesKeys.USE_MATERIAL_YOU] ?: false
             }, false)
 
+    fun observeCompatibilityModeFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.WEBVIEW_COMPATIBILITY_MODE]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Main.WEBVIEW_COMPATIBILITY_MODE, false)
+            }, false)
+
     fun observeDownloadMethodFlow(): Flow<AppPreferences.Main.DownloadMethod> =
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
                 parseDownloadMethod(
@@ -230,7 +238,19 @@ class MainDataStore(private val context: Context) {
         mirrorPrefs.edit().putBoolean("scroll_button_enable", value).apply()
     }
 
-    fun getScrollButtonEnabledImmediate(): Boolean = mirrorPrefs.getBoolean("scroll_button_enable", true)
+    fun getScrollButtonEnabledImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.SCROLL_BUTTON_ENABLE)) {
+            return legacy.getBoolean(AppPreferences.Main.SCROLL_BUTTON_ENABLE, true)
+        }
+        if (mirrorPrefs.contains("scroll_button_enable")) {
+            return mirrorPrefs.getBoolean("scroll_button_enable", true)
+        }
+        return true
+    }
 
     suspend fun setTopicPaginationPanelEnabled(value: Boolean) {
         safeEdit { preferences ->
@@ -338,7 +358,19 @@ class MainDataStore(private val context: Context) {
         mirrorPrefs.edit().putBoolean("topic_bottom_refresh_gesture_enable", value).apply()
     }
 
-    fun getTopicBottomRefreshGestureEnabledImmediate(): Boolean = mirrorPrefs.getBoolean("topic_bottom_refresh_gesture_enable", true)
+    fun getTopicBottomRefreshGestureEnabledImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE)) {
+            return legacy.getBoolean(AppPreferences.Main.TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE, true)
+        }
+        if (mirrorPrefs.contains("topic_bottom_refresh_gesture_enable")) {
+            return mirrorPrefs.getBoolean("topic_bottom_refresh_gesture_enable", true)
+        }
+        return true
+    }
 
     suspend fun setTopicBackBehavior(value: AppPreferences.Main.TopicBackBehavior) {
         safeEdit { preferences ->
@@ -410,7 +442,43 @@ class MainDataStore(private val context: Context) {
         mirrorPrefs.edit().putBoolean("show_bottom_arrow", value).apply()
     }
 
-    fun getShowBottomArrowImmediate(): Boolean = mirrorPrefs.getBoolean("show_bottom_arrow", false)
+    fun getShowBottomArrowImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.SHOW_BOTTOM_ARROW)) {
+            return legacy.getBoolean(AppPreferences.Main.SHOW_BOTTOM_ARROW, false)
+        }
+        if (mirrorPrefs.contains("show_bottom_arrow")) {
+            return mirrorPrefs.getBoolean("show_bottom_arrow", false)
+        }
+        return false
+    }
+
+    suspend fun setCompatibilityMode(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.WEBVIEW_COMPATIBILITY_MODE] = value
+        }
+        mirrorPrefs.edit().putBoolean("webview_compatibility_mode", value).apply()
+        // Keep the legacy androidx-prefs key in sync so the immediate read reflects programmatic sets.
+        context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                .edit().putBoolean(AppPreferences.Main.WEBVIEW_COMPATIBILITY_MODE, value).apply()
+    }
+
+    fun getCompatibilityModeImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.WEBVIEW_COMPATIBILITY_MODE)) {
+            return legacy.getBoolean(AppPreferences.Main.WEBVIEW_COMPATIBILITY_MODE, false)
+        }
+        if (mirrorPrefs.contains("webview_compatibility_mode")) {
+            return mirrorPrefs.getBoolean("webview_compatibility_mode", false)
+        }
+        return false
+    }
 
     suspend fun setWebViewFontSize(size: Int) {
         val clamped = max(min(size, 64), 8)
@@ -422,6 +490,10 @@ class MainDataStore(private val context: Context) {
 
     /** Instant synchronous read from SharedPreferences mirror (no blocking I/O). */
     fun getWebViewFontSizeImmediate(): Int {
+        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+        if (legacy.contains(AppPreferences.Main.WEBVIEW_FONT_SIZE)) {
+            return max(min(legacy.getInt(AppPreferences.Main.WEBVIEW_FONT_SIZE, 16), 64), 8)
+        }
         val mirrored = mirrorPrefs.getInt("webview_font_size", -1)
         if (mirrored > 0) return max(min(mirrored, 64), 8)
         return 16
@@ -436,8 +508,10 @@ class MainDataStore(private val context: Context) {
     }
 
     fun getBottomNavColumnsImmediate(): Int {
-        val mirrored = mirrorPrefs.getString("bottom_nav_columns", null)
-        return max(min(mirrored?.toIntOrNull() ?: 6, 6), 5)
+        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+        val raw = legacy.getString(AppPreferences.Main.BOTTOM_NAV_COLUMNS, null)
+            ?: mirrorPrefs.getString("bottom_nav_columns", null)
+        return max(min(raw?.toIntOrNull() ?: 6, 6), 5)
     }
 
     suspend fun setThemeMode(mode: AppPreferences.Main.ThemeMode) {
@@ -463,7 +537,19 @@ class MainDataStore(private val context: Context) {
         mirrorPrefs.edit().putBoolean("is_editor_monospace", value).apply()
     }
 
-    fun getEditorMonospaceImmediate(): Boolean = mirrorPrefs.getBoolean("is_editor_monospace", true)
+    fun getEditorMonospaceImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.IS_EDITOR_MONOSPACE)) {
+            return legacy.getBoolean(AppPreferences.Main.IS_EDITOR_MONOSPACE, true)
+        }
+        if (mirrorPrefs.contains("is_editor_monospace")) {
+            return mirrorPrefs.getBoolean("is_editor_monospace", true)
+        }
+        return true
+    }
 
     suspend fun setEditorDefaultHidden(value: Boolean) {
         safeEdit { preferences ->
@@ -472,7 +558,19 @@ class MainDataStore(private val context: Context) {
         mirrorPrefs.edit().putBoolean("is_editor_default_hidden", value).apply()
     }
 
-    fun getEditorDefaultHiddenImmediate(): Boolean = mirrorPrefs.getBoolean("is_editor_default_hidden", true)
+    fun getEditorDefaultHiddenImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.IS_EDITOR_DEFAULT_HIDDEN)) {
+            return legacy.getBoolean(AppPreferences.Main.IS_EDITOR_DEFAULT_HIDDEN, true)
+        }
+        if (mirrorPrefs.contains("is_editor_default_hidden")) {
+            return mirrorPrefs.getBoolean("is_editor_default_hidden", true)
+        }
+        return true
+    }
 
     suspend fun setSystemDownloader(value: Boolean) {
         safeEdit { preferences ->
@@ -491,8 +589,12 @@ class MainDataStore(private val context: Context) {
     }
 
     fun getDownloadMethodImmediate(): AppPreferences.Main.DownloadMethod {
+        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+        val legacyRaw = legacy.getString(AppPreferences.Main.DOWNLOAD_METHOD, null)
+        parseDownloadMethod(legacyRaw)?.let { return it }
         val mirrored = mirrorPrefs.getString("download_method", null)
-        return parseDownloadMethod(mirrored) ?: AppPreferences.Main.DownloadMethod.SYSTEM
+        parseDownloadMethod(mirrored)?.let { return it }
+        return legacyDownloadMethod(null)
     }
 
     suspend fun setDownloadFolderUri(uri: String?) {
@@ -508,7 +610,12 @@ class MainDataStore(private val context: Context) {
         }.apply()
     }
 
-    fun getDownloadFolderUriImmediate(): String? = mirrorPrefs.getString("download_folder_uri", null)
+    fun getDownloadFolderUriImmediate(): String? {
+        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+        val legacyRaw = legacy.getString(AppPreferences.Main.DOWNLOAD_FOLDER_URI, null)
+        if (!legacyRaw.isNullOrBlank()) return legacyRaw
+        return mirrorPrefs.getString("download_folder_uri", null)
+    }
 
     suspend fun setUseSystemFont(value: Boolean) {
         setAppFontMode(if (value) AppFontMode.SYSTEM else FontController.DEFAULT_FONT_MODE)
@@ -564,6 +671,9 @@ class MainDataStore(private val context: Context) {
 
     suspend fun getScrollButtonEnabled(): Boolean =
             observeScrollButtonEnabledFlow().map { it }.first()
+
+    suspend fun getCompatibilityMode(): Boolean =
+            observeCompatibilityModeFlow().map { it }.first()
 
     suspend fun getTopicPaginationPanelEnabled(): Boolean =
             observeTopicPaginationPanelEnabledFlow().map { it }.first()
@@ -628,7 +738,19 @@ class MainDataStore(private val context: Context) {
         return getAppFontModeImmediate() == AppFontMode.SYSTEM
     }
 
-    fun getUseMaterialYouImmediate(): Boolean = mirrorPrefs.getBoolean("use_material_you", false)
+    fun getUseMaterialYouImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.USE_MATERIAL_YOU)) {
+            return legacy.getBoolean(AppPreferences.Main.USE_MATERIAL_YOU, false)
+        }
+        if (mirrorPrefs.contains("use_material_you")) {
+            return mirrorPrefs.getBoolean("use_material_you", false)
+        }
+        return false
+    }
 
     fun getAppFontModeImmediate(): AppFontMode {
         val mirrored = mirrorPrefs.getString("app_font_mode", null)

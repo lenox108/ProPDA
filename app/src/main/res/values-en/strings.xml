@@ -576,6 +576,8 @@
     <string name="pref_message_ui_palette_sepia_disabled">Sepia is available with light, dark, and system themes</string>
     <string name="pref_title_show_bottom_arrow">Bottom menu button</string>
     <string name="pref_summary_show_bottom_arrow">Enable if system has gesture at bottom of screen</string>
+    <string name="pref_title_webview_compatibility_mode">WebView compatibility mode</string>
+    <string name="pref_summary_webview_compatibility_mode">For weak devices or a problematic Android System WebView: improves stability by reducing aggressive rendering</string>
     <string name="pref_title_text_size">Text size</string>
     <string name="pref_summary_text_size">Being applied for topics, search and chat</string>
     <string name="pref_title_app_font">Application font</string>
