@@ -21,6 +21,14 @@ class ThemeRepository(
         private val pageMemoryCache: ThemePageMemoryCache = ThemePageMemoryCache()
 ) {
 
+    /**
+     * Optional supplier of the current global theme/render signature (theme type, density, font,
+     * avatar mode, blacklist, etc.). When set, the in-memory page cache is dropped whenever the
+     * signature changes, so a settings change never serves a stale-styled page (Phase 6B).
+     */
+    @Volatile
+    var renderSignatureProvider: (() -> String?)? = null
+
     suspend fun getTheme(
             url: String,
             _withHtml: Boolean,
@@ -29,13 +37,15 @@ class ThemeRepository(
             openFromUnreadListHint: Boolean = false
     ): ThemePage = withContext(Dispatchers.IO) {
         val topicId = extractTopicIdFromUrl(url)
+        val currentSignature = renderSignatureProvider?.invoke()
+        pageMemoryCache.invalidateOnSignatureChange(currentSignature)
         val cacheKey = if (!ThemePageMemoryCache.shouldSkipCache(url)) {
             pageMemoryCache.keyFrom(url, hatOpen, pollOpen)
         } else {
             null
         }
         cacheKey?.let { key ->
-            pageMemoryCache.get(key)?.let { cached ->
+            pageMemoryCache.get(key, expectedSignature = currentSignature)?.let { cached ->
                 FpdaDebugLog.logTheme(
                         FpdaDebugLog.ThemeArea.LOAD,
                         "cache_hit",

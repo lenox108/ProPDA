@@ -26,6 +26,13 @@ class ThemePageMemoryCache(
 
     private val store = LinkedHashMap<Key, Entry>(maxEntries, 0.75f, true)
 
+    /**
+     * Last theme/render signature the cache was validated against. When the global signature
+     * changes (palette/density/font/dark-mode/avatar/blacklist), every cached page is stale-styled,
+     * so [invalidateOnSignatureChange] clears the whole store. `null` means "not yet tracked".
+     */
+    private var trackedSignature: String? = null
+
     fun keyFrom(url: String, hatOpen: Boolean, pollOpen: Boolean): Key? {
         val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: return null
         if (topicId <= 0) return null
@@ -33,10 +40,22 @@ class ThemePageMemoryCache(
         return Key(topicId, st, hatOpen, pollOpen)
     }
 
-    fun get(key: Key): ThemePage? {
+    fun get(key: Key): ThemePage? = get(key, expectedSignature = null)
+
+    /**
+     * Signature-aware read (Phase 6B). When [expectedSignature] is non-null, a cached entry whose
+     * [ThemePage.renderSignature] no longer matches is treated as stale: it is evicted and a miss is
+     * returned, so a palette/density/font change can never render a stale-styled page. Passing `null`
+     * preserves the legacy behavior (no signature check).
+     */
+    fun get(key: Key, expectedSignature: String?): ThemePage? {
         pruneExpired()
         val entry = store[key] ?: return null
         if (entry.expiresAt <= nowMs()) {
+            store.remove(key)
+            return null
+        }
+        if (expectedSignature != null && entry.page.renderSignature != expectedSignature) {
             store.remove(key)
             return null
         }
@@ -55,6 +74,25 @@ class ThemePageMemoryCache(
     fun invalidateTopic(topicId: Int) {
         if (topicId <= 0) return
         store.keys.removeAll { it.topicId == topicId }
+    }
+
+    /**
+     * Clears the whole cache when the global theme/render [signature] changes (Phase 6B). Call on
+     * theme/palette change, density change, font-mode change, avatar-mode change, blacklist change —
+     * any global change that restyles every page. Returns true if the cache was cleared.
+     *
+     * The first call only records the signature (no clear). A `null` signature is ignored so an
+     * unknown signature never wipes a valid cache.
+     */
+    fun invalidateOnSignatureChange(signature: String?): Boolean {
+        if (signature == null) return false
+        val previous = trackedSignature
+        trackedSignature = signature
+        if (previous != null && previous != signature) {
+            clear()
+            return true
+        }
+        return false
     }
 
     fun clear() {
