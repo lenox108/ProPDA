@@ -67,7 +67,7 @@ class EditPostApi(
         return attachmentsParser.parseAttachments(response.body)
     }
 
-    fun sendPost(form: EditPostForm, scrollTraceId: String? = null): ThemePage {
+    suspend fun sendPost(form: EditPostForm, scrollTraceId: String? = null): ThemePage {
         val url = "https://4pda.to/forum/index.php"
         val headers = HashMap<String, String>()
 
@@ -137,7 +137,7 @@ class EditPostApi(
         return parseNewPostPage(form, response.body, redirectUrl, scrollTraceId)
     }
 
-    private fun parseNewPostPage(
+    private suspend fun parseNewPostPage(
             form: EditPostForm,
             body: String,
             redirectUrl: String,
@@ -203,7 +203,7 @@ class EditPostApi(
         ThemeApi.ensureScrollAnchorForPostedPage(page, null, scrollTraceId)
     }
 
-    private fun parseEditedPostPage(
+    private suspend fun parseEditedPostPage(
             form: EditPostForm,
             body: String,
             redirectUrl: String,

@@ -9,25 +9,25 @@ sealed class ThemeLoadAction {
      * Обычная загрузка темы (первичная или навигация на новую страницу).
      * Сохраняет страницу в историю.
      */
-    data object Normal : ThemeLoadAction()
+    object Normal : ThemeLoadAction()
 
     /**
      * Обновление текущей страницы (pull-to-refresh).
      * Обновляет последнюю страницу в истории с сохранением позиции прокрутки.
      */
-    data object Refresh : ThemeLoadAction()
+    object Refresh : ThemeLoadAction()
 
     /**
      * Возврат к предыдущей странице в истории.
      * Обновляет последнюю страницу в истории с сохранением позиции прокрутки.
      */
-    data object Back : ThemeLoadAction()
+    object Back : ThemeLoadAction()
 
     /**
      * Загрузка последней страницы темы (переход в конец).
      * Сохраняет страницу в историю.
      */
-    data object End : ThemeLoadAction()
+    object End : ThemeLoadAction()
 
     /**
      * Возвращает строковое представление для JS-интеграции.

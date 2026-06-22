@@ -273,6 +273,7 @@ class ThemeTemplate(
                         if (themePostRatingToInt(ratingUi.postRating) == 0) "post_rating_hidden" else ""
                 )
                 setVariableOpt("blacklisted_post_class", if (isBlacklisted) "blacklisted_post" else "")
+                setVariableOpt("post_class_extras", buildPostClassExtras(isBlacklisted, post.isOnline))
 
                 if (isBlacklisted) {
                     addBlockOpt("blacklisted_stub_open")
@@ -830,6 +831,13 @@ class ThemeTemplate(
     ): Boolean {
         if (post.userId > 0 && post.userId == currentUserId) return false
         return blacklist.any { it.matches(post.userId, post.nick) }
+    }
+
+    private fun buildPostClassExtras(isBlacklisted: Boolean, isOnline: Boolean): String {
+        return buildString {
+            if (isBlacklisted) append(" blacklisted_post")
+            if (isOnline) append(" online")
+        }
     }
 
     private fun htmlEncode(value: String?): String? = value?.let { ApiUtils.htmlEncode(it) ?: it }

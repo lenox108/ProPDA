@@ -17,9 +17,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.net.URLEncoder
 import java.util.Locale
@@ -49,30 +49,30 @@ class NewsApi(
         private val articleParser: ArticleParser
 ) {
 
-    fun getNews(category: String, pageNumber: Int): List<NewsItem> {
+    suspend fun getNews(category: String, pageNumber: Int): List<NewsItem> {
         if (category == Constants.NEWS_CATEGORY_TECH) {
             return getTechNews(pageNumber)
         }
-        val url = getLink(category, pageNumber)
-        val response = webClient.get(url)
-        return articleParser.parseArticles(response.body)
+        return withContext(Dispatchers.IO) {
+            val url = getLink(category, pageNumber)
+            val response = webClient.get(url)
+            articleParser.parseArticles(response.body)
+        }
     }
 
-    private fun getTechNews(pageNumber: Int): List<NewsItem> {
-        return runBlocking {
-            val gate = Semaphore(TECH_NEWS_CONCURRENCY)
-            TECH_URLS
-                    .map { url ->
-                        async(Dispatchers.IO) {
-                            gate.withPermit {
-                                articleParser.parseArticles(webClient.get(getPageLink(url, pageNumber)).body)
-                            }
-                        }
+    private suspend fun getTechNews(pageNumber: Int): List<NewsItem> = coroutineScope {
+        val gate = Semaphore(TECH_NEWS_CONCURRENCY)
+        TECH_URLS
+            .map { url ->
+                async(Dispatchers.IO) {
+                    gate.withPermit {
+                        articleParser.parseArticles(webClient.get(getPageLink(url, pageNumber)).body)
                     }
-                    .awaitAll()
-                    .flatten()
-                    .distinctBy { it.id }
-        }
+                }
+            }
+            .awaitAll()
+            .flatten()
+            .distinctBy { it.id }
     }
 
     fun getDetails(id: Int): DetailsPage =

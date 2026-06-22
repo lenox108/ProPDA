@@ -4,16 +4,20 @@ import android.content.Context
 import android.widget.Toast
 import androidx.annotation.StringRes
 import com.github.terrakok.cicerone.Router
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
  * Обертка над Cicerone 6.x с прежними именами методов для приложения.
+ *
+ * The Toast helpers use the Hilt-provided [appScope] (process-wide, [kotlinx.coroutines.SupervisorJob])
+ * so we do not create a per-instance [kotlinx.coroutines.MainScope] that would leak when the
+ * router outlives the current UI (e.g. after a configuration change).
  */
-class TabRouter(private val context: Context) : Router() {
-
-    private val mainScope = MainScope()
+class TabRouter(
+    private val context: Context,
+    private val appScope: CoroutineScope,
+) : Router() {
 
     fun newScreenChain(screen: Screen) {
         newRootChain(screen)
@@ -36,13 +40,13 @@ class TabRouter(private val context: Context) : Router() {
     }
 
     fun showSystemMessage(message: String) {
-        mainScope.launch {
+        appScope.launch {
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
 
     fun showSystemMessage(@StringRes messageId: Int) {
-        mainScope.launch {
+        appScope.launch {
             Toast.makeText(context, context.getString(messageId), Toast.LENGTH_SHORT).show()
         }
     }
@@ -52,8 +56,13 @@ class TabRouter(private val context: Context) : Router() {
         exit()
     }
 
-    /** Отменяет scope. Вызывать при завершении приложения (необязательно для @Singleton). */
+    /**
+     * Kept for binary/source compatibility with previous callers. No-op: the
+     * injected [appScope] is the shared process-wide scope, owned by Hilt, and
+     * must not be cancelled from here.
+     */
+    @Suppress("unused")
     fun cleanup() {
-        mainScope.cancel()
+        // intentionally empty
     }
 }

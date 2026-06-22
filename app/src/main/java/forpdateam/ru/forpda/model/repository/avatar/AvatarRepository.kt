@@ -9,13 +9,57 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Created by radiationx on 01.01.18.
+ *
+ * **Public entry points (AUDIT-L09 contract):**
+ *
+ *  1. [getAvatar] (id + nick) — `suspend`; throws
+ *     [AvatarNotFoundException] on miss. Use from coroutine code when
+ *     you already have both the user id and the nick and want one
+ *     canonical answer.
+ *  2. [getAvatar] (id only) — `suspend`; throws on miss. Use when you
+ *     only have the id.
+ *  3. [getAvatar] (nick only) — `suspend`; throws on miss. Use when
+ *     you only have the nick. Internally falls back to
+ *     `userSource.getUsers(nick)` via the cache's `getUserByNick`.
+ *  4. [getAvatarSync] (nick) — **blocking** (uses `runBlocking` +
+ *     `Dispatchers.IO`); returns `null` on miss; **does not throw**.
+ *     Use from Java code that cannot `suspend`. The null-vs-throw
+ *     contract is part of the Java bridge.
+ *  5. [getAvatarForWebViewInterceptSync] (nick) — same as 4 but bounded
+ *     by [WEBVIEW_LOOKUP_TIMEOUT_MS] (50ms) so the WebView resource
+ *     loader can never block for more than 50ms. Also returns `null`
+ *     on miss. **Must not throw** — `CustomWebViewClient.
+ *     shouldInterceptRequest` has no try/catch around the lookup.
+ *
+ * The five entry points are kept separate because the contract
+ * (suspending vs blocking, throws vs null, time-bounded vs not)
+ * matters at every call site. A future consolidation into a single
+ * `AvatarLoader` facade is welcome as long as each of the 5 contracts
+ * is preserved (the
+ * `AvatarRepository` is *already* the "AvatarLoader" in spirit; the
+ * audit's suggested rename is documentation-only and is not done in
+ * this pass to keep the diff small).
  */
 class AvatarRepository(
         private val forumUsersCache: ForumUsersCacheRoom
 ) {
 
     companion object {
+        /**
+         * Hard upper bound for the WebView intercept path. The lookup
+         * runs on the WebView's resource loader thread; if the cache
+         * miss + DB roundtrip would take longer than this, we return
+         * `null` and let the WebView fall back to its default behaviour
+         * (broken-image icon).
+         */
         private const val WEBVIEW_LOOKUP_TIMEOUT_MS = 50L
+
+        /**
+         * In-memory LRU for nick → avatar URL. Capped at 512 entries
+         * (~64 KiB at 128B/URL). The cache is *not* a substitute for
+         * the DB cache; it just avoids re-mapping the URL on every
+         * list-item rebind.
+         */
         private const val AVATAR_URL_CACHE_SIZE = 512
     }
 
@@ -23,17 +67,17 @@ class AvatarRepository(
 
     suspend fun getAvatar(id: Int, nick: String): String =
             withContext(Dispatchers.IO) {
-                getAvatarSync(id, nick) ?: throw NullPointerException("No avatar/user by id: $id")
+                getAvatarSync(id, nick) ?: throw AvatarNotFoundException(avatarId = id, nick = nick)
             }
 
     suspend fun getAvatar(id: Int): String =
             withContext(Dispatchers.IO) {
-                getAvatarSync(id) ?: throw NullPointerException("No avatar/user by id: $id")
+                getAvatarSync(id) ?: throw AvatarNotFoundException(avatarId = id)
             }
 
     suspend fun getAvatar(nick: String): String =
             withContext(Dispatchers.IO) {
-                fetchAvatarByNick(nick) ?: throw NullPointerException("No avatar/user by nick: $nick")
+                fetchAvatarByNick(nick) ?: throw AvatarNotFoundException(nick = nick)
             }
 
     /** Блокирующая обёртка для вызова из Java (CustomWebViewClient.shouldInterceptRequest). */

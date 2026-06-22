@@ -170,7 +170,7 @@ class ArticleParser(
         val articleContentRegexes = listOf(
                 Regex("""(?is)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bentry-content\b[^"']*["'])[^>]*>([\s\S]*?)</div>\s*<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-footer\b)"""),
                 Regex("""(?is)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bentry-content\b[^"']*["'])[^>]*>([\s\S]*?)</div>"""),
-                Regex("""(?is)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle\b[^"']*["'])[^>]*>([\s\S]*?)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-footer\b)"""),
+                Regex("""(?is)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle\b[^"']*["'])(?![^>]*\bclass\s*=\s*["'][^"']*\barticle(?:body|header|footer|meta|anons)\b)[^>]*>([\s\S]*?)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-footer\b)"""),
                 Regex("""(?is)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bcontent-box\b[^"']*["'])(?=[^>]*\bitemprop\s*=\s*["']articleBody["'])[^>]*>([\s\S]*?)</div>"""),
                 Regex("""(?is)<article\b[^>]*>([\s\S]*?)</article>""")
         )
@@ -877,7 +877,9 @@ class ArticleParser(
             .matcher(pageContext.response)
             .mapOnce { matcher ->
                 DetailsPage().apply {
-                    val extractedContent = resolveArticleBodyContent(pageContext, phase, matcher.group(6))
+                    val rawBody = matcher.group(6)
+                    val cleanedBody = rawBody?.let { cleanV2BodyContent(it) }
+                    val extractedContent = resolveArticleBodyContent(pageContext, phase, cleanedBody)
                     id = matcher.group(1).orEmpty().toIntOrNull() ?: 0
 
                     patternProvider
@@ -958,7 +960,7 @@ class ArticleParser(
 
         // Find article content - try multiple patterns
         val extractedContent = extractArticleContent(pageContext, phase)
-        val content = extractedContent.html
+        val content = extractedContent.html?.let { cleanArticleMetaFromContent(it) }
 
         // Find date
         val date = run {
@@ -1253,6 +1255,46 @@ class ArticleParser(
         }
     }
 
+    private val v2ArticleHeaderStripRegex = Regex(
+            """(?is)<(?:div|header|section)\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-header\b[^"']*["'])[^>]*>([\s\S]*?)</(?:div|header|section)>"""
+    )
+    private val v2ArticleMetaStripRegex = Regex(
+            """(?is)<(?:div|span|small|em|p|footer|header)\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-meta(?:-comment|-time|-[a-z0-9-]*)?\b[^"']*["'])[^>]*>[\s\S]*?</(?:div|span|small|em|p|footer|header)>|<time\b[^>]*\bclass\s*=\s*["'][^"']*\barticle-meta-time\b[^"']*["'][^>]*>[^<]*</time>"""
+    )
+    private val v2ArticleMetaOuterStripRegex = Regex(
+            """(?is)<(?:div|span|small|em|p|footer|header)\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-meta\b[^"']*["'])(?![^>]*\barticle-meta-)[^>]*>[\s\S]*?</(?:div|span|small|em|p|footer|header)>"""
+    )
+    private val v2MetaTagStripRegex = Regex(
+            """(?is)<meta\b[^>]*>"""
+    )
+
+    private fun cleanV2BodyContent(body: String): String {
+        System.err.println("CLEAN_V2_INPUT: $body")
+        var current = body
+        val preserved = StringBuilder()
+        current = v2ArticleHeaderStripRegex.replace(current) { match ->
+            val inner = match.groupValues.getOrNull(1).orEmpty()
+            val cleanedInner = v2ArticleMetaStripRegex.replace(inner, "")
+            preserved.append(cleanedInner)
+            ""
+        }
+        current = v2ArticleMetaOuterStripRegex.replace(current, "")
+        current = v2ArticleMetaStripRegex.replace(current, "")
+        current = v2MetaTagStripRegex.replace(current, "")
+        val result = preserved.append(current).toString()
+        System.err.println("CLEAN_V2_OUTPUT: $result")
+        return result
+    }
+
+    private fun cleanArticleMetaFromContent(body: String): String {
+        System.err.println("CLEAN_META_INPUT: $body")
+        var current = body
+        current = v2ArticleMetaOuterStripRegex.replace(current, "")
+        current = v2ArticleMetaStripRegex.replace(current, "")
+        System.err.println("CLEAN_META_OUTPUT: $current")
+        return current
+    }
+
     private fun normalizeSponsoredArticleLink(linkHtml: String): String? {
         val match = sponsoredCardLinkRegex.find(linkHtml) ?: return null
         val href = match.groupValues.getOrNull(2).orEmpty().ifBlank { return null }
@@ -1512,7 +1554,7 @@ class ArticleParser(
                             readOnly = poll.voted,
                             totalVotes = poll.totalVotes,
                             multiSelect = poll.multiSelect,
-                            frameId = "poll-ajax-frame-${poll.pollId}",
+                            frameId = "poll-ajax-frame-news",
                             renderToken = stablePollRenderToken(poll.pollId, source)
                     )
                 }

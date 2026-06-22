@@ -99,7 +99,9 @@ object DataModule {
             NotesMigrations.MIGRATION_3_4,
             NotesMigrations.MIGRATION_4_5,
             NotesMigrations.MIGRATION_5_6,
-            NotesMigrations.MIGRATION_6_7
+            NotesMigrations.MIGRATION_6_7,
+            NotesMigrations.MIGRATION_7_8,
+            NotesMigrations.MIGRATION_8_9
         )
             .build()
     }

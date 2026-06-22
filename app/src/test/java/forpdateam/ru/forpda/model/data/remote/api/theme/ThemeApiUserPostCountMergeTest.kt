@@ -21,6 +21,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -63,7 +64,7 @@ class ThemeApiUserPostCountMergeTest {
     }
 
     @Test
-    fun getThemeMergesUserPostCountFromDesktopTopicHtml() {
+    fun getThemeMergesUserPostCountFromDesktopTopicHtml() = runTest {
         val url = "https://4pda.to/forum/index.php?showtopic=10"
         val desktopUrl = "https://4pda.to/forum/index.php?showtopic=10&st=0"
         val desktopRequest = slot<NetworkRequest>()
@@ -108,7 +109,7 @@ class ThemeApiUserPostCountMergeTest {
     }
 
     @Test
-    fun getThemeMergesDesktopPostCountBeforeFinalTemplateRender() {
+    fun getThemeMergesDesktopPostCountBeforeFinalTemplateRender() = runTest {
         val url = "https://4pda.to/forum/index.php?showtopic=10"
         val webClient = mockk<IWebClient>(relaxed = true)
         val parser = mockk<ThemeParser>(relaxed = true)
@@ -150,7 +151,7 @@ class ThemeApiUserPostCountMergeTest {
     }
 
     @Test
-    fun getThemeFallsBackToProfilePostCountAndCachesAuthor() {
+    fun getThemeFallsBackToProfilePostCountAndCachesAuthor() = runTest {
         val url = "https://4pda.to/forum/index.php?showtopic=10"
         val profileUrl = "https://4pda.to/forum/index.php?showuser=777"
         val webClient = mockk<IWebClient>(relaxed = true)
@@ -195,7 +196,7 @@ class ThemeApiUserPostCountMergeTest {
     }
 
     @Test
-    fun getThemeDoesNotOverwriteExistingPositivePostCountFromDesktopMerge() {
+    fun getThemeDoesNotOverwriteExistingPositivePostCountFromDesktopMerge() = runTest {
         val url = "https://4pda.to/forum/index.php?showtopic=10"
         val webClient = mockk<IWebClient>(relaxed = true)
         val parser = mockk<ThemeParser>(relaxed = true)

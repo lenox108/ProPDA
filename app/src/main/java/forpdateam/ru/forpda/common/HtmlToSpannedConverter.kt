@@ -11,7 +11,6 @@ import java.io.StringReader
 import java.util.Locale
 import java.util.regex.Pattern
 import forpdateam.ru.forpda.R
-import forpdateam.ru.forpda.App
 import forpdateam.ru.forpda.common.Html.Companion.FROM_HTML_OPTION_USE_CSS_COLORS
 
 internal class HtmlToSpannedConverter(
@@ -168,7 +167,12 @@ internal class HtmlToSpannedConverter(
     }
     private fun startImg(text: Editable, attributes: Attributes, img: Html.ImageGetter?) {
         val src = attributes.getValue("", "src"); var d: Drawable? = null; if (img != null) d = img.getDrawable(src)
-        if (d == null) { try { d = App.instance.getDrawable(R.drawable.adf); d?.setBounds(0, 0, d.intrinsicWidth, d.intrinsicHeight) } catch (_: Exception) {} }
+        if (d == null) {
+            try {
+                d = ContextImageLookup.requireDrawable(R.drawable.adf)
+                d?.setBounds(0, 0, d.intrinsicWidth, d.intrinsicHeight)
+            } catch (_: Exception) {}
+        }
         if (d == null) return
         val len = text.length; text.append("\uFFFC"); text.setSpan(ImageSpan(d, src), len, text.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
     }

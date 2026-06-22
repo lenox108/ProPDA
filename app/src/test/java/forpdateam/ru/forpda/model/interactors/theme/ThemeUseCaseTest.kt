@@ -19,10 +19,12 @@ import forpdateam.ru.forpda.entity.app.profile.IUserHolder
 import forpdateam.ru.forpda.entity.remote.others.pagination.Pagination
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.entity.remote.theme.ThemePost
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -51,6 +53,7 @@ class ThemeUseCaseTest {
     private val userHolder: IUserHolder = mockk(relaxed = true)
     private val topicPreferencesHolder: TopicPreferencesHolder = mockk(relaxed = true)
     private val mainPreferencesHolder: MainPreferencesHolder = mockk(relaxed = true)
+    private val appScope: CoroutineScope = TestScope(dispatcher)
 
     @Before
     fun setup() {
@@ -68,7 +71,8 @@ class ThemeUseCaseTest {
             favoritesRepository,
             userHolder,
             topicPreferencesHolder,
-            mainPreferencesHolder
+            mainPreferencesHolder,
+            appScope = appScope
         )
     }
 
@@ -203,7 +207,8 @@ class ThemeUseCaseTest {
                 userHolder = userHolder,
                 topicPreferencesHolder = topicPreferencesHolder,
                 mainPreferencesHolder = mainPreferencesHolder,
-                prefetchService = prefetch
+                prefetchService = prefetch,
+                appScope = appScope
         )
 
         prefetch.prefetchTopic(topicId, requestUrl, openFromUnreadListHint = false)
@@ -260,7 +265,8 @@ class ThemeUseCaseTest {
                 userHolder = userHolder,
                 topicPreferencesHolder = topicPreferencesHolder,
                 mainPreferencesHolder = mainPreferencesHolder,
-                prefetchService = prefetch
+                prefetchService = prefetch,
+                appScope = appScope
         )
 
         prefetch.prefetchTopic(topicId, requestUrl, openFromUnreadListHint = true)

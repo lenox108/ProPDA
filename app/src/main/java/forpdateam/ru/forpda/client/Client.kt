@@ -53,7 +53,8 @@ import java.util.concurrent.atomic.AtomicReference
 class Client(
     private val context: Context,
     private val authHolder: AuthHolder,
-    private val countersHolder: CountersHolder
+    private val countersHolder: CountersHolder,
+    @forpdateam.ru.forpda.common.di.AppScope private val appScope: kotlinx.coroutines.CoroutineScope,
 ) : IWebClient {
 
     /**
@@ -91,7 +92,7 @@ class Client(
     }
 
     // region Properties
-    private val cookieManager = CookieManager(context, authHolder)
+    private val cookieManager = CookieManager(context, authHolder, appScope)
     private val authKey: AtomicReference<String> = AtomicReference("0")
     // endregion
 
@@ -109,7 +110,7 @@ class Client(
     private val cachedDns = CachedDns()
 
     private val cacheDir by lazy { File(context.cacheDir, "http_cache").apply { mkdirs() } }
-    private val httpCache by lazy { Cache(cacheDir, 10L * 1024 * 1024) } // 10 MB
+    private val httpCache by lazy { Cache(cacheDir, 50L * 1024 * 1024) } // 50 MB (was 10) — matches docs/AUDIT_REPORT.md promise
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -369,37 +370,14 @@ class Client(
     }
 
     private fun getCounts(res: String) {
-        fun findFirstInt(pattern: java.util.regex.Pattern): Int? {
-            val m = pattern.matcher(res)
-            if (!m.find()) return null
-            // Берём первое не-null значение из групп (некоторые fallback-паттерны используют альтернативы).
-            for (i in 1..m.groupCount()) {
-                val v = m.group(i)?.toIntOrNull()
-                if (v != null) return v
-            }
-            return null
-        }
-
+        // Delegate to the shared header-counters parser so the legacy and
+        // per-counter regex logic live in exactly one place. See AUDIT-M09.
+        val parsed = forpdateam.ru.forpda.notifications.ForumHeaderCounters.parseOptional(res)
         val counters = countersHolder.get()
         var changed = false
-
-        // Старый «единый» паттерн — самый точный, если совпал.
-        val countsMatcher = IWebClient.countsPattern.matcher(res)
-        if (countsMatcher.find()) {
-            runCatching {
-                countsMatcher.group(1)?.toIntOrNull()?.also { counters.mentions = it; changed = true }
-                countsMatcher.group(2)?.toIntOrNull()?.also { counters.favorites = it; changed = true }
-                countsMatcher.group(3)?.toIntOrNull()?.also { counters.qms = it; changed = true }
-            }.onFailure {
-                if (BuildConfig.DEBUG) Timber.d("getCounts parse failed (legacy)")
-            }
-        } else {
-            // Fallback: шапка форума регулярно меняется, поэтому извлекаем счётчики по отдельности.
-            findFirstInt(IWebClient.mentionsCountPattern)?.also { counters.mentions = it; changed = true }
-            findFirstInt(IWebClient.favoritesCountPattern)?.also { counters.favorites = it; changed = true }
-            findFirstInt(IWebClient.qmsCountPattern)?.also { counters.qms = it; changed = true }
-        }
-
+        parsed.mentions?.also { counters.mentions = it; changed = true }
+        parsed.favorites?.also { counters.favorites = it; changed = true }
+        parsed.qms?.also { counters.qms = it; changed = true }
         if (changed) {
             countersHolder.set(counters, source = "index_header")
         }

@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.entity.remote.theme
 import java.util.ArrayList
 
 import forpdateam.ru.forpda.entity.remote.others.pagination.Pagination
+import forpdateam.ru.forpda.presentation.theme.HighlightTarget
 
 /**
  * Created by radiationx on 04.08.16.
@@ -33,6 +34,20 @@ class ThemePage {
     var refreshRestoreMode: String? = null
     var refreshRestoreSource: String? = null
     var renderSignature: String? = null
+
+    /**
+     * Resolved visual highlight for the current render of this page (see
+     * [forpdateam.ru.forpda.presentation.theme.TopicHighlightApply]). The
+     * template reads it through `ppda_highlight_post_id_int`.
+     */
+    var highlightTarget: HighlightTarget? = null
+
+    /**
+     * Monotonic id bumped each time a *new* highlight is stamped onto this page
+     * (see [TopicHighlightApply.applyToPage]). The JS guard uses it to ignore
+     * stale highlight callbacks from a superseded render.
+     */
+    var renderGenerationId: Int = 0
     var postsFragmentHtml: String? = null
     var isInFavorite = false
     var isCurator = false

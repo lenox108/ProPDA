@@ -25,7 +25,8 @@ internal object FavoriteReadStateMerge {
             cached: FavItem?,
             inspectorUnread: Boolean,
             inspectorPresent: Boolean,
-            hasNewerContentThanCache: Boolean = false
+            hasNewerContentThanCache: Boolean = false,
+            networkIsFreshRefresh: Boolean = false
     ): Result {
         val htmlPlusCount = when {
             networkUnreadCount > 0 -> networkUnreadCount
@@ -57,7 +58,10 @@ internal object FavoriteReadStateMerge {
                 if (!htmlSaysUnread && network == FavoriteReadState.READ && !hasNewerContentThanCache) {
                     // Log 480/1103268: favorites HTML often lacks +N while inspector still reports unread.
                     // Do not flip a cached-unread row to READ before the user opens the topic.
-                    if (cachedUnread) {
+                    // On a fresh network refresh, however, the network's READ is the source of
+                    // truth and must replace the cached UNREAD; the inspector hint is treated
+                    // as stale in that case.
+                    if (cachedUnread && !networkIsFreshRefresh) {
                         val count = maxOf(htmlPlusCount, cachedCount).coerceAtLeast(1)
                         return Result(
                                 FavoriteReadState.UNREAD,

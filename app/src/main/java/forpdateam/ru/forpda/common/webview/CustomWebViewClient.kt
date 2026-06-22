@@ -285,7 +285,12 @@ open class CustomWebViewClient(
     }
 
     private fun downloadFile(context: Context, uri: Uri) {
-        systemLinkHandler!!.handleDownload(uri.toString(), null, context)
+        val handler = systemLinkHandler
+        if (handler == null) {
+            Timber.w("downloadFile called before systemLinkHandler was attached: %s", uri)
+            return
+        }
+        handler.handleDownload(uri.toString(), null, context)
     }
 
     override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {

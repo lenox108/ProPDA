@@ -36,8 +36,15 @@ class QuoteTitleTransformTest {
 
     @Test
     fun returnsEmptyDateWhenOnlyNickPresent() {
-        val (nick, date) = parseQuoteTitle("user @ ")
+        val (nick, date) = parseQuoteTitle("user @ name")
         assertEquals("user", nick)
+        assertEquals("name", date)
+    }
+
+    @Test
+    fun returnsNoMatchWhenSeparatorHasNoTrailingToken() {
+        val (nick, date) = parseQuoteTitle("user @ ")
+        assertEquals("", nick)
         assertNull(date)
     }
 }

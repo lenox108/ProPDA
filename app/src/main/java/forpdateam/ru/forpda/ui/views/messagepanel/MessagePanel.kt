@@ -134,34 +134,36 @@ class MessagePanel(
         val inflater = context.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
         if (fullForm) {
             fullBinding = MessagePanelFullBinding.inflate(inflater, this, true)
-            advancedButton = fullBinding!!.buttonAdvancedInput
-            attachmentsButton = fullBinding!!.buttonAttachments
-            sendButton = fullBinding!!.buttonSend
-            fullButton = fullBinding!!.buttonFull
+            val fb = requireNotNull(fullBinding) { "MessagePanelFullBinding.inflate returned null" }
+            advancedButton = fb.buttonAdvancedInput
+            attachmentsButton = fb.buttonAttachments
+            sendButton = fb.buttonSend
+            fullButton = fb.buttonFull
             hideButton = null
-            editPollButton = fullBinding!!.buttonEdtPoll
-            previewButton = fullBinding!!.buttonPreview
-            clearMessageButton = fullBinding!!.buttonClearMessage
-            attachmentsCounter = fullBinding!!.attachmentCounter
-            messageField = fullBinding!!.messageField
-            sendProgress = fullBinding!!.sendProgress
-            formProgress = fullBinding!!.formLoadProgress
-            messageWrapper = fullBinding!!.messageWrapper
+            editPollButton = fb.buttonEdtPoll
+            previewButton = fb.buttonPreview
+            clearMessageButton = fb.buttonClearMessage
+            attachmentsCounter = fb.attachmentCounter
+            messageField = fb.messageField
+            sendProgress = fb.sendProgress
+            formProgress = fb.formLoadProgress
+            messageWrapper = fb.messageWrapper
         } else {
             quickBinding = MessagePanelQuickBinding.inflate(inflater, this, true)
-            advancedButton = quickBinding!!.buttonAdvancedInput
-            attachmentsButton = quickBinding!!.buttonAttachments
-            sendButton = quickBinding!!.buttonSend
-            fullButton = quickBinding!!.buttonFull
-            hideButton = quickBinding!!.buttonHide
+            val qb = requireNotNull(quickBinding) { "MessagePanelQuickBinding.inflate returned null" }
+            advancedButton = qb.buttonAdvancedInput
+            attachmentsButton = qb.buttonAttachments
+            sendButton = qb.buttonSend
+            fullButton = qb.buttonFull
+            hideButton = qb.buttonHide
             editPollButton = null
-            previewButton = quickBinding!!.buttonPreview
-            clearMessageButton = quickBinding!!.buttonClearMessage
-            attachmentsCounter = quickBinding!!.attachmentCounter
-            messageField = quickBinding!!.messageField
-            sendProgress = quickBinding!!.sendProgress
+            previewButton = qb.buttonPreview
+            clearMessageButton = qb.buttonClearMessage
+            attachmentsCounter = qb.attachmentCounter
+            messageField = qb.messageField
+            sendProgress = qb.sendProgress
             formProgress = null
-            messageWrapper = quickBinding!!.messageWrapper
+            messageWrapper = qb.messageWrapper
         }
         isClickable = true
         
@@ -221,7 +223,7 @@ class MessagePanel(
                 heightChangeListener?.onChangedHeight(newHeight)
             }
         }
-        addOnLayoutChangeListener(layoutChangeListener!!)
+        addOnLayoutChangeListener(requireNotNull(layoutChangeListener))
 
         textWatcher = object : SimpleTextWatcher() {
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
@@ -236,7 +238,7 @@ class MessagePanel(
                 }
             }
         }
-        messageField?.addTextChangedListener(textWatcher!!)
+        messageField?.addTextChangedListener(requireNotNull(textWatcher))
         applyEditorTypeface()
 
         // Keep cursor/selection on tap/long-press; suppress IME without consuming touch events.
@@ -255,13 +257,13 @@ class MessagePanel(
             }
             false
         }
-        messageField.setOnTouchListener(touchListener!!)
+        messageField.setOnTouchListener(requireNotNull(touchListener))
         focusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
             if (hasFocus && imeSuppressed) {
                 hideImeFromEditor(clearFocus = false)
             }
         }
-        messageField.onFocusChangeListener = focusChangeListener!!
+        messageField.onFocusChangeListener = requireNotNull(focusChangeListener)
         
         scope.launch {
             mainPreferencesHolder.observeEditorMonospaceFlow().collect { value ->

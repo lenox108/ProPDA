@@ -4,9 +4,15 @@ import android.content.Context
 import androidx.preference.PreferenceManager
 import forpdateam.ru.forpda.common.PrivateHeaders
 import forpdateam.ru.forpda.common.SecureCookiesPreferences
+import forpdateam.ru.forpda.common.di.AppScope
 import forpdateam.ru.forpda.entity.common.AuthData
 import forpdateam.ru.forpda.entity.common.AuthState
 import forpdateam.ru.forpda.model.AuthHolder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -14,13 +20,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import timber.log.Timber
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Менеджер для управления cookies аутентификации.
  */
 class CookieManager(
     private val context: Context,
-    private val authHolder: AuthHolder
+    private val authHolder: AuthHolder,
+    @AppScope private val appScope: CoroutineScope,
 ) {
     private val clientCookies = ConcurrentHashMap<String, Cookie>()
     private val mobileCookie: Cookie? = safeParseMobileCookie()
@@ -34,17 +42,34 @@ class CookieManager(
 
     private val lastStaleCheck = java.util.concurrent.atomic.AtomicLong(0L)
 
+    /**
+     * Set to true once the auth cookies from EncryptedSharedPreferences have been
+     * hydrated into [clientCookies]. Hydration runs off the main thread on
+     * construction; the first [CookieJar.loadForRequest] call will block briefly
+     * (with a short timeout) to wait for the in-flight hydration to complete so
+     * that poll pages do not go out as guest. See AUDIT-M15.
+     */
+    private val cookiesHydrated = AtomicBoolean(false)
+
     companion object {
         private const val MOBILE_COOKIE_NAME = "ngx_mb"
         private const val MOBILE_COOKIE_VALUE = "1"
         private const val STALE_CHECK_INTERVAL_MS = 60_000L  // раз в минуту
+        private const val COOKIE_HYDRATION_WAIT_MS = 500L
     }
 
     init {
         putCookieIfValid(mobileCookie)
         // Auth cookies must be available before the first topic request; otherwise
         // poll pages can be fetched as guest and lose the voting form.
-        initializeCookies()
+        // Hydrate off the main thread so the app's critical-path work (DI graph,
+        // first activity creation) is not blocked by the EncryptedSharedPreferences
+        // roundtrip (which can take ~50-200 ms on a cold start).
+        appScope.launch(Dispatchers.IO) {
+            runCatching { initializeCookies() }
+                .onFailure { Timber.w(it, "CookieManager.initializeCookies failed") }
+            cookiesHydrated.set(true)
+        }
     }
 
     private fun initializeCookies() {
@@ -123,6 +148,19 @@ class CookieManager(
                 val lastCheck = lastStaleCheck.get()
                 if (now - lastCheck > STALE_CHECK_INTERVAL_MS && lastStaleCheck.compareAndSet(lastCheck, now)) {
                     removeStaleNullCookies()
+                }
+
+                // Block briefly on the first request so the off-main hydration
+                // can finish before the first outgoing call. After hydration
+                // completes this is a single volatile read.
+                if (!cookiesHydrated.get()) {
+                    runBlocking(Dispatchers.IO) {
+                        withTimeoutOrNull(COOKIE_HYDRATION_WAIT_MS) {
+                            while (!cookiesHydrated.get()) {
+                                kotlinx.coroutines.yield()
+                            }
+                        }
+                    }
                 }
 
                 val cookies = clientCookies.values

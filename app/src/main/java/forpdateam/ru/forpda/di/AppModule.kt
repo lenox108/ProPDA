@@ -11,6 +11,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import forpdateam.ru.forpda.common.DayNightHelper
+import forpdateam.ru.forpda.common.di.AppScope
 import forpdateam.ru.forpda.entity.app.profile.IUserHolder
 import forpdateam.ru.forpda.entity.app.profile.UserHolder
 import forpdateam.ru.forpda.model.*
@@ -59,7 +60,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideCicerone(@ApplicationContext context: Context): Cicerone<TabRouter> = Cicerone.create(TabRouter(context))
+    fun provideCicerone(
+        @ApplicationContext context: Context,
+        @AppScope appScope: kotlinx.coroutines.CoroutineScope,
+    ): Cicerone<TabRouter> = Cicerone.create(TabRouter(context, appScope))
 
     @Provides
     @Singleton

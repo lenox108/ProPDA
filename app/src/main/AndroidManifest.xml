@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="349"
-    android:versionName="2.9.3">
+    android:versionCode="350"
+    android:versionName="2.9.6">
 
     <uses-feature
         android:name="android.hardware.touchscreen"

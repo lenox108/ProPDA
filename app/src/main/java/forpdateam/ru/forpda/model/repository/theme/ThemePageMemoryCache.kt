@@ -3,11 +3,22 @@ package forpdateam.ru.forpda.model.repository.theme
 import android.os.SystemClock
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
+import java.lang.ref.SoftReference
 import java.util.Locale
 
 /**
  * Short-lived in-memory cache of parsed [ThemePage] (pre-template) to avoid repeat network
  * round-trips when reopening the same topic page.
+ *
+ * **Memory model (AUDIT-L08).** The value side is wrapped in [SoftReference] so the JVM
+ * can release cached pages under memory pressure (e.g. when the WebView renderer swells
+ * or the system approaches its OOM threshold). The [Key] / expiry metadata is kept as
+ * a hard reference so the LRU ordering survives a soft-clear, and the next access to a
+ * still-soft-referenced page simply re-fetches from the network.
+ *
+ * The LRU eviction policy is still active on top of the soft references: [maxEntries]
+ * bounds the **map size**, not the live set of pages. The actual heap footprint of
+ * this cache is the sum of pages that have not yet been reclaimed by the GC.
  */
 class ThemePageMemoryCache(
         private val ttlMs: Long = DEFAULT_TTL_MS,
@@ -22,7 +33,11 @@ class ThemePageMemoryCache(
             val pollOpen: Boolean
     )
 
-    private data class Entry(val page: ThemePage, val expiresAt: Long)
+    private data class Entry(
+            val pageRef: SoftReference<ThemePage>,
+            val renderSignature: String?,
+            val expiresAt: Long
+    )
 
     private val store = LinkedHashMap<Key, Entry>(maxEntries, 0.75f, true)
 
@@ -55,11 +70,17 @@ class ThemePageMemoryCache(
             store.remove(key)
             return null
         }
-        if (expectedSignature != null && entry.page.renderSignature != expectedSignature) {
+        if (expectedSignature != null && entry.renderSignature != expectedSignature) {
             store.remove(key)
             return null
         }
-        return entry.page.copyForCache()
+        // SoftReference may have been cleared by the GC between put() and get().
+        // Treat that as a miss so the caller re-fetches.
+        val page = entry.pageRef.get() ?: run {
+            store.remove(key)
+            return null
+        }
+        return page.copyForCache()
     }
 
     fun put(key: Key, page: ThemePage) {
@@ -68,7 +89,11 @@ class ThemePageMemoryCache(
             val eldest = store.entries.firstOrNull() ?: break
             store.remove(eldest.key)
         }
-        store[key] = Entry(page.copyForCache(), nowMs() + ttlMs)
+        store[key] = Entry(
+                pageRef = SoftReference(page.copyForCache()),
+                renderSignature = page.renderSignature,
+                expiresAt = nowMs() + ttlMs
+        )
     }
 
     fun invalidateTopic(topicId: Int) {
@@ -104,6 +129,14 @@ class ThemePageMemoryCache(
         store.entries.removeAll { it.value.expiresAt <= now }
     }
 
+    /**
+     * Test/observability hook. Returns the current size of the **map** (not the
+     * number of pages the JVM is still holding hard refs to). The map size is
+     * bounded by [maxEntries]; the live set may be smaller when soft references
+     * have been reclaimed.
+     */
+    fun size(): Int = store.size
+
     companion object {
         const val DEFAULT_TTL_MS = 7 * 60 * 1000L
 
@@ -138,6 +171,8 @@ internal fun ThemePage.copyForCache(): ThemePage {
     copy.refreshRestoreMode = refreshRestoreMode
     copy.refreshRestoreSource = refreshRestoreSource
     copy.renderSignature = renderSignature
+    copy.highlightTarget = highlightTarget
+    copy.renderGenerationId = renderGenerationId
     copy.postsFragmentHtml = postsFragmentHtml
     copy.isInFavorite = isInFavorite
     copy.isCurator = isCurator

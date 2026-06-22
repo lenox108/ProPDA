@@ -63,14 +63,18 @@ object TopicHighlightApply {
                 pagePostIds = pagePostIds,
         )
 
-        // TODO restore on next pass: ThemePage.highlightTarget and
-        //  ThemePage.renderGenerationId are not in the tracked entity yet. The
-        //  resolution is still returned to callers so the diagnostic pipeline
-        //  (TopicHighlightDiagnostics) remains observable.
-        @Suppress("UNUSED_VARIABLE")
-        val _resolvedTarget = resolution.target
-        @Suppress("UNUSED_VARIABLE")
-        val _bumpGeneration = if (false) nextGeneration() else 0
+        val resolvedTarget = resolution.target
+        val previousTarget = page.highlightTarget
+        page.highlightTarget = resolvedTarget
+
+        // Only bump the generation when the highlight actually changed (or when the
+        // page had no generation yet). A refresh of the *same* page with the *same*
+        // resolved target keeps the generation stable, so the JS guard still accepts
+        // callbacks for the current render instead of treating them as stale.
+        val sameAsBefore = previousTarget == resolvedTarget && page.renderGenerationId > 0
+        if (!sameAsBefore) {
+            page.renderGenerationId = nextGeneration()
+        }
         return resolution
     }
 }

@@ -10,21 +10,48 @@ import org.json.JSONObject
  * Converted to Kotlin.
  */
 object ApiUtils {
+    /**
+     * Decode HTML to a [Spanned] **with CSS color support**.
+     *
+     * Use this when the input may contain `style="color:…"` or `<font color="…">`
+     * (e.g. user signatures, post bodies) and the caller needs the colored
+     * spans preserved. Backed by [Html.FROM_HTML_OPTION_USE_CSS_COLORS].
+     */
     @JvmStatic
     fun coloredFromHtml(s: String?): Spanned? {
         return s?.let { Html.fromHtml(it, Html.FROM_HTML_OPTION_USE_CSS_COLORS) }
     }
 
+    /**
+     * Decode HTML to a [Spanned] in legacy mode (color attributes stripped).
+     *
+     * Use this when the caller only needs plain text styling (bold/italic/
+     * links) and the surrounding theme already provides its own color scheme
+     * — typical for body text rendered into the active theme. Backed by
+     * [Html.FROM_HTML_MODE_LEGACY].
+     */
     @JvmStatic
     fun spannedFromHtml(s: String?): Spanned? {
         return s?.let { Html.fromHtml(it, Html.FROM_HTML_MODE_LEGACY) }
     }
 
+    /**
+     * Decode HTML to a **String** (legacy mode, colors stripped).
+     *
+     * Use this when the caller only needs a flat string — typically for
+     * comparison, logging, or as a fallback when the [Spanned] representation
+     * is overkill. Equivalent to `spannedFromHtml(s).toString()`.
+     */
     @JvmStatic
     fun fromHtml(s: String?): String? {
         return s?.let { spannedFromHtml(it)?.toString() }
     }
 
+    /**
+     * Encode a string for safe inclusion in HTML (entity-encoding `<>&"`).
+     * This is the **encode** direction, not a decoder; the audit L05 only
+     * deals with decoding.
+     */
     @JvmStatic
     fun htmlEncode(s: String?): String? {
         return s?.let { TextUtils.htmlEncode(it) }

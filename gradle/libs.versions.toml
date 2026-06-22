@@ -89,6 +89,7 @@ junit = "4.13.2"
 robolectric = "4.14.1"
 mockk = "1.13.13"
 turbine = "1.1.0"
+androidxTestCoreApp = "1.6.1"
 
 [libraries]
 # Core
@@ -195,6 +196,7 @@ robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 androidx-test-core = { group = "androidx.arch.core", name = "core-testing", version.ref = "androidxTestCore" }
+androidx-test-core-app = { group = "androidx.test", name = "core", version.ref = "androidxTestCoreApp" }
 
 # Detekt
 detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }

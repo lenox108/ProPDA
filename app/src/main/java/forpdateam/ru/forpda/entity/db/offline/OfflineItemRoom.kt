@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.entity.db.offline
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -12,7 +13,10 @@ import androidx.room.PrimaryKey
  * filesystem under [forpdateam.ru.forpda.model.data.offline.OfflineStorage]
  * and the row only carries the path and a serialized model.
  */
-@Entity(tableName = "offline_items")
+@Entity(
+        tableName = "offline_items",
+        indices = [Index(value = ["savedAtMs"], orders = [Index.Order.DESC])]
+)
 data class OfflineItemRoom(
         @PrimaryKey
         val id: String,                 // "article:<id>" / "theme:<topicId>:<page>"

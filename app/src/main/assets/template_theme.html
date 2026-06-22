@@ -314,7 +314,7 @@
         </div>
         <!-- $EndBlock poll_block -->
         <!-- $BeginBlock post -->
-        <div name="entry${post_id}" class="post_container ${blacklisted_post_class} ${user_online} ${hat_state_class}" data-post-id="${post_id}" data-display-date="${date}" data-user-id="${user_id}" data-nick="${nick}">
+        <div name="entry${post_id}" class="post_container${post_class_extras}" data-post-id="${post_id}" data-display-date="${date}" data-user-id="${user_id}" data-nick="${nick}">
             <!-- $BeginBlock blacklisted_stub_open -->
             <button type="button" class="blacklisted_post_placeholder" onclick="toggleBlacklistedPost('${post_id}', this); return false;" role="button" aria-expanded="false" aria-label="${res_s_forum_blacklist_post_hidden}"><span class="blacklisted_post_placeholder_text">${res_s_forum_blacklist_post_hidden}</span></button>
             <div class="blacklisted_post_content" aria-hidden="true" hidden>
@@ -808,6 +808,92 @@
         }
 
         installInlineTopicHeaderVisibilityObserver();
+
+        (function () {
+            var ppdaHighlight = window.PPDA_HIGHLIGHT || { generationId: 0, postId: 0, type: "none" };
+            var ppdaFadeout = window.PPDA_FADEOUT || { scheduledGeneration: 0, fadedGeneration: 0 };
+
+            function ppdaIsInViewport(el) {
+                if (!el || typeof el.getBoundingClientRect !== "function") return false;
+                var rect = el.getBoundingClientRect();
+                var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+                var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+                return rect.width > 0 && rect.height > 0 &&
+                    rect.bottom > 0 && rect.right > 0 &&
+                    rect.top < vh && rect.left < vw;
+            }
+
+            function ppdaClearHighlightClasses(el) {
+                if (!el || !el.classList || el.__ppdaHighlightDone) return;
+                el.__ppdaHighlightDone = true;
+                el.classList.remove("ppda_highlight_post");
+                el.classList.remove("ppda_highlight_fading");
+            }
+
+            function ppdaApplyHighlightToNode(target, postId, type) {
+                if (!target) return;
+                target.__ppdaHighlightDone = false;
+                target.classList.add("ppda_highlight_post");
+                target.classList.remove("ppda_highlight_fading");
+                if (!ppdaIsInViewport(target)) {
+                    try { target.scrollIntoView({ block: "center", behavior: "smooth" }); }
+                    catch (e) { try { target.scrollIntoView(); } catch (_) {} }
+                }
+                if (typeof window.PPDA_scheduleHighlightFadeout === "function") {
+                    window.PPDA_scheduleHighlightFadeout(postId, type, ppdaHighlight.generationId);
+                }
+            }
+
+            window.PPDA_applyHighlight = function (postId, type, generationId) {
+                var callbackGen = Number(generationId) || 0;
+                if (callbackGen < ppdaHighlight.generationId) return false;
+                ppdaHighlight.generationId = callbackGen;
+                ppdaHighlight.postId = Number(postId) || 0;
+                ppdaHighlight.type = String(type || "none");
+                if (ppdaHighlight.postId === 0 || ppdaHighlight.type === "none") return false;
+                var allPosts = document.querySelectorAll(".post_container[data-post-id]");
+                var pagePostIds = {};
+                for (var i = 0; i < allPosts.length; i++) {
+                    var pid = parseInt(allPosts[i].getAttribute("data-post-id") || "0", 10);
+                    if (pid > 0) pagePostIds[pid] = true;
+                }
+                if (!pagePostIds[ppdaHighlight.postId]) return false;
+                var target = null;
+                for (var j = 0; j < allPosts.length; j++) {
+                    var matchPid = parseInt(allPosts[j].getAttribute("data-post-id") || "0", 10);
+                    if (matchPid === ppdaHighlight.postId) { target = allPosts[j]; break; }
+                }
+                ppdaApplyHighlightToNode(target, ppdaHighlight.postId, ppdaHighlight.type);
+                return true;
+            };
+
+            window.PPDA_scheduleHighlightFadeout = function (postId, type, generationId) {
+                var gen = Number(generationId) || 0;
+                if (gen <= 0) return "rejected";
+                if (ppdaFadeout.scheduledGeneration === gen) return "noop_same_generation";
+                ppdaFadeout.scheduledGeneration = gen;
+                ppdaFadeout.fadedGeneration = 0;
+                var postNodes = document.querySelectorAll(".post_container.ppda_highlight_post");
+                for (var k = 0; k < postNodes.length; k++) {
+                    postNodes[k].classList.add("ppda_highlight_fading");
+                    postNodes[k].__ppdaHighlightDone = false;
+                }
+                setTimeout(function () {
+                    if (ppdaFadeout.scheduledGeneration !== gen) return;
+                    ppdaFadeout.fadedGeneration = gen;
+                    var fadingNodes = document.querySelectorAll(".post_container.ppda_highlight_fading");
+                    for (var m = 0; m < fadingNodes.length; m++) {
+                        ppdaClearHighlightClasses(fadingNodes[m]);
+                    }
+                    if (typeof IThemePresenter !== "undefined" &&
+                        IThemePresenter &&
+                        typeof IThemePresenter.highlightFadeoutCompleted === "function") {
+                        try { IThemePresenter.highlightFadeoutCompleted(gen); } catch (e) {}
+                    }
+                }, 2000);
+                return "armed";
+            };
+        })();
     </script>
 </body>
 

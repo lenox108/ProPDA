@@ -13,7 +13,7 @@ import forpdateam.ru.forpda.common.Cp1251Codec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.coroutineScope
 import java.util.regex.Pattern
 
 /**
@@ -234,12 +234,12 @@ class ThemeApi(
      * Mobile topic HTML (including the body returned after posting) often omits `ka_p` / vote UI;
      * [getTheme] does this merge automatically — call this when using [ThemeParser.parsePage] alone.
      */
-    fun mergeDesktopRatingsIntoPage(page: ThemePage, finalUrl: String) {
+    suspend fun mergeDesktopRatingsIntoPage(page: ThemePage, finalUrl: String) {
         enrichPageMetadata(page, finalUrl)
     }
 
     /** Desktop/profile metadata merge; not called from [getTheme] so first render stays on mobile HTML. */
-    fun enrichPageMetadata(page: ThemePage, finalUrl: String) {
+    suspend fun enrichPageMetadata(page: ThemePage, finalUrl: String) {
         fetchAndMergeDesktopTopicMetadata(page, finalUrl)
         fetchAndMergeProfileUserPostCounts(page)
         mergeTopicHatUserPostCount(page)
@@ -322,7 +322,7 @@ class ThemeApi(
         }
     }
 
-    private fun fetchAndMergeProfileUserPostCounts(page: ThemePage): Int {
+    private suspend fun fetchAndMergeProfileUserPostCounts(page: ThemePage): Int {
         val missingPosts = page.posts
                 .asSequence()
                 .filter { it.userPostCount == null && it.userId > 0 }
@@ -338,9 +338,9 @@ class ThemeApi(
             listOfNotNull(resolveProfileUserPostCount(missingPosts.first())?.let { missingPosts.first() to it })
         } else {
             runCatching {
-                runBlocking(Dispatchers.IO) {
+                coroutineScope {
                     missingPosts
-                            .map { post -> async { resolveProfileUserPostCount(post)?.let { post to it } } }
+                            .map { post -> async(Dispatchers.IO) { resolveProfileUserPostCount(post)?.let { post to it } } }
                             .awaitAll()
                             .filterNotNull()
                 }

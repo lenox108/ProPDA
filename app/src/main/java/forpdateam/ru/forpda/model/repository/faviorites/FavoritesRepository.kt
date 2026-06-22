@@ -62,7 +62,7 @@ class FavoritesRepository(
         val data = favoritesApi.getFavorites(st, all, sorting, forceRefresh)
         val inspectorEvents = loadInspectorEvents()
         val cachedByFavId = favoritesCache.getItems().associateBy { it.favId }
-        mergeNetworkFavoriteReadStates(data.items, cachedByFavId, inspectorEvents)
+        mergeNetworkFavoriteReadStates(data.items, cachedByFavId, inspectorEvents, networkIsFreshRefresh = forceRefresh)
         favoritesCache.saveFavorites(data.items)
         traceSortedItems(data.items, unreadTop)
         syncFavoritesCounter(data.items, source = "favorites_refresh")
@@ -331,7 +331,8 @@ class FavoritesRepository(
     private fun mergeNetworkFavoriteReadStates(
             items: MutableList<FavItem>,
             cachedByFavId: Map<Int, FavItem>,
-            inspectorEvents: List<NotificationEvent>
+            inspectorEvents: List<NotificationEvent>,
+            networkIsFreshRefresh: Boolean = false
     ) {
         val byTopic = inspectorEvents.associateBy { it.sourceId }
         val inspectorPresent = inspectorEvents.isNotEmpty()
@@ -354,7 +355,8 @@ class FavoritesRepository(
                     cached = cached,
                     inspectorUnread = inspectorUnread,
                     inspectorPresent = inspectorPresent && ev != null,
-                    hasNewerContentThanCache = hasNewerFavoriteContent(item, cached)
+                    hasNewerContentThanCache = hasNewerFavoriteContent(item, cached),
+                    networkIsFreshRefresh = networkIsFreshRefresh
             )
             FavoritesUnreadTrace.inspectorRowMerged(
                     topicId = item.topicId,
