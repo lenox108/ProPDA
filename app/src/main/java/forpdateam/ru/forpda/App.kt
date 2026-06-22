@@ -185,6 +185,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         }
         
         setupStrictMode()
+        setupMaterialYouMigration()
         setupAppMetrica()
         setupThemeObserver()
         setupVersionHistory()
@@ -233,7 +234,23 @@ class App : Application(), androidx.work.Configuration.Provider {
             )
         }
     }
-    
+
+    /**
+     * Если у пользователя в DataStore сохранён `use_material_you = true` со
+     * старой установки на Android 12+ и он установил APK на устройство с
+     * Android < 12, тумблер в настройках отключён, но сохранённое значение
+     * всё ещё `true` и может всплыть в логике или бэкапах. Форсим `false`
+     * на API < 31 — см. [MainDataStore.migrateMaterialYouForOldApis].
+     */
+    private fun setupMaterialYouMigration() {
+        appScope.launch {
+            runCatching {
+                forpdateam.ru.forpda.model.datastore.MainDataStore(applicationContext)
+                    .migrateMaterialYouForOldApis()
+            }.onFailure { Timber.w(it, "Material You migration failed") }
+        }
+    }
+
     private fun setupAppMetrica() {
         // Аналитика включена только в store-флейворе (тот, что публикуется на Google Play).
         // В dev/beta/parallel/stable — отключаем, чтобы лишний исходящий трафик
