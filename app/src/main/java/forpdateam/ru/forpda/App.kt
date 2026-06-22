@@ -34,7 +34,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.preference.PreferenceManager
 import timber.log.Timber
-import com.google.android.material.color.DynamicColors
 import forpdateam.ru.forpda.common.di.AppScope
 import forpdateam.ru.forpda.common.dpToPx
 import forpdateam.ru.forpda.common.getColorFromAttr
@@ -173,7 +172,6 @@ class App : Application(), androidx.work.Configuration.Provider {
         setupNetworkTracking()
         setupBackgroundEventsCheck()
         setupAppUpdateCheck()
-        setupMaterialYou()
 
         // Lifecycle observer для очистки ресурсов
         ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
@@ -452,26 +450,6 @@ class App : Application(), androidx.work.Configuration.Provider {
 
     private fun setupAppUpdateCheck() {
         appUpdateScheduler.reschedule()
-    }
-
-    /**
-     * Material You / Dynamic Color for the native UI shell.
-     *
-     * Applies the system wallpaper-derived palette to all activities that
-     * participate in the dynamic-colors overlay. This is the *native* accent
-     * only — the WebView CSS in [TemplateManager] is intentionally not affected,
-     * so reading palettes (SEPIA_*, MINIMAL_READER) keep their
-     * own background/typography and the dynamic accent is layered on top.
-     *
-     * §4.1 of REFACTOR_PLAN.md.
-     */
-    private fun setupMaterialYou() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        if (!mainPreferencesHolder.getUseMaterialYou()) return
-        // Only apply to the SYSTEM palette so we don't fight reading palettes.
-        val palette = mainPreferencesHolder.getUiPalette()
-        if (palette != Preferences.Main.UiPalette.SYSTEM) return
-        DynamicColors.applyToActivitiesIfAvailable(this)
     }
     // endregion
 
