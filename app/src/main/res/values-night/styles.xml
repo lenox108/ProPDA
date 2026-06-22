@@ -354,8 +354,18 @@
         <item name="colorControlNormal">?icon_toolbar</item>
         <item name="colorOnSurface">?icon_toolbar</item>
         <item name="actionMenuTextColor">?icon_toolbar</item>
-        <item name="android:textColorPrimary">?icon_toolbar</item>
-        <item name="android:textColorSecondary">?icon_toolbar</item>
+        <!--
+            НЕ переопределяем android:textColorPrimary/Secondary здесь:
+            ?icon_toolbar — ?attr/... ссылка, а при включённом Material You
+            ThemeOverlay.ForPDA.MaterialYouSurface переопределяет icon_toolbar на
+            ?attr/colorOnSurface — получается двух- и трёхуровневая цепочка
+            ?attr/... ссылок, которую MaterialComponents.TextAppearance не может
+            разрешить (UnsupportedOperationException при инфлейте CollapsingToolbarLayout).
+            textColorPrimary/Secondary наследуются из
+            ThemeOverlay.Material3.Dark.ActionBar -> ThemeOverlay.AppCompat.Dark.ActionBar
+            и корректно перекрываются MaterialYouSurface (?attr/colorOnSurface),
+            когда Material You включён.
+        -->
         <item name="colorPrimary">@color/dark_link_color</item>
         <item name="colorPrimaryContainer">@color/dark_card_background</item>
         <item name="colorOnPrimaryContainer">@color/dark_default_text_color</item>

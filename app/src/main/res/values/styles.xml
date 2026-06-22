@@ -108,9 +108,22 @@
         <!-- Разделители -->
         <item name="divider_line">?attr/colorOutlineVariant</item>
 
-        <!-- Системные текстовые/контролы цвета, чтобы Material-виджеты совпали -->
-        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
-        <item name="android:textColorSecondary">?attr/colorOnSurfaceVariant</item>
+        <!--
+            НЕ переопределяем android:textColorPrimary/Secondary здесь:
+            это ?attr/... ссылки, которые оставляют TypedValue в состоянии
+            TYPE_ATTRIBUTE. Material-овский TextAppearance.<init> для
+            TextAppearance.Design.CollapsingToolbar.Expanded (используется
+            CollapsingToolbarLayout при инфлейте) читает android:textColor
+            = ?android:attr/textColorPrimary через MaterialResources.getColorStateList
+            -> TypedArray.getColorStateList, а тот не принимает TYPE_ATTRIBUTE
+            и кидает UnsupportedOperationException, который превращается в
+            InflateException при создании фрагмента.
+            Стандартные textColorPrimary/Secondary наследуются из Material 3
+            и динамически обновляются DynamicColors через colorOnSurface* в
+            Material 3-стилях, так что в Material You режиме текст всё равно
+            остаётся читаемым. Кастомные цвета для нашего UI берутся из
+            default_text_color / second_text_color выше.
+        -->
     </style>
 
     <style name="ThemeOverlay.ForPDA.SystemFont" parent="ThemeOverlay.Material3">
@@ -363,8 +376,18 @@
         <item name="colorControlNormal">?icon_toolbar</item>
         <item name="colorOnSurface">?icon_toolbar</item>
         <item name="actionMenuTextColor">?icon_toolbar</item>
-        <item name="android:textColorPrimary">?icon_toolbar</item>
-        <item name="android:textColorSecondary">?icon_toolbar</item>
+        <!--
+            НЕ переопределяем android:textColorPrimary/Secondary здесь:
+            ?icon_toolbar сам по себе ?attr/... ссылка, а при включённом Material You
+            ThemeOverlay.ForPDA.MaterialYouSurface переопределяет icon_toolbar на
+            ?attr/colorOnSurface — получается двух- и трёхуровневая цепочка
+            ?attr/... ссылок, которую MaterialComponents.TextAppearance не может
+            разрешить (падает UnsupportedOperationException при инфлейте
+            CollapsingToolbarLayout). textColorPrimary/Secondary наследуются
+            из ThemeOverlay.Material3.ActionBar -> ThemeOverlay.AppCompat.ActionBar
+            и корректно перекрываются MaterialYouSurface (?attr/colorOnSurface),
+            когда Material You включён.
+        -->
         <item name="colorPrimary">@color/light_link_color</item>
         <item name="colorPrimaryContainer">@color/light_background_for_cards</item>
         <item name="colorOnPrimaryContainer">@color/light_default_text_color</item>
