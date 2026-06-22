@@ -1132,11 +1132,6 @@ class ThemeWebController(
         return "{\"v\":$value}"
     }
 
-    @JavascriptInterface
-    fun callbackUpdateHistoryHtml(_value: String) {
-        // no-op (см. updateHistoryLastHtml)
-    }
-
     fun saveScrollYForImageViewer() {
         savedScrollYForImageViewer = webView.scrollY
     }
@@ -1463,15 +1458,83 @@ class ThemeWebController(
         reapplyTopicHighlightAfterScrollSettled()
     }
 
-    // TODO restore on next pass: ThemePage.highlightTarget / renderGenerationId and
-    //  HighlightTarget.postId / .type are not in the tracked entity yet. The body is
-    //  stubbed so the file compiles; the public trigger onWebViewContentRevealed() and
-    //  reapplyTopicHighlightAfterScrollSettled() are kept to preserve the controller
-    //  surface used by tests and other call sites.
+    /**
+     * Resolve the post-highlight target for the current page and apply the
+     * matching JS class via [ThemeJsApi.applyHighlight] / arm the fadeout
+     * timer via [ThemeJsApi.scheduleHighlightFadeout]. Idempotent for a given
+     * render generation: the per-generation guards ([highlightArmedGeneration]
+     * / [highlightFadeoutScheduledGeneration]) keep a single arming and the
+     * JS-side `PPDA_applyHighlight` ignores stale callbacks.
+     */
     private fun reapplyTopicHighlight() {
         if (disposed || fragment.view == null) return
-        if (presenter.getCurrentPageInstance() == null) return
-        // Highlight application intentionally disabled until the underlying API lands.
+        // The renderer path (mapEntity → applyToPage) is the canonical place to
+        // stamp `highlightTarget` / `renderGenerationId`, but it can be bypassed
+        // (cached-page restore, smart-patch re-apply, fast re-render on tab show).
+        // Resolving it here as a defensive step guarantees the page always has a
+        // stamped target before we ask the JS side to highlight it.
+        val resolution = runCatching { presenter.applyHighlightForCurrentPage() }.getOrNull()
+        if (resolution != null && BuildConfig.DEBUG) {
+            // Silence unused-var warning in release; the value is observable in
+            // the diagnostic logs emitted by TopicHighlightApply.
+            @Suppress("UNUSED_VARIABLE")
+            val unused = resolution.reason
+        }
+        val page = presenter.getCurrentPageInstance() ?: return
+        val highlight = page.highlightTarget ?: return
+        if (highlight is forpdateam.ru.forpda.presentation.theme.HighlightTarget.None) return
+        val topicId = page.id
+        if (topicId <= 0) return
+        val generation = page.renderGenerationId
+        if (generation <= 0) return
+        val postId = highlight.postId
+        if (postId <= 0L) return
+        val typeName = highlight.type.jsName
+        val deferApply = HighlightArmingPolicy.shouldDeferUntilScrollSettled(presenter.hasBlockingScrollPending())
+        val shouldScheduleFadeout = highlightFadeoutScheduledGeneration != generation
+        val shouldApply = !deferApply && highlightArmedGeneration != generation
+        if (!shouldScheduleFadeout && !shouldApply) return
+        val js = buildString {
+            append(jsApi.setReadPosObserverEnabled(false))
+            if (shouldApply) {
+                append('\n')
+                append(jsApi.applyHighlight(postId, typeName, generation))
+            }
+            if (shouldScheduleFadeout) {
+                append('\n')
+                append(jsApi.scheduleHighlightFadeout(generation, HIGHLIGHT_FADEOUT_DELAY_MS))
+            }
+        }
+        jsApi.eval(js)
+        if (shouldScheduleFadeout) {
+            highlightFadeoutScheduledGeneration = generation
+            ReadPositionSaveGate.onHighlightArmed(generation)
+            TopicHighlightDiagnostics.highlightFadeoutScheduled(
+                    topicId = topicId.toLong(),
+                    page = page.pagination.current,
+                    renderGenerationId = generation,
+                    delayMs = HIGHLIGHT_FADEOUT_DELAY_MS,
+                    highlightType = typeName,
+                    postId = highlight.postId
+            )
+        }
+        if (shouldApply) {
+            highlightArmedGeneration = generation
+            TopicHighlightDiagnostics.nativeHighlightBound(
+                    topicId = topicId.toLong(),
+                    page = page.pagination.current,
+                    renderGenerationId = generation,
+                    highlightType = typeName,
+                    postId = postId
+            )
+            TopicHighlightDiagnostics.jsHighlightApplied(
+                    topicId = topicId.toLong(),
+                    page = page.pagination.current,
+                    renderGenerationId = generation,
+                    highlightType = typeName,
+                    postAnchorExists = true
+            )
+        }
     }
 
     /**
@@ -1483,11 +1546,47 @@ class ThemeWebController(
      * than the highlight target). This is the post-render counterpart of the JS
      * `js_highlight_applied` event that fires from [reapplyTopicHighlight].
      */
-    // TODO restore on next pass: see reapplyTopicHighlight() above. The render-side
-    //  diagnostic is suppressed until ThemePage.highlightTarget / renderGenerationId land.
-    @Suppress("UNUSED_PARAMETER")
     private fun logRenderHighlightApplied(page: ThemePage) {
-        // No-op until the underlying API is available.
+        val highlight = page.highlightTarget
+        val topicId = page.id.toLong()
+        val pageNumber = page.pagination.current
+        val generation = page.renderGenerationId
+        if (highlight == null || highlight is forpdateam.ru.forpda.presentation.theme.HighlightTarget.None) {
+            if (BuildConfig.DEBUG && generation > 0 && topicId > 0L) {
+                TopicHighlightDiagnostics.renderHighlightApplied(
+                        topicId = topicId,
+                        page = pageNumber,
+                        renderGenerationId = generation,
+                        mode = "none",
+                        highlightType = "none",
+                        appliedSuccessfully = false,
+                        postAnchorExists = false
+                )
+            }
+            return
+        }
+        if (generation <= 0 || topicId <= 0L) return
+        val postId = highlight.postId
+        val postAnchorExists = postId > 0L && page.posts.any { it.id.toLong() == postId }
+        TopicHighlightDiagnostics.renderHighlightApplied(
+                topicId = topicId,
+                page = pageNumber,
+                renderGenerationId = generation,
+                mode = "static",
+                highlightType = highlight.type.jsName,
+                appliedSuccessfully = postAnchorExists,
+                postAnchorExists = postAnchorExists
+        )
+        if (!postAnchorExists) {
+            TopicHighlightDiagnostics.highlightFailedPostNotFound(
+                    topicId = topicId,
+                    page = pageNumber,
+                    renderGenerationId = generation,
+                    highlightType = highlight.type.jsName,
+                    expectedPostId = postId,
+                    failureReason = "post_not_in_page"
+            )
+        }
     }
 
     private inner class ThemeChromeClient : CustomWebChromeClient() {

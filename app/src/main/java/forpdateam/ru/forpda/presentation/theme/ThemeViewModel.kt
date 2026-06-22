@@ -32,6 +32,7 @@ import forpdateam.ru.forpda.model.preferences.ForumBlacklistedUser
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.interactors.theme.ThemeNavigationUseCase
+import forpdateam.ru.forpda.model.repository.theme.ThemeReadPositionRepository
 import com.github.terrakok.cicerone.ResultListenerHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
@@ -107,7 +108,8 @@ class ThemeViewModel @Inject constructor(
         private val editorUseCase: ThemeEditorUseCase,
         private val interactionUseCase: ThemeInteractionUseCase,
         private val navigationUseCase: ThemeNavigationUseCase,
-        private val router: TabRouter
+        private val router: TabRouter,
+        private val readPositionRepository: ThemeReadPositionRepository
 ) : BaseViewModel(), ThemeWebCallbacks {
 
     // SharedFlow для MVVM (замена callback-методов ThemeView)
@@ -3518,6 +3520,33 @@ class ThemeViewModel @Inject constructor(
     fun completeBottomRefreshRestore(requestId: String?) = completeRefreshRestore(requestId)
 
     fun getCurrentPageInstance(): ThemePage? = currentPage
+
+    /**
+     * Resolve the topic-post highlight for [ThemeWebController] just before
+     * it arms the JS apply + fadeout timer. Idempotent: the underlying
+     * [TopicHighlightApply.applyToPage] keeps the same `renderGenerationId`
+     * when the inputs / resolved target are unchanged (refresh of the same
+     * page), so the JS guard still accepts the callback for the current
+     * render and only ignores older ones.
+     *
+     * Called by the controller on every `reapplyTopicHighlight()` entry so
+     * that the rendered page always has a `highlightTarget` /
+     * `renderGenerationId` stamped onto it even when the previous render
+     * path (`mapEntity` → `applyToPage`) was bypassed.
+     */
+    fun applyHighlightForCurrentPage(): forpdateam.ru.forpda.presentation.theme.HighlightResolution? {
+        val page = currentPage ?: return null
+        val inputs = forpdateam.ru.forpda.presentation.theme.HighlightOpenInputsPolicy
+                .resolveOpenInputs(page = page, openedViaFindPost = openedViaFindPostLink)
+        return forpdateam.ru.forpda.presentation.theme.TopicHighlightApply.applyToPage(
+                page = page,
+                readPositionRepository = readPositionRepository,
+                explicitPostId = inputs.explicitPostId,
+                unreadUrl = inputs.unreadUrl,
+                firstUnreadPostId = inputs.firstUnreadPostId,
+                unreadPage = inputs.unreadPage,
+        )
+    }
 
     fun getRefreshCapturePageInstance(): ThemePage? {
         val request = pendingRefreshRequest ?: return visibleCurrentPage
