@@ -33,7 +33,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="?attr/chrome_plane_background"
+                app:collapsedTitleTextColor="@color/collapsing_toolbar_title_color"
                 app:contentScrim="@android:color/transparent"
+                app:expandedTitleTextColor="@color/collapsing_toolbar_title_color"
                 app:statusBarScrim="@android:color/transparent"
                 app:titleEnabled="false">
 

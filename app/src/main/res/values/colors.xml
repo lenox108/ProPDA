@@ -2,6 +2,21 @@
 <resources>
     <color name="ic_launcher_background">#ffffffff</color>
     <color name="white">#ffffff</color>
+    <!--
+        Concrete (NON-?attr) value for CollapsingToolbarLayout title text color.
+        The Material3 default collapsingToolbarLayoutStyle sets
+        expanded/collapsedTitleTextColor to @macro/...headline_color, which expands
+        inline to ?attr/colorOnSurface. Macros stay TYPE_ATTRIBUTE until resolved
+        against the inflation context's theme; in the Material You path that
+        context bottoms out at Theme.AppCompat.Empty where the app's colorOnSurface
+        has no value, so TypedArray.getColorStateList throws
+        UnsupportedOperationException at CollapsingToolbarLayout.<init> (styleable
+        index 11 = expandedTitleTextColor). Setting the title colors directly on the
+        view to this concrete color removes the ?attr indirection. The toolbars use
+        titleEnabled=false, so this color is never actually rendered — it only needs
+        to be a resolvable non-attribute value to satisfy the constructor.
+    -->
+    <color name="collapsing_toolbar_title_color">#000000</color>
     <!-- Material palette (раньше из wada811:android-material-design-colors) -->
     <color name="md_red_400">#EF5350</color>
     <color name="md_green_400">#66BB6A</color>
