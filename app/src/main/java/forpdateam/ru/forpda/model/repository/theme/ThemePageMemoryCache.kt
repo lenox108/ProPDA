@@ -19,6 +19,20 @@ import java.util.Locale
  * The LRU eviction policy is still active on top of the soft references: [maxEntries]
  * bounds the **map size**, not the live set of pages. The actual heap footprint of
  * this cache is the sum of pages that have not yet been reclaimed by the GC.
+ *
+ * **Read-only contract (AUDIT-L08 Stage 1).** [get] returns the same [ThemePage] reference
+ * that was passed to [put] — there is no per-read defensive copy. Callers MUST treat the
+ * returned object as read-only. The container fields (`posts`, `anchors`) are never
+ * mutated by current callers (audited in `docs/perf/L08_THEME_PAGE_MEMORY_CACHE_ANALYSIS.md`
+ * §2.3), and the `SoftReference` semantics isolate in-flight readers from any future
+ * `put` of the same key. Mutations on the returned page are not visible to the cache
+ * unless the same page is re-`put` (which current callers never do).
+ *
+ * **Render-generation handshake (AUDIT-L08 Stage 2).** The 3-arg [get] overload accepts an
+ * optional `expectedRenderGeneration` matching the active `ThemeRenderSession`. When the
+ * caller's render generation no longer matches the cached entry's `renderGenerationId`
+ * (e.g. after scroll-restore into a page from a superseded render), the entry is treated
+ * as a miss and evicted.
  */
 class ThemePageMemoryCache(
         private val ttlMs: Long = DEFAULT_TTL_MS,
@@ -36,6 +50,7 @@ class ThemePageMemoryCache(
     private data class Entry(
             val pageRef: SoftReference<ThemePage>,
             val renderSignature: String?,
+            val renderGenerationId: Int,
             val expiresAt: Long
     )
 
@@ -55,7 +70,7 @@ class ThemePageMemoryCache(
         return Key(topicId, st, hatOpen, pollOpen)
     }
 
-    fun get(key: Key): ThemePage? = get(key, expectedSignature = null)
+    fun get(key: Key): ThemePage? = get(key, expectedSignature = null, expectedRenderGeneration = null)
 
     /**
      * Signature-aware read (Phase 6B). When [expectedSignature] is non-null, a cached entry whose
@@ -63,7 +78,21 @@ class ThemePageMemoryCache(
      * returned, so a palette/density/font change can never render a stale-styled page. Passing `null`
      * preserves the legacy behavior (no signature check).
      */
-    fun get(key: Key, expectedSignature: String?): ThemePage? {
+    fun get(key: Key, expectedSignature: String?): ThemePage? =
+            get(key, expectedSignature, expectedRenderGeneration = null)
+
+    /**
+     * Render-generation-aware read (AUDIT-L08). When [expectedRenderGeneration] is non-null and the
+     * cached entry's [ThemePage.renderGenerationId] does not match it, the entry is evicted and a
+     * miss is returned. This closes the cache ↔ `ThemeRenderSession` desync window for scroll-restore
+     * (see `docs/perf/L08_THEME_PAGE_MEMORY_CACHE_ANALYSIS.md` §3). Passing `null` skips the check
+     * (backward-compatible behavior).
+     */
+    fun get(
+            key: Key,
+            expectedSignature: String?,
+            expectedRenderGeneration: Int?,
+    ): ThemePage? {
         pruneExpired()
         val entry = store[key] ?: return null
         if (entry.expiresAt <= nowMs()) {
@@ -74,13 +103,18 @@ class ThemePageMemoryCache(
             store.remove(key)
             return null
         }
-        // SoftReference may have been cleared by the GC between put() and get().
-        // Treat that as a miss so the caller re-fetches.
-        val page = entry.pageRef.get() ?: run {
+        if (expectedRenderGeneration != null && entry.renderGenerationId != expectedRenderGeneration) {
             store.remove(key)
             return null
         }
-        return page.copyForCache()
+        // SoftReference may have been cleared by the GC between put() and get().
+        // Treat that as a miss so the caller re-fetches. The reference returned to the
+        // caller is the exact same `ThemePage` instance that was put() — no defensive
+        // copy is made (AUDIT-L08 zero-alloc read).
+        return entry.pageRef.get() ?: run {
+            store.remove(key)
+            null
+        }
     }
 
     fun put(key: Key, page: ThemePage) {
@@ -90,8 +124,9 @@ class ThemePageMemoryCache(
             store.remove(eldest.key)
         }
         store[key] = Entry(
-                pageRef = SoftReference(page.copyForCache()),
+                pageRef = SoftReference(page),
                 renderSignature = page.renderSignature,
+                renderGenerationId = page.renderGenerationId,
                 expiresAt = nowMs() + ttlMs
         )
     }
@@ -151,40 +186,4 @@ class ThemePageMemoryCache(
             return false
         }
     }
-}
-
-internal fun ThemePage.copyForCache(): ThemePage {
-    val copy = ThemePage()
-    copy.title = title
-    copy.desc = desc
-    copy.html = html
-    copy.url = url
-    copy.id = id
-    copy.forumId = forumId
-    copy.favId = favId
-    copy.scrollY = scrollY
-    copy.anchorPostId = anchorPostId
-    copy.anchorOffsetTop = anchorOffsetTop
-    copy.scrollRatio = scrollRatio
-    copy.wasNearBottom = wasNearBottom
-    copy.refreshRestoreId = refreshRestoreId
-    copy.refreshRestoreMode = refreshRestoreMode
-    copy.refreshRestoreSource = refreshRestoreSource
-    copy.renderSignature = renderSignature
-    copy.highlightTarget = highlightTarget
-    copy.renderGenerationId = renderGenerationId
-    copy.postsFragmentHtml = postsFragmentHtml
-    copy.isInFavorite = isInFavorite
-    copy.isCurator = isCurator
-    copy.canQuote = canQuote
-    copy.isHatOpen = isHatOpen
-    copy.isInlineHatOpen = isInlineHatOpen
-    copy.isPollOpen = isPollOpen
-    copy.hasUnreadTarget = hasUnreadTarget
-    copy.topicHatPost = topicHatPost
-    copy.pagination = pagination
-    copy.poll = poll
-    copy.anchors.addAll(anchors)
-    copy.posts.addAll(posts)
-    return copy
 }
