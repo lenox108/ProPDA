@@ -428,8 +428,9 @@
 
     <style name="Widget.ForPDA.PopupMenu" parent="Widget.Material3.PopupMenu">
         <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
-        <item name="android:colorBackground">?attr/cards_background</item>
-        <item name="android:textColorPrimary">?attr/default_text_color</item>
+        <!-- LayoutInflater-safe (см. аналогичный комментарий в values/styles.xml). -->
+        <item name="android:colorBackground">?attr/dynamic_cards_background</item>
+        <item name="android:textColorPrimary">?attr/dynamic_default_text_color</item>
         <item name="android:textColorSecondary">?attr/second_text_color</item>
     </style>
 
@@ -524,6 +525,17 @@
 
         <!-- Разделители -->
         <item name="divider_line">?attr/colorOutlineVariant</item>
+
+        <!--
+            Material You dynamic indirection (см. attrs.xml + комментарий в
+            values/styles.xml MaterialYouSurface). Поведение в night-варианте
+            оверлея идентичное: ?dynamic_* → M3 role, читается
+            LayoutInflater-безопасными слотами (CardView, PopupMenu, TabLayout,
+            TextAppearance) и трекает палитру обоев.
+        -->
+        <item name="dynamic_icon_toolbar">?attr/colorOnSurface</item>
+        <item name="dynamic_default_text_color">?attr/colorOnSurface</item>
+        <item name="dynamic_cards_background">?attr/colorSurfaceContainer</item>
     </style>
 
 </resources>
