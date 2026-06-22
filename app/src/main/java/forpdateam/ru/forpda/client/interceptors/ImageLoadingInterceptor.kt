@@ -8,7 +8,6 @@ import okhttp3.Response
 import timber.log.Timber
 import java.io.IOException
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 /**
  * Adds browser-like metadata for 4PDA image hosts used by Coil/ImageViewer.
@@ -57,8 +56,8 @@ class ImageLoadingInterceptor(
             }
             // Retry once on 504/503 for image hosts: OkHttp's "only-if-cached" cache miss
             // returns 504 (and some CDNs return 503 on transient edge failures) without
-            // ever hitting the network. A short backoff retry is enough to recover most
-            // image loads before the UI gives up. Logged so we can correlate with
+            // ever hitting the network. A retry without blocking sleep is enough to recover
+            // most image loads before the UI gives up. Logged so we can correlate with
             // coil_image_load_failed diagnostics.
             if (isImageRequest && response.code in 503..504 && !response.request.url.queryParameterNames.contains(RETRY_FLAG)) {
                 response.closeQuietly()
@@ -69,7 +68,6 @@ class ImageLoadingInterceptor(
                         sanitizeUrlForLog(original.url)
                     )
                 }
-                TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS)
                 val retried = request.newBuilder()
                     .url(appendRetryFlag(request.url))
                     .build()
@@ -111,7 +109,6 @@ class ImageLoadingInterceptor(
     companion object {
         private const val TAG = "ImageViewer"
         private const val DEFAULT_REFERER = "https://4pda.to/forum/"
-        private const val RETRY_DELAY_MS = 300L
         private const val RETRY_FLAG = "forpda_retry"
 
         fun isFourPdaImageRequest(url: HttpUrl): Boolean {
