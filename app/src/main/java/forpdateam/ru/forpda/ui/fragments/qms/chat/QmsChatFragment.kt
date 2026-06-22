@@ -81,6 +81,7 @@ import javax.inject.Inject
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -94,8 +95,9 @@ import kotlin.math.roundToInt
  *
  * JS Bridge обоснование:
  * - IBase: базовый интерфейс для обратных вызовов из JS (domContentLoaded, onPageComplete) необходим для очереди pendingQmsJs
- * - Контент: локально генерируемый HTML из API QMS сообщений (доверенный шаблонный контент)
- * - Профиль безопасности: TRUSTED_LOCAL_TEMPLATE (JS включён, базовый bridge разрешён)
+ * - Контент: HTML собирается из ответов QMS API (пользовательский контент в никах/сообщениях) и подмешивается в локальный шаблон
+ * - Профиль безопасности: TRUSTED_QMS_CHAT (JS включён, базовый bridge разрешён, но это
+ *   отдельный tier — уже, чем TRUSTED_LOCAL_TEMPLATE, т.к. в контенте присутствует user-generated данные)
  */
 @AndroidEntryPoint
 class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, ExtendedWebView.JsLifeCycleListener, TabTopScroller {
@@ -195,8 +197,11 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         webView = ExtendedWebView(requireContext()).also {
             it.systemLinkHandler = systemLinkHandler
             // Без init() + enableBaseBridge() не регистрируется IBase JS-интерфейс → IBase.domContentLoaded() из main.js
-            // не вызывается → onDomContentComplete не срабатывает → очередь pendingQmsJs не сбрасывается
-            it.init(WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE)
+            // не вызывается → onDomContentComplete не срабатывает → очередь pendingQmsJs не сбрасывается.
+            // Используем отдельный QMS-профиль: HTML собирается из ответов QMS API
+            // (пользовательский контент в никах/сообщениях), поэтому trust уже,
+            // чем у полностью локального шаблона темы.
+            it.init(WebViewSecurityProfile.TRUSTED_QMS_CHAT)
             it.enableBaseBridge()
         }
         webView.setDialogsHelper(DialogsHelper(
@@ -1174,15 +1179,22 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         webView.beginAutoScrollToBottom()
         val scrollJs =
                 "if(typeof scrollQmsToBottomWithRetries==='function'){scrollQmsToBottomWithRetries();}"
+        // Use viewLifecycleOwner.lifecycleScope so the staged scroll retries are
+        // auto-cancelled on onDestroyView, instead of relying on the webView
+        // handler's removeCallbacks on detach (which is fragile if the runnable
+        // is captured by something else).
+        val scope = viewLifecycleOwner.lifecycleScope
         for (delayMs in QMS_SCROLL_BOTTOM_NATIVE_DELAYS_MS) {
-            webView.postDelayed({
-                if (!isAdded || view == null) return@postDelayed
+            scope.launch(Dispatchers.Main.immediate) {
+                delay(delayMs)
+                if (!isAdded || view == null) return@launch
+                if (!::webView.isInitialized) return@launch
                 // Stand down the moment the user grabs the scroll, so the multi-stage pass
                 // does not fight a manual drag/fling (jitter / "won't scroll" symptom).
-                if (webView.isAutoScrollSuppressedByUser()) return@postDelayed
+                if (webView.isAutoScrollSuppressedByUser()) return@launch
                 webView.evalJs(scrollJs)
                 scrollQmsWebViewNativeToBottom()
-            }, delayMs)
+            }
         }
     }
 
@@ -2462,7 +2474,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         if (::jsInterface.isInitialized) jsInterface.cancel()
         webView = ExtendedWebView(requireContext()).also {
             it.systemLinkHandler = systemLinkHandler
-            it.init(WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE)
+            it.init(WebViewSecurityProfile.TRUSTED_QMS_CHAT)
             it.enableBaseBridge()
         }
         webView.setDialogsHelper(DialogsHelper(

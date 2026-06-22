@@ -42,10 +42,21 @@ import timber.log.Timber
  */
 enum class WebViewSecurityProfile {
     /**
-     * Полностью доверенный локальный контент (темы форума, QMS).
+     * Полностью доверенный локальный контент (темы форума).
      * JS включён, разрешён базовый bridge IBase.
      */
     TRUSTED_LOCAL_TEMPLATE,
+
+    /**
+     * QMS-чат: HTML собирается клиентом из API-ответов 4PDA и подмешивается
+     * в локальный шаблон, но сообщения/ники берутся с сервера и потенциально
+     * содержат пользовательский контент. JS включён, базовый bridge IBase
+     * разрешён (нужен для `domContentLoaded`/`onPageComplete`), но это
+     * **отдельный** уровень доверия — уже, чем [TRUSTED_LOCAL_TEMPLATE]
+     * (где шаблон полностью локальный), и шире, чем [TRUSTED_STATIC_ARTICLE]
+     * (где bridge запрещён).
+     */
+    TRUSTED_QMS_CHAT,
 
     /**
      * Статический контент, генерируемый локально (статьи, объявления, правила форума).
@@ -240,9 +251,14 @@ open class ExtendedWebView @JvmOverloads constructor(
      * Вызывать только для trusted content (тема, QMS).
      * Не вызывать для внешних/неизвестных URL (статьи, поиск).
      * Проверяет профиль безопасности перед включением bridge.
+     * Разрешённые профили: [WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE]
+     * (полностью локальный шаблон) и [WebViewSecurityProfile.TRUSTED_QMS_CHAT]
+     * (QMS-чат, где bridge нужен для `domContentLoaded`/`onPageComplete`).
      */
     fun enableBaseBridge() {
-        if (securityProfile != WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE) {
+        if (securityProfile != WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE &&
+            securityProfile != WebViewSecurityProfile.TRUSTED_QMS_CHAT
+        ) {
             Timber.w("enableBaseBridge called with non-trusted profile: $securityProfile")
             return
         }
@@ -265,7 +281,9 @@ open class ExtendedWebView @JvmOverloads constructor(
             WebViewSecurityProfile.UNTRUSTED_EXTERNAL -> false
             else -> true
         }
-        if (enableBridge && profile == WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE) {
+        if (enableBridge && (profile == WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE ||
+                    profile == WebViewSecurityProfile.TRUSTED_QMS_CHAT)
+        ) {
             enableBaseBridge()
         }
     }
@@ -427,6 +445,7 @@ open class ExtendedWebView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         if (BuildConfig.DEBUG) Timber.v("onDetachedFromWindow")
+        mHandler.removeCallbacksAndMessages(null)
         isJsReady = false
     }
 
