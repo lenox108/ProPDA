@@ -5,6 +5,8 @@ import android.os.Build
 import android.util.TypedValue
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.DynamicColorsOptions
+import com.google.android.material.color.HarmonizedColors
+import com.google.android.material.color.HarmonizedColorsOptions
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.DayNightHelper
@@ -45,7 +47,29 @@ import timber.log.Timber
  * Выбор оверлея делает [MaterialYouPolicy.resolveMode]. Палитры чтения
  * (Sepia/Minimal) динамику не получают вовсе.
  *
- * §4.1 of REFACTOR_PLAN.md.
+ * Поверх обоих оверлеев дополнительно накладывается M3 Color Harmonization
+ * ([HarmonizedColors.applyToContextIfAvailable] +
+ * [HarmonizedColorsOptions.createMaterialDefaults]). Это сдвигает тон
+ * зарезервированных M3-ролей `colorError*` (и `colorOnError*` /
+ * `colorErrorContainer*`) в сторону wallpaper-derived `colorPrimary`, чтобы
+ * destructive actions (Delete / Report / и т.п.) не выглядели стандартным
+ * M3-red на любых обоях.
+ *
+ * Применяется ТОЛЬКО при `mode != NONE` (см. early-return выше) — иначе
+ * гармонизация перекрыла бы hand-picked `colorError` палитр чтения
+ * (Sepia/MinimalReader: `styles_minimal_reader.xml`).
+ *
+ * Применяется ТОЛЬКО не в Robolectric-окружении (см. [isRobolectric]) —
+ * upstream-баг Robolectric [issue #9552](https://github.com/robolectric/robolectric/issues/9552)
+ * (Robolectric 4.14.1, актуально на момент написания) ломает
+ * `applyStyle(ThemeOverlay.Material3.HarmonizedColors, …)` с `Util.CHECK`
+ * в `ShadowArscAssetManager10.nativeThemeApplyStyle`. Гард сужает зону
+ * гармонизации до реальных устройств, не блокируя при этом Robolectric-тесты
+ * `MaterialYouApplierTest` / `MaterialYouThemeFallbackTest` /
+ * `MaterialYouPolicyTest`. Сама гармонизация покрывается визуальной
+ * проверкой на устройстве (см. QA checklist).
+ *
+ * §4.1 / §4.5 of REFACTOR_PLAN.md.
  */
 object MaterialYouApplier {
 
@@ -84,6 +108,28 @@ object MaterialYouApplier {
         val options = DynamicColorsOptions.Builder()
                 .setOnAppliedCallback {
                     activity.theme.applyStyle(overlay, true)
+                    // M3 Color Harmonization: сдвигает тон M3 error-ролей
+                    // (colorError / colorOnError / colorErrorContainer /
+                    // colorOnErrorContainer) в сторону wallpaper-derived
+                    // colorPrimary, чтобы destructive actions
+                    // гармонизировались с обоями. createMaterialDefaults()
+                    // гармонизирует именно error-цвета — остальные роли уже
+                    // покрыты DynamicColors + нашими оверлеями.
+                    //
+                    // Гард isRobolectric(): upstream-баг Robolectric #9552
+                    // (см. KDoc) ломает нативный theme engine при
+                    // applyStyle(ThemeOverlay.Material3.HarmonizedColors, …).
+                    // На реальных устройствах (Build.FINGERPRINT != "robolectric*")
+                    // этот путь безопасен и рекомендован Material как
+                    // канонический паттерн (см. Color.md, «A Material-suggested
+                    // default when applying dynamic colors is to harmonize M3
+                    // Error colors in the OnAppliedCallback»).
+                    if (!isRobolectric()) {
+                        HarmonizedColors.applyToContextIfAvailable(
+                                activity,
+                                HarmonizedColorsOptions.createMaterialDefaults()
+                        )
+                    }
                     if (BuildConfig.DEBUG) logResolvedColors(activity)
                 }
                 .build()
@@ -101,6 +147,17 @@ object MaterialYouApplier {
                 activity.javaClass.simpleName, primary, accent
         )
     }
+
+    /**
+     * Детект Robolectric-окружения. В тестах `Build.FINGERPRINT` имеет префикс
+     * `robolectric/…` (Robolectric 4.x) или `GENERIC` с другим sentinel — мы
+     * используем префикс, который совпадает с `robolectric` для всех
+     * поддерживаемых нами версий (4.13+). Используется только для guard'а
+     * вокруг [HarmonizedColors.applyToContextIfAvailable] (см. KDoc класса
+     * и upstream-баг #9552).
+     */
+    internal fun isRobolectric(): Boolean =
+            Build.FINGERPRINT.startsWith("robolectric")
 
     private const val LOG_TAG = "MaterialYou"
 }
