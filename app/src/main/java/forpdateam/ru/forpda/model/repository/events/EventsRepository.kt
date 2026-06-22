@@ -64,6 +64,9 @@ class EventsRepository(
     private val ioDispatcher = Dispatchers.IO
     @Volatile
     private var foregroundRealtimeEnabled = false
+    private val realtimeScreenOwners = mutableSetOf<String>()
+    @Volatile
+    private var realtimeScreenRefCount = 0
     private var reconnectAttempts = 0
 
     private val pendingEvents = mapOf<NotificationEvent.Source, MutableMap<Int, NotificationEvent>>(
@@ -218,6 +221,35 @@ class EventsRepository(
             stop("background:$reason")
         }
     }
+
+    /**
+     * Экран, которому нужен realtime-WebSocket, запрашивает разрешение через refcount.
+     * Пока хотя бы один экран держит счётчик > 0, фреймворк не отключает WS даже
+     * если приложение остаётся в foreground без активных realtime-экранов.
+     * Это позволяет экрану, который в фоне (например, QMS-чат на свёрнутой вкладке),
+     * удерживать WS открытым. Сам по себе вызов НЕ открывает WS — для открытия
+     * по-прежнему требуется foreground + network + auth.
+     */
+    fun requestRealtimeForScreen(owner: String) {
+        synchronized(realtimeScreenOwners) {
+            val added = realtimeScreenOwners.add(owner)
+            realtimeScreenRefCount = realtimeScreenOwners.size
+            if (added) {
+                BatteryDebugLogger.logState("EventsRepository", "screenAcquireRealtime", "owner=$owner count=$realtimeScreenRefCount")
+            }
+        }
+    }
+
+    fun releaseRealtimeForScreen(owner: String) {
+        synchronized(realtimeScreenOwners) {
+            if (realtimeScreenOwners.remove(owner)) {
+                realtimeScreenRefCount = realtimeScreenOwners.size
+                BatteryDebugLogger.logState("EventsRepository", "screenReleaseRealtime", "owner=$owner count=$realtimeScreenRefCount")
+            }
+        }
+    }
+
+    fun isRealtimeScreenActive(): Boolean = realtimeScreenRefCount > 0
 
     fun updateEvents(source: NotificationEvent.Source) {
         hardHandleEvent(source)
