@@ -48,7 +48,7 @@ android {
     def versionNumber = 350
     def versionMajor = "2"
     def versionMinor = "9"
-    def versionPatch = "4"
+    def versionPatch = "6"
     def versionBuild = 1
     def versionPropsFile = file('version.properties')
     if (versionPropsFile.canRead()) {
