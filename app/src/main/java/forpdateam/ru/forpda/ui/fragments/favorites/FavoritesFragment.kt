@@ -405,6 +405,7 @@ class FavoritesFragment : RecyclerFragment() {
         currentSorting = data.sorting
         paginationHelper.updatePagination(data.pagination)
         clearToolbarPaginationSubtitle()
+        listScrollTop()
     }
 
     private fun onShowFavorite(items: List<FavItem>) {

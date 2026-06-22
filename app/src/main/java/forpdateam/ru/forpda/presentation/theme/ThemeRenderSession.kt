@@ -24,10 +24,7 @@ data class ThemeRenderSession(
                 page: ThemePage,
                 bridgeToken: String,
         ): ThemeRenderSession {
-            // TODO restore on next pass: ThemePage.renderGenerationId does not exist yet
-            //  in the tracked entity. The session currently falls back to 0.
-            @Suppress("UNUSED_VARIABLE")
-            val pageRenderGenerationId = 0
+            val pageRenderGenerationId = page.renderGenerationId
             return ThemeRenderSession(
                     topicId = page.id,
                     page = page.pagination.current,

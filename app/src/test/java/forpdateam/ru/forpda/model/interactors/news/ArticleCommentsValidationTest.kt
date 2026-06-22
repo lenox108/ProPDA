@@ -82,6 +82,7 @@ class ArticleCommentsValidationTest {
             every { hasCommentNodeMarkup(any()) } returns true
             every { countCommentNodesInSource(any()) } returns 1
             every { commentsSourceUnderfetchesExpected(any(), any()) } returns true
+            every { fetchCommentsPageSource(any(), any()) } returns null
             every { parseCommentsFromSource(any(), any(), paginated = true) } returns emptyTree
         }
         val interactor = ArticleInteractor(

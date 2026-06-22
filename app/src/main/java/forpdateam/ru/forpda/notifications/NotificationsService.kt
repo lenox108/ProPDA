@@ -11,15 +11,9 @@ import android.content.res.Resources
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
-import android.os.Message
-import android.os.Messenger
 import android.util.Log
-import java.lang.ref.WeakReference
 import timber.log.Timber
-import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -53,7 +47,6 @@ class NotificationsService : Service() {
     @Inject lateinit var eventsRepository: EventsRepository
     @Inject lateinit var notificationPreferencesHolder: NotificationPreferencesHolder
 
-    private val myMessenger = Messenger(IncomingHandler(this))
     private var mNotificationManager: NotificationManagerCompat? = null
     private var lastHardCheckTime = 0L
 
@@ -86,21 +79,10 @@ class NotificationsService : Service() {
         if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Published $category notification")
     }
 
-    override fun onBind(intent: Intent?): IBinder {
+    override fun onBind(intent: Intent?): android.os.IBinder? {
         Timber.v("onBind")
         BatteryDebugLogger.logState("NotificationsService", "bind")
-        return myMessenger.binder
-    }
-
-    override fun onRebind(intent: Intent?) {
-        Timber.v("onRebind")
-        super.onRebind(intent)
-    }
-
-    override fun onUnbind(intent: Intent?): Boolean {
-        Timber.v("onUnbind")
-        BatteryDebugLogger.logState("NotificationsService", "unbind")
-        return true
+        return null
     }
 
     override fun onCreate() {
@@ -542,16 +524,6 @@ class NotificationsService : Service() {
         if (event.fromQms()) return "https://4pda.to/forum/index.php?act=qms"
         if (event.fromTheme()) return "https://4pda.to/forum/index.php?act=fav"
         return ""
-    }
-
-    private class IncomingHandler(service: NotificationsService) : Handler(Looper.getMainLooper()) {
-        private val serviceRef: WeakReference<NotificationsService> = WeakReference(service)
-
-        override fun handleMessage(msg: Message) {
-            serviceRef.get()?.let { service ->
-                Toast.makeText(service.applicationContext, "" + msg.data, Toast.LENGTH_SHORT).show()
-            }
-        }
     }
 
     companion object {

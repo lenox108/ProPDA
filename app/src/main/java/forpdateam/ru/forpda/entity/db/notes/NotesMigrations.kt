@@ -98,4 +98,50 @@ object NotesMigrations {
             )
         }
     }
+
+    /**
+     * No-op bridge migration.
+     *
+     * Version 8 was briefly published in internal/test builds whose schema was
+     * identical to version 7. Devices that reached version 7 already have every
+     * table, so upgrading 7 -> 8 requires no schema change. This migration exists
+     * only so Room has a valid upward path and never attempts an (unsupported)
+     * 8 -> 7 downgrade, which crashed on startup
+     * ("A migration from 8 to 7 was required but not found").
+     */
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Schema identical to v7; nothing to do.
+        }
+    }
+
+    /**
+     * Repairs devices stuck on the stale version 8 whose schema actually
+     * predates the offline_items table (it matched the v6 schema). For those
+     * devices this creates the missing table; for devices that arrived here via
+     * the regular 6 -> 7 -> 8 path the table already exists, so the statements
+     * are guarded with IF NOT EXISTS and become no-ops.
+     */
+    val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS offline_items (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        type TEXT NOT NULL,
+                        sourceUrl TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        savedAtMs INTEGER NOT NULL,
+                        sizeBytes INTEGER NOT NULL,
+                        status TEXT NOT NULL,
+                        htmlPath TEXT NOT NULL,
+                        modelJson TEXT NOT NULL
+                    )
+                    """.trimIndent()
+            )
+            db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_offline_items_savedAtMs ON offline_items (savedAtMs DESC)"
+            )
+        }
+    }
 }

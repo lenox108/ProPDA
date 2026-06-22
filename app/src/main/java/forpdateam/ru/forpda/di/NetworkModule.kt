@@ -7,8 +7,10 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import forpdateam.ru.forpda.client.Client
+import forpdateam.ru.forpda.common.di.AppScope
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.CountersHolder
+import kotlinx.coroutines.CoroutineScope
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsApi
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsParser
@@ -51,8 +53,9 @@ object NetworkModule {
     fun provideWebClient(
             @ApplicationContext context: Context,
             authHolder: AuthHolder,
-            countersHolder: CountersHolder
-    ): IWebClient = Client(context, authHolder, countersHolder)
+            countersHolder: CountersHolder,
+            @AppScope appScope: CoroutineScope,
+    ): IWebClient = Client(context, authHolder, countersHolder, appScope)
 
     // region Parsers (concrete classes; @Binds only works for interface→impl binding)
     @Provides @Singleton fun provideAuthParser(pp: IPatternProvider) = AuthParser(pp)

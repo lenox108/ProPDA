@@ -99,6 +99,7 @@ object TopicOpenScrollRestorePolicy {
             topicOpenTarget: AppPreferences.Main.TopicOpenTarget,
             navigationTarget: TopicOpenTarget? = null
     ): Boolean {
+        if (loadAction == ThemeLoadAction.Back) return false
         if (hasActiveRefreshRestore || loadAction == ThemeLoadAction.Refresh) return false
         navigationTarget?.let {
             if (it is TopicOpenTarget.Unread) return true

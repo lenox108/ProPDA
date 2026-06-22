@@ -124,7 +124,11 @@ abstract class ThemeFragment : TabFragment() {
         uploadFiles(FilePickHelper.onActivityResult(requireContext(), data))
     }
 
-    protected lateinit var dialogsHelper: ThemeDialogsHelper_V2
+    // Nullable + view-scoped: created in onViewCreated() with the view
+    // lifecycle scope and cleared in onDestroyViewBinding(). Constructing it from
+    // onCreate() touched viewLifecycleOwner before the view existed and crashed
+    // (Can't access the Fragment View's LifecycleOwner ... when getView() is null).
+    protected var dialogsHelper: ThemeDialogsHelper_V2? = null
 
     protected lateinit var toggleMessagePanelItem: MenuItem
     protected lateinit var copyLinkMenuItem: MenuItem
@@ -281,7 +285,6 @@ abstract class ThemeFragment : TabFragment() {
             )
             presenter.setTopicOpenIntent(openIntent)
         }
-        dialogsHelper = ThemeDialogsHelper_V2(requireContext(), authHolder, otherPreferencesHolder, topicPreferencesHolder)
     }
 
     override fun initFabBehavior() {
@@ -347,6 +350,7 @@ abstract class ThemeFragment : TabFragment() {
         notificationBinding = null
         clearMessagePanelTextDialog?.dismiss()
         clearMessagePanelTextDialog = null
+        dialogsHelper = null
         _themeBinding = null
         super.onDestroyViewBinding()
     }
@@ -354,6 +358,14 @@ abstract class ThemeFragment : TabFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         // Размер шрифта WebView задаёт ThemeFragmentWeb после создания webView (иначе lateinit webView).
+
+        dialogsHelper = ThemeDialogsHelper_V2(
+                requireContext(),
+                authHolder,
+                otherPreferencesHolder,
+                topicPreferencesHolder,
+                scope = viewLifecycleOwner.lifecycleScope
+        )
 
         notificationButton?.setColorFilter(requireContext().getColorFromAttr(R.attr.contrast_text_color), PorterDuff.Mode.SRC_ATOP)
         notificationTitle?.text = getString(R.string.new_message_notification_title)
@@ -1783,23 +1795,23 @@ abstract class ThemeFragment : TabFragment() {
     }
 
     fun showUserMenu(post: IBaseForumPost) {
-        dialogsHelper.showUserMenu(presenter, post)
+        dialogsHelper?.showUserMenu(presenter, post)
     }
 
     fun showReputationMenu(post: IBaseForumPost) {
-        dialogsHelper.showReputationMenu(presenter, post)
+        dialogsHelper?.showReputationMenu(presenter, post)
     }
 
     fun showPostMenu(post: IBaseForumPost) {
-        dialogsHelper.showPostMenu(presenter, post, currentTopicPostDensity)
+        dialogsHelper?.showPostMenu(presenter, post, currentTopicPostDensity)
     }
 
     fun reportPost(post: IBaseForumPost) {
-        dialogsHelper.tryReportPost(presenter, post)
+        dialogsHelper?.tryReportPost(presenter, post)
     }
 
     fun deletePost(post: IBaseForumPost) {
-        dialogsHelper.deletePost(presenter, post)
+        dialogsHelper?.deletePost(presenter, post)
     }
 
     fun votePost(post: IBaseForumPost, type: Boolean) {
@@ -1807,7 +1819,7 @@ abstract class ThemeFragment : TabFragment() {
             Utils.showNeedAuthDialog(requireContext(), router)
             return
         }
-        dialogsHelper.votePost(presenter, post, type)
+        dialogsHelper?.votePost(presenter, post, type)
     }
 
     fun showChangeReputation(post: IBaseForumPost, type: Boolean) {
@@ -1815,7 +1827,7 @@ abstract class ThemeFragment : TabFragment() {
             Utils.showNeedAuthDialog(requireContext(), router)
             return
         }
-        dialogsHelper.changeReputation(presenter, post, type)
+        dialogsHelper?.changeReputation(presenter, post, type)
     }
 
     companion object {

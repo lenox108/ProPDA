@@ -116,12 +116,7 @@ object TopicOpenTrace {
         }
     }
 
-    private fun parseLoadAction(name: String): ThemeLoadAction = when (name) {
-        "Refresh" -> ThemeLoadAction.Refresh
-        "Back" -> ThemeLoadAction.Back
-        "End" -> ThemeLoadAction.End
-        else -> ThemeLoadAction.Normal
-    }
+    private fun parseLoadAction(name: String): ThemeLoadAction = ThemeLoadAction.fromString(name)
 }
 
 data class TopicOpenTraceExtras(

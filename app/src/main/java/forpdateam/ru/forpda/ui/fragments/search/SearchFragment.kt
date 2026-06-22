@@ -150,7 +150,11 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
 
 
     private lateinit var jsInterface: SearchJsInterface
-    private lateinit var dialogsHelper: ThemeDialogsHelper_V2
+
+    // Nullable + view-scoped: created in onViewCreated() with the view lifecycle
+    // scope and cleared in onDestroyView(). Constructing it from onCreate() touched
+    // viewLifecycleOwner before the view existed and crashed.
+    private var dialogsHelper: ThemeDialogsHelper_V2? = null
 
     private var pendingSearchHtml: String? = null
     private var pendingSearchHtmlHash: Int = 0
@@ -183,13 +187,6 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
                     getString(TabFragment.ARG_SUBTITLE),
             )
         }
-        dialogsHelper = ThemeDialogsHelper_V2(
-                requireContext(),
-                authHolder,
-                otherPreferencesHolder,
-                topicPreferencesHolder,
-                enableForumBlacklistMenu = false
-        )
     }
 
     fun updateShowAvatarState(isShow: Boolean) {
@@ -270,6 +267,14 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         jsInterface = SearchJsInterface(presenter)
+        dialogsHelper = ThemeDialogsHelper_V2(
+                requireContext(),
+                authHolder,
+                otherPreferencesHolder,
+                topicPreferencesHolder,
+                scope = viewLifecycleOwner.lifecycleScope,
+                enableForumBlacklistMenu = false
+        )
         clearToolbarScrollFlags()
         ensureOpaquePinnedToolbarUnderlay()
 
@@ -630,6 +635,7 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
         searchLoadDispatched = false
         sharedRenderController.cleanup()
         sharedRenderSession = null
+        dialogsHelper = null
         super.onDestroyView()
     }
 
@@ -643,7 +649,7 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
         val generation = searchRenderGeneration
         cancelSearchBlankVerify()
         searchBlankVerifyRunnable = Runnable { verifySearchRender(generation, "dom_content_complete") }
-        webView.postDelayed(searchBlankVerifyRunnable!!, 48L)
+        searchBlankVerifyRunnable?.let { webView.postDelayed(it, 48L) }
     }
 
     override fun onPageComplete(actions: ArrayList<String>) {
@@ -911,11 +917,11 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
     }
 
     fun openAnchorDialog(post: IBaseForumPost, anchorName: String) {
-        dialogsHelper.openAnchorDialog(presenter, post, anchorName)
+        dialogsHelper?.openAnchorDialog(presenter, post, anchorName)
     }
 
     fun openSpoilerLinkDialog(post: IBaseForumPost, spoilNumber: String) {
-        dialogsHelper.openSpoilerLinkDialog(presenter, post, spoilNumber)
+        dialogsHelper?.openSpoilerLinkDialog(presenter, post, spoilNumber)
     }
 
     fun firstPage() {
@@ -954,31 +960,31 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
     }
 
     fun showUserMenu(post: IBaseForumPost) {
-        dialogsHelper.showUserMenu(presenter, post)
+        dialogsHelper?.showUserMenu(presenter, post)
     }
 
     fun showReputationMenu(post: IBaseForumPost) {
-        dialogsHelper.showReputationMenu(presenter, post)
+        dialogsHelper?.showReputationMenu(presenter, post)
     }
 
     fun showPostMenu(post: IBaseForumPost) {
-        dialogsHelper.showPostMenu(presenter, post)
+        dialogsHelper?.showPostMenu(presenter, post)
     }
 
     fun reportPost(post: IBaseForumPost) {
-        dialogsHelper.tryReportPost(presenter, post)
+        dialogsHelper?.tryReportPost(presenter, post)
     }
 
     fun deletePost(post: IBaseForumPost) {
-        dialogsHelper.deletePost(presenter, post)
+        dialogsHelper?.deletePost(presenter, post)
     }
 
     fun votePost(post: IBaseForumPost, type: Boolean) {
-        dialogsHelper.votePost(presenter, post, type)
+        dialogsHelper?.votePost(presenter, post, type)
     }
 
     fun showChangeReputation(post: IBaseForumPost, type: Boolean) {
-        dialogsHelper.changeReputation(presenter, post, type)
+        dialogsHelper?.changeReputation(presenter, post, type)
     }
 
     fun editPost(post: IBaseForumPost) {

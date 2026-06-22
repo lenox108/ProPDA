@@ -1162,10 +1162,9 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         webView.alpha = 0f
         super.updateView(page)
         if (presenter.isEndNavigationPending()) {
-            webView.postDelayed({
-                if (!isAdded || view == null || !::webView.isInitialized) return@postDelayed
+            postOnActiveWebView(280L) {
                 webController.scheduleEndNavigationScrollIfNeeded("renderDeferred")
-            }, 280L)
+            }
         }
         scheduleRenderCompletionWatchdog(renderKey, page)
         scheduleAlphaRevealSafetyWatchdog(renderKey, page)
@@ -2417,8 +2416,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         val page = presenter.getCurrentPageInstance() ?: return
         val expectedPosts = expectedListPostsForReveal(page)
         if (expectedPosts == 0) return
-        webView.postDelayed({
-            if (!isAdded || view == null || !::webView.isInitialized) return@postDelayed
+        postOnActiveWebView(THEME_BLANK_RENDER_VERIFY_DELAY_MS) {
             webView.evaluateJavascript(
                     "(function(){return document.querySelectorAll('.post_container[data-post-id]').length;})();"
             ) { raw ->
@@ -2445,7 +2443,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                 webController.resetRenderState()
                 renderThemePageSafely(page)
             }
-        }, THEME_BLANK_RENDER_VERIFY_DELAY_MS)
+        }
     }
 
     /** Adapter that bridges [ThemeBridgeHandler] into the [ThemeUiModule] contract. */
@@ -2461,11 +2459,11 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     }
 
     fun openAnchorDialog(post: IBaseForumPost, anchorName: String) {
-        dialogsHelper.openAnchorDialog(presenter, post, anchorName)
+        dialogsHelper?.openAnchorDialog(presenter, post, anchorName)
     }
 
     fun openSpoilerLinkDialog(post: IBaseForumPost, spoilNumber: String) {
-        dialogsHelper.openSpoilerLinkDialog(presenter, post, spoilNumber)
+        dialogsHelper?.openSpoilerLinkDialog(presenter, post, spoilNumber)
     }
 
     private fun observeViewModel() {

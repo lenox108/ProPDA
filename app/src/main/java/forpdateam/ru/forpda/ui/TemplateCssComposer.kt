@@ -27,10 +27,45 @@ class TemplateCssComposer(
     private fun isAmoled(): Boolean = paletteResolver.isAmoled()
 
     /**
+     * Cache key for the last [compose] result. The composed CSS depends only on
+     * the font mode plus the night/palette flags, so we memoize on exactly those
+     * inputs and reuse the same [String] instance until one of them changes.
+     */
+    private data class CssConfig(
+            val fontMode: Any?,
+            val night: Boolean,
+            val sepiaReading: Boolean,
+            val sepiaBlue: Boolean,
+            val minimalReader: Boolean,
+            val amoled: Boolean,
+    )
+
+    private var cachedConfig: CssConfig? = null
+    private var cachedCss: String? = null
+
+    private fun currentConfig(): CssConfig = CssConfig(
+            fontMode = FontController.getCurrentFontMode(mainPreferencesHolder),
+            night = dayNightHelper.isNight(),
+            sepiaReading = isSepiaReading(),
+            sepiaBlue = isSepiaBlue(),
+            minimalReader = isMinimalReader(),
+            amoled = isAmoled(),
+    )
+
+    /**
      * Возвращает inline CSS-оверрайды для WebView-шаблонов.
      * Применяется поверх базовых css-файлов и оставляет icon fonts нетронутыми.
+     *
+     * The result is memoized per [CssConfig]: repeated calls with an unchanged
+     * configuration return the exact same [String] instance.
      */
     fun compose(): String {
+        val config = currentConfig()
+        cachedCss?.let { cached ->
+            if (cachedConfig == config) {
+                return cached
+            }
+        }
         val overrides = listOf(
                 FontController.webFontCss(FontController.getCurrentFontMode(mainPreferencesHolder)),
                 getSepiaReadingOverrideCss(),
@@ -46,8 +81,19 @@ class TemplateCssComposer(
                     FontController.getCurrentFontMode(mainPreferencesHolder)
             )
         }
-        return if (overrides.isBlank()) "" else overrides
+        val result = if (overrides.isBlank()) "" else overrides
+        cachedConfig = config
+        cachedCss = result
+        return result
     }
+
+    /**
+     * Hash of the currently cached composed CSS (or of a freshly composed result
+     * when nothing is cached yet). Equals `compose().hashCode()` for the current
+     * configuration; used by the WebView controller to detect whether the inline
+     * overrides changed without re-diffing the whole string.
+     */
+    fun composeHash(): Int = compose().hashCode()
 
     private fun getTopicPostActionIconCss(): String {
         val css = """

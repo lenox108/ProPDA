@@ -2456,6 +2456,10 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
             chatBinding.qmsChatContainer.removeView(webView)
             webView.destroy()
         }
+        // Cancel the previous jsInterface before re-attaching it to the new WebView.
+        // After renderer recovery the old jsInterface object must not receive further
+        // @JavascriptInterface callbacks (which the new WebView is unaware of).
+        if (::jsInterface.isInitialized) jsInterface.cancel()
         webView = ExtendedWebView(requireContext()).also {
             it.systemLinkHandler = systemLinkHandler
             it.init(WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE)

@@ -3,9 +3,10 @@ package forpdateam.ru.forpda.model.interactors.theme
 import android.os.Looper
 import android.os.SystemClock
 import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.common.di.AppScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
@@ -61,7 +62,8 @@ class ThemeUseCase @Inject constructor(
         private val userHolder: IUserHolder,
         private val topicPreferencesHolder: TopicPreferencesHolder,
         private val mainPreferencesHolder: MainPreferencesHolder,
-        private val prefetchService: ThemePrefetchService? = null
+        private val prefetchService: ThemePrefetchService? = null,
+        @AppScope private val appScope: CoroutineScope,
 ) {
 
     /**
@@ -325,7 +327,7 @@ class ThemeUseCase @Inject constructor(
             if (last != null && (now - last) < SERVER_MARK_READ_DEDUP_TTL_MS) return
             serverMarkReadSentTopics[topicId] = now
         }
-        GlobalScope.launch(Dispatchers.IO) {
+        appScope.launch(Dispatchers.IO) {
             val sent = runCatching {
                 favoritesRepository.markFavoriteTopicRead(topicId)
             }.onFailure { errorHandler.handle(it) }

@@ -73,6 +73,19 @@ private const val THEME_HISTORY_TAG = "ThemeHistory"
 private const val THEME_QUOTE_TAG = "ThemeQuote"
 private const val MAX_REMEMBERED_TOPIC_TITLES = 32
 
+/**
+ * Single TTL for the captured link source anchor (Pack B of the back-navigation
+ * audit). Both the cross-topic link path ([ThemeViewModel.consumeLinkSourceAnchorFor])
+ * and the same-topic scroll restore ([ThemeViewModel.sourceAnchorAppliesTo]) share
+ * this window via the single [ThemeViewModel.pendingHistorySourceAnchor] field.
+ *
+ * 15s covers a user who pauses between tapping a cross-topic link and the
+ * WebViewClient dispatching `handleUri`, plus the same-topic history restore that
+ * fires on the new page's `loadData`. The previous 8s/5s split dropped the anchor
+ * for slower users and reintroduced the "scroll jumps to top" bug.
+ */
+internal const val SOURCE_ANCHOR_TTL_MS = 15_000L
+
 data class ThemeLinkSourceAnchor(
         val href: String,
         val postId: String,
@@ -3326,7 +3339,7 @@ class ThemeViewModel @Inject constructor(
     fun consumeLinkSourceAnchorFor(targetUrl: String): ThemeLinkSourceAnchor? {
         val anchor = lastLinkSourceAnchor ?: return null
         val ageMs = SystemClock.uptimeMillis() - anchor.capturedAt
-        if (ageMs > 5000L) {
+        if (ageMs > SOURCE_ANCHOR_TTL_MS) {
             Log.i(
                     THEME_HISTORY_TAG,
                     "native sourceAnchor stale target=$targetUrl href=${anchor.href} sourcePostId=${anchor.postId} ageMs=$ageMs"
@@ -3408,7 +3421,7 @@ class ThemeViewModel @Inject constructor(
 
     private fun sourceAnchorAppliesTo(target: ThemePage, anchor: ThemeLinkSourceAnchor): Boolean {
         val ageMs = SystemClock.uptimeMillis() - anchor.capturedAt
-        if (ageMs > 8000L) {
+        if (ageMs > SOURCE_ANCHOR_TTL_MS) {
             pendingHistorySourceAnchor = null
             pendingHistorySourceTopicId = null
             pendingHistorySourceSt = null

@@ -4,11 +4,9 @@ import android.Manifest
 import android.app.Activity
 import android.app.Application
 import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.ServiceConnection
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -19,8 +17,6 @@ import android.graphics.drawable.VectorDrawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
-import android.os.IBinder
-import android.os.Messenger
 import android.os.PowerManager
 import android.os.StrictMode
 import android.util.DisplayMetrics
@@ -39,6 +35,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.preference.PreferenceManager
 import timber.log.Timber
 import com.google.android.material.color.DynamicColors
+import forpdateam.ru.forpda.common.di.AppScope
 import forpdateam.ru.forpda.common.dpToPx
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.common.getDrawableAttr
@@ -50,14 +47,13 @@ import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.NetworkConnectivityTracker
 import forpdateam.ru.forpda.common.Preferences
+import forpdateam.ru.forpda.diagnostic.ColdStartTracer
 import forpdateam.ru.forpda.notifications.NotificationsService
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import io.appmetrica.analytics.AppMetrica
 import io.appmetrica.analytics.AppMetricaConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -95,12 +91,8 @@ import javax.inject.Inject
 @HiltAndroidApp
 class App : Application(), androidx.work.Configuration.Provider {
 
-    // region Companion Object - Thread-safe Singleton
+    // region Companion Object
     companion object {
-        @Volatile
-        private var _instance: App? = null
-
-        val instance: App get() = _instance!!
         private const val VERSION_HISTORY_STARTUP_DELAY_MS = 1_500L
     }
     // endregion
@@ -119,11 +111,7 @@ class App : Application(), androidx.work.Configuration.Provider {
     // region Properties
     private val preferencesLazy = lazy { PreferenceManager.getDefaultSharedPreferences(this) }
     private val webViewFound = AtomicReference<Boolean?>(null)
-    private val mServiceBound = AtomicBoolean(false)
-    
-    @Volatile
-    private var mBoundService: Messenger? = null
-    
+
     @javax.inject.Inject
     lateinit var workerFactory: androidx.hilt.work.HiltWorkerFactory
 
@@ -135,55 +123,45 @@ class App : Application(), androidx.work.Configuration.Provider {
     // StateFlow вместо SimpleObservable для networkForbidden
     private val _networkForbidden = MutableStateFlow(false)
     val networkForbidden: StateFlow<Boolean> = _networkForbidden.asStateFlow()
-    
+
     private var networkConnectivityTracker: NetworkConnectivityTracker? = null
     private var dozeReceiver: BroadcastReceiver? = null
     private val permissionCallbacks = mutableListOf<Runnable>()
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    @Inject @AppScope lateinit var appScope: CoroutineScope
     private val appLifecycleObserver = AppLifecycleObserver()
-    
+
     private val isInitialized = AtomicBoolean(false)
     // endregion
 
-    // region Service Connection
-    private val mServiceConnection = object : ServiceConnection {
-        override fun onServiceDisconnected(name: ComponentName?) {
-            mBoundService = null
-            mServiceBound.set(false)
-        }
-
-        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            if (name?.className == NotificationsService::class.java.name) {
-                mBoundService = Messenger(service)
-                mServiceBound.set(true)
-            }
-        }
-    }
-    // endregion
-
     // region Lifecycle
-    init {
-        _instance = this
-    }
-
     override fun attachBaseContext(base: Context) {
+        // Capture the process-start anchor as early as possible, before
+        // super, so the first measurable instant is included in the trace.
+        ColdStartTracer.markProcessStart()
         super.attachBaseContext(LocaleHelper.onAttach(base))
+        ColdStartTracer.mark("app.attachBaseContext.end")
     }
 
     override fun onCreate() {
+        ColdStartTracer.mark("app.onCreate.start")
         super.onCreate()
-        
+
         if (isInitialized.getAndSet(true)) {
             return // Предотвращаем двойную инициализацию
         }
-        
-        _instance = this
+
         val startTime = System.currentTimeMillis()
-        
+        ColdStartTracer.mark("app.create")
+
+        // Bind the process-wide Context for static facades (Html.fromHtml) that
+        // cannot easily take a Context parameter. Idempotent across configuration
+        // changes because we always rebind to the same application context.
+        forpdateam.ru.forpda.common.ContextImageLookup.bind(this)
+
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
-        
+
         setupStrictMode()
         setupMaterialYouMigration()
         setupAppMetrica()
@@ -196,11 +174,13 @@ class App : Application(), androidx.work.Configuration.Provider {
         setupBackgroundEventsCheck()
         setupAppUpdateCheck()
         setupMaterialYou()
-        
+
         // Lifecycle observer для очистки ресурсов
         ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
         BatteryDebugLogger.logState("App", "created")
-        
+        ColdStartTracer.mark("app.onCreate.end")
+        ColdStartTracer.logSnapshot()
+
         if (BuildConfig.DEBUG) {
             Timber.d("TIME APP FINAL ${System.currentTimeMillis() - startTime}ms")
         }
@@ -277,7 +257,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         }
         appScope.launch(Dispatchers.IO) {
             try {
-                val config = AppMetricaConfig.newConfigBuilder("a94d9236-cdf3-4a5e-af30-d6dbffaea362").build()
+                val config = AppMetricaConfig.newConfigBuilder(BuildConfig.APPMETRICA_API_KEY).build()
                 AppMetrica.activate(applicationContext, config)
                 AppMetrica.enableActivityAutoTracking(this@App)
             } catch (t: Throwable) {
@@ -509,41 +489,25 @@ class App : Application(), androidx.work.Configuration.Provider {
             false
         }
     }
-    
-    
-    /**
-     * Возвращает ServiceConnection для NotificationsService.
-     */
-    fun getServiceConnection(): ServiceConnection = mServiceConnection
-    
-    /**
-     * Проверяет, привязан ли сервис уведомлений.
-     */
-    fun isServiceBound(): Boolean = mServiceBound.get()
-    
-    /**
-     * Возвращает Messenger для связи с сервисом.
-     */
-    fun getBoundService(): Messenger? = mBoundService
-    
+
     /**
      * Уведомляет слушателей о запрете сети.
      */
     fun notifyForbidden(isForbidden: Boolean) {
         _networkForbidden.value = isForbidden
     }
-    
+
     /**
      * Проверяет разрешение на хранение и выполняет callback если оно есть.
      */
     fun checkStoragePermission(runnable: Runnable?, activity: Activity?) {
         if (runnable == null || activity == null) return
-        
+
         // WRITE_EXTERNAL_STORAGE требуется только для записи в public Downloads до Android 10 (API 29).
         // Начиная с Android 10 используем MediaStore и разрешение не нужно.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) 
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(
                     activity,
@@ -556,7 +520,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         }
         runnable.run()
     }
-    
+
     /**
      * Вызывается при результате запроса разрешений.
      * PLS CALL THIS IN ALL ACTIVITIES
@@ -567,7 +531,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         grantResults: IntArray
     ) {
         permissions.indices.forEach { i ->
-            if (permissions[i] == Manifest.permission.WRITE_EXTERNAL_STORAGE && 
+            if (permissions[i] == Manifest.permission.WRITE_EXTERNAL_STORAGE &&
                 grantResults[i] == PackageManager.PERMISSION_GRANTED) {
                 permissionCallbacks.forEach { runnable ->
                     try {
@@ -580,26 +544,6 @@ class App : Application(), androidx.work.Configuration.Provider {
             }
         }
         permissionCallbacks.clear()
-    }
-    
-    /**
-     * Получает текущую активность без использования reflection.
-     * Рекомендуется передавать Activity явно через параметры.
-     */
-    fun getActivity(): Activity? {
-        // Используем ActivityManager для получения текущей активити
-        // Это более безопасный способ чем reflection
-        return try {
-            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-            val appTasks = activityManager?.appTasks
-            appTasks?.firstOrNull()?.taskInfo?.topActivity?.let {
-                // Возвращаем null так как мы не можем получить instance Activity
-                // Этот метод deprecated, используйте явную передачу Activity
-                null
-            }
-        } catch (_: Exception) {
-            null
-        }
     }
     // endregion
 
@@ -615,8 +559,9 @@ class App : Application(), androidx.work.Configuration.Provider {
         }
         dozeReceiver = null
         ProcessLifecycleOwner.get().lifecycle.removeObserver(appLifecycleObserver)
-        appScope.cancel()
-        _instance = null
+        // Note: appScope is the Hilt-provided @AppScope CoroutineScope; we do not cancel it here
+        // because other components (repositories, use-cases) share the same process-wide scope.
+        // The OS terminates the process; cancellation would orphan their in-flight work.
     }
     // endregion
 

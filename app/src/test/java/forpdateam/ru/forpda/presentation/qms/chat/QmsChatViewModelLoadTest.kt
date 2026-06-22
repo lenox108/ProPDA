@@ -18,6 +18,7 @@ import forpdateam.ru.forpda.ui.TemplateManager
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -25,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -355,13 +357,14 @@ class QmsChatViewModelLoadTest {
             }
         }
         val vm = viewModel(interactor)
-        val events = async {
-            vm.uiEvents.take(6).toList()
+        val collected = mutableListOf<QmsChatUiEvent>()
+        val collector = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            vm.uiEvents.collect { collected += it }
         }
-        vm.onChatIdentityChanged()
+        vm.retryLoadChat()
         advanceUntilIdle()
 
-        val warning = events.await().filterIsInstance<QmsChatUiEvent.LoadWarning>().single()
+        val warning = collected.filterIsInstance<QmsChatUiEvent.LoadWarning>().single()
         assertEquals(QmsLoadErrorKind.NETWORK, warning.kind)
         assertNotNull(warning.cacheAgeMinutes)
         assertTrue(warning.cacheAgeMinutes!! >= 0)

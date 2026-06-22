@@ -14,19 +14,37 @@ import timber.log.Timber
 class SecureCookiesPreferences private constructor(context: Context) {
 
     private val appContext: Context = context.applicationContext
-    private val masterKey: MasterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
 
-    private val encryptedPrefs: SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "secure_cookies",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    /**
+     * Encrypted store backed by the AndroidKeyStore. Creating it can fail when the
+     * keystore is unavailable (no hardware/emulated keystore — e.g. Robolectric
+     * unit tests) or when the previously persisted master key / store is corrupted
+     * on-device. In those cases we fall back to a plain [SharedPreferences] so the
+     * app keeps working instead of crashing on startup; cookies are simply not
+     * encrypted at rest in that degraded mode.
+     */
+    private val encryptedPrefs: SharedPreferences = createEncryptedPrefs(context)
+        ?: context.getSharedPreferences("secure_cookies_fallback", Context.MODE_PRIVATE)
 
     private val migrationKey = "cookies_migrated_to_encrypted"
+
+    private fun createEncryptedPrefs(context: Context): SharedPreferences? {
+        return try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                "secure_cookies",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Throwable) {
+            Timber.e(e, "Encrypted cookie store unavailable; falling back to plain prefs")
+            null
+        }
+    }
 
     init {
         migrateFromOldPrefs()

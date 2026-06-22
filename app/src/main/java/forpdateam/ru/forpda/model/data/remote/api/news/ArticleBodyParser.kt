@@ -38,13 +38,58 @@ internal class ArticleBodyParser(
             regexFallback: String? = null
     ): ArticleParser.ArticleContent {
         regexFallback?.trim()?.takeIf { it.isNotBlank() }?.let { return ArticleParser.ArticleContent(it, false) }
-        extractArticleContentByRegex(pageContext)?.let { return it }
+        extractArticleContentByRegex(pageContext)?.let { regexContent ->
+            // When the regex matched only entry-content (narrow capture), also look for standalone
+            // lead/media nodes that are siblings (not inside the matched entry-content) and prepend them.
+            val html = regexContent.html.orEmpty()
+            if (!html.contains("article-header", ignoreCase = true) &&
+                    !html.contains("article-meta", ignoreCase = true) &&
+                    !html.contains("article-anons", ignoreCase = true)) {
+                val prepended = prependStandaloneLeadAndMedia(pageContext, html)
+                if (prepended != html) {
+                    return ArticleParser.ArticleContent(prepended, regexContent.hasInlineHeroMedia || hasInlineMediaMarker(prepended))
+                }
+            }
+            return regexContent
+        }
         if (phase == ArticleParsePhase.FIRST_RENDER) {
             return ArticleParser.ArticleContent(null, false)
         }
         extractOrderedArticleContent(pageContext)?.let { return it }
         return ArticleParser.ArticleContent(null, false)
     }
+
+    private fun prependStandaloneLeadAndMedia(
+            pageContext: ArticleParser.ArticlePageContext,
+            bodyHtml: String
+    ): String {
+        val document = pageContext.documentOrNull() ?: return bodyHtml
+        val article = findArticleNode(document) ?: return bodyHtml
+        val preBlocks = mutableListOf<String>()
+        val seenTextBlocks = mutableSetOf<String>()
+        for (child in article.getNodes()) {
+            if (Parser.isNotElement(child)) continue
+            if (isArticleHeaderNode(child)) continue
+            if (isArticleFooterNode(child)) continue
+            if (isArticleBodyNode(child)) continue
+            if (isLeadNode(child) || isArticleMediaNode(child)) {
+                val html = Parser.getHtml(child, false)
+                val trimmed = html.trim()
+                if (trimmed.isNotBlank()) {
+                    val textKey = normalizeArticleText(trimmed)
+                    if (textKey.isBlank() || seenTextBlocks.add(textKey)) {
+                        preBlocks += trimmed
+                    }
+                }
+            }
+        }
+        if (preBlocks.isEmpty()) return bodyHtml
+        return preBlocks.joinToString("\n") + "\n" + bodyHtml
+    }
+
+    private fun hasInlineMediaMarker(html: String): Boolean =
+            html.contains("data-lightbox=\"post-", ignoreCase = true) ||
+                    html.contains("data-lightbox='post-", ignoreCase = true)
 
     fun extractArticleContent(
             pageContext: ArticleParser.ArticlePageContext,
