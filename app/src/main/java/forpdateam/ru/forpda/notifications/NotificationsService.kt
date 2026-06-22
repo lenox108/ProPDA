@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.notifications
 
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -23,6 +24,7 @@ import forpdateam.ru.forpda.common.BatteryDebugLogger
 import forpdateam.ru.forpda.common.BitmapUtils
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
+import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
@@ -46,6 +48,7 @@ class NotificationsService : Service() {
     @Inject lateinit var avatarRepository: AvatarRepository
     @Inject lateinit var eventsRepository: EventsRepository
     @Inject lateinit var notificationPreferencesHolder: NotificationPreferencesHolder
+    @Inject lateinit var authHolder: AuthHolder
 
     private var mNotificationManager: NotificationManagerCompat? = null
     private var lastHardCheckTime = 0L
@@ -79,7 +82,7 @@ class NotificationsService : Service() {
         if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Published $category notification")
     }
 
-    override fun onBind(intent: Intent?): android.os.IBinder? {
+    override fun onBind(intent: Intent?): IBinder? {
         Timber.v("onBind")
         BatteryDebugLogger.logState("NotificationsService", "bind")
         return null
@@ -95,6 +98,20 @@ class NotificationsService : Service() {
                     if (!enabled) {
                         // Принудительно останавливаем WebSocket перед остановкой сервиса
                         eventsRepository.onDestroy()
+                        cancelAllNotifications()
+                        stopSelf()
+                    }
+                }
+            }
+            launch {
+                // Если пользователь вышел из аккаунта (или стёр куки), шторка не должна
+                // висеть с уведомлением. Сразу глушим сервис и снимаем уведомления.
+                authHolder.observe().collect { auth ->
+                    if (!auth.isAuth()) {
+                        Timber.i("NotificationsService: auth lost, stopping service")
+                        BatteryDebugLogger.logState("NotificationsService", "auth_lost", "stop")
+                        eventsRepository.onDestroy()
+                        cancelAllNotifications()
                         stopSelf()
                     }
                 }
@@ -142,6 +159,12 @@ class NotificationsService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        // Без авторизации уведомления о событиях форума нам слать неоткуда.
+        if (!authHolder.get().isAuth()) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip service start: user not authenticated")
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
 
         // Поднимаемся в foreground-сервис, чтобы Android не убивал нас во время
         // background-опроса событий (Android 14+ жёстко требует foregroundServiceType
@@ -176,13 +199,23 @@ class NotificationsService : Service() {
             setShowBadge(false)
             enableLights(false)
             enableVibration(false)
+            // Канал FGS максимально скрытный: ни шторка, ни lock-screen не показывают.
+            setLockscreenVisibility(Notification.VISIBILITY_SECRET)
         }
         getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         val notification = NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notify_favorites)
-                .setOngoing(true)
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(getString(R.string.notification_foreground_channel_name))
+                // Без ongoing/без ongoing-summary: пользователь может смахнуть, и на
+                // многих оболочках уведомление вообще не появится в шторке.
+                .setOngoing(false)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+                .setShowWhen(false)
+                .setOnlyAlertOnce(true)
+                .setSilent(true)
                 .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -200,16 +233,9 @@ class NotificationsService : Service() {
         BatteryDebugLogger.logState("NotificationsService", "destroy")
         serviceScope.cancel()  // Отменяем все корутины
         serviceJob.cancel()
-        if (foregroundPromoted) {
-            // Убираем foreground-уведомление, чтобы шторка не залипала после остановки
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-            }
-            foregroundPromoted = false
-        }
+        // Принудительно снимаем ВСЕ наши уведомления, чтобы шторка не залипала
+        // после остановки сервиса (foreground + stacked).
+        cancelAllNotifications()
         // EventsRepository является singleton'ом. Не отменяем его repoScope из lifecycle
         // сервиса, иначе последующие события обновляют вкладки, но уже не доходят до notify().
         super.onDestroy()
@@ -218,6 +244,30 @@ class NotificationsService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         Timber.i("onTaskRemoved")
+        // Пользователь смахнул приложение из Recents. Без явной остановки foreground-сервис
+        // продолжает жить вместе со своим обязательным уведомлением в шторке.
+        cancelAllNotifications()
+        stopSelf()
+    }
+
+    private fun cancelAllNotifications() {
+        if (foregroundPromoted) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+            foregroundPromoted = false
+        }
+        // На всякий случай снимаем stacked-уведомления и все наши ID. Метод cancel(null)
+        // снимает ВСЕ уведомления нашего приложения — это самый надёжный способ убрать
+        // "залипшее" уведомление из шторки.
+        try {
+            getNotificationManager().cancelAll()
+        } catch (t: Throwable) {
+            Timber.e(t, "cancelAll notifications failed")
+        }
     }
 
     private fun getNotificationManager(): NotificationManagerCompat {
