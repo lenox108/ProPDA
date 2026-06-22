@@ -59,6 +59,7 @@ import forpdateam.ru.forpda.presentation.TabRouter
 import forpdateam.ru.forpda.ui.DimensionsProvider
 import forpdateam.ru.forpda.common.PermissionHelper
 import forpdateam.ru.forpda.common.WebViewChecker
+import forpdateam.ru.forpda.ui.MaterialYouApplier
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import javax.inject.Inject
 
@@ -132,6 +133,11 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         appliedFontMode = tempDataStore.getAppFontModeImmediate()
         setTheme(UiThemeStyles.mainNoActionBar(appliedUiPalette, themeMode, resources.configuration))
         FontController.applyNativeTheme(this, appliedFontMode)
+        // Material You (Dynamic Color) must be layered on top of the just-set theme
+        // (setTheme wipes any overlay applied earlier by the global applier). The
+        // per-Activity applier is the canonical entry point and is what makes the
+        // Material You toggle visually change the colors on the native UI shell.
+        MaterialYouApplier.applyIfEnabled(this)
         super.onCreate(savedInstanceState)
         dayNightHelper.setIsNight(DayNightHelper.isUiModeNight(resources.configuration))
         binding = ActivityMainBinding.inflate(layoutInflater)
