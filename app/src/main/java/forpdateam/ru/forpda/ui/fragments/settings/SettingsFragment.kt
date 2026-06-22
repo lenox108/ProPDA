@@ -120,12 +120,8 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
-        if (key == forpdateam.ru.forpda.common.Preferences.Offline.MAX_BYTES_MB) {
-            val mb = sharedPrefs.getString(
-                    key,
-                    forpdateam.ru.forpda.common.Preferences.Offline.DEFAULT_MAX_BYTES_MB.toString()
-            )?.toIntOrNull()
-                    ?: forpdateam.ru.forpda.common.Preferences.Offline.DEFAULT_MAX_BYTES_MB
+        if (key == "offline.max_bytes_mb") {
+            val mb = sharedPrefs.getString(key, null)?.toIntOrNull() ?: 200
             if (isAdded) {
                 lifecycleScope.launch {
                     runCatching {
@@ -729,10 +725,8 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun parseUiPalette(value: String?): Preferences.Main.UiPalette = try {
-        when (val palette = Preferences.Main.UiPalette.valueOf(value ?: Preferences.Main.UiPalette.SYSTEM.name)) {
-            Preferences.Main.UiPalette.CLASSIC_4PDA -> Preferences.Main.UiPalette.SYSTEM
-            else -> palette
-        }
+        // CLASSIC_4PDA was removed; any legacy stored value falls back to SYSTEM.
+        Preferences.Main.UiPalette.valueOf(value ?: Preferences.Main.UiPalette.SYSTEM.name)
     } catch (_: IllegalArgumentException) {
         Preferences.Main.UiPalette.SYSTEM
     }
