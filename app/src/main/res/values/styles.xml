@@ -35,6 +35,84 @@
         <item name="textAppearanceLabelSmall">@style/TextAppearance.ForPDA.LabelSmall</item>
     </style>
 
+    <!--
+        Material You: оверлей акцентов поверх динамических цветов.
+        DynamicColors переопределяет только стандартные M3-роли (colorPrimary
+        и т.д.), а весь «хром» приложения (FAB, переключатели, индикатор табов,
+        ссылки, кнопки диалогов) красится через собственные атрибуты
+        ?attr/colorAccent и ?attr/link_color, которые в теме захардкожены.
+        Поэтому без этого оверлея тумблер Material You визуально ничего не менял.
+        Оверлей перенаправляет эти атрибуты на динамический ?attr/colorPrimary,
+        поэтому накладывается ПОСЛЕ DynamicColors (см. App.setupMaterialYou()).
+        Работает для светлой и тёмной тем, т.к. ссылается на уже разрешённый
+        день/ночь ?attr/colorPrimary.
+    -->
+    <style name="ThemeOverlay.ForPDA.MaterialYouAccent" parent="">
+        <item name="colorAccent">?attr/colorPrimary</item>
+        <item name="android:colorAccent">?attr/colorPrimary</item>
+        <item name="link_color">?attr/colorPrimary</item>
+        <item name="link_color_contrast">?attr/colorPrimary</item>
+        <item name="colorControlActivated">?attr/colorPrimary</item>
+        <item name="android:colorControlActivated">?attr/colorPrimary</item>
+    </style>
+
+    <!--
+        Material You: ПОЛНЫЙ оверлей (акцент + поверхности + типографика + хром).
+        Накладывается ПОВЕРХ DynamicColors ТОЛЬКО для системной палитры (SYSTEM)
+        в светлой/тёмной теме — см. MaterialYouApplier + MaterialYouPolicy.
+        Палитры чтения (Sepia/Minimal) и AMOLED этот оверлей НЕ получают: их
+        фоны/типографика остаются под управлением соответствующих тем.
+
+        Идея: «хром» приложения покрашен через собственные статические атрибуты
+        (background_base, cards_background, default_text_color, ...), которые
+        DynamicColors сам по себе не трогает. Здесь мы перенаправляем их на
+        динамические роли Material 3 (colorSurface*/onSurface*/outlineVariant),
+        чтобы системная палитра обоев растеклась по фонам экранов, карточкам,
+        спискам, тулбарам, навбару, тексту и разделителям.
+
+        Тональная иерархия поверхностей (от самой «глубокой» к «приподнятой»):
+        background_base  -> colorSurface
+        background_for_lists -> colorSurfaceContainerLowest
+        cards / chrome / toolbar -> colorSurfaceContainer(Low)
+    -->
+    <style name="ThemeOverlay.ForPDA.MaterialYouSurface" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
+        <!-- Базовые M3-роли, которые тоже читают некоторые виджеты напрямую -->
+        <item name="android:colorBackground">?attr/colorSurface</item>
+        <item name="colorOnBackground">?attr/colorOnSurface</item>
+
+        <!-- Фоны -->
+        <item name="background_base">?attr/colorSurface</item>
+        <item name="background_for_cards">?attr/colorSurfaceContainerLow</item>
+        <item name="background_for_lists">?attr/colorSurfaceContainerLowest</item>
+        <item name="cards_background">?attr/colorSurfaceContainer</item>
+        <item name="chrome_plane_background">?attr/colorSurfaceContainer</item>
+
+        <!-- Тулбар / верхняя плашка -->
+        <item name="toolbar_color">?attr/colorSurfaceContainer</item>
+        <item name="main_toolbar_accent_surface">?attr/colorSurfaceContainerHigh</item>
+
+        <!-- Статус-бар -->
+        <item name="status_bar_color">?attr/colorSurface</item>
+
+        <!-- Типографика -->
+        <item name="default_text_color">?attr/colorOnSurface</item>
+        <item name="second_text_color">?attr/colorOnSurfaceVariant</item>
+        <item name="contrast_text_color">?attr/colorOnPrimary</item>
+        <item name="drawer_item_text">?attr/colorOnSurfaceVariant</item>
+        <item name="drawer_item_text_selected">?attr/colorPrimary</item>
+
+        <!-- Иконки -->
+        <item name="icon_base">?attr/colorOnSurfaceVariant</item>
+        <item name="icon_toolbar">?attr/colorOnSurface</item>
+
+        <!-- Разделители -->
+        <item name="divider_line">?attr/colorOutlineVariant</item>
+
+        <!-- Системные текстовые/контролы цвета, чтобы Material-виджеты совпали -->
+        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
+        <item name="android:textColorSecondary">?attr/colorOnSurfaceVariant</item>
+    </style>
+
     <style name="ThemeOverlay.ForPDA.SystemFont" parent="ThemeOverlay.Material3">
         <item name="fontFamily">sans-serif</item>
         <item name="android:fontFamily">sans-serif</item>
