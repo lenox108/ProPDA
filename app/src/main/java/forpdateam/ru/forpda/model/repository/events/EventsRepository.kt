@@ -20,7 +20,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -170,24 +169,6 @@ class EventsRepository(
                     start(checkEvents = true, force = true)
                 } else {
                     stop("auth_lost_or_background")
-                }
-            }
-        }
-        repoScope.launch {
-            var lastTimerStamp = System.currentTimeMillis()
-            while (isActive) {
-                delay(60_000L)
-                if (BuildConfig.DEBUG) Timber.d("start timer (${(System.currentTimeMillis() - lastTimerStamp) / 1000}), ${webSocketController.isConnected()}")
-                lastTimerStamp = System.currentTimeMillis()
-                if (!foregroundRealtimeEnabled) {
-                    continue
-                }
-                // Без включённых уведомлений пропускаем таймер, чтобы не будить процесс.
-                if (!notificationPreferencesHolder.wantsPushNotifications()) {
-                    continue
-                }
-                if (!webSocketController.isConnected()) {
-                    start(checkEvents = false, force = false)
                 }
             }
         }
