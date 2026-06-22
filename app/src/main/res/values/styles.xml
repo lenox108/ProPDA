@@ -8,10 +8,12 @@
     <!-- Material3 по умолчанию красит выбранный таб colorPrimary — на тёмном toolbar/card он сливается с фоном -->
     <style name="Widget.ForPDA.TabLayout" parent="Widget.Material3.TabLayout">
         <item name="tabTextColor">?attr/second_text_color</item>
-        <!-- LayoutInflater-safe: tabSelectedTextColor читается из стиля при инфлейте
-             таба, идёт через 2-ой уровень deref, ?attr/... в dynamic_* уже
-             разрешён в concrete int Material3-цепочкой, до TypedArray.getColor. -->
-        <item name="tabSelectedTextColor">?attr/dynamic_default_text_color</item>
+        <!-- LayoutInflater-safe: tabSelectedTextColor резолвится через 2-ой уровень
+             deref при инфлейте таба (LayoutInflater, не raw TypedArray.getColor);
+             ?default_text_color → ?attr/colorOnSurface в Material You SURFACE →
+             concrete @color/light_default_text_color / @color/dark_default_text_color
+             в базовой DayNightAppTheme (api<31 fallback). -->
+        <item name="tabSelectedTextColor">?attr/default_text_color</item>
         <item name="tabIndicatorColor">?attr/colorAccent</item>
     </style>
 
@@ -99,15 +101,19 @@
         <item name="background_for_cards">?attr/colorSurfaceContainerLow</item>
         <item name="background_for_lists">?attr/colorSurfaceContainerLowest</item>
         <!--
-            cards_background: КОНКРЕТНЫЙ @color, а не ?attr/colorSurfaceContainer.
-            ?cards_background читается напрямую из CardStyle.Item (style="@style/CardStyle.Item"),
-            CardView.<init> вызывает TypedArray.getColorStateList(cardBackgroundColor)
-            через TintTypedArray, который НЕ делает второго уровня dereference.
-            ?attr/... остаётся TYPE_ATTRIBUTE и кидает UnsupportedOperationException.
-            Светлая @color/light_card_background совпадает со значением базовой
-            DayNightAppTheme; в night — перекрыто в values-night/styles.xml.
+            cards_background: ?attr/colorSurfaceContainer.
+            Канонический M3 dynamic surface role. На API >= 31 в Material You
+            SURFACE это dynamic M3 container; на API < 31 SURFACE не применяется
+            (см. MaterialYouApplier.applyIfEnabled — early-return на sdk<S) и
+            в базовой DayNightAppTheme определён КОНКРЕТНЫЙ
+            @color/light_card_background / @color/dark_card_background —
+            CardView.<init> / AppBarLayout.<init> / CollapsingToolbarLayout.<init>
+            читают ?attr/cards_background через TypedArray.getColorStateList,
+            который получает 2-ой уровень deref и материализуется в concrete
+            int. Раньше здесь стоял статический @color/... — это 7f1de68
+            regression, отключавшая dynamic M3 tracking.
         -->
-        <item name="cards_background">@color/light_card_background</item>
+        <item name="cards_background">?attr/colorSurfaceContainer</item>
         <item name="chrome_plane_background">?attr/colorSurfaceContainer</item>
 
         <!-- Тулбар / верхняя плашка -->
@@ -119,15 +125,14 @@
 
         <!-- Типографика -->
         <!--
-            default_text_color: КОНКРЕТНЫЙ @color, а не ?attr/colorOnSurface.
-            ?default_text_color читается из MyTextViewStyle.android:textColor
-            (style="@style/MyTextViewStyle" стоит как android:textViewStyle),
-            TextView.<init> вызывает TypedArray.getColorStateList(textColor)
-            через TintTypedArray, который не dereference-ит ?attr/... .
-            Светлая @color/light_default_text_color совпадает со значением базовой
-            DayNightAppTheme; в night — перекрыто в values-night/styles.xml.
+            default_text_color: ?attr/colorOnSurface.
+            Канонический M3 dynamic onSurface. На API >= 31 dynamic M3
+            on-surface; на API < 31 в DayNightAppTheme определён КОНКРЕТНЫЙ
+            @color/light_default_text_color / @color/dark_default_text_color
+            — TextView.<init> получает TYPE_INT_COLOR. Раньше здесь стоял
+            статический @color/... — это 7f1de68 regression.
         -->
-        <item name="default_text_color">@color/light_default_text_color</item>
+        <item name="default_text_color">?attr/colorOnSurface</item>
         <item name="second_text_color">?attr/colorOnSurfaceVariant</item>
         <item name="contrast_text_color">?attr/colorOnPrimary</item>
         <item name="drawer_item_text">?attr/colorOnSurfaceVariant</item>
@@ -136,44 +141,17 @@
         <!-- Иконки -->
         <item name="icon_base">?attr/colorOnSurfaceVariant</item>
         <!--
-            icon_toolbar: КОНКРЕТНЫЙ @color, а не ?attr/colorOnSurface.
-            ?icon_toolbar читается в ToolbarStyle.Light.titleTextColor /
-            subtitleTextColor / navigationIconTint / colorControlNormal / iconTint
-            и в DayNightAppTheme.AppBarOverlay.colorOnSurface / colorControlNormal /
-            actionMenuTextColor. AppBarLayout / Toolbar / CollapsingToolbarLayout
-            вызывают TypedArray.getColorStateList на этих слотах, который не
-            dereference-ит ?attr/... и кидает UnsupportedOperationException.
-            Светлая @color/light_icon_toolbar совпадает со значением базовой
-            DayNightAppTheme; в night — перекрыто в values-night/styles.xml.
-            Раньше здесь стояло ?attr/colorOnSurface для динамического трекинга
-            палитры обоев, но AppCompat TypedArray.getColorStateList на любом
-            инфлейте Toolbar/CollapsingToolbarLayout/AppBarLayout падает с
-            UnsupportedOperationException — см. commits b8b7b57, 775b344, и
-            текущее index 29 = titleTextColor падение.
+            icon_toolbar: ?attr/colorOnSurface.
+            Канонический M3 dynamic onSurface. На API >= 31 dynamic; на API < 31
+            в DayNightAppTheme определён КОНКРЕТНЫЙ @color/light_icon_toolbar /
+            @color/dark_icon_toolbar — Toolbar.<init> / AppBarLayout.<init> /
+            CollapsingToolbarLayout.<init> получают TYPE_INT_COLOR. Раньше здесь
+            стоял статический @color/... — это 7f1de68 regression.
         -->
-        <item name="icon_toolbar">@color/light_icon_toolbar</item>
+        <item name="icon_toolbar">?attr/colorOnSurface</item>
 
         <!-- Разделители -->
         <item name="divider_line">?attr/colorOutlineVariant</item>
-
-        <!--
-            Material You dynamic indirection (см. attrs.xml).
-            LayoutInflater-безопасные слоты (CardStyle.Item, Widget.ForPDA.PopupMenu,
-            Widget.ForPDA.TabLayout, MessagePanelAdvancedTabText) читают ?dynamic_*
-            вместо ?icon_toolbar / ?default_text_color / ?cards_background и трекают
-            палитру обоев через M3 colorOnSurface / colorSurfaceContainer.
-            ?attr/... здесь безопасен: ThemeOverlay.Material3 статически определяет
-            colorOnSurface / colorSurfaceContainer, поэтому TypedValue материализуется
-            в resolveAttribute (2-ой уровень deref) до того, как виджет её читает —
-            widget-ctor-небезопасные слоты (Toolbar.titleTextColor, TextView.textColor,
-            AppBarLayout.colorControlNormal) остались на ?icon_toolbar /
-            ?default_text_color / ?cards_background со СТАТИЧЕСКИМИ @color/* внутри
-            этого оверлея (см. выше), чтобы избежать
-            UnsupportedOperationException → InflateException.
-        -->
-        <item name="dynamic_icon_toolbar">?attr/colorOnSurface</item>
-        <item name="dynamic_default_text_color">?attr/colorOnSurface</item>
-        <item name="dynamic_cards_background">?attr/colorSurfaceContainer</item>
 
         <!--
             НЕ переопределяем android:textColorPrimary/Secondary здесь:
@@ -285,8 +263,9 @@
         <item name="colorOnSecondaryContainer">@color/light_default_text_color</item>
         <item name="colorSurfaceVariant">@color/light_background_for_cards</item>
         <item name="colorOnSurfaceVariant">@color/light_second_text_color</item>
-        <item name="colorControlHighlight">#1F000000</item>
-        <item name="android:colorControlHighlight">#1F000000</item>
+        <!-- M3 ripple: dynamic colorPrimary at 0.12 alpha (focused/pressed) — трекает обои -->
+        <item name="colorControlHighlight">@color/m3_ripple_color</item>
+        <item name="android:colorControlHighlight">@color/m3_ripple_color</item>
         <!-- Toolbar icon colors -->
         <item name="colorControlNormal">?icon_toolbar</item>
         <item name="android:colorControlNormal">?icon_toolbar</item>
@@ -579,8 +558,8 @@
         <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
         <!-- LayoutInflater-safe: PopupMenu/ListPopupWindow резолвит colorBackground
              и textColorPrimary/Secondary через 2-ой уровень deref при инфлейте. -->
-        <item name="android:colorBackground">?attr/dynamic_cards_background</item>
-        <item name="android:textColorPrimary">?attr/dynamic_default_text_color</item>
+        <item name="android:colorBackground">?attr/cards_background</item>
+        <item name="android:textColorPrimary">?attr/default_text_color</item>
         <item name="android:textColorSecondary">?attr/second_text_color</item>
     </style>
 
@@ -636,7 +615,7 @@
         <item name="cardElevation">@dimen/card_elevation</item>
         <!-- LayoutInflater-safe: CardView инфлейтится через LayoutInflater, который
              сам делает 2-ой уровень deref для ?attr/... и трекает палитру обоев. -->
-        <item name="cardBackgroundColor">?attr/dynamic_cards_background</item>
+        <item name="cardBackgroundColor">?attr/cards_background</item>
         <item name="cardUseCompatPadding">true</item>
     </style>
 
@@ -676,9 +655,7 @@
         <!-- Иначе LabelLarge тянет colorPrimary — на тёмном colorPrimary таб «сливается» с фоном -->
         <item name="fontFamily">?fontFamily</item>
         <item name="android:fontFamily">?android:fontFamily</item>
-        <!-- LayoutInflater-safe: TextAppearance читается при инфлейте через 2-ой
-             уровень deref, ?attr/... в dynamic_* уже разрешён. -->
-        <item name="android:textColor">?attr/dynamic_default_text_color</item>
+        <item name="android:textColor">?attr/default_text_color</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
     </style>

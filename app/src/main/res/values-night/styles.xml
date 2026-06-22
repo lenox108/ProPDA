@@ -198,8 +198,9 @@
         <item name="colorSurfaceContainerHigh">@color/amoled_card_background</item>
         <item name="colorSurfaceContainerHighest">@color/amoled_card_background</item>
         <item name="colorOnSurfaceVariant">@color/dark_second_text_color</item>
-        <item name="colorControlHighlight">#33FFFFFF</item>
-        <item name="android:colorControlHighlight">#33FFFFFF</item>
+        <!-- M3 ripple: dynamic colorPrimary at 0.12 alpha (focused/pressed) — трекает обои -->
+        <item name="colorControlHighlight">@color/m3_ripple_color</item>
+        <item name="android:colorControlHighlight">@color/m3_ripple_color</item>
         <item name="colorControlActivated">?attr/colorAccent</item>
         <item name="android:colorControlActivated">?attr/colorAccent</item>
         <item name="android:textCursorDrawable">@drawable/text_cursor</item>
@@ -429,8 +430,8 @@
     <style name="Widget.ForPDA.PopupMenu" parent="Widget.Material3.PopupMenu">
         <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
         <!-- LayoutInflater-safe (см. аналогичный комментарий в values/styles.xml). -->
-        <item name="android:colorBackground">?attr/dynamic_cards_background</item>
-        <item name="android:textColorPrimary">?attr/dynamic_default_text_color</item>
+        <item name="android:colorBackground">?attr/cards_background</item>
+        <item name="android:textColorPrimary">?attr/default_text_color</item>
         <item name="android:textColorSecondary">?attr/second_text_color</item>
     </style>
 
@@ -502,7 +503,19 @@
         <item name="background_base">?attr/colorSurface</item>
         <item name="background_for_cards">?attr/colorSurfaceContainerLow</item>
         <item name="background_for_lists">?attr/colorSurfaceContainerLowest</item>
-        <item name="cards_background">@color/dark_card_background</item>
+        <!--
+            cards_background: ?attr/colorSurfaceContainer.
+            На API >= 31 с активным Material You Surface это dynamic M3 container
+            surface. На API < 31 этот оверлей не применяется (см.
+            MaterialYouApplier.applyIfEnabled — early-return на sdk<S), и в
+            DayNightAppTheme определён КОНКРЕТНЫЙ @color/light_card_background
+            / @color/dark_card_background, чтобы CardView.<init> (который читает
+            ?attr/cards_background через TypedArray.getColorStateList и НЕ
+            делает 2-го уровня deref) получал TYPE_INT_COLOR. Раньше здесь
+            стоял статический @color/... — это 7f1de68 regression, которая
+            отключала dynamic M3 tracking.
+        -->
+        <item name="cards_background">?attr/colorSurfaceContainer</item>
         <item name="chrome_plane_background">?attr/colorSurfaceContainer</item>
 
         <!-- Тулбар / верхняя плашка -->
@@ -513,7 +526,15 @@
         <item name="status_bar_color">?attr/colorSurface</item>
 
         <!-- Типографика -->
-        <item name="default_text_color">@color/dark_default_text_color</item>
+        <!--
+            default_text_color: ?attr/colorOnSurface.
+            На API >= 31 dynamic M3 on-surface. На API < 31 в DayNightAppTheme
+            определён КОНКРЕТНЫЙ @color/light_default_text_color /
+            @color/dark_default_text_color, чтобы TextView.<init> получал
+            TYPE_INT_COLOR. Раньше здесь стоял статический @color/... — это
+            7f1de68 regression.
+        -->
+        <item name="default_text_color">?attr/colorOnSurface</item>
         <item name="second_text_color">?attr/colorOnSurfaceVariant</item>
         <item name="contrast_text_color">?attr/colorOnPrimary</item>
         <item name="drawer_item_text">?attr/colorOnSurfaceVariant</item>
@@ -521,21 +542,20 @@
 
         <!-- Иконки -->
         <item name="icon_base">?attr/colorOnSurfaceVariant</item>
-        <item name="icon_toolbar">@color/dark_icon_toolbar</item>
+        <!--
+            icon_toolbar: ?attr/colorOnSurface.
+            На API >= 31 dynamic M3 on-surface. На API < 31 в DayNightAppTheme
+            определён КОНКРЕТНЫЙ @color/light_icon_toolbar /
+            @color/dark_icon_toolbar, чтобы Toolbar.<init> /
+            AppBarLayout.<init> / CollapsingToolbarLayout.<init> получали
+            TYPE_INT_COLOR. Раньше здесь стоял статический @color/... — это
+            7f1de68 regression.
+        -->
+        <item name="icon_toolbar">?attr/colorOnSurface</item>
 
         <!-- Разделители -->
         <item name="divider_line">?attr/colorOutlineVariant</item>
 
-        <!--
-            Material You dynamic indirection (см. attrs.xml + комментарий в
-            values/styles.xml MaterialYouSurface). Поведение в night-варианте
-            оверлея идентичное: ?dynamic_* → M3 role, читается
-            LayoutInflater-безопасными слотами (CardView, PopupMenu, TabLayout,
-            TextAppearance) и трекает палитру обоев.
-        -->
-        <item name="dynamic_icon_toolbar">?attr/colorOnSurface</item>
-        <item name="dynamic_default_text_color">?attr/colorOnSurface</item>
-        <item name="dynamic_cards_background">?attr/colorSurfaceContainer</item>
     </style>
 
 </resources>

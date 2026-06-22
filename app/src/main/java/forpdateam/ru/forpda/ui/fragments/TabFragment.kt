@@ -325,7 +325,7 @@ open class TabFragment : Fragment() {
         // XML-атрибуты app:collapsedTitleTextColor / app:expandedTitleTextColor в
         // fragment_base.xml / activity_updater.xml оставлены конкретными, чтобы
         // CollapsingToolbarLayout.<init> не падал на TYPE_ATTRIBUTE (см. 7f1de68).
-        // Здесь накладываем dynamic_default_text_color.
+        // Здесь накладываем ?attr/colorOnSurface.
         tintCollapsingToolbarTitle()
 
         setTitle(titleText)
@@ -629,11 +629,12 @@ open class TabFragment : Fragment() {
 
     // Helper methods for toolbar icon tinting - can be called when menu changes
     protected fun tintToolbarIcons() {
-        // Toolbar navigationIcon / overflowIcon — на widget-ctor-небезопасном
-        // слоте ?icon_toolbar, поэтому красим напрямую dynamic_icon_toolbar
-        // (= ?attr/colorOnSurface в Material You SURFACE; static @color/light_icon_toolbar
-        // / @color/dark_icon_toolbar в остальных палитрах).
-        val iconColor = requireContext().getColorFromAttr(R.attr.dynamic_icon_toolbar)
+        // Toolbar navigationIcon / overflowIcon.
+        // На widget-ctor-небезопасном слоте ?icon_toolbar, поэтому красим
+        // напрямую из ?attr/colorOnSurface: в Material You SURFACE это
+        // динамический onSurface от обоев; в остальных палитрах — статический
+        // onSurface базовой темы.
+        val iconColor = requireContext().getColorFromAttr(R.attr.colorOnSurface)
         toolbar.navigationIcon?.mutate()?.setTint(iconColor)
         toolbar.overflowIcon?.mutate()?.setTint(iconColor)
         // title/subtitle — динамический текст. На widget-ctor-небезопасном
@@ -641,7 +642,7 @@ open class TabFragment : Fragment() {
         // поэтому XML в fragment_base.xml / activity_updater.xml держит конкретный
         // @color/toolbar_title_color; здесь после инфлята накладываем dynamic
         // color из Material You SURFACE, если она активна.
-        val textColor = requireContext().getColorFromAttr(R.attr.dynamic_default_text_color)
+        val textColor = requireContext().getColorFromAttr(R.attr.colorOnSurface)
         toolbar.setTitleTextColor(textColor)
         toolbar.setSubtitleTextColor(textColor)
     }
@@ -653,13 +654,13 @@ open class TabFragment : Fragment() {
      * @color/collapsing_toolbar_title_color, чтобы избежать crash в
      * CollapsingToolbarLayout.<init> (см. комментарии в values/styles.xml
      * MaterialYouSurface и коммит 7f1de68). После инфлята накладываем
-     * dynamic_default_text_color — в Material You SURFACE это
-     * ?attr/colorOnSurface, в остальных палитрах —
+     * ?attr/colorOnSurface — в Material You SURFACE это
+     * динамический onSurface от обоев; в остальных палитрах —
      * @color/light_default_text_color / @color/dark_default_text_color.
      */
     protected fun tintCollapsingToolbarTitle() {
         if (!isAdded) return
-        val textColor = requireContext().getColorFromAttr(R.attr.dynamic_default_text_color)
+        val textColor = requireContext().getColorFromAttr(R.attr.colorOnSurface)
         toolbarLayout.setCollapsedTitleTextColor(textColor)
         toolbarLayout.setExpandedTitleColor(textColor)
     }
