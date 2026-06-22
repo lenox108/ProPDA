@@ -16,6 +16,7 @@ import forpdateam.ru.forpda.ui.EdgeToEdge
 import forpdateam.ru.forpda.ui.FontController
 import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.UiThemeStyles
+import forpdateam.ru.forpda.ui.MaterialYouApplier
 import forpdateam.ru.forpda.ui.fragments.settings.NotificationsSettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.SettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.BaseSettingFragment
@@ -60,6 +61,10 @@ class SettingsActivity : AppCompatActivity() {
         appliedFontMode = tempDataStore.getAppFontModeImmediate()
         setTheme(UiThemeStyles.settingsPreferenceScreen(appliedUiPalette, themeMode, resources.configuration))
         FontController.applyNativeTheme(this, appliedFontMode)
+        // Material You (Dynamic Color) must be layered on top of the just-set theme
+        // (setTheme wipes any overlay applied earlier by the global applier). The
+        // per-Activity applier is the canonical entry point — see MaterialYouApplier KDoc.
+        MaterialYouApplier.applyIfEnabled(this)
         super.onCreate(savedInstanceState)
         val barColor = getColorFromAttr(R.attr.main_toolbar_accent_surface)
         setContentView(R.layout.activity_settings)
