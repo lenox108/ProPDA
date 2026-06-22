@@ -53,6 +53,7 @@ object MaterialYouApplier {
      * Должен вызываться из `Activity.onCreate()` сразу после `setTheme(...)`.
      */
     fun applyIfEnabled(activity: Activity) {
+        // API < 31: dynamic color not supported — bail out so we never try to apply it.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             if (BuildConfig.DEBUG) Timber.tag(LOG_TAG).d("skip: sdk<31 (sdk=%d)", Build.VERSION.SDK_INT)
             return

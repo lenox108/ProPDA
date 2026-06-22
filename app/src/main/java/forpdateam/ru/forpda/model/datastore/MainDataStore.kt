@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.model.datastore
 
 import android.content.Context
+import android.os.Build
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
@@ -9,6 +10,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.common.Preferences as AppPreferences
 import forpdateam.ru.forpda.ui.AppFontMode
 import forpdateam.ru.forpda.ui.FontController
@@ -671,6 +673,21 @@ class MainDataStore(private val context: Context) {
         mirrorPrefs.edit().putBoolean("use_material_you", value).apply()
     }
 
+    /**
+     * Material You (dynamic color) requires API 31+. If a user has a stale
+     * `use_material_you = true` saved from a previous Android 12+ install and
+     * later downgraded to an older device, the toggle is meaningless on the new
+     * device. Force it off here so DataStore and the UI stay consistent with
+     * the actual device capabilities.
+     */
+    suspend fun migrateMaterialYouForOldApis() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
+        if (getUseMaterialYouImmediate()) {
+            if (BuildConfig.DEBUG) Timber.tag(LOG_TAG).d("migrate: forcing use_material_you=false on sdk=%d", Build.VERSION.SDK_INT)
+            setUseMaterialYou(false)
+        }
+    }
+
     suspend fun getWebViewFontSize(): Int =
             observeWebViewFontSizeFlow().map { it }.first()
 
@@ -902,5 +919,9 @@ class MainDataStore(private val context: Context) {
         } else {
             AppPreferences.Main.DownloadMethod.BROWSER
         }
+    }
+
+    private companion object {
+        private const val LOG_TAG = "MainDataStore"
     }
 }
