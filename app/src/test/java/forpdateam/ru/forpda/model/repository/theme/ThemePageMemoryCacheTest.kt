@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,7 +17,9 @@ class ThemePageMemoryCacheTest {
             ThemePageMemoryCache(ttlMs = ttlMs, nowMs = { now })
 
     @Test
-    fun putThenGet_returnsCopyAndExpiresAfterTtl() {
+    fun putThenGet_returnsSameReferenceAndExpiresAfterTtl() {
+        // AUDIT-L08 (Stage 1): get() must return the exact same ThemePage instance that was
+        // put() — no defensive copy. After TTL the entry is gone.
         val cache = cache(ttlMs = 1000L)
         val key = ThemePageMemoryCache.Key(topicId = 42, st = 0, hatOpen = false, pollOpen = false)
         val page = ThemePage().apply {
@@ -28,10 +31,51 @@ class ThemePageMemoryCacheTest {
         assertNotNull(hit)
         assertEquals(42, hit!!.id)
         assertEquals("cached", hit.title)
-        assertTrue(hit !== page)
+        assertSame(page, hit)
 
         now = 1001L
         assertNull(cache.get(key))
+    }
+
+    @Test
+    fun putThenGet_returnsSameReferenceAcrossRepeatedReads() {
+        // AUDIT-L08: zero-alloc on read — every get() call returns the same object identity
+        // and never allocates a new ThemePage.
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        val page = ThemePage().apply { id = 1 }
+        cache.put(key, page)
+
+        val first = cache.get(key)
+        val second = cache.get(key)
+        val third = cache.get(key, expectedSignature = null)
+        val fourth = cache.get(key, expectedSignature = "any-non-matching-still-doesn't-mutate")
+
+        assertNotNull(first)
+        assertSame(page, first)
+        assertSame(first, second)
+        assertSame(first, third)
+        assertNull(fourth) // signature mismatch evicts; the first three are unaffected
+    }
+
+    @Test
+    fun get_returnsUnmodifiedCollectionsByReference() {
+        // AUDIT-L08: the `posts` and `anchors` container fields are not deep-copied.
+        // Callers must treat them as read-only.
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        val page = ThemePage().apply {
+            id = 1
+            posts.add(forpdateam.ru.forpda.entity.remote.theme.ThemePost().apply { this.id = 1 })
+            anchors.add("a-1")
+        }
+        cache.put(key, page)
+
+        val hit = cache.get(key)
+        assertNotNull(hit)
+        assertSame(page, hit)
+        assertSame(page.posts, hit!!.posts)
+        assertSame(page.anchors, hit.anchors)
     }
 
     @Test
@@ -152,14 +196,73 @@ class ThemePageMemoryCacheTest {
         }
         // Note: we cannot deterministically force GC from a unit test, so
         // we just assert the contract: if the soft reference has been
-        // reclaimed, get() returns null; otherwise it returns a copy.
+        // reclaimed, get() returns null; otherwise it returns the same
+        // reference that was put.
         // Both outcomes are valid; the test never fails.
         val hit = cache.get(key)
-        // The cache may still hold a hard copy if the soft ref wasn't
+        // The cache may still hold a hard ref if the soft ref wasn't
         // reclaimed yet. In that case, the title matches.
         if (hit != null) {
             assertEquals(1, hit.id)
             assertEquals("weakly-held", hit.title)
         }
+    }
+
+    // --- AUDIT-L08 Stage 2: render-generation handshake -------------------------
+
+    @Test
+    fun get_withMatchingRenderGeneration_returnsHit() {
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        val page = ThemePage().apply { id = 1; renderGenerationId = 7 }
+        cache.put(key, page)
+
+        val hit = cache.get(key, expectedSignature = null, expectedRenderGeneration = 7)
+        assertNotNull(hit)
+        assertSame(page, hit)
+    }
+
+    @Test
+    fun get_withStaleRenderGeneration_missesAndEvicts() {
+        // Cache holds a page from render generation 5. The active session is generation 7.
+        // The cache must treat the entry as a miss and evict it.
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        val page = ThemePage().apply { id = 1; renderGenerationId = 5 }
+        cache.put(key, page)
+
+        assertNull(cache.get(key, expectedSignature = null, expectedRenderGeneration = 7))
+        // Evicted — even a no-generation-check read must miss.
+        assertNull(cache.get(key))
+    }
+
+    @Test
+    fun get_withNullRenderGeneration_skipsCheck() {
+        // Backward compat: null expectedRenderGeneration does not enforce a check,
+        // so the entry is returned regardless of its renderGenerationId.
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        val page = ThemePage().apply { id = 1; renderGenerationId = 42 }
+        cache.put(key, page)
+
+        val hit = cache.get(key, expectedSignature = null, expectedRenderGeneration = null)
+        assertNotNull(hit)
+        assertSame(page, hit)
+    }
+
+    @Test
+    fun put_capturesRenderGenerationIdFromPage() {
+        // The cache must record the page's renderGenerationId at put() time so a later
+        // handshake can match against it.
+        val cache = cache()
+        val key = ThemePageMemoryCache.Key(topicId = 1, st = 0, hatOpen = false, pollOpen = false)
+        cache.put(key, ThemePage().apply { id = 1; renderGenerationId = 99 })
+        // Stale check with a different generation must miss (entry holds 99).
+        assertNull(cache.get(key, expectedSignature = null, expectedRenderGeneration = 100))
+        // Same generation must hit.
+        val cache2 = cache()
+        cache2.put(key, ThemePage().apply { id = 1; renderGenerationId = 100 })
+        val hit = cache2.get(key, expectedSignature = null, expectedRenderGeneration = 100)
+        assertNotNull(hit)
     }
 }
