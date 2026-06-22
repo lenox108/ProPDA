@@ -480,7 +480,7 @@ class App : Application(), androidx.work.Configuration.Provider {
      * Applies the system wallpaper-derived palette to all activities that
      * participate in the dynamic-colors overlay. This is the *native* accent
      * only — the WebView CSS in [TemplateManager] is intentionally not affected,
-     * so reading palettes (SEPIA_*, MINIMAL_READER, CLASSIC_4PDA) keep their
+     * so reading palettes (SEPIA_*, MINIMAL_READER) keep their
      * own background/typography and the dynamic accent is layered on top.
      *
      * §4.1 of REFACTOR_PLAN.md.
@@ -490,8 +490,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         if (!mainPreferencesHolder.getUseMaterialYou()) return
         // Only apply to the SYSTEM palette so we don't fight reading palettes.
         val palette = mainPreferencesHolder.getUiPalette()
-        if (palette != Preferences.Main.UiPalette.SYSTEM &&
-                palette != Preferences.Main.UiPalette.CLASSIC_4PDA) return
+        if (palette != Preferences.Main.UiPalette.SYSTEM) return
         DynamicColors.applyToActivitiesIfAvailable(this)
     }
     // endregion
