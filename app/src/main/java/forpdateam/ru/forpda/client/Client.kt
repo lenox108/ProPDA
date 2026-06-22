@@ -130,6 +130,8 @@ class Client(
             .build()
     }
 
+    private val sharedConnectionPool: ConnectionPool get() = client.connectionPool
+
     private val desktopClient: OkHttpClient by lazy {
         client.newBuilder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -166,6 +168,7 @@ class Client(
             .readTimeout(30, TimeUnit.SECONDS)
             .pingInterval(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            .connectionPool(sharedConnectionPool)
             .cookieJar(cookieJar)
             .addInterceptor(AuthInterceptor())
             .build()
