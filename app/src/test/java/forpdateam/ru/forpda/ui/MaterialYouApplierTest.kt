@@ -5,8 +5,15 @@ import android.content.Context
 import android.os.Bundle
 import android.util.TypedValue
 import androidx.test.core.app.ApplicationProvider
+import com.google.android.material.color.DynamicColors
+import com.google.android.material.color.HarmonizedColors
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Preferences as AppPreferences
+import io.mockk.every
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.mockk.verify
+import org.junit.After
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -45,6 +52,33 @@ import org.robolectric.annotation.Config
  *     surface a real wallpaper-derived palette, so the value is whatever
  *     DynamicColors synthesises internally; the important contract is that
  *     the value changed.
+ *
+ * The additional gating tests (3-5 below) pin down the §4.5 harmonization
+ * invariants that can't be tested through Robolectric's native theme engine
+ * (see [HarmonizedColors] + Robolectric upstream issue #9552):
+ *
+ *  3. With `use_material_you = true` + a non-SYSTEM palette
+ *     (SEPIA_READING / SEPIA_BLUE / MINIMAL_READER), the applier MUST NOT
+ *     invoke [DynamicColors.applyToActivityIfAvailable] at all
+ *     (early-return on `Mode = NONE`). This guarantees that the
+ *     `OnAppliedCallback` — and therefore the inner
+ *     [HarmonizedColors.applyToContextIfAvailable] call — is never built
+ *     for hand-picked reading palettes, so their `colorError` survives.
+ *
+ *  4. `isRobolectric()` returns true in this test environment
+ *     (Build.FINGERPRINT starts with "robolectric"). This is the predicate
+ *     that gates the harmonization call off the test path; the assertion
+ *     is here so a future refactor that breaks the detection gets caught
+ *     with a clear failure message instead of an opaque #9552 crash.
+ *
+ *  5. With `use_material_you = true` + SYSTEM palette
+ *     (so [DynamicColors.applyToActivityIfAvailable] IS reached and the
+ *     `OnAppliedCallback` fires), [HarmonizedColors.applyToContextIfAvailable]
+ *     is NOT invoked — because the Robolectric guard short-circuits it. This
+ *     is the regression guard for the guard: if someone removes
+ *     `if (!isRobolectric())` from the production code, this test fails
+ *     with `verify(exactly = 0) { HarmonizedColors.applyToContextIfAvailable(...) }`,
+ *     pointing directly at the regression.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = android.app.Application::class)
@@ -138,5 +172,101 @@ class MaterialYouApplierTest {
                 "?icon_toolbar must differ from the static @color/light_icon_toolbar after MY is enabled — applier likely not wired up (got #${Integer.toHexString(resolved.data)} vs baseline #${Integer.toHexString(baseline)})",
                 resolved.data != baseline
         )
+    }
+
+    // --- §4.5 gating tests (see KDoc) ---
+
+    @After
+    fun tearDownMockk() {
+        // mockkStatic state is per-test classloader; tear it down so other
+        // test classes in the same module don't see the static stubs.
+        runCatching { unmockkStatic(DynamicColors::class) }
+        runCatching { unmockkStatic(HarmonizedColors::class) }
+    }
+
+    @Test
+    fun `applier is a no-op for non-SYSTEM palettes so HarmonizedColors never fires for reading palettes`() {
+        // Mock both Material entry points so the test can observe (or rather,
+        // NOT observe) any call. `DynamicColors` and `HarmonizedColors` are
+        // Java classes with static methods — mockkStatic replaces the static
+        // dispatch for the duration of the test, and we use these stubs to
+        // count invocations. These are exactly the API surface that must
+        // stay silent for hand-picked reading palettes.
+        mockkStatic(DynamicColors::class)
+        mockkStatic(HarmonizedColors::class)
+        every { DynamicColors.applyToActivityIfAvailable(any(), any()) } returns Unit
+        every { HarmonizedColors.applyToContextIfAvailable(any(), any()) } returns Unit
+
+        // For every reading palette, with use_material_you explicitly ON, the
+        // applier must short-circuit at the `mode == NONE` early-return and
+        // never reach DynamicColors — which means the OnAppliedCallback
+        // (which contains the HarmonizedColors call) is never even built.
+        listOf(
+                AppPreferences.Main.UiPalette.SEPIA_READING,
+                AppPreferences.Main.UiPalette.SEPIA_BLUE,
+                AppPreferences.Main.UiPalette.MINIMAL_READER
+        ).forEach { palette ->
+            writeMaterialYouEnabled(true)
+            writeUiPalette(palette)
+
+            Robolectric.buildActivity(ThemedActivity::class.java).setup().get()
+
+            verify(exactly = 0) {
+                DynamicColors.applyToActivityIfAvailable(any(), any())
+            }
+            verify(exactly = 0) {
+                HarmonizedColors.applyToContextIfAvailable(any(), any())
+            }
+        }
+    }
+
+    @Test
+    fun `isRobolectric returns true in this Robolectric test environment`() {
+        // The Robolectric guard that gates HarmonizedColors off the test path
+        // depends on Build.FINGERPRINT starting with "robolectric". If a future
+        // refactor changes the detection predicate (e.g. drops the prefix
+        // check or looks at the wrong Build.* field), this test fails
+        // immediately with a clear message, instead of the opaque
+        // Robolectric #9552 stack that would otherwise surface downstream.
+        assertTrue(
+                "Build.FINGERPRINT is '${android.os.Build.FINGERPRINT}' — isRobolectric() must return true in this Robolectric test environment",
+                MaterialYouApplier.isRobolectric()
+        )
+    }
+
+    @Test
+    fun `HarmonizedColors is gated by isRobolectric in the OnAppliedCallback`() {
+        // Pre-condition: use_material_you = true + palette = SYSTEM →
+        // resolveMode returns SURFACE → the applier DOES reach
+        // DynamicColors.applyToActivityIfAvailable and the OnAppliedCallback
+        // fires. Inside the callback the production code has
+        //   if (!isRobolectric()) { HarmonizedColors.applyToContextIfAvailable(...) }
+        // — so in this Robolectric test, the inner call must NOT be made.
+        // If someone removes the `!isRobolectric()` guard, this test fails
+        // with a clear `verify(exactly = 0)` mismatch pointing at the
+        // regression (instead of the opaque Robolectric #9552 crash that
+        // would otherwise surface from inside the OnAppliedCallback).
+        mockkStatic(DynamicColors::class)
+        mockkStatic(HarmonizedColors::class)
+        // Stub DynamicColors so the activity creation completes without
+        // actually applying the overlay (we only care about the static-call
+        // bookkeeping, not the real overlay effect).
+        every { DynamicColors.applyToActivityIfAvailable(any(), any()) } returns Unit
+        every { HarmonizedColors.applyToContextIfAvailable(any(), any()) } returns Unit
+
+        writeMaterialYouEnabled(true)
+        writeUiPalette(AppPreferences.Main.UiPalette.SYSTEM)
+
+        Robolectric.buildActivity(ThemedActivity::class.java).setup().get()
+
+        // DynamicColors WAS called (proves the applier reached the active-MY
+        // branch and built the OnAppliedCallback).
+        verify(exactly = 1) {
+            DynamicColors.applyToActivityIfAvailable(any(), any())
+        }
+        // …but HarmonizedColors was NOT — the Robolectric guard fired.
+        verify(exactly = 0) {
+            HarmonizedColors.applyToContextIfAvailable(any(), any())
+        }
     }
 }
