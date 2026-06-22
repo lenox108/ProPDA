@@ -8,10 +8,15 @@ import forpdateam.ru.forpda.model.NetworkStateProvider
 
 /**
  * Отслеживание сети через [ConnectivityManager.NetworkCallback] вместо устаревшего CONNECTIVITY_ACTION.
+ *
+ * При смене/потере сети опционально дёргает [onNetworkLost] — например, чтобы сбросить
+ * DNS-кеш (см. [forpdateam.ru.forpda.client.CachedDns.clearCache]). Без этого после
+ * Wi-Fi → mobile приложение до 30 секунд долбится в мёртвые адреса.
  */
 class NetworkConnectivityTracker(
         context: Context,
-        private val networkState: NetworkStateProvider
+        private val networkState: NetworkStateProvider,
+        private val onNetworkLost: () -> Unit = {},
 ) {
     private val appContext = context.applicationContext
     private val cm = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -23,6 +28,8 @@ class NetworkConnectivityTracker(
 
         override fun onLost(network: Network) {
             pushState()
+            runCatching { onNetworkLost() }
+                .onFailure { android.util.Log.w("NetworkTracker", "onNetworkLost hook failed", it) }
         }
 
         override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {

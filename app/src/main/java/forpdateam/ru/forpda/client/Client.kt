@@ -184,6 +184,10 @@ class Client(
         cookieManager.clearCookies()
     }
 
+    override fun clearDnsCache() {
+        cachedDns.clearCache()
+    }
+
     /** Общий клиент для HTTP и загрузки изображений (Coil), чтобы cookies совпадали. */
     fun getHttpClient(): OkHttpClient = client
 
