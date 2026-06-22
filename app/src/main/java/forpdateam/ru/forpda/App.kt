@@ -390,7 +390,11 @@ class App : Application(), androidx.work.Configuration.Provider {
     
     private fun setupNetworkTracking() {
         networkConnectivityTracker?.stop()
-        networkConnectivityTracker = NetworkConnectivityTracker(this, networkState).apply {
+        networkConnectivityTracker = NetworkConnectivityTracker(
+            context = this,
+            networkState = networkState,
+            onNetworkLost = { webClient.clearDnsCache() },
+        ).apply {
             start()
         }
     }

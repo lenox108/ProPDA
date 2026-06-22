@@ -46,6 +46,12 @@ interface IWebClient {
 
     fun clearCookies()
 
+    /**
+     * Сбросить DNS-кеш. Вызывается при смене/потере сети, чтобы не долбиться
+     * в мёртвые адреса. Реализация по умолчанию — no-op для моков/тестов.
+     */
+    fun clearDnsCache() {}
+
     fun createWebSocketConnection(webSocketListener: WebSocketListener): WebSocket
 
     /**
