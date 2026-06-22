@@ -6,7 +6,7 @@ import forpdateam.ru.forpda.common.Preferences as AppPreferences
  * Чистая логика решения, применять ли динамические цвета (Material You) к
  * нативному UI.
  *
- * Вынесено отдельно от [forpdateam.ru.forpda.App.setupMaterialYou], чтобы
+ * Вынесено отдельно от [forpdateam.ru.forpda.ui.MaterialYouApplier], чтобы
  * условие было юнит-тестируемым без Android-зависимостей (DataStore/Activity).
  *
  * Правило: динамические цвета включаются только если тумблер «Цвета системы
