@@ -8,7 +8,10 @@
     <!-- Material3 по умолчанию красит выбранный таб colorPrimary — на тёмном toolbar/card он сливается с фоном -->
     <style name="Widget.ForPDA.TabLayout" parent="Widget.Material3.TabLayout">
         <item name="tabTextColor">?attr/second_text_color</item>
-        <item name="tabSelectedTextColor">?attr/default_text_color</item>
+        <!-- LayoutInflater-safe: tabSelectedTextColor читается из стиля при инфлейте
+             таба, идёт через 2-ой уровень deref, ?attr/... в dynamic_* уже
+             разрешён в concrete int Material3-цепочкой, до TypedArray.getColor. -->
+        <item name="tabSelectedTextColor">?attr/dynamic_default_text_color</item>
         <item name="tabIndicatorColor">?attr/colorAccent</item>
     </style>
 
@@ -152,6 +155,25 @@
 
         <!-- Разделители -->
         <item name="divider_line">?attr/colorOutlineVariant</item>
+
+        <!--
+            Material You dynamic indirection (см. attrs.xml).
+            LayoutInflater-безопасные слоты (CardStyle.Item, Widget.ForPDA.PopupMenu,
+            Widget.ForPDA.TabLayout, MessagePanelAdvancedTabText) читают ?dynamic_*
+            вместо ?icon_toolbar / ?default_text_color / ?cards_background и трекают
+            палитру обоев через M3 colorOnSurface / colorSurfaceContainer.
+            ?attr/... здесь безопасен: ThemeOverlay.Material3 статически определяет
+            colorOnSurface / colorSurfaceContainer, поэтому TypedValue материализуется
+            в resolveAttribute (2-ой уровень deref) до того, как виджет её читает —
+            widget-ctor-небезопасные слоты (Toolbar.titleTextColor, TextView.textColor,
+            AppBarLayout.colorControlNormal) остались на ?icon_toolbar /
+            ?default_text_color / ?cards_background со СТАТИЧЕСКИМИ @color/* внутри
+            этого оверлея (см. выше), чтобы избежать
+            UnsupportedOperationException → InflateException.
+        -->
+        <item name="dynamic_icon_toolbar">?attr/colorOnSurface</item>
+        <item name="dynamic_default_text_color">?attr/colorOnSurface</item>
+        <item name="dynamic_cards_background">?attr/colorSurfaceContainer</item>
 
         <!--
             НЕ переопределяем android:textColorPrimary/Secondary здесь:
@@ -555,8 +577,10 @@
 
     <style name="Widget.ForPDA.PopupMenu" parent="Widget.Material3.PopupMenu">
         <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
-        <item name="android:colorBackground">?attr/cards_background</item>
-        <item name="android:textColorPrimary">?attr/default_text_color</item>
+        <!-- LayoutInflater-safe: PopupMenu/ListPopupWindow резолвит colorBackground
+             и textColorPrimary/Secondary через 2-ой уровень deref при инфлейте. -->
+        <item name="android:colorBackground">?attr/dynamic_cards_background</item>
+        <item name="android:textColorPrimary">?attr/dynamic_default_text_color</item>
         <item name="android:textColorSecondary">?attr/second_text_color</item>
     </style>
 
@@ -610,7 +634,9 @@
     <style name="CardStyle.Item" parent="CardView">
         <item name="cardCornerRadius">@dimen/card_corner_radius</item>
         <item name="cardElevation">@dimen/card_elevation</item>
-        <item name="cardBackgroundColor">?cards_background</item>
+        <!-- LayoutInflater-safe: CardView инфлейтится через LayoutInflater, который
+             сам делает 2-ой уровень deref для ?attr/... и трекает палитру обоев. -->
+        <item name="cardBackgroundColor">?attr/dynamic_cards_background</item>
         <item name="cardUseCompatPadding">true</item>
     </style>
 
@@ -650,7 +676,9 @@
         <!-- Иначе LabelLarge тянет colorPrimary — на тёмном colorPrimary таб «сливается» с фоном -->
         <item name="fontFamily">?fontFamily</item>
         <item name="android:fontFamily">?android:fontFamily</item>
-        <item name="android:textColor">?attr/default_text_color</item>
+        <!-- LayoutInflater-safe: TextAppearance читается при инфлейте через 2-ой
+             уровень deref, ?attr/... в dynamic_* уже разрешён. -->
+        <item name="android:textColor">?attr/dynamic_default_text_color</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
     </style>

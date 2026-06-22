@@ -6,6 +6,23 @@
     <attr name="colorAccent" extension="reference" />-->
     <attr name="status_bar_color" extension="reference" format="color" />
 
+    <!--
+        Material You dynamic indirection (introduced after the 7f1de68 fix).
+        These names are aliased to M3 dynamic roles (colorOnSurface / colorSurfaceContainer)
+        inside ThemeOverlay.ForPDA.MaterialYouSurface, so LayoutInflater/resolveAttribute
+        consumers (CardView, PopupMenu, TextAppearance) can track the live wallpaper
+        palette without going through the widget-ctor-unsafe slots that crash on
+        ?attr/... in TypedArray.getColorStateList (Toolbar, TextView, AppBarLayout).
+
+        The "static" counterparts (icon_toolbar, default_text_color, cards_background)
+        remain pointed at concrete @color/* in MaterialYouSurface and continue to be
+        consumed by widget-ctor-unsafe slots; for those surfaces, dynamic tracking
+        is restored programmatically (see TabFragment.tintToolbarIcons +
+        tintCollapsingToolbarTitle).
+    -->
+    <attr name="dynamic_icon_toolbar" extension="reference" format="color" />
+    <attr name="dynamic_default_text_color" extension="reference" format="color" />
+    <attr name="dynamic_cards_background" extension="reference" format="color" />
 
     <attr name="link_color" extension="reference" format="color" />
     <attr name="link_color_contrast" extension="reference" format="color" />
