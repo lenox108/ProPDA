@@ -478,4 +478,52 @@
         <item name="iconTint">?icon_toolbar</item>
     </style>
 
+    <!--
+        Material You SURFACE overlay: night-mode override.
+        icon_toolbar / default_text_color / cards_background объявлены
+        КОНКРЕТНЫМИ @color/*, а не ?attr/... — иначе ?icon_toolbar /
+        ?default_text_color / ?cards_background остаются TYPE_ATTRIBUTE в
+        TypedValue и падают в Toolbar.<init> / TextView.<init> /
+        CardView.<init> на TypedArray.getColorStateList →
+        UnsupportedOperationException (см. parent в values/styles.xml).
+        Тёмные цвета берутся те же, что и в базовой DayNightAppTheme (night),
+        чтобы Material You SURFACE на тёмной теме выглядел идентично
+        базовой тёмной — динамический трекинг палитры обоев тут был сломан
+        ещё в commits 775b344 / b8b7b57, фикс полностью убирает его.
+    -->
+    <style name="ThemeOverlay.ForPDA.MaterialYouSurface" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
+        <!-- Базовые M3-роли — динамические, читаются напрямую из layout XML,
+             layout inflater сам делает второй уровень dereference. -->
+        <item name="android:colorBackground">?attr/colorSurface</item>
+        <item name="colorOnBackground">?attr/colorOnSurface</item>
+
+        <!-- Фоны -->
+        <item name="background_base">?attr/colorSurface</item>
+        <item name="background_for_cards">?attr/colorSurfaceContainerLow</item>
+        <item name="background_for_lists">?attr/colorSurfaceContainerLowest</item>
+        <item name="cards_background">@color/dark_card_background</item>
+        <item name="chrome_plane_background">?attr/colorSurfaceContainer</item>
+
+        <!-- Тулбар / верхняя плашка -->
+        <item name="toolbar_color">?attr/colorSurfaceContainer</item>
+        <item name="main_toolbar_accent_surface">?attr/colorSurfaceContainerHigh</item>
+
+        <!-- Статус-бар -->
+        <item name="status_bar_color">?attr/colorSurface</item>
+
+        <!-- Типографика -->
+        <item name="default_text_color">@color/dark_default_text_color</item>
+        <item name="second_text_color">?attr/colorOnSurfaceVariant</item>
+        <item name="contrast_text_color">?attr/colorOnPrimary</item>
+        <item name="drawer_item_text">?attr/colorOnSurfaceVariant</item>
+        <item name="drawer_item_text_selected">?attr/colorPrimary</item>
+
+        <!-- Иконки -->
+        <item name="icon_base">?attr/colorOnSurfaceVariant</item>
+        <item name="icon_toolbar">@color/dark_icon_toolbar</item>
+
+        <!-- Разделители -->
+        <item name="divider_line">?attr/colorOutlineVariant</item>
+    </style>
+
 </resources>

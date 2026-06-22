@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Toolbar title color, выбирается автоматически по day/night.
+        В values/colors.xml = @color/light_default_text_color (#000000),
+        здесь перекрывается на @color/dark_default_text_color (#ffffff).
+        Используется как concrete-@color в fragment_base.xml (Fix A):
+        XML-атрибут app:titleTextColor должен быть КОНКРЕТНЫМ, чтобы
+        TypedArray.getColorStateList не получал TYPE_ATTRIBUTE — иначе
+        Toolbar.<init> падает с UnsupportedOperationException.
+    -->
+    <color name="toolbar_title_color">@color/dark_default_text_color</color>
+    <!-- Подсказки в outlined TextInputLayout / диалогах (ночь, AMOLED) -->
+    <color name="dialog_textinput_hint">@color/dark_second_text_color</color>
+    <color name="support_author_link_text">#64B5F6</color>
+
+    <!-- Sepia / Reading palette, dark base -->
+    <color name="sepia_colorPrimary">#20160F</color>
+    <color name="sepia_colorPrimaryDark">#15100B</color>
+    <color name="sepia_colorAccent">#C9975B</color>
+    <color name="sepia_status_bar_color">#00000000</color>
+    <color name="sepia_navigation_bar_color">#15100B</color>
+    <color name="sepia_link_color">#C9975B</color>
+    <color name="sepia_link_color_contrast">#15100B</color>
+    <color name="sepia_default_text_color">#F2E6D3</color>
+    <color name="sepia_contrast_text_color">#15100B</color>
+    <color name="sepia_second_text_color">#B89F82</color>
+    <color name="sepia_drawer_item_text">@color/sepia_default_text_color</color>
+    <color name="sepia_drawer_item_text_selected">@color/sepia_default_text_color</color>
+    <color name="sepia_background_base">#15100B</color>
+    <color name="sepia_background_for_cards">#20160F</color>
+    <color name="sepia_background_for_lists">#15100B</color>
+    <color name="sepia_card_background">#241A12</color>
+    <color name="sepia_divider_line">#3B2A1C</color>
+    <color name="sepia_divider_line_bottom_nav">#3B2A1C</color>
+    <color name="sepia_selection">#33C9975B</color>
+    <color name="sepia_attachment_overlay_bg">#21000000</color>
+    <color name="sepia_attachment_description_bg">#44000000</color>
+    <color name="sepia_attachment_text">@color/sepia_default_text_color</color>
+    <color name="sepia_msg_panel_tooltip_bg">#ee241A12</color>
+    <color name="sepia_profile_overlay_bg">#44000000</color>
+    <color name="sepia_img_viewer_toolbar">#33000000</color>
+    <color name="sepia_icon_base">#B89F82</color>
+    <color name="sepia_icon_toolbar">#F2E6D3</color>
+    <color name="sepia_main_toolbar_accent_surface">#20160F</color>
+    <color name="sepia_main_toolbar_stroke">#3B2A1C</color>
+
+    <!-- Sepia Blue palette, dark base -->
+    <color name="sepia_blue_colorPrimary">#1D2327</color>
+    <color name="sepia_blue_colorPrimaryDark">#14191D</color>
+    <color name="sepia_blue_colorAccent">#8FB3C8</color>
+    <color name="sepia_blue_navigation_bar_color">#14191D</color>
+    <color name="sepia_blue_link_color">#8FB3C8</color>
+    <color name="sepia_blue_link_color_contrast">#14191D</color>
+    <color name="sepia_blue_default_text_color">#F0E7D9</color>
+    <color name="sepia_blue_contrast_text_color">#14191D</color>
+    <color name="sepia_blue_second_text_color">#B8AA99</color>
+    <color name="sepia_blue_background_base">#14191D</color>
+    <color name="sepia_blue_background_for_cards">#1A2024</color>
+    <color name="sepia_blue_background_for_lists">#14191D</color>
+    <color name="sepia_blue_card_background">#20282D</color>
+    <color name="sepia_blue_toolbar">#1D2327</color>
+    <color name="sepia_blue_divider_line">#354148</color>
+    <color name="sepia_blue_accent_soft">#263B47</color>
+    <color name="sepia_blue_selection">#3D8FB3C8</color>
+    <color name="sepia_blue_msg_panel_tooltip_bg">#ee20282D</color>
+    <color name="sepia_blue_icon_base">#B8AA99</color>
+    <color name="sepia_blue_icon_toolbar">#F0E7D9</color>
+    <color name="sepia_blue_main_toolbar_accent_surface">#1D2327</color>
+    <color name="sepia_blue_main_toolbar_stroke">#354148</color>
+
+    <!-- Minimal Reader UI palette, dark base -->
+    <color name="minimal_reader_colorPrimary">#181B1F</color>
+    <color name="minimal_reader_colorPrimaryDark">#121416</color>
+    <color name="minimal_reader_colorAccent">#8DA3B8</color>
+    <color name="minimal_reader_navigation_bar_color">#121416</color>
+    <color name="minimal_reader_link_color">#8DA3B8</color>
+    <color name="minimal_reader_link_color_contrast">#121416</color>
+    <color name="minimal_reader_default_text_color">#ECE8E1</color>
+    <color name="minimal_reader_contrast_text_color">#121416</color>
+    <color name="minimal_reader_second_text_color">#B3ADA4</color>
+    <color name="minimal_reader_muted_text_color">#7C776F</color>
+    <color name="minimal_reader_background_base">#121416</color>
+    <color name="minimal_reader_background_for_cards">#171A1D</color>
+    <color name="minimal_reader_background_for_lists">#171A1D</color>
+    <color name="minimal_reader_card_background">#1D2126</color>
+    <color name="minimal_reader_toolbar">#181B1F</color>
+    <color name="minimal_reader_divider_line">#2A2E34</color>
+    <color name="minimal_reader_accent_soft">#26313B</color>
+    <color name="minimal_reader_selection">#2A3742</color>
+    <color name="minimal_reader_error">#D08C7E</color>
+    <color name="minimal_reader_success">#7FA089</color>
+    <color name="minimal_reader_msg_panel_tooltip_bg">#ee1D2126</color>
+    <color name="minimal_reader_icon_base">#B3ADA4</color>
+    <color name="minimal_reader_icon_toolbar">#ECE8E1</color>
+    <color name="minimal_reader_main_toolbar_accent_surface">#181B1F</color>
+    <color name="minimal_reader_main_toolbar_stroke">#2A2E34</color>
+
+    <!-- Adaptive last-read / first-unread highlight (dark / AMOLED).
+         Warmer gold for the dark surface (still amber family) and a tight, low-alpha
+         bg so the highlight stays discreet on pure black. Outline a touch brighter
+         than accent to remain visible. -->
+    <color name="fpda_unread_accent">#FBBF24</color>
+    <color name="fpda_unread_bg">#24FBBF24</color>
+    <color name="fpda_unread_outline">#FFD75E</color>
+</resources>

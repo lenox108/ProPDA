@@ -3,6 +3,15 @@
     <color name="ic_launcher_background">#ffffffff</color>
     <color name="white">#ffffff</color>
     <!--
+        Toolbar title color, выбирается автоматически по day/night.
+        В values-night/colors.xml перекрыто на @color/dark_default_text_color.
+        Используется как concrete-@color в fragment_base.xml (Fix A):
+        XML-атрибут app:titleTextColor должен быть КОНКРЕТНЫМ, чтобы
+        TypedArray.getColorStateList не получал TYPE_ATTRIBUTE — иначе
+        Toolbar.<init> падает с UnsupportedOperationException.
+    -->
+    <color name="toolbar_title_color">@color/light_default_text_color</color>
+    <!--
         Concrete (NON-?attr) value for CollapsingToolbarLayout title text color.
         The Material3 default collapsingToolbarLayoutStyle sets
         expanded/collapsedTitleTextColor to @macro/...headline_color, which expands

@@ -47,7 +47,18 @@
         Работает для светлой и тёмной тем, т.к. ссылается на уже разрешённый
         день/ночь ?attr/colorPrimary.
     -->
-    <style name="ThemeOverlay.ForPDA.MaterialYouAccent" parent="">
+    <!--
+        Material You: акцент-оверлей. Родитель явно ThemeOverlay.Material3,
+        а не пустая строка, чтобы резолв ?attr/colorPrimary и пр. всегда
+        шёл через ПОЛНУЮ M3-цепочку (ThemeOverlay.Material3 →
+        ThemeOverlay.MaterialComponents → ThemeOverlay.AppCompat → …).
+        С parent="" Android подставлял дефолтный android:Theme, что давало
+        в инфлейт-цепочке Theme.AppCompat.Empty и в нём наши app-атрибуты
+        (colorOnSurface / icon_toolbar / …) не имели конкретного значения
+        — отсюда UnsupportedOperationException в Toolbar.<init>,
+        CollapsingToolbarLayout.<init>, CardView.<init> и пр.
+    -->
+    <style name="ThemeOverlay.ForPDA.MaterialYouAccent" parent="ThemeOverlay.Material3">
         <item name="colorAccent">?attr/colorPrimary</item>
         <item name="android:colorAccent">?attr/colorPrimary</item>
         <item name="link_color">?attr/colorPrimary</item>
@@ -84,7 +95,16 @@
         <item name="background_base">?attr/colorSurface</item>
         <item name="background_for_cards">?attr/colorSurfaceContainerLow</item>
         <item name="background_for_lists">?attr/colorSurfaceContainerLowest</item>
-        <item name="cards_background">?attr/colorSurfaceContainer</item>
+        <!--
+            cards_background: КОНКРЕТНЫЙ @color, а не ?attr/colorSurfaceContainer.
+            ?cards_background читается напрямую из CardStyle.Item (style="@style/CardStyle.Item"),
+            CardView.<init> вызывает TypedArray.getColorStateList(cardBackgroundColor)
+            через TintTypedArray, который НЕ делает второго уровня dereference.
+            ?attr/... остаётся TYPE_ATTRIBUTE и кидает UnsupportedOperationException.
+            Светлая @color/light_card_background совпадает со значением базовой
+            DayNightAppTheme; в night — перекрыто в values-night/styles.xml.
+        -->
+        <item name="cards_background">@color/light_card_background</item>
         <item name="chrome_plane_background">?attr/colorSurfaceContainer</item>
 
         <!-- Тулбар / верхняя плашка -->
@@ -95,7 +115,16 @@
         <item name="status_bar_color">?attr/colorSurface</item>
 
         <!-- Типографика -->
-        <item name="default_text_color">?attr/colorOnSurface</item>
+        <!--
+            default_text_color: КОНКРЕТНЫЙ @color, а не ?attr/colorOnSurface.
+            ?default_text_color читается из MyTextViewStyle.android:textColor
+            (style="@style/MyTextViewStyle" стоит как android:textViewStyle),
+            TextView.<init> вызывает TypedArray.getColorStateList(textColor)
+            через TintTypedArray, который не dereference-ит ?attr/... .
+            Светлая @color/light_default_text_color совпадает со значением базовой
+            DayNightAppTheme; в night — перекрыто в values-night/styles.xml.
+        -->
+        <item name="default_text_color">@color/light_default_text_color</item>
         <item name="second_text_color">?attr/colorOnSurfaceVariant</item>
         <item name="contrast_text_color">?attr/colorOnPrimary</item>
         <item name="drawer_item_text">?attr/colorOnSurfaceVariant</item>
@@ -103,7 +132,23 @@
 
         <!-- Иконки -->
         <item name="icon_base">?attr/colorOnSurfaceVariant</item>
-        <item name="icon_toolbar">?attr/colorOnSurface</item>
+        <!--
+            icon_toolbar: КОНКРЕТНЫЙ @color, а не ?attr/colorOnSurface.
+            ?icon_toolbar читается в ToolbarStyle.Light.titleTextColor /
+            subtitleTextColor / navigationIconTint / colorControlNormal / iconTint
+            и в DayNightAppTheme.AppBarOverlay.colorOnSurface / colorControlNormal /
+            actionMenuTextColor. AppBarLayout / Toolbar / CollapsingToolbarLayout
+            вызывают TypedArray.getColorStateList на этих слотах, который не
+            dereference-ит ?attr/... и кидает UnsupportedOperationException.
+            Светлая @color/light_icon_toolbar совпадает со значением базовой
+            DayNightAppTheme; в night — перекрыто в values-night/styles.xml.
+            Раньше здесь стояло ?attr/colorOnSurface для динамического трекинга
+            палитры обоев, но AppCompat TypedArray.getColorStateList на любом
+            инфлейте Toolbar/CollapsingToolbarLayout/AppBarLayout падает с
+            UnsupportedOperationException — см. commits b8b7b57, 775b344, и
+            текущее index 29 = titleTextColor падение.
+        -->
+        <item name="icon_toolbar">@color/light_icon_toolbar</item>
 
         <!-- Разделители -->
         <item name="divider_line">?attr/colorOutlineVariant</item>

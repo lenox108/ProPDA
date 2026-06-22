@@ -64,7 +64,10 @@
                     android:layout_height="?attr/actionBarSize"
                     android:background="?attr/chrome_plane_background"
                     app:layout_collapseMode="parallax"
-                    app:popupTheme="?attr/popup_overlay">
+                    app:navigationIconTint="@color/toolbar_title_color"
+                    app:popupTheme="?attr/popup_overlay"
+                    app:subtitleTextColor="@color/toolbar_title_color"
+                    app:titleTextColor="@color/toolbar_title_color">
 
                     <LinearLayout
                         android:layout_width="match_parent"
