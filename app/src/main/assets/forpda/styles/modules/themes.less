@@ -1459,6 +1459,25 @@ body {
             -webkit-animation: highlight 1s;
         }
     }
+    // Topic "where I stopped" highlight. JS (template_theme.html) toggles
+    // `.ppda_highlight_post` on the post wrapper; `.ppda_highlight_fading` is
+    // added when the visible window elapses so the ring/background animate out.
+    // Uses an inset box-shadow ring + subtle tint so layout never shifts and the
+    // accent stays visible across light/dark/hybrid.
+    &.ppda_highlight_post {
+        box-shadow: inset 0 0 0 (3/16rem) fade(@surface_accent, 95%),
+            0rem 1/16rem 1/16rem fade(#000, 12%),
+            0rem 0rem 1/16rem fade(#000, 12%);
+        background: mix(@surface_accent, @card_background, 8%);
+        -webkit-transition: box-shadow 0.3s ease, background 0.3s ease;
+        transition: box-shadow 0.3s ease, background 0.3s ease;
+        &.ppda_highlight_fading {
+            box-shadow: inset 0 0 0 0 fade(@surface_accent, 0%),
+                0rem 1/16rem 1/16rem fade(#000, 12%),
+                0rem 0rem 1/16rem fade(#000, 12%);
+            background: @card_background;
+        }
+    }
     &:after {
         content: "";
         display: table;

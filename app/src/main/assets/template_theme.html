@@ -840,7 +840,7 @@
                     catch (e) { try { target.scrollIntoView(); } catch (_) {} }
                 }
                 if (typeof window.PPDA_scheduleHighlightFadeout === "function") {
-                    window.PPDA_scheduleHighlightFadeout(postId, type, ppdaHighlight.generationId);
+                    window.PPDA_scheduleHighlightFadeout(ppdaHighlight.generationId, 2000);
                 }
             }
 
@@ -867,30 +867,40 @@
                 return true;
             };
 
-            window.PPDA_scheduleHighlightFadeout = function (postId, type, generationId) {
+            window.PPDA_scheduleHighlightFadeout = function (generationId, delayMs) {
                 var gen = Number(generationId) || 0;
                 if (gen <= 0) return "rejected";
                 if (ppdaFadeout.scheduledGeneration === gen) return "noop_same_generation";
                 ppdaFadeout.scheduledGeneration = gen;
                 ppdaFadeout.fadedGeneration = 0;
-                var postNodes = document.querySelectorAll(".post_container.ppda_highlight_post");
-                for (var k = 0; k < postNodes.length; k++) {
-                    postNodes[k].classList.add("ppda_highlight_fading");
-                    postNodes[k].__ppdaHighlightDone = false;
-                }
+                var holdMs = Number(delayMs);
+                if (!isFinite(holdMs) || holdMs <= 0) holdMs = 2000;
+                // Phase 1: keep the highlight fully visible for holdMs, THEN start the
+                // CSS fade by adding `ppda_highlight_fading` (the base class stays so the
+                // transition has something to animate from).
                 setTimeout(function () {
                     if (ppdaFadeout.scheduledGeneration !== gen) return;
-                    ppdaFadeout.fadedGeneration = gen;
-                    var fadingNodes = document.querySelectorAll(".post_container.ppda_highlight_fading");
-                    for (var m = 0; m < fadingNodes.length; m++) {
-                        ppdaClearHighlightClasses(fadingNodes[m]);
+                    var fadeNodes = document.querySelectorAll(".post_container.ppda_highlight_post");
+                    for (var k = 0; k < fadeNodes.length; k++) {
+                        fadeNodes[k].classList.add("ppda_highlight_fading");
+                        fadeNodes[k].__ppdaHighlightDone = false;
                     }
-                    if (typeof IThemePresenter !== "undefined" &&
-                        IThemePresenter &&
-                        typeof IThemePresenter.highlightFadeoutCompleted === "function") {
-                        try { IThemePresenter.highlightFadeoutCompleted(gen); } catch (e) {}
-                    }
-                }, 2000);
+                    // Phase 2: after the CSS transition (~300ms) strip both classes and
+                    // notify native that the fadeout finished.
+                    setTimeout(function () {
+                        if (ppdaFadeout.scheduledGeneration !== gen) return;
+                        ppdaFadeout.fadedGeneration = gen;
+                        var fadingNodes = document.querySelectorAll(".post_container.ppda_highlight_fading");
+                        for (var m = 0; m < fadingNodes.length; m++) {
+                            ppdaClearHighlightClasses(fadingNodes[m]);
+                        }
+                        if (typeof IThemePresenter !== "undefined" &&
+                            IThemePresenter &&
+                            typeof IThemePresenter.highlightFadeoutCompleted === "function") {
+                            try { IThemePresenter.highlightFadeoutCompleted(gen); } catch (e) {}
+                        }
+                    }, 350);
+                }, holdMs);
                 return "armed";
             };
         })();
