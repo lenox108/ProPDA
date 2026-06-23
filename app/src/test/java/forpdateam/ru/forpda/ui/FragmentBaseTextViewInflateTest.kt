@@ -38,13 +38,25 @@ import org.robolectric.annotation.Config
  * read `android:textColor` from `?android:attr/textColorPrimary` in the resolved
  * TextAppearance style.
  *
- * Fix: in `MaterialYouSurface` (and `MaterialYouSurface` night), override
- * `android:textColor*` and our `default_text_color` / `second_text_color` /
- * `link_color` to CONCRETE `@color/...` references. This loses dynamic M3
- * tracking of those particular slots (TypedArray.getColorStateList only does
- * 1 level of deref; the M3 dynamic chain has 3 levels), but eliminates the
- * InflateException. The remaining M3 dynamic surfaces (backgrounds, accents,
- * toolbar, cards) still track the wallpaper via M3 dynamic roles.
+ * Fix: in `MaterialYouSurface` (and `MaterialYouSurface` night), ALL custom
+ * slots (those NOT named after a framework Material 3 role) are overridden
+ * to CONCRETE `@color/...` references — not only the textColor trio fixed
+ * in 65c64b8, but also `background_*`, `cards_background`,
+ * `chrome_plane_background`, `contrast_text_color`, `divider_line`,
+ * `drawer_item_text*`, `icon_base`, `icon_toolbar`,
+ * `main_toolbar_accent_surface`, `status_bar_color`, `toolbar_color`. This
+ * eliminates the "hydra" pattern where each partial fix only closes one
+ * attr and the crash moves to the next widget's read.
+ *
+ * Only the two framework Material-3 role slots are KEPT as `?attr/...`:
+ * `android:colorBackground` → `colorSurface`, and `colorOnBackground` →
+ * `colorOnSurface`. The AOSP inflater resolves framework attrs directly,
+ * so those don't go through the broken 2-level TypedArray path.
+ *
+ * Trade-off: the static slots lose dynamic M3 wallpaper tracking. M3
+ * framework roles (`colorPrimary`, `colorSurface`, `colorOnSurface`, …)
+ * still track the wallpaper via the upstream `DynamicColors.Light` overlay
+ * from MaterialYouApplier; the loss only affects our custom chrome slots.
  *
  * The first test below is the canonical regression test: it actually inflates
  * fragment_base.xml against the production theme chain and asserts no
@@ -112,36 +124,43 @@ class FragmentBaseTextViewInflateTest {
 
     /**
      * Sanity check: the canonical Material You regression (applier chains
-     * correctly, icon_toolbar tracks M3 dynamic color) still holds.
-     * This is the existing test in `MaterialYouApplierTest` re-asserted here
-     * to ensure the MaterialYouSurface fix didn't accidentally break the
-     * dynamic-tracking contract for `icon_toolbar` (which is still set to
-     * `?attr/colorOnSurface` in the overlay — only the framework textColor
-     * slots and our own default_text_color / second_text_color / link_color
-     * are made concrete).
+     * correctly) still holds. `icon_toolbar` is now CONCRETE
+     * `@color/light_icon_toolbar` (was `?attr/colorOnSurface` before this
+     * fix — see the hydra-crash MentionsFragment.onViewCreated →
+     * Toolbar.getOverflowIcon → ActionMenuPresenter.OverflowMenuButton
+     * (ImageView).&lt;init&gt; → TypedArray.getColorStateList(0x7f040272)
+     * → UnsupportedOperationException).
+     *
+     * `icon_toolbar` deliberately does NOT track wallpaper anymore — it
+     * became a static @color/... for the same reason default_text_color
+     * became static in 65c64b8: TypedArray.getColorStateList cannot do
+     * a 2-level `?attr/...` dereference. This test guards against any
+     * regression that reintroduces TYPE_ATTRIBUTE for `icon_toolbar`.
      */
     @Test
-    fun `icon_toolbar still tracks M3 colorOnSurface when MY is enabled`() {
+    fun `icon_toolbar is concrete in activity theme when MY is enabled`() {
         writeMaterialYouEnabled(true)
         writeUiPalette("SYSTEM")
 
         val activity = Robolectric.buildActivity(ThemedActivity::class.java).setup().get()
-        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
-        val baseline = ctx.resources.getColor(R.color.light_icon_toolbar, ctx.theme)
 
-        val tv = TypedValue()
-        val resolved = activity.theme.resolveAttribute(
-                R.attr.icon_toolbar, tv, /* resolveRefs = */ true
-        )
-        assertTrue("?icon_toolbar must resolve on the activity theme", resolved)
-        assertNotEquals(
-                "?icon_toolbar must NOT stay as TYPE_ATTRIBUTE",
+        val ta = activity.theme.obtainStyledAttributes(intArrayOf(R.attr.icon_toolbar))
+        try {
+            val tv = TypedValue()
+            assertTrue("?icon_toolbar must resolve", ta.getValue(0, tv))
+            assertNotEquals(
+                "?icon_toolbar must NOT stay as TYPE_ATTRIBUTE " +
+                    "(this is the EXACT prod crash signature: " +
+                    "MentionsFragment.onViewCreated → Toolbar.getOverflowIcon → " +
+                    "ActionMenuPresenter\$OverflowMenuButton (ImageView).<init> → " +
+                    "TypedArray.getColorStateList(0x7f040272) on TYPE_ATTRIBUTE → " +
+                    "UnsupportedOperationException). Got type=${tv.type}, " +
+                    "data=0x${Integer.toHexString(tv.data)}",
                 TypedValue.TYPE_ATTRIBUTE, tv.type
-        )
-        assertNotEquals(
-                "?icon_toolbar must differ from the static @color/light_icon_toolbar — applier likely not wired up (got #${Integer.toHexString(tv.data)} vs baseline #${Integer.toHexString(baseline)})",
-                baseline, tv.data
-        )
+            )
+        } finally {
+            ta.recycle()
+        }
     }
 
     /**
@@ -194,6 +213,17 @@ class FragmentBaseTextViewInflateTest {
         val activity = Robolectric.buildActivity(ThemedActivity::class.java).setup().get()
         val theme = activity.theme
 
+        // Every custom attr that MaterialYouSurface (and HarmonizedError) sets
+        // MUST resolve to a concrete color int (TYPE_INT_COLOR or a 1-level
+        // @color reference) — never TYPE_ATTRIBUTE. Any of these attrs can be
+        // read via TypedArray.getColorStateList by some widget in the framework
+        // (TextView, ImageView, Toolbar, CardView, AppBarLayout,
+        // CollapsingToolbarLayout, ActionMenuPresenter$OverflowMenuButton, …),
+        // and each of them throws UnsupportedOperationException on
+        // TYPE_ATTRIBUTE. The two M3-ROLE slots that are KEPT as ?attr/... by
+        // design (android:colorBackground → colorSurface, colorOnBackground →
+        // colorOnSurface) are framework attrs that the AOSP inflater resolves
+        // directly, so they are excluded.
         val criticalAttrIds = intArrayOf(
                 R.attr.default_text_color,
                 R.attr.second_text_color,
@@ -203,6 +233,20 @@ class FragmentBaseTextViewInflateTest {
                 android.R.attr.textColorSecondary,
                 android.R.attr.textColorLink,
                 android.R.attr.textColorHint,
+                R.attr.background_base,
+                R.attr.background_for_cards,
+                R.attr.background_for_lists,
+                R.attr.cards_background,
+                R.attr.chrome_plane_background,
+                R.attr.contrast_text_color,
+                R.attr.divider_line,
+                R.attr.drawer_item_text,
+                R.attr.drawer_item_text_selected,
+                R.attr.icon_base,
+                R.attr.icon_toolbar,
+                R.attr.main_toolbar_accent_surface,
+                R.attr.status_bar_color,
+                R.attr.toolbar_color,
         )
         val criticalAttrNames = mapOf(
                 R.attr.default_text_color to "default_text_color",
@@ -213,6 +257,20 @@ class FragmentBaseTextViewInflateTest {
                 android.R.attr.textColorSecondary to "android:textColorSecondary",
                 android.R.attr.textColorLink to "android:textColorLink",
                 android.R.attr.textColorHint to "android:textColorHint",
+                R.attr.background_base to "background_base",
+                R.attr.background_for_cards to "background_for_cards",
+                R.attr.background_for_lists to "background_for_lists",
+                R.attr.cards_background to "cards_background",
+                R.attr.chrome_plane_background to "chrome_plane_background",
+                R.attr.contrast_text_color to "contrast_text_color",
+                R.attr.divider_line to "divider_line",
+                R.attr.drawer_item_text to "drawer_item_text",
+                R.attr.drawer_item_text_selected to "drawer_item_text_selected",
+                R.attr.icon_base to "icon_base",
+                R.attr.icon_toolbar to "icon_toolbar",
+                R.attr.main_toolbar_accent_surface to "main_toolbar_accent_surface",
+                R.attr.status_bar_color to "status_bar_color",
+                R.attr.toolbar_color to "toolbar_color",
         )
 
         val unresolved = mutableListOf<String>()
@@ -227,16 +285,15 @@ class FragmentBaseTextViewInflateTest {
                                     "TYPE_ATTRIBUTE survived into the runtime theme " +
                                     "(data=0x${Integer.toHexString(tv.data)}); " +
                                     "TypedArray.getColorStateList will throw " +
-                                    "UnsupportedOperationException at fragment_base.xml:118 " +
-                                    "(toolbar_title) and at any M3 widget that reads " +
-                                    "android:textColor from a TextAppearance style. " +
-                                    "This is the EXACT prod crash signature " +
-                                    "(d=0x7f040195 for default_text_color). " +
+                                    "UnsupportedOperationException. Each of these custom " +
+                                    "attrs is read by some framework widget via " +
+                                    "getColorStateList (TextView, ImageView, Toolbar, " +
+                                    "CardView, AppBarLayout, CollapsingToolbarLayout, " +
+                                    "ActionMenuPresenter\$OverflowMenuButton, …) and ALL " +
+                                    "of them crash on TYPE_ATTRIBUTE. " +
                                     "Likely cause: MaterialYouSurface has a duplicate " +
-                                    "?attr/colorOnSurface* entry for this slot — " +
-                                    "aapt2 records both, and the platform applies them in " +
-                                    "source order, so the later entry (which can be a " +
-                                    "?attr/... reference) wins in the runtime theme."
+                                    "?attr/... entry for this slot — aapt2 records both, " +
+                                    "and the platform applies them in source order."
                     )
                 }
             }
@@ -253,21 +310,46 @@ class FragmentBaseTextViewInflateTest {
     /**
      * Second-line guard: inspects the SOURCE XML of
      * `ThemeOverlay.ForPDA.MaterialYouSurface` (both day and night) to ensure
-     * NO slot is defined as a `?attr/...` reference where the slot is one of
-     * the textColor slots that the prod crash touches.
+     * NO custom slot is defined as a `?attr/...` reference. The set below is
+     * the COMPLETE list of custom (non-M3-role) attrs set by
+     * MaterialYouSurface — every one of them is read via
+     * `TypedArray.getColorStateList` by some framework widget (TextView,
+     * ImageView, Toolbar, CardView, AppBarLayout, CollapsingToolbarLayout,
+     * ActionMenuPresenter.OverflowMenuButton, …), so each one MUST be a
+     * concrete `@color/...`. M3-role attrs (`colorPrimary`, `colorOnSurface`,
+     * `colorSurface`, `android:colorBackground`, `colorOnBackground`, …)
+     * are deliberately OUT of this list — the AOSP inflater resolves those
+     * directly via the framework.
      *
      * This is a SOURCE-LEVEL assertion (it walks the on-disk XML, not the
-     * compiled resources.arsc), and runs as a `@Test` so the build fails
-     * with a precise error if anyone reintroduces a `?attr/colorOnSurface`
-     * entry for one of the textColor slots — the exact bug that 4a26ff1
-     * tried to fix but shipped with a duplicate `?attr/colorOnSurface`
-     * entry that the source XML still contained. The `obtainStyledAttributes`
-     * test above catches the bug at runtime, this test catches it at the
-     * source so the regression cannot be reintroduced.
+     * compiled resources.arsc) so the build fails fast if anyone
+     * reintroduces a `?attr/colorOnSurface` (or similar) entry for any of
+     * these slots — the EXACT hydra bug pattern that recurs on different
+     * attrs after each partial fix (see 7f1de68 → 4a26ff1 → 65c64b8 →
+     * this commit for icon_toolbar/0x7f040272 on
+     * ActionMenuPresenter.OverflowMenuButton).
      */
     @Test
     fun `MaterialYouSurface source XML has no broken textColor slot references`() {
-        val forbidden = setOf("default_text_color", "second_text_color", "link_color")
+        val forbidden = setOf(
+            "default_text_color",
+            "second_text_color",
+            "link_color",
+            "background_base",
+            "background_for_cards",
+            "background_for_lists",
+            "cards_background",
+            "chrome_plane_background",
+            "contrast_text_color",
+            "divider_line",
+            "drawer_item_text",
+            "drawer_item_text_selected",
+            "icon_base",
+            "icon_toolbar",
+            "main_toolbar_accent_surface",
+            "status_bar_color",
+            "toolbar_color",
+        )
         // The test JVM's CWD is `app/` when running under gradle :app:test*, so
         // we need to look up the project root via the user.dir system property
         // (which is set by the JVM launcher to the project root, NOT the
@@ -301,12 +383,12 @@ class FragmentBaseTextViewInflateTest {
                 val match = pattern.find(block)
                 if (match != null) {
                     val matchedText = match.value.replace("\n", " ").replace("\\s+".toRegex(), " ")
-                    badEntries.add("$relPath: $styleName has '$matchedText' — textColor slots must be CONCRETE @color/... (not ?attr/colorOnSurface*), otherwise TypedArray.getColorStateList will throw UnsupportedOperationException at fragment_base.xml:118 with d=0x7f040195")
+                    badEntries.add("$relPath: $styleName has '$matchedText' — custom slots must be CONCRETE @color/... (not ?attr/...). TypedArray.getColorStateList cannot do a 2-level ?attr deref and throws UnsupportedOperationException. Each of these slots is read by some framework widget (TextView, ImageView, Toolbar, CardView, AppBarLayout, CollapsingToolbarLayout, ActionMenuPresenter\$OverflowMenuButton, …)")
                 }
             }
         }
         assertTrue(
-                "MaterialYouSurface must not have any textColor slot defined as a ?attr/... reference: " +
+                "MaterialYouSurface must not have any custom slot defined as a ?attr/... reference: " +
                         badEntries.joinToString("; "),
                 badEntries.isEmpty()
         )
