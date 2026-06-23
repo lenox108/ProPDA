@@ -145,6 +145,21 @@ class NotificationsService : Service() {
             launch {
                 eventsRepository.observeCancel().collect { cancelNotification(it) }
             }
+            launch {
+                // При process_stop WS закрывается в EventsRepository, но FGS-уведомление
+                // продолжает висеть в шторке. Детачим foreground (без REMOVE), чтобы
+                // снять ограничения background-launch'ей и не держать CPU, оставляя
+                // сервис живым до возврата приложения в foreground.
+                eventsRepository.observeForegroundRealtimeChanges().collect { change ->
+                    if (change.enabled) {
+                        if (!foregroundPromoted) {
+                            promoteToForegroundIfNeeded()
+                        }
+                    } else if (change.reason.contains("process_stop")) {
+                        detachForegroundIfPromoted(change.reason)
+                    }
+                }
+            }
         }
     }
 
@@ -188,7 +203,19 @@ class NotificationsService : Service() {
         return START_NOT_STICKY
     }
 
-    private var foregroundPromoted = false
+    internal var foregroundPromoted = false
+
+    private fun detachForegroundIfPromoted(reason: String) {
+        if (!foregroundPromoted) return
+        BatteryDebugLogger.logState("NotificationsService", "foregroundDetach", "reason=$reason")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_DETACH)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(false)
+        }
+        foregroundPromoted = false
+    }
 
     private fun promoteToForegroundIfNeeded() {
         if (foregroundPromoted) return
