@@ -100,7 +100,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         if (granted) {
             Log.i(NOTIFICATIONS_LOG_TAG, "POST_NOTIFICATIONS granted")
             NotificationsService.createEventChannels(this)
-            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) && notificationPreferencesHolder.getMainEnabled()) {
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) &&
+                    notificationPreferencesHolder.wantsPushNotifications() && authHolder.get().isAuth()) {
                 NotificationsService.startAndCheckNoBind(this)
             }
         } else {
@@ -335,10 +336,10 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         // UI поток: стартуем сервис, а bind пусть делает сам сервис при необходимости.
         // Это же снижает риск ANR на некоторых устройствах при старте/возврате в приложение.
         // Проверяем, включены ли уведомления перед запуском сервиса
-        if (notificationPreferencesHolder.getMainEnabled()) {
+        if (notificationPreferencesHolder.wantsPushNotifications() && authHolder.get().isAuth()) {
             NotificationsService.startAndCheckNoBind(this)
         } else {
-            Timber.d("MainActivity.onStart: notifications disabled, skipping service start")
+            Timber.d("MainActivity.onStart: notifications disabled or no push families, skipping service start")
         }
         BatteryDebugLogger.logState("MainActivity", "start")
     }
