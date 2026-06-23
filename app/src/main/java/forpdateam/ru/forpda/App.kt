@@ -3,10 +3,7 @@ package forpdateam.ru.forpda
 import android.Manifest
 import android.app.Activity
 import android.app.Application
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -17,7 +14,6 @@ import android.graphics.drawable.VectorDrawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
-import android.os.PowerManager
 import android.os.StrictMode
 import android.util.DisplayMetrics
 import android.util.TypedValue
@@ -25,10 +21,8 @@ import android.webkit.WebSettings
 import androidx.annotation.AttrRes
 import androidx.annotation.ColorInt
 import androidx.annotation.DrawableRes
-import androidx.annotation.RequiresApi
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.app.ActivityCompat
-import androidx.core.content.getSystemService
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -124,7 +118,6 @@ class App : Application(), androidx.work.Configuration.Provider {
     val networkForbidden: StateFlow<Boolean> = _networkForbidden.asStateFlow()
 
     private var networkConnectivityTracker: NetworkConnectivityTracker? = null
-    private var dozeReceiver: BroadcastReceiver? = null
     private val permissionCallbacks = mutableListOf<Runnable>()
     @Inject @AppScope lateinit var appScope: CoroutineScope
     private val appLifecycleObserver = AppLifecycleObserver()
@@ -168,7 +161,6 @@ class App : Application(), androidx.work.Configuration.Provider {
         setupVersionHistory()
         setupCoil()
         NotificationsService.createEventChannels(this)
-        setupDozeReceiver()
         setupNetworkTracking()
         setupBackgroundEventsCheck()
         setupAppUpdateCheck()
@@ -358,36 +350,6 @@ class App : Application(), androidx.work.Configuration.Provider {
         templateManager.setStaticStrings(templateStringCache)
     }
     
-    private fun setupDozeReceiver() {
-        if (dozeReceiver != null) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val receiver = object : BroadcastReceiver() {
-                @RequiresApi(Build.VERSION_CODES.M)
-                override fun onReceive(context: Context?, intent: Intent?) {
-                    Timber.d("DOZE ON RECEIVE $intent")
-
-                    val pm = context?.getSystemService<PowerManager>() ?: return
-
-                    if (pm.isDeviceIdleMode) {
-                        Timber.d("DOZE MODE ENABLYA")
-                    } else {
-                        Timber.d("DOZE MODE DISABLYA")
-                        BatteryDebugLogger.logState("App", "deviceIdleExit", "periodic worker handles background checks")
-                    }
-                }
-            }
-
-            val filter = IntentFilter(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                registerReceiver(receiver, filter)
-            }
-            dozeReceiver = receiver
-        }
-    }
-    
-    
     private fun setupNetworkTracking() {
         networkConnectivityTracker?.stop()
         networkConnectivityTracker = NetworkConnectivityTracker(
@@ -535,11 +497,6 @@ class App : Application(), androidx.work.Configuration.Provider {
     private fun cleanupApplicationResources() {
         networkConnectivityTracker?.stop()
         networkConnectivityTracker = null
-        dozeReceiver?.let { receiver ->
-            runCatching { unregisterReceiver(receiver) }
-                .onFailure { Timber.w(it, "Doze receiver unregister failed") }
-        }
-        dozeReceiver = null
         ProcessLifecycleOwner.get().lifecycle.removeObserver(appLifecycleObserver)
         // Note: appScope is the Hilt-provided @AppScope CoroutineScope; we do not cancel it here
         // because other components (repositories, use-cases) share the same process-wide scope.
