@@ -26,7 +26,9 @@ internal object FavoriteReadStateMerge {
             inspectorUnread: Boolean,
             inspectorPresent: Boolean,
             hasNewerContentThanCache: Boolean = false,
-            networkIsFreshRefresh: Boolean = false
+            networkIsFreshRefresh: Boolean = false,
+            inspectorTimeStampSeconds: Long = 0L,
+            localReadTimeSeconds: Long = 0L
     ): Result {
         val htmlPlusCount = when {
             networkUnreadCount > 0 -> networkUnreadCount
@@ -48,6 +50,20 @@ internal object FavoriteReadStateMerge {
                         !htmlSaysUnread &&
                         !hasNewerContentThanCache
                 ) {
+                    // Log 23_06: 1103268 had cached READ (user opened the topic earlier) but the
+                    // inspector reported fresh unread activity (timeStamp > local read moment).
+                    // The local read marker is now stale; trust the inspector and flip to UNREAD.
+                    if (cached.localReadPostId > 0 &&
+                            inspectorTimeStampSeconds > 0L &&
+                            localReadTimeSeconds > 0L &&
+                            inspectorTimeStampSeconds > localReadTimeSeconds
+                    ) {
+                        return Result(
+                                FavoriteReadState.UNREAD,
+                                1,
+                                "inspector_unread_fresh_over_local_read"
+                        )
+                    }
                     val reason = if (cached.localReadPostId > 0) {
                         "cached_read_over_inspector"
                     } else {
