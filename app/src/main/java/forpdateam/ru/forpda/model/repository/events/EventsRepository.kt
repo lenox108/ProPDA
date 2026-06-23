@@ -102,6 +102,16 @@ class EventsRepository(
             onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
+    data class ForegroundRealtimeChange(val enabled: Boolean, val reason: String)
+
+    private val foregroundRealtimeFlow = MutableSharedFlow<ForegroundRealtimeChange>(
+            extraBufferCapacity = 16,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    fun observeForegroundRealtimeChanges(): Flow<ForegroundRealtimeChange> =
+            foregroundRealtimeFlow.asSharedFlow()
+
     private val controllerListener: WebSocketController.Listener = object : WebSocketController.Listener() {
         override fun onConnected() {
             if (BuildConfig.DEBUG) Timber.d("WSContr onConnected ${webSocketController.getCurrentId()},  ${webSocketController.isConnected()}")
@@ -215,6 +225,7 @@ class EventsRepository(
         }
         foregroundRealtimeEnabled = enabled
         BatteryDebugLogger.logState("EventsRepository", if (enabled) "foreground" else "background", "reason=$reason")
+        foregroundRealtimeFlow.tryEmit(ForegroundRealtimeChange(enabled, reason))
         if (enabled) {
             start(checkEvents = true, force = true)
         } else {
