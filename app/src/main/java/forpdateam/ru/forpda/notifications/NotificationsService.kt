@@ -662,6 +662,10 @@ class NotificationsService : Service() {
             } catch (ignore: Exception) {
             }
         }
+
+        @JvmStatic
+        fun shouldStartService(wantsPushNotifications: Boolean, isAuth: Boolean): Boolean =
+                wantsPushNotifications && isAuth
     }
 }
 
