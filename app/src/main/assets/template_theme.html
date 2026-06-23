@@ -831,10 +831,33 @@
             }
 
             function ppdaApplyHighlightToNode(target, postId, type) {
-                if (!target) return;
+                if (!target) {
+                    try { console.log("PPDA_HL ppdaApplyHighlightToNode: target=null postId=" + postId + " type=" + type); } catch (_) {}
+                    return;
+                }
+                var classBefore = target.className;
                 target.__ppdaHighlightDone = false;
                 target.classList.add("ppda_highlight_post");
                 target.classList.remove("ppda_highlight_fading");
+                // Diagnostic: proves on-device whether the class actually lands on
+                // the post wrapper AND whether the CSS rule resolves to a visible
+                // box-shadow/outline. Surfaces in WebConsole (CustomWebChromeClient).
+                try {
+                    var cs = window.getComputedStyle ? window.getComputedStyle(target) : null;
+                    console.log(
+                        "PPDA_HL applied postId=" + postId +
+                        " type=" + type +
+                        " tag=" + target.tagName +
+                        " dataPostId=" + target.getAttribute("data-post-id") +
+                        " classBefore=[" + classBefore + "]" +
+                        " classAfter=[" + target.className + "]" +
+                        " boxShadow=[" + (cs ? cs.boxShadow : "n/a") + "]" +
+                        " outline=[" + (cs ? (cs.outlineWidth + " " + cs.outlineStyle + " " + cs.outlineColor) : "n/a") + "]" +
+                        " bg=[" + (cs ? cs.backgroundColor : "n/a") + "]"
+                    );
+                } catch (e) {
+                    try { console.log("PPDA_HL diag_error=" + e); } catch (_) {}
+                }
                 if (!ppdaIsInViewport(target)) {
                     try { target.scrollIntoView({ block: "center", behavior: "smooth" }); }
                     catch (e) { try { target.scrollIntoView(); } catch (_) {} }
@@ -845,19 +868,29 @@
             }
 
             window.PPDA_applyHighlight = function (postId, type, generationId) {
+                try { console.log("PPDA_HL PPDA_applyHighlight called postId=" + postId + " type=" + type + " gen=" + generationId); } catch (_) {}
                 var callbackGen = Number(generationId) || 0;
-                if (callbackGen < ppdaHighlight.generationId) return false;
+                if (callbackGen < ppdaHighlight.generationId) {
+                    try { console.log("PPDA_HL reject stale gen=" + callbackGen + " current=" + ppdaHighlight.generationId); } catch (_) {}
+                    return false;
+                }
                 ppdaHighlight.generationId = callbackGen;
                 ppdaHighlight.postId = Number(postId) || 0;
                 ppdaHighlight.type = String(type || "none");
-                if (ppdaHighlight.postId === 0 || ppdaHighlight.type === "none") return false;
+                if (ppdaHighlight.postId === 0 || ppdaHighlight.type === "none") {
+                    try { console.log("PPDA_HL reject empty postId/type postId=" + ppdaHighlight.postId + " type=" + ppdaHighlight.type); } catch (_) {}
+                    return false;
+                }
                 var allPosts = document.querySelectorAll(".post_container[data-post-id]");
                 var pagePostIds = {};
                 for (var i = 0; i < allPosts.length; i++) {
                     var pid = parseInt(allPosts[i].getAttribute("data-post-id") || "0", 10);
                     if (pid > 0) pagePostIds[pid] = true;
                 }
-                if (!pagePostIds[ppdaHighlight.postId]) return false;
+                if (!pagePostIds[ppdaHighlight.postId]) {
+                    try { console.log("PPDA_HL reject post_not_on_page postId=" + ppdaHighlight.postId + " domCount=" + allPosts.length); } catch (_) {}
+                    return false;
+                }
                 var target = null;
                 for (var j = 0; j < allPosts.length; j++) {
                     var matchPid = parseInt(allPosts[j].getAttribute("data-post-id") || "0", 10);

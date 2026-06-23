@@ -1464,18 +1464,25 @@ body {
     // added when the visible window elapses so the ring/background animate out.
     // Uses an inset box-shadow ring + subtle tint so layout never shifts and the
     // accent stays visible across light/dark/hybrid.
+    // `!important` + outline are required because several theme override modes
+    // (sepia/minimal/amoled in TemplateCssComposer) declare
+    // `.post_container { box-shadow: ... !important }`, which would otherwise win
+    // the cascade regardless of selector specificity and hide the highlight.
     &.ppda_highlight_post {
         box-shadow: inset 0 0 0 (3/16rem) fade(@surface_accent, 95%),
             0rem 1/16rem 1/16rem fade(#000, 12%),
-            0rem 0rem 1/16rem fade(#000, 12%);
-        background: mix(@surface_accent, @card_background, 8%);
-        -webkit-transition: box-shadow 0.3s ease, background 0.3s ease;
-        transition: box-shadow 0.3s ease, background 0.3s ease;
+            0rem 0rem 1/16rem fade(#000, 12%) !important;
+        outline: (3/16rem) solid fade(@surface_accent, 95%) !important;
+        outline-offset: (-3/16rem) !important;
+        background: mix(@surface_accent, @card_background, 8%) !important;
+        -webkit-transition: box-shadow 0.3s ease, outline-color 0.3s ease, background 0.3s ease;
+        transition: box-shadow 0.3s ease, outline-color 0.3s ease, background 0.3s ease;
         &.ppda_highlight_fading {
             box-shadow: inset 0 0 0 0 fade(@surface_accent, 0%),
                 0rem 1/16rem 1/16rem fade(#000, 12%),
-                0rem 0rem 1/16rem fade(#000, 12%);
-            background: @card_background;
+                0rem 0rem 1/16rem fade(#000, 12%) !important;
+            outline-color: fade(@surface_accent, 0%) !important;
+            background: @card_background !important;
         }
     }
     &:after {

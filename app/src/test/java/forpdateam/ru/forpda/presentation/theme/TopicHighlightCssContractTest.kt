@@ -90,5 +90,19 @@ class TopicHighlightCssContractTest {
                 "$cssRelativePath: $selector must apply a visible box-shadow/background: $ruleBody",
                 ruleBody.contains("box-shadow") || ruleBody.contains("background"),
         )
+        // Several theme override modes (sepia/minimal/amoled, see
+        // TemplateCssComposer) declare `.post_container { box-shadow: ... !important }`.
+        // Without `!important` on the highlight, that override wins the cascade
+        // regardless of specificity and the highlight is invisible. Pin it.
+        assertTrue(
+                "$cssRelativePath: $selector must use !important to beat theme overrides: $ruleBody",
+                ruleBody.contains("!important"),
+        )
+        // Outline is a second visual channel that the override CSS does not reset
+        // on `.post_container`, so it survives even an unforeseen box-shadow reset.
+        assertTrue(
+                "$cssRelativePath: $selector must also apply an outline fallback: $ruleBody",
+                ruleBody.contains("outline"),
+        )
     }
 }
