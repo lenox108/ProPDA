@@ -525,17 +525,20 @@
         <!-- Статус-бар -->
         <item name="status_bar_color">?attr/colorSurface</item>
 
-        <!-- Типографика -->
-        <!--
-            default_text_color: ?attr/colorOnSurface.
-            На API >= 31 dynamic M3 on-surface. На API < 31 в DayNightAppTheme
-            определён КОНКРЕТНЫЙ @color/light_default_text_color /
-            @color/dark_default_text_color, чтобы TextView.<init> получал
-            TYPE_INT_COLOR. Раньше здесь стоял статический @color/... — это
-            7f1de68 regression.
+        <!-- Типографика
+             NB: default_text_color / second_text_color / link_color задаются
+             НИЖЕ (в блоке «framework android:textColor* и наши default_text_color /
+             second_text_color / link_color — обязательно должны закрываться
+             на КОНКРЕТНЫЙ color-state-list (@color/...)») как @color/...,
+             а не как ?attr/colorOnSurface* — иначе TypedArray.getColorStateList
+             в TextView.<init> кидает UnsupportedOperationException на
+             TYPE_ATTRIBUTE (см. KDoc ниже).
+             Не дублируйте default_text_color / second_text_color / link_color
+             здесь, иначе aapt2 запишет оба варианта в resources.arsc, и в
+             runtime theme второй из них будет перекрыт, и резолв пойдёт в
+             ?attr/colorOnSurface → TYPE_ATTRIBUTE → crash. Эмпирически
+             подтверждено FragmentBaseTextViewInflateTest.
         -->
-        <item name="default_text_color">?attr/colorOnSurface</item>
-        <item name="second_text_color">?attr/colorOnSurfaceVariant</item>
         <item name="contrast_text_color">?attr/colorOnPrimary</item>
         <item name="drawer_item_text">?attr/colorOnSurfaceVariant</item>
         <item name="drawer_item_text_selected">?attr/colorPrimary</item>
