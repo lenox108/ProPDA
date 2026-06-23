@@ -1462,26 +1462,30 @@ body {
     // Topic "where I stopped" highlight. JS (template_theme.html) toggles
     // `.ppda_highlight_post` on the post wrapper; `.ppda_highlight_fading` is
     // added when the visible window elapses so the ring/background animate out.
-    // Uses an inset box-shadow ring + subtle tint so layout never shifts and the
-    // accent stays visible across light/dark/hybrid.
-    // `!important` + outline are required because several theme override modes
-    // (sepia/minimal/amoled in TemplateCssComposer) declare
+    //
+    // Inset box-shadow only (no outline): the post wrapper has `overflow:hidden`
+    // and a `border-radius`, so a rectangular outline gets clipped at the rounded
+    // corners and at horizontal edges when the post spans the full viewport.
+    // Inset shadow is painted inside the border-radius and is never clipped.
+    //
+    // Accent is resolved via `var(--ppda-accent, var(--surface-accent, fallback))`:
+    //   - `--ppda-accent` is set in TemplateCssComposer (per night/sepia mode);
+    //   - `--surface-accent` is set in the sepia/minimal/amoled override modes;
+    //   - the trailing fallback covers the normal light/dark HYBRID path.
+    // `!important` is required because several override modes declare
     // `.post_container { box-shadow: ... !important }`, which would otherwise win
-    // the cascade regardless of selector specificity and hide the highlight.
+    // the cascade regardless of selector specificity.
     &.ppda_highlight_post {
-        box-shadow: inset 0 0 0 (3/16rem) fade(@surface_accent, 95%),
+        box-shadow: inset 0 0 0 (3.2/16rem) var(--ppda-accent, var(--surface-accent, @surface_accent)),
             0rem 1/16rem 1/16rem fade(#000, 12%),
             0rem 0rem 1/16rem fade(#000, 12%) !important;
-        outline: (3/16rem) solid fade(@surface_accent, 95%) !important;
-        outline-offset: (-3/16rem) !important;
-        background: mix(@surface_accent, @card_background, 8%) !important;
-        -webkit-transition: box-shadow 0.3s ease, outline-color 0.3s ease, background 0.3s ease;
-        transition: box-shadow 0.3s ease, outline-color 0.3s ease, background 0.3s ease;
+        background: color-mix(in srgb, var(--ppda-accent, var(--surface-accent, @surface_accent)) 12%, @card_background) !important;
+        -webkit-transition: box-shadow 0.3s ease, background 0.3s ease;
+        transition: box-shadow 0.3s ease, background 0.3s ease;
         &.ppda_highlight_fading {
-            box-shadow: inset 0 0 0 0 fade(@surface_accent, 0%),
+            box-shadow: inset 0 0 0 0 transparent,
                 0rem 1/16rem 1/16rem fade(#000, 12%),
                 0rem 0rem 1/16rem fade(#000, 12%) !important;
-            outline-color: fade(@surface_accent, 0%) !important;
             background: @card_background !important;
         }
     }

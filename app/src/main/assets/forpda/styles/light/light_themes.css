@@ -1566,19 +1566,25 @@ body.hide_avatar .post-block.quote > .block-title .avatar .image {
 }
 body#topic .post_container.ppda_highlight_post,
 .post_container.ppda_highlight_post {
-  -webkit-box-shadow: inset 0 0 0 0.1875rem rgba(33, 119, 175, 0.95), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
-  box-shadow: inset 0 0 0 0.1875rem rgba(33, 119, 175, 0.95), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
-  outline: 0.1875rem solid rgba(33, 119, 175, 0.95) !important;
-  outline-offset: -0.1875rem !important;
-  background: #eef5fb !important;
-  -webkit-transition: box-shadow 0.3s ease, outline-color 0.3s ease, background 0.3s ease;
-  transition: box-shadow 0.3s ease, outline-color 0.3s ease, background 0.3s ease;
+  /* Inset box-shadow only (no outline): the post wrapper has `overflow:hidden`
+     and a `border-radius`, so a rectangular outline gets clipped at the rounded
+     corners and at horizontal edges when the post spans the full viewport.
+     Inset shadow is painted inside the border-radius and is never clipped by
+     `overflow:hidden`. Spread 0.2rem (≈ the old outline thickness) keeps the
+     ring visually identical. */
+  -webkit-box-shadow: inset 0 0 0 0.2rem var(--ppda-accent, var(--surface-accent, #2177af)), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
+  box-shadow: inset 0 0 0 0.2rem var(--ppda-accent, var(--surface-accent, #2177af)), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
+  /* `color-mix` guarantees a readable tint against the post card regardless of
+     the chosen accent (very dark or very light). 88% post background + 12%
+     accent is a conservative tint that never washes the post out. */
+  background: color-mix(in srgb, var(--ppda-accent, var(--surface-accent, #2177af)) 12%, #ffffff) !important;
+  -webkit-transition: box-shadow 0.3s ease, background 0.3s ease;
+  transition: box-shadow 0.3s ease, background 0.3s ease;
 }
 body#topic .post_container.ppda_highlight_post.ppda_highlight_fading,
 .post_container.ppda_highlight_post.ppda_highlight_fading {
-  -webkit-box-shadow: inset 0 0 0 0rem rgba(33, 119, 175, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
-  box-shadow: inset 0 0 0 0rem rgba(33, 119, 175, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
-  outline-color: rgba(33, 119, 175, 0) !important;
+  -webkit-box-shadow: inset 0 0 0 0rem rgba(0, 0, 0, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
+  box-shadow: inset 0 0 0 0rem rgba(0, 0, 0, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
   background: #ffffff !important;
 }
 .post_container:after {
