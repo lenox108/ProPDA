@@ -71,77 +71,36 @@ object NotesMigrations {
     }
 
     /**
-     * Adds the [forpdateam.ru.forpda.entity.db.offline.OfflineItemRoom]
-     * table for §5.1 (offline reading) Phase 1 — data layer only.
-     * HTML and images stay on the filesystem; this table only holds
-     * metadata + a serialized model + the path to the HTML file.
+     * Drops the `offline_items` table that the now-removed offline-reading
+     * feature used to keep in the database. Devices that never had the
+     * offline feature (and therefore never created the table) are no-ops
+     * thanks to `IF EXISTS`. Devices that reached v7+ during the offline
+     * era come back to the v6 schema.
      */
-    val MIGRATION_6_7 = object : Migration(6, 7) {
+    val MIGRATION_7_6 = object : Migration(7, 6) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS offline_items (
-                        id TEXT NOT NULL PRIMARY KEY,
-                        type TEXT NOT NULL,
-                        sourceUrl TEXT NOT NULL,
-                        title TEXT NOT NULL,
-                        savedAtMs INTEGER NOT NULL,
-                        sizeBytes INTEGER NOT NULL,
-                        status TEXT NOT NULL,
-                        htmlPath TEXT NOT NULL,
-                        modelJson TEXT NOT NULL
-                    )
-                    """.trimIndent()
-            )
-            db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_offline_items_savedAtMs ON offline_items (savedAtMs DESC)"
-            )
+            db.execSQL("DROP TABLE IF EXISTS offline_items")
         }
     }
 
     /**
-     * No-op bridge migration.
-     *
-     * Version 8 was briefly published in internal/test builds whose schema was
-     * identical to version 7. Devices that reached version 7 already have every
-     * table, so upgrading 7 -> 8 requires no schema change. This migration exists
-     * only so Room has a valid upward path and never attempts an (unsupported)
-     * 8 -> 7 downgrade, which crashed on startup
-     * ("A migration from 8 to 7 was required but not found").
+     * Schema on v8 was identical to v7 (no-op bridge). The `offline_items`
+     * table is still present on devices that reached v8; drop it the same
+     * way as the v7 -> v6 path.
      */
-    val MIGRATION_7_8 = object : Migration(7, 8) {
+    val MIGRATION_8_6 = object : Migration(8, 6) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            // Schema identical to v7; nothing to do.
+            db.execSQL("DROP TABLE IF EXISTS offline_items")
         }
     }
 
     /**
-     * Repairs devices stuck on the stale version 8 whose schema actually
-     * predates the offline_items table (it matched the v6 schema). For those
-     * devices this creates the missing table; for devices that arrived here via
-     * the regular 6 -> 7 -> 8 path the table already exists, so the statements
-     * are guarded with IF NOT EXISTS and become no-ops.
+     * Drops the `offline_items` table on devices that reached v9 (the last
+     * version that shipped with the offline-reading feature).
      */
-    val MIGRATION_8_9 = object : Migration(8, 9) {
+    val MIGRATION_9_6 = object : Migration(9, 6) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS offline_items (
-                        id TEXT NOT NULL PRIMARY KEY,
-                        type TEXT NOT NULL,
-                        sourceUrl TEXT NOT NULL,
-                        title TEXT NOT NULL,
-                        savedAtMs INTEGER NOT NULL,
-                        sizeBytes INTEGER NOT NULL,
-                        status TEXT NOT NULL,
-                        htmlPath TEXT NOT NULL,
-                        modelJson TEXT NOT NULL
-                    )
-                    """.trimIndent()
-            )
-            db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_offline_items_savedAtMs ON offline_items (savedAtMs DESC)"
-            )
+            db.execSQL("DROP TABLE IF EXISTS offline_items")
         }
     }
 }

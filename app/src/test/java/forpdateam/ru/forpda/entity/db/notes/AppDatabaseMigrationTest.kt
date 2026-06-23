@@ -25,14 +25,14 @@ class AppDatabaseMigrationTest {
                         NotesMigrations.MIGRATION_3_4,
                         NotesMigrations.MIGRATION_4_5,
                         NotesMigrations.MIGRATION_5_6,
-                        NotesMigrations.MIGRATION_6_7,
-                        NotesMigrations.MIGRATION_7_8,
-                        NotesMigrations.MIGRATION_8_9
+                        NotesMigrations.MIGRATION_7_6,
+                        NotesMigrations.MIGRATION_8_6,
+                        NotesMigrations.MIGRATION_9_6
                 )
                 .allowMainThreadQueries()
                 .build()
         db.openHelper.writableDatabase
-        assertEquals(9, db.openHelper.writableDatabase.version)
+        assertEquals(6, db.openHelper.writableDatabase.version)
         db.close()
     }
 
