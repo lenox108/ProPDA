@@ -494,36 +494,36 @@
         ещё в commits 775b344 / b8b7b57, фикс полностью убирает его.
     -->
     <style name="ThemeOverlay.ForPDA.MaterialYouSurface" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
-        <!-- Базовые M3-роли — динамические, читаются напрямую из layout XML,
-             layout inflater сам делает второй уровень dereference. -->
+        <!--
+            Базовые M3-роли — динамические, читаются напрямую из layout XML,
+            layout inflater сам делает второй уровень dereference. Оставляем
+            ?attr/... только для фреймворк-M3-ролей (colorSurface,
+            colorOnSurface) — это контракт Material.
+        -->
         <item name="android:colorBackground">?attr/colorSurface</item>
         <item name="colorOnBackground">?attr/colorOnSurface</item>
 
-        <!-- Фоны -->
-        <item name="background_base">?attr/colorSurface</item>
-        <item name="background_for_cards">?attr/colorSurfaceContainerLow</item>
-        <item name="background_for_lists">?attr/colorSurfaceContainerLowest</item>
         <!--
-            cards_background: ?attr/colorSurfaceContainer.
-            На API >= 31 с активным Material You Surface это dynamic M3 container
-            surface. На API < 31 этот оверлей не применяется (см.
-            MaterialYouApplier.applyIfEnabled — early-return на sdk<S), и в
-            DayNightAppTheme определён КОНКРЕТНЫЙ @color/light_card_background
-            / @color/dark_card_background, чтобы CardView.<init> (который читает
-            ?attr/cards_background через TypedArray.getColorStateList и НЕ
-            делает 2-го уровня deref) получал TYPE_INT_COLOR. Раньше здесь
-            стоял статический @color/... — это 7f1de68 regression, которая
-            отключала dynamic M3 tracking.
+            Фоны — ВСЕ custom-слоты @color/... для day/night. Custom-attr
+            (background_base, cards_background, ...) читаются через
+            TypedArray.getColorStateList, который НЕ делает 2-го deref для
+            TYPE_ATTRIBUTE. См. 65c64b8 / 7f1de68 и стек MentionsFragment
+            → Toolbar.getOverflowIcon → OverflowMenuButton (ImageView).<init>
+            (TypedArray.getColorStateList(0x7f040272 = icon_toolbar) →
+            UnsupportedOperationException).
         -->
-        <item name="cards_background">?attr/colorSurfaceContainer</item>
-        <item name="chrome_plane_background">?attr/colorSurfaceContainer</item>
+        <item name="background_base">@color/dark_background_base</item>
+        <item name="background_for_cards">@color/dark_background_for_cards</item>
+        <item name="background_for_lists">@color/dark_background_for_lists</item>
+        <item name="cards_background">@color/dark_card_background</item>
+        <item name="chrome_plane_background">@color/dark_card_background</item>
 
         <!-- Тулбар / верхняя плашка -->
-        <item name="toolbar_color">?attr/colorSurfaceContainer</item>
-        <item name="main_toolbar_accent_surface">?attr/colorSurfaceContainerHigh</item>
+        <item name="toolbar_color">@color/dark_card_background</item>
+        <item name="main_toolbar_accent_surface">@color/dark_main_toolbar_accent_surface</item>
 
         <!-- Статус-бар -->
-        <item name="status_bar_color">?attr/colorSurface</item>
+        <item name="status_bar_color">@color/dark_status_bar_color</item>
 
         <!-- Типографика
              NB: default_text_color / second_text_color / link_color задаются
@@ -539,25 +539,24 @@
              ?attr/colorOnSurface → TYPE_ATTRIBUTE → crash. Эмпирически
              подтверждено FragmentBaseTextViewInflateTest.
         -->
-        <item name="contrast_text_color">?attr/colorOnPrimary</item>
-        <item name="drawer_item_text">?attr/colorOnSurfaceVariant</item>
-        <item name="drawer_item_text_selected">?attr/colorPrimary</item>
+        <item name="contrast_text_color">@color/dark_contrast_text_color</item>
+        <item name="drawer_item_text">@color/dark_drawer_item_text</item>
+        <item name="drawer_item_text_selected">@color/dark_drawer_item_text_selected</item>
 
         <!-- Иконки -->
-        <item name="icon_base">?attr/colorOnSurfaceVariant</item>
+        <item name="icon_base">@color/dark_icon_base</item>
         <!--
-            icon_toolbar: ?attr/colorOnSurface.
-            На API >= 31 dynamic M3 on-surface. На API < 31 в DayNightAppTheme
-            определён КОНКРЕТНЫЙ @color/light_icon_toolbar /
-            @color/dark_icon_toolbar, чтобы Toolbar.<init> /
-            AppBarLayout.<init> / CollapsingToolbarLayout.<init> получали
-            TYPE_INT_COLOR. Раньше здесь стоял статический @color/... — это
-            7f1de68 regression.
+            icon_toolbar: @color/dark_icon_toolbar.
+            КРИТИЧНЫЙ фикс гидры-крэша MentionsFragment.onViewCreated
+            → TabFragment.tintToolbarIcons → Toolbar.getOverflowIcon →
+            OverflowMenuButton (ImageView).<init>
+            → TypedArray.getColorStateList(0x7f040272) на TYPE_ATTRIBUTE.
+            См. полный KDoc в values/styles.xml.
         -->
-        <item name="icon_toolbar">?attr/colorOnSurface</item>
+        <item name="icon_toolbar">@color/dark_icon_toolbar</item>
 
         <!-- Разделители -->
-        <item name="divider_line">?attr/colorOutlineVariant</item>
+        <item name="divider_line">@color/dark_divider_line</item>
 
         <!--
             Framework android:textColor* и наши default_text_color /

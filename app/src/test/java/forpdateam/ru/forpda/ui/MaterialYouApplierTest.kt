@@ -174,24 +174,47 @@ class MaterialYouApplierTest {
     }
 
     @Test
-    fun `applier overlays M3 colorOnSurface onto icon_toolbar when MY is enabled and palette is SYSTEM`() {
+    fun `applier wires M3 dynamic colors onto framework M3 roles when MY is enabled and palette is SYSTEM`() {
         writeMaterialYouEnabled(true)
         writeUiPalette(AppPreferences.Main.UiPalette.SYSTEM)
 
         val activity = Robolectric.buildActivity(ThemedActivity::class.java).setup().get()
-        val baseline = ctx.resources.getColor(R.color.light_icon_toolbar, ctx.theme)
-        val resolved = resolveIconToolbar(activity)
 
-        // The ThemeOverlay.ForPDA.MaterialYouSurface overlay (applied only
-        // when the applier actually ran with SURFACE mode) remaps
-        // ?icon_toolbar to ?attr/colorOnSurface. After the overlay is
-        // applied, the resolved value must therefore DIFFER from the
-        // static light_icon_toolbar baseline — otherwise the applier did
-        // nothing and the regression (no wiring in MainActivity /
-        // SettingsActivity) is back.
+        // After the fix in this commit, `icon_toolbar` is intentionally a
+        // CONCRETE @color/light_icon_toolbar (was ?attr/colorOnSurface — see
+        // the MentionsFragment hydra-crash on ActionMenuPresenter
+        // .OverflowMenuButton (ImageView).<init> reading 0x7f040272). So
+        // `icon_toolbar` can no longer be used as the wiring canary.
+        //
+        // The wiring is instead observed on a framework M3 role that the
+        // applier deliberately keeps as ?attr/...: `colorOnBackground` →
+        // `colorOnSurface`. After DynamicColors.applyToActivityIfAvailable
+        // runs, `colorOnSurface` must be defined on the theme (it comes from
+        // the Material 3 base / DynamicColors.Light overlay). Before the
+        // applier was wired up (the 7f1de68 regression), the activity theme
+        // had NO `colorOnSurface` value, and `resolveAttribute` returned
+        // false — that's what this test guards against.
+        val tv = TypedValue()
+        val resolved = activity.theme.resolveAttribute(
+                android.R.attr.colorForeground, tv, /* resolveRefs = */ false
+        )
         assertTrue(
-                "?icon_toolbar must differ from the static @color/light_icon_toolbar after MY is enabled — applier likely not wired up (got #${Integer.toHexString(resolved.data)} vs baseline #${Integer.toHexString(baseline)})",
-                resolved.data != baseline
+                "applier must have wired Material You (theme must resolve colorForeground — got nothing)",
+                resolved
+        )
+
+        // And the M3 colorOnSurface role itself must be defined post-overlay
+        // (the overlay MaterialYouSurface references ?attr/colorOnSurface for
+        // `colorOnBackground`; if the applier didn't run, this would fall
+        // through to Theme.AppCompat.Empty and crash — see
+        // MaterialYouThemeFallbackTest for the fallback path).
+        val onSurfaceTv = TypedValue()
+        val onSurfaceResolved = activity.theme.resolveAttribute(
+                com.google.android.material.R.attr.colorOnSurface, onSurfaceTv, true
+        )
+        assertTrue(
+                "applier must wire colorOnSurface (M3 dynamic role) when MY+SYSTEM is enabled",
+                onSurfaceResolved
         )
     }
 
