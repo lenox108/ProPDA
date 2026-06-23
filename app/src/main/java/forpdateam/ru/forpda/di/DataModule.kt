@@ -24,12 +24,9 @@ import forpdateam.ru.forpda.entity.db.history.HistoryItemDao
 import forpdateam.ru.forpda.entity.db.favorites.FavItemDao
 import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatDao
 import forpdateam.ru.forpda.entity.db.ForumUserDao
-import forpdateam.ru.forpda.entity.db.offline.OfflineItemDao
 import forpdateam.ru.forpda.entity.db.qms.QmsContactDao
 import forpdateam.ru.forpda.entity.db.qms.QmsThemeDao
 import forpdateam.ru.forpda.entity.db.qms.QmsThemesDao
-import forpdateam.ru.forpda.model.data.offline.OfflineRepository
-import forpdateam.ru.forpda.model.data.offline.OfflineStorage
 import androidx.room.Room
 import forpdateam.ru.forpda.model.data.providers.UserSourceProvider
 import forpdateam.ru.forpda.model.data.remote.IWebClient
@@ -99,9 +96,9 @@ object DataModule {
             NotesMigrations.MIGRATION_3_4,
             NotesMigrations.MIGRATION_4_5,
             NotesMigrations.MIGRATION_5_6,
-            NotesMigrations.MIGRATION_6_7,
-            NotesMigrations.MIGRATION_7_8,
-            NotesMigrations.MIGRATION_8_9
+            NotesMigrations.MIGRATION_7_6,
+            NotesMigrations.MIGRATION_8_6,
+            NotesMigrations.MIGRATION_9_6
         )
             .build()
     }
@@ -132,55 +129,6 @@ object DataModule {
 
     @Provides @Singleton
     fun provideForumUserDao(database: AppDatabase): ForumUserDao = database.forumUserDao()
-
-    @Provides @Singleton
-    fun provideOfflineItemDao(database: AppDatabase): OfflineItemDao = database.offlineItemDao()
-
-    @Provides @Singleton
-    fun provideOfflineStorage(@ApplicationContext context: Context): OfflineStorage =
-            OfflineStorage(context)
-
-    @Provides @Singleton
-    fun provideOfflineRepository(dao: OfflineItemDao, storage: OfflineStorage): OfflineRepository =
-            OfflineRepository(dao, storage)
-
-    @Provides @Singleton
-    fun provideOfflineArticleSource(repository: OfflineRepository) =
-            forpdateam.ru.forpda.model.data.offline.OfflineArticleSource(repository)
-
-    /**
-     * Phase 5 image-downloader HTTP client. Reuses the long-lived
-     * `forpdateam.ru.forpda.client.Client` OkHttp instance via the
-     * `okHttpClient` provider, sharing the cookie jar and DNS cache
-     * so we don't bypass the forum auth state.
-     */
-    @Provides @Singleton
-    fun provideOfflineImageDownloader(
-            httpClient: okhttp3.OkHttpClient,
-            storage: OfflineStorage,
-    ): forpdateam.ru.forpda.model.data.offline.OfflineImageDownloader =
-            forpdateam.ru.forpda.model.data.offline.OfflineImageDownloader(httpClient, storage)
-
-    @Provides @Singleton
-    fun provideOfflineSaveController(
-            repository: forpdateam.ru.forpda.model.data.offline.OfflineRepository,
-            imageDownloader: forpdateam.ru.forpda.model.data.offline.OfflineImageDownloader,
-    ): forpdateam.ru.forpda.model.data.offline.OfflineSaveController =
-            forpdateam.ru.forpda.model.data.offline.OfflineSaveController(repository, imageDownloader)
-
-    /**
-     * Shared OkHttp client for the offline subsystem. Kept
-     * deliberately independent of [forpdateam.ru.forpda.client.Client]
-     * to avoid coupling the offline flow to the main app client's
-     * auth-cookie pipeline; image downloads are public, no
-     * `auth_key` is required.
-     */
-    @Provides @Singleton
-    fun provideOfflineOkHttpClient(): okhttp3.OkHttpClient =
-            okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
 
     @Provides @Singleton fun provideNotesCacheRoom(noteItemDao: NoteItemDao, noteFolderDao: NoteFolderDao) =
             NotesCacheRoom(noteItemDao, noteFolderDao)
