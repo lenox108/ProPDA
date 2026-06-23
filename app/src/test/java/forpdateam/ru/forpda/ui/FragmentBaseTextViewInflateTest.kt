@@ -6,7 +6,6 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import androidx.test.core.app.ApplicationProvider
 import forpdateam.ru.forpda.R
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -156,6 +155,36 @@ class FragmentBaseTextViewInflateTest {
      * Before the fix, default_text_color was `?attr/colorOnSurface` (TYPE_ATTRIBUTE)
      * and the InflateException fired on fragment_base.xml:118
      * (`android:textColor="?attr/default_text_color"`).
+     *
+     * IMPLEMENTATION NOTE: this test deliberately uses
+     * `obtainStyledAttributes(int[])` + `TypedArray.getValue(index, outValue)`
+     * rather than `theme.resolveAttribute(..., resolveRefs=true)`. The reason
+     * matters for catching regressions of the 4a26ff1 class:
+     *
+     * - `theme.resolveAttribute(..., resolveRefs=true)` ALWAYS walks references
+     *   to a concrete value (it never returns TYPE_ATTRIBUTE, see Android
+     *   Resources.Theme#resolveAttribute Javadoc). That means the previous
+     *   version of this test could not detect a duplicate `?attr/colorOnSurface`
+     *   in `MaterialYouSurface` for `default_text_color` — Robolectric would
+     *   happily walk through both levels of `?attr/...` and return a concrete
+     *   color int, hiding the underlying TYPE_ATTRIBUTE that the production
+     *   `TypedArray.getColorStateList` cannot dereference.
+     *
+     * - `obtainStyledAttributes(int[])` returns a TypedArray whose `getValue`
+     *   method exposes the raw TypedValue the platform stored in the theme.
+     *   This is the SAME path the real TextView.<init> takes, so the assertion
+     *   here matches what production sees. If the underlying TypedValue is
+     *   TYPE_ATTRIBUTE, the test will fail with a precise error pointing at
+     *   the broken attribute.
+     *
+     * This catches a regression where `MaterialYouSurface` accidentally ends
+     * up with a `?attr/colorOnSurface` (or similar) entry for one of the
+     * textColor slots — aapt2 will record BOTH the concrete color and the
+     * `?attr/...` reference in resources.arsc, and at runtime the platform
+     * applies them in source order. The net effect is that the theme
+     * resolves `?attr/default_text_color` to a TYPE_ATTRIBUTE, which crashes
+     * `TypedArray.getColorStateList` on real devices but NOT in Robolectric's
+     * `resolveAttribute(..., true)` path.
      */
     @Test
     fun `MY overlay slots are concrete in activity theme when MY is enabled`() {
@@ -165,40 +194,146 @@ class FragmentBaseTextViewInflateTest {
         val activity = Robolectric.buildActivity(ThemedActivity::class.java).setup().get()
         val theme = activity.theme
 
-        val criticalSlots = listOf(
-                "default_text_color" to R.attr.default_text_color,
-                "second_text_color" to R.attr.second_text_color,
-                "link_color" to R.attr.link_color,
-                "android:textColor" to android.R.attr.textColor,
-                "android:textColorPrimary" to android.R.attr.textColorPrimary,
-                "android:textColorSecondary" to android.R.attr.textColorSecondary,
-                "android:textColorLink" to android.R.attr.textColorLink,
-                "android:textColorHint" to android.R.attr.textColorHint,
+        val criticalAttrIds = intArrayOf(
+                R.attr.default_text_color,
+                R.attr.second_text_color,
+                R.attr.link_color,
+                android.R.attr.textColor,
+                android.R.attr.textColorPrimary,
+                android.R.attr.textColorSecondary,
+                android.R.attr.textColorLink,
+                android.R.attr.textColorHint,
+        )
+        val criticalAttrNames = mapOf(
+                R.attr.default_text_color to "default_text_color",
+                R.attr.second_text_color to "second_text_color",
+                R.attr.link_color to "link_color",
+                android.R.attr.textColor to "android:textColor",
+                android.R.attr.textColorPrimary to "android:textColorPrimary",
+                android.R.attr.textColorSecondary to "android:textColorSecondary",
+                android.R.attr.textColorLink to "android:textColorLink",
+                android.R.attr.textColorHint to "android:textColorHint",
         )
 
         val unresolved = mutableListOf<String>()
-        for ((name, attrId) in criticalSlots) {
-            val tv = TypedValue()
-            val ok = theme.resolveAttribute(attrId, tv, /* resolveRefs = */ true)
-            if (!ok) {
-                // Robolectric quirk: framework attrs sometimes return false here
-                // even when they ARE defined. The first regression test (the
-                // actual inflate) is the canonical signal; we just record the
-                // miss here for diagnostics.
-                continue
+        val ta = theme.obtainStyledAttributes(criticalAttrIds)
+        try {
+            for (i in criticalAttrIds.indices) {
+                val tv = TypedValue()
+                ta.getValue(i, tv)
+                if (tv.type == TypedValue.TYPE_ATTRIBUTE) {
+                    unresolved.add(
+                            "${criticalAttrNames[criticalAttrIds[i]]}: " +
+                                    "TYPE_ATTRIBUTE survived into the runtime theme " +
+                                    "(data=0x${Integer.toHexString(tv.data)}); " +
+                                    "TypedArray.getColorStateList will throw " +
+                                    "UnsupportedOperationException at fragment_base.xml:118 " +
+                                    "(toolbar_title) and at any M3 widget that reads " +
+                                    "android:textColor from a TextAppearance style. " +
+                                    "This is the EXACT prod crash signature " +
+                                    "(d=0x7f040195 for default_text_color). " +
+                                    "Likely cause: MaterialYouSurface has a duplicate " +
+                                    "?attr/colorOnSurface* entry for this slot — " +
+                                    "aapt2 records both, and the platform applies them in " +
+                                    "source order, so the later entry (which can be a " +
+                                    "?attr/... reference) wins in the runtime theme."
+                    )
+                }
             }
-            if (tv.type == TypedValue.TYPE_ATTRIBUTE) {
-                unresolved.add(
-                        "$name: TYPE_ATTRIBUTE survived resolveRefs=true (data=0x${Integer.toHexString(tv.data)}); " +
-                                "would crash TypedArray.getColorStateList at fragment_base.xml:118 (toolbar_title) " +
-                                "and at any M3 widget that reads android:textColor from a TextAppearance style"
-                )
-            }
+        } finally {
+            ta.recycle()
         }
         assertTrue(
                 "MY overlay slots that would crash TypedArray.getColorStateList: " +
                         unresolved.joinToString("; "),
                 unresolved.isEmpty()
         )
+    }
+
+    /**
+     * Second-line guard: inspects the SOURCE XML of
+     * `ThemeOverlay.ForPDA.MaterialYouSurface` (both day and night) to ensure
+     * NO slot is defined as a `?attr/...` reference where the slot is one of
+     * the textColor slots that the prod crash touches.
+     *
+     * This is a SOURCE-LEVEL assertion (it walks the on-disk XML, not the
+     * compiled resources.arsc), and runs as a `@Test` so the build fails
+     * with a precise error if anyone reintroduces a `?attr/colorOnSurface`
+     * entry for one of the textColor slots — the exact bug that 4a26ff1
+     * tried to fix but shipped with a duplicate `?attr/colorOnSurface`
+     * entry that the source XML still contained. The `obtainStyledAttributes`
+     * test above catches the bug at runtime, this test catches it at the
+     * source so the regression cannot be reintroduced.
+     */
+    @Test
+    fun `MaterialYouSurface source XML has no broken textColor slot references`() {
+        val forbidden = setOf("default_text_color", "second_text_color", "link_color")
+        // The test JVM's CWD is `app/` when running under gradle :app:test*, so
+        // we need to look up the project root via the user.dir system property
+        // (which is set by the JVM launcher to the project root, NOT the
+        // gradle CWD) — or walk up from any test resource we know exists.
+        val projectRoot = locateProjectRoot()
+        val sources = listOf(
+                "app/src/main/res/values/styles.xml" to "ThemeOverlay.ForPDA.MaterialYouSurface",
+                "app/src/main/res/values-night/styles.xml" to "ThemeOverlay.ForPDA.MaterialYouSurface"
+        )
+        val badEntries = mutableListOf<String>()
+        for ((relPath, styleName) in sources) {
+            val file = java.io.File(projectRoot, relPath)
+            if (!file.exists()) {
+                badEntries.add("${file.absolutePath}: file not found")
+                continue
+            }
+            val text = file.readText()
+            val idx = text.indexOf("name=\"$styleName\"")
+            if (idx < 0) {
+                badEntries.add("$relPath: style $styleName not found")
+                continue
+            }
+            val endIdx = text.indexOf("</style>", idx)
+            if (endIdx < 0) {
+                badEntries.add("$relPath: style $styleName has no </style>")
+                continue
+            }
+            val block = text.substring(idx, endIdx)
+            for (attrName in forbidden) {
+                val pattern = Regex("name=\"$attrName\"[^>]*>\\s*\\?attr/[^<]+")
+                val match = pattern.find(block)
+                if (match != null) {
+                    val matchedText = match.value.replace("\n", " ").replace("\\s+".toRegex(), " ")
+                    badEntries.add("$relPath: $styleName has '$matchedText' — textColor slots must be CONCRETE @color/... (not ?attr/colorOnSurface*), otherwise TypedArray.getColorStateList will throw UnsupportedOperationException at fragment_base.xml:118 with d=0x7f040195")
+                }
+            }
+        }
+        assertTrue(
+                "MaterialYouSurface must not have any textColor slot defined as a ?attr/... reference: " +
+                        badEntries.joinToString("; "),
+                badEntries.isEmpty()
+        )
+    }
+
+    /**
+     * Locates the project root by walking up from the JVM's user.dir until we
+     * find `app/src/main/res/values/styles.xml`. The JVM's user.dir is set
+     * to the project root by gradle for the test task, but the gradle WORKING
+     * directory (the CWD of the gradle process) is `app/` for `:app:test*`
+     * tasks. This helper works in both cases.
+     */
+    private fun locateProjectRoot(): java.io.File {
+        val userDir = System.getProperty("user.dir") ?: "."
+        val candidates = listOf(
+                java.io.File(userDir),
+                java.io.File("."),
+                java.io.File(".."),
+                java.io.File("../.."),
+                java.io.File("../../..")
+        )
+        for (cand in candidates) {
+            try {
+                val probe = java.io.File(cand, "app/src/main/res/values/styles.xml")
+                if (probe.exists()) return cand.canonicalFile
+            } catch (_: Exception) {}
+        }
+        return java.io.File(".").canonicalFile
     }
 }
