@@ -356,7 +356,9 @@ class FavoritesRepository(
                     inspectorUnread = inspectorUnread,
                     inspectorPresent = inspectorPresent && ev != null,
                     hasNewerContentThanCache = hasNewerFavoriteContent(item, cached),
-                    networkIsFreshRefresh = networkIsFreshRefresh
+                    networkIsFreshRefresh = networkIsFreshRefresh,
+                    inspectorTimeStampSeconds = ev?.timeStamp ?: 0L,
+                    localReadTimeSeconds = cached?.localReadPostDateMillis?.let { it / 1000L } ?: 0L
             )
             FavoritesUnreadTrace.inspectorRowMerged(
                     topicId = item.topicId,
