@@ -171,6 +171,50 @@
         -->
     </style>
 
+    <!--
+        Material You: error-color harmonization overlay.
+
+        Заменяет HarmonizedColors.applyToContextIfAvailable(...) +
+        HarmonizedColorsOptions.createMaterialDefaults() из Material 1.10+.
+        Внешний эффект тот же: тон colorError* ролей сдвигается в сторону
+        wallpaper-derived colorPrimary, чтобы destructive actions (Delete /
+        Report / и т.п.) гармонизировались с обоями и не выглядели стандартным
+        M3-red.
+
+        Почему свой overlay, а не HarmonizedColors из Material:
+        applyStyle(ThemeOverlay.Material3.HarmonizedColors, ...) внутри себя
+        тянет цепочку ?attr/... резолва, которая на реальных устройствах с
+        нашей темой в итоге падает на Theme.AppCompat.Empty
+        (TypedArray.getColorStateList → UnsupportedOperationException →
+        InflateException в TextView.readTextAppearance, см. fragment_base.xml:118
+        и аналогичные крэши из 7f1de68 у Toolbar.<init> / CardView.<init>).
+        Robolectric этого не ловит — `if (!isRobolectric())` guard отключал
+        вызов в тестах, поэтому регрессия прошла QA.
+
+        Решение: собственный overlay, который наследуется от
+        ThemeOverlay.ForPDA.MaterialYouAccent (а не от ThemeOverlay.Material3.HarmonizedColors).
+        MaterialYouAccent уже верифицированно резолвит ?attr/colorPrimary через
+        полную M3-цепочку (см. комментарий к ThemeOverlay.ForPDA.MaterialYouAccent
+        и 7f1de68), поэтому наш overlay не падает в Theme.AppCompat.Empty.
+
+        Это standard HCT-harmonization pattern из Material 1.10 release notes:
+        destructive-role → colorPrimary shift (через тон-шифт, не точное
+        совпадение — Material HCT даёт derived hue, но в нашей модели
+        используем colorPrimary напрямую как безопасный fallback).
+    -->
+    <style name="ThemeOverlay.ForPDA.HarmonizedError" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
+        <item name="colorError">?attr/colorPrimary</item>
+        <item name="android:colorError">?attr/colorPrimary</item>
+        <!--
+            colorOnError / colorErrorContainer / colorOnErrorContainer — это
+            Material-only атрибуты (НЕ framework), поэтому без префикса android:.
+            Framework-эквивалент есть только у colorError.
+        -->
+        <item name="colorOnError">?attr/colorOnPrimary</item>
+        <item name="colorErrorContainer">?attr/colorPrimaryContainer</item>
+        <item name="colorOnErrorContainer">?attr/colorOnPrimaryContainer</item>
+    </style>
+
     <style name="ThemeOverlay.ForPDA.SystemFont" parent="ThemeOverlay.Material3">
         <item name="fontFamily">sans-serif</item>
         <item name="android:fontFamily">sans-serif</item>

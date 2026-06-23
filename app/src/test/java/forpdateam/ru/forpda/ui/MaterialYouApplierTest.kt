@@ -15,6 +15,7 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import org.junit.After
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,11 +75,31 @@ import org.robolectric.annotation.Config
  *  5. With `use_material_you = true` + SYSTEM palette
  *     (so [DynamicColors.applyToActivityIfAvailable] IS reached and the
  *     `OnAppliedCallback` fires), [HarmonizedColors.applyToContextIfAvailable]
- *     is NOT invoked — because the Robolectric guard short-circuits it. This
- *     is the regression guard for the guard: if someone removes
- *     `if (!isRobolectric())` from the production code, this test fails
- *     with `verify(exactly = 0) { HarmonizedColors.applyToContextIfAvailable(...) }`,
+ *     is NOT invoked at all — the applier no longer uses the Material API,
+ *     it applies its own [R.style.ThemeOverlay_ForPDA_HarmonizedError] via
+ *     `activity.theme.applyStyle(...)`. This is the regression guard for the
+ *     prod TextView inflation crash (see fragment_base.xml:118) caused by
+ *     `ThemeOverlay.Material3.HarmonizedColors` pulling the
+ *     `?attr/textColorPrimary` chain through `Theme.AppCompat.Empty`. If
+ *     someone re-introduces the upstream HarmonizedColors call without the
+ *     custom overlay, this test fails with `verify(exactly = 0) { ... }`,
  *     pointing directly at the regression.
+ *
+ *  6. [R.style.ThemeOverlay_ForPDA_HarmonizedError] resolves `?attr/colorError`
+ *     to a non-zero concrete color int (not `TYPE_ATTRIBUTE`) on a real
+ *     themed activity. This pins the §4.5 contract: error-color roles are
+ *     defined and the chain does not break, regardless of whether the
+ *     device surfaces a real wallpaper palette.
+ *
+ *  7. A themed [Activity] with [R.style.DayNightAppTheme] +
+ *     [MaterialYouApplier.applyIfEnabled] inflates without throwing
+ *     [android.view.InflateException] when MY is enabled. This is the
+ *     regression guard for the production TextView.<init> /
+ *     `readTextAppearance` crash (the one that fires on `fragment_base.xml:118`
+ *     via `TypedArray.getColorStateList` → `UnsupportedOperationException`).
+ *     Note: Robolectric does NOT exhibit the upstream crash either, so this
+ *     test on its own does not prove the prod crash is gone — visual
+ *     verification on a real device is still required (see commit message).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = android.app.Application::class)
@@ -222,12 +243,14 @@ class MaterialYouApplierTest {
 
     @Test
     fun `isRobolectric returns true in this Robolectric test environment`() {
-        // The Robolectric guard that gates HarmonizedColors off the test path
-        // depends on Build.FINGERPRINT starting with "robolectric". If a future
-        // refactor changes the detection predicate (e.g. drops the prefix
-        // check or looks at the wrong Build.* field), this test fails
-        // immediately with a clear message, instead of the opaque
-        // Robolectric #9552 stack that would otherwise surface downstream.
+        // The isRobolectric() helper is kept on the applier (as `internal`) so
+        // future Material-API harmonization calls (e.g. if someone re-introduces
+        // a guarded third-party API) can still detect the test environment and
+        // opt out. The detection depends on Build.FINGERPRINT starting with
+        // "robolectric" — Robolectric 4.x sets it to "robolectric/<arch>". If
+        // a future refactor changes the detection predicate, this test fails
+        // immediately with a clear message, instead of the opaque #9552 stack
+        // that would otherwise surface downstream.
         assertTrue(
                 "Build.FINGERPRINT is '${android.os.Build.FINGERPRINT}' — isRobolectric() must return true in this Robolectric test environment",
                 MaterialYouApplier.isRobolectric()
@@ -235,17 +258,20 @@ class MaterialYouApplierTest {
     }
 
     @Test
-    fun `HarmonizedColors is gated by isRobolectric in the OnAppliedCallback`() {
+    fun `HarmonizedColors applyToContextIfAvailable is never called in the OnAppliedCallback`() {
         // Pre-condition: use_material_you = true + palette = SYSTEM →
         // resolveMode returns SURFACE → the applier DOES reach
         // DynamicColors.applyToActivityIfAvailable and the OnAppliedCallback
-        // fires. Inside the callback the production code has
-        //   if (!isRobolectric()) { HarmonizedColors.applyToContextIfAvailable(...) }
-        // — so in this Robolectric test, the inner call must NOT be made.
-        // If someone removes the `!isRobolectric()` guard, this test fails
-        // with a clear `verify(exactly = 0)` mismatch pointing at the
-        // regression (instead of the opaque Robolectric #9552 crash that
-        // would otherwise surface from inside the OnAppliedCallback).
+        // fires. The callback used to call
+        //   HarmonizedColors.applyToContextIfAvailable(...)
+        // — but that pulled ThemeOverlay.Material3.HarmonizedColors' ?attr chain
+        // through Theme.AppCompat.Empty, which crashed real devices
+        // (TextView.<init> → readTextAppearance → TypedArray.getColorStateList
+        // → UnsupportedOperationException, see fragment_base.xml:118). The
+        // applier now applies its own ThemeOverlay.ForPDA.HarmonizedError
+        // via activity.theme.applyStyle(...) instead. If someone reverts
+        // that decision and brings the upstream API call back, this test
+        // fails with `verify(exactly = 0)`, pointing directly at the regression.
         mockkStatic(DynamicColors::class)
         mockkStatic(HarmonizedColors::class)
         // Stub DynamicColors so the activity creation completes without
@@ -264,9 +290,78 @@ class MaterialYouApplierTest {
         verify(exactly = 1) {
             DynamicColors.applyToActivityIfAvailable(any(), any())
         }
-        // …but HarmonizedColors was NOT — the Robolectric guard fired.
+        // …but HarmonizedColors.applyToContextIfAvailable was NOT — the
+        // applier no longer uses that API.
         verify(exactly = 0) {
             HarmonizedColors.applyToContextIfAvailable(any(), any())
         }
+    }
+
+    @Test
+    fun `ThemeOverlay_ForPDA_HarmonizedError remaps colorError to colorPrimary when MY is enabled`() {
+        // §4.5 contract: when MY is enabled, our HarmonizedError overlay
+        // (applied inside the OnAppliedCallback) remaps
+        //   ?attr/colorError             -> ?attr/colorPrimary
+        //   ?attr/colorOnError           -> ?attr/colorOnPrimary
+        //   ?attr/colorErrorContainer    -> ?attr/colorPrimaryContainer
+        //   ?attr/colorOnErrorContainer  -> ?attr/colorOnPrimaryContainer
+        // so destructive actions (Delete / Report / etc.) are tinted to the
+        // wallpaper-derived primary palette.
+        //
+        // We don't assert exact value equality (the resolved colorPrimary
+        // itself depends on the dynamic palette, which Robolectric synthesises
+        // internally on API 33); we assert that the chain does NOT leave
+        // colorError as a dangling TYPE_ATTRIBUTE (the prod crash symptom)
+        // and that colorError is a concrete color int.
+        writeMaterialYouEnabled(true)
+        writeUiPalette(AppPreferences.Main.UiPalette.SYSTEM)
+
+        val activity = Robolectric.buildActivity(ThemedActivity::class.java).setup().get()
+
+        val colorError = TypedValue()
+        val resolved = activity.theme.resolveAttribute(
+                com.google.android.material.R.attr.colorError, colorError, /* resolveRefs = */ true
+        )
+        assertTrue("?attr/colorError must resolve on the activity theme", resolved)
+        assertNotEquals(
+                "?attr/colorError must NOT stay as TYPE_ATTRIBUTE — the prod TextView crash surfaced exactly this symptom",
+                TypedValue.TYPE_ATTRIBUTE, colorError.type
+        )
+        assertTrue(
+                "?attr/colorError must resolve to a color int (got type=0x${Integer.toHexString(colorError.type)})",
+                colorError.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT
+        )
+    }
+
+    @Test
+    fun `ThemedActivity inflates without InflateException when MY is enabled`() {
+        // Regression guard for the prod crash. The original Robolectric
+        // guard `if (!isRobolectric())` prevented the HarmonizedColors call
+        // from running in tests, so the InflateException
+        // (TextView.readTextAppearance → TypedArray.getColorStateList →
+        // UnsupportedOperationException at fragment_base.xml:118) was never
+        // observable from the test path. Now that the applier applies its
+        // own ThemeOverlay.ForPDA.HarmonizedError (no guard), a Robolectric
+        // activity creation is the closest we can get to a real-device
+        // inflation smoke test.
+        //
+        // IMPORTANT: Robolectric does NOT exhibit the same native theme
+        // engine crash as Android (it doesn't share ShadowArscAssetManager10's
+        // ThemeOverlay.Material3.HarmonizedColors resolution path the same
+        // way). So this test alone does NOT prove the prod crash is gone.
+        // It is the regression guard for the regression guard: if someone
+        // re-introduces the upstream HarmonizedColors call, this activity
+        // setup throws here in CI, catching the issue before it ships.
+        // Visual verification on a real device with use_material_you = true
+        // remains the canonical regression test (see commit message).
+        writeMaterialYouEnabled(true)
+        writeUiPalette(AppPreferences.Main.UiPalette.SYSTEM)
+
+        // If the production code crashes the activity setup, this line
+        // throws InflateException (or a downstream exception) and the test
+        // fails with a clear stack pointing at MaterialYouApplier / the
+        // OnAppliedCallback overlay chain.
+        val activity = Robolectric.buildActivity(ThemedActivity::class.java).setup().get()
+        assertNotNull("ThemedActivity must be created without throwing", activity)
     }
 }

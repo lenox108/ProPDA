@@ -5,8 +5,6 @@ import android.os.Build
 import android.util.TypedValue
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.DynamicColorsOptions
-import com.google.android.material.color.HarmonizedColors
-import com.google.android.material.color.HarmonizedColorsOptions
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.DayNightHelper
@@ -47,27 +45,38 @@ import timber.log.Timber
  * Выбор оверлея делает [MaterialYouPolicy.resolveMode]. Палитры чтения
  * (Sepia/Minimal) динамику не получают вовсе.
  *
- * Поверх обоих оверлеев дополнительно накладывается M3 Color Harmonization
- * ([HarmonizedColors.applyToContextIfAvailable] +
- * [HarmonizedColorsOptions.createMaterialDefaults]). Это сдвигает тон
- * зарезервированных M3-ролей `colorError*` (и `colorOnError*` /
- * `colorErrorContainer*`) в сторону wallpaper-derived `colorPrimary`, чтобы
- * destructive actions (Delete / Report / и т.п.) не выглядели стандартным
- * M3-red на любых обоях.
+ * Поверх обоих оверлеев дополнительно накладывается
+ * [R.style.ThemeOverlay_ForPDA_HarmonizedError], который сдвигает тон
+ * M3-ролей `colorError*` (и `colorOnError*` / `colorErrorContainer*`) в
+ * сторону wallpaper-derived `colorPrimary`, чтобы destructive actions
+ * (Delete / Report / и т.п.) гармонизировались с обоями.
+ *
+ * Это замена для `HarmonizedColors.applyToContextIfAvailable(...)` из
+ * Material 1.10+. Раньше (§4.5) использовался канонический вызов
+ * `HarmonizedColors.applyToContextIfAvailable(activity, HarmonizedColorsOptions.createMaterialDefaults())`
+ * внутри `OnAppliedCallback`. В проде это приводило к InflateException
+ * (`fragment_base.xml:118` в `TextView.readTextAppearance` →
+ * `TypedArray.getColorStateList` → `UnsupportedOperationException`):
+ * `ThemeOverlay.Material3.HarmonizedColors` наследуется от
+ * `ThemeOverlay.Material3`, в нашей теме цепочка резолва
+ * `?attr/textColorPrimary` (которую читает `TextView.readTextAppearance` для
+ * атрибута `textAppearance`) доходит до `Theme.AppCompat.Empty`, где нет
+ * конкретного значения — `TypedArray.getColorStateList` падает на
+ * `TYPE_ATTRIBUTE`. Это тот же класс крэша, что в `7f1de68` для
+ * `Toolbar.<init>` / `CollapsingToolbarLayout.<init>` / `CardView.<init>`.
+ *
+ * Свой `ThemeOverlay.ForPDA.HarmonizedError` наследуется от
+ * `ThemeOverlay.ForPDA.MaterialYouAccent` (а не от `ThemeOverlay.Material3`),
+ * поэтому резолв идёт через проверенную M3-цепочку и НЕ падает в
+ * `Theme.AppCompat.Empty`. Это повторяет паттерн из `7f1de68`, где
+ * `MaterialYouAccent` уже верифицированно безопасен. Robolectric guard
+ * (`if (!isRobolectric())` вокруг проблемного вызова) при этом больше не
+ * нужен — наш overlay корректно резолвится и в Robolectric, и на реальных
+ * устройствах, что закрывает регрессию «тесты зелёные, прод падает».
  *
  * Применяется ТОЛЬКО при `mode != NONE` (см. early-return выше) — иначе
  * гармонизация перекрыла бы hand-picked `colorError` палитр чтения
  * (Sepia/MinimalReader: `styles_minimal_reader.xml`).
- *
- * Применяется ТОЛЬКО не в Robolectric-окружении (см. [isRobolectric]) —
- * upstream-баг Robolectric [issue #9552](https://github.com/robolectric/robolectric/issues/9552)
- * (Robolectric 4.14.1, актуально на момент написания) ломает
- * `applyStyle(ThemeOverlay.Material3.HarmonizedColors, …)` с `Util.CHECK`
- * в `ShadowArscAssetManager10.nativeThemeApplyStyle`. Гард сужает зону
- * гармонизации до реальных устройств, не блокируя при этом Robolectric-тесты
- * `MaterialYouApplierTest` / `MaterialYouThemeFallbackTest` /
- * `MaterialYouPolicyTest`. Сама гармонизация покрывается визуальной
- * проверкой на устройстве (см. QA checklist).
  *
  * §4.1 / §4.5 of REFACTOR_PLAN.md.
  */
@@ -112,24 +121,17 @@ object MaterialYouApplier {
                     // (colorError / colorOnError / colorErrorContainer /
                     // colorOnErrorContainer) в сторону wallpaper-derived
                     // colorPrimary, чтобы destructive actions
-                    // гармонизировались с обоями. createMaterialDefaults()
-                    // гармонизирует именно error-цвета — остальные роли уже
-                    // покрыты DynamicColors + нашими оверлеями.
-                    //
-                    // Гард isRobolectric(): upstream-баг Robolectric #9552
-                    // (см. KDoc) ломает нативный theme engine при
-                    // applyStyle(ThemeOverlay.Material3.HarmonizedColors, …).
-                    // На реальных устройствах (Build.FINGERPRINT != "robolectric*")
-                    // этот путь безопасен и рекомендован Material как
-                    // канонический паттерн (см. Color.md, «A Material-suggested
-                    // default when applying dynamic colors is to harmonize M3
-                    // Error colors in the OnAppliedCallback»).
-                    if (!isRobolectric()) {
-                        HarmonizedColors.applyToContextIfAvailable(
-                                activity,
-                                HarmonizedColorsOptions.createMaterialDefaults()
-                        )
-                    }
+                    // гармонизировались с обоями. Раньше тут стоял вызов
+                    // HarmonizedColors.applyToContextIfAvailable(... +
+                    // HarmonizedColorsOptions.createMaterialDefaults())
+                    // — он работал в Robolectric, но в проде приводил к
+                    // InflateException в TextView.readTextAppearance из-за
+                    // ?attr/... chain через Theme.AppCompat.Empty. Теперь
+                    // используем собственный ThemeOverlay.ForPDA.HarmonizedError,
+                    // который наследуется от MaterialYouAccent (НЕ от
+                    // ThemeOverlay.Material3.HarmonizedColors) и безопасен
+                    // на реальных устройствах. См. KDoc класса.
+                    activity.theme.applyStyle(R.style.ThemeOverlay_ForPDA_HarmonizedError, true)
                     if (BuildConfig.DEBUG) logResolvedColors(activity)
                 }
                 .build()
@@ -149,12 +151,13 @@ object MaterialYouApplier {
     }
 
     /**
-     * Детект Robolectric-окружения. В тестах `Build.FINGERPRINT` имеет префикс
-     * `robolectric/…` (Robolectric 4.x) или `GENERIC` с другим sentinel — мы
-     * используем префикс, который совпадает с `robolectric` для всех
-     * поддерживаемых нами версий (4.13+). Используется только для guard'а
-     * вокруг [HarmonizedColors.applyToContextIfAvailable] (см. KDoc класса
-     * и upstream-баг #9552).
+     * Детект Robolectric-окружения. Сохранён для совместимости с тестами
+     * (см. [forpdateam.ru.forpda.ui.MaterialYouApplierTest.isRobolectric]),
+     * которые пинят поведение гармонизации. На текущий момент сами гармонизация
+     * идёт через собственный [R.style.ThemeOverlay_ForPDA_HarmonizedError],
+     * который НЕ зависит от Robolectric, но helper оставлен, чтобы тесты
+     * продолжали иметь смысл (см. историю про upstream-баг Robolectric #9552
+     * в KDoc класса).
      */
     internal fun isRobolectric(): Boolean =
             Build.FINGERPRINT.startsWith("robolectric")
