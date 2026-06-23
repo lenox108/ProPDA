@@ -195,10 +195,12 @@ class FavoritesViewModel @Inject constructor(
         if (forceRefresh) {
             invalidateSearchCatalog()
         }
-        // Log 14_06-19: re-arm the server mark-read de-dup cache on every favorites load so
-        // that re-visiting a topic after Inspector re-asserts unread state will re-fire
-        // GET view=getlastpost on the next bottom-of-topic exit.
-        themeUseCase.resetAllServerMarkReadDedup()
+        // Favorites refresh/load is a pure list operation and MUST NOT touch the theme
+        // server mark-read de-dup cache. Previously this cleared the cache on every load,
+        // which re-armed `GET view=getlastpost` so an already-marked topic was re-sent to
+        // the server (marking it read) on the next last-page render — even when the user
+        // only pulled-to-refresh the list and never (re)read the topic. The de-dup already
+        // has its own TTL (SERVER_MARK_READ_DEDUP_TTL_MS) that re-arms on genuine revisits.
         loadJob = scope.launch {
             _refreshing.value = true
             runCatching {

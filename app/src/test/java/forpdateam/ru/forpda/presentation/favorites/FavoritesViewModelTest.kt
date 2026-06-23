@@ -10,6 +10,7 @@ import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
+import forpdateam.ru.forpda.model.interactors.theme.ThemeUseCase
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.presentation.ILinkHandler
@@ -65,6 +66,8 @@ class FavoritesViewModelTest {
     }
 
     private lateinit var favoritesRepository: FavoritesRepository
+    private lateinit var themeUseCase: ThemeUseCase
+    private lateinit var authHolder: AuthHolder
 
     private fun createViewModel(): FavoritesViewModel {
         favoritesRepository = mockk<FavoritesRepository>(relaxed = true)
@@ -87,6 +90,8 @@ class FavoritesViewModelTest {
         every { eventsRepository.observeEventsTab() } returns emptyFlow()
         val crossScreenInteractor = mockk<CrossScreenInteractor>(relaxed = true)
         every { crossScreenInteractor.observeTopic() } returns emptyFlow()
+        themeUseCase = mockk<ThemeUseCase>(relaxed = true)
+        authHolder = mockk<AuthHolder>(relaxed = true)
         return FavoritesViewModel(
                 favoritesRepository,
                 eventsRepository,
@@ -96,11 +101,11 @@ class FavoritesViewModelTest {
                 mockk<ILinkHandler>(relaxed = true),
                 mockk<IErrorHandler>(relaxed = true),
                 mockk<ClipboardHelper>(relaxed = true),
-                mockk<AuthHolder>(relaxed = true),
+                authHolder,
                 mockk<NotificationPreferencesHolder>(relaxed = true),
                 mockk<ThemePrefetchService>(relaxed = true),
                 mockk<MainPreferencesHolder>(relaxed = true),
-                mockk<forpdateam.ru.forpda.model.interactors.theme.ThemeUseCase>(relaxed = true),
+                themeUseCase,
         )
     }
 
@@ -174,6 +179,28 @@ class FavoritesViewModelTest {
         coVerify(exactly = 0) { favoritesRepository.fetchAllFavoritesForSearch(any()) }
 
         collectJob.cancel()
+    }
+
+    @Test
+    fun `refresh does not touch theme server mark-read de-dup cache`() = runTest {
+        val vm = createViewModel()
+        every { authHolder.get() } returns forpdateam.ru.forpda.entity.common.AuthData(
+            userId = 1,
+            state = forpdateam.ru.forpda.entity.common.AuthState.AUTH,
+        )
+        vm.start()
+        advanceUntilIdle()
+
+        vm.refresh()
+        advanceUntilIdle()
+
+        // A plain favorites refresh is a pure list operation: it must never re-arm the
+        // theme server mark-read de-dup, otherwise `GET view=getlastpost` gets re-sent and
+        // the topic is marked read on the server without the user (re)reading it.
+        coVerify(exactly = 0) { themeUseCase.resetAllServerMarkReadDedup() }
+        coVerify(exactly = 0) { themeUseCase.resetServerMarkReadDedup(any()) }
+        // Sanity: the refresh actually ran (otherwise the verification is vacuous).
+        coVerify(atLeast = 1) { favoritesRepository.loadFavorites(any(), any(), any(), any()) }
     }
 
     @Test
