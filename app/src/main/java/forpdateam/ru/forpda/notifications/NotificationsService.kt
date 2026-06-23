@@ -153,9 +153,10 @@ class NotificationsService : Service() {
         Timber.i("onStartCommand args$flags : $startId : $intent")
         BatteryDebugLogger.logState("NotificationsService", "startCommand", "action=${intent?.action}")
 
-        // Проверяем главный переключатель уведомлений перед запуском
-        if (!notificationPreferencesHolder.getMainEnabled()) {
-            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip service start: app preference disabled")
+        // wantsPushNotifications, а не getMainEnabled: при пустых push-семействах
+        // и включённых загрузках FGS поднимать не нужно.
+        if (!notificationPreferencesHolder.wantsPushNotifications()) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip service start: no push families enabled")
             stopSelf(startId)
             return START_NOT_STICKY
         }
