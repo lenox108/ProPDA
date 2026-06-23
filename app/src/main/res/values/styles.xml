@@ -154,21 +154,51 @@
         <item name="divider_line">?attr/colorOutlineVariant</item>
 
         <!--
-            НЕ переопределяем android:textColorPrimary/Secondary здесь:
-            это ?attr/... ссылки, которые оставляют TypedValue в состоянии
-            TYPE_ATTRIBUTE. Material-овский TextAppearance.<init> для
-            TextAppearance.Design.CollapsingToolbar.Expanded (используется
-            CollapsingToolbarLayout при инфлейте) читает android:textColor
-            = ?android:attr/textColorPrimary через MaterialResources.getColorStateList
-            -> TypedArray.getColorStateList, а тот не принимает TYPE_ATTRIBUTE
-            и кидает UnsupportedOperationException, который превращается в
-            InflateException при создании фрагмента.
-            Стандартные textColorPrimary/Secondary наследуются из Material 3
-            и динамически обновляются DynamicColors через colorOnSurface* в
-            Material 3-стилях, так что в Material You режиме текст всё равно
-            остаётся читаемым. Кастомные цвета для нашего UI берутся из
-            default_text_color / second_text_color выше.
+            1) Framework android:textColor* — обязательно должны закрываться
+            на КОНКРЕТНЫЙ color-state-list (@color/... или прямой int),
+            а не на ?attr/... ссылку. Иначе TypedArray.getColorStateList
+            кидает UnsupportedOperationException на TYPE_ATTRIBUTE.
+            Здесь задаём 5 framework textColor*-слотов КОНКРЕТНЫМИ цветами
+            тех же статических ресурсов, что использует M3 base.
+
+            2) Наши ?attr/default_text_color / second_text_color тоже
+            должны быть КОНКРЕТНЫМИ (не ?attr/colorOnSurface / colorOnSurfaceVariant):
+            layout XML fragment_base.xml:118, :125 использует
+            ?attr/default_text_color / second_text_color напрямую, и при
+            включённом MY ?attr/colorOnSurface резолвится в TYPE_ATTRIBUTE,
+            который TypedArray.getColorStateList НЕ дерефит через 2 уровня
+            (см. AOSP TypedArray.java:600 — кидает сразу).
+
+            Эмпирически подтверждено Robolectric-тестом
+            FragmentBaseTextViewInflateDiagnosticTest, который точно
+            воспроизводит прод-крэш с тем же стеком
+            (TextView.__constructor__ → readTextAppearance:4123 →
+            TypedArray.getColorStateList:600 → UnsupportedOperationException,
+            «Failed to resolve attribute at index N: TypedValue{t=0x2/d=...}»,
+            где d = 0x7f040195 = наш ?attr/default_text_color).
+
+            Решение: default_text_color / second_text_color / link_color
+            резолвятся в КОНКРЕТНЫЕ статические @color/*, как в M3 base.
+            Это безопасно на любой API.
+
+            Trade-off: при включённом Material You toolbar_title и
+            toolbar_subtitle (читающие android:textColor="?attr/default_text_color"
+            в layout'е) НЕ трекают обои. Визуально это означает, что текст
+            на toolbar использует статические m3_default_color_primary_text,
+            а не динамический colorOnSurface. Это допустимый компромисс:
+            вся типографика самого M3 (CollapsingToolbarLayout title,
+            Material-виджеты) И так использует статические цвета из M3
+            base — мы лишь приводим наш UI к тому же контракту.
         -->
+        <item name="android:textColor">@color/light_default_text_color</item>
+        <item name="android:textColorPrimary">@color/light_default_text_color</item>
+        <item name="android:textColorSecondary">@color/light_second_text_color</item>
+        <item name="android:textColorLink">@color/light_link_color</item>
+        <item name="android:textColorHint">@color/light_second_text_color</item>
+
+        <item name="default_text_color">@color/light_default_text_color</item>
+        <item name="second_text_color">@color/light_second_text_color</item>
+        <item name="link_color">@color/light_link_color</item>
     </style>
 
     <!--

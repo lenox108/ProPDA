@@ -556,6 +556,28 @@
         <!-- Разделители -->
         <item name="divider_line">?attr/colorOutlineVariant</item>
 
+        <!--
+            Framework android:textColor* и наши default_text_color /
+            second_text_color / link_color — обязательно должны
+            закрываться на КОНКРЕТНЫЙ color-state-list (@color/...),
+            а не на ?attr/... ссылку. См. полный KDoc в
+            values/styles.xml. Здесь — те же правила, ночные цвета.
+
+            Trade-off: при включённом Material You framework textColor
+            НЕ трекает обои (ограничение TypedArray.getColorStateList,
+            который делает только 1 уровень deref), но зато не падает
+            InflateException.
+        -->
+        <item name="android:textColor">@color/dark_default_text_color</item>
+        <item name="android:textColorPrimary">@color/dark_default_text_color</item>
+        <item name="android:textColorSecondary">@color/dark_second_text_color</item>
+        <item name="android:textColorLink">@color/dark_link_color</item>
+        <item name="android:textColorHint">@color/dark_second_text_color</item>
+
+        <item name="default_text_color">@color/dark_default_text_color</item>
+        <item name="second_text_color">@color/dark_second_text_color</item>
+        <item name="link_color">@color/dark_link_color</item>
+
     </style>
 
 </resources>
