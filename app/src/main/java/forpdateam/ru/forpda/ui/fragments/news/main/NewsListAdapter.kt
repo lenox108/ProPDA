@@ -6,7 +6,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.updateLayoutParams
-import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ForPdaCoil
@@ -15,7 +14,6 @@ import forpdateam.ru.forpda.ui.applyListRowPlate
 import forpdateam.ru.forpda.ui.currentUiDensityValues
 import forpdateam.ru.forpda.ui.setTextSizePx
 import forpdateam.ru.forpda.databinding.ItemNewsBinding
-import forpdateam.ru.forpda.databinding.NewsItemCompatBinding
 import forpdateam.ru.forpda.databinding.NewsItemLoadMoreBinding
 import forpdateam.ru.forpda.entity.remote.news.NewsItem
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
@@ -25,9 +23,8 @@ import forpdateam.ru.forpda.ui.views.adapters.BaseViewHolder
 class NewsListAdapter : BaseAdapter<NewsItem, BaseViewHolder<NewsItem>>() {
 
     companion object {
-        private const val COMPAT_LAYOUT = 1
-        private const val FULL_LAYOUT = 2
-        private const val LOAD_MORE_LAYOUT = 3
+        private const val FULL_LAYOUT = 1
+        private const val LOAD_MORE_LAYOUT = 2
     }
 
     private var showBtn = false
@@ -47,9 +44,6 @@ class NewsListAdapter : BaseAdapter<NewsItem, BaseViewHolder<NewsItem>>() {
             FULL_LAYOUT -> FullHolder(
                 ItemNewsBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             )
-            COMPAT_LAYOUT -> CompatHolder(
-                NewsItemCompatBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            )
             LOAD_MORE_LAYOUT -> LoadMoreHolder(
                 NewsItemLoadMoreBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             )
@@ -59,11 +53,6 @@ class NewsListAdapter : BaseAdapter<NewsItem, BaseViewHolder<NewsItem>>() {
 
     override fun onBindViewHolder(holder: BaseViewHolder<NewsItem>, position: Int) {
         when (getItemViewType(position)) {
-            COMPAT_LAYOUT -> {
-                val item = getItem(position)
-                (holder as? CompatHolder)?.bind(item, position)
-                mItemDisplayListener?.invoke(item)
-            }
             FULL_LAYOUT -> {
                 val item = getItem(position)
                 (holder as? FullHolder)?.bind(item, position)
@@ -104,40 +93,6 @@ class NewsListAdapter : BaseAdapter<NewsItem, BaseViewHolder<NewsItem>>() {
             }
         }
         notifyDataSetChanged()
-    }
-
-    private inner class CompatHolder(
-        private val binding: NewsItemCompatBinding
-    ) : BaseViewHolder<NewsItem>(binding.root) {
-
-        init {
-            binding.newsListItemClickContainer.setOnClickListener {
-                val position = bindingAdapterPosition
-                if (position == RecyclerView.NO_POSITION) return@setOnClickListener
-                ViewCompat.setTransitionName(
-                    binding.newsListItemCover,
-                    "${position}_image"
-                )
-                mItemClickListener?.onItemClick(
-                    binding.newsListItemCover,
-                    getItem(position),
-                    position
-                )
-            }
-        }
-
-        override fun bind(item: NewsItem, position: Int) {
-            val density = binding.root.context.currentUiDensityValues()
-            binding.newsListItemTitle.setTextSizePx(density.titleTextSizePx)
-            binding.newsListItemDescription.setTextSizePx(density.subtitleTextSizePx)
-            binding.newsListItemUsername.setTextSizePx(density.metadataTextSizePx)
-            binding.newsListItemDate.setTextSizePx(density.metadataTextSizePx)
-            binding.newsListItemTitle.text = item.title
-            binding.newsListItemDescription.text = item.description
-            ForPdaCoil.loadInto(binding.newsListItemCover, item.imgUrl)
-            binding.newsListItemUsername.text = item.author
-            binding.newsListItemDate.text = item.date
-        }
     }
 
     private inner class FullHolder(

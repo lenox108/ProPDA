@@ -954,19 +954,4 @@
     <string name="webview_not_found_or">или</string>
     <string name="main_link_hint">Введите ссылку</string>
 
-    <!-- Offline reading (§5.1 of REFACTOR_PLAN.md) -->
-    <string name="save_for_offline">Сохранить для оффлайна</string>
-    <string name="offline_saved">Сохранено</string>
-    <string name="offline_save_error">Ошибка</string>
-    <string name="pref_title_offline">Оффлайн-чтение</string>
-    <string name="pref_title_offline_max_bytes">Лимит кэша</string>
-    <string name="pref_summary_offline_max_bytes">Максимальный размер сохранённых статей и тем (МБ). Старые записи автоматически удаляются при превышении.</string>
-    <string name="entries_offline_max_bytes">50 МБ;100 МБ;200 МБ;500 МБ;1 ГБ</string>
-    <string name="entry_values_offline_max_bytes">50;100;200;500;1024</string>
-    <string name="pref_summary_offline_max_bytes_50">50 МБ</string>
-    <string name="pref_summary_offline_max_bytes_100">100 МБ</string>
-    <string name="pref_summary_offline_max_bytes_200">200 МБ</string>
-    <string name="pref_summary_offline_max_bytes_500">500 МБ</string>
-    <string name="pref_summary_offline_max_bytes_1024">1 ГБ</string>
-
 </resources>

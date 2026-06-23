@@ -18,10 +18,6 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.core.view.MenuProvider
-import android.view.Menu
-import android.view.MenuInflater
-import android.view.MenuItem
 
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -114,10 +110,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     @Inject lateinit var authHolder: AuthHolder
     @Inject lateinit var readingProgressStore: ArticleReadingProgressStore
     @Inject lateinit var articleTemplate: ArticleTemplate
-    @Inject lateinit var offlineSaveController: forpdateam.ru.forpda.model.data.offline.OfflineSaveController
-    @Inject lateinit var offlineArticleSource: forpdateam.ru.forpda.model.data.offline.OfflineArticleSource
-    @Inject lateinit var offlineRepository: forpdateam.ru.forpda.model.data.offline.OfflineRepository
-    @Inject lateinit var offlineStorage: forpdateam.ru.forpda.model.data.offline.OfflineStorage
 
     private lateinit var contentRoot: View
     private lateinit var webView: ExtendedWebView
@@ -389,21 +381,14 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        registerOfflineSaveMenu()
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     viewModel.uiState.collect { state ->
                         state.article?.let { article ->
-                            // §5.1 — try the offline cache first; if the article is
-                            // fully saved locally we wire the WebViewAssetLoader and
-                            // render the cached HTML. Falls back to the network path
-                            // (via the same renderArticle()) on any failure.
-                            val served = tryServeOfflineArticle(article.id)
                             renderArticle(article)
                             patchCommentsCountIfDomReady(article, "article_model")
                             scheduleInlineCommentsBinding()
-                            if (!served) clearOfflineAssetLoader()
                         }
                         applyWebViewStyle(state)
                     }
@@ -1069,82 +1054,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     fun hostFragment(): NewsDetailsFragment =
             parentFragment as NewsDetailsFragment
 
-    /**
-     * §5.1 — exposes a "Save for offline" overflow item to the host activity toolbar. The
-     * data-layer call is fire-and-forget (see [OfflineSaveController]); the UI just shows a
-     * Snackbar with the result.
-     */
-    private fun registerOfflineSaveMenu() {
-        val host = activity ?: return
-        val provider = object : MenuProvider {
-            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-                menuInflater.inflate(R.menu.article_details, menu)
-            }
-
-            override fun onMenuItemSelected(menuItem: MenuItem): Boolean = when (menuItem.itemId) {
-                R.id.action_save_offline -> {
-                    saveCurrentArticleForOffline()
-                    true
-                }
-                else -> false
-            }
-        }
-        host.addMenuProvider(provider, viewLifecycleOwner, Lifecycle.State.RESUMED)
-    }
-
-    private fun saveCurrentArticleForOffline() {
-        val article = hostFragment().currentArticle() ?: return
-        val html = currentTrustedArticleHtml ?: return
-        val id = forpdateam.ru.forpda.model.data.offline.OfflineSaveController.articleId(article.id)
-        offlineSaveController.save(
-                id = id,
-                type = forpdateam.ru.forpda.entity.db.offline.OfflineItemType.ARTICLE,
-                sourceUrl = article.url ?: "",
-                title = article.title.orEmpty(),
-                html = html,
-                modelJson = "",
-                onSuccess = {
-                    view?.showSnackbar(R.string.offline_saved)
-                },
-                onError = {
-                    view?.showSnackbar(R.string.offline_save_error)
-                }
-        )
-    }
-
-    /**
-     * §5.1 — attempt to serve the article from the offline cache. Returns `true` if
-     * the asset loader was configured (the WebView will resolve `<OFFLINE_BASE_URL>`
-     * requests through it). Returns `false` if the article is not cached, the WebView
-     * is not initialized, or any error occurs — in which case the network path stays
-     * in effect.
-     */
-    private suspend fun tryServeOfflineArticle(articleId: Int): Boolean {
-        if (articleId <= 0) return false
-        if (!::webView.isInitialized) return false
-        return runCatching {
-            val probe = offlineArticleSource.lookupArticle(articleId.toLong())
-            val html = when (probe) {
-                is forpdateam.ru.forpda.model.data.offline.OfflineArticleSource.Probe.Ready -> probe.html
-                is forpdateam.ru.forpda.model.data.offline.OfflineArticleSource.Probe.Partial -> probe.html
-                is forpdateam.ru.forpda.model.data.offline.OfflineArticleSource.Probe.NotSaved -> null
-            } ?: return@runCatching false
-            val itemId = offlineArticleSource.articleId(articleId.toLong())
-            val loader = forpdateam.ru.forpda.model.data.offline.OfflineWebViewBaseUrl
-                    .newAssetLoader(requireContext(), offlineStorage, itemId)
-            (webView.webViewClient as? ArticleWebViewClient)?.setOfflineAssetLoader(loader)
-            // Pre-stage the cached HTML so the network render doesn't blank the view.
-            forpdateam.ru.forpda.model.data.offline.OfflineWebViewBaseUrl
-                    .loadOfflineHtml(webView, offlineRepository, itemId)
-            true
-        }.getOrDefault(false)
-    }
-
-    private fun clearOfflineAssetLoader() {
-        if (!::webView.isInitialized) return
-        (webView.webViewClient as? ArticleWebViewClient)?.setOfflineAssetLoader(null)
-    }
-
     private fun isWebViewReady(): Boolean =
             isAdded && view != null && ::webView.isInitialized && !webView.isDestroyedForReuse()
 
@@ -1706,11 +1615,12 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             else -> (WEBVIEW_STALLED_LOAD_MS - elapsedSinceStart).coerceAtLeast(WEBVIEW_RENDER_PROBE_INTERVAL_MS)
         }
         val probeToken = ++renderProbeToken
-        renderTimeoutRunnable = Runnable {
+        val runnable = Runnable {
             if (probeToken != renderProbeToken || articleRenderErrorShown) return@Runnable
             runArticleRenderProbe(requestId, articleId, startedAt, isHardDeadline || delayMs == 0L)
         }
-        webView.postDelayed(renderTimeoutRunnable!!, delayMs)
+        renderTimeoutRunnable = runnable
+        webView.postDelayed(runnable, delayMs)
     }
 
     private fun runArticleRenderProbe(
@@ -2136,7 +2046,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     private fun schedulePendingExpandWatchdog() {
         if (!::webView.isInitialized) return
         cancelPendingExpandWatchdog()
-        pendingExpandWatchdogRunnable = Runnable {
+        val runnable = Runnable {
             if (!isWebViewReady()) return@Runnable
             val pending = commentsExpandCoordinator.current().pendingExpandSource ?: return@Runnable
             FpdaDebugLog.log(
@@ -2155,7 +2065,8 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             scheduleInlineCommentsBinding()
             runCommentsCoordinator { emptyList() }
         }
-        webView.postDelayed(pendingExpandWatchdogRunnable!!, PENDING_EXPAND_WATCHDOG_MS)
+        pendingExpandWatchdogRunnable = runnable
+        webView.postDelayed(runnable, PENDING_EXPAND_WATCHDOG_MS)
     }
 
     private fun cancelPendingExpandWatchdog() {
@@ -2762,14 +2673,16 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                     copyCommentLink(comment)
                 })
             }
-            if (auth && !isOwnComment && actions.karmaPlus?.isValid() == true) {
+            val karmaPlusAction = actions.karmaPlus
+            if (auth && !isOwnComment && karmaPlusAction?.isValid() == true) {
                 add(InlineCommentMenuItem(getString(R.string.comment_plus_karma)) {
-                    commentsViewModel.executeCommentAction(actions.karmaPlus!!)
+                    commentsViewModel.executeCommentAction(karmaPlusAction)
                 })
             }
-            if (auth && actions.hide?.isValid() == true) {
+            val hideAction = actions.hide
+            if (auth && hideAction?.isValid() == true) {
                 add(InlineCommentMenuItem(getString(R.string.comment_hide)) {
-                    commentsViewModel.executeCommentAction(actions.hide!!)
+                    commentsViewModel.executeCommentAction(hideAction)
                 })
             }
             if (auth && !isOwnComment && isRealReputationAction(actions.reputationPlus)) {
@@ -3164,42 +3077,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
      * — изображения обрабатываются через JS-интерфейс (openImage)
      */
     private inner class ArticleWebViewClient : CustomWebViewClient(avatarRepository, linkHandler, systemLinkHandler) {
-
-        /**
-         * §5.1 — optional [androidx.webkit.WebViewAssetLoader] used to serve the saved
-         * article's HTML and images from the offline cache. Set by
-         * [configureOfflineAssetLoader] when the user re-opens a saved article; cleared
-         * afterwards so the next network article doesn't accidentally serve stale content.
-         */
-        private var offlineAssetLoader: androidx.webkit.WebViewAssetLoader? = null
-
-        fun setOfflineAssetLoader(loader: androidx.webkit.WebViewAssetLoader?) {
-            offlineAssetLoader = loader
-        }
-
-        override fun shouldInterceptRequest(
-                view: WebView,
-                request: android.webkit.WebResourceRequest
-        ): android.webkit.WebResourceResponse? {
-            offlineAssetLoader?.let { loader ->
-                val intercepted = runCatching { loader.shouldInterceptRequest(request.url) }
-                        .getOrNull()
-                if (intercepted != null) return intercepted
-            }
-            return super.shouldInterceptRequest(view, request)
-        }
-
-        override fun shouldInterceptRequest(
-                view: WebView,
-                url: String
-        ): android.webkit.WebResourceResponse? {
-            offlineAssetLoader?.let { loader ->
-                val intercepted = runCatching { loader.shouldInterceptRequest(android.net.Uri.parse(url)) }
-                        .getOrNull()
-                if (intercepted != null) return intercepted
-            }
-            return super.shouldInterceptRequest(view, url)
-        }
 
         override fun handleUri(view: WebView, uri: Uri): Boolean {
             val url = uri.toString()

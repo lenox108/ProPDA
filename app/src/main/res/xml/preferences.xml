@@ -336,21 +336,6 @@
 
     <PreferenceCategory
         android:layout="@layout/preference_category_custom"
-        android:title="@string/pref_title_offline">
-        <ListPreference
-            android:defaultValue="200"
-            android:dialogTitle="@string/pref_title_offline_max_bytes"
-            android:entries="@array/entries_offline_max_bytes"
-            android:entryValues="@array/entry_values_offline_max_bytes"
-            android:key="offline.max_bytes_mb"
-            android:layout="@layout/preference_custom"
-            android:summary="@string/pref_summary_offline_max_bytes"
-            android:title="@string/pref_title_offline_max_bytes"
-            app:iconSpaceReserved="false" />
-    </PreferenceCategory>
-
-    <PreferenceCategory
-        android:layout="@layout/preference_category_custom"
         android:title="@string/pref_title_about">
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"
