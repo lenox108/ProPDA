@@ -54,6 +54,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -370,9 +371,9 @@ class App : Application(), androidx.work.Configuration.Provider {
         rescheduleEventsCheckWorker()
         appScope.launch {
             kotlinx.coroutines.flow.combine(
-                    notificationPreferencesHolder.mainEnabledFlow(),
-                    notificationPreferencesHolder.bgCheckEnabledFlow(),
-                    notificationPreferencesHolder.bgCheckIntervalMinFlow()
+                    notificationPreferencesHolder.mainEnabledFlow().distinctUntilChanged(),
+                    notificationPreferencesHolder.bgCheckEnabledFlow().distinctUntilChanged(),
+                    notificationPreferencesHolder.bgCheckIntervalMinFlow().distinctUntilChanged()
             ) { _, _, _ -> }.collect {
                 rescheduleEventsCheckWorker()
             }
