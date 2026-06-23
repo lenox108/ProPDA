@@ -56,6 +56,8 @@ class NotificationsService : Service() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(serviceJob + Dispatchers.Main.immediate)
 
+    internal val avatarBitmapCache = object : android.util.LruCache<String, Bitmap>(64) {}
+
     @SuppressLint("MissingPermission")
     private fun notifySafe(id: Int, notification: android.app.Notification, event: NotificationEvent?, channelId: String) {
         val category = event?.notificationLogCategory() ?: "stack"
@@ -259,6 +261,7 @@ class NotificationsService : Service() {
 
     override fun onDestroy() {
         BatteryDebugLogger.logState("NotificationsService", "destroy")
+        avatarBitmapCache.evictAll()
         serviceScope.cancel()  // Отменяем все корутины
         serviceJob.cancel()
         // Принудительно снимаем ВСЕ наши уведомления, чтобы шторка не залипала
@@ -315,6 +318,11 @@ class NotificationsService : Service() {
             return
         }
         if (notificationPreferencesHolder.getMainAvatarsEnabled()) {
+            val cacheKey = "user_${event.userId}"
+            avatarBitmapCache.get(cacheKey)?.let { cached ->
+                sendNotification(event, cached)
+                return
+            }
             val res: Resources = this.resources
             val height = res.getDimension(android.R.dimen.notification_large_icon_height).toInt()
             val width = res.getDimension(android.R.dimen.notification_large_icon_width).toInt()
@@ -326,6 +334,7 @@ class NotificationsService : Service() {
                     b = BitmapUtils.centerCrop(b, width, height, 1.0f)
                     BitmapUtils.createAvatar(b, width, height, true)
                 }.onSuccess { avatar ->
+                    avatarBitmapCache.put(cacheKey, avatar)
                     sendNotification(event, avatar)
                 }.onFailure {
                     Timber.e(it, "Notification avatar load failed")
