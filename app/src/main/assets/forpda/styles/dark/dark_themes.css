@@ -1574,6 +1574,17 @@ body#topic .post_container.ppda_highlight_post,
 .post_container.ppda_highlight_post {
   -webkit-box-shadow: inset 0 0 0 0.2rem var(--ppda-accent, var(--surface-accent, #78B8E6)), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
   box-shadow: inset 0 0 0 0.2rem var(--ppda-accent, var(--surface-accent, #78B8E6)), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
+  /* Progressive enhancement: a static `rgba()` tint is declared FIRST so that
+     Android WebView builds that predate `color-mix()` support (CSS Color
+     Module Level 5, Chromium 111+ / 2023-03) still render a visible card tint.
+     Without this fallback the `background: color-mix(...)!important`
+     declaration is discarded as invalid on those WebViews and the post card
+     keeps its base colour, making the highlight effectively invisible in
+     non-system palettes (the regression behind "highlight works only in
+     system palette"). A browser that does not recognise `color-mix(...)`
+     discards only the second declaration, leaving the first `rgba()` in
+     force. */
+  background: rgba(120, 184, 230, 0.22) !important;
   background: color-mix(in srgb, var(--ppda-accent, var(--surface-accent, #78B8E6)) 18%, #1E1E1E) !important;
   -webkit-transition: box-shadow 0.3s ease, background 0.3s ease;
   transition: box-shadow 0.3s ease, background 0.3s ease;

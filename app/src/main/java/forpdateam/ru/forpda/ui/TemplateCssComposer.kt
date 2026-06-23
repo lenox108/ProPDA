@@ -217,21 +217,35 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
 """.trimIndent()
 
     private fun getThemeLayoutSafetyCss(): String {
-        // Accent for the topic "where I stopped" highlight (see
-        // `.post_container.ppda_highlight_post` in the shipped *themes.css).
-        // Only set in the normal (non-palette) path: sepia / minimal-reader /
-        // amoled override modes already set `--surface-accent` to their
-        // palette-aware link color, and the highlight's CSS
-        // `var(--ppda-accent, var(--surface-accent, ...))` falls through to
-        // `--surface-accent` when `--ppda-accent` is undefined — so the
-        // highlight is palette-aware in every mode without touching the
-        // override composers.
-        val accentRootCss = if (
-                isSepiaReading() || isSepiaBlue() || isMinimalReader() || isAmoled()
-        ) "" else {
-            val accent = if (dayNightHelper.isNight()) "#78B8E6" else "#2177AF"
-            ":root { --ppda-accent: $accent; }\n"
+        // `--ppda-accent` MUST be defined for every active palette/mode. The
+        // topic "where I stopped" highlight uses
+        // `var(--ppda-accent, var(--surface-accent, <terminal-fallback>))` in
+        // the shipped *themes.css, and historically `--ppda-accent` was only
+        // set on the system path — leaving sepia / sepia-blue / minimal /
+        // amoled to fall through to `--surface-accent` (defined by the
+        // override composers). That worked in theory, but two regressions
+        // slipped through:
+        //   1) if any override composer ever forgets to set
+        //      `--surface-accent` (or sets it to `transparent`/`none`), the
+        //      cascade reaches the terminal fallback and the ring colour is
+        //      fixed regardless of palette;
+        //   2) `--surface-accent` is intentionally absent on the system path,
+        //      so any third-party Material You / dynamic-colour layer that
+        //      wanted to tint the highlight had no variable to hook into.
+        // By unconditionally defining `--ppda-accent` here (this composer runs
+        // AFTER the override composers in [compose], so this wins the
+        // cascade), the highlight always resolves to a visible, palette-aware
+        // accent. The values mirror the per-palette `colors.link` /
+        // `colors.accent` baked into the override composers above so the ring
+        // colour matches the rest of the palette rather than a hard-coded blue.
+        val accent = when {
+            isSepiaReading() -> if (dayNightHelper.isNight()) "#C9975B" else "#8A5A2B"
+            isSepiaBlue() -> if (dayNightHelper.isNight()) "#8FB3C8" else "#4F7896"
+            isMinimalReader() -> if (dayNightHelper.isNight()) "#8DA3B8" else "#7C8FA1"
+            isAmoled() -> "#9E9E9E"
+            else -> if (dayNightHelper.isNight()) "#78B8E6" else "#2177AF"
         }
+        val accentRootCss = ":root { --ppda-accent: $accent; }\n"
         val css = """
 $accentRootCss
 body#topic .post_container .post_header .header_wrapper {
