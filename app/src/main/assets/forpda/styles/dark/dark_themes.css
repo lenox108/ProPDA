@@ -1570,17 +1570,22 @@ body.hide_avatar .post-block.quote > .block-title .avatar .image {
   -webkit-animation: highlight 1s;
   animation: highlight 1s;
 }
+body#topic .post_container.ppda_highlight_post,
 .post_container.ppda_highlight_post {
-  -webkit-box-shadow: inset 0 0 0 0.1875rem rgba(120, 184, 230, 0.95), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12);
-  box-shadow: inset 0 0 0 0.1875rem rgba(120, 184, 230, 0.95), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12);
-  background: #2a3642;
-  -webkit-transition: box-shadow 0.3s ease, background 0.3s ease;
-  transition: box-shadow 0.3s ease, background 0.3s ease;
+  -webkit-box-shadow: inset 0 0 0 0.1875rem rgba(120, 184, 230, 0.95), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
+  box-shadow: inset 0 0 0 0.1875rem rgba(120, 184, 230, 0.95), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
+  outline: 0.1875rem solid rgba(120, 184, 230, 0.95) !important;
+  outline-offset: -0.1875rem !important;
+  background: #2a3642 !important;
+  -webkit-transition: box-shadow 0.3s ease, outline-color 0.3s ease, background 0.3s ease;
+  transition: box-shadow 0.3s ease, outline-color 0.3s ease, background 0.3s ease;
 }
+body#topic .post_container.ppda_highlight_post.ppda_highlight_fading,
 .post_container.ppda_highlight_post.ppda_highlight_fading {
-  -webkit-box-shadow: inset 0 0 0 0rem rgba(120, 184, 230, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12);
-  box-shadow: inset 0 0 0 0rem rgba(120, 184, 230, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12);
-  background: #1E1E1E;
+  -webkit-box-shadow: inset 0 0 0 0rem rgba(120, 184, 230, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
+  box-shadow: inset 0 0 0 0rem rgba(120, 184, 230, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
+  outline-color: rgba(120, 184, 230, 0) !important;
+  background: #1E1E1E !important;
 }
 .post_container:after {
   content: "";
