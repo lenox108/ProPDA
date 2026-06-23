@@ -1574,9 +1574,17 @@ body#topic .post_container.ppda_highlight_post,
      ring visually identical. */
   -webkit-box-shadow: inset 0 0 0 0.2rem var(--ppda-accent, var(--surface-accent, #2177af)), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
   box-shadow: inset 0 0 0 0.2rem var(--ppda-accent, var(--surface-accent, #2177af)), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
-  /* `color-mix` guarantees a readable tint against the post card regardless of
-     the chosen accent (very dark or very light). 88% post background + 12%
-     accent is a conservative tint that never washes the post out. */
+  /* Progressive enhancement: a static `rgba()` tint is declared FIRST so that
+     Android WebView builds that predate `color-mix()` support (CSS Color
+     Module Level 5, Chromium 111+ / 2023-03) still render a visible card tint.
+     A browser that does not recognise `color-mix(...)` discards ONLY the
+     second declaration, leaving the first `rgba()` in force — so the tint
+     never silently disappears on older WebViews (which is exactly the
+     regression behind "highlight works only in system palette": without this
+     fallback the highlight's `background` declaration was discarded as
+     invalid on those devices and the post card kept its base colour, making
+     the highlight effectively invisible in non-system palettes). */
+  background: rgba(33, 119, 175, 0.16) !important;
   background: color-mix(in srgb, var(--ppda-accent, var(--surface-accent, #2177af)) 12%, #ffffff) !important;
   -webkit-transition: box-shadow 0.3s ease, background 0.3s ease;
   transition: box-shadow 0.3s ease, background 0.3s ease;

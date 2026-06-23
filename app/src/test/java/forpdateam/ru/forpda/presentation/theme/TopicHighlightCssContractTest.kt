@@ -116,10 +116,35 @@ class TopicHighlightCssContractTest {
         // Background tint must be derived from the same accent via color-mix,
         // so a dark accent on a dark post still produces a readable tint and
         // a light accent on a light post does not wash the card out.
-        val tintRule = ruleBody.substringAfter("background:").substringBefore(";")
+        // We must read across the WHOLE rule body (not just
+        // `background:`'s first segment): the rule declares a static
+        // `rgba()` fallback BEFORE the `color-mix(...)` line for progressive
+        // enhancement on Android WebView builds that predate `color-mix()`
+        // (Chromium < 111). The static fallback is what makes the highlight
+        // visible on those older WebViews — without it the `color-mix`
+        // declaration is discarded as invalid and the post card keeps its
+        // base colour, which is exactly the "highlight only works in system
+        // palette" regression.
         assertTrue(
-                "$cssRelativePath: $selector background tint must be derived from the accent via color-mix, got: $tintRule",
-                tintRule.contains("color-mix") && tintRule.contains("var(--ppda-accent"),
+                "$cssRelativePath: $selector background must include a color-mix tint derived from the accent: $ruleBody",
+                ruleBody.contains("color-mix") && ruleBody.contains("var(--ppda-accent"),
+        )
+        assertTrue(
+                "$cssRelativePath: $selector must declare a static rgba() tint BEFORE the color-mix(...) line " +
+                        "so older Android WebViews (pre-Chromium-111, no color-mix support) still render the highlight: $ruleBody",
+                ruleBody.contains("rgba("),
+        )
+        // Ordering matters: the `rgba(...)` fallback MUST appear before the
+        // `color-mix(...)` line so that a WebView that recognises the first
+        // but not the second keeps the first in force. If `color-mix` were
+        // declared first, an unsupported engine would discard it and leave
+        // the card with no tint at all (cascade would not reach a valid one).
+        val rgbaIndex = ruleBody.indexOf("rgba(")
+        val colorMixIndex = ruleBody.indexOf("color-mix")
+        assertTrue(
+                "$cssRelativePath: $selector the rgba() fallback must be declared before color-mix(...) " +
+                        "(found rgba at $rgbaIndex, color-mix at $colorMixIndex): $ruleBody",
+                rgbaIndex in 0 until colorMixIndex,
         )
     }
 }
