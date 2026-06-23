@@ -66,7 +66,6 @@ class SettingsFragment : BaseSettingFragment() {
     @Inject lateinit var preferences: SharedPreferences
     @Inject lateinit var dayNightHelper: DayNightHelper
     @Inject lateinit var clipboardHelper: ClipboardHelper
-    @Inject lateinit var offlineRepository: forpdateam.ru.forpda.model.data.offline.OfflineRepository
 
     private var logoutJob: kotlinx.coroutines.Job? = null
     private val prefs by lazy { preferences }
@@ -117,16 +116,6 @@ class SettingsFragment : BaseSettingFragment() {
             if (isAdded) {
                 lifecycleScope.launch {
                     mainPreferencesHolder.setShowBottomArrow(value)
-                }
-            }
-        }
-        if (key == "offline.max_bytes_mb") {
-            val mb = sharedPrefs.getString(key, null)?.toIntOrNull() ?: 200
-            if (isAdded) {
-                lifecycleScope.launch {
-                    runCatching {
-                        offlineRepository.enforceStorageLimit(mb.toLong() * 1024L * 1024L)
-                    }.onFailure { Timber.w(it, "SettingsFragment: enforceStorageLimit on pref change failed") }
                 }
             }
         }

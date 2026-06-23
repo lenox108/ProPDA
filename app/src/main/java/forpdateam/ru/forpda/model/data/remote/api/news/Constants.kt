@@ -80,7 +80,6 @@ object Constants {
     const val NEWS_SUBCATEGORY_HOW_TO_INTERVIEW = "interview_news"
     const val NEWS_URL_HOW_TO_INTERVIEW = "https://4pda.to/articles/tag/interview/"
 
-    const val TAB_OFFLINE = "offline"
     const val TAB_ALL = "news"
     const val TAB_ARTICLE = "article"
     const val TAB_REVIEWS = "reviews"
