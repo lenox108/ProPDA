@@ -98,11 +98,28 @@ class TopicHighlightCssContractTest {
                 "$cssRelativePath: $selector must use !important to beat theme overrides: $ruleBody",
                 ruleBody.contains("!important"),
         )
-        // Outline is a second visual channel that the override CSS does not reset
-        // on `.post_container`, so it survives even an unforeseen box-shadow reset.
+        // Inset box-shadow only — the post wrapper has `overflow:hidden` +
+        // `border-radius`, so an `outline` (rectangular, drawn outside the
+        // box) gets clipped at the rounded corners and at the horizontal
+        // edges. Pin that no outline leaks into the rule.
         assertTrue(
-                "$cssRelativePath: $selector must also apply an outline fallback: $ruleBody",
-                ruleBody.contains("outline"),
+                "$cssRelativePath: $selector must NOT use outline (it gets clipped by the post's overflow:hidden + border-radius): $ruleBody",
+                !ruleBody.contains("outline:"),
+        )
+        // The accent must be resolved from a CSS variable (palette-aware),
+        // not a single hard-coded RGB. Without this, the ring colour is fixed
+        // regardless of sepia / amoled / minimal / light / dark mode.
+        assertTrue(
+                "$cssRelativePath: $selector must use var(--ppda-accent, var(--surface-accent, ...)) so the colour adapts to the active palette: $ruleBody",
+                ruleBody.contains("--ppda-accent"),
+        )
+        // Background tint must be derived from the same accent via color-mix,
+        // so a dark accent on a dark post still produces a readable tint and
+        // a light accent on a light post does not wash the card out.
+        val tintRule = ruleBody.substringAfter("background:").substringBefore(";")
+        assertTrue(
+                "$cssRelativePath: $selector background tint must be derived from the accent via color-mix, got: $tintRule",
+                tintRule.contains("color-mix") && tintRule.contains("var(--ppda-accent"),
         )
     }
 }

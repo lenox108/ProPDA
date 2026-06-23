@@ -217,7 +217,23 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
 """.trimIndent()
 
     private fun getThemeLayoutSafetyCss(): String {
+        // Accent for the topic "where I stopped" highlight (see
+        // `.post_container.ppda_highlight_post` in the shipped *themes.css).
+        // Only set in the normal (non-palette) path: sepia / minimal-reader /
+        // amoled override modes already set `--surface-accent` to their
+        // palette-aware link color, and the highlight's CSS
+        // `var(--ppda-accent, var(--surface-accent, ...))` falls through to
+        // `--surface-accent` when `--ppda-accent` is undefined — so the
+        // highlight is palette-aware in every mode without touching the
+        // override composers.
+        val accentRootCss = if (
+                isSepiaReading() || isSepiaBlue() || isMinimalReader() || isAmoled()
+        ) "" else {
+            val accent = if (dayNightHelper.isNight()) "#78B8E6" else "#2177AF"
+            ":root { --ppda-accent: $accent; }\n"
+        }
         val css = """
+$accentRootCss
 body#topic .post_container .post_header .header_wrapper {
     position: relative !important;
     --post-header-action-right: -1rem !important;
