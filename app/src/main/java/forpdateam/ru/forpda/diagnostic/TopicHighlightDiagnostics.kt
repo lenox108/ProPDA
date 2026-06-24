@@ -141,6 +141,39 @@ object TopicHighlightDiagnostics {
      * `deferred_and_already_armed` (scroll still blocking AND nothing left to
      * schedule), `already_armed` (per-generation guards already satisfied).
      */
+    /**
+     * Logs every update of the per-render armed/fadeout flags in
+     * [ThemeWebController]. Each assignment site is wrapped to emit
+     * `highlight_arm_flag_updated` BEFORE the value is written, so the
+     * logcat shows the previous value, the new value, and the call site
+     * (caller method name) for every state mutation.
+     *
+     * Used to localise the regression behind the device log
+     * (24_06-12-16-08_230) where the highlight chain dies with
+     * `highlight_arm_skipped reason=already_armed` even on the very first
+     * `reapplyTopicHighlight` call for a given render generation. The only
+     * way the armed flag can be equal to the page's render generation at
+     * the first arm is if it was set by an assignment that did NOT pass
+     * through `jsApi.eval(applyHighlight)`; this log makes that assignment
+     * visible.
+     */
+    fun highlightArmFlagUpdated(
+            flag: String,
+            previousValue: Int,
+            newValue: Int,
+            caller: String
+    ) {
+        log(
+                "highlight_arm_flag_updated",
+                linkedMapOf(
+                        "flag" to flag,
+                        "previousValue" to previousValue,
+                        "newValue" to newValue,
+                        "caller" to caller
+                )
+        )
+    }
+
     fun highlightArmSkipped(
             topicId: Long,
             reason: String,
