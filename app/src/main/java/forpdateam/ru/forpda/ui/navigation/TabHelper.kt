@@ -48,15 +48,6 @@ object TabHelper {
     var useComposeQmsContacts: Boolean = false
 
     /**
-     * A/B flag for the offline-reading list (§5.1 of REFACTOR_PLAN.md). When
-     * `true`, [forpdateam.ru.forpda.ui.fragments.offline.OfflineListComposeFragment]
-     * is used; otherwise a future legacy fragment path takes over. Flip the
-     * flag to roll back to legacy in case of regressions.
-     */
-    @Volatile
-    var useComposeOfflineList: Boolean = false
-
-    /**
      * §3.2 flag: when true, [Screen.ArticleList] routes through the
      * Compose-based [forpdateam.ru.forpda.ui.fragments.news.main.NewsMainComposeFragment];
      * when false (default) it falls back to the legacy
@@ -223,6 +214,7 @@ object TabHelper {
                     if (screen.unreadPostIdFromList > 0) {
                         putInt(Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST, screen.unreadPostIdFromList)
                     }
+                    putBoolean(Screen.Theme.ARG_INSPECTOR_MARKED_UNREAD, screen.inspectorMarkedUnread)
                 })
             }
             is Screen.Topics -> {
@@ -232,20 +224,6 @@ object TabHelper {
             }
             is Screen.OtherMenu -> {
                 createFragment(OtherFragment::class.java)
-            }
-            is Screen.OfflineList -> if (useComposeOfflineList) {
-                createFragment(
-                        forpdateam.ru.forpda.ui.fragments.offline.OfflineListComposeFragment::class.java,
-                        args
-                )
-            } else {
-                // No legacy offline-list fragment is shipping yet — fall back to the
-                // Compose host. The A/B flag exists so the legacy path can be wired
-                // in later without changing the routing.
-                createFragment(
-                        forpdateam.ru.forpda.ui.fragments.offline.OfflineListComposeFragment::class.java,
-                        args
-                )
             }
             else -> {
                 // Не падаем в проде из-за неизвестного экрана: открываем меню как безопасный fallback.

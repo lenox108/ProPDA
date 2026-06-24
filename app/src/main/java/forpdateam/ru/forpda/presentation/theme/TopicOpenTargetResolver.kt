@@ -20,6 +20,8 @@ enum class TopicOpenTargetType {
     USER_ACTION,
     SETTING_FIRST_PAGE,
     SETTING_LAST_UNREAD,
+    /** Read list row under LAST_UNREAD: server `view=getlastpost` to resume at last-read post. */
+    READ_RESUME,
     SERVER_UNREAD_FALLBACK,
     SAFE_FALLBACK
 }
@@ -35,6 +37,8 @@ data class TopicOpenContext(
         val unreadPostIdFromList: Int? = null,
         /** List row marked unread (+N, bold, inspector) — do not apply [list_read_no_unread_hint]. */
         val listTopicMarkedUnread: Boolean = false,
+        /** Inspector-fav snapshot marked this topic unread on last merge (see [FavItem.inspectorMarkedUnread]). */
+        val inspectorMarkedUnread: Boolean = false,
         val cachedLastPage: Int? = null,
         val cachedScrollPosition: Int? = null,
         /** Read favorites/topics row — open at server last-read, not page 1 or getnewpost. */

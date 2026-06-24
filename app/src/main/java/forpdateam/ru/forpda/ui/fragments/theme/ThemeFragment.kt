@@ -272,6 +272,7 @@ abstract class ThemeFragment : TabFragment() {
             val unreadUrl = getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_UNREAD_URL_FROM_LIST, null)
             val unreadPostId = getInt(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST, 0)
             val lastReadUrl = getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_LAST_READ_URL_FROM_LIST, null)
+            val inspectorMarkedUnread = getBoolean(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_INSPECTOR_MARKED_UNREAD, false)
             val source = getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_TOPIC_OPEN_SOURCE, "theme_tab")
             val openIntent = getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_TOPIC_OPEN_INTENT, "fresh")
             presenter.initTopicOpenHints(
@@ -279,6 +280,7 @@ abstract class ThemeFragment : TabFragment() {
                             unreadUrlFromList = unreadUrl,
                             unreadPostIdFromList = unreadPostId.takeIf { it > 0 },
                             topicMarkedUnread = !unreadUrl.isNullOrBlank() || unreadPostId > 0,
+                            inspectorMarkedUnread = inspectorMarkedUnread,
                             lastReadUrlFromList = lastReadUrl
                     ),
                     sourceScreen = source

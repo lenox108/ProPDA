@@ -16,7 +16,6 @@ import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.common.Preferences as AppPreferences
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
 /**
@@ -26,14 +25,14 @@ import kotlinx.coroutines.launch
  * `MainScope()` that would outlive the view. Callers pass the fragment's
  * `viewLifecycleOwner.lifecycleScope` (constructed from `onViewCreated()`), so
  * the report-warning preference write in `tryReportPost` is cancelled with the
- * view. The default `MainScope()` keeps non-fragment callers working.
+ * view.
  */
 class ThemeDialogsHelper_V2(
     private val context: Context,
     private val authHolder: AuthHolder,
     private val otherPreferencesHolder: OtherPreferencesHolder,
     private val topicPreferencesHolder: TopicPreferencesHolder,
-    private val scope: CoroutineScope = MainScope(),
+    private val scope: CoroutineScope,
     private val enableForumBlacklistMenu: Boolean = true
 ) {
     private companion object {

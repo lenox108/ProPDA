@@ -169,6 +169,8 @@ data class TopicOpenListHints(
         val unreadPostIdFromList: Int? = null,
         /** List row marked unread (+N, bold title, inspector) even when href lacks view=getnewpost. */
         val topicMarkedUnread: Boolean = false,
+        /** Inspector fav snapshot marked this topic unread on last merge — separate from list-row state. */
+        val inspectorMarkedUnread: Boolean = false,
         /** Read list row resume hint — server last-read page (getlastpost), not first unread. */
         val lastReadUrlFromList: String? = null
 )

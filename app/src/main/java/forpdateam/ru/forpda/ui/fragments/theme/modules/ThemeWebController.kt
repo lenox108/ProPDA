@@ -122,6 +122,8 @@ class ThemeWebController(
      * bump the generation).
      */
     private var highlightArmedGeneration: Int = 0
+    /** Post id the highlight was last armed for. See [HighlightArmingPolicy.shouldArmForCurrentTarget]. */
+    private var highlightArmedPostId: Long = 0L
     /** Generation for which the JS fade-out timer has been armed (independent of apply). */
     private var highlightFadeoutScheduledGeneration: Int = 0
 
@@ -146,6 +148,19 @@ class ThemeWebController(
             )
         }
         highlightArmedGeneration = newValue
+    }
+
+    /** Companion to [setHighlightArmedGeneration]; records the post id the last arm applied. */
+    private fun setHighlightArmedPostId(newValue: Long, caller: String) {
+        if (BuildConfig.DEBUG && highlightArmedPostId != newValue) {
+            TopicHighlightDiagnostics.highlightArmFlagUpdated(
+                    flag = "highlightArmedPostId",
+                    previousValue = highlightArmedPostId.toInt(),
+                    newValue = newValue.toInt(),
+                    caller = caller
+            )
+        }
+        highlightArmedPostId = newValue
     }
 
     /** Same guard for the fade-out flag — see [setHighlightArmedGeneration]. */
@@ -342,6 +357,7 @@ class ThemeWebController(
                 newValue = HighlightArmingPolicy.armedGenerationAfterNewRender(),
                 caller = "renderThemePage"
         )
+        setHighlightArmedPostId(newValue = 0L, caller = "renderThemePage")
         setHighlightFadeoutScheduledGeneration(
                 newValue = 0,
                 caller = "renderThemePage"
@@ -543,6 +559,7 @@ class ThemeWebController(
         domLifecycleGeneration = 0
         pageLifecycleGeneration = 0
         setHighlightArmedGeneration(newValue = 0, caller = "resetRenderState")
+        setHighlightArmedPostId(newValue = 0L, caller = "resetRenderState")
         missedLifecycleFlushGeneration = 0
         if (BuildConfig.DEBUG) Log.i(REFRESH_SCROLL_TAG, "controller resetRenderState")
     }
@@ -1574,6 +1591,10 @@ class ThemeWebController(
                 newValue = 0,
                 caller = "reapplyTopicHighlightAfterScrollSettled"
         )
+        setHighlightArmedPostId(
+                newValue = 0L,
+                caller = "reapplyTopicHighlightAfterScrollSettled"
+        )
         reapplyTopicHighlight()
     }
 
@@ -1693,7 +1714,12 @@ class ThemeWebController(
         val blockingScrollPending = presenter.hasBlockingScrollPending()
         val deferApply = HighlightArmingPolicy.shouldDeferUntilScrollSettled(blockingScrollPending)
         val shouldScheduleFadeout = highlightFadeoutScheduledGeneration != generation
-        val shouldApply = !deferApply && highlightArmedGeneration != generation
+        val shouldApply = !deferApply && HighlightArmingPolicy.shouldArmForCurrentTarget(
+                armedGeneration = highlightArmedGeneration,
+                armedPostId = highlightArmedPostId,
+                currentGeneration = generation,
+                currentPostId = postId,
+        )
         if (!shouldScheduleFadeout && !shouldApply) {
             if (BuildConfig.DEBUG) {
                 TopicHighlightDiagnostics.highlightArmSkipped(
@@ -1739,6 +1765,10 @@ class ThemeWebController(
         if (shouldApply) {
             setHighlightArmedGeneration(
                     newValue = generation,
+                    caller = "reapplyTopicHighlight.applyHighlight"
+            )
+            setHighlightArmedPostId(
+                    newValue = postId,
                     caller = "reapplyTopicHighlight.applyHighlight"
             )
             TopicHighlightDiagnostics.nativeHighlightBound(

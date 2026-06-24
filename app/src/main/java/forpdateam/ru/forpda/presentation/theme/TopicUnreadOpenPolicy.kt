@@ -448,6 +448,24 @@ object TopicUnreadOpenPolicy {
                     reason = "list_marked_unread_use_getnewpost"
             )
         }
+        // Log 24_06-14: read list row (no list-unread URL, list not marked unread, inspector not
+        // marking it unread) under LAST_UNREAD must use `view=getlastpost` to resume at the
+        // server-side last-read bookmark. The previous `list_read_use_getnewpost` always resolved
+        // to `getnewpost`, which the server redirected to the bottom-bookmark of an already-read
+        // topic without any first-unread to seek — leaving the user on the top of the last page
+        // with no highlight.
+        if (!context.inspectorMarkedUnread &&
+                context.unreadUrlFromList.isNullOrBlank() &&
+                context.unreadPostIdFromList?.takeIf { it > 0 } == null
+        ) {
+            val normalized = TopicOpenTargetResolver.normalizeLastReadNavigationUrl(context.rawUrl)
+            return TopicOpenResolution(
+                    url = normalized,
+                    targetType = TopicOpenTargetType.READ_RESUME,
+                    suppressScrollRestore = true,
+                    reason = "list_read_use_getlastpost"
+            )
+        }
         if (isListReadOpen(context)) {
             // Log 1121483: a "read" favorites row under LAST_UNREAD must still seek the first unread.
             // getlastpost can only ever resolve to the server last-read bookmark, so when the list

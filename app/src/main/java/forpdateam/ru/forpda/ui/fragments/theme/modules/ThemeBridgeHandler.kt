@@ -1,7 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.theme.modules
 
 import android.annotation.SuppressLint
-import android.webkit.JavascriptInterface
 import forpdateam.ru.forpda.common.extractPostBodyHtml
 import forpdateam.ru.forpda.entity.remote.IBaseForumPost
 import forpdateam.ru.forpda.presentation.theme.ThemeJsInterface
@@ -20,18 +19,15 @@ class ThemeBridgeHandler(
 
     companion object {
         const val JS_INTERFACE = "IThemePresenter"
-        const val THEME_VIEW_INTERFACE = "IThemeView"
     }
 
     private val jsApi = ThemeJsApi(webView)
-    private val themeViewBridge = ThemeViewBridge()
     private var isRegistered = false
 
     @SuppressLint("JavascriptInterface")
     fun init() {
         if (isRegistered) return
         webView.enableBaseBridge()
-        webView.addJavascriptInterface(themeViewBridge, THEME_VIEW_INTERFACE)
         webView.addJavascriptInterface(jsInterface, JS_INTERFACE)
         isRegistered = true
     }
@@ -42,7 +38,6 @@ class ThemeBridgeHandler(
             return
         }
         webView.removeBaseBridge()
-        webView.removeJavascriptInterface(THEME_VIEW_INTERFACE)
         webView.removeJavascriptInterface(JS_INTERFACE)
         jsInterface.cancel()
         isRegistered = false
@@ -68,12 +63,5 @@ class ThemeBridgeHandler(
 
     fun extractPostBodyHtml(postId: Int, callback: (String?) -> Unit) {
         webView.extractPostBodyHtml(postId, callback)
-    }
-
-    private class ThemeViewBridge {
-        @JavascriptInterface
-        fun callbackUpdateHistoryHtml(_value: String) {
-            // Compatibility no-op for legacy theme templates.
-        }
     }
 }

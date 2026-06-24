@@ -83,6 +83,7 @@ object TopicOpenTargetMapper {
                     pageSt = pageSt ?: 0
             )
             TopicOpenTargetType.SETTING_LAST_UNREAD,
+            TopicOpenTargetType.READ_RESUME,
             TopicOpenTargetType.SERVER_UNREAD_FALLBACK -> TopicOpenTarget.Unread(
                     fetchUrl = url,
                     topicId = topicId,
