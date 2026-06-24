@@ -1467,7 +1467,15 @@ class ThemeWebController(
      * JS-side `PPDA_applyHighlight` ignores stale callbacks.
      */
     private fun reapplyTopicHighlight() {
-        if (disposed || fragment.view == null) return
+        if (disposed || fragment.view == null) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = 0L,
+                        reason = "disposed_or_no_view"
+                )
+            }
+            return
+        }
         // The renderer path (mapEntity → applyToPage) is the canonical place to
         // stamp `highlightTarget` / `renderGenerationId`, but it can be bypassed
         // (cached-page restore, smart-patch re-apply, fast re-render on tab show).
@@ -1480,20 +1488,93 @@ class ThemeWebController(
             @Suppress("UNUSED_VARIABLE")
             val unused = resolution.reason
         }
-        val page = presenter.getCurrentPageInstance() ?: return
-        val highlight = page.highlightTarget ?: return
-        if (highlight is forpdateam.ru.forpda.presentation.theme.HighlightTarget.None) return
+        val page = presenter.getCurrentPageInstance()
+        if (page == null) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = 0L,
+                        reason = "no_current_page"
+                )
+            }
+            return
+        }
+        val highlight = page.highlightTarget
+        if (highlight == null) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = page.id.toLong(),
+                        reason = "no_highlight_target",
+                        renderGenerationId = page.renderGenerationId
+                )
+            }
+            return
+        }
+        if (highlight is forpdateam.ru.forpda.presentation.theme.HighlightTarget.None) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = page.id.toLong(),
+                        reason = "highlight_target_none",
+                        renderGenerationId = page.renderGenerationId
+                )
+            }
+            return
+        }
         val topicId = page.id
-        if (topicId <= 0) return
+        if (topicId <= 0) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = topicId.toLong(),
+                        reason = "topic_id_non_positive",
+                        renderGenerationId = page.renderGenerationId,
+                        postId = highlight.postId
+                )
+            }
+            return
+        }
         val generation = page.renderGenerationId
-        if (generation <= 0) return
+        if (generation <= 0) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = topicId.toLong(),
+                        reason = "generation_non_positive",
+                        renderGenerationId = generation,
+                        postId = highlight.postId
+                )
+            }
+            return
+        }
         val postId = highlight.postId
-        if (postId <= 0L) return
+        if (postId <= 0L) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = topicId.toLong(),
+                        reason = "post_id_non_positive",
+                        renderGenerationId = generation,
+                        postId = postId
+                )
+            }
+            return
+        }
         val typeName = highlight.type.jsName
-        val deferApply = HighlightArmingPolicy.shouldDeferUntilScrollSettled(presenter.hasBlockingScrollPending())
+        val blockingScrollPending = presenter.hasBlockingScrollPending()
+        val deferApply = HighlightArmingPolicy.shouldDeferUntilScrollSettled(blockingScrollPending)
         val shouldScheduleFadeout = highlightFadeoutScheduledGeneration != generation
         val shouldApply = !deferApply && highlightArmedGeneration != generation
-        if (!shouldScheduleFadeout && !shouldApply) return
+        if (!shouldScheduleFadeout && !shouldApply) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = topicId.toLong(),
+                        reason = if (deferApply) "deferred_and_already_armed" else "already_armed",
+                        renderGenerationId = generation,
+                        postId = postId,
+                        deferApply = deferApply,
+                        blockingScrollPending = blockingScrollPending,
+                        armedGeneration = highlightArmedGeneration,
+                        fadeoutScheduledGeneration = highlightFadeoutScheduledGeneration
+                )
+            }
+            return
+        }
         val js = buildString {
             append(jsApi.setReadPosObserverEnabled(false))
             if (shouldApply) {
