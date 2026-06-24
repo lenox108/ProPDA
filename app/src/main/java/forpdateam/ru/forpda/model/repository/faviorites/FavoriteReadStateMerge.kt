@@ -35,7 +35,9 @@ internal object FavoriteReadStateMerge {
             network == FavoriteReadState.UNREAD || networkLegacyIsNew -> 1
             else -> 0
         }
-        val cachedUnread = cached?.let { it.readState == FavoriteReadState.UNREAD || it.isNew } == true
+        val cachedUnread = cached?.let {
+            it.readState == FavoriteReadState.UNREAD || it.isNew || it.unreadPostCount > 0
+        } == true
         val cachedCount = cached?.unreadPostCount ?: 0
 
         if (inspectorPresent) {

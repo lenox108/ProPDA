@@ -194,14 +194,68 @@ object ThemePostReadStateDiagnostics {
     fun markReadApplied(
             topicId: Int,
             reason: String,
-            source: String
+            source: String,
+            prevIsNew: Boolean? = null,
+            prevReadState: String? = null,
+            prevUnreadCount: Int? = null,
+            newIsNew: Boolean? = null,
+            newReadState: String? = null,
+            newUnreadCount: Int? = null,
+            itemPresent: Boolean? = null
     ) {
         log(
                 "mark_read_applied",
+                linkedMapOf(
+                        "topicId" to topicId,
+                        "reason" to reason,
+                        "source" to source,
+                        "prevIsNew" to prevIsNew,
+                        "prevReadState" to prevReadState,
+                        "prevUnreadCount" to prevUnreadCount,
+                        "newIsNew" to newIsNew,
+                        "newReadState" to newReadState,
+                        "newUnreadCount" to newUnreadCount,
+                        "itemPresent" to itemPresent
+                )
+        )
+    }
+
+    fun markReadSkipped(
+            topicId: Int,
+            reason: String,
+            source: String,
+            currentPage: Int = 0,
+            allPages: Int = 0
+    ) {
+        log(
+                "mark_read_skipped",
                 mapOf(
                         "topicId" to topicId,
                         "reason" to reason,
-                        "source" to source
+                        "source" to source,
+                        "current" to currentPage,
+                        "all" to allPages
+                )
+        )
+    }
+
+    fun markReadGateCheck(
+            topicId: Int,
+            currentPage: Int,
+            allPages: Int,
+            wasNearBottom: Boolean?,
+            scrollRatio: Double?,
+            result: String
+    ) {
+        log(
+                "mark_read_gate_check",
+                mapOf(
+                        "topicId" to topicId,
+                        "current" to currentPage,
+                        "all" to allPages,
+                        "wasNearBottom" to wasNearBottom,
+                        "scrollRatio" to scrollRatio,
+                        "result" to result
                 )
         )
     }

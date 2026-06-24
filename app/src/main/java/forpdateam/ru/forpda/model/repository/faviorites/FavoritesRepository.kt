@@ -96,23 +96,44 @@ class FavoritesRepository(
     }
 
     suspend fun markRead(topicId: Int) = withContext(Dispatchers.IO) {
+        val favItem = favoritesCache.getItemByTopicId(topicId)
+        if (favItem == null) {
+            // Debug #3: cache miss — must be visible in logs, otherwise we silently drop a mark-read.
+            ThemePostReadStateDiagnostics.markReadSkipped(
+                    topicId = topicId,
+                    reason = "item_not_in_cache",
+                    source = "favorites_repository",
+                    currentPage = 0,
+                    allPages = 0
+            )
+            return@withContext
+        }
+        val prevIsNew = favItem.isNew
+        val prevReadState = favItem.readState
+        val prevUnreadCount = favItem.unreadPostCount
+        favItem.isNew = false
+        favItem.readState = FavoriteReadState.READ
+        favItem.unreadPostCount = 0
+        favItem.listingHref = null
+        // Не сбрасываем inspectorMarkedUnread — он должен пересчитываться только в merge на
+        // следующем refresh. Иначе теряем бейдж до прихода inspector.
+        favItem.localReadPostId = topicId
+        favItem.localReadPostDateMillis = System.currentTimeMillis()
+        favoritesCache.updateItem(favItem)
+        syncFavoritesCounter(favoritesCache.getItems(), source = "favorites_mark_read")
+        // Debug #2: фиксируем фактическое изменение (было/стало) для последующего аудита.
         ThemePostReadStateDiagnostics.markReadApplied(
                 topicId = topicId,
-                reason = "cross_screen_topic",
-                source = "favorites_repository"
+                reason = "cross_screen_topic_changed",
+                source = "favorites_repository",
+                prevIsNew = prevIsNew,
+                prevReadState = prevReadState.name,
+                prevUnreadCount = prevUnreadCount,
+                newIsNew = favItem.isNew,
+                newReadState = favItem.readState.name,
+                newUnreadCount = favItem.unreadPostCount,
+                itemPresent = true
         )
-        val favItem = favoritesCache.getItemByTopicId(topicId)
-        if (favItem != null) {
-            favItem.isNew = false
-            favItem.readState = FavoriteReadState.READ
-            favItem.unreadPostCount = 0
-            favItem.listingHref = null
-            favItem.inspectorMarkedUnread = false
-            favItem.localReadPostId = topicId
-            favItem.localReadPostDateMillis = System.currentTimeMillis()
-            favoritesCache.updateItem(favItem)
-            syncFavoritesCounter(favoritesCache.getItems(), source = "favorites_mark_read")
-        }
     }
 
     suspend fun syncTopicLastPost(page: ThemePage) = withContext(Dispatchers.IO) {
@@ -165,6 +186,10 @@ class FavoritesRepository(
                     it.isNew = false
                     it.readState = FavoriteReadState.READ
                     it.unreadPostCount = 0
+                    // Намеренно сбрасываем inspectorMarkedUnread здесь: при markAllFavoritesRead
+                    // пользователь явно потребовал считать тему прочитанной — последующий merge
+                    // не должен заново поднять бейдж до прихода нового инспектора.
+                    it.inspectorMarkedUnread = false
                 }
             }
             favoritesCache.saveFavorites(items)
