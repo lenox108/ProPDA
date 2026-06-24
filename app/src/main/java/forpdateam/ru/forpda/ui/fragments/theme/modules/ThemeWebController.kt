@@ -124,6 +124,42 @@ class ThemeWebController(
     private var highlightArmedGeneration: Int = 0
     /** Generation for which the JS fade-out timer has been armed (independent of apply). */
     private var highlightFadeoutScheduledGeneration: Int = 0
+
+    /**
+     * All updates to the per-render armed flag go through this helper so we
+     * can observe the previous→new transition in logcat. The native-only
+     * invariant is: the flag MUST only ever move from its current value to a
+     * `renderGenerationId` AFTER `jsApi.eval(applyHighlight(...))` has
+     * returned. A log here that jumps to the new render's generation
+     * without a matching `js_highlight_applied` / `native_highlight_bound`
+     * event in the same frame pinpoints a regression (see device log
+     * 24_06-12-16-08_230: `armed=25` on the first reapply with zero
+     * `js_highlight_applied` events in the log).
+     */
+    private fun setHighlightArmedGeneration(newValue: Int, caller: String) {
+        if (BuildConfig.DEBUG && highlightArmedGeneration != newValue) {
+            TopicHighlightDiagnostics.highlightArmFlagUpdated(
+                    flag = "highlightArmedGeneration",
+                    previousValue = highlightArmedGeneration,
+                    newValue = newValue,
+                    caller = caller
+            )
+        }
+        highlightArmedGeneration = newValue
+    }
+
+    /** Same guard for the fade-out flag — see [setHighlightArmedGeneration]. */
+    private fun setHighlightFadeoutScheduledGeneration(newValue: Int, caller: String) {
+        if (BuildConfig.DEBUG && highlightFadeoutScheduledGeneration != newValue) {
+            TopicHighlightDiagnostics.highlightArmFlagUpdated(
+                    flag = "highlightFadeoutScheduledGeneration",
+                    previousValue = highlightFadeoutScheduledGeneration,
+                    newValue = newValue,
+                    caller = caller
+            )
+        }
+        highlightFadeoutScheduledGeneration = newValue
+    }
     /**
      * Render generation for which the native-side fallback already replayed the
      * `nativeEvents` JS queues from [markRenderVerifiedFromDom]. Prevents double-flushes
@@ -302,8 +338,14 @@ class ThemeWebController(
         renderGeneration++
         domLifecycleGeneration = 0
         pageLifecycleGeneration = 0
-        highlightArmedGeneration = HighlightArmingPolicy.armedGenerationAfterNewRender()
-        highlightFadeoutScheduledGeneration = 0
+        setHighlightArmedGeneration(
+                newValue = HighlightArmingPolicy.armedGenerationAfterNewRender(),
+                caller = "renderThemePage"
+        )
+        setHighlightFadeoutScheduledGeneration(
+                newValue = 0,
+                caller = "renderThemePage"
+        )
         // Additive shared-controller mirror (Phase 4): no behavior change, diagnostics only.
         val sharedSession = sharedRenderController.beginRender(
                 owner = WebViewRenderSession.Owner.THEME,
@@ -458,7 +500,7 @@ class ThemeWebController(
         completedRenderHasPosts = false
         domLifecycleGeneration = 0
         pageLifecycleGeneration = 0
-        highlightArmedGeneration = 0
+        setHighlightArmedGeneration(newValue = 0, caller = "resetRenderState")
         missedLifecycleFlushGeneration = 0
         if (BuildConfig.DEBUG) Log.i(REFRESH_SCROLL_TAG, "controller resetRenderState")
     }
@@ -1446,7 +1488,10 @@ class ThemeWebController(
      * generation so the original 2-second deadline is preserved.
      */
     fun reapplyTopicHighlightAfterScrollSettled() {
-        highlightArmedGeneration = 0
+        setHighlightArmedGeneration(
+                newValue = 0,
+                caller = "reapplyTopicHighlightAfterScrollSettled"
+        )
         reapplyTopicHighlight()
     }
 
@@ -1588,7 +1633,10 @@ class ThemeWebController(
         }
         jsApi.eval(js)
         if (shouldScheduleFadeout) {
-            highlightFadeoutScheduledGeneration = generation
+            setHighlightFadeoutScheduledGeneration(
+                    newValue = generation,
+                    caller = "reapplyTopicHighlight.scheduleFadeout"
+            )
             ReadPositionSaveGate.onHighlightArmed(generation)
             TopicHighlightDiagnostics.highlightFadeoutScheduled(
                     topicId = topicId.toLong(),
@@ -1600,7 +1648,10 @@ class ThemeWebController(
             )
         }
         if (shouldApply) {
-            highlightArmedGeneration = generation
+            setHighlightArmedGeneration(
+                    newValue = generation,
+                    caller = "reapplyTopicHighlight.applyHighlight"
+            )
             TopicHighlightDiagnostics.nativeHighlightBound(
                     topicId = topicId.toLong(),
                     page = page.pagination.current,
