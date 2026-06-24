@@ -81,14 +81,19 @@ class TopicHighlightCssContractTest {
                 "$cssRelativePath must contain a rule for $selector",
                 css.contains(selector),
         )
-        // The rule must carry a visible declaration (box-shadow ring or
-        // background tint) — not merely declare the selector.
-        val ruleBody = css.substringAfter("$selector {", "")
+        // Strip CSS comments before extracting the rule body so that the
+        // explanatory comments above the rule (which intentionally mention
+        // historical decisions like the removed `color-mix` tint by name) do
+        // not trigger the assertions about the rule's *declarations*.
+        val cssNoComments = css.replace(Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL), "")
+        // The rule must carry a visible declaration (box-shadow ring) — not
+        // merely declare the selector.
+        val ruleBody = cssNoComments.substringAfter("$selector {", "")
                 .substringBefore("}")
                 .lowercase()
         assertTrue(
-                "$cssRelativePath: $selector must apply a visible box-shadow/background: $ruleBody",
-                ruleBody.contains("box-shadow") || ruleBody.contains("background"),
+                "$cssRelativePath: $selector must apply a visible box-shadow: $ruleBody",
+                ruleBody.contains("box-shadow"),
         )
         // Several theme override modes (sepia/minimal/amoled, see
         // TemplateCssComposer) declare `.post_container { box-shadow: ... !important }`.
@@ -113,38 +118,33 @@ class TopicHighlightCssContractTest {
                 "$cssRelativePath: $selector must use var(--ppda-accent, var(--surface-accent, ...)) so the colour adapts to the active palette: $ruleBody",
                 ruleBody.contains("--ppda-accent"),
         )
-        // Background tint must be derived from the same accent via color-mix,
-        // so a dark accent on a dark post still produces a readable tint and
-        // a light accent on a light post does not wash the card out.
-        // We must read across the WHOLE rule body (not just
-        // `background:`'s first segment): the rule declares a static
-        // `rgba()` fallback BEFORE the `color-mix(...)` line for progressive
-        // enhancement on Android WebView builds that predate `color-mix()`
-        // (Chromium < 111). The static fallback is what makes the highlight
-        // visible on those older WebViews — without it the `color-mix`
-        // declaration is discarded as invalid and the post card keeps its
-        // base colour, which is exactly the "highlight only works in system
-        // palette" regression.
+        // Box-shadow MUST be `inset` — we want a ring drawn INSIDE the post
+        // border-radius, not a drop-shadow outside (an outer drop-shadow would
+        // also escape the rounded corners).
         assertTrue(
-                "$cssRelativePath: $selector background must include a color-mix tint derived from the accent: $ruleBody",
-                ruleBody.contains("color-mix") && ruleBody.contains("var(--ppda-accent"),
+                "$cssRelativePath: $selector box-shadow must be inset (so the ring is drawn inside the post's border-radius, not outside it): $ruleBody",
+                ruleBody.contains("inset"),
         )
+        // CRITICAL — the highlight must NOT set a `background` declaration. The
+        // earlier design used the `color-mix()` CSS function to tint the post
+        // card, but users reported it as "the whole post flashes" (the tint
+        // recoloured the entire post body, not just the ring). Removing the
+        // background tint also removes the `color-mix()` dependency that
+        // broke on Android WebView builds predating Chromium 111 — those
+        // discarded the entire declaration and left the post card with no
+        // visible highlight at all. The ring is now a pure box-shadow only;
+        // the post keeps its base background from the surrounding CSS.
         assertTrue(
-                "$cssRelativePath: $selector must declare a static rgba() tint BEFORE the color-mix(...) line " +
-                        "so older Android WebViews (pre-Chromium-111, no color-mix support) still render the highlight: $ruleBody",
-                ruleBody.contains("rgba("),
+                "$cssRelativePath: $selector must NOT set background (whole-card tint is the 'whole block flashes' regression): $ruleBody",
+                !ruleBody.contains("background:"),
         )
-        // Ordering matters: the `rgba(...)` fallback MUST appear before the
-        // `color-mix(...)` line so that a WebView that recognises the first
-        // but not the second keeps the first in force. If `color-mix` were
-        // declared first, an unsupported engine would discard it and leave
-        // the card with no tint at all (cascade would not reach a valid one).
-        val rgbaIndex = ruleBody.indexOf("rgba(")
-        val colorMixIndex = ruleBody.indexOf("color-mix")
+        // The CSS function call `color-mix(` must not appear inside the
+        // rule's declarations. (The literal word may legitimately appear in
+        // the surrounding comments — the rule-body substring checked here
+        // already has CSS comments stripped above.)
         assertTrue(
-                "$cssRelativePath: $selector the rgba() fallback must be declared before color-mix(...) " +
-                        "(found rgba at $rgbaIndex, color-mix at $colorMixIndex): $ruleBody",
-                rgbaIndex in 0 until colorMixIndex,
+                "$cssRelativePath: $selector must NOT use the color-mix() CSS function (no background tint anymore; the ring is box-shadow only): $ruleBody",
+                !ruleBody.contains("color-mix("),
         )
     }
 }
