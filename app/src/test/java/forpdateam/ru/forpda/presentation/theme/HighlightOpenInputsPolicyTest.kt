@@ -245,6 +245,68 @@ class HighlightOpenInputsPolicyTest {
         assertTrue(page.renderGenerationId > 0)
     }
 
+    /**
+     * Device log 24_06-13-00-28_912 (topic 1103268): the topic was opened via
+     * `view=getnewpost` BUT the parser resolved it as
+     * `anchorSource=list_read_use_getnewpost` with `hasUnreadTarget=false`
+     * (i.e. the user has read all posts; getnewpost is just the last-read
+     * redirect on the favorites row). The page also has a non-null
+     * `anchorPostId` (= the redirect entry id, e.g. 143987753).
+     *
+     * The highlight must still be stamped — by the `last_post_on_page_fallback`
+     * path in [HighlightResolver], since `hasUnreadTarget=false` means the
+     * policy strips `firstUnreadPostId` and the `openedViaFindPost=false`
+     * means the policy also strips `explicitPostId`. Without the fallback
+     * the user opens an all-read topic from getnewpost and sees NO highlight
+     * at all — which is the user-reported regression.
+     */
+    @Test
+    fun applyToPage_allReadTopicFromGetnewpost_stampsLastPostOnPageFallback() {
+        val page = makePage(
+                topicId = 1103268,
+                postIds = longArrayOf(143987740L, 143987753L, 143987760L, 143987781L,
+                        143987795L, 143987820L, 143987840L, 143987870L),
+                hasUnreadTarget = false,
+                anchorPostId = "143987753",
+                url = "https://4pda.to/forum/index.php?showtopic=1103268&st=26280#entry143987753",
+                pageNumber = 1315,
+        )
+        val repo = ThemeReadPositionRepository()
+        val inputs = HighlightOpenInputsPolicy.resolveOpenInputs(page, openedViaFindPost = false)
+        // hasUnreadTarget=false → policy must NOT surface firstUnreadPostId even
+        // though the page URL is getnewpost-shaped and the parser set an
+        // anchorPostId. This is the tripwire for the regression.
+        assertNull(
+                "hasUnreadTarget=false must strip firstUnreadPostId " +
+                        "even when the page URL is getnewpost-shaped",
+                inputs.firstUnreadPostId
+        )
+        assertNull(inputs.unreadPage)
+        assertNull(inputs.unreadUrl)
+        assertNull(
+                "openedViaFindPost=false must strip explicitPostId " +
+                        "even when anchorPostId is present",
+                inputs.explicitPostId
+        )
+        val resolution = TopicHighlightApply.applyToPage(
+                page = page,
+                readPositionRepository = repo,
+                firstUnreadPostId = inputs.firstUnreadPostId,
+                unreadPage = inputs.unreadPage,
+                unreadUrl = inputs.unreadUrl,
+                explicitPostId = inputs.explicitPostId,
+        )
+        assertNotNull(
+                "Highlight must still be stamped even with all three open-inputs null " +
+                        "(this is the user-reported regression on topic 1103268).",
+                page.highlightTarget
+        )
+        assertEquals(HighlightType.LastRead, page.highlightTarget!!.type)
+        assertEquals(143987870L, page.highlightTarget!!.postId)
+        assertEquals("last_post_on_page_fallback", resolution.reason)
+        assertTrue(page.renderGenerationId > 0)
+    }
+
     @Test
     fun resolver_isDeterministic_viaPolicy() {
         // The whole point of the policy is determinism: same inputs -> same

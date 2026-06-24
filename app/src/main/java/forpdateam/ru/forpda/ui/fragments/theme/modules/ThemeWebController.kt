@@ -424,9 +424,51 @@ class ThemeWebController(
      * (log: blankVerifyOk renderComplete=false, no domComplete for trace).
      */
     fun markRenderVerifiedFromDom(domPosts: Int): Boolean {
-        if (disposed || fragment.view == null) return false
-        val renderKey = activeRenderKey ?: return false
-        if (!webView.isJsReady || domPosts <= 0) return false
+        // Tripwire log — must be FIRST so we see the call even when one of the
+        // guards below returns false. The user-reported regression on topic
+        // 1103268 (log 24_06-13-00-28_912): no `markRenderVerifiedFromDom`
+        // log line at all and zero `highlight_arm_*` events. With the existing
+        // late-Log.i inside the function, we cannot tell whether (a) the call
+        // site never ran, or (b) it ran but one of the guards returned false.
+        // The entered / exited log pair below is the diagnostic that
+        // distinguishes (a) from (b) on the next device log.
+        val traceAtEntry = if (BuildConfig.DEBUG) presenter.getThemeLoadTraceId() else ""
+        if (BuildConfig.DEBUG) {
+            val activeRk = activeRenderKey
+            val jsReady = webView.isJsReady
+            Log.i(
+                    REFRESH_SCROLL_TAG,
+                    "controller markRenderVerifiedFromDom_entered trace=$traceAtEntry activeRenderKey=$activeRk jsReady=$jsReady domPosts=$domPosts expected=$activeRenderExpectedPosts disposed=$disposed viewAttached=${fragment.view != null}"
+            )
+        }
+        if (disposed || fragment.view == null) {
+            if (BuildConfig.DEBUG) {
+                Log.i(
+                        REFRESH_SCROLL_TAG,
+                        "controller markRenderVerifiedFromDom_exited trace=$traceAtEntry reason=disposed_or_no_view"
+                )
+            }
+            return false
+        }
+        val renderKey = activeRenderKey
+        if (renderKey == null) {
+            if (BuildConfig.DEBUG) {
+                Log.i(
+                        REFRESH_SCROLL_TAG,
+                        "controller markRenderVerifiedFromDom_exited trace=$traceAtEntry reason=no_active_render_key"
+                )
+            }
+            return false
+        }
+        if (!webView.isJsReady || domPosts <= 0) {
+            if (BuildConfig.DEBUG) {
+                Log.i(
+                        REFRESH_SCROLL_TAG,
+                        "controller markRenderVerifiedFromDom_exited trace=$traceAtEntry reason=js_not_ready_or_no_posts jsReady=${webView.isJsReady} domPosts=$domPosts"
+                )
+            }
+            return false
+        }
         completedRenderKey = renderKey
         completedRenderHasPosts = true
         // The native page-loaded lifecycle (`onPageComplete` → onDomRendered)
@@ -449,7 +491,7 @@ class ThemeWebController(
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "controller markRenderVerifiedFromDom trace=${presenter.getThemeLoadTraceId()} renderKey=$renderKey domPosts=$domPosts expected=$activeRenderExpectedPosts"
+                    "controller markRenderVerifiedFromDom trace=$traceAtEntry renderKey=$renderKey domPosts=$domPosts expected=$activeRenderExpectedPosts"
             )
         }
         return true
@@ -1421,9 +1463,43 @@ class ThemeWebController(
     }
 
     fun onDomRendered() {
-        if (disposed || fragment.view == null) return
-        val renderKey = activeRenderKey ?: return
-        if (!webView.isJsReady) return
+        val traceAtEntry = if (BuildConfig.DEBUG) presenter.getThemeLoadTraceId() else ""
+        if (BuildConfig.DEBUG) {
+            val activeRk = activeRenderKey
+            val jsReady = webView.isJsReady
+            Log.i(
+                    REFRESH_SCROLL_TAG,
+                    "controller onDomRendered_entered trace=$traceAtEntry activeRenderKey=$activeRk jsReady=$jsReady disposed=$disposed viewAttached=${fragment.view != null}"
+            )
+        }
+        if (disposed || fragment.view == null) {
+            if (BuildConfig.DEBUG) {
+                Log.i(
+                        REFRESH_SCROLL_TAG,
+                        "controller onDomRendered_exited trace=$traceAtEntry reason=disposed_or_no_view"
+                )
+            }
+            return
+        }
+        val renderKey = activeRenderKey
+        if (renderKey == null) {
+            if (BuildConfig.DEBUG) {
+                Log.i(
+                        REFRESH_SCROLL_TAG,
+                        "controller onDomRendered_exited trace=$traceAtEntry reason=no_active_render_key"
+                )
+            }
+            return
+        }
+        if (!webView.isJsReady) {
+            if (BuildConfig.DEBUG) {
+                Log.i(
+                        REFRESH_SCROLL_TAG,
+                        "controller onDomRendered_exited trace=$traceAtEntry reason=js_not_ready"
+                )
+            }
+            return
+        }
         val expectedPosts = activeRenderExpectedPosts
         val script = """
             (function(){
@@ -1444,6 +1520,12 @@ class ThemeWebController(
             val hasExpectedPosts = when {
                 expectedPosts <= 0 -> domPosts > 0
                 else -> domPosts >= expectedPosts
+            }
+            if (BuildConfig.DEBUG) {
+                Log.i(
+                        REFRESH_SCROLL_TAG,
+                        "controller onDomRendered_evaluate_result trace=$traceAtEntry renderKey=$renderKey raw=$result domPosts=$domPosts expected=$expectedPosts hasExpectedPosts=$hasExpectedPosts"
+                )
             }
             completedRenderKey = renderKey
             completedRenderHasPosts = hasExpectedPosts
@@ -1512,6 +1594,13 @@ class ThemeWebController(
      * JS-side `PPDA_applyHighlight` ignores stale callbacks.
      */
     private fun reapplyTopicHighlight() {
+        if (BuildConfig.DEBUG) {
+            val trace = presenter.getThemeLoadTraceId()
+            Log.i(
+                    THEME_RENDER_TAG,
+                    "controller reapplyTopicHighlight_called trace=$trace disposed=$disposed viewAttached=${fragment.view != null}"
+            )
+        }
         if (disposed || fragment.view == null) {
             if (BuildConfig.DEBUG) {
                 TopicHighlightDiagnostics.highlightArmSkipped(
