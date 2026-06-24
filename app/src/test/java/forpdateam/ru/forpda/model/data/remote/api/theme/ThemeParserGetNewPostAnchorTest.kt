@@ -437,6 +437,45 @@ class ThemeParserGetNewPostAnchorTest {
         assertTrue(page.hasUnreadTarget)
     }
 
+    @Test
+    fun findPost_stampsAnchorPostIdWhenInitialRequestUrlCarriesPostId() {
+        // Regression for log 24_06-13-16-39_747 (topic 1103268): the findpost reload after
+        // a getnewpost redirect was leaving page.anchorPostId = null even though the
+        // initial request URL carried &p=143988030, which made
+        // ThemeHistoryController.saveToHistory log "anchor=null" and broke the F8 dedupe
+        // (compare-null-vs-real never fires). The fix sets anchorPostId from the
+        // &p= value in the parser; the runtime already falls back to page.anchor,
+        // but history + dedupe + ReadStateTrace all need the unprefixed form.
+        val html = """
+            <script>var topic_id = parseInt(1103268); var forum_id = parseInt(1);</script>
+            <a name="entry143988028"></a><div class="post_container read">prev</div>
+            <a name="entry143988030"></a><div class="post_container">target</div>
+        """.trimIndent()
+        val page = parser.parsePage(
+                html,
+                "https://4pda.to/forum/index.php?showtopic=1103268&st=26280#entry143988030",
+                initialRequestUrl = "https://4pda.to/forum/index.php?showtopic=1103268&view=findpost&p=143988030"
+        )
+        assertEquals("entry143988030", page.anchor)
+        assertEquals("143988030", page.anchorPostId)
+    }
+
+    @Test
+    fun actFindPost_stampsAnchorPostId() {
+        // Same regression as above, but for act=findpost (mobile deep-link).
+        val html = """
+            <script>var topic_id = parseInt(1); var forum_id = parseInt(1);</script>
+            <a name="entry4242"></a><div class="post_container">only</div>
+        """.trimIndent()
+        val page = parser.parsePage(
+                html,
+                "https://4pda.to/forum/index.php?showtopic=1&st=20#entry4242",
+                initialRequestUrl = "https://4pda.to/forum/index.php?act=findpost&p=4242&t=1"
+        )
+        assertEquals("entry4242", page.anchor)
+        assertEquals("4242", page.anchorPostId)
+    }
+
     private fun loadProductionPatterns(): IPatternProvider {
         val patternsFile = listOf(
                 File("src/main/assets/patterns.json"),

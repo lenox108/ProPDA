@@ -72,6 +72,13 @@ class ThemeParser(
 
         if (findpostPostId != null) {
             page.addAnchor("entry$findpostPostId")
+            // Mirrors the ensureGetNewPostScrollAnchor anchorPostId stamping: without
+            // this, history.push logs `anchor=null` and the F8 dedupe in
+            // ThemeHistoryController.saveToHistory compares a real anchor against null
+            // and never fires (e.g. findpost reload after getnewpost redirect for
+            // 1103268/1115025). The runtime still works because getAnchorPostId()
+            // falls back to `anchor`, but the dedupe + ReadStateTrace stay wrong.
+            page.anchorPostId = findpostPostId.toString()
         } else if (wantsUnreadScroll) {
             // view=getnewpost: редирект часто с #entry на первый пост страницы — якорь попадал в anchors до
             // ensureGetNewPostScrollAnchor, тот видел непустой список и не искал непрочитанное (остаётся «последняя страница, первый пост»).
