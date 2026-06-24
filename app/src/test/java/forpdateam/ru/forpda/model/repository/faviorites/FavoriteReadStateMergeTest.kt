@@ -282,6 +282,33 @@ class FavoriteReadStateMergeTest {
     }
 
     @Test
+    fun inspectorFreshActivityFlipsCachedLocalReadToUnread_2_8() {
+        // Same scenario as log 1103268 above, but with bare-bones numbers:
+        // cached localReadPostId=100, localReadPostDateMillis=1_000_000 (≈ 1000 sec since epoch).
+        // Inspector timeStamp=2000, lastTimeStamp=500. Inspector's last post is at 500 (read),
+        // inspector's last post is at 2000 (newer) — i.e. inspector reports fresh unread activity
+        // whose timeStamp is newer than the moment the user marked the topic read.
+        val cached = fav(readState = FavoriteReadState.READ, isNew = false).apply {
+            localReadPostId = 100
+            localReadPostDateMillis = 1_000_000L
+        }
+        val result = FavoriteReadStateMerge.merge(
+                network = FavoriteReadState.READ,
+                networkUnreadCount = 0,
+                cached = cached,
+                inspectorUnread = true,
+                inspectorPresent = true,
+                hasNewerContentThanCache = false,
+                inspectorTimeStampSeconds = 2000L,
+                localReadTimeSeconds = cached.localReadPostDateMillis / 1000L,
+        )
+
+        assertEquals(FavoriteReadState.UNREAD, result.readState)
+        assertEquals(1, result.unreadPostCount)
+        assertEquals("inspector_unread_fresh_over_local_read", result.reason)
+    }
+
+    @Test
     fun unknownWithoutHintsDefaultsToRead() {
         val result = FavoriteReadStateMerge.merge(
                 network = FavoriteReadState.UNKNOWN,
