@@ -149,9 +149,6 @@ class ThemeViewModel @Inject constructor(
     private var pendingPostedPageScrollCommand: Boolean = false
     private var currentPage: ThemePage? = null
 
-    /** §5.1 — read-only accessor for the offline-save UI. Returns the most recently loaded page. */
-    fun currentData(): ThemePage? = currentPage
-
     private var visibleCurrentPage: Int? = null
     private val explicitTargetPostIds = java.util.WeakHashMap<ThemePage, Int>()
     private var currentTopicScrollMode = AppPreferences.Main.TopicScrollMode.HYBRID
@@ -167,8 +164,8 @@ class ThemeViewModel @Inject constructor(
         uiEvents = _uiEvents,
         router = router,
         getCurrentPage = { getPageForEditorAndSubmit() },
-        getThemeLoadTraceId = { themeLoadTraceId },
-        setThemeLoadTraceId = { themeLoadTraceId = it },
+        getThemeLoadTraceId = { openTrace.id },
+        setThemeLoadTraceId = { openTrace = openTrace.copy(id = it) },
         getSetMessageRefreshing = { _setMessageRefreshing },
         onPostSubmitSuccess = { form, sentAtMillis, page ->
             themeUseCase.syncSubmittedFavoriteLastPost(form.topicId, sentAtMillis, page)
@@ -359,10 +356,10 @@ class ThemeViewModel @Inject constructor(
         }
         if (pending.kind == ThemeScrollCommand.Kind.INITIAL_ANCHOR) {
             if (success) {
-                initialAnchorScrollSettledTraceId = themeLoadTraceId
+                initialAnchorScrollSettledTraceId = openTrace.id
                 Log.i(
                         ThemeUnreadHybridAnchorGuardPolicy.LOG_TAG,
-                        "anchor_scroll_settled trace=$themeLoadTraceId kind=${pending.kind}"
+                        "anchor_scroll_settled trace=$openTrace.id kind=${pending.kind}"
                 )
                 _uiEvents.tryEmit(ThemeUiEvent.ClearUnreadAnchorHybridGuard("initial_anchor_settled"))
                 flushPendingHatOverlayRenderAfterScroll()
@@ -384,17 +381,17 @@ class ThemeViewModel @Inject constructor(
         _uiEvents.tryEmit(ThemeUiEvent.RevealThemeContent)
     }
 
-    /** Primary HTML for [themeLoadTraceId] was emitted; safe to reveal WebView. */
+    /** Primary HTML for [openTrace.id] was emitted; safe to reveal WebView. */
     fun isPrimaryOpenComplete(): Boolean =
-            postOpenEnrichmentController.isPrimaryOpenComplete(themeLoadTraceId)
+            postOpenEnrichmentController.isPrimaryOpenComplete(openTrace.id)
 
-    /** Post-open enrich jobs were scheduled for [themeLoadTraceId]. */
+    /** Post-open enrich jobs were scheduled for [openTrace.id]. */
     fun isPostOpenEnrichStarted(): Boolean =
-            postOpenEnrichmentController.isPostOpenEnrichStarted(themeLoadTraceId)
+            postOpenEnrichmentController.isPostOpenEnrichStarted(openTrace.id)
 
     fun shouldArmInitialAnchorOnPageComplete(): Boolean =
             ThemeOpenScrollCoalescePolicy.shouldArmInitialAnchorOnPageComplete(
-                    traceId = themeLoadTraceId,
+                    traceId = openTrace.id,
                     initialAnchorScrollSettledTraceId = initialAnchorScrollSettledTraceId,
                     pendingScrollKind = pendingScrollCommand?.kind,
                     hatOverlayReinjectionTraceId = hatOverlayReinjectionTraceId,
@@ -410,10 +407,10 @@ class ThemeViewModel @Inject constructor(
             )
 
     fun isHatOverlayReinjectionRender(): Boolean =
-            hatOverlayReinjectionTraceId == themeLoadTraceId
+            hatOverlayReinjectionTraceId == openTrace.id
 
     fun onHatOverlayReinjectionScrollRestored() {
-        if (hatOverlayReinjectionTraceId == themeLoadTraceId) {
+        if (hatOverlayReinjectionTraceId == openTrace.id) {
             hatOverlayReinjectionTraceId = null
         }
     }
@@ -443,17 +440,17 @@ class ThemeViewModel @Inject constructor(
 
     /** Clears Kotlin + WebView hybrid guard when INITIAL_ANCHOR cannot settle (log 11_06: pageComplete lost). */
     fun releaseUnreadAnchorHybridGuard(reason: String) {
-        initialAnchorScrollSettledTraceId = themeLoadTraceId
+        initialAnchorScrollSettledTraceId = openTrace.id
         pendingScrollCommand = null
         maybeMarkTopicRenderSettledAfterScroll()
         Log.i(
                 ThemeUnreadHybridAnchorGuardPolicy.LOG_TAG,
-                "anchor_guard_release reason=$reason trace=$themeLoadTraceId"
+                "anchor_guard_release reason=$reason trace=$openTrace.id"
         )
         _uiEvents.tryEmit(ThemeUiEvent.ClearUnreadAnchorHybridGuard(reason))
     }
 
-    fun isTopicRenderSettled(): Boolean = renderSettledTraceId == themeLoadTraceId
+    fun isTopicRenderSettled(): Boolean = renderSettledTraceId == openTrace.id
 
     override fun onScrollCommandComplete(commandId: String, success: Boolean, reason: String) {
         val pending = pendingScrollCommand
@@ -463,7 +460,7 @@ class ThemeViewModel @Inject constructor(
             ThemeScrollCommand.Kind.INITIAL_ANCHOR -> {
                 ThemePostReadStateDiagnostics.scrollSettled(
                         topicId = currentPage?.id,
-                        traceId = themeLoadTraceId,
+                        traceId = openTrace.id,
                         anchorPostId = currentPage?.anchorPostId ?: currentPage?.anchor,
                         finalScrolledPostId = ThemePostReadStateDiagnostics.parseLastPostFromScrollReason(reason),
                         scrollKind = pending.kind.name,
@@ -496,7 +493,7 @@ class ThemeViewModel @Inject constructor(
     fun shouldBlockHybridUntilInitialAnchorSettled(): Boolean {
         if (currentPage?.hasUnreadTarget != true) return false
         return ThemeUnreadHybridAnchorGuardPolicy.shouldBlockHybridUntilInitialAnchorSettled(
-                traceId = themeLoadTraceId,
+                traceId = openTrace.id,
                 initialAnchorScrollSettledTraceId = initialAnchorScrollSettledTraceId,
                 pendingScrollKind = pendingScrollCommand?.kind,
                 expectsInitialAnchorScroll = expectsInitialAnchorScrollOnOpen(),
@@ -570,9 +567,9 @@ class ThemeViewModel @Inject constructor(
     /** При открытии ImageViewer из темы — не скроллить к непрочитанному при возврате. */
     private var skipNextUnreadJumpAfterTabSwitch = false
     private var initialOpenSettledAt = 0L
-    /** First WebView paint for [themeLoadTraceId] finished; hat metadata must not preempt it. */
+    /** First WebView paint for [openTrace.id] finished; hat metadata must not preempt it. */
     private var renderSettledTraceId: String? = null
-    /** Successful INITIAL_ANCHOR for [themeLoadTraceId]; suppresses a second scroll on pageComplete. */
+    /** Successful INITIAL_ANCHOR for [openTrace.id]; suppresses a second scroll on pageComplete. */
     private var initialAnchorScrollSettledTraceId: String? = null
     /** Topic title preserved across deep hybrid pages when pagination HTML omits it. */
     private var sessionTopicTitle: String? = null
@@ -613,8 +610,16 @@ class ThemeViewModel @Inject constructor(
         skipNextUnreadJumpAfterTabSwitch = skip
     }
 
-    /** Короткий id для склейки логов одной загрузки темы (loadData / ответ / WebView). */
-    private var themeLoadTraceId: String = ""
+    /**
+     * Per-load trace. Carries both a short string [OpenTrace.id] (for log stitching — same
+     * contract as the previous [themeLoadTraceId] field) AND the [OpenTrace.topicId] plus a
+     * monotonically increasing [OpenTrace.callIndex] so the late-response guards can
+     * distinguish a stale `getnewpost → findpost` escalation from the currently active load
+     * even when the [OpenTrace.id] string was just re-rolled on BACK.
+     */
+    private data class OpenTrace(val id: String, val topicId: Int?, val callIndex: Long)
+    private var openTrace: OpenTrace = OpenTrace("", null, 0L)
+    private var loadCallCounter: Long = 0L
     private var pendingRefreshRequest: RefreshRequest? = null
 
     /** Отменяем предыдущий HTTP-запрос темы, иначе два ответа гоняются и в WebView попадает случайный. */
@@ -797,6 +802,7 @@ class ThemeViewModel @Inject constructor(
                 unreadUrlFromList = hints?.unreadUrlFromList,
                 unreadPostIdFromList = hints?.unreadPostIdFromList,
                 listTopicMarkedUnread = hints?.topicMarkedUnread == true,
+                inspectorMarkedUnread = hints?.inspectorMarkedUnread == true,
                 lastReadUrlFromList = hints?.lastReadUrlFromList,
                 cachedLastPage = previousPage?.pagination?.current,
                 cachedScrollPosition = previousPage?.scrollY
@@ -833,8 +839,8 @@ class ThemeViewModel @Inject constructor(
                 resolution,
                 TopicOpenTraceExtras(
                         event = "resolve_url",
-                        traceId = themeLoadTraceId.takeIf { it.isNotBlank() },
-                        requestId = themeLoadTraceId.takeIf { it.isNotBlank() },
+                        traceId = openTrace.id.takeIf { it.isNotBlank() },
+                        requestId = openTrace.id.takeIf { it.isNotBlank() },
                         openIntent = lastOpenIntent,
                         isFreshOpen = isFreshTopicOpen(),
                         isBackRestore = isRestoreTopicOpen(),
@@ -866,6 +872,7 @@ class ThemeViewModel @Inject constructor(
                         unreadUrlFromList = listOpenHints?.unreadUrlFromList,
                         unreadPostIdFromList = listOpenHints?.unreadPostIdFromList,
                         listTopicMarkedUnread = listOpenHints?.topicMarkedUnread == true,
+                        inspectorMarkedUnread = listOpenHints?.inspectorMarkedUnread == true,
                         lastReadUrlFromList = listOpenHints?.lastReadUrlFromList
                 )
         )
@@ -968,7 +975,7 @@ class ThemeViewModel @Inject constructor(
         val pageHtml = page?.html
         if (ThemeStuckLoadRecoveryPolicy.shouldReEmitLoadedPage(pageHtml)) {
             scope.launch {
-                if (page != null && themeLoadTraceId.isNotBlank()) {
+                if (page != null && openTrace.id.isNotBlank()) {
                     _updateView.tryEmit(page)
                 }
             }
@@ -1057,7 +1064,7 @@ class ThemeViewModel @Inject constructor(
         enrichTopicHatPostFromKnownOriginal(page, hat)
         pendingHatToolbarClick = false
         pendingHatToolbarOpenAfterRender = true
-        val traceId = themeLoadTraceId
+        val traceId = openTrace.id
         hatOverlayReinjectionTraceId = traceId
         scope.launch {
             ThemeToolbarTitlePolicy.mergeTitleFromSession(page, currentPage, loadedPages.values)
@@ -1069,7 +1076,7 @@ class ThemeViewModel @Inject constructor(
             )
             stripDuplicateHatFromNonFirstPage(page, page.pagination.current)
             mapEntityWithPostListGuard(page, "hatOverlayEnsure")
-            if (traceId != themeLoadTraceId) return@launch
+            if (traceId != openTrace.id) return@launch
             if (tryScheduleHatOverlayJsPatch(page, hat, openAfterInject = true)) {
                 hatOverlayReinjectionTraceId = null
                 pendingHatToolbarOpenAfterRender = false
@@ -1077,7 +1084,7 @@ class ThemeViewModel @Inject constructor(
                 return@launch
             }
             remapHybridPagesForCurrentTopic(page, "hatOverlayEnsure")
-            if (traceId != themeLoadTraceId) return@launch
+            if (traceId != openTrace.id) return@launch
             _updateView.tryEmit(page)
             _uiEvents.tryEmit(ThemeUiEvent.UpdateHatOpenState(true))
         }
@@ -1247,10 +1254,16 @@ class ThemeViewModel @Inject constructor(
         ) {
             loadedPages.clear()
         }
-        if (!preserveOpenTrace) {
-            themeLoadTraceId = UUID.randomUUID().toString().replace("-", "").take(8)
+        val isBack = action == ThemeLoadAction.Back
+        if (isBack || !preserveOpenTrace) {
+            loadCallCounter += 1
+            openTrace = OpenTrace(
+                id = UUID.randomUUID().toString().replace("-", "").take(8),
+                topicId = requestedTopicId,
+                callIndex = loadCallCounter,
+            )
         }
-        val loadTraceId = themeLoadTraceId
+        val loadTraceId = openTrace.id
         if (action == ThemeLoadAction.Normal && !pendingHatToolbarOpenAfterRender) {
             userHatOpenOverride = null
         }
@@ -1299,7 +1312,7 @@ class ThemeViewModel @Inject constructor(
             if (BuildConfig.DEBUG) {
                 Log.i(
                         REFRESH_SCROLL_TAG,
-                        "skip loadData duplicate findpost in flight trace=$themeLoadTraceId topic=$requestedTopicId"
+                        "skip loadData duplicate findpost in flight trace=$openTrace.id topic=$requestedTopicId"
                 )
             }
             return
@@ -1308,7 +1321,7 @@ class ThemeViewModel @Inject constructor(
             Timber.d("loadData: url=$url action=$action openedViaFindPost=$openedViaFindPostLink currentPage.id=${currentPage?.id}")
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "vm loadData action=$action trace=$themeLoadTraceId t=$startedAt url=$url currentScroll=${currentPage?.scrollY} anchor=${currentPage?.anchorPostId} offset=${currentPage?.anchorOffsetTop} ratio=${currentPage?.scrollRatio} wasNearBottom=${currentPage?.wasNearBottom}"
+                    "vm loadData action=$action trace=$openTrace.id t=$startedAt url=$url currentScroll=${currentPage?.scrollY} anchor=${currentPage?.anchorPostId} offset=${currentPage?.anchorOffsetTop} ratio=${currentPage?.scrollRatio} wasNearBottom=${currentPage?.wasNearBottom}"
             )
         }
         FpdaDebugLog.logTheme(
@@ -1338,7 +1351,11 @@ class ThemeViewModel @Inject constructor(
 
         // Special handling for QMS URLs (act=qms) - load directly without theme templating
         if (low.contains("act=qms")) {
+            val previousQmsJob = loadThemeJob
             loadThemeJob = scope.launch {
+                if (previousQmsJob != null && previousQmsJob.isActive) {
+                    try { previousQmsJob.join() } catch (_: kotlinx.coroutines.CancellationException) { /* expected */ }
+                }
                 _setRefreshing.value = true
                 when (val result = themeUseCase.loadQms(url)) {
                     is ThemeUseCase.LoadResult.Success -> onLoadData(result.page)
@@ -1351,7 +1368,15 @@ class ThemeViewModel @Inject constructor(
             return
         }
 
+        val previousLoadJob = loadThemeJob
         loadThemeJob = scope.launch {
+            // Wait for the previous load to fully finish (or be cancelled) before starting
+            // a new network call. The previous job was already cancelled at the top of
+            // loadData via loadThemeJob?.cancel(); join() here ensures its body has stopped
+            // executing before we kick off a new one, so two responses cannot interleave.
+            if (previousLoadJob != null && previousLoadJob.isActive) {
+                try { previousLoadJob.join() } catch (_: kotlinx.coroutines.CancellationException) { /* expected */ }
+            }
             val networkStartedAt = SystemClock.uptimeMillis()
             _setRefreshing.value = true
             if (BuildConfig.DEBUG) Log.i(REFRESH_SCROLL_TAG, "vm networkStart action=$action trace=$loadTraceId dt=${networkStartedAt - startedAt}")
@@ -1359,11 +1384,11 @@ class ThemeViewModel @Inject constructor(
                 val openFromUnreadListHint = activeLoadParserUnreadHint
                 when (val result = themeUseCase.loadTheme(url, hatOpen, pollOpen, openFromUnreadListHint)) {
                     is ThemeUseCase.LoadResult.Success -> {
-                        if (loadTraceId != themeLoadTraceId) {
+                        if (loadTraceId != openTrace.id) {
                             if (BuildConfig.DEBUG) {
                                 Log.w(
                                         REFRESH_SCROLL_TAG,
-                                        "vm dropStaleThemeResponse trace=$loadTraceId currentTrace=$themeLoadTraceId topic=${result.page.id}"
+                                        "vm dropStaleThemeResponse trace=$loadTraceId currentTrace=$openTrace.id topic=${result.page.id}"
                                 )
                             }
                             FpdaDebugLog.logTheme(
@@ -1371,7 +1396,7 @@ class ThemeViewModel @Inject constructor(
                                     "stale_response_ignored",
                                     mapOf(
                                             "traceId" to loadTraceId,
-                                            "currentTraceId" to themeLoadTraceId,
+                                            "currentTraceId" to openTrace.id,
                                             "topicId" to result.page.id
                                     ),
                                     warn = true
@@ -1386,6 +1411,25 @@ class ThemeViewModel @Inject constructor(
                                         "vm dropMismatchedThemeResponse trace=$loadTraceId expectedTopic=$expectedTopicId loadedTopic=${result.page.id} url=$themeUrl"
                                 )
                             }
+                            return@launch
+                        }
+                        // Fix C: second guard. Even when the trace id matches (no
+                        // rotation happened in between), a stale response whose topic
+                        // doesn't match the currently displayed topic must be dropped,
+                        // so it cannot overwrite a newer topic's state.
+                        if (openTrace.callIndex > 0L &&
+                                activeLoadedTopicId != null &&
+                                result.page.id != activeLoadedTopicId) {
+                            FpdaDebugLog.logTheme(
+                                    FpdaDebugLog.ThemeArea.LOAD,
+                                    "dropMismatched",
+                                    mapOf(
+                                            "traceId" to openTrace.id,
+                                            "expectedTopicId" to activeLoadedTopicId,
+                                            "loadedTopicId" to result.page.id,
+                                    ),
+                                    warn = true
+                            )
                             return@launch
                         }
                         if (BuildConfig.DEBUG) {
@@ -1420,20 +1464,20 @@ class ThemeViewModel @Inject constructor(
                         )
                         explicitTargetPostId?.let { explicitTargetPostIds[result.page] = it }
                         onLoadData(result.page, startedAt, loadTraceId)
-                        if (!isActive || loadTraceId != themeLoadTraceId) return@launch
+                        if (!isActive || loadTraceId != openTrace.id) return@launch
                         if (runPendingSmartEndFallbackIfNeeded()) return@launch
                     }
                     is ThemeUseCase.LoadResult.Error -> {
-                        if (loadTraceId == themeLoadTraceId) {
+                        if (loadTraceId == openTrace.id) {
                             _uiEvents.tryEmit(ThemeUiEvent.ShowError(result.userMessage))
                         }
                     }
                 }
-                if (!isActive || loadTraceId != themeLoadTraceId) return@launch
+                if (!isActive || loadTraceId != openTrace.id) return@launch
                 if (runPendingSmartEndFallbackIfNeeded()) return@launch
                 if (BuildConfig.DEBUG) Log.i(REFRESH_SCROLL_TAG, "vm refreshFalse action=$action trace=$loadTraceId dt=${SystemClock.uptimeMillis() - startedAt}")
             } finally {
-                if (ThemeLoadRefreshingPolicy.shouldClearRefreshingOnJobEnd(loadTraceId, themeLoadTraceId)) {
+                if (ThemeLoadRefreshingPolicy.shouldClearRefreshingOnJobEnd(loadTraceId, openTrace.id)) {
                     _setRefreshing.value = false
                 }
             }
@@ -1443,13 +1487,13 @@ class ThemeViewModel @Inject constructor(
     private suspend fun onLoadData(
             page: ThemePage,
             startedAt: Long = SystemClock.uptimeMillis(),
-            traceId: String = themeLoadTraceId
+            traceId: String = openTrace.id
     ) {
-        if (traceId != themeLoadTraceId) {
+        if (traceId != openTrace.id) {
             if (BuildConfig.DEBUG) {
                 Log.w(
                         REFRESH_SCROLL_TAG,
-                        "vm dropStaleOnLoadData trace=$traceId currentTrace=$themeLoadTraceId topic=${page.id}"
+                        "vm dropStaleOnLoadData trace=$traceId currentTrace=$openTrace.id topic=${page.id}"
                 )
             }
             return
@@ -1463,7 +1507,7 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             val serverP = ThemeApi.extractScrollPostIdFromFinalTopicUrl(page.url.orEmpty())
             Timber.d(
-                    "onLoadData trace=$themeLoadTraceId topicId=${page.id} _loadAction=$_loadAction anchor=${page.anchor} anchors=${page.anchors.size} finalUrl=${page.url} requestUrl=$themeUrl serverP=$serverP"
+                    "onLoadData trace=$openTrace.id topicId=${page.id} _loadAction=$_loadAction anchor=${page.anchor} anchors=${page.anchors.size} finalUrl=${page.url} requestUrl=$themeUrl serverP=$serverP"
             )
         }
         if (BuildConfig.DEBUG) Timber.d("onLoadData: topicId=${page.id} pagination.current=${page.pagination.current} pagination.perPage=${page.pagination.perPage} st=${page.st} _loadAction=$_loadAction historySize=${historyController.size}")
@@ -1482,7 +1526,7 @@ class ThemeViewModel @Inject constructor(
                         loadAction = _loadAction,
                         parserListUnreadHint = activeLoadParserUnreadHint,
                         openedViaFindPost = openedViaFindPostLink,
-                        findPostUpgradeTraceMatches = unreadFindPostUpgradeTraceId == themeLoadTraceId,
+                        findPostUpgradeTraceMatches = unreadFindPostUpgradeTraceId == openTrace.id,
                         requestUrl = themeUrl,
                         anchorPostId = page.anchorPostId ?: page.anchor?.removePrefix("entry"),
                         ambiguousBottomRedirect = page.ambiguousLastUnreadBottomRedirect,
@@ -1499,19 +1543,19 @@ class ThemeViewModel @Inject constructor(
             val offPageReloadId = TopicUnreadOpenPolicy.offPageReadResumeFindPostReloadId(page)
             if (offPageReloadId != null &&
                     page.id > 0 &&
-                    unreadFindPostUpgradeTraceId != themeLoadTraceId
+                    unreadFindPostUpgradeTraceId != openTrace.id
             ) {
-                unreadFindPostUpgradeTraceId = themeLoadTraceId
+                unreadFindPostUpgradeTraceId = openTrace.id
                 val offPageReloadAnchor = offPageReloadId.toString()
                 val findPostUrl = TopicUnreadFindPostReloadPolicy.buildFindPostUrl(page.id, offPageReloadAnchor)
                 forpdateam.ru.forpda.diagnostic.TopicUnreadAnchorDiagnostics.findPostReloadStarted(
                         topicId = page.id,
                         anchorPostId = offPageReloadAnchor,
-                        traceId = themeLoadTraceId,
+                        traceId = openTrace.id,
                 )
                 Log.i(
                         TopicUnreadFindPostReloadPolicy.LOG_TAG,
-                        "reload_findpost_offpage topic=${page.id} anchor=$offPageReloadAnchor trace=$themeLoadTraceId"
+                        "reload_findpost_offpage topic=${page.id} anchor=$offPageReloadAnchor trace=$openTrace.id"
                 )
                 loadData(findPostUrl, ThemeLoadAction.Normal, preserveOpenTrace = true)
                 return
@@ -1545,7 +1589,7 @@ class ThemeViewModel @Inject constructor(
                 scrollMode = currentTopicScrollMode,
                 suppressScrollRestore = shouldSuppressScrollRestoreOnRender(),
                 openedViaFindPost = openedViaFindPostLink,
-                alreadyUpgradedThisTrace = unreadFindPostUpgradeTraceId == themeLoadTraceId,
+                alreadyUpgradedThisTrace = unreadFindPostUpgradeTraceId == openTrace.id,
                 hasUnreadTarget = page.hasUnreadTarget,
                 anchorPostId = page.anchorPostId,
                 pageAnchor = page.anchor,
@@ -1557,7 +1601,7 @@ class ThemeViewModel @Inject constructor(
                 scrollMode = currentTopicScrollMode,
                 suppressScrollRestore = shouldSuppressScrollRestoreOnRender(),
                 openedViaFindPost = openedViaFindPostLink,
-                alreadyUpgradedThisTrace = unreadFindPostUpgradeTraceId == themeLoadTraceId,
+                alreadyUpgradedThisTrace = unreadFindPostUpgradeTraceId == openTrace.id,
                 parserListUnreadHint = activeLoadParserUnreadHint,
                 ambiguousBottomRedirect = page.ambiguousLastUnreadBottomRedirect,
                 hasUnreadTarget = page.hasUnreadTarget,
@@ -1589,16 +1633,16 @@ class ThemeViewModel @Inject constructor(
             )
         }
         if (findPostUpgradeAnchor != null && page.id > 0) {
-            unreadFindPostUpgradeTraceId = themeLoadTraceId
+            unreadFindPostUpgradeTraceId = openTrace.id
             val findPostUrl = TopicUnreadFindPostReloadPolicy.buildFindPostUrl(page.id, findPostUpgradeAnchor)
             forpdateam.ru.forpda.diagnostic.TopicUnreadAnchorDiagnostics.findPostReloadStarted(
                     topicId = page.id,
                     anchorPostId = findPostUpgradeAnchor,
-                    traceId = themeLoadTraceId,
+                    traceId = openTrace.id,
             )
             Log.i(
                     TopicUnreadFindPostReloadPolicy.LOG_TAG,
-                    "reload_findpost topic=${page.id} anchor=$findPostUpgradeAnchor ambiguous=${shouldReloadAmbiguousFindPost} trace=$themeLoadTraceId"
+                    "reload_findpost topic=${page.id} anchor=$findPostUpgradeAnchor ambiguous=${shouldReloadAmbiguousFindPost} trace=$openTrace.id"
             )
             loadData(findPostUrl, ThemeLoadAction.Normal, preserveOpenTrace = true)
             return
@@ -1632,11 +1676,11 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "vm templateReady trace=$themeLoadTraceId mapMs=${SystemClock.uptimeMillis() - beforeMapAt} dt=${SystemClock.uptimeMillis() - startedAt} posts=${page.posts.size} html=${page.html?.length ?: 0} loadedBefore=${loadedPages.keys.joinToString()}"
+                    "vm templateReady trace=$openTrace.id mapMs=${SystemClock.uptimeMillis() - beforeMapAt} dt=${SystemClock.uptimeMillis() - startedAt} posts=${page.posts.size} html=${page.html?.length ?: 0} loadedBefore=${loadedPages.keys.joinToString()}"
             )
             Log.i(
                     THEME_RENDER_TAG,
-                    "templateReady reason=initialLoad trace=$themeLoadTraceId action=$_loadAction mode=$currentTopicScrollMode topic=${page.id} page=${page.pagination.current}/${page.pagination.all} pagePosts=${page.posts.size} html=${page.html?.length ?: 0} containers=${countHtmlOccurrences(page.html, "theme_page_container")} postsInHtml=${countHtmlOccurrences(page.html, "post_container")} loadedBefore=${loadedPages.keys.joinToString()}"
+                    "templateReady reason=initialLoad trace=$openTrace.id action=$_loadAction mode=$currentTopicScrollMode topic=${page.id} page=${page.pagination.current}/${page.pagination.all} pagePosts=${page.posts.size} html=${page.html?.length ?: 0} containers=${countHtmlOccurrences(page.html, "theme_page_container")} postsInHtml=${countHtmlOccurrences(page.html, "post_container")} loadedBefore=${loadedPages.keys.joinToString()}"
             )
         }
         val beforeThemeLoadedAt = SystemClock.uptimeMillis()
@@ -1644,7 +1688,7 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "vm onThemeLoadedReady trace=$themeLoadTraceId ms=${SystemClock.uptimeMillis() - beforeThemeLoadedAt} dt=${SystemClock.uptimeMillis() - startedAt}"
+                    "vm onThemeLoadedReady trace=$openTrace.id ms=${SystemClock.uptimeMillis() - beforeThemeLoadedAt} dt=${SystemClock.uptimeMillis() - startedAt}"
             )
         }
         val previousPage = currentPage
@@ -1656,6 +1700,25 @@ class ThemeViewModel @Inject constructor(
             ensureTopicTitleFromFirstPageIfNeeded(page)
         }
         rememberSessionTopicTitle(page.title)
+        // Fix C: second guard right before the commit. Even if the earlier-bail
+        // path was bypassed (e.g. when [activeLoadedTopicId] is set by a different
+        // load that just completed), refuse to overwrite the current page with a
+        // stale-topic response.
+        if (openTrace.callIndex > 0L &&
+                activeLoadedTopicId != null &&
+                page.id != activeLoadedTopicId) {
+            FpdaDebugLog.logTheme(
+                    FpdaDebugLog.ThemeArea.LOAD,
+                    "dropMismatchedCommit",
+                    mapOf(
+                            "traceId" to openTrace.id,
+                            "expectedTopicId" to activeLoadedTopicId,
+                            "loadedTopicId" to page.id,
+                    ),
+                    warn = true
+            )
+            return
+        }
         currentPage = page
         activeLoadedTopicId = page.id.takeIf { it > 0 }
         visibleCurrentPage = page.pagination.current
@@ -1681,7 +1744,7 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Log.i(
                     THEME_RENDER_TAG,
-                    "loadedPagesReady trace=$themeLoadTraceId action=$_loadAction preserveHybrid=$canPreserveHybridPages loaded=${loadedPages.keys.joinToString()} html=${page.html?.length ?: 0} containers=${countHtmlOccurrences(page.html, "theme_page_container")} postsInHtml=${countHtmlOccurrences(page.html, "post_container")}"
+                    "loadedPagesReady trace=$openTrace.id action=$_loadAction preserveHybrid=$canPreserveHybridPages loaded=${loadedPages.keys.joinToString()} html=${page.html?.length ?: 0} containers=${countHtmlOccurrences(page.html, "theme_page_container")} postsInHtml=${countHtmlOccurrences(page.html, "post_container")}"
             )
         }
         if (shouldRunPendingSmartEnd) {
@@ -1733,8 +1796,8 @@ class ThemeViewModel @Inject constructor(
                     resolution,
                     TopicOpenTraceExtras(
                             event = "page_loaded",
-                            traceId = themeLoadTraceId,
-                            requestId = themeLoadTraceId,
+                            traceId = openTrace.id,
+                            requestId = openTrace.id,
                             openIntent = lastOpenIntent,
                             isFreshOpen = isFreshTopicOpen(),
                             isBackRestore = isRestoreTopicOpen(),
@@ -1748,6 +1811,17 @@ class ThemeViewModel @Inject constructor(
                             finalLoadedPage = page.pagination.current,
                             finalScrolledPostId = page.anchorPostId ?: page.anchor,
                             finalScrollY = page.scrollY,
+                            lastViewedPostId = forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
+                                    .extractHashEntryPostIdFromTopicUrl(page.url.orEmpty())
+                                    ?.toLongOrNull()
+                                    ?: page.anchorPostId?.toLongOrNull(),
+                            lastReadSource = when {
+                                !page.anchorPostId.isNullOrBlank() -> "page_anchor"
+                                !forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
+                                        .extractHashEntryPostIdFromTopicUrl(page.url.orEmpty())
+                                        .isNullOrBlank() -> "redirect_url"
+                                else -> "none"
+                            },
                             savedPage = previousPage?.pagination?.current,
                             savedPostId = previousPage?.anchorPostId,
                             savedScrollY = previousPage?.scrollY,
@@ -1762,7 +1836,7 @@ class ThemeViewModel @Inject constructor(
         }
         ThemePostReadStateDiagnostics.viewModelLoadComplete(
                 topicId = page.id,
-                traceId = themeLoadTraceId,
+                traceId = openTrace.id,
                 anchorPostId = page.anchorPostId ?: page.anchor?.removePrefix("entry"),
                 hasUnreadTarget = page.hasUnreadTarget,
                 blockScrollRestoreForUnread = shouldSuppressScrollRestoreOnRender(),
@@ -1773,7 +1847,7 @@ class ThemeViewModel @Inject constructor(
         if (_loadAction == ThemeLoadAction.Normal &&
                 (themeUrl.contains("view=getnewpost", ignoreCase = true) ||
                         openedViaFindPostLink ||
-                        unreadFindPostUpgradeTraceId == themeLoadTraceId)
+                        unreadFindPostUpgradeTraceId == openTrace.id)
         ) {
             val actualPostId = page.anchorPostId ?: page.anchor?.removePrefix("entry")
             val redirectPostId = ThemeApi.extractHashEntryPostIdFromTopicUrl(page.url.orEmpty())
@@ -1784,7 +1858,7 @@ class ThemeViewModel @Inject constructor(
                     actualPostId = actualPostId,
                     hasUnreadTarget = page.hasUnreadTarget,
                     anchorSource = lastOpenResolution?.reason,
-                    traceId = themeLoadTraceId,
+                    traceId = openTrace.id,
             )
             if (page.hasUnreadTarget &&
                     redirectPostId != null &&
@@ -1798,7 +1872,7 @@ class ThemeViewModel @Inject constructor(
                         actualPostId = redirectPostId,
                         hasUnreadTarget = page.hasUnreadTarget,
                         anchorSource = "redirect_mismatch",
-                        traceId = themeLoadTraceId,
+                        traceId = openTrace.id,
                 )
             }
         }
@@ -1810,11 +1884,11 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "vm emitUpdateViewStart trace=$themeLoadTraceId dt=${beforeEmitAt - startedAt} html=${page.html?.length ?: 0} smartPatch=${smartPatch != null} preserveHybrid=$canPreserveHybridPages loaded=${loadedPages.keys.joinToString()}"
+                    "vm emitUpdateViewStart trace=$openTrace.id dt=${beforeEmitAt - startedAt} html=${page.html?.length ?: 0} smartPatch=${smartPatch != null} preserveHybrid=$canPreserveHybridPages loaded=${loadedPages.keys.joinToString()}"
             )
             Log.i(
                     THEME_RENDER_TAG,
-                    "emitUpdateView source=${if (smartPatch != null) "smartPatch" else "loadData"} trace=$themeLoadTraceId action=$_loadAction html=${page.html?.length ?: 0} containers=${countHtmlOccurrences(page.html, "theme_page_container")} postsInHtml=${countHtmlOccurrences(page.html, "post_container")} loaded=${loadedPages.keys.joinToString()} smartPatch=${smartPatch != null}"
+                    "emitUpdateView source=${if (smartPatch != null) "smartPatch" else "loadData"} trace=$openTrace.id action=$_loadAction html=${page.html?.length ?: 0} containers=${countHtmlOccurrences(page.html, "theme_page_container")} postsInHtml=${countHtmlOccurrences(page.html, "post_container")} loaded=${loadedPages.keys.joinToString()} smartPatch=${smartPatch != null}"
             )
         }
         postOpenEnrichmentController.markPrimaryOpenComplete(traceId)
@@ -1842,7 +1916,7 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "vm emitUpdateViewEnd trace=$themeLoadTraceId emitMs=${SystemClock.uptimeMillis() - beforeEmitAt} dt=${SystemClock.uptimeMillis() - startedAt}"
+                    "vm emitUpdateViewEnd trace=$openTrace.id emitMs=${SystemClock.uptimeMillis() - beforeEmitAt} dt=${SystemClock.uptimeMillis() - startedAt}"
             )
         }
         if (_loadAction == ThemeLoadAction.Normal || _loadAction == ThemeLoadAction.End) {
@@ -1929,7 +2003,12 @@ class ThemeViewModel @Inject constructor(
             scrollToPostId: Int? = null
     ) {
         pendingEditCancelScrollPostId = null
-        themeLoadTraceId = UUID.randomUUID().toString().replace("-", "").take(8)
+        loadCallCounter += 1
+        openTrace = OpenTrace(
+            id = UUID.randomUUID().toString().replace("-", "").take(8),
+            topicId = themePage.id.takeIf { it > 0 },
+            callIndex = loadCallCounter,
+        )
         val resolvedPostId = scrollToPostId?.takeIf { it > 0 }
                 ?: themePage.anchorPostId?.toIntOrNull()
                 ?: themePage.anchor?.removePrefix("entry")?.toIntOrNull()
@@ -1939,7 +2018,7 @@ class ThemeViewModel @Inject constructor(
             themePage.addAnchor("entry$resolvedPostId")
             themePage.anchorPostId = resolvedPostId.toString()
         } else {
-            ThemeApi.ensureScrollAnchorForPostedPage(themePage, null, themeLoadTraceId)
+            ThemeApi.ensureScrollAnchorForPostedPage(themePage, null, openTrace.id)
             themePage.anchorPostId = themePage.anchor
                     ?.removePrefix("entry")
                     ?.takeIf { it.isNotEmpty() }
@@ -2002,7 +2081,12 @@ class ThemeViewModel @Inject constructor(
     fun loadUrl(url: String, sourceScreen: String = "unknown", listHints: TopicOpenListHints? = null) {
         val trimmedUrl = url.trim()
         val incomingTopicId = ThemeApi.extractTopicIdFromUrl(trimmedUrl)
-        val previouslyLoadedId = activeLoadedTopicId ?: currentPage?.id
+        // Use only [currentPage?.id] for the reset decision. The previous
+        // `activeLoadedTopicId ?: currentPage?.id` form short-circuited to a stale
+        // "no reset" when [activeLoadedTopicId] was null (e.g. before the first
+        // onLoadData commit), which allowed a cross-topic loadUrl to skip the
+        // reset block and leave stale UI state.
+        val previouslyLoadedId = currentPage?.id
         val preserveHistoryOnCrossTopic = ThemeViewModel.shouldPreserveHistoryOnCrossTopicOpen(sourceScreen)
         if (needsTopicSwitchReset(incomingTopicId, previouslyLoadedId)) {
             if (preserveHistoryOnCrossTopic) {
@@ -2065,7 +2149,7 @@ class ThemeViewModel @Inject constructor(
                 FpdaDebugLog.ThemeArea.OPEN,
                 "load_url",
                 mapOf(
-                        "traceId" to themeLoadTraceId,
+                        "traceId" to openTrace.id,
                         "sourceScreen" to sourceScreen,
                         "incomingTopicId" to incomingTopicId,
                         "resolvedUrl" to FpdaDebugLog.sanitizeUrl(resolution.url),
@@ -2138,7 +2222,7 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "vm refreshRequest begin id=${request.id} source=${request.source} mode=${request.restoreMode} topic=${request.topicId} st=${request.pageSt} page=${request.targetPageNumber} url=${request.targetUrl} visible=$visibleCurrentPage loaded=${loadedPages.keys.joinToString()} trace=$themeLoadTraceId"
+                    "vm refreshRequest begin id=${request.id} source=${request.source} mode=${request.restoreMode} topic=${request.topicId} st=${request.pageSt} page=${request.targetPageNumber} url=${request.targetUrl} visible=$visibleCurrentPage loaded=${loadedPages.keys.joinToString()} trace=$openTrace.id"
             )
         }
         return request.id
@@ -2186,7 +2270,10 @@ class ThemeViewModel @Inject constructor(
             }
         }
         if (BuildConfig.DEBUG) Timber.d("restoreFromChildTab: historySize=${historyController.size} currentPage.id=${currentPage?.id} currentPage.st=${currentPage?.st}")
-        if (historyController.canGoBack()) {
+        val anchorStillValid = currentPage?.let { page ->
+            pendingHistorySourceAnchor?.takeIf { sourceAnchorAppliesTo(page, it) }
+        } != null
+        if (historyController.canGoBack() && !anchorStillValid) {
             backPage()
             return
         }
@@ -2231,7 +2318,7 @@ class ThemeViewModel @Inject constructor(
             if (BuildConfig.DEBUG) {
                 Log.i(
                         REFRESH_SCROLL_TAG,
-                        "skip loadNewPosts before initial settle trace=$themeLoadTraceId"
+                        "skip loadNewPosts before initial settle trace=$openTrace.id"
                 )
             }
             return
@@ -2240,7 +2327,7 @@ class ThemeViewModel @Inject constructor(
             if (BuildConfig.DEBUG) {
                 Log.i(
                         REFRESH_SCROLL_TAG,
-                        "skip loadNewPosts while theme load in flight trace=$themeLoadTraceId"
+                        "skip loadNewPosts while theme load in flight trace=$openTrace.id"
                 )
             }
             return
@@ -2249,7 +2336,7 @@ class ThemeViewModel @Inject constructor(
             if (BuildConfig.DEBUG) {
                 Log.i(
                         REFRESH_SCROLL_TAG,
-                        "skip loadNewPosts after initialOpen trace=$themeLoadTraceId dt=${SystemClock.uptimeMillis() - initialOpenSettledAt}"
+                        "skip loadNewPosts after initialOpen trace=$openTrace.id dt=${SystemClock.uptimeMillis() - initialOpenSettledAt}"
                 )
             }
             return
@@ -3091,14 +3178,14 @@ class ThemeViewModel @Inject constructor(
         }
         if (hatMetadataJob?.isActive == true) return
         val topicId = page.id
-        val traceId = themeLoadTraceId
+        val traceId = openTrace.id
         val session = infiniteSession
         val hatOpen = userHatOpenOverride ?: false
         val pollOpen = page.isPollOpen
         hatMetadataJob = scope.launch {
             when (val result = themeUseCase.loadTheme(buildCleanThemeUrl(topicId, 0), hatOpen, pollOpen)) {
                 is ThemeUseCase.LoadResult.Success -> {
-                    if (session != infiniteSession || traceId != themeLoadTraceId) return@launch
+                    if (session != infiniteSession || traceId != openTrace.id) return@launch
                     val firstPage = result.page
                     if (firstPage.id != topicId) return@launch
                     val detected = detectTopicHatPost(firstPage) ?: firstPage.topicHatPost
@@ -3140,7 +3227,7 @@ class ThemeViewModel @Inject constructor(
                             pendingToolbarOverlayOpen = pendingHatToolbarOpenAfterRender,
                     )
                     mapEntityWithPostListGuard(current, "hatMetadata")
-                    if (traceId != themeLoadTraceId) return@launch
+                    if (traceId != openTrace.id) return@launch
                     if (ThemeHtmlMetrics.isListPostsUnderRendered(
                                     current,
                                     current.html,
@@ -3163,13 +3250,13 @@ class ThemeViewModel @Inject constructor(
         pageMetadataEnrichmentJob?.cancel()
         pageMetadataEnrichmentJob = scope.launch {
             delay(ThemeDeferredMetadataEnrichmentPolicy.DELAY_MS)
-            if (traceId != themeLoadTraceId) return@launch
+            if (traceId != openTrace.id) return@launch
             val current = currentPage ?: return@launch
             if (current.id != page.id) return@launch
             val navigationBefore = ThemeDeferredMetadataEnrichmentPolicy.navigationSnapshot(current)
             val beforeByPostId = ThemeDeferredMetadataPatcher.snapshotByPostId(current.posts)
             val changed = themeUseCase.enrichPageMetadata(current)
-            if (!changed || traceId != themeLoadTraceId) return@launch
+            if (!changed || traceId != openTrace.id) return@launch
             if (current.id != page.id) return@launch
             if (!ThemeDeferredMetadataEnrichmentPolicy.navigationUnchanged(
                             navigationBefore,
@@ -3297,9 +3384,78 @@ class ThemeViewModel @Inject constructor(
             scrollRatio: Double?,
             source: String
     ) {
-        if (target.id <= 0) return
-        if (target.pagination.current < target.pagination.all) return
-        if (!TopicReadExitPolicy.shouldMarkReadOnLastPageExit(wasNearBottom, scrollRatio)) return
+        if (target.id <= 0) {
+            ThemePostReadStateDiagnostics.markReadSkipped(
+                    topicId = target.id,
+                    reason = "invalid_topic_id",
+                    source = source
+            )
+            return
+        }
+        if (target.pagination.current < target.pagination.all) {
+            ThemePostReadStateDiagnostics.markReadSkipped(
+                    topicId = target.id,
+                    reason = "not_last_page",
+                    source = source,
+                    currentPage = target.pagination.current,
+                    allPages = target.pagination.all
+            )
+            FpdaDebugLog.warn(
+                    FpdaDebugLog.TAG_THEME_POST_READ_STATE,
+                    "mark_read_gate_not_last_page",
+                    mapOf(
+                            "topicId" to target.id,
+                            "current" to target.pagination.current,
+                            "all" to target.pagination.all,
+                            "source" to source
+                    )
+            )
+            return
+        }
+        // Fix #4: end-action path. If the user is loading the last page via End action
+        // and we've already scrolled (scrollY > 0), treat it as bottom-reached.
+        if (_loadAction == ThemeLoadAction.End && target.scrollY > 0) {
+            ThemePostReadStateDiagnostics.markReadGateCheck(
+                    topicId = target.id,
+                    currentPage = target.pagination.current,
+                    allPages = target.pagination.all,
+                    wasNearBottom = wasNearBottom,
+                    scrollRatio = scrollRatio,
+                    result = "pass_end_action"
+            )
+            themeUseCase.markTopicRead(
+                    topicId = target.id,
+                    reason = "theme_last_page_loaded_after_end",
+                    source = source
+            )
+            return
+        }
+        if (!TopicReadExitPolicy.shouldMarkReadOnLastPageExit(wasNearBottom, scrollRatio)) {
+            ThemePostReadStateDiagnostics.markReadSkipped(
+                    topicId = target.id,
+                    reason = "exit_policy_fail",
+                    source = source,
+                    currentPage = target.pagination.current,
+                    allPages = target.pagination.all
+            )
+            ThemePostReadStateDiagnostics.markReadGateCheck(
+                    topicId = target.id,
+                    currentPage = target.pagination.current,
+                    allPages = target.pagination.all,
+                    wasNearBottom = wasNearBottom,
+                    scrollRatio = scrollRatio,
+                    result = "skip_exit_policy"
+            )
+            return
+        }
+        ThemePostReadStateDiagnostics.markReadGateCheck(
+                topicId = target.id,
+                currentPage = target.pagination.current,
+                allPages = target.pagination.all,
+                wasNearBottom = wasNearBottom,
+                scrollRatio = scrollRatio,
+                result = "pass"
+        )
         themeUseCase.markTopicRead(
                 topicId = target.id,
                 reason = "theme_last_page_bottom_reached",
@@ -3350,11 +3506,13 @@ class ThemeViewModel @Inject constructor(
             return null
         }
         lastLinkSourceAnchor = null
-        if (pendingHistorySourceAnchor == anchor) {
-            pendingHistorySourceAnchor = null
-            pendingHistorySourceTopicId = null
-            pendingHistorySourceSt = null
-        }
+        // BACK-to-wrong-post fix: do NOT clear pendingHistorySourceAnchor here.
+        // The navigation consumes the anchor for the OUTGOING load, but the SOURCE page's
+        // trailing onPauseOrHide async DOM capture still runs ~150ms later and would otherwise
+        // overwrite the authoritative clicked-post anchor (e.g. entry143876380) with the
+        // viewport-top post (e.g. entry143876586). Keeping pendingHistorySourceAnchor alive lets
+        // updatePageHistoryHtml() honor sourceAnchorAppliesTo() and preserve the exact source post.
+        // It stays topic/st-scoped, is TTL-bounded (SOURCE_ANCHOR_TTL_MS), and is reset on any fresh load.
         Log.i(
                 THEME_HISTORY_TAG,
                 "native sourceAnchor consume target=$targetUrl href=${anchor.href} sourcePostId=${anchor.postId} offset=${anchor.offsetTop} y=${anchor.scrollY} ratio=${anchor.ratio} event=${anchor.eventType} ageMs=$ageMs"
@@ -3440,7 +3598,7 @@ class ThemeViewModel @Inject constructor(
         target.anchorPostId = anchor.postId
         target.anchorOffsetTop = anchor.offsetTop ?: 0.0
         target.scrollRatio = anchor.ratio
-        target.wasNearBottom = false
+        target.wasNearBottom = (anchor.ratio ?: 0.0) >= TopicReadExitPolicy.LAST_PAGE_MARK_READ_RATIO_THRESHOLD
         Log.i(
                 THEME_HISTORY_TAG,
                 "sourceAnchor applied reason=$reason topic=${target.id} st=${target.st} page=${target.pagination.current} sourcePostId=${anchor.postId} offset=${target.anchorOffsetTop} y=${anchor.scrollY} ratio=${anchor.ratio} href=${anchor.href}"
@@ -3536,8 +3694,15 @@ class ThemeViewModel @Inject constructor(
      */
     fun applyHighlightForCurrentPage(): forpdateam.ru.forpda.presentation.theme.HighlightResolution? {
         val page = currentPage ?: return null
+        val forceLastViewed = forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy
+                .parseOpenSessionKind(page.openSessionKind) ==
+                forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy.TopicOpenSessionKind.AMBIGUOUS_ALL_READ
         val inputs = forpdateam.ru.forpda.presentation.theme.HighlightOpenInputsPolicy
-                .resolveOpenInputs(page = page, openedViaFindPost = openedViaFindPostLink)
+                .resolveOpenInputs(
+                        page = page,
+                        openedViaFindPost = openedViaFindPostLink,
+                        forceLastViewedInput = forceLastViewed,
+                )
         return forpdateam.ru.forpda.presentation.theme.TopicHighlightApply.applyToPage(
                 page = page,
                 readPositionRepository = readPositionRepository,
@@ -3545,6 +3710,8 @@ class ThemeViewModel @Inject constructor(
                 unreadUrl = inputs.unreadUrl,
                 firstUnreadPostId = inputs.firstUnreadPostId,
                 unreadPage = inputs.unreadPage,
+                readPositionOverride = inputs.readPosition,
+                lastReadSource = inputs.lastReadSource.name,
         )
     }
 
@@ -3624,14 +3791,14 @@ class ThemeViewModel @Inject constructor(
     }
 
     private fun markTopicRenderSettled() {
-        renderSettledTraceId = themeLoadTraceId
+        renderSettledTraceId = openTrace.id
         flushPendingHatOverlayRenderAfterScroll()
         flushPendingHatMetadataViewUpdate()
     }
 
     private fun flushPendingHatMetadataViewUpdate() {
         val pendingTrace = pendingHatMetadataEmitTraceId ?: return
-        if (pendingTrace != themeLoadTraceId) return
+        if (pendingTrace != openTrace.id) return
         if (!ThemeOpenScrollCoalescePolicy.shouldFlushDeferredHatMetadataViewUpdate(userHatOpenOverride)) {
             pendingHatMetadataEmitTraceId = null
             return
@@ -3645,7 +3812,7 @@ class ThemeViewModel @Inject constructor(
     }
 
     private fun emitHatMetadataViewUpdate(traceId: String, page: ThemePage) {
-        if (traceId != themeLoadTraceId) return
+        if (traceId != openTrace.id) return
         if (hasBlockingScrollPending() || renderSettledTraceId != traceId) {
             pendingHatMetadataEmitTraceId = traceId
             return
@@ -3733,6 +3900,7 @@ class ThemeViewModel @Inject constructor(
             TopicOpenTargetType.EXPLICIT_POST,
             TopicOpenTargetType.USER_ACTION,
             TopicOpenTargetType.SETTING_LAST_UNREAD,
+            TopicOpenTargetType.READ_RESUME,
             TopicOpenTargetType.SERVER_UNREAD_FALLBACK -> {
                 val postId = (resolution.resolvedPostId ?: explicitTargetPostIds[page])
                         ?.takeIf { it > 0 }
@@ -3798,7 +3966,7 @@ class ThemeViewModel @Inject constructor(
         if (shouldBlockHybridUntilInitialAnchorSettled()) {
             Log.i(
                     ThemeUnreadHybridAnchorGuardPolicy.LOG_TAG,
-                    "blocked_infinite direction=$direction reason=awaiting_anchor trace=$themeLoadTraceId"
+                    "blocked_infinite direction=$direction reason=awaiting_anchor trace=$openTrace.id"
             )
             _uiEvents.tryEmit(
                     ThemeUiEvent.SetInfiniteState(direction, ThemeInfiniteScrollController.InfiniteState.IDLE.jsName, null)
@@ -3954,7 +4122,7 @@ class ThemeViewModel @Inject constructor(
 
     private val LOG_TAG = ThemeFragmentWeb::class.java.simpleName
 
-    fun getThemeLoadTraceId(): String = themeLoadTraceId
+    fun getThemeLoadTraceId(): String = openTrace.id
 
     fun onEmptyThemeHtmlDetected() {
         val page = currentPage
@@ -4047,7 +4215,13 @@ class ThemeViewModel @Inject constructor(
 
         if (showTopicParam != null && showTopicParam != Uri.parse(themeUrl).getQueryParameter("showtopic")) {
             setTopicOpenIntent(TopicOpenIntentClassifier.freshIntentForSource(lastOpenSourceScreen))
-            loadUrl(url, sourceScreen = "in_topic_link")
+            // Fix E: push a new top-level Theme tab so system back works even
+            // if the in-tab history is corrupted. Fall back to in-tab loadUrl
+            // if the router refused (e.g. the URL did not yield a topic id).
+            val opened = router.tryOpenTopicInNewTab(url, sourceScreen = "in_topic_link")
+            if (!opened) {
+                loadUrl(url, sourceScreen = "in_topic_link")
+            }
             return true
         }
 
@@ -4389,7 +4563,7 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "vm refreshRequest apply id=${request.id} source=${request.source} mode=${request.restoreMode} effectiveMode=$effectiveMode trace=$themeLoadTraceId page=${page.pagination.current}/${page.pagination.all} st=${page.st} snapshotY=${request.snapshotScrollY} snapshotAnchor=${request.snapshotAnchorPostId} anchor=${page.anchorPostId} offset=${page.anchorOffsetTop} ratio=${page.scrollRatio} bottom=${page.wasNearBottom}"
+                    "vm refreshRequest apply id=${request.id} source=${request.source} mode=${request.restoreMode} effectiveMode=$effectiveMode trace=$openTrace.id page=${page.pagination.current}/${page.pagination.all} st=${page.st} snapshotY=${request.snapshotScrollY} snapshotAnchor=${request.snapshotAnchorPostId} anchor=${page.anchorPostId} offset=${page.anchorOffsetTop} ratio=${page.scrollRatio} bottom=${page.wasNearBottom}"
             )
         }
     }
@@ -4481,7 +4655,7 @@ class ThemeViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Log.i(
                     REFRESH_SCROLL_TAG,
-                    "vm backRestoreSnapshot trace=$themeLoadTraceId topic=${page.id} st=${page.st} scrollY=${page.scrollY} anchor=${page.anchorPostId} offset=${page.anchorOffsetTop} ratio=${page.scrollRatio} bottom=${page.wasNearBottom} restoreId=${page.refreshRestoreId}"
+                    "vm backRestoreSnapshot trace=$openTrace.id topic=${page.id} st=${page.st} scrollY=${page.scrollY} anchor=${page.anchorPostId} offset=${page.anchorOffsetTop} ratio=${page.scrollRatio} bottom=${page.wasNearBottom} restoreId=${page.refreshRestoreId}"
             )
             Log.i(
                     THEME_HISTORY_TAG,
@@ -4499,7 +4673,7 @@ class ThemeViewModel @Inject constructor(
         deferredFavoriteSyncJob = scope.launch {
             val startedAt = SystemClock.uptimeMillis()
             themeUseCase.syncFavoriteLastPost(page)
-            if (BuildConfig.DEBUG && traceId == themeLoadTraceId) {
+            if (BuildConfig.DEBUG && traceId == openTrace.id) {
                 Log.i(
                         REFRESH_SCROLL_TAG,
                         "vm favoriteSyncDeferred trace=$traceId topic=${page.id} ms=${SystemClock.uptimeMillis() - startedAt}"
@@ -4524,7 +4698,7 @@ class ThemeViewModel @Inject constructor(
             when (val result = themeUseCase.loadTheme(prefetchUrl, hatOpen, pollOpen)) {
                 is ThemeUseCase.LoadResult.Success -> {
                     val loaded = result.page
-                    if (traceId != themeLoadTraceId || loaded.id != topicId) return@launch
+                    if (traceId != openTrace.id || loaded.id != topicId) return@launch
                     if (loaded.pagination.current != 2 || loadedPages.containsKey(2)) return@launch
                     loadedPages[2] = loaded
                     if (BuildConfig.DEBUG) {
@@ -4564,7 +4738,7 @@ class ThemeViewModel @Inject constructor(
 
         fun needsTopicSwitchReset(incomingTopicId: Int?, previouslyLoadedTopicId: Int?): Boolean {
             if (incomingTopicId == null || incomingTopicId <= 0) return false
-            if (previouslyLoadedTopicId == null || previouslyLoadedTopicId <= 0) return false
+            if (previouslyLoadedTopicId == null) return false
             return incomingTopicId != previouslyLoadedTopicId
         }
 

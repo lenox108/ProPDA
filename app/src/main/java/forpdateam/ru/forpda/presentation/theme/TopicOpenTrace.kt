@@ -87,6 +87,8 @@ object TopicOpenTrace {
                 "finalLoadedPage" to extras.finalLoadedPage,
                 "finalScrolledPostId" to extras.finalScrolledPostId,
                 "finalScrollY" to extras.finalScrollY,
+                "lastViewedPostId" to extras.lastViewedPostId,
+                "lastReadSource" to extras.lastReadSource,
                 "hasUnreadTarget" to extras.hasUnreadTarget,
                 "openSessionKind" to extras.openSessionKind,
                 "loadAction" to extras.loadAction,
@@ -142,6 +144,10 @@ data class TopicOpenTraceExtras(
         val finalLoadedPage: Int? = null,
         val finalScrolledPostId: String? = null,
         val finalScrollY: Int? = null,
+        /** Resolved last-viewed post id (read-resume or all-read bottom-redirect). Log 24_06-14. */
+        val lastViewedPostId: Long? = null,
+        /** Origin of [lastViewedPostId]: `page_anchor` | `redirect_url` | `anchors_list` | `none`. */
+        val lastReadSource: String? = null,
         val savedPage: Int? = null,
         val savedPostId: String? = null,
         val savedScrollY: Int? = null,

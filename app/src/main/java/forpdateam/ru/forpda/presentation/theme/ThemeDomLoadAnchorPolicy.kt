@@ -36,7 +36,9 @@ object ThemeDomLoadAnchorPolicy {
             isRefreshNavigation: Boolean,
             isPostedPageScroll: Boolean,
             anchorPostId: String?,
+            isExplicitPostOpen: Boolean = false,
     ): Boolean {
+        if (isExplicitPostOpen) return false
         if (loadAction != ThemeLoadAction.Normal) return false
         if (isEndNavigation || isRefreshNavigation || isPostedPageScroll) return false
         return !anchorPostId.isNullOrBlank()

@@ -33,6 +33,8 @@ object TopicHighlightApply {
             unreadUrl: String? = null,
             firstUnreadPostId: Long? = null,
             unreadPage: Int? = null,
+            readPositionOverride: ReadPosition? = null,
+            lastReadSource: String? = null,
     ): HighlightResolution {
         val topicId = page.id.toLong()
         val unread = if (firstUnreadPostId != null && firstUnreadPostId > 0L) {
@@ -52,7 +54,7 @@ object TopicHighlightApply {
         } else {
             null
         }
-        val readPosition = readPositionRepository.get(topicId)
+        val readPosition = readPositionOverride ?: readPositionRepository.get(topicId)
         val pagePostIds = page.posts.map { it.id.toLong() }
 
         val resolution = HighlightResolver.resolve(
@@ -61,6 +63,7 @@ object TopicHighlightApply {
                 readPosition = readPosition,
                 explicitPostId = explicitPostId,
                 pagePostIds = pagePostIds,
+                lastReadSource = lastReadSource,
         )
 
         val resolvedTarget = resolution.target

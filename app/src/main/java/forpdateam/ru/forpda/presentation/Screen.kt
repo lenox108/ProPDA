@@ -166,6 +166,7 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
             const val ARG_UNREAD_URL_FROM_LIST = "topic_unread_url_from_list"
             const val ARG_UNREAD_POST_ID_FROM_LIST = "topic_unread_post_id_from_list"
             const val ARG_LAST_READ_URL_FROM_LIST = "topic_last_read_url_from_list"
+            const val ARG_INSPECTOR_MARKED_UNREAD = "topic_inspector_marked_unread"
             const val ARG_TOPIC_OPEN_INTENT = "topic_open_intent"
         }
 
@@ -176,6 +177,8 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
         var lastReadUrlFromList: String? = null
         /** Carried from favorites/topics list row — survives hint URL strip on navigation. */
         var listTopicMarkedUnread: Boolean = false
+        /** Inspector fav snapshot marked this topic unread on last merge (separate from row state). */
+        var inspectorMarkedUnread: Boolean = false
         /**
          * Navigation intent for opening a topic.
          * Values are stringly-typed to keep Fragment args stable.
@@ -187,16 +190,6 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
 
     class Topics : Screen() {
         var forumId: Int = NO_ID
-    }
-
-    /**
-     * Phase 3 list screen for §5.1 (offline reading). The
-     * fragment that hosts this Screen is registered in
-     * [forpdateam.ru.forpda.ui.navigation.TabHelper] in a
-     * follow-up commit; the data layer is in place.
-     */
-    class OfflineList : Screen() {
-        override var isAlone: Boolean = true
     }
 
     class OtherMenu() : Screen() {

@@ -16,11 +16,12 @@ object FavoritesTopicNavigationPolicy {
 
     fun buildListHints(item: FavItem): TopicOpenListHints {
         if (item.isForum || item.topicId <= 0) return TopicOpenListHints()
-        return TopicUnreadOpenPolicy.buildListHints(
+        val base = TopicUnreadOpenPolicy.buildListHints(
                 topicId = item.topicId,
                 listingHref = item.listingHref,
                 topicMarkedUnread = item.isUnreadForNavigation()
         )
+        return base.copy(inspectorMarkedUnread = item.inspectorMarkedUnread)
     }
 
     /** Unread row: +N / bold title / [readState] / legacy [isNew] / inspector hint. */
@@ -77,6 +78,7 @@ object FavoritesTopicNavigationPolicy {
             unreadPostIdFromList = hints.unreadPostIdFromList ?: 0
             lastReadUrlFromList = hints.lastReadUrlFromList
             listTopicMarkedUnread = hints.topicMarkedUnread
+            inspectorMarkedUnread = hints.inspectorMarkedUnread
         }
     }
 }

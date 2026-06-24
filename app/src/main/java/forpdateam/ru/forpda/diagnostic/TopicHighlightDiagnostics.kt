@@ -22,7 +22,8 @@ object TopicHighlightDiagnostics {
             firstUnreadPostId: Long?,
             lastViewedPostId: Long?,
             explicitPostId: Long?,
-            pagePostCount: Int
+            pagePostCount: Int,
+            lastReadSource: String? = null,
     ) {
         log(
                 "highlight_resolve_started",
@@ -34,7 +35,8 @@ object TopicHighlightDiagnostics {
                         "firstUnreadPostId" to firstUnreadPostId,
                         "lastViewedPostId" to lastViewedPostId,
                         "explicitPostId" to explicitPostId,
-                        "pagePostCount" to pagePostCount
+                        "pagePostCount" to pagePostCount,
+                        "lastReadSource" to lastReadSource
                 )
         )
     }

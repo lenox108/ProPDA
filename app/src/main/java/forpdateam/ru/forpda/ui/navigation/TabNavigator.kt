@@ -502,12 +502,49 @@ class TabNavigator(
 
     private fun activateAloneThemeTabIfPresent(screen: Screen): Boolean {
         if (screen !is Screen.Theme) return false
-        val aloneTab = tabController.findThemeTab() ?: return false
+        // Prefer the CURRENT tab when it is a Theme tab: findThemeTab() returns the FIRST Theme tab
+        // in the tree, which is wrong when multiple alone Theme tabs coexist (cross-topic opens).
+        // Using the visible tab ensures openTopicId/source-anchor are computed from the active topic.
+        val current = tabController.getCurrent()
+        val aloneTab = current?.takeIf { it.screen?.key == Screen.Theme::class.java.simpleName }
+                ?: tabController.findThemeTab()
+                ?: return false
         val themeFr = getByTag(aloneTab.tag) as? ThemeFragmentWeb ?: return false
         val url = screen.themeUrl ?: return false
         val targetTopicId = extractShowTopicId(url)
         val openTopicId = themeFr.arguments?.getString(TabFragment.ARG_TAB)?.let { extractShowTopicId(it) }
                 ?: themeFr.getOpenTopicIdForReuse()
+        // Cross-topic navigation (e.g. an in-topic link to a DIFFERENT topic) must NOT reuse the
+        // existing alone Theme tab: it would corrupt in-tab history with mixed topics and break
+        // system back. Fall through to createFragment so a new tab is opened instead.
+        if (TabNavigatorThemeSwitchPolicy.isCrossTopicFreshOpen(
+                        targetTopicId = targetTopicId,
+                        openTopicId = openTopicId,
+                        openIntent = screen.topicOpenIntent
+                )) {
+            FpdaDebugLog.log(
+                    FpdaDebugLog.TAG_TOPIC_SWITCH,
+                    event = "alone_theme_skip_reuse_cross_topic",
+                    fields = mapOf(
+                            "targetTopicId" to targetTopicId,
+                            "openTopicId" to openTopicId,
+                            "source" to screen.topicOpenSource,
+                            "intent" to screen.topicOpenIntent,
+                            "tabTag" to aloneTab.tag
+                    )
+            )
+            val newFragment = createFragment(screen.screenKey, screen)
+            if (newFragment != null) {
+                val tag = genTag()
+                fragmentManager
+                        .beginTransaction()
+                        .add(containerId, newFragment, tag)
+                        .commitNow()
+                tabController.addNew(tag, screen)
+                updateFragmentsState()
+            }
+            return true
+        }
         if (TabNavigatorThemeSwitchPolicy.mustReloadAloneThemeOnNavigation(screen.topicOpenIntent)) {
             applyThemeScreenToFragment(themeFr, screen)
             themeFr.loadThemeUrlFromNavigator(
@@ -558,6 +595,7 @@ class TabNavigator(
             } else {
                 remove(Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST)
             }
+            putBoolean(Screen.Theme.ARG_INSPECTOR_MARKED_UNREAD, screen.inspectorMarkedUnread)
         }
     }
 
