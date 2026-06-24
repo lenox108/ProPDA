@@ -129,11 +129,14 @@ class FavoritesTopicNavigationPolicyTest {
                 "https://4pda.to/forum/index.php?showtopic=1106099&view=getlastpost",
                 screen.lastReadUrlFromList
         )
-        // … but under LAST_UNREAD the open/prefetch asks the server for the first unread (log 1121483):
-        // getlastpost can only ever resolve to the already-read bookmark, so a stale read row would
-        // otherwise strand the user on an old post. getnewpost falls back to the all-read bottom redirect.
+        // Log 24_06-14-15: under LAST_UNREAD, a fully-read favorites row now
+        // uses `view=getlastpost` (server last-read bookmark) so the user
+        // resumes at the actual last-read post and the highlight lands on
+        // it. The previous `getnewpost` redirect resolved to the all-read
+        // bottom bookmark of an already-read topic — the user was stranded
+        // on the last page top with no highlight.
         assertEquals(
-                "https://4pda.to/forum/index.php?showtopic=1106099&view=getnewpost",
+                "https://4pda.to/forum/index.php?showtopic=1106099&view=getlastpost",
                 prefetchUrl
         )
     }
@@ -153,7 +156,7 @@ class FavoritesTopicNavigationPolicyTest {
     }
 
     @Test
-    fun resolvePrefetchUrl_usesGetNewPostForReadFavoriteWithLastUnreadSetting() {
+    fun resolvePrefetchUrl_usesGetLastPostForReadFavoriteWithLastUnreadSetting() {
         val item = FavItem().apply {
             topicId = 789
             isNew = false
@@ -162,8 +165,12 @@ class FavoritesTopicNavigationPolicyTest {
                 item,
                 AppPreferences.Main.TopicOpenTarget.LAST_UNREAD
         )
-        // LAST_UNREAD always asks the server for the first unread, even for a read row (log 1121483).
-        assertEquals("https://4pda.to/forum/index.php?showtopic=789&view=getnewpost", url)
+        // Log 24_06-14-15: a fully-read favorites row under LAST_UNREAD now
+        // uses `view=getlastpost` (server last-read bookmark). The previous
+        // `getnewpost` redirect resolved to the all-read bottom bookmark of
+        // an already-read topic, which stranded the user on the last page
+        // top with no highlight.
+        assertEquals("https://4pda.to/forum/index.php?showtopic=789&view=getlastpost", url)
     }
 
     @Test

@@ -218,7 +218,13 @@ class TopicOpenTargetResolverTest {
     }
 
     @Test
-    fun favoritesReadTopicWithoutUnreadHintStillUsesGetNewPostForLastUnreadSetting() {
+    fun favoritesReadTopicWithoutUnreadHintResumesAtLastRead_log24_06_14() {
+        // Log 24_06-14-15: a fully-read favorites row under LAST_UNREAD now
+        // uses `view=getlastpost` (server last-read bookmark) so the user
+        // resumes at the actual last-read post and the highlight lands on
+        // it. The previous `getnewpost` contract resolved to the all-read
+        // bottom bookmark of an already-read topic — the user was stranded
+        // on the last page top with no highlight.
         val resolution = TopicOpenTargetResolver.resolve(
                 TopicOpenContext(
                         rawUrl = "https://4pda.to/forum/index.php?showtopic=1103268",
@@ -229,17 +235,20 @@ class TopicOpenTargetResolverTest {
                 )
         )
         assertEquals(
-                "https://4pda.to/forum/index.php?showtopic=1103268&view=getnewpost",
+                "https://4pda.to/forum/index.php?showtopic=1103268&view=getlastpost",
                 resolution.url
         )
-        assertEquals(TopicOpenTargetType.SETTING_LAST_UNREAD, resolution.targetType)
-        assertEquals("list_read_use_getnewpost", resolution.reason)
+        assertEquals(TopicOpenTargetType.READ_RESUME, resolution.targetType)
+        assertEquals("list_read_use_getlastpost", resolution.reason)
         assertTrue(resolution.suppressScrollRestore)
     }
 
     @Test
-    fun listSourceWithPlainPostParamStaysLastReadHint() {
-        // Favorites/topics list opens still treat `p=` as a last-read hint, not an explicit post.
+    fun listSourceWithPlainPostParamResumesAtLastRead() {
+        // Log 24_06-14-15: a fully-read favorites/topics row with a plain
+        // `p=` last-read hint now uses `view=getlastpost` (server last-read
+        // bookmark) instead of getnewpost, so the user resumes at the
+        // actual last-read post and the highlight lands on it.
         val resolution = TopicOpenTargetResolver.resolve(
                 TopicOpenContext(
                         rawUrl = "https://4pda.to/forum/index.php?showtopic=123&p=456",
@@ -248,8 +257,8 @@ class TopicOpenTargetResolverTest {
                         openIntentRaw = TopicOpenIntentClassifier.FRESH_FAVORITES
                 )
         )
-        assertEquals(TopicOpenTargetType.SETTING_LAST_UNREAD, resolution.targetType)
-        assertTrue(resolution.url.contains("view=getnewpost"))
+        assertEquals(TopicOpenTargetType.READ_RESUME, resolution.targetType)
+        assertTrue(resolution.url.contains("view=getlastpost"))
         assertFalse(resolution.url.contains("view=findpost"))
     }
 

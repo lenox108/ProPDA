@@ -53,7 +53,12 @@ class TopicOpenLastUnreadMatrixTest {
     }
 
     @Test
-    fun readFavoriteWithGetNewPostInListingHref_opensAtFirstUnread() {
+    fun readFavoriteWithGetNewPostInListingHref_resumesAtLastRead_log24_06_14() {
+        // Log 24_06-14-15: a fully-read favorites row under LAST_UNREAD now
+        // opens at the server last-read bookmark (getlastpost). The previous
+        // contract used getnewpost, which the server redirected to the
+        // all-read bottom bookmark of an already-read topic — stranding the
+        // user on the last page top with no highlight.
         val item = FavItem().apply {
             topicId = 789
             isNew = false
@@ -78,17 +83,20 @@ class TopicOpenLastUnreadMatrixTest {
                 )
         )
         assertEquals(
-                "https://4pda.to/forum/index.php?showtopic=789&view=getnewpost",
+                "https://4pda.to/forum/index.php?showtopic=789&view=getlastpost",
                 resolution.url
         )
-        assertEquals("list_read_use_getnewpost", resolution.reason)
+        assertEquals("list_read_use_getlastpost", resolution.reason)
     }
 
     @Test
-    fun readFavoriteOpensAtFirstUnread_log1121483() {
-        // Read favorites row under LAST_UNREAD must seek the first unread (getnewpost), never the
-        // last-read bookmark (getlastpost), so stale list read-state cannot strand the user on an
-        // already-read post.
+    fun readFavoriteOpensAtLastRead_log24_06_14() {
+        // Log 24_06-14-15: a fully-read favorites row under LAST_UNREAD now
+        // uses `view=getlastpost` (server last-read bookmark) so the user
+        // resumes at the actual last-read post and the highlight lands on
+        // it. The previous `getnewpost` redirect resolved to the all-read
+        // bottom bookmark of an already-read topic — the user was stranded
+        // on the last page top with no highlight.
         val item = FavItem().apply {
             topicId = 1121483
             isNew = false
@@ -104,13 +112,13 @@ class TopicOpenLastUnreadMatrixTest {
                         lastReadUrlFromList = hints.lastReadUrlFromList
                 )
         )
-        assertTrue(resolution.url.contains("view=getnewpost"))
-        assertFalse(resolution.url.contains("view=getlastpost"))
-        assertEquals("list_read_use_getnewpost", resolution.reason)
+        assertTrue(resolution.url.contains("view=getlastpost"))
+        assertFalse(resolution.url.contains("view=getnewpost"))
+        assertEquals("list_read_use_getlastpost", resolution.reason)
     }
 
     @Test
-    fun forumReadWithoutUnreadMarkers_opensAtFirstUnread() {
+    fun forumReadWithoutUnreadMarkers_resumesAtLastRead() {
         val resolution = TopicOpenTargetResolver.resolve(
                 TopicOpenContext(
                         rawUrl = plainTopic,
@@ -121,10 +129,10 @@ class TopicOpenLastUnreadMatrixTest {
                 )
         )
         assertEquals(
-                "https://4pda.to/forum/index.php?showtopic=123&view=getnewpost",
+                "https://4pda.to/forum/index.php?showtopic=123&view=getlastpost",
                 resolution.url
         )
-        assertEquals("list_read_use_getnewpost", resolution.reason)
+        assertEquals("list_read_use_getlastpost", resolution.reason)
     }
 
     @Test

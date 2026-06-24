@@ -34,45 +34,47 @@ class TopicUnreadOpenPolicyTest {
     }
 
     @Test
-    fun readListRow_resolvesGetNewPost_log1121483() {
-        // A "read" favorites row under LAST_UNREAD must still seek the first unread (getnewpost),
-        // not resume at the last-read bookmark (getlastpost): when list read-state lags behind the
-        // server the bookmark is an already-read post and the user would land on an old post.
+    fun readListRow_resolvesGetLastPost_log24_06_14() {
+        // Log 24_06-14-15: a fully-read favorites row under LAST_UNREAD must
+        // use `view=getlastpost` (server last-read bookmark) so the user
+        // resumes at the actual last-read post and the highlight lands on
+        // it. The previous `getnewpost` redirect resolved to the
+        // bottom-bookmark of an already-read topic with no first-unread, so
+        // the user was stranded on the last page top with no highlight.
         val hints = readHints(topic1121483)
         val resolution = resolveFavorite(topic1121483, hints)
-        assertTrue(resolution.url.contains("view=getnewpost"))
-        assertFalse(resolution.url.contains("view=getlastpost"))
-        assertEquals("list_read_use_getnewpost", resolution.reason)
+        assertTrue(resolution.url.contains("view=getlastpost"))
+        assertFalse(resolution.url.contains("view=getnewpost"))
+        assertEquals("list_read_use_getlastpost", resolution.reason)
         assertTrue(resolution.suppressScrollRestore)
     }
 
     @Test
-    fun readListRow_log13_neverNavigatesToLastReadBookmark_1121483() {
-        // Device log 13_06-16-24-38: favorites row READ/unreadPostCount=0 under LAST_UNREAD opened
-        // via view=getlastpost, which the server resolved to the last-read bookmark entry143822428 on
-        // the final page 58/58 (page-leading content post entry143733850). The user's "first unread"
-        // setting was effectively ignored. The open must instead use view=getnewpost so the server
-        // returns the first unread (or the all-read bottom redirect when truly all read).
-        val lastReadBookmarkPost = 143822428
-        val pageLeadingPost = 143733850
+    fun readListRow_log24_06_14_navigatesToLastReadBookmark() {
+        // Device log 24_06-14-15 (regression of log 13_06-16-24-38 /
+        // 1121483): a fully-read favorites row under LAST_UNREAD must use
+        // `view=getlastpost` so the user resumes at the server last-read
+        // post. The previous contract was `view=getnewpost` which the
+        // server redirected to the all-read bottom bookmark without
+        // producing a first-unread target — leaving the user stranded on
+        // the last page top with no highlight.
         val hints = readHints(topic1121483)
         val resolution = resolveFavorite(topic1121483, hints)
-        assertTrue(resolution.url.contains("view=getnewpost"))
-        assertFalse(resolution.url.contains("view=getlastpost"))
-        assertFalse(resolution.url.contains(lastReadBookmarkPost.toString()))
-        assertFalse(resolution.url.contains(pageLeadingPost.toString()))
-        assertEquals("list_read_use_getnewpost", resolution.reason)
+        assertTrue(resolution.url.contains("view=getlastpost"))
+        assertFalse(resolution.url.contains("view=getnewpost"))
+        assertEquals("list_read_use_getlastpost", resolution.reason)
         assertTrue(resolution.suppressScrollRestore)
     }
 
     @Test
-    fun readListRow_neverUsesListReadNoUnreadHint() {
+    fun readListRow_usesGetLastPost() {
         val resolution = resolveFavorite(
                 topic1103268,
                 readHints(topic1103268)
         )
         assertFalse(resolution.reason == "list_read_no_unread_hint")
-        assertTrue(resolution.url.contains("view=getnewpost"))
+        assertTrue("must use view=getlastpost for read rows", resolution.url.contains("view=getlastpost"))
+        assertEquals("list_read_use_getlastpost", resolution.reason)
     }
 
     @Test
@@ -848,7 +850,12 @@ class TopicUnreadOpenPolicyTest {
     }
 
     @Test
-    fun resolveOpenSessionKindAtResolve_readListRowUsesGetNewPost() {
+    fun resolveOpenSessionKindAtResolve_readListRowUsesGetLastPost() {
+        // Log 24_06-14-15: a fully-read favorites row under LAST_UNREAD now
+        // opens via getlastpost (server last-read bookmark), so the session
+        // kind is READ_RESUME. The previous FIRST_UNREAD outcome was a
+        // semantic mis-classification: the server's all-read bottom redirect
+        // does not represent a first-unread intent.
         val context = TopicOpenContext(
                 rawUrl = "${base}$topic1121483",
                 setting = AppPreferences.Main.TopicOpenTarget.LAST_UNREAD,
@@ -856,9 +863,8 @@ class TopicUnreadOpenPolicyTest {
                 lastReadUrlFromList = "${base}$topic1121483&view=getlastpost",
         )
         val resolution = resolveFavorite(topic1121483, readHints(topic1121483))
-        // Read row now opens via getnewpost (first-unread), so the session kind is FIRST_UNREAD.
         assertEquals(
-                TopicUnreadOpenPolicy.TopicOpenSessionKind.FIRST_UNREAD,
+                TopicUnreadOpenPolicy.TopicOpenSessionKind.READ_RESUME,
                 TopicUnreadOpenPolicy.resolveOpenSessionKindAtResolve(context, resolution),
         )
     }
