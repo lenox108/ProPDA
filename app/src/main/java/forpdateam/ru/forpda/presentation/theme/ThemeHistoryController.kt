@@ -14,6 +14,14 @@ import timber.log.Timber
 class ThemeHistoryController {
     companion object {
         private const val THEME_HISTORY_TAG = "ThemeHistory"
+        /**
+         * Max scrollY delta (in pixels) under which a consecutive identical
+         * (topicId + st + anchorPostId) history entry is considered a duplicate
+         * and is replaced instead of appended. 100px is well below the typical
+         * post height, so it filters out "I scrolled a hair while the page was
+         * reloading" noise without losing meaningful scroll jumps.
+         */
+        private const val SCROLL_DEDUPE_THRESHOLD_PX = 100
     }
 
     private val history = mutableListOf<ThemePage>()
@@ -66,20 +74,63 @@ class ThemeHistoryController {
      * Используется при первой загрузке темы или навигации на новую страницу.
      */
     fun saveToHistory(themePage: ThemePage) {
+        // Fix F8: dedupe consecutive identical entries. When the network re-fetches
+        // the same topic+st+anchor and emits another saveToHistory with a slightly
+        // different scrollY (e.g. mid-scroll capture vs. anchor settle), we should
+        // REPLACE the previous entry instead of growing the history. Without this,
+        // the BACK stack can contain two visually identical "current" pages, and
+        // the first BACK press just lands on the duplicate and feels like no-op.
+        // Canonicalize the anchor for both the dedupe key and the diagnostic log:
+        // parser sometimes sets only `anchor` (entry-prefixed) and leaves
+        // `anchorPostId` null (e.g. findpost reload path), so comparing the
+        // unprefixed form only would never dedupe across the two shapes.
+        val themeAnchor = canonicalAnchor(themePage)
+        val last = history.lastOrNull()
+        if (last != null &&
+                last.id == themePage.id &&
+                last.st == themePage.st &&
+                canonicalAnchor(last) == themeAnchor
+        ) {
+            val scrollDelta = kotlin.math.abs((last.scrollY) - (themePage.scrollY))
+            if (scrollDelta <= SCROLL_DEDUPE_THRESHOLD_PX) {
+                // Identical enough — replace the tail instead of appending.
+                history[history.size - 1] = themePage
+                if (BuildConfig.DEBUG) {
+                    Timber.d("saveToHistory: deduped topicId=${themePage.id} st=${themePage.st} historySize=${history.size}")
+                }
+                Log.i(
+                        THEME_HISTORY_TAG,
+                        "dedupe topic=${themePage.id} st=${themePage.st} page=${themePage.pagination.current} url=${themePage.url} anchor=$themeAnchor prevY=${last.scrollY} newY=${themePage.scrollY} size=${history.size}"
+                )
+                ReadStateTrace.log(
+                        event = "history_dedupe",
+                        topicId = themePage.id,
+                        pageSt = themePage.st,
+                        scrollY = themePage.scrollY,
+                        anchorPostId = themeAnchor,
+                        allowedAsNavTarget = true,
+                        source = "history",
+                        reason = "saveToHistory"
+                )
+                return
+            }
+            // ScrollY differs by more than the threshold — keep both so BACK can
+            // actually return the user to the previous scroll position.
+        }
         history.add(themePage)
         if (BuildConfig.DEBUG) {
             Timber.d("saveToHistory: topicId=${themePage.id} st=${themePage.st} historySize=${history.size}")
         }
         Log.i(
                 THEME_HISTORY_TAG,
-                "push topic=${themePage.id} st=${themePage.st} page=${themePage.pagination.current} url=${themePage.url} anchor=${themePage.anchorPostId} y=${themePage.scrollY} size=${history.size}"
+                "push topic=${themePage.id} st=${themePage.st} page=${themePage.pagination.current} url=${themePage.url} anchor=$themeAnchor y=${themePage.scrollY} size=${history.size}"
         )
         ReadStateTrace.log(
                 event = "history_push",
                 topicId = themePage.id,
                 pageSt = themePage.st,
                 scrollY = themePage.scrollY,
-                anchorPostId = themePage.anchorPostId,
+                anchorPostId = themeAnchor,
                 allowedAsNavTarget = true,
                 source = "history",
                 reason = "saveToHistory"
@@ -102,7 +153,12 @@ class ThemeHistoryController {
                 // Не подмешиваем prev.anchors: addAll в конец делал anchor = последний = старый якорь
                 // после REFRESH/BACK, хотя парсер уже выставил правильный elem_to_scroll.
                 themePage.scrollY = prev.scrollY
-                themePage.anchorPostId = prev.anchorPostId
+                // Preserve the saved scroll anchor across REFRESH/BACK in canonical
+                // form: if prev.anchorPostId is null (e.g. from an old build that
+                // pre-dated the parser fix for the findpost path) but prev.anchor
+                // is set, do not silently drop it.
+                val prevAnchor = canonicalAnchor(prev)
+                themePage.anchorPostId = prevAnchor ?: prev.anchorPostId
                 themePage.anchorOffsetTop = prev.anchorOffsetTop
                 themePage.scrollRatio = prev.scrollRatio
                 themePage.wasNearBottom = prev.wasNearBottom
@@ -110,22 +166,39 @@ class ThemeHistoryController {
                     prev.html = null
                 }
             }
+            val themeAnchor = canonicalAnchor(themePage)
             history[history.size - 1] = themePage
             Log.i(
                     THEME_HISTORY_TAG,
-                    "updateLast topic=${themePage.id} st=${themePage.st} page=${themePage.pagination.current} url=${themePage.url} anchor=${themePage.anchorPostId} y=${themePage.scrollY} size=${history.size}"
+                    "updateLast topic=${themePage.id} st=${themePage.st} page=${themePage.pagination.current} url=${themePage.url} anchor=$themeAnchor y=${themePage.scrollY} size=${history.size}"
             )
             ReadStateTrace.log(
                     event = "history_update_last",
                     topicId = themePage.id,
                     pageSt = themePage.st,
                     scrollY = themePage.scrollY,
-                    anchorPostId = themePage.anchorPostId,
+                    anchorPostId = themeAnchor,
                     allowedAsNavTarget = true,
                     source = "history",
                     reason = "updateHistoryLast"
             )
         }
+    }
+
+    /**
+     * Returns the unprefixed (no `entry`/`ENTRY`) post id for the page's scroll
+     * anchor. Mirrors `ThemeViewModel.getAnchorPostId()` fallback. Used as the
+     * dedupe key in saveToHistory and as the diagnostic anchor in history logs,
+     * so a parser path that only fills `anchor` (entry-prefixed) and leaves
+     * `anchorPostId` null no longer breaks the F8 dedupe.
+     */
+    private fun canonicalAnchor(themePage: ThemePage): String? {
+        themePage.anchorPostId?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        return themePage.anchor
+                ?.trim()
+                ?.removePrefix("entry")
+                ?.removePrefix("ENTRY")
+                ?.takeIf { it.isNotEmpty() }
     }
 
     /**
