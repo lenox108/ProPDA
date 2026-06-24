@@ -253,15 +253,16 @@ class HighlightOpenInputsPolicyTest {
      * redirect on the favorites row). The page also has a non-null
      * `anchorPostId` (= the redirect entry id, e.g. 143987753).
      *
-     * The highlight must still be stamped — by the `last_post_on_page_fallback`
-     * path in [HighlightResolver], since `hasUnreadTarget=false` means the
-     * policy strips `firstUnreadPostId` and the `openedViaFindPost=false`
-     * means the policy also strips `explicitPostId`. Without the fallback
-     * the user opens an all-read topic from getnewpost and sees NO highlight
-     * at all — which is the user-reported regression.
+     * The highlight must still be stamped. As of Fix #B, the policy now
+     * forwards `page.anchorPostId` as a `ReadPosition` override, so the
+     * resolver hits priority 2 ("Last read on page") and stamps the actual
+     * last-read post (= 143987753) instead of the previous regression where
+     * the highlight silently slipped through to `last_post_on_page_fallback`
+     * (= 143987870, the bottom of the last page) without a `lastViewedInput`
+     * flag.
      */
     @Test
-    fun applyToPage_allReadTopicFromGetnewpost_stampsLastPostOnPageFallback() {
+    fun applyToPage_allReadTopicFromGetnewpost_stampsLastReadAnchor() {
         val page = makePage(
                 topicId = 1103268,
                 postIds = longArrayOf(143987740L, 143987753L, 143987760L, 143987781L,
@@ -288,6 +289,18 @@ class HighlightOpenInputsPolicyTest {
                         "even when anchorPostId is present",
                 inputs.explicitPostId
         )
+        // Fix #B: anchorPostId is forwarded as a read-position override so the
+        // resolver hits priority 2 ("last_read") rather than the previous
+        // priority 5 fallback.
+        assertNotNull(
+                "Fix #B: anchorPostId must produce a ReadPosition override",
+                inputs.readPosition
+        )
+        assertEquals(143987753L, inputs.readPosition!!.lastViewedPostId)
+        assertEquals(
+                HighlightOpenInputsPolicy.LastReadSource.PAGE_ANCHOR,
+                inputs.lastReadSource
+        )
         val resolution = TopicHighlightApply.applyToPage(
                 page = page,
                 readPositionRepository = repo,
@@ -295,6 +308,7 @@ class HighlightOpenInputsPolicyTest {
                 unreadPage = inputs.unreadPage,
                 unreadUrl = inputs.unreadUrl,
                 explicitPostId = inputs.explicitPostId,
+                readPositionOverride = inputs.readPosition,
         )
         assertNotNull(
                 "Highlight must still be stamped even with all three open-inputs null " +
@@ -302,8 +316,12 @@ class HighlightOpenInputsPolicyTest {
                 page.highlightTarget
         )
         assertEquals(HighlightType.LastRead, page.highlightTarget!!.type)
-        assertEquals(143987870L, page.highlightTarget!!.postId)
-        assertEquals("last_post_on_page_fallback", resolution.reason)
+        assertEquals(
+                "Fix #B: highlight must be the realigned last-read post, not the page bottom",
+                143987753L,
+                page.highlightTarget!!.postId
+        )
+        assertEquals("last_read", resolution.reason)
         assertTrue(page.renderGenerationId > 0)
     }
 

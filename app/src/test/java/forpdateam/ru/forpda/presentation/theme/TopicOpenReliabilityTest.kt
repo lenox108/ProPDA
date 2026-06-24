@@ -41,10 +41,13 @@ class TopicOpenReliabilityTest {
     }
 
     @Test
-    fun scenario2b_freshFavoritesWithoutUnreadUrl_opensAtFirstUnreadNotPageOne() {
-        // Read favorites row under LAST_UNREAD seeks the first unread via getnewpost; getnewpost
-        // falls back to the server last-read bottom redirect when the topic is truly all-read, so
-        // it never lands on page one.
+    fun scenario2b_freshFavoritesWithoutUnreadUrl_resumesAtLastRead_log24_06_14() {
+        // Log 24_06-14-15: a fully-read favorites row under LAST_UNREAD now
+        // uses `view=getlastpost` (server last-read bookmark) so the user
+        // resumes at the actual last-read post and the highlight lands on
+        // it. The previous `getnewpost` contract resolved to the all-read
+        // bottom bookmark of an already-read topic — the user was stranded
+        // on the last page top with no highlight.
         val resolution = TopicOpenTargetResolver.resolve(
                 TopicOpenContext(
                         rawUrl = topicUrl,
@@ -57,11 +60,11 @@ class TopicOpenReliabilityTest {
                 )
         )
         assertEquals(
-                "https://4pda.to/forum/index.php?showtopic=123&view=getnewpost",
+                "https://4pda.to/forum/index.php?showtopic=123&view=getlastpost",
                 resolution.url
         )
-        assertEquals(TopicOpenTargetType.SETTING_LAST_UNREAD, resolution.targetType)
-        assertEquals("list_read_use_getnewpost", resolution.reason)
+        assertEquals(TopicOpenTargetType.READ_RESUME, resolution.targetType)
+        assertEquals("list_read_use_getlastpost", resolution.reason)
         assertTrue(resolution.suppressScrollRestore)
     }
 
