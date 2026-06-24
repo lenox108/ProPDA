@@ -28,9 +28,27 @@ window.refreshRestoreMode = "";
 window.refreshRestoreSource = "";
 window.themeLastLinkSourceAnchor = null;
 window.__themeLastClickedPostAnchor = null;
-var anchorElem, elemToActivation;
-var themeAnchorScrollGeneration = 0;
-var themeAnchorRetryPendingName = "";
+/**
+ * Monotonic timestamp of the last successful initial end-anchor scroll for the
+ * CURRENT page-load. Set on the final retry of
+ * [scrollToEndAnchorOrBottomWithRetries] (the "end_anchor" completion path) and
+ * reset by [setLoadAction] / any user-initiated scroll.
+ *
+ * When this is non-zero AND no user scroll has happened since, repeated calls
+ * to [scrollToEndAnchorOrBottomWithRetries] for the same page-load are dropped
+ * — this is what stops the "anchor jumps to a different post" / "blinks"
+ * regression: each subsequent [setLoadAnchorPostId] (from a follow-up page
+ * render, infinite-scroll, redirect resolution, read-state update, etc.) used
+ * to retrigger end-anchor scroll to the LATEST post id, even though the
+ * initial scroll had already settled on the correct post. Pinning the scroll
+ * here means the original target is honoured until the user actually scrolls
+ * the topic.
+ *
+ * The very first [scrollToEndAnchorOrBottomWithRetries] call after a new
+ * page-load ([setLoadAction] resets the flag) always wins, so legitimate
+ * initial scrolls are not blocked.
+ */
+var endAnchorScrollSettledAt = 0;
 var themeRuntimeDestroyed = false;
 var themeRuntimeTimers = [];
 var themeRuntimeRafs = [];
@@ -304,6 +322,11 @@ function unbindThemeLinkSourceAnchorEvents() {
 function onThemeAnchorScrollCancelInput(event) {
     if (!isThemeRuntimeAlive()) return;
     themeInfiniteScroll.userScrolled = true;
+    // The user has touched / scrolled the topic: any pending end-anchor
+    // "already settled" latch is no longer authoritative — the user is in
+    // control now, so clear it so a future [setLoadAnchorPostId] can drive a
+    // fresh end-anchor scroll if the user navigates elsewhere.
+    endAnchorScrollSettledAt = 0;
     cancelThemeAnchorScrollRetries();
     logRefreshScroll("cancel userInput event=" + (event && event.type ? event.type : "") + " y=" + getScrollTop());
 }
@@ -734,6 +757,10 @@ function parseThemePostRatingNumber(s) {
 function setLoadAction(loadAction) {
     logThemeRender("setLoadAction " + loadAction);
     window.loadAction = loadAction;
+    // New page-load: clear the "end-anchor already settled" latch so the very
+    // first scrollToEndAnchorOrBottomWithRetries() for this load can run.
+    // See the comment on `endAnchorScrollSettledAt` for the full rationale.
+    endAnchorScrollSettledAt = 0;
     if (loadAction == END_ACTION && typeof PageInfo !== "undefined") {
         PageInfo.elemToScroll = "";
         window.loadScrollY = 0;
@@ -2076,7 +2103,55 @@ function isThemeScrollSettledNearBottom(minScrollY) {
     return metrics.scrollY >= Math.max(threshold, metrics.maxScroll - Math.max(96, themeInfiniteScroll.threshold / 2));
 }
 
+function getThemeVisibleBandReserves() {
+    var topReserve = (typeof topChromePadding !== "undefined" ? Math.max(0, Number(topChromePadding) || 0) : 0);
+    var bottomReserve = (typeof bottomChromePadding !== "undefined" ? Math.max(0, Number(bottomChromePadding) || 0) : 0)
+        + (typeof messagePanelPadding !== "undefined" ? Math.max(0, Number(messagePanelPadding) || 0) : 0);
+    return {top: topReserve, bottom: bottomReserve};
+}
+
+/**
+ * Place the resolved end-anchor post inside the VISIBLE band (innerHeight minus the top toolbar and the
+ * bottom tabbar/message panel that overlay the full-bleed WebView). Always aligns the post TOP to the
+ * visible top so the whole post (incl. its action-bar footer) reads from the start and is never hidden
+ * under the bottom navigation. The scroll is INSTANT (`behavior: "auto"`) — the
+ * initial end-anchor placement on topic open must never animate. Returns
+ * whether the post bottom fits inside the visible band.
+ */
+function scrollEndAnchorIntoVisibleBand(anchor) {
+    if (!anchor || typeof anchor.getBoundingClientRect !== "function") return false;
+    var reserves = getThemeVisibleBandReserves();
+    var viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+    var visibleHeight = Math.max(0, viewport - reserves.top - reserves.bottom);
+    var rect = anchor.getBoundingClientRect();
+    var postTopAbs = rect.top + window.pageYOffset;
+    var postHeight = rect.height;
+    var maxY = Math.max(0, getThemeDocumentScrollHeight() - viewport);
+    var y = Math.max(0, Math.min(maxY, postTopAbs - reserves.top));
+    // Explicit `behavior: "auto"` keeps the initial end-anchor placement
+    // instant even on browsers that treat a 2-argument `window.scrollTo(x,y)`
+    // as smooth (Chromium historically did this when called from a
+    // non-passive touch handler). The initial scroll on topic open must
+    // NEVER be smooth — the user opens the topic and must land on the
+    // correct post without an animation. See the comment on
+    // `endAnchorScrollSettledAt` for the wider "no blinking on topic open"
+    // contract.
+    window.scrollTo({left: 0, top: y, behavior: "auto"});
+    return postHeight <= visibleHeight;
+}
+
 function scrollToEndAnchorOrBottomWithRetries(postId) {
+    // Latch: once an end-anchor scroll for the CURRENT page-load has settled
+    // (and the user has not scrolled in the meantime), do NOT re-run the
+    // scroll on a follow-up [setLoadAnchorPostId] from a follow-up render.
+    // See the comment on `endAnchorScrollSettledAt` for the full rationale.
+    // Without this guard, the original target is overwritten by the LATEST
+    // post id from the most recent `setLoadAnchorPostId`, and the viewport
+    // blinks / jumps to a different post mid-load.
+    if (endAnchorScrollSettledAt > 0) {
+        logThemeRender("[ThemeScrollDiag] endAnchorScrollSkipped reason=already_settled lastSettledAt=" + endAnchorScrollSettledAt + " requestedPostId=" + postId);
+        return;
+    }
     var targetPostId = resolveEndScrollTargetPostId(postId);
     if (!targetPostId.length) {
         if (typeof scrollToThemeBottomWithRetries === "function") scrollToThemeBottomWithRetries();
@@ -2093,6 +2168,14 @@ function scrollToEndAnchorOrBottomWithRetries(postId) {
         (function (ms) {
             scheduleThemeScrollAttempt(scrollGeneration, ms, function () {
                 if (completed) return;
+                // Re-check the latch at every retry — by the time the final
+                // retry fires, the user may already have scrolled (which
+                // clears the latch) or — more commonly — another concurrent
+                // setLoadAnchorPostId may have flipped the latch in a
+                // race-free way via this same function's outer guard. We do
+                // NOT re-check the outer guard here because the outer guard
+                // only protects against NEW invocations, not retries from
+                // this one already-armed run.
                 var desiredPostId = resolveEndScrollTargetPostId(targetPostId);
                 if (!desiredPostId.length) {
                     desiredPostId = getLastRealThemePostIdInDom();
@@ -2101,7 +2184,15 @@ function scrollToEndAnchorOrBottomWithRetries(postId) {
                     ? (findRealThemePostById(desiredPostId) || resolveThemeAnchorElement("entry" + String(desiredPostId).replace(/^entry/i, "")))
                     : null;
                 if (anchor) {
-                    anchor.scrollIntoView(false);
+                    // Always use instant scrolling (`behavior: 'auto'`) for the
+                    // initial end-anchor placement on topic open. Smooth
+                    // scrolling here would produce a visible animation right
+                    // when the topic is opened, which the user reads as
+                    // "the app is scrolling the page on me". Programmatic
+                    // initial scrolls must be instant; only user-initiated
+                    // scrolls (touch / wheel / keyboard) get smooth handling
+                    // — that is decided by the browser, not by us.
+                    var postFitsBand = scrollEndAnchorIntoVisibleBand(anchor);
                     updateVisibleThemePage();
                     var scrolledId = anchor.dataset ? String(anchor.dataset.postId || "") : "";
                     var lastDomId = getLastRealThemePostIdInDom();
@@ -2109,24 +2200,13 @@ function scrollToEndAnchorOrBottomWithRetries(postId) {
                     if (!settledOnLastPost && ms < finalDelay) {
                         return;
                     }
-                    if (ms >= 120 && settledOnLastPost && isThemeScrollSettledNearBottom(END_SCROLL_MIN_Y_THRESHOLD)) {
+                    if (ms >= finalDelay) {
                         completed = true;
                         cancelThemeAnchorScrollRetries();
                         themeInfiniteScroll.endScrollPending = false;
+                        endAnchorScrollSettledAt = Date.now();
+                        logThemeRender("[ThemeScrollDiag] endAnchorBand=" + (window.pageYOffset || 0) + " fits=" + postFitsBand + " anchor=" + desiredPostId);
                         maybeCompleteThemeScrollCommand(true, "end_anchor");
-                        return;
-                    }
-                    if (ms >= finalDelay && settledOnLastPost && !isThemeScrollSettledNearBottom(END_SCROLL_MIN_Y_THRESHOLD)) {
-                        completed = true;
-                        logThemeRender("[ThemeScrollDiag] endAnchorLowY=" + (window.pageYOffset || 0) + " fallback=bottom anchor=" + desiredPostId);
-                        if (typeof scrollToThemeBottomWithRetries === "function") {
-                            scrollToThemeBottomWithRetries();
-                        } else {
-                            window.scrollTo(0, document.documentElement.scrollHeight);
-                            updateVisibleThemePage();
-                            themeInfiniteScroll.endScrollPending = false;
-                            maybeCompleteThemeScrollCommand(true, "end_bottom_fallback");
-                        }
                     }
                     return;
                 }
@@ -2136,7 +2216,7 @@ function scrollToEndAnchorOrBottomWithRetries(postId) {
                     if (typeof scrollToThemeBottomWithRetries === "function") {
                         scrollToThemeBottomWithRetries();
                     } else {
-                        window.scrollTo(0, document.documentElement.scrollHeight);
+                        window.scrollTo(0, document.documentElement.scrollHeight, {behavior: "auto"});
                         updateVisibleThemePage();
                         themeInfiniteScroll.endScrollPending = false;
                         maybeCompleteThemeScrollCommand(true, "end_bottom_fallback");
@@ -2174,24 +2254,17 @@ function doScroll(tAnchorElem, scrollIntoElem) {
         logThemeRuntimeWarning("ThemeScroll", ex);
     }
 
-    // Manual scroll: align post BOTTOM to viewport bottom if post is taller than viewport,
-    // otherwise align post TOP to viewport top. Accounts for the bottom-chrome/tabbar spacer
-    // and the open message panel so the post action bar (like/quote/reply/share) stays visible.
+    // Manual scroll based on the VISIBLE band only. The WebView is full-bleed: it draws under the
+    // top toolbar (topChromePadding) and under the bottom tabbar/message panel (bottomReserve).
+    // Align the post top to the visible top in both cases: a post that fits is shown whole (incl.
+    // the action bar), a taller post is read from its beginning. The footer never hides under chrome.
     try {
         var postRect = toScroll.getBoundingClientRect();
         var postTopAbs = postRect.top + window.pageYOffset;
-        var postHeight = postRect.height;
         var viewport = window.innerHeight;
-        var bottomReserve = (typeof bottomChromePadding !== 'undefined' ? bottomChromePadding : 0)
-            + (typeof messagePanelPadding !== 'undefined' ? messagePanelPadding : 0);
-        var availableViewport = Math.max(0, viewport - bottomReserve);
+        var topReserve = (typeof topChromePadding !== 'undefined' ? Math.max(0, Number(topChromePadding) || 0) : 0);
         var maxY = Math.max(0, document.documentElement.scrollHeight - viewport);
-        var y;
-        if (postHeight > availableViewport) {
-            y = postTopAbs + postHeight - viewport; // align post bottom to viewport bottom
-        } else {
-            y = postTopAbs; // post fits in viewport, align top
-        }
+        var y = postTopAbs - topReserve;
         window.scrollTo(0, Math.max(0, Math.min(maxY, y)));
     } catch (ex) {
         logThemeRuntimeWarning("ThemeScroll", ex);
@@ -2619,6 +2692,13 @@ function onThemeInfiniteScroll() {
     if (!isThemeHybridScrollEnabled()) return;
     if (!window.__themeScrollCommandId && !themeInfiniteScroll.unreadInitialAnchorPending) {
         themeInfiniteScroll.userScrolled = true;
+        // The viewport is scrolling and no native scroll command is driving
+        // it — clear the end-anchor "already settled" latch so a follow-up
+        // setLoadAnchorPostId from a follow-up render (e.g. infinite scroll
+        // prepending / appending pages) can drive a fresh end-anchor scroll
+        // if the user navigates away via a link in the newly-loaded
+        // content.
+        endAnchorScrollSettledAt = 0;
     }
     if (themeInfiniteScroll.scrollRafPending) return;
     themeInfiniteScroll.scrollRafPending = true;
