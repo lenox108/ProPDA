@@ -1476,12 +1476,18 @@ body {
     // `.post_container { box-shadow: ... !important }`, which would otherwise win
     // the cascade regardless of selector specificity.
     &.ppda_highlight_post {
+        // Inset box-shadow ring only — NO `background` tint (the old color-mix
+        // tint recoloured the whole post block, which users reported as "the
+        // whole post flashes", and also broke on Android WebView builds that
+        // predate `color-mix()`). The post wrapper keeps its base background;
+        // the highlight is communicated purely by a thick inset ring + a faint
+        // inner glow.
         box-shadow: inset 0 0 0 (3.2/16rem) var(--ppda-accent, var(--surface-accent, @surface_accent)),
+            inset 0 0 (8/16rem) (1.6/16rem) var(--ppda-accent, var(--surface-accent, @surface_accent)),
             0rem 1/16rem 1/16rem fade(#000, 12%),
             0rem 0rem 1/16rem fade(#000, 12%) !important;
-        background: color-mix(in srgb, var(--ppda-accent, var(--surface-accent, @surface_accent)) 12%, @card_background) !important;
-        -webkit-transition: box-shadow 0.3s ease, background 0.3s ease;
-        transition: box-shadow 0.3s ease, background 0.3s ease;
+        -webkit-transition: box-shadow 0.3s ease;
+        transition: box-shadow 0.3s ease;
         &.ppda_highlight_fading {
             box-shadow: inset 0 0 0 0 transparent,
                 0rem 1/16rem 1/16rem fade(#000, 12%),
