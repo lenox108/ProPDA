@@ -538,6 +538,32 @@ class TopicPrependedHatPolicyTest {
         assertEquals(143862484, page.posts.first().id)
     }
 
+    @Test
+    fun `resolvePrependedHatId never returns the open anchor and strip keeps it on a re-strip pass`() {
+        // Device log 26_06-15-03, topic 1111449: the first strip removes the real hat and the unread
+        // anchor (143983265) becomes the first post. A SECOND strip pass (hatMetadataPreload /
+        // ThemeTemplate) runs with knownHatId=null and re-resolved the anchor AS the hat, so removeAll
+        // stripped it via `post.id == hatId` before the anchor guard. The anchor must never be the hat.
+        val page = deepPage(
+                posts = listOf(
+                        regularPost(id = 143983265, number = 0),
+                        regularPost(id = 143984639, number = 0),
+                        regularPost(id = 143990913, number = 0),
+                )
+        ).apply {
+            pagination.current = 74
+            pagination.all = 74
+            url = "https://4pda.to/forum/index.php?showtopic=1111449&st=1460#entry143983265"
+        }
+
+        val hatId = TopicPrependedHatPolicy.resolvePrependedHatId(page, requestedPage = 74, knownHatId = null)
+        assertTrue("the open anchor must never be resolved as the hat", hatId != 143983265)
+
+        TopicPrependedHatPolicy.stripFromNonFirstPage(page, requestedPage = 74, knownHatId = null)
+        assertTrue("the anchor must survive a knownHatId=null re-strip pass", page.posts.any { it.id == 143983265 })
+        assertEquals(143983265, page.posts.first().id)
+    }
+
     private fun deepPage(posts: List<ThemePost>): ThemePage =
             ThemePage().apply {
                 id = 1121483
