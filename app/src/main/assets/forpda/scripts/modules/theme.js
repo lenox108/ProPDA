@@ -831,7 +831,23 @@ function setLoadAction(loadAction) {
     endAnchorScrollSettledAt = 0;
     // R-04: a new page-load opens a new scroll-command generation so a stale
     // completion from the previous load cannot be misattributed to a new id.
-    window.__themeScrollCommandGeneration = (Number(window.__themeScrollCommandGeneration) || 0) + 1;
+    var __prevScrollGen = Number(window.__themeScrollCommandGeneration) || 0;
+    window.__themeScrollCommandGeneration = __prevScrollGen + 1;
+    // Carry an IN-FLIGHT scroll command across this generation bump. Device log 26_06-16-29
+    // (621742/1121191/1084306/826244): a PASSIVE re-render — hat-overlay metadata preload / hybrid
+    // neighbor insert that keeps the SAME anchor (`coalesce anchor=entry…` unchanged) — bumps the
+    // generation while the INITIAL_ANCHOR scroll is still retrying. maybeCompleteThemeScrollCommand
+    // then drops the completion as stale (`dropped stale gen exec=1 live=2`), so Kotlin never gets
+    // `anchor_scroll_settled`, the reveal falls to the watchdog and the user SEES the page scroll to
+    // the post instead of opening already positioned. Re-stamp the in-flight command's exec
+    // generation to the new one so its completion still matches. A genuine reload re-arms via
+    // executeThemeScrollCommand (which overwrites `__themeScrollCommandGenerationAtExec` with the
+    // live generation), so R-04's protection against misattributing a previous page's completion is
+    // preserved; and if the old anchor is no longer on the page the retry simply reports success=false.
+    if (window.__themeScrollCommandId &&
+        (Number(window.__themeScrollCommandGenerationAtExec) || 0) === __prevScrollGen) {
+        window.__themeScrollCommandGenerationAtExec = window.__themeScrollCommandGeneration;
+    }
     // S-02: a new page-load invalidates any pending late-media re-anchor.
     themeInitialAnchorReanchorName = "";
     themeInitialAnchorReanchorUntil = 0;
