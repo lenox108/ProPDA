@@ -107,6 +107,12 @@ private const val THEME_SCROLL_STUCK_REVEAL_DELAY_MS = 2000L
 private const val MAX_INITIAL_ANCHOR_REVEAL_ATTEMPTS = 1
 private const val NATIVE_UNREAD_ANCHOR_FALLBACK_DELAY_MS = 500L
 /**
+ * Safety bound for the open toolbar lock: even if a genuine user touch is never observed (OEM touch
+ * routing), auto-hide resumes after this so the chrome can never be trapped hidden. Comfortably covers
+ * the post-open content reflows (hat strip / hybrid prepend) seen in device logs.
+ */
+private const val TOOLBAR_OPEN_LOCK_TIMEOUT_MS = 1500L
+/**
  * S-01 / R-03: window (ms) the JS DOM-anchor fallback yields for the Kotlin
  * INITIAL_ANCHOR command. Must comfortably exceed the gap between the DOM-content
  * batch and a late `onPageComplete` dispatch of the command, while staying short
@@ -216,6 +222,20 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     private var jsAnchorRevealReleased = false
     /** Reveal-at-anchor (A/B): per-instance generation guard so a stale JS-anchor release watchdog from a previous render cannot reveal a newer one. */
     private var jsAnchorRevealWatchdogGeneration = 0
+    /**
+     * Set when a fresh page render starts; consumed at the first real content reveal (not the
+     * `beforeRender` flip). Drives the deterministic open toolbar state so the chrome is hidden-until-scroll
+     * under HIDE_ON_SCROLL instead of landing wherever the programmatic open/anchor scroll left it.
+     */
+    private var pendingInitialToolbarStateOnReveal = false
+    /**
+     * While true, auto-hide ignores scroll changes so the toolbar stays in its open (hidden) state.
+     * Released by the first GENUINE user touch-scroll (not a programmatic post-open reflow) or by a
+     * bounded safety timeout, so a content reflow (hat strip / hybrid prepend) can't re-show the chrome
+     * by itself. See [armToolbarOpenLock] / the header scroll listener.
+     */
+    private var toolbarOpenLockActive = false
+    private var toolbarOpenLockArmedAtMs = 0L
     private var lastRenderAt: Long = 0L
     private var pendingRenderPage: ThemePage? = null
     private var renderCount: Int = 0
@@ -379,6 +399,18 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             override fun onScrollChange(scrollX: Int, scrollY: Int, oldScrollX: Int, oldScrollY: Int) {
                 requestHybridPageIfNearEdge(scrollY)
                 if (!isToolbarAutoHideEnabled) return
+                if (toolbarOpenLockActive) {
+                    if (shouldReleaseToolbarOpenLock()) {
+                        toolbarOpenLockActive = false
+                    } else {
+                        // Programmatic post-open reflow (hat strip / hybrid prepend) shifts scrollY without
+                        // a real touch — keep the toolbar in its open (hidden) state, don't re-show it.
+                        if (BuildConfig.DEBUG && scrollY != oldScrollY) {
+                            Log.i("ToolbarAutoHide", "open-lock ignore y=$scrollY dy=${scrollY - oldScrollY}")
+                        }
+                        return
+                    }
+                }
                 if (webView.isUserScrollActive()) {
                     releaseToolbarSuppressOnUserScroll()
                 }
@@ -536,6 +568,9 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     override fun onToolbarAutoHideEnabledChanged(enabled: Boolean) {
         val changed = isToolbarAutoHideEnabled != enabled
         isToolbarAutoHideEnabled = enabled
+        if (!enabled) {
+            clearToolbarOpenLock()
+        }
         if (::toolbarScrollController.isInitialized) {
             toolbarScrollController.setEnabled(enabled)
         }
@@ -1136,6 +1171,13 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             return
         }
         webView.alpha = 0f
+        // The open positions the viewport via a programmatic INITIAL_ANCHOR scroll. Suppress auto-hide
+        // reaction so that scroll can't randomly toggle the toolbar, and arm a deterministic open state
+        // (hidden-until-scroll under HIDE_ON_SCROLL) that is applied once the content is revealed.
+        pendingInitialToolbarStateOnReveal = true
+        if (isToolbarAutoHideEnabled) {
+            armToolbarSuppressForProgrammaticScroll()
+        }
         // Reveal-at-anchor (A/B): a fresh render re-arms the JS-anchor reveal hold.
         jsAnchorRevealReleased = false
         jsAnchorRevealWatchdogGeneration++
@@ -1307,6 +1349,57 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         // `hasBlockingScrollPending` and is idempotent per render generation, so an extra call when
         // already visible cannot double-apply or re-flash.
         webController.onWebViewContentRevealed()
+        // `beforeRender` only flips alpha for the previous content; the real open reveal (anchor settled)
+        // is what should establish the toolbar's open state.
+        if (reason != "beforeRender" && pendingInitialToolbarStateOnReveal) {
+            pendingInitialToolbarStateOnReveal = false
+            applyInitialToolbarStateOnOpen()
+        }
+    }
+
+    /**
+     * Deterministic toolbar state right after a topic open reveals its content. The global setting wins:
+     * PINNED keeps the toolbar shown; HIDE_ON_SCROLL hides it (hidden-until-scroll) once the open
+     * anchor has positioned below the top. At the very top there is nothing to scroll up to, so the
+     * toolbar stays visible — consistent with the auto-hide model.
+     */
+    private fun applyInitialToolbarStateOnOpen() {
+        if (!::toolbarScrollController.isInitialized) return
+        if (!isToolbarAutoHideEnabled) {
+            clearToolbarOpenLock()
+            toolbarScrollController.show(force = true)
+            return
+        }
+        val atTop = !::webView.isInitialized || webView.scrollY <= 0
+        if (atTop) {
+            clearToolbarOpenLock()
+            toolbarScrollController.show(force = true)
+            return
+        }
+        val hidden = toolbarScrollController.hideImmediate()
+        if (hidden) {
+            armToolbarOpenLock()
+        } else {
+            clearToolbarOpenLock()
+        }
+    }
+
+    /** Hold the open (hidden) toolbar state until a genuine user scroll or the safety timeout. */
+    private fun armToolbarOpenLock() {
+        toolbarOpenLockActive = true
+        toolbarOpenLockArmedAtMs = SystemClock.uptimeMillis()
+    }
+
+    private fun clearToolbarOpenLock() {
+        toolbarOpenLockActive = false
+    }
+
+    /** True once a real user touch-scroll happened after the lock was armed, or the safety bound elapsed. */
+    private fun shouldReleaseToolbarOpenLock(): Boolean {
+        val genuineTouch = ::webView.isInitialized &&
+                webView.lastUserTouchScrollAtMs > toolbarOpenLockArmedAtMs
+        val timedOut = SystemClock.uptimeMillis() - toolbarOpenLockArmedAtMs > TOOLBAR_OPEN_LOCK_TIMEOUT_MS
+        return genuineTouch || timedOut
     }
 
     private fun postOnActiveView(delayMillis: Long = 0L, action: () -> Unit) {
@@ -1625,8 +1718,15 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         if (::webView.isInitialized) {
             // Парный вызов к onPause() в onPauseOrHide: возобновляем рендер WebView
             // и его таймеры, чтобы контент снова мог рендериться и обновляться.
+            // ВАЖНО: только webView.onResume() — он внутри (ExtendedWebView) уже
+            // вызывает ГЛОБАЛЬНЫЙ resumeTimers() через счётчик активных WebView.
+            // Прямой webView.resumeTimers()/pauseTimers() здесь НЕЛЬЗЯ: эти вызовы
+            // процессно-глобальные и в обход счётчика. При открытии вкладки по ссылке
+            // порядок onResumeOrShow(новая)→onPauseOrHide(старая) приводил к тому, что
+            // прямой pauseTimers() старой вкладки замораживал JS-таймеры уже видимой
+            // новой — из-за чего таймер угасания подсветки поста не срабатывал и
+            // подсветка горела не угасая.
             webView.onResume()
-            webView.resumeTimers()
         }
         webController.restoreScrollYAfterImageViewer()
         // Fix: Force hide keyboard and reset IME insets after returning from search
@@ -1730,8 +1830,11 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             hideKeyboard()
             // Остановить рендер WebView: критично для батареи — иначе фоновый
             // renderer-поток продолжает работу и не даёт процессу уйти в Doze.
+            // ВАЖНО: только webView.onPause() — он внутри (ExtendedWebView) ставит
+            // ГЛОБАЛЬНУЮ паузу таймеров через счётчик активных WebView и лишь когда
+            // активных не осталось. Прямой webView.pauseTimers() здесь обходил счётчик
+            // и замораживал JS-таймеры видимой соседней вкладки (см. onResumeOrShow).
             webView.onPause()
-            webView.pauseTimers()
         }
         // Fix phantom white area: reset messagePanelHost padding and margin when leaving theme
         uiBinder.resetMessagePanelHostPadding()
@@ -1894,7 +1997,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         val currentAnchor = presenter.getCurrentPageAnchor()
         val endPage = presenter.getEndScrollTargetPage()
         val refreshPage = presenter.getCurrentPageInstance()
-        val effectiveRestoreMode = if (isRefreshNavigation && refreshPage != null) {
+        val rawEffectiveRestoreMode = if (isRefreshNavigation && refreshPage != null) {
             ThemeRefreshScrollRestorePolicy.effectiveRestoreMode(
                     requestedMode = restoreMode,
                     wasNearBottom = wasNearBottom,
@@ -1904,6 +2007,25 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             )
         } else {
             restoreMode
+        }
+        // BACK to a specific post must ANCHOR to it, never chase BOTTOM. On a HYBRID page whose loaded
+        // window is NOT the topic's absolute end, a BOTTOM restore scrolls to the document bottom, which
+        // retriggers bottom infinite-scroll, appends the next page, grows the document, and the
+        // bottom-restore chases the receding bottom — a visible multi-page runaway scroll that lags and
+        // never lands on the saved post (device log 26_06-22-52: y 14266→77278, content 15083→278488).
+        // The saved anchor (e.g. 144022004) is a precise in-DOM target, so downgrade BOTTOM→ANCHOR for
+        // BACK whenever a usable anchor post is present; wasNearBottom is also cleared below so the JS
+        // restore cannot fall back to the bottom either.
+        val downgradeBottomToAnchorForBack =
+                loadAction == forpdateam.ru.forpda.presentation.theme.ThemeLoadAction.Back &&
+                        rawEffectiveRestoreMode.equals("BOTTOM", ignoreCase = true) &&
+                        !anchorPostId.isNullOrBlank()
+        val effectiveRestoreMode = if (downgradeBottomToAnchorForBack) "ANCHOR" else rawEffectiveRestoreMode
+        if (BuildConfig.DEBUG && downgradeBottomToAnchorForBack) {
+            android.util.Log.i(
+                    "FPDA_THEME_BACK",
+                    "back_bottom_downgraded_to_anchor anchor=$anchorPostId wasNearBottom=$wasNearBottom ratio=$scrollRatio"
+            )
         }
         val postedScrollAnchor = ThemePostedPageScrollPolicy.resolveDomScrollAnchor(
                 pendingPostedAnchor = presenter.getPendingPostedPageScrollAnchor(),
@@ -1946,7 +2068,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         actions.add(jsApi.setLoadAnchorPostId(anchorToUse ?: ""))
         actions.add(jsApi.setLoadAnchorOffsetTop(anchorOffsetTop))
         actions.add(jsApi.setLoadScrollRatio(if (shouldBlockScrollRestoreForUnread) null else scrollRatio))
-        actions.add(jsApi.setLoadWasNearBottom(if (shouldBlockScrollRestoreForUnread) false else wasNearBottom))
+        actions.add(jsApi.setLoadWasNearBottom(if (shouldBlockScrollRestoreForUnread || downgradeBottomToAnchorForBack) false else wasNearBottom))
         actions.add(jsApi.setRefreshRestoreRequest(if (shouldBlockScrollRestoreForUnread) null else restoreId, effectiveRestoreMode ?: restoreMode, restoreSource))
         // Reset hybrid runtime before scheduling end/restore scroll commands: running this after
         // executeThemeScrollCommand() used to call cancelThemeAnchorScrollRetries() and drop the
@@ -2773,6 +2895,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
 
     private fun onTopicHatOpenStateChanged(open: Boolean) {
         isTopicHatOverlayOpen = open
+        clearToolbarOpenLock()
         if (open) {
             hatToolbarOpenInFlight = false
             bottomRefreshController?.cancelFromHatOpen()
@@ -2795,6 +2918,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
 
     private fun onTopicPollOpenStateChanged(open: Boolean) {
         isTopicPollOverlayOpen = open
+        clearToolbarOpenLock()
         if (open) {
             if (::toolbarScrollController.isInitialized) {
                 toolbarScrollController.show(force = true)
