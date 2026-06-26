@@ -2439,7 +2439,18 @@ function scrollEndAnchorIntoVisibleBand(anchor) {
     var postTopAbs = rect.top + window.pageYOffset;
     var postHeight = rect.height;
     var maxY = Math.max(0, getThemeDocumentScrollHeight() - viewport);
-    var y = Math.max(0, Math.min(maxY, postTopAbs - reserves.top));
+    var postFits = postHeight <= visibleHeight;
+    var y;
+    if (postFits) {
+        // Short last post: land at the actual END of the topic (absolute bottom) so "to end" lands
+        // at the end and the whole post is visible.
+        y = maxY;
+    } else {
+        // Tall last post that does NOT fit the viewport: TOP-align it (post top to the visible top)
+        // so the user reads it from the beginning. Device log 26_06-17-55: the end scroll went to the
+        // absolute bottom, cropping a tall last post top & bottom so only its middle showed.
+        y = Math.max(0, Math.min(maxY, postTopAbs - reserves.top));
+    }
     // Explicit `behavior: "auto"` keeps the initial end-anchor placement
     // instant even on browsers that treat a 2-argument `window.scrollTo(x,y)`
     // as smooth (Chromium historically did this when called from a
@@ -2449,7 +2460,7 @@ function scrollEndAnchorIntoVisibleBand(anchor) {
     // `endAnchorScrollSettledAt` for the wider "no blinking on topic open"
     // contract.
     window.scrollTo({left: 0, top: y, behavior: "auto"});
-    return postHeight <= visibleHeight;
+    return postFits;
 }
 
 function scrollToEndAnchorOrBottomWithRetries(postId) {
@@ -3662,6 +3673,36 @@ function scrollToThemeBottomOnce() {
     updateVisibleThemePage();
 }
 
+/**
+ * End placement that reads the LAST post correctly: a short last post lands at the absolute topic
+ * bottom (the end), a TALL last post that does not fit the viewport is TOP-aligned so the user reads
+ * it from the start instead of seeing only its middle at the absolute bottom (device log 26_06-17-55).
+ * Falls back to the plain absolute-bottom scroll when no last post is resolvable.
+ */
+function scrollThemeEndIntoBandOnce() {
+    suppressThemeInfiniteScrollFor(1800);
+    var lastId = getLastRealThemePostIdInDom();
+    var lastPost = lastId.length ? findRealThemePostById(lastId) : null;
+    if (lastPost && typeof scrollEndAnchorIntoVisibleBand === "function") {
+        scrollEndAnchorIntoVisibleBand(lastPost);
+        updateVisibleThemePage();
+        return;
+    }
+    scrollToThemeBottomOnce();
+}
+
+/** True once the END scroll has landed the last post (top-aligned tall, or near the bottom). */
+function isThemeEndSettled() {
+    if (isThemeScrollSettledNearBottom(96)) return true;
+    var lastId = getLastRealThemePostIdInDom();
+    var lastPost = lastId.length ? findRealThemePostById(lastId) : null;
+    if (!lastPost) return false;
+    var reserves = getThemeVisibleBandReserves();
+    var rect = lastPost.getBoundingClientRect();
+    // The last post's top is at (or just below) the visible top band — i.e. top-aligned.
+    return rect.top >= reserves.top - 8 && rect.top <= reserves.top + 64;
+}
+
 function scrollToThemeBottomWithRetries(maxRetries) {
     cancelThemeAnchorScrollRetries();
     themeInfiniteScroll.endScrollPending = true;
@@ -3673,25 +3714,19 @@ function scrollToThemeBottomWithRetries(maxRetries) {
     for (var i = 0; i < retryCount; i++) {
         (function (ms) {
             themeRuntimeSetTimeout(function () {
-                scrollToThemeBottomOnce();
+                scrollThemeEndIntoBandOnce();
             }, ms);
         })(SCROLL_BOTTOM_RETRY_DELAYS_MS[i]);
     }
     var lastBottomRetryMs = SCROLL_BOTTOM_RETRY_DELAYS_MS[retryCount - 1];
     themeRuntimeSetTimeout(function () {
-        if (!isThemeScrollSettledNearBottom(END_SCROLL_MIN_Y_THRESHOLD)) {
-            var lastId = getLastRealThemePostIdInDom();
-            if (lastId.length) {
-                var lastPost = findRealThemePostById(lastId);
-                if (lastPost) {
-                    lastPost.scrollIntoView(false);
-                    updateVisibleThemePage();
-                }
-            }
-            scrollToThemeBottomOnce();
+        if (!isThemeEndSettled()) {
+            scrollThemeEndIntoBandOnce();
         }
         themeInfiniteScroll.endScrollPending = false;
-        maybeCompleteThemeScrollCommand(isThemeScrollSettledNearBottom(96), "bottom");
+        // A TALL last post is top-aligned (not near the bottom) yet is correctly placed, so accept
+        // either the near-bottom OR the top-aligned-last-post settle as success.
+        maybeCompleteThemeScrollCommand(isThemeEndSettled(), "bottom");
         scheduleThemeInfiniteScrollBootstrap(0);
     }, lastBottomRetryMs + 80);
 }
