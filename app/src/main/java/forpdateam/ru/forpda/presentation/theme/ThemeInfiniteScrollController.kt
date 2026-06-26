@@ -23,6 +23,7 @@ class ThemeInfiniteScrollController(
     private val stripDuplicateHatFromNonFirstPage: (ThemePage, Int) -> Boolean,
     private val validateNonFirstPagePostNumbers: (ThemePage, Int) -> Boolean,
     private val promoteTopicHatForHybridPage: (ThemePage) -> Unit,
+    private val scheduleMetadataEnrichmentForPage: (ThemePage) -> Unit,
     private val getCurrentPage: () -> ThemePage?,
     private val getLoadedPages: () -> LinkedHashMap<Int, ThemePage>,
     private val setLoadedPages: (LinkedHashMap<Int, ThemePage>) -> Unit,
@@ -198,6 +199,13 @@ class ThemeInfiniteScrollController(
                             html = fragmentHtml
                         )
                     )
+                    // After the page is in the DOM, run deferred desktop-metadata enrichment so
+                    // ratings (+/- counts) appear on appended pages. Mobile HTML has no `ka_p`, so
+                    // without this the rating row stays hidden. The callback enqueues enrichment and
+                    // emits PatchPostRatingUi/PatchUserPostCountUi events; ordering is safe because
+                    // ApplyInfinitePage is emitted first (synchronous DOM insert) and the WebView
+                    // consumes events from the SharedFlow in emission order.
+                    scheduleMetadataEnrichmentForPage(loaded)
                     uiEvents.tryEmit(ThemeUiEvent.SetInfiniteState(dir.jsName, InfiniteState.IDLE.jsName, null))
                     scope.launch {
                         themeUseCase.syncFavoriteLastPost(loaded)
