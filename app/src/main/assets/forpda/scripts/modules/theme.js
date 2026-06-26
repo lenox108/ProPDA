@@ -2386,6 +2386,40 @@ function scrollToElementWithRetries(name, requireFinalRetry) {
     var completed = false;
     var successfulScrolls = 0;
     var finalDelay = SCROLL_ANCHOR_RETRY_DELAYS_MS[SCROLL_ANCHOR_RETRY_DELAYS_MS.length - 1];
+    // Deadline fallback (device log 26_06-18-42, forward nav 239158 p=119890221). The retry chain
+    // above is dispatched through scheduleThemeScrollAttempt, which is gated on `scrollGeneration`
+    // (themeAnchorScrollGeneration). A concurrent HYBRID re-render bumps that generation, so EVERY
+    // retry callback — including the final one that completes the scroll command — silently no-ops.
+    // The INITIAL_ANCHOR command then never completes, the post is never positioned, and reveal is
+    // stuck until the 3.2s alphaRevealSafety watchdog reveals at the page top (after which the
+    // highlight code is left to position the post). This deadline is NOT generation-gated: if the
+    // command is still pending when it fires, it positions the anchor (instant) and completes so reveal
+    // happens promptly with the post already placed. Only armed for the blocking INITIAL_ANCHOR path.
+    if (requireFinalRetry) {
+        var ownedCommandId = window.__themeScrollCommandId;
+        if (ownedCommandId) {
+            themeRuntimeSetTimeout(function () {
+                if (completed) return;
+                if (window.__themeScrollCommandId !== ownedCommandId) return; // a newer command owns it now
+                var el = resolveThemeAnchorElement(name);
+                completed = true;
+                themeAnchorRetryPendingName = "";
+                clearUnreadInitialAnchorScroll("initial_anchor_deadline");
+                // We verified __themeScrollCommandId still equals our id, so this IS our command — force
+                // the completion past the stale-generation gate (a render-gen bump is exactly what
+                // orphaned the retries; that same bump must not also drop this rescue completion).
+                window.__themeScrollCommandGenerationAtExec = Number(window.__themeScrollCommandGeneration) || 0;
+                if (el) {
+                    doScroll(el);
+                    armThemeInitialAnchorMediaReanchor(name);
+                    maybeCompleteThemeScrollCommand(true, "initial_anchor_deadline");
+                    scheduleThemeInfiniteScrollBootstrap(80);
+                } else {
+                    maybeCompleteThemeScrollCommand(false, "initial_anchor_deadline_missing");
+                }
+            }, finalDelay + 450);
+        }
+    }
     for (var i = 0; i < SCROLL_ANCHOR_RETRY_DELAYS_MS.length; i++) {
         (function (ms) {
             scheduleThemeScrollAttempt(scrollGeneration, ms, function () {
@@ -2601,10 +2635,13 @@ function doScroll(tAnchorElem, scrollIntoElem) {
     var toScroll = scrollIntoElem || tAnchorElem;
     if (!toScroll || typeof toScroll.scrollIntoView !== "function") return;
     try {
-        toScroll.focus();
+        // preventScroll: HTMLElement.focus() scrolls the element into view by default, and this WebView
+        // animates that focus-induced scroll — a second source of the visible "forced scroll". The
+        // explicit instant scrollTop positioning below owns placement; focus must not move the viewport.
+        toScroll.focus({preventScroll: true});
         var access_anchor = tAnchorElem && tAnchorElem.querySelector ? tAnchorElem.querySelector(".accessibility_anchor") : null;
         if (access_anchor) {
-            access_anchor.focus();
+            access_anchor.focus({preventScroll: true});
         }
     } catch (ex) {
         logThemeRuntimeWarning("ThemeScroll", ex);
