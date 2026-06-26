@@ -1525,30 +1525,42 @@ function captureThemeRefreshScrollAnchor(source) {
 }
 
 /**
- * INSTANT programmatic vertical scroll. A bare two-argument `window.scrollTo(x, y)` is treated as a
- * SMOOTH (animated) scroll by this WebView in several invocation contexts — most visibly when a
- * restore/anchor scroll is dispatched as part of a back-gesture touch sequence or a link tap. The
- * resulting ~660ms scroll ramp from the page top to the target post is exactly the "visible scroll"
- * the user sees on link navigation, back, and end-of-topic (device log 26_06-18-09: BACK to 239158
- * animated scrollY 0 → 10590 over 660ms with the WebView already revealed). The OBJECT form with an
- * explicit `behavior: "auto"` is reliably instant on every code path; route ALL programmatic
- * positioning through these helpers so a stray bare call can never re-introduce the animation.
+ * INSTANT programmatic vertical scroll. This WebView ANIMATES `window.scrollTo` / `scrollIntoView`
+ * even with an explicit `behavior: "auto"` — the object form is NOT enough here. Device logs
+ * 26_06-18-09 and 26_06-18-31 (after the behavior:"auto" change shipped) still show a restore to y
+ * ramping smoothly 0 → target over ~700ms in a textbook ease-in-out curve (dt≈8ms, accelerating then
+ * decelerating dy) with the WebView already revealed — that ramp IS the "visible scroll" the user
+ * reports on link navigation, back, and end-of-topic. The only reliably INSTANT positioning primitive
+ * is a DIRECT `scrollTop` assignment on the scrolling element: scroll-behavior in the theme CSS is the
+ * default (auto), so the assignment is never animated. Route ALL programmatic positioning through
+ * these helpers so a stray `window.scrollTo` can never re-introduce the animation.
  */
 function themeInstantScrollToY(top) {
     var y = Number(top);
-    if (!isFinite(y)) y = 0;
-    if (y < 0) y = 0;
-    window.scrollTo({left: 0, top: y, behavior: "auto"});
+    if (!isFinite(y) || y < 0) y = 0;
+    var se = document.scrollingElement || document.documentElement || null;
+    if (se) {
+        try { se.scrollTop = y; } catch (ex) {}
+    }
+    if (document.body && document.body !== se) {
+        // Quirks-mode / engines that scroll <body>: assign there too. A no-op on the non-scroller.
+        try { document.body.scrollTop = y; } catch (ex) {}
+    }
 }
 
 function themeInstantScrollIntoView(el, alignBottom) {
-    if (!el || typeof el.scrollIntoView !== "function") return;
-    try {
-        el.scrollIntoView({block: alignBottom ? "end" : "start", inline: "nearest", behavior: "auto"});
-    } catch (ex) {
-        // Older engines without the options overload: the boolean form is instant.
-        el.scrollIntoView(alignBottom ? false : true);
+    if (!el || typeof el.getBoundingClientRect !== "function") return;
+    // Compute the absolute target Y and use the instant scrollTop primitive instead of
+    // `el.scrollIntoView()`, which this WebView animates (see themeInstantScrollToY).
+    var rect = el.getBoundingClientRect();
+    var se = document.scrollingElement || document.documentElement || null;
+    var pageY = window.pageYOffset || (se ? se.scrollTop : 0) || 0;
+    var top = rect.top + pageY;
+    if (alignBottom) {
+        var viewport = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 0) || 0;
+        top = top + rect.height - viewport;
     }
+    themeInstantScrollToY(top);
 }
 
 function restoreThemeRefreshScrollAnchorOnce(scrollGeneration, reason, allowMissingAnchorFallback) {
@@ -2478,15 +2490,9 @@ function scrollEndAnchorIntoVisibleBand(anchor) {
         // absolute bottom, cropping a tall last post top & bottom so only its middle showed.
         y = Math.max(0, Math.min(maxY, postTopAbs - reserves.top));
     }
-    // Explicit `behavior: "auto"` keeps the initial end-anchor placement
-    // instant even on browsers that treat a 2-argument `window.scrollTo(x,y)`
-    // as smooth (Chromium historically did this when called from a
-    // non-passive touch handler). The initial scroll on topic open must
-    // NEVER be smooth — the user opens the topic and must land on the
-    // correct post without an animation. See the comment on
-    // `endAnchorScrollSettledAt` for the wider "no blinking on topic open"
-    // contract.
-    window.scrollTo({left: 0, top: y, behavior: "auto"});
+    // The initial end-anchor placement on topic open must NEVER animate. This WebView animates
+    // window.scrollTo even with behavior:"auto", so position via the instant scrollTop primitive.
+    themeInstantScrollToY(y);
     return postFits;
 }
 
@@ -3579,7 +3585,9 @@ function applyThemeInfinitePage(direction, html) {
                 var pinnedTopAfter = pinnedElement.getBoundingClientRect().top;
                 var delta = pinnedTopAfter - pinnedTopBefore;
                 if (delta !== 0) {
-                    window.scrollBy({left: 0, top: delta, behavior: "auto"});
+                    var se = document.scrollingElement || document.documentElement || null;
+                    var curY = window.pageYOffset || (se ? se.scrollTop : 0) || 0;
+                    themeInstantScrollToY(curY + delta);
                 }
             } else {
                 var newHeight = document.documentElement.scrollHeight;

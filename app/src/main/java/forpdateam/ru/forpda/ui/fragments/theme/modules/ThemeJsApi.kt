@@ -197,7 +197,10 @@ class ThemeJsApi(
             var topReserve=(typeof topChromePadding!=='undefined')?Math.max(0,Number(topChromePadding)||0):0;
             var offset=(typeof window.loadAnchorOffsetTop==='number'&&isFinite(window.loadAnchorOffsetTop))?window.loadAnchorOffsetTop:topReserve;
             var y=Math.max(0,Math.round(top-offset));
-            window.scrollTo(0,y);
+            // This WebView animates window.scrollTo even with behavior:"auto"; assign scrollTop
+            // directly so the native-anchor fallback positions INSTANTLY (no visible scroll ramp).
+            var se=document.scrollingElement||document.documentElement;if(se){se.scrollTop=y;}
+            if(document.body&&document.body!==se){document.body.scrollTop=y;}
             return y;
         })();"""
     }
