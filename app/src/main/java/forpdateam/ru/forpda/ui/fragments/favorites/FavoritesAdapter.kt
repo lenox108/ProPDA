@@ -217,6 +217,11 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
         prefsRebindHandler.postDelayed(prefsRebindRunnable, PREFS_REBIND_DEBOUNCE_MS)
     }
 
+    /** Cancels the debounced prefs-rebind callback so it cannot fire after the host view is gone. */
+    fun release() {
+        prefsRebindHandler.removeCallbacks(prefsRebindRunnable)
+    }
+
     fun setOnItemClickListener(listener: BaseSectionedAdapter.OnItemClickListener<FavItem>) {
         itemClickListener = listener
     }

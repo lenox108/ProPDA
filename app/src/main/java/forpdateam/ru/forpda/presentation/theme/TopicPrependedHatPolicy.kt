@@ -56,7 +56,13 @@ internal object TopicPrependedHatPolicy {
             return first.takeIf { it.id > 0 }
         }
         val expectedMin = expectedFirstPostNumber(page) ?: return null
-        if (first.id > 0 && first.number < expectedMin) {
+        // The `number < expectedMin` heuristic only means "prepended hat" when post numbers are
+        // trustworthy. On deep/last pages the parser sometimes leaves EVERY content post at number==0
+        // (device log 26_06-12-14, topic 928862): then this branch would flag the FIRST content post
+        // — including the first-unread anchor once an earlier strip pass made it first — as the hat,
+        // and removeAll strips it by `post.id == hatId` BEFORE the anchor guard. Require at least one
+        // post to reach the expected window before trusting the number heuristic.
+        if (first.id > 0 && first.number < expectedMin && pageNumbersReliable(page, page.pagination.current)) {
             return first
         }
         val classicPrepended = first.takeIf {
@@ -94,9 +100,19 @@ internal object TopicPrependedHatPolicy {
             shouldStripHatPost(page, post, requestedPage, hatId)
         }
 
+        val anchorIds = anchorEntryIds(page)
+        val numbersReliable = pageNumbersReliable(page, requestedPage)
         while (page.posts.isNotEmpty()) {
             val first = page.posts.first()
-            val isPrependedByNumber = first.number < expectedMin
+            // Stop trimming once the leading post is the open's anchor target: it is real content the
+            // user is being navigated to, never the prepended hat. Without this the number-based
+            // `isPrependedByNumber` check below strips the first-unread post when its sequential
+            // `number` is 0/below expectedMin on a deep/last page (device log 26_06-11-11, 1122662).
+            if (first.id > 0 && first.id in anchorIds) break
+            // Only trust the number window when the page actually has trustworthy numbers; otherwise
+            // (every post number==0, device log 26_06-12-14 topic 928862) this would eat real content
+            // post by post until the unread anchor is gone.
+            val isPrependedByNumber = numbersReliable && first.number < expectedMin
             val looksLikeKnownHat = hatId != null && first.id == hatId
             val looksLikeOnlyPrependedHat = first.number == 1 &&
                     page.posts.size > 1 &&
@@ -227,10 +243,21 @@ internal object TopicPrependedHatPolicy {
         }
         if (topicHeader != null && post.id == topicHeader.id) return true
         if (hatId != null && post.id == hatId) return true
+        // Never strip the post the open is navigating to (unread / scroll / explicit anchor). The
+        // topic hat is never the anchor target, so an anchor post being flagged here is always a
+        // false positive. Guards the number-based strips below, which fire on a deep/last page where
+        // the anchor's sequential `number` is 0 or below `expectedMin` (device log 26_06-11-11, topic
+        // 1122662: first-unread 143996702 — the first content post after the prepended hat — was
+        // removed from page.posts as a "hat", so the highlight resolver saw it off-page, fell back to
+        // last_post_on_page_fallback (144013662) and the reveal scrolled visibly to the wrong post).
+        if (post.id > 0 && post.id in anchorEntryIds(page)) return false
         if (looksLikeProPdaTopicHat(post)) return true
         if (looksLikeTopicTitleHat(post, page)) return true
         if (post.number == 1) return true
-        if (post.number == 0) return true
+        // `number == 0` only signals a hat when the page's numbers are trustworthy. When the parser
+        // left every post at number==0 (deep/last page, device log 26_06-12-14 topic 928862) this rule
+        // would strip real content — including the unread anchor — post by post across re-strip passes.
+        if (post.number == 0 && pageNumbersReliable(page, requestedPage)) return true
         return looksLikeAnchorExcludedPrependedHat(page, post, requestedPage)
     }
 
@@ -270,7 +297,34 @@ internal object TopicPrependedHatPolicy {
             anchor.removePrefix("entry").toIntOrNull()?.let { ids.add(it) }
         }
         page.anchorPostId?.removePrefix("entry")?.toIntOrNull()?.let { ids.add(it) }
+        // Durable fallback: the open's #entry target survives in page.url even after page.anchors /
+        // anchorPostId have been cleared by a SECOND strip pass (hat-overlay remap / ThemeTemplate
+        // fragment mapping). Device log 26_06-12-04, topic 461675: the first strip keeps the anchor
+        // (anchors=[entry143885374]), but a later strip runs with anchors=[] and re-strips the
+        // first-unread post 143885374 by the number==0 rule -> highlight off-page -> visible scroll to
+        // the wrong post. The redirect hash in page.url (…#entry143885374) is stable across both passes.
+        extractEntryHashPostId(page.url)?.let { ids.add(it) }
         return ids
+    }
+
+    /**
+     * True when this page's posts carry trustworthy sequential numbers — at least one post reaches
+     * the expected number window for [requestedPage]. On deep/last pages the parser can leave EVERY
+     * content post at number==0; then the number-based hat heuristics are meaningless and must be
+     * suppressed so they don't strip real content (device log 26_06-12-14, topic 928862). When numbers
+     * are unreliable only positively-identified hats (knownHatId / ProPDA / title) are removed.
+     */
+    private fun pageNumbersReliable(page: ThemePage, requestedPage: Int): Boolean {
+        val expectedMin = expectedFirstPostNumber(page, requestedPage) ?: return true
+        return page.posts.any { it.number >= expectedMin }
+    }
+
+    /** Post id from the trailing `#entry<digits>` of a topic url (handles a doubled `#entry…#entry…`). */
+    private fun extractEntryHashPostId(url: String?): Int? {
+        val u = url ?: return null
+        val idx = u.lastIndexOf("#entry")
+        if (idx < 0) return null
+        return u.substring(idx + "#entry".length).takeWhile(Char::isDigit).toIntOrNull()
     }
 
     private fun hasPositiveSt(url: String): Boolean {

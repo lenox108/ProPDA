@@ -476,6 +476,7 @@ class FavoritesFragment : RecyclerFragment() {
         super.onDestroy()
         dismissMarkAllReadProgressDialog()
         paginationHelper.destroy()
+        if (::adapter.isInitialized) adapter.release()
     }
 
     private fun onChangeFav(result: Boolean) {

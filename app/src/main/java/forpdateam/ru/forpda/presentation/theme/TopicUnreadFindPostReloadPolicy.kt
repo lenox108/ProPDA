@@ -59,6 +59,7 @@ object TopicUnreadFindPostReloadPolicy {
             hasUnreadTarget: Boolean,
             fallbackAnchorPostId: String?,
             redirectIsBottomEntry: Boolean = false,
+            listTopicMarkedUnread: Boolean = false,
     ): Boolean {
         if (alreadyUpgradedThisTrace) return false
         if (openedViaFindPost) return false
@@ -69,11 +70,31 @@ object TopicUnreadFindPostReloadPolicy {
         if (!parserListUnreadHint) return false
         if (!ambiguousBottomRedirect) return false
         if (!requestUrl.contains("view=getnewpost", ignoreCase = true)) return false
-        // Log 14_06-16-33 (1103268, 1121483): bottom-of-page redirect on a fully-read topic
-        // is the user's last-read bookmark, not a first-unread. Reloading findpost to a sibling
-        // on-page post lands on a read post (worse than the bookmark). Stay on the bookmark.
-        if (redirectIsBottomEntry) return false
+        // Log 24_06-20-07 (1103268, trace 415ab025): a GENUINELY unread topic (favorites row
+        // `topicMarkedUnread=true`, +N) whose new post arrived at the bottom of the last page makes
+        // the server `view=getnewpost` redirect to that bottom #entry. The bottom-redirect heuristic
+        // misclassifies this as an all-read last-read bookmark and strands the user on the last post.
+        // When the LIST itself marks the topic unread, the server's getnewpost bottom redirect IS the
+        // first-unread post — reload findpost to it (see [resolveListUnreadBottomRedirectFindPostAnchor]).
+        if (redirectIsBottomEntry) {
+            return listTopicMarkedUnread && !fallbackAnchorPostId.isNullOrBlank()
+        }
         return !fallbackAnchorPostId.isNullOrBlank()
+    }
+
+    /**
+     * Anchor for the genuine-list-unread bottom-redirect reload (log 24_06-20-07, 1103268). When the
+     * favorites row is marked unread and the server getnewpost redirected to the bottom #entry of the
+     * last page, that bottom entry is the new (unread) post — reload findpost directly to it so the
+     * view opens at the first-unread post instead of being stranded above/below it.
+     */
+    fun resolveListUnreadBottomRedirectFindPostAnchor(
+            loadedPagePostIds: List<Int>,
+            redirectEntryId: Int?,
+    ): String? {
+        if (redirectEntryId == null || redirectEntryId <= 0) return null
+        if (loadedPagePostIds.lastOrNull() != redirectEntryId) return null
+        return redirectEntryId.toString()
     }
 
     fun resolveAmbiguousListUnreadFindPostAnchor(

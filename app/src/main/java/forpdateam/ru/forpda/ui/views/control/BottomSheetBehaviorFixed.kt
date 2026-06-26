@@ -263,8 +263,8 @@ open class BottomSheetBehaviorFixed<V : View> : CoordinatorLayout.Behavior<V>, I
         if (!child.isShown || !draggable) { ignoreEvents = true; return false }
         val action = event.actionMasked
         if (action == MotionEvent.ACTION_DOWN) reset()
-        if (velocityTracker == null) velocityTracker = VelocityTracker.obtain()
-        velocityTracker!!.addMovement(event)
+        val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
+        tracker.addMovement(event)
         when (action) {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 touchingScrollingChild = false
@@ -288,10 +288,11 @@ open class BottomSheetBehaviorFixed<V : View> : CoordinatorLayout.Behavior<V>, I
                     !parent.isPointInChildBounds(child, initialX, initialY)
             }
         }
-        if (!ignoreEvents && viewDragHelper != null && viewDragHelper!!.shouldInterceptTouchEvent(event)) return true
+        val dragHelper = viewDragHelper
+        if (!ignoreEvents && dragHelper != null && dragHelper.shouldInterceptTouchEvent(event)) return true
         return action == MotionEvent.ACTION_MOVE && !ignoreEvents && state != STATE_DRAGGING &&
             !isPointInsideChildScrollView(parent, event.x.toInt(), event.y.toInt()) &&
-            viewDragHelper != null && abs(initialY - event.y) > viewDragHelper!!.touchSlop
+            dragHelper != null && abs(initialY - event.y) > dragHelper.touchSlop
     }
 
     private fun isPointInsideChildScrollView(parent: CoordinatorLayout, x: Int, y: Int): Boolean {
@@ -306,11 +307,12 @@ open class BottomSheetBehaviorFixed<V : View> : CoordinatorLayout.Behavior<V>, I
         if (state == STATE_DRAGGING && event.actionMasked == MotionEvent.ACTION_DOWN) return true
         viewDragHelper?.processTouchEvent(event)
         if (event.actionMasked == MotionEvent.ACTION_DOWN) reset()
-        if (velocityTracker == null) velocityTracker = VelocityTracker.obtain()
-        velocityTracker!!.addMovement(event)
-        if (viewDragHelper != null && event.actionMasked == MotionEvent.ACTION_MOVE && !ignoreEvents) {
-            if (abs(initialY - event.y) > viewDragHelper!!.touchSlop) {
-                viewDragHelper!!.captureChildView(child, event.getPointerId(event.actionIndex))
+        val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
+        tracker.addMovement(event)
+        val dragHelper = viewDragHelper
+        if (dragHelper != null && event.actionMasked == MotionEvent.ACTION_MOVE && !ignoreEvents) {
+            if (abs(initialY - event.y) > dragHelper.touchSlop) {
+                dragHelper.captureChildView(child, event.getPointerId(event.actionIndex))
             }
         }
         return !ignoreEvents
@@ -407,7 +409,7 @@ open class BottomSheetBehaviorFixed<V : View> : CoordinatorLayout.Behavior<V>, I
     }
 
     private fun updatePeekHeight(animate: Boolean) {
-        if (viewRef != null) { calculateCollapsedOffset(); if (state == STATE_COLLAPSED) { viewRef!!.get()?.let { if (animate) settleToStatePendingLayout(state) else it.requestLayout() } } }
+        if (viewRef != null) { calculateCollapsedOffset(); if (state == STATE_COLLAPSED) { viewRef?.get()?.let { if (animate) settleToStatePendingLayout(state) else it.requestLayout() } } }
     }
 
     fun getPeekHeight(): Int = if (peekHeightAuto) PEEK_HEIGHT_AUTO else peekHeight
@@ -562,13 +564,14 @@ open class BottomSheetBehaviorFixed<V : View> : CoordinatorLayout.Behavior<V>, I
     }
 
     internal fun startSettlingAnimation(child: View, state: Int, top: Int, settleFromViewDragHelper: Boolean) {
-        val startedSettling = viewDragHelper != null &&
-            (if (settleFromViewDragHelper) viewDragHelper!!.settleCapturedViewAt(child.left, top) else viewDragHelper!!.smoothSlideViewTo(child, child.left, top))
+        val dragHelper = viewDragHelper
+        val startedSettling = dragHelper != null &&
+            (if (settleFromViewDragHelper) dragHelper.settleCapturedViewAt(child.left, top) else dragHelper.smoothSlideViewTo(child, child.left, top))
         if (startedSettling) {
             setStateInternal(STATE_SETTLING); updateDrawableForTargetState(state)
-            if (settleRunnable == null) settleRunnable = SettleRunnable(child, state)
-            if (!settleRunnable!!.isPosted) { settleRunnable!!.targetState = state; ViewCompat.postOnAnimation(child, settleRunnable!!); settleRunnable!!.isPosted = true }
-            else settleRunnable!!.targetState = state
+            val runnable = settleRunnable ?: SettleRunnable(child, state).also { settleRunnable = it }
+            if (!runnable.isPosted) { runnable.targetState = state; ViewCompat.postOnAnimation(child, runnable); runnable.isPosted = true }
+            else runnable.targetState = state
         } else setStateInternal(state)
     }
 
@@ -641,11 +644,12 @@ open class BottomSheetBehaviorFixed<V : View> : CoordinatorLayout.Behavior<V>, I
             val child = parent.getChildAt(i)
             if (child === viewRef.get()) continue
             if (expanded) {
-                importantForAccessibilityMap!![child] = child.importantForAccessibility
+                importantForAccessibilityMap?.put(child, child.importantForAccessibility)
                 if (updateImportantForAccessibilityOnSiblings) ViewCompat.setImportantForAccessibility(child, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS)
             } else {
-                if (updateImportantForAccessibilityOnSiblings && importantForAccessibilityMap != null && importantForAccessibilityMap!!.containsKey(child))
-                    ViewCompat.setImportantForAccessibility(child, importantForAccessibilityMap!![child]!!)
+                val savedImportance = importantForAccessibilityMap?.get(child)
+                if (updateImportantForAccessibilityOnSiblings && savedImportance != null)
+                    ViewCompat.setImportantForAccessibility(child, savedImportance)
             }
         }
         if (!expanded) importantForAccessibilityMap = null
@@ -680,7 +684,8 @@ open class BottomSheetBehaviorFixed<V : View> : CoordinatorLayout.Behavior<V>, I
     private inner class SettleRunnable(private val view: View, @State var targetState: Int) : Runnable {
         var isPosted: Boolean = false
         override fun run() {
-            if (viewDragHelper != null && viewDragHelper!!.continueSettling(true)) ViewCompat.postOnAnimation(view, this)
+            val dragHelper = viewDragHelper
+            if (dragHelper != null && dragHelper.continueSettling(true)) ViewCompat.postOnAnimation(view, this)
             else setStateInternal(targetState)
             isPosted = false
         }

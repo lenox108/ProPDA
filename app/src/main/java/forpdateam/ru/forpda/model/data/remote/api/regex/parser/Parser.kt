@@ -23,25 +23,19 @@ object Parser {
     private var uTags: Array<String>? = null
 
     @JvmStatic
-    fun getMainPattern(): Pattern {
-        if (mainPattern == null)
-            mainPattern = Pattern.compile("\\<(?:(?:(script|style|textarea)(?:([^\\>]+))?\\>)([\\s\\S]*?)(?:\\<\\/\\1)|([\\/])?(!?[\\w]*)(?:([^\\>]+))?\\/?)\\>(?:([^<]+))?", Pattern.CASE_INSENSITIVE)
-        return mainPattern!!
-    }
+    fun getMainPattern(): Pattern =
+        mainPattern ?: Pattern.compile("\\<(?:(?:(script|style|textarea)(?:([^\\>]+))?\\>)([\\s\\S]*?)(?:\\<\\/\\1)|([\\/])?(!?[\\w]*)(?:([^\\>]+))?\\/?)\\>(?:([^<]+))?", Pattern.CASE_INSENSITIVE)
+            .also { mainPattern = it }
 
     @JvmStatic
-    fun getAttributePattern(): Pattern {
-        if (attributePattern == null)
-            attributePattern = Pattern.compile("([^ \"']*?)\\s*?=\\s*?([\"'])([\\s\\S]*?)\\2", Pattern.CASE_INSENSITIVE)
-        return attributePattern!!
-    }
+    fun getAttributePattern(): Pattern =
+        attributePattern ?: Pattern.compile("([^ \"']*?)\\s*?=\\s*?([\"'])([\\s\\S]*?)\\2", Pattern.CASE_INSENSITIVE)
+            .also { attributePattern = it }
 
     @JvmStatic
-    fun getuTags(): Array<String> {
-        if (uTags == null)
-            uTags = arrayOf("!doctype", "area", "br", "col", "colgroup", "command", "embed", "hr", "img", "input", "keygen", "link", "meta", "param", "source", "track", "wbr")
-        return uTags!!
-    }
+    fun getuTags(): Array<String> =
+        uTags ?: arrayOf("!doctype", "area", "br", "col", "colgroup", "command", "embed", "hr", "img", "input", "keygen", "link", "meta", "param", "source", "track", "wbr")
+            .also { uTags = it }
 
     private fun containsInUTag(tag: String): Boolean =
         getuTags().any { it.equals(tag, ignoreCase = true) }
@@ -162,8 +156,9 @@ object Parser {
             }
         }
         if (!onlyText) {
-            if (!containsInUTag(node.name!!)) {
-                resultHtml.append("</").append(node.name).append(">")
+            val name = node.name
+            if (name != null && !containsInUTag(name)) {
+                resultHtml.append("</").append(name).append(">")
             }
         }
         return resultHtml.toString()
@@ -186,8 +181,9 @@ object Parser {
             resultHtml.append(getHtml(child, false))
         }
         if (!onlyInner) {
-            if (!containsInUTag(node.name!!)) {
-                resultHtml.append("</").append(node.name).append(">")
+            val name = node.name
+            if (name != null && !containsInUTag(name)) {
+                resultHtml.append("</").append(name).append(">")
             }
         }
         return resultHtml.toString()

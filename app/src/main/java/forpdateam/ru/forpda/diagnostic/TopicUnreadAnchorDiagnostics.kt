@@ -38,6 +38,36 @@ object TopicUnreadAnchorDiagnostics {
         )
     }
 
+    /**
+     * U-02 (audit Finding U-02, High): warn when a genuinely-unread open had its unread target
+     * suppressed because the server redirect was classified as a top/bottom bookmark hint. Helps
+     * confirm at runtime whether `hasUnreadTarget=false` is being set on a topic that actually has
+     * unread posts (so FirstUnread highlight/scroll is wrongly skipped).
+     */
+    fun unreadTargetSuppressed(
+            topicId: Int,
+            reason: String,
+            redirectEntryId: Int?,
+            htmlUnreadCount: Int,
+            listUnreadHint: Boolean,
+            pageCurrent: Int,
+            pageTotal: Int,
+    ) {
+        FpdaDebugLog.warn(
+                LOG_TAG,
+                "unread_target_suppressed",
+                mapOf(
+                        "topicId" to topicId,
+                        "reason" to reason,
+                        "redirectEntryId" to redirectEntryId,
+                        "htmlUnreadCount" to htmlUnreadCount,
+                        "listUnreadHint" to listUnreadHint,
+                        "pageCurrent" to pageCurrent,
+                        "pageTotal" to pageTotal,
+                ),
+        )
+    }
+
     fun findPostReloadSkipped(
             topicId: Int,
             reason: String,

@@ -16,6 +16,7 @@ import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.data.remote.api.NetworkRequest
 import forpdateam.ru.forpda.model.data.remote.api.NetworkResponse
 import forpdateam.ru.forpda.client.interceptors.AuthInterceptor
+import forpdateam.ru.forpda.client.interceptors.CacheControlInterceptor
 import forpdateam.ru.forpda.client.interceptors.ErrorInterceptor
 import forpdateam.ru.forpda.client.interceptors.ImageLoadingInterceptor
 import forpdateam.ru.forpda.client.interceptors.RedirectFragmentInterceptor
@@ -89,6 +90,13 @@ class Client(
         private const val MOBILE_COOKIE_NAME = "ngx_mb"
         private const val DESKTOP_MOBILE_COOKIE_VALUE = "0"
         private const val EVENT_WS_URL = "wss://app.4pda.to/ws/"
+
+        /**
+         * Foreground WebSocket ping interval. Raised from 30s to 45s as a low-risk
+         * battery win (BAT-02): fewer radio wakeups while still detecting stale
+         * connections reasonably quickly.
+         */
+        private const val WEBSOCKET_PING_INTERVAL_SECONDS = 45L
     }
 
     // region Properties
@@ -127,6 +135,7 @@ class Client(
             .addInterceptor(ErrorInterceptor())
             .addInterceptor(BrotliInterceptor)
             .addNetworkInterceptor(RedirectFragmentInterceptor())
+            .addNetworkInterceptor(CacheControlInterceptor())
             .build()
     }
 
@@ -166,7 +175,7 @@ class Client(
             .connectTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
-            .pingInterval(30, TimeUnit.SECONDS)
+            .pingInterval(WEBSOCKET_PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .connectionPool(sharedConnectionPool)
             .cookieJar(cookieJar)

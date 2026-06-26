@@ -27,6 +27,17 @@ class ThemeHistoryController {
     private val history = mutableListOf<ThemePage>()
     private val backSnapshots = linkedMapOf<String, TopicBackSnapshot>()
 
+    /**
+     * C-fix (log 1121483: back after a cross-topic hop landed on st=1260/page-64 instead of the
+     * st=1180/post-143876380 page the user was viewing). A cross-topic link opens Topic B in a new
+     * tab WITHOUT pushing an in-tab entry, so the source page stays the in-tab history TOP. When
+     * Topic B's tab is exhausted and the source tab regains the back gesture, [backPage] would pop
+     * that TOP and land on the page BELOW it (a stale earlier page of the same topic). This guard
+     * marks the source key so the FIRST back after the cross-topic open RESTORES the top entry in
+     * place instead of discarding it. Cleared after one use and on any normal in-tab navigation.
+     */
+    private var crossTopicReturnGuardKey: String? = null
+
     fun snapshotKey(topicId: Int, pageSt: Int): String = TopicBackSnapshot.key(topicId, pageSt)
 
     fun captureBackSnapshot(snapshot: TopicBackSnapshot) {
@@ -42,6 +53,55 @@ class ThemeHistoryController {
 
     fun peekBackSnapshot(topicId: Int, pageSt: Int): TopicBackSnapshot? =
             backSnapshots[snapshotKey(topicId, pageSt)]
+
+    /**
+     * Cross-topic BACK st/anchor mismatch fix (log 1121483: back landed on st=1260/page-64 while the
+     * source post 143979796 lives on st=1240/page-63). In HYBRID mode the loaded `currentPage.st`
+     * (1260) can differ from the page the user actually navigated FROM (st=1240), but the native back
+     * snapshot is keyed by the SOURCE page's st. Building the restore URL from `currentPage.st` then
+     * pairs the right post id with the WRONG st, so the post isn't on the loaded page and the anchor
+     * falls back to last-post-on-page. This finds the usable snapshot for `topicId` whose captured
+     * `visiblePostId` equals the post we are restoring to, so the caller can pull the CORRECT st.
+     * Returns the most recently captured match.
+     */
+    fun findUsableBackSnapshotByPost(topicId: Int, visiblePostId: String?): TopicBackSnapshot? {
+        if (topicId <= 0) return null
+        val normalized = visiblePostId?.removePrefix("entry")?.takeIf { it.isNotBlank() } ?: return null
+        // Prefer the FIRST-INSERTED matching capture. `backSnapshots` is a LinkedHashMap, and
+        // re-assigning an existing key keeps its original insertion position — so iteration order is
+        // capture order. The authoritative cross-topic source-anchor snapshot (keyed by the genuine
+        // source page st, e.g. 1240) is captured at link-tap time, BEFORE the trailing `onPauseOrHide`
+        // viewport snapshot that re-stamps the same visible post under the loaded `currentPage.st`
+        // (e.g. 1260) — a st/post mismatch. The earliest entry is the one whose st actually contains
+        // the post, and insertion order makes this deterministic regardless of clock ties.
+        return backSnapshots.values
+                .firstOrNull {
+                    it.topicId == topicId &&
+                            it.isUsable() &&
+                            it.visiblePostId?.removePrefix("entry") == normalized
+                }
+    }
+
+    /**
+     * C-fix: arm the cross-topic return guard for the CURRENT in-tab top entry. Called right
+     * before a cross-topic link opens Topic B in a new tab. The next [backPage] for this topic+st
+     * restores the top entry in place rather than popping past it. No-op if the top entry does not
+     * match the supplied source (defensive — the source page must be the page actually on top).
+     */
+    fun armCrossTopicReturnGuard(topicId: Int, pageSt: Int) {
+        if (topicId <= 0) return
+        val top = history.lastOrNull() ?: return
+        if (top.id != topicId || top.st != pageSt) return
+        crossTopicReturnGuardKey = snapshotKey(topicId, pageSt)
+    }
+
+    fun isCrossTopicReturnGuardArmedFor(topicId: Int, pageSt: Int): Boolean =
+            crossTopicReturnGuardKey != null &&
+                    crossTopicReturnGuardKey == snapshotKey(topicId, pageSt)
+
+    fun clearCrossTopicReturnGuard() {
+        crossTopicReturnGuardKey = null
+    }
 
     fun consumeBackSnapshot(topicId: Int, pageSt: Int): TopicBackSnapshot? =
             backSnapshots.remove(snapshotKey(topicId, pageSt))
@@ -117,6 +177,9 @@ class ThemeHistoryController {
             // ScrollY differs by more than the threshold — keep both so BACK can
             // actually return the user to the previous scroll position.
         }
+        // A genuine in-tab forward navigation invalidates the cross-topic return guard: the user
+        // moved to a new page within this tab, so the next back is an ordinary in-tab pop.
+        crossTopicReturnGuardKey = null
         history.add(themePage)
         if (BuildConfig.DEBUG) {
             Timber.d("saveToHistory: topicId=${themePage.id} st=${themePage.st} historySize=${history.size}")
@@ -159,6 +222,11 @@ class ThemeHistoryController {
                 // is set, do not silently drop it.
                 val prevAnchor = canonicalAnchor(prev)
                 themePage.anchorPostId = prevAnchor ?: prev.anchorPostId
+                // Multi-back anchor loss fix: preserve the authoritative explicit-open anchor across
+                // REFRESH/BACK so a re-rendered findpost page keeps restoring its original source post.
+                if (themePage.authoritativeAnchorPostId.isNullOrBlank()) {
+                    themePage.authoritativeAnchorPostId = prev.authoritativeAnchorPostId
+                }
                 themePage.anchorOffsetTop = prev.anchorOffsetTop
                 themePage.scrollRatio = prev.scrollRatio
                 themePage.wasNearBottom = prev.wasNearBottom
@@ -206,6 +274,33 @@ class ThemeHistoryController {
      * @return Пара (ThemePage, Boolean) где Boolean = true если нужно загрузить с сервера (html пустой)
      */
     fun backPage(): ThemePage? {
+        // C-fix: if the in-tab top entry is the source of a cross-topic open, the user is
+        // returning to it from Topic B's (now-closed) tab — restore it in place rather than
+        // popping past it onto an earlier page of the same topic.
+        val top = history.lastOrNull()
+        if (top != null &&
+                crossTopicReturnGuardKey != null &&
+                crossTopicReturnGuardKey == snapshotKey(top.id, top.st)
+        ) {
+            crossTopicReturnGuardKey = null
+            if (BuildConfig.DEBUG) {
+                Timber.d(
+                        "backPage: cross-topic return restore-in-place id=${top.id} st=${top.st} historySize=${history.size}"
+                )
+            }
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "back cross_topic_return_in_place topic=${top.id} st=${top.st} page=${top.pagination.current} url=${top.url} anchor=${top.anchorPostId} y=${top.scrollY} size=${history.size}"
+            )
+            NavBackstackTrace.log(
+                    event = "theme_history_cross_topic_return",
+                    navigator = "ThemeHistoryController",
+                    topicId = top.id,
+                    historySize = history.size,
+                    reason = "restore_in_place"
+            )
+            return top
+        }
         if (history.size <= 1) return null
         history.removeAt(history.size - 1)
         val prev = history.last()
@@ -276,6 +371,26 @@ class ThemeHistoryController {
             )
             return
         }
+        val keepAuthoritative = anchorPostId != null && ThemeAuthoritativeAnchorPolicy.shouldKeepAuthoritative(
+                authoritativeAnchorPostId = target.authoritativeAnchorPostId,
+                candidateAnchorPostId = anchorPostId,
+        )
+        if (keepAuthoritative) {
+            // Geometry consistency fix (device log 25_06-22-18-38): a trailing visible-anchor
+            // snapshot (e.g. onPauseOrHide JS capture of post 143860995 at y=11810) must NOT
+            // overwrite this entry's AUTHORITATIVE explicit-open anchor (143876380 at y=3807)
+            // — nor its scroll geometry. Earlier fixes correctly preserved `anchorPostId` but
+            // still wrote the visible post's `scrollY`/`anchorOffsetTop`/`scrollRatio` and fed
+            // that inconsistent tuple into the back snapshot, so BACK loaded #entry143876380 but
+            // scrolled to the visible post's screen location. When the authoritative anchor wins,
+            // reject the ENTIRE geometry mutation and do NOT capture a new back snapshot — the
+            // existing snapshot for the authoritative post survives untouched.
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "updatePage kept authoritative topic=${target.id} st=${target.st} page=${target.pagination.current} authoritativePostId=${target.authoritativeAnchorPostId} ignoredPost=$anchorPostId ignoredY=$scrollY"
+            )
+            return
+        }
         target.html = html
         target.scrollY = scrollY
         if (anchorPostId != null) {
@@ -313,6 +428,7 @@ class ThemeHistoryController {
     fun clear() {
         history.clear()
         backSnapshots.clear()
+        crossTopicReturnGuardKey = null
     }
 
     /**

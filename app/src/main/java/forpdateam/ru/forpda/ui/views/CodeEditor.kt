@@ -151,6 +151,7 @@ class CodeEditor @JvmOverloads constructor(
 
     private fun cancelUpdate() {
         updateHandler.removeCallbacks(updateRunnable)
+        scrollerTask?.let { task -> scrollView?.removeCallbacks(task) }
     }
 
     private fun highlightWithoutChange(e: Editable) {

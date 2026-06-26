@@ -267,7 +267,64 @@ object TopicUnreadOpenPolicy {
                 page.pagination.current < page.pagination.all) {
             return true
         }
+        // Log 25_06-10-09 (1103268): a GENUINE first-unread open (server `view=getnewpost` resolved
+        // a real unread target) that happens to land on the LAST page was being marked read the
+        // instant the page loaded (`theme_last_page_loaded`), even though the user was positioned AT
+        // the first-unread post (near the top of a tall last page) and had NOT read to the end. That
+        // turned every subsequent open into a READ_RESUME that restored a saved/already-read post —
+        // the "unread topic opens at an already-read post every time" symptom. Suppress the eager
+        // load-time mark-read whenever the page carries a real unread target and the user was NOT
+        // positioned at the very bottom: the existing scroll-to-bottom exit-policy gate still marks
+        // the topic read once the user actually reaches the end. When the unread target IS the
+        // bottom post (`resumeToLastPageBottom`/near-bottom anchor), the user is already at the end,
+        // so the normal mark-read stands.
+        if (shouldSuppressMarkReadForFirstUnreadOpen(sessionKind, page)) {
+            return true
+        }
         return false
+    }
+
+    /**
+     * @return true when a genuine first-unread open must NOT be auto-marked read on page load.
+     *
+     * Conditions (all required):
+     *  - the open session is a server unread navigation — [TopicOpenSessionKind.FIRST_UNREAD], OR
+     *    [TopicOpenSessionKind.EXPLICIT_POST] (the findpost-reload of a getnewpost-resolved unread
+     *    post: the session is reclassified EXPLICIT_POST but the page still carries the real unread
+     *    target — log 25_06-10-09 trace dc7bdeb7), and
+     *  - the parsed page actually carries an unread target ([ThemePage.hasUnreadTarget]), and
+     *  - the unread anchor is NOT the bottom of the page — i.e. the resume-to-bottom flag is not set
+     *    and the resolved anchor post is not the last post on the page. When the unread post is the
+     *    last post, the user is already at the end and the normal end-of-topic mark-read applies.
+     *
+     * The decisive signal is [ThemePage.hasUnreadTarget]: a pure explicit bookmark/mention deep
+     * link (no server unread resolution) does NOT set it, so those opens are unaffected and still
+     * mark read on the last page as before.
+     */
+    fun shouldSuppressMarkReadForFirstUnreadOpen(
+            sessionKind: TopicOpenSessionKind?,
+            page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
+    ): Boolean {
+        val isUnreadNavSession = sessionKind == TopicOpenSessionKind.FIRST_UNREAD ||
+                sessionKind == TopicOpenSessionKind.EXPLICIT_POST
+        if (!isUnreadNavSession) return false
+        if (!page.hasUnreadTarget) return false
+        if (page.resumeToLastPageBottom) return false
+        val anchorId = page.anchorPostId
+                ?.removePrefix("entry")
+                ?.trim()
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?: page.anchor
+                        ?.removePrefix("entry")
+                        ?.trim()
+                        ?.toIntOrNull()
+                        ?.takeIf { it > 0 }
+                ?: return true // unread target present but no resolvable anchor — be safe, suppress.
+        val lastPostId = page.posts.lastOrNull { it.id > 0 }?.id
+        // Unread post is the last post on the page → user is at the end; let mark-read proceed.
+        if (lastPostId != null && lastPostId == anchorId) return false
+        return true
     }
 
     /**
@@ -340,6 +397,77 @@ object TopicUnreadOpenPolicy {
         // Guard against pathological redirects: id must look like a real post (> 0).
         if (redirectId <= 0) return null
         return redirectId
+    }
+
+    /**
+     * U-01 (audit §4.3 / Finding U-01): a GENUINE unread open (`hasUnreadTarget=true`) whose
+     * resolved first-unread anchor is NOT on the loaded page window must not be silently
+     * realigned to [realignOffPageGetNewPostAnchor]'s `posts.first` fallback — that strands the
+     * user on the first post of the loaded (usually last) page with nothing to highlight.
+     *
+     * Instead reload the topic at `view=findpost&p=<unreadPostId>` to fetch the real page that
+     * actually contains the confirmed first-unread post. Returns that off-page unread post id when
+     * a controlled findpost reload is warranted, else null (on-page targets, or no usable id).
+     *
+     * Distinct from [offPageReadResumeFindPostReloadId] which handles the all-read read-resume
+     * bottom-bookmark case (`hasUnreadTarget=false`).
+     */
+    fun offPageUnreadFindPostReloadId(
+            page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
+    ): Int? {
+        if (!page.hasUnreadTarget) return null
+        if (page.posts.isEmpty()) return null
+        if (!isOffPageGetNewPostAnchor(page)) return null
+        // Prefer the parser-confirmed first-unread anchor over the server redirect hash: the anchor
+        // is the resolved unread target, the redirect hash may be a bottom/top bookmark.
+        val anchorId = page.anchorPostId?.trim()?.removePrefix("entry")?.toIntOrNull()
+                ?: page.anchor?.removePrefix("entry")?.trim()?.toIntOrNull()
+                ?: return null
+        if (anchorId <= 0) return null
+        // Defensive: only reload when the unread anchor is genuinely off the loaded window.
+        if (page.posts.any { it.id == anchorId }) return null
+        return anchorId
+    }
+
+    /**
+     * Log 25_06-10-39 (1103268): a GENUINE list-unread open (`view=getnewpost`, `listUnreadHint`)
+     * whose server redirect lands on the **bottom post of a NON-final page** is the stale "last-read
+     * boundary" — the real first-unread post is the first post of the NEXT page. The current resolver
+     * accepts that bottom entry as a confirmed unread anchor (`reason=redirect_hash`,
+     * `hasUnreadTarget=true`) because [rejectsBottomHash] is disabled for list-unread opens, so the
+     * user is parked on the last post of page N (which they read as "it shows the last post"), the
+     * mark-read gate then skips with `not_last_page` (current=N < all=N+1), and the topic stays unread
+     * forever — every re-open re-resolves getnewpost to the same boundary.
+     *
+     * Detect that case and return the `st` offset of the NEXT page so the caller reloads it (the genuine
+     * unread is at its top). Returns null when this is not a bottom-redirect-on-non-final-page unread
+     * open, so all other flows are untouched.
+     *
+     * @return next-page `st` offset (0-based), or null.
+     */
+    fun nextPageUnreadReloadSt(
+            page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
+    ): Int? {
+        if (!page.hasUnreadTarget) return null
+        if (page.ambiguousLastUnreadBottomRedirect) return null
+        val current = page.pagination.current
+        val all = page.pagination.all
+        val perPage = page.pagination.perPage
+        if (current <= 0 || all <= 0 || perPage <= 0) return null
+        // Must NOT be the final page — when on the last page the bottom post genuinely is the end.
+        if (current >= all) return null
+        val redirectId = ThemeApi.extractHashEntryPostIdFromTopicUrl(page.url.orEmpty())?.toIntOrNull()
+                ?: return null
+        if (redirectId <= 0) return null
+        val lastPostId = page.posts.lastOrNull { it.id > 0 }?.id ?: return null
+        // The server redirect must be the BOTTOM post of the loaded page (the last-read boundary).
+        if (redirectId != lastPostId) return null
+        // The resolved unread anchor must also be that same bottom post (no distinct on-page unread).
+        val anchorId = page.anchorPostId?.trim()?.removePrefix("entry")?.toIntOrNull()
+                ?: page.anchor?.removePrefix("entry")?.trim()?.toIntOrNull()
+        if (anchorId != null && anchorId != redirectId) return null
+        // Next page's 0-based st offset (page numbers are 1-indexed; st = (page-1) * perPage).
+        return current * perPage
     }
 
     /**

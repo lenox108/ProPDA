@@ -19,9 +19,10 @@ class SmilesPanelItem(context: Context, panel: MessagePanel) :
 
         @JvmStatic
         fun getSmiles(): List<ButtonData> {
-            if (smiles != null) return smiles!!
-            smiles = mutableListOf()
-            smiles!!.apply {
+            smiles?.let { return it }
+            val list = mutableListOf<ButtonData>()
+            smiles = list
+            list.apply {
                 add(ButtonData(":happy:", "happy.gif"))
                 add(ButtonData(";)", "wink.gif"))
                 add(ButtonData(":P", "tongue.gif"))
@@ -185,17 +186,18 @@ class SmilesPanelItem(context: Context, panel: MessagePanel) :
                 add(ButtonData(":ohmy:", "ohmy.gif"))
                 add(ButtonData(":smile:", "smile.gif"))
             }
-            return smiles!!
+            return list
         }
 
         @JvmStatic
         fun getUrlToAssets(): List<String> {
-            if (urlToAssets != null) return urlToAssets!!
-            urlToAssets = mutableListOf()
+            urlToAssets?.let { return it }
+            val list = mutableListOf<String>()
             for (data in getSmiles()) {
-                urlToAssets!!.add("assets://smiles/${data.icon}")
+                list.add("assets://smiles/${data.icon}")
             }
-            return urlToAssets!!
+            urlToAssets = list
+            return list
         }
     }
 

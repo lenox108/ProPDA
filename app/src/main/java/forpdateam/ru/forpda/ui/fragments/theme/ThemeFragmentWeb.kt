@@ -106,8 +106,22 @@ private const val THEME_ALPHA_REVEAL_SAFETY_DELAY_MS = 3200L
 private const val THEME_SCROLL_STUCK_REVEAL_DELAY_MS = 2000L
 private const val MAX_INITIAL_ANCHOR_REVEAL_ATTEMPTS = 1
 private const val NATIVE_UNREAD_ANCHOR_FALLBACK_DELAY_MS = 500L
+/**
+ * S-01 / R-03: window (ms) the JS DOM-anchor fallback yields for the Kotlin
+ * INITIAL_ANCHOR command. Must comfortably exceed the gap between the DOM-content
+ * batch and a late `onPageComplete` dispatch of the command, while staying short
+ * enough that a genuinely command-less load still gets the JS safety net.
+ */
+private const val INITIAL_ANCHOR_KOTLIN_HANDSHAKE_MS = 700
 private var initialAnchorGuardWatchdogGeneration = 0
 private var nativeUnreadAnchorFallbackGeneration = 0
+/**
+ * Reveal-at-anchor (A/B): max time the WebView reveal waits for the INSTANT JS anchor scroll
+ * (explicit-post / BACK / refresh) to position the viewport before failing open. The JS retry
+ * ladder is [1,120,400,900]ms; 700ms covers the common 400ms attempt that lands the post while
+ * staying short enough that a genuinely command-less load reveals promptly.
+ */
+private const val JS_ANCHOR_REVEAL_RELEASE_DELAY_MS = 700L
 private const val THEME_RENDER_WATCHDOG_BASE_DELAY_MS = 2500L
 private const val THEME_RENDER_WATCHDOG_LARGE_HTML_DELAY_MS = 5000L
 private const val THEME_RENDER_WATCHDOG_HUGE_HTML_DELAY_MS = 8000L
@@ -198,6 +212,10 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     private var alphaRevealWatchdogGeneration = 0
     private var blockingScrollStuckWatchdogGeneration = 0
     private var initialAnchorRevealAttempts = 0
+    /** Reveal-at-anchor (A/B): set once the JS anchor scroll release watchdog has fired or the page positioned, so a subsequent reveal evaluation no longer holds for it. Reset on each new render. */
+    private var jsAnchorRevealReleased = false
+    /** Reveal-at-anchor (A/B): per-instance generation guard so a stale JS-anchor release watchdog from a previous render cannot reveal a newer one. */
+    private var jsAnchorRevealWatchdogGeneration = 0
     private var lastRenderAt: Long = 0L
     private var pendingRenderPage: ThemePage? = null
     private var renderCount: Int = 0
@@ -209,6 +227,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     private var pageSwipeDirectionLabel: TextView? = null
     private lateinit var loadingIndicator: ThemeLoadingIndicator
     private var lastHybridEdgeLogAt = 0L
+    private var suppressTopAutoloadAfterUnreadRevealUntilMs = 0L
     private var suppressToolbarScrollUntilMs = 0L
     private var programmaticToolbarScrollSuppressActive = false
     private val hybridEdgeThresholdPx: Int
@@ -1098,6 +1117,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         if (!shouldStartRender) return
         renderGuard.invalidate()
         themeBlankRetryCount = 0
+        suppressTopAutoloadAfterUnreadRevealUntilMs = 0L
         val renderStarted = webController.renderThemePage(page, force = true)
         TopicScrollTrace.render(
                 event = if (renderStarted) "render_start" else "render_skipped",
@@ -1116,6 +1136,9 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             return
         }
         webView.alpha = 0f
+        // Reveal-at-anchor (A/B): a fresh render re-arms the JS-anchor reveal hold.
+        jsAnchorRevealReleased = false
+        jsAnchorRevealWatchdogGeneration++
         super.updateView(page)
         if (presenter.isEndNavigationPending()) {
             postOnActiveWebView(280L) {
@@ -1262,11 +1285,28 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
 
     private fun revealWebView(reason: String) {
         if (!::webView.isInitialized) return
-        if (webView.visibility == View.VISIBLE && webView.alpha >= 1f) return
-        webView.animate().cancel()
-        webView.visibility = View.VISIBLE
-        webView.alpha = 1f
-        if (BuildConfig.DEBUG) Log.i(REFRESH_SCROLL_TAG, "webView reveal reason=$reason")
+        val alreadyVisible = webView.visibility == View.VISIBLE && webView.alpha >= 1f
+        if (!alreadyVisible) {
+            webView.animate().cancel()
+            webView.visibility = View.VISIBLE
+            webView.alpha = 1f
+            if (BuildConfig.DEBUG) Log.i(REFRESH_SCROLL_TAG, "webView reveal reason=$reason")
+        }
+        // H-01 (audit Finding H-01) / log 24_06-20-37 (1121483/1103268/621742/826244): the first
+        // highlight arm at dom-render is deferred while a blocking initial-anchor/refresh scroll is
+        // pending (deferApply=true, reason=deferred_until_scroll_settled). The deferred re-arm fires
+        // from [ThemeWebController.onWebViewContentRevealed].
+        //
+        // Bug: this re-arm trigger used to be gated behind the visibility TRANSITION (the early
+        // `return` when the WebView was already VISIBLE). After the FIRST topic the WebView stays
+        // visible across opens (line ~1070 reveals `beforeRender`), so every subsequent topic open
+        // early-returned here WITHOUT calling `onWebViewContentRevealed` — the deferred highlight was
+        // never re-armed and the outline never painted (zero `js_highlight_applied` in the device
+        // log across many opens). Decouple the re-arm from the visibility flip: always notify the
+        // controller that content is shown. `onWebViewContentRevealed` self-guards on
+        // `hasBlockingScrollPending` and is idempotent per render generation, so an extra call when
+        // already visible cannot double-apply or re-flash.
+        webController.onWebViewContentRevealed()
     }
 
     private fun postOnActiveView(delayMillis: Long = 0L, action: () -> Unit) {
@@ -1487,6 +1527,22 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         val bottomDistance = contentHeightPx - (scrollY + viewportHeightPx)
         when {
             scrollY <= hybridEdgeThresholdPx -> {
+                if (ThemeUnreadHybridAnchorGuardPolicy.shouldSuppressTopAutoloadAfterUnreadAnchorReveal(
+                                suppressTopAutoloadUntilMs = suppressTopAutoloadAfterUnreadRevealUntilMs,
+                                nowMs = SystemClock.uptimeMillis(),
+                        )
+                ) {
+                    logHybridEdgeThrottled("native edge top suppressed (unread anchor reveal) scrollY=$scrollY")
+                    return
+                }
+                if (ThemeUnreadHybridAnchorGuardPolicy.shouldSuppressTopAutoloadDuringJsAnchorPositioning(
+                                expectsJsAnchorPositioning = presenter.expectsJsAnchorPositioningOnOpen(),
+                                jsAnchorRevealReleased = jsAnchorRevealReleased,
+                        )
+                ) {
+                    logHybridEdgeThrottled("native edge top suppressed (js anchor positioning) scrollY=$scrollY")
+                    return
+                }
                 logHybridEdgeThrottled("native edge top scrollY=$scrollY content=$contentHeightPx viewport=$viewportHeightPx")
                 presenter.requestInfinitePage("top")
             }
@@ -1951,13 +2007,22 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                     )
             )
         }
-        if (loadAction == forpdateam.ru.forpda.presentation.theme.ThemeLoadAction.Normal &&
+        // S-01 / R-03: when Kotlin owns the initial-anchor scroll for this open,
+        // announce the handshake so the JS DOM-anchor fallback yields for the
+        // command instead of racing on event order. Armed independently of
+        // whether the command is dispatched in THIS batch or a later
+        // onPageComplete batch — both are covered by the same predicate.
+        val kotlinOwnsInitialAnchor = loadAction == forpdateam.ru.forpda.presentation.theme.ThemeLoadAction.Normal &&
                 !isEndNavigation &&
                 !isRefreshNavigation &&
                 !isPostedPageScroll &&
-                presenter.shouldArmInitialAnchorOnPageComplete() &&
-                !anchorToUse.isNullOrBlank()
-        ) {
+                presenter.shouldArmInitialAnchorOnPageComplete()
+        if (kotlinOwnsInitialAnchor) {
+            actions.add(jsApi.setThemeInitialAnchorExpected(INITIAL_ANCHOR_KOTLIN_HANDSHAKE_MS))
+        } else {
+            actions.add(jsApi.setThemeInitialAnchorExpected(0))
+        }
+        if (kotlinOwnsInitialAnchor && !anchorToUse.isNullOrBlank()) {
             actions.add(
                     webController.buildScrollCommandAction(ThemeScrollCommand.initialAnchor())
             )
@@ -2037,6 +2102,12 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                 if (presenter.shouldBlockHybridUntilInitialAnchorSettled()) {
                     presenter.releaseUnreadAnchorHybridGuard("native_anchor_fallback")
                 }
+                // S1: releasing the anchor guard re-enables native edge autoload; the anchor we just
+                // scrolled sits near the content top, so without this short window `native edge top`
+                // would immediately insert the previous page and visibly ramp the scroll. Hold top
+                // inserts briefly so the revealed anchor stays positioned (bottom/user scroll unaffected).
+                suppressTopAutoloadAfterUnreadRevealUntilMs = SystemClock.uptimeMillis() +
+                        ThemeUnreadHybridAnchorGuardPolicy.TOP_AUTOLOAD_SUPPRESS_AFTER_REVEAL_MS
                 revealThemeContentIfReady("nativeAnchorFallback")
             }
         }
@@ -2274,6 +2345,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         val expectsInitialAnchorScroll = presenter.expectsInitialAnchorScrollOnOpen()
         val hasUnreadTarget = page?.hasUnreadTarget == true
         val safetyFallbackReveal = ThemeOpenScrollCoalescePolicy.isSafetyFallbackRevealReason(reason)
+        val expectsJsAnchorScroll = presenter.expectsJsAnchorPositioningOnOpen()
         if (ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
                         hasBlockingScrollPending = presenter.hasBlockingScrollPending(),
                         expectedPosts = expectedPosts,
@@ -2286,18 +2358,22 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                         blockingScrollKind = presenter.getPendingScrollCommand()?.kind,
                         hasUnreadTarget = hasUnreadTarget,
                         primaryOpenComplete = presenter.isPrimaryOpenComplete(),
+                        expectsJsAnchorScroll = expectsJsAnchorScroll,
+                        jsAnchorScrollSettled = jsAnchorRevealReleased,
                 )
         ) {
             if (BuildConfig.DEBUG) {
                 Log.i(
                         REFRESH_SCROLL_TAG,
-                        "defer webView reveal reason=$reason content=${webView.contentHeight} expectedPosts=$expectedPosts blockingScroll=${presenter.hasBlockingScrollPending()} renderComplete=$renderComplete domPostsVerified=$domPostsVerified expectsInitialAnchor=$expectsInitialAnchorScroll safetyFallback=$safetyFallbackReveal"
+                        "defer webView reveal reason=$reason content=${webView.contentHeight} expectedPosts=$expectedPosts blockingScroll=${presenter.hasBlockingScrollPending()} renderComplete=$renderComplete domPostsVerified=$domPostsVerified expectsInitialAnchor=$expectsInitialAnchorScroll expectsJsAnchor=$expectsJsAnchorScroll safetyFallback=$safetyFallbackReveal"
                 )
             }
             if (presenter.hasBlockingScrollPending() && renderComplete && renderKey.isNotEmpty()) {
                 scheduleBlockingScrollStuckRevealIfNeeded(renderKey)
             } else if (expectsInitialAnchorScroll && renderComplete && renderKey.isNotEmpty()) {
                 scheduleInitialAnchorGuardReleaseIfNeeded(renderKey)
+            } else if (expectsJsAnchorScroll && renderComplete && renderKey.isNotEmpty()) {
+                scheduleJsAnchorRevealReleaseIfNeeded(renderKey)
             }
             return
         }
@@ -2327,6 +2403,27 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             )
             presenter.releaseUnreadAnchorHybridGuard("render_watchdog_timeout")
             revealThemeContentIfReady("anchorGuardTimeout")
+        }
+    }
+
+    /**
+     * Reveal-at-anchor (A/B): hold the WebView hidden until the INSTANT JS anchor scroll
+     * (explicit-post open / BACK / refresh restore) has positioned the viewport, then reveal so
+     * the content is uncovered already at the post — no multi-second visible auto-scroll. Bounded
+     * by [JS_ANCHOR_REVEAL_RELEASE_DELAY_MS] so it can never trap alpha=0: the watchdog always
+     * reveals when it fires. Releasing early once the page has scrolled off the top keeps the
+     * reveal snappy on fast loads.
+     */
+    private fun scheduleJsAnchorRevealReleaseIfNeeded(renderKey: String) {
+        val generation = ++jsAnchorRevealWatchdogGeneration
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main.immediate) {
+            delay(JS_ANCHOR_REVEAL_RELEASE_DELAY_MS)
+            if (!isAdded || view == null || !::webView.isInitialized) return@launch
+            if (generation != jsAnchorRevealWatchdogGeneration) return@launch
+            if (renderKey != lastRenderKey) return@launch
+            if (webView.alpha >= 1f) return@launch
+            jsAnchorRevealReleased = true
+            revealThemeContentIfReady("scrollStuckReveal")
         }
     }
 

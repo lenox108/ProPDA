@@ -30,6 +30,11 @@ class ThemeParser(
 
     private companion object {
         const val UNREAD_OPEN_ANCHOR_TAG = "FPDA_THEME_UNREAD_OPEN"
+        /** U-02: resolver exits that suppress the unread target by classifying the redirect bookmark. */
+        val UNREAD_SUPPRESSED_REASONS = setOf(
+                "all_read_bottom_redirect",
+                "page_top_redirect_no_unread",
+        )
         val USER_POST_COUNT_RAW_PATTERNS = listOf(
                 Regex("""(?is)\bdata-member-posts\b\s*=\s*["']?([0-9][0-9\s.,]*)"""),
                 Regex("""(?is)(?:[Сс]ообщени[йя]|[Пп]ост(?:ов|а|ы)?|[Pp]osts?)(?![а-яА-Яa-zA-Z])(?:\s|&nbsp;|&#160;|&#x0?A0;|:|</?[^>]+>)*([0-9][0-9\s.,]*)""")
@@ -482,9 +487,10 @@ class ThemeParser(
             )
             return
         }
-        page.posts.firstOrNull()?.id?.let {
-            page.addAnchor("entry$it")
-            page.anchorPostId = it.toString()
+        val firstParsedPostId = page.posts.firstOrNull()?.id
+        if (firstParsedPostId != null) {
+            page.addAnchor("entry$firstParsedPostId")
+            page.anchorPostId = firstParsedPostId.toString()
             page.hasUnreadTarget = true
             logUnreadOpenAnchor(
                     reason = "fallback_first_parsed_post",
@@ -495,6 +501,23 @@ class ThemeParser(
                     entryIds = entryIds,
                     page = page,
                     html = html
+            )
+        } else {
+            // Phase 1 (audit §13): guarantee resolveGetNewPostAnchor emits a single structured trace
+            // on EVERY exit path. The empty-page `no_anchor` outcome previously logged nothing, hiding
+            // which branch fired for problems #1/#2/#9. hasUnreadTarget is already stamped above;
+            // emit the resolver reason verbatim so the no-anchor exit is observable.
+            logUnreadOpenAnchor(
+                    reason = resolution.reason,
+                    anchor = page.anchor,
+                    hasUnreadTarget = resolution.hasUnreadTarget,
+                    openFromUnreadListHint = openFromUnreadListHint,
+                    redirectHashId = redirectHashId,
+                    entryIds = entryIds,
+                    page = page,
+                    html = html,
+                    bottomHashRejected = resolution.bottomHashRejected,
+                    ambiguousBottomRedirect = resolution.ambiguousBottomRedirect
             )
         }
     }
@@ -555,6 +578,24 @@ class ThemeParser(
                         "ambiguousBottomRedirect" to ambiguousBottomRedirect,
                 ),
         )
+        // U-02 (audit Finding U-02): a topic with HTML-unread markers whose anchor resolution still
+        // ended on a redirect-bookmark classification (no confirmed unread target) likely had a valid
+        // first-unread suppressed. Emit a warning so this is visible at runtime without changing the
+        // resolution itself.
+        if (!hasUnreadTarget &&
+                reason in UNREAD_SUPPRESSED_REASONS &&
+                serverUnreadIds.isNotEmpty()
+        ) {
+            forpdateam.ru.forpda.diagnostic.TopicUnreadAnchorDiagnostics.unreadTargetSuppressed(
+                    topicId = page.id,
+                    reason = reason,
+                    redirectEntryId = redirectHashId,
+                    htmlUnreadCount = serverUnreadIds.size,
+                    listUnreadHint = openFromUnreadListHint,
+                    pageCurrent = page.pagination.current,
+                    pageTotal = page.pagination.all,
+            )
+        }
         if (BuildConfig.DEBUG) {
             Timber.tag(UNREAD_OPEN_ANCHOR_TAG).i(
                     "ensureGetNewPostAnchor reason=%s anchor=%s hasUnreadTarget=%s listUnreadHint=%s " +

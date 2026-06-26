@@ -95,6 +95,67 @@ class TemplateCssComposer(
      */
     fun composeHash(): Int = compose().hashCode()
 
+    /**
+     * Palette-aware "where I stopped" highlight ring, injected into
+     * [getThemeLayoutSafetyCss] (which runs LAST in [compose], after every
+     * per-palette override composer) immediately after the `--ppda-accent`
+     * `:root` declaration it depends on.
+     *
+     * CAUSE-2 fix (Audit Findings H-04 + follow-up): several palettes declare
+     * `.post_container { box-shadow: inset 0 0 0 1px <palette-border> !important }`
+     * — sepia (`--sepia-border`), sepia-blue (`--sepia-blue-border`), amoled
+     * (`#1a1a1a`). That pale 1px palette border kept WINNING the box-shadow
+     * PROPERTY on device even though our highlight selector out-specifies it
+     * (device log: `boxShadow=[rgb(53,65,72) 0 0 0 1px inset, ...]` ==
+     * dark `--sepia-blue-border`). Because a single `box-shadow` is one
+     * property, the palette rule and the ring rule fight for the SAME property,
+     * and on this build the palette won regardless.
+     *
+     * The robust fix: draw the visible contour as a transparent-fill BORDER on
+     * a dedicated `::before` pseudo-element. `border` on `::before` is a
+     * DIFFERENT property on a DIFFERENT box, so NO `.post_container {
+     * box-shadow }` palette rule can ever override it. `inset:0 + border` keeps
+     * the ring inside the wrapper's `overflow:hidden`, so it is visible on ALL
+     * FOUR sides (the box-shadow-only version showed only top/bottom on
+     * full-bleed posts). The inset box-shadow is kept only as a soft inner glow.
+     *
+     * The ring colour resolves to the palette-aware `--ppda-accent` defined just
+     * above it in the same CSS block, so the contour matches the active palette
+     * (blue on sepia-blue, warm on sepia, etc.). NO `background` tint (the
+     * "whole post flashes" defect) and NO `color-mix()` (breaks pre-Chromium-111
+     * WebViews). The fading class fades the `::before` opacity to 0.
+     */
+    private val topicHighlightRingOverrideCss: String = """
+body#topic .post_container.ppda_highlight_post::before {
+    content: "" !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    border: 0.1875rem solid var(--ppda-accent, var(--surface-accent, #2177af)) !important;
+    -webkit-border-radius: inherit !important;
+    border-radius: inherit !important;
+    background: transparent !important;
+    pointer-events: none !important;
+    z-index: 5 !important;
+    opacity: 1 !important;
+    -webkit-transition: opacity 0.3s ease !important;
+    transition: opacity 0.3s ease !important;
+}
+body#topic .post_container.ppda_highlight_post.ppda_highlight_fading::before {
+    opacity: 0 !important;
+}
+body#topic .post_container.ppda_highlight_post {
+    -webkit-box-shadow: inset 0 0 0.5rem 0.1rem var(--ppda-accent, var(--surface-accent, #2177af)) !important;
+    box-shadow: inset 0 0 0.5rem 0.1rem var(--ppda-accent, var(--surface-accent, #2177af)) !important;
+}
+body#topic .post_container.ppda_highlight_post.ppda_highlight_fading {
+    -webkit-box-shadow: inset 0 0 0 0 rgba(0, 0, 0, 0) !important;
+    box-shadow: inset 0 0 0 0 rgba(0, 0, 0, 0) !important;
+}
+""".trimIndent()
+
     private fun getTopicPostActionIconCss(): String {
         val css = """
 body#topic .post_container .post_footer .post_actions_row {
@@ -248,6 +309,7 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
         val accentRootCss = ":root { --ppda-accent: $accent; }\n"
         val css = """
 $accentRootCss
+$topicHighlightRingOverrideCss
 body#topic .post_container .post_header .header_wrapper {
     position: relative !important;
     --post-header-action-right: -1rem !important;

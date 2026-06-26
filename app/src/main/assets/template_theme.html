@@ -812,6 +812,21 @@
         (function () {
             var ppdaHighlight = window.PPDA_HIGHLIGHT || { generationId: 0, postId: 0, type: "none" };
             var ppdaFadeout = window.PPDA_FADEOUT || { scheduledGeneration: 0, fadedGeneration: 0 };
+            // Lifecycle bookkeeping so a single highlight lights up ONCE and fades
+            // ONCE (no blink, no stuck-lit). `appliedGeneration`/`appliedPostId`
+            // record the currently-lit target; `fadeTimers` holds the pending
+            // phase-1/phase-2 setTimeout handles so a superseding generation can
+            // cancel them deterministically instead of letting stale timers race.
+            var ppdaApplied = { generation: 0, postId: 0, node: null };
+            var ppdaFadeTimers = [];
+            // Durable "already ran a FULL light+fade cycle" latch, keyed on
+            // (postId, generation). Survives fade completion so a re-apply for a
+            // generation+post that has ALREADY faded is a no-op (not a re-light).
+            // The still-lit window is covered by `ppdaApplied`; this covers the
+            // post-fade window. A genuinely new generation/post does not match
+            // and still lights up once. Mirrors the native completion latch
+            // (HighlightArmingPolicy.isHighlightCycleAlreadyCompleted).
+            var ppdaDone = { generation: 0, postId: 0 };
 
             function ppdaIsInViewport(el) {
                 if (!el || typeof el.getBoundingClientRect !== "function") return false;
@@ -823,11 +838,27 @@
                     rect.top < vh && rect.left < vw;
             }
 
+            function ppdaCancelFadeTimers() {
+                for (var t = 0; t < ppdaFadeTimers.length; t++) {
+                    try { clearTimeout(ppdaFadeTimers[t]); } catch (_) {}
+                }
+                ppdaFadeTimers = [];
+            }
+
             function ppdaClearHighlightClasses(el) {
-                if (!el || !el.classList || el.__ppdaHighlightDone) return;
-                el.__ppdaHighlightDone = true;
+                if (!el || !el.classList) return;
                 el.classList.remove("ppda_highlight_post");
                 el.classList.remove("ppda_highlight_fading");
+            }
+
+            // Strip the highlight from every node that still carries it. Used when a
+            // NEW generation supersedes an in-flight one so the previous target is
+            // cleared cleanly (no double-lit posts, no stuck ring).
+            function ppdaClearAllHighlights() {
+                var nodes = document.querySelectorAll(".post_container.ppda_highlight_post, .post_container.ppda_highlight_fading");
+                for (var i = 0; i < nodes.length; i++) {
+                    ppdaClearHighlightClasses(nodes[i]);
+                }
             }
 
             function ppdaApplyHighlightToNode(target, postId, type) {
@@ -836,7 +867,6 @@
                     return;
                 }
                 var classBefore = target.className;
-                target.__ppdaHighlightDone = false;
                 target.classList.add("ppda_highlight_post");
                 target.classList.remove("ppda_highlight_fading");
                 // Diagnostic: proves on-device whether the class actually lands on
@@ -844,6 +874,11 @@
                 // box-shadow/outline. Surfaces in WebConsole (CustomWebChromeClient).
                 try {
                     var cs = window.getComputedStyle ? window.getComputedStyle(target) : null;
+                    // The visible contour is now a `::before` bordered ring (a different
+                    // property/box than `.post_container { box-shadow }`, which a palette
+                    // rule could otherwise override). Read the pseudo-element border so the
+                    // device log proves the adaptive accent colour + 4-side ring width.
+                    var csb = window.getComputedStyle ? window.getComputedStyle(target, "::before") : null;
                     console.log(
                         "PPDA_HL applied postId=" + postId +
                         " type=" + type +
@@ -851,6 +886,11 @@
                         " dataPostId=" + target.getAttribute("data-post-id") +
                         " classBefore=[" + classBefore + "]" +
                         " classAfter=[" + target.className + "]" +
+                        " ringBorder=[" + (csb ? (csb.borderTopWidth + " " + csb.borderTopStyle + " " + csb.borderTopColor) : "n/a") + "]" +
+                        " ringWidths=[t=" + (csb ? csb.borderTopWidth : "n/a") +
+                            " r=" + (csb ? csb.borderRightWidth : "n/a") +
+                            " b=" + (csb ? csb.borderBottomWidth : "n/a") +
+                            " l=" + (csb ? csb.borderLeftWidth : "n/a") + "]" +
                         " boxShadow=[" + (cs ? cs.boxShadow : "n/a") + "]" +
                         " outline=[" + (cs ? (cs.outlineWidth + " " + cs.outlineStyle + " " + cs.outlineColor) : "n/a") + "]" +
                         " bg=[" + (cs ? cs.backgroundColor : "n/a") + "]"
@@ -858,6 +898,9 @@
                 } catch (e) {
                     try { console.log("PPDA_HL diag_error=" + e); } catch (_) {}
                 }
+                ppdaApplied.generation = ppdaHighlight.generationId;
+                ppdaApplied.postId = postId;
+                ppdaApplied.node = target;
                 if (!ppdaIsInViewport(target)) {
                     try { target.scrollIntoView({ block: "center", behavior: "smooth" }); }
                     catch (e) { try { target.scrollIntoView(); } catch (_) {} }
@@ -874,13 +917,50 @@
                     try { console.log("PPDA_HL reject stale gen=" + callbackGen + " current=" + ppdaHighlight.generationId); } catch (_) {}
                     return false;
                 }
-                ppdaHighlight.generationId = callbackGen;
-                ppdaHighlight.postId = Number(postId) || 0;
-                ppdaHighlight.type = String(type || "none");
-                if (ppdaHighlight.postId === 0 || ppdaHighlight.type === "none") {
-                    try { console.log("PPDA_HL reject empty postId/type postId=" + ppdaHighlight.postId + " type=" + ppdaHighlight.type); } catch (_) {}
+                var nextPostId = Number(postId) || 0;
+                var nextType = String(type || "none");
+                if (nextPostId === 0 || nextType === "none") {
+                    try { console.log("PPDA_HL reject empty postId/type postId=" + nextPostId + " type=" + nextType); } catch (_) {}
                     return false;
                 }
+                // Durable completion latch: this exact (postId, generation) has
+                // already run its single light+fade cycle. Any later re-apply for
+                // the same pair (smart-patch re-render / repeated reveal) is a
+                // NO-OP — must NOT re-light. The native side now also suppresses
+                // these, but keep the JS latch as a defensive backstop.
+                if (callbackGen === ppdaDone.generation && nextPostId === ppdaDone.postId) {
+                    try { console.log("PPDA_HL noop_generation_done postId=" + nextPostId + " gen=" + callbackGen); } catch (_) {}
+                    ppdaHighlight.generationId = callbackGen;
+                    ppdaHighlight.postId = nextPostId;
+                    ppdaHighlight.type = nextType;
+                    return true;
+                }
+                // Idempotency: a re-apply for the SAME (postId, generation) that is
+                // already lit and has NOT yet faded must NOT churn the classes. The
+                // native side re-issues apply on every reapplyTopicHighlight (scroll
+                // settled, content revealed); without this guard each re-issue removed
+                // `ppda_highlight_fading` and re-added `ppda_highlight_post`, which
+                // restarted the fade mid-transition — the "lights up, fades, lights
+                // again" blink the user reported.
+                if (callbackGen === ppdaApplied.generation &&
+                    nextPostId === ppdaApplied.postId &&
+                    ppdaFadeout.fadedGeneration !== callbackGen) {
+                    try { console.log("PPDA_HL noop_already_applied postId=" + nextPostId + " gen=" + callbackGen); } catch (_) {}
+                    ppdaHighlight.generationId = callbackGen;
+                    ppdaHighlight.postId = nextPostId;
+                    ppdaHighlight.type = nextType;
+                    return true;
+                }
+                // A genuinely new target/generation supersedes any in-flight one:
+                // cancel its pending fade timers and clear its ring so we never end
+                // up with two lit posts or a stuck ring from the previous generation.
+                ppdaCancelFadeTimers();
+                ppdaClearAllHighlights();
+                ppdaFadeout.scheduledGeneration = 0;
+                ppdaFadeout.fadedGeneration = 0;
+                ppdaHighlight.generationId = callbackGen;
+                ppdaHighlight.postId = nextPostId;
+                ppdaHighlight.type = nextType;
                 var allPosts = document.querySelectorAll(".post_container[data-post-id]");
                 var pagePostIds = {};
                 for (var i = 0; i < allPosts.length; i++) {
@@ -903,7 +983,13 @@
             window.PPDA_scheduleHighlightFadeout = function (generationId, delayMs) {
                 var gen = Number(generationId) || 0;
                 if (gen <= 0) return "rejected";
+                // Exactly ONE fade per generation. If this generation already has a
+                // fade armed (and it has not been superseded), do nothing — re-arming
+                // would restart the 2s hold and could leave the ring stuck lit.
                 if (ppdaFadeout.scheduledGeneration === gen) return "noop_same_generation";
+                // A new generation supersedes any previously-armed fade: cancel its
+                // timers so they cannot fire against this generation's ring.
+                ppdaCancelFadeTimers();
                 ppdaFadeout.scheduledGeneration = gen;
                 ppdaFadeout.fadedGeneration = 0;
                 var holdMs = Number(delayMs);
@@ -911,29 +997,41 @@
                 // Phase 1: keep the highlight fully visible for holdMs, THEN start the
                 // CSS fade by adding `ppda_highlight_fading` (the base class stays so the
                 // transition has something to animate from).
-                setTimeout(function () {
+                var phase1 = setTimeout(function () {
                     if (ppdaFadeout.scheduledGeneration !== gen) return;
                     var fadeNodes = document.querySelectorAll(".post_container.ppda_highlight_post");
                     for (var k = 0; k < fadeNodes.length; k++) {
                         fadeNodes[k].classList.add("ppda_highlight_fading");
-                        fadeNodes[k].__ppdaHighlightDone = false;
                     }
                     // Phase 2: after the CSS transition (~300ms) strip both classes and
-                    // notify native that the fadeout finished.
-                    setTimeout(function () {
+                    // notify native that the fadeout finished. Clear by the recorded
+                    // applied node AND any remaining highlight nodes so the ring is
+                    // GUARANTEED gone (run-to-completion) — never stuck lit.
+                    var phase2 = setTimeout(function () {
                         if (ppdaFadeout.scheduledGeneration !== gen) return;
                         ppdaFadeout.fadedGeneration = gen;
-                        var fadingNodes = document.querySelectorAll(".post_container.ppda_highlight_fading");
-                        for (var m = 0; m < fadingNodes.length; m++) {
-                            ppdaClearHighlightClasses(fadingNodes[m]);
+                        ppdaClearAllHighlights();
+                        // Latch this generation+post as fully done so a later
+                        // re-apply for the same pair is a no-op (no re-light).
+                        if (ppdaApplied.generation === gen && ppdaApplied.postId > 0) {
+                            ppdaDone.generation = gen;
+                            ppdaDone.postId = ppdaApplied.postId;
                         }
+                        if (ppdaApplied.generation === gen) {
+                            ppdaApplied.generation = 0;
+                            ppdaApplied.postId = 0;
+                            ppdaApplied.node = null;
+                        }
+                        ppdaFadeTimers = [];
                         if (typeof IThemePresenter !== "undefined" &&
                             IThemePresenter &&
                             typeof IThemePresenter.highlightFadeoutCompleted === "function") {
                             try { IThemePresenter.highlightFadeoutCompleted(gen); } catch (e) {}
                         }
                     }, 350);
+                    ppdaFadeTimers.push(phase2);
                 }, holdMs);
+                ppdaFadeTimers.push(phase1);
                 return "armed";
             };
         })();

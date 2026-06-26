@@ -412,6 +412,132 @@ class TopicPrependedHatPolicyTest {
                 )
             }
 
+    @Test
+    fun `stripFromNonFirstPage keeps the unread anchor post even when its number is below the window`() {
+        // Device log 26_06-11-11, topic 1122662 last page (19/19): the server prepends the hat
+        // (143681911) and the first-unread anchor (143996702) is the FIRST content post after it, but
+        // its sequential `number` is 0 (unreliable on the getnewpost->findpost reload). Without the
+        // anchor guard the number-window strip removed 143996702 along with the hat, so the highlight
+        // resolver saw it off-page and the open visibly scrolled to the wrong (last) post.
+        val page = deepPage(
+                posts = listOf(
+                        hatPost(id = 143681911, number = 0),
+                        regularPost(id = 143996702, number = 0),
+                        regularPost(id = 143997335, number = 362),
+                        regularPost(id = 143999790, number = 363),
+                )
+        ).apply {
+            pagination.current = 19
+            pagination.all = 19
+            url = "https://4pda.to/forum/index.php?showtopic=1122662&st=360#entry143996702"
+            anchorPostId = "143996702"
+            anchors.add("entry143996702")
+        }
+
+        val kept = TopicPrependedHatPolicy.stripFromNonFirstPage(
+                page = page,
+                requestedPage = 19,
+                knownHatId = null,
+        )
+
+        assertTrue(kept)
+        val ids = page.posts.map { it.id }
+        assertFalse("the prepended hat must be removed", ids.contains(143681911))
+        assertTrue("the unread anchor post must be preserved", ids.contains(143996702))
+        assertEquals(143996702, page.posts.first().id)
+    }
+
+    @Test
+    fun `stripFromNonFirstPage keeps the anchor from page url even when anchors list is cleared`() {
+        // Device log 26_06-12-04, topic 461675: a SECOND strip pass (hat-overlay remap / template
+        // fragment mapping) runs after page.anchors / anchorPostId have been cleared, so the list-based
+        // guard no longer protects the first-unread post and it is re-stripped by the number==0 rule.
+        // The redirect hash in page.url (…#entry143885374) is stable across both passes and must keep
+        // the anchor on the page.
+        val page = deepPage(
+                posts = listOf(
+                        hatPost(id = 21945584, number = 0),
+                        regularPost(id = 143885374, number = 0),
+                        regularPost(id = 143885377, number = 372),
+                        regularPost(id = 143885461, number = 373),
+                )
+        ).apply {
+            pagination.current = 18584
+            pagination.all = 18624
+            url = "https://4pda.to/forum/index.php?showtopic=461675&st=371660#entry143885374"
+            // anchors intentionally left EMPTY and anchorPostId null — the cleared-state regression.
+        }
+
+        val kept = TopicPrependedHatPolicy.stripFromNonFirstPage(
+                page = page,
+                requestedPage = 18584,
+                knownHatId = 21945584,
+        )
+
+        assertTrue(kept)
+        val ids = page.posts.map { it.id }
+        assertFalse("the prepended hat must be removed", ids.contains(21945584))
+        assertTrue("the url-anchor post must be preserved even with empty anchors", ids.contains(143885374))
+        assertEquals(143885374, page.posts.first().id)
+    }
+
+    @Test
+    fun `stripFromNonFirstPage with all-zero post numbers keeps anchor and strips only the known hat`() {
+        // Device log 26_06-12-14, topic 928862: on this deep page the parser left EVERY post at
+        // number==0. The number-based hat heuristic then ate the leading post on each re-strip pass —
+        // once the unread anchor became first it was mis-detected as the hat and removed (via
+        // `post.id == hatId`, before the anchor guard). With numbers unreliable, only the explicitly
+        // known hat must be stripped; all real content (incl. the anchor) stays. No #entry in the url
+        // here so the protection comes purely from the number-reliability gate, not the url fallback.
+        val page = deepPage(
+                posts = listOf(
+                        hatPost(id = 78923713, number = 0),
+                        regularPost(id = 143862484, number = 0),
+                        regularPost(id = 143863252, number = 0),
+                        regularPost(id = 143863329, number = 0),
+                )
+        ).apply {
+            pagination.current = 5226
+            pagination.all = 5240
+            url = "https://4pda.to/forum/index.php?showtopic=928862&st=104500"
+        }
+
+        val kept = TopicPrependedHatPolicy.stripFromNonFirstPage(
+                page = page,
+                requestedPage = 5226,
+                knownHatId = 78923713,
+        )
+
+        assertTrue(kept)
+        val ids = page.posts.map { it.id }
+        assertFalse("the known hat must be removed", ids.contains(78923713))
+        assertTrue("the unread anchor must survive despite number==0", ids.contains(143862484))
+        assertTrue("other content must survive despite number==0", ids.contains(143863252))
+        assertEquals(143862484, page.posts.first().id)
+    }
+
+    @Test
+    fun `stripFromNonFirstPage with all-zero numbers and no known hat does not over-strip content`() {
+        // Same all-zero deep page but the hat id is unknown: the number heuristic must NOT guess and
+        // eat the leading content posts. We keep everything rather than risk stripping the anchor.
+        val page = deepPage(
+                posts = listOf(
+                        regularPost(id = 143862484, number = 0),
+                        regularPost(id = 143863252, number = 0),
+                        regularPost(id = 143863329, number = 0),
+                )
+        ).apply {
+            pagination.current = 5226
+            pagination.all = 5240
+            url = "https://4pda.to/forum/index.php?showtopic=928862&st=104500"
+        }
+
+        TopicPrependedHatPolicy.stripFromNonFirstPage(page, requestedPage = 5226, knownHatId = null)
+
+        assertTrue("the first-unread anchor must not be stripped by the number heuristic", page.posts.any { it.id == 143862484 })
+        assertEquals(143862484, page.posts.first().id)
+    }
+
     private fun deepPage(posts: List<ThemePost>): ThemePage =
             ThemePage().apply {
                 id = 1121483

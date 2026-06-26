@@ -29,26 +29,21 @@ internal class HtmlToSpannedConverter(
         private var sTextDecorationPattern: Pattern? = null
         private var sFontFamilyPattern: Pattern? = null
 
-        private fun getTextAlignPattern(): Pattern {
-            if (sTextAlignPattern == null) sTextAlignPattern = Pattern.compile("(?:\\s+|\\A)text-align\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
-            return sTextAlignPattern!!
-        }
-        private fun getForegroundColorPattern(): Pattern {
-            if (sForegroundColorPattern == null) sForegroundColorPattern = Pattern.compile("(?:\\s+|\\A)color\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
-            return sForegroundColorPattern!!
-        }
-        private fun getBackgroundColorPattern(): Pattern {
-            if (sBackgroundColorPattern == null) sBackgroundColorPattern = Pattern.compile("(?:\\s+|\\A)background(?:-color)?\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
-            return sBackgroundColorPattern!!
-        }
-        private fun getTextDecorationPattern(): Pattern {
-            if (sTextDecorationPattern == null) sTextDecorationPattern = Pattern.compile("(?:\\s+|\\A)text-decoration\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
-            return sTextDecorationPattern!!
-        }
-        private fun getFontFamilyPattern(): Pattern {
-            if (sFontFamilyPattern == null) sFontFamilyPattern = Pattern.compile("(?:\\s+|\\A)font-family\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
-            return sFontFamilyPattern!!
-        }
+        private fun getTextAlignPattern(): Pattern =
+            sTextAlignPattern ?: Pattern.compile("(?:\\s+|\\A)text-align\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
+                .also { sTextAlignPattern = it }
+        private fun getForegroundColorPattern(): Pattern =
+            sForegroundColorPattern ?: Pattern.compile("(?:\\s+|\\A)color\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
+                .also { sForegroundColorPattern = it }
+        private fun getBackgroundColorPattern(): Pattern =
+            sBackgroundColorPattern ?: Pattern.compile("(?:\\s+|\\A)background(?:-color)?\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
+                .also { sBackgroundColorPattern = it }
+        private fun getTextDecorationPattern(): Pattern =
+            sTextDecorationPattern ?: Pattern.compile("(?:\\s+|\\A)text-decoration\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
+                .also { sTextDecorationPattern = it }
+        private fun getFontFamilyPattern(): Pattern =
+            sFontFamilyPattern ?: Pattern.compile("(?:\\s+|\\A)font-family\\s*:\\s*(\\S*)\\b", Pattern.CASE_INSENSITIVE)
+                .also { sFontFamilyPattern = it }
     }
 
     private val mSpannableStringBuilder = SpannableStringBuilder()
@@ -91,7 +86,7 @@ internal class HtmlToSpannedConverter(
             tag.equals("sub", ignoreCase = true) -> start(mSpannableStringBuilder, Sub())
             tag.length == 2 && tag[0].lowercaseChar() == 'h' && tag[1] in '1'..'6' -> startHeading(mSpannableStringBuilder, attributes, tag[1] - '1')
             tag.equals("img", ignoreCase = true) -> startImg(mSpannableStringBuilder, attributes, mImageGetter)
-            mTagHandler != null -> mTagHandler!!.handleTag(true, tag, mSpannableStringBuilder, mReader)
+            else -> mTagHandler?.handleTag(true, tag, mSpannableStringBuilder, mReader)
         }
     }
 
@@ -115,7 +110,7 @@ internal class HtmlToSpannedConverter(
             tag.equals("sup", ignoreCase = true) -> end(mSpannableStringBuilder, Super::class.java, SuperscriptSpan())
             tag.equals("sub", ignoreCase = true) -> end(mSpannableStringBuilder, Sub::class.java, SubscriptSpan())
             tag.length == 2 && tag[0].lowercaseChar() == 'h' && tag[1] in '1'..'6' -> endHeading(mSpannableStringBuilder)
-            mTagHandler != null -> mTagHandler!!.handleTag(false, tag, mSpannableStringBuilder, mReader)
+            else -> mTagHandler?.handleTag(false, tag, mSpannableStringBuilder, mReader)
         }
     }
 

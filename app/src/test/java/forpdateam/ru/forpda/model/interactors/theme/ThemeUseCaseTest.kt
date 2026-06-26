@@ -53,6 +53,8 @@ class ThemeUseCaseTest {
     private val userHolder: IUserHolder = mockk(relaxed = true)
     private val topicPreferencesHolder: TopicPreferencesHolder = mockk(relaxed = true)
     private val mainPreferencesHolder: MainPreferencesHolder = mockk(relaxed = true)
+    private val returnPositionStore =
+            forpdateam.ru.forpda.model.repository.theme.TopicReturnPositionStore()
     private val appScope: CoroutineScope = TestScope(dispatcher)
 
     @Before
@@ -69,6 +71,7 @@ class ThemeUseCaseTest {
             errorHandler,
             eventsRepository,
             favoritesRepository,
+            returnPositionStore,
             userHolder,
             topicPreferencesHolder,
             mainPreferencesHolder,
@@ -204,6 +207,7 @@ class ThemeUseCaseTest {
                 errorHandler = errorHandler,
                 eventsRepository = eventsRepository,
                 favoritesRepository = favoritesRepository,
+                returnPositionStore = returnPositionStore,
                 userHolder = userHolder,
                 topicPreferencesHolder = topicPreferencesHolder,
                 mainPreferencesHolder = mainPreferencesHolder,
@@ -262,6 +266,7 @@ class ThemeUseCaseTest {
                 errorHandler = errorHandler,
                 eventsRepository = eventsRepository,
                 favoritesRepository = favoritesRepository,
+                returnPositionStore = returnPositionStore,
                 userHolder = userHolder,
                 topicPreferencesHolder = topicPreferencesHolder,
                 mainPreferencesHolder = mainPreferencesHolder,

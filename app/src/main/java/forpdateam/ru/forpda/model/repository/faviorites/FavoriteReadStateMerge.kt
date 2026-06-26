@@ -76,10 +76,18 @@ internal object FavoriteReadStateMerge {
                 if (!htmlSaysUnread && network == FavoriteReadState.READ && !hasNewerContentThanCache) {
                     // Log 480/1103268: favorites HTML often lacks +N while inspector still reports unread.
                     // Do not flip a cached-unread row to READ before the user opens the topic.
-                    // On a fresh network refresh, however, the network's READ is the source of
-                    // truth and must replace the cached UNREAD; the inspector hint is treated
-                    // as stale in that case.
-                    if (cachedUnread && !networkIsFreshRefresh) {
+                    //
+                    // Device log 24_06-20-37 (FPDA_FAVORITES_UNREAD): pull-to-refresh
+                    // (networkIsFreshRefresh=true) flipped genuinely-unread rows to READ. The previous
+                    // `!networkIsFreshRefresh` exception treated the refresh's HTML READ as the source
+                    // of truth — but we are INSIDE `if (inspectorUnread)`: the inspector itself
+                    // authoritatively reports unread activity for this topic, and the favorites HTML
+                    // simply lacks the +N marker (a known gap, see above). With BOTH the cache AND the
+                    // inspector saying unread, a refresh that only fails to find +N is NOT authoritative
+                    // evidence the user read the topic — so we MUST preserve UNREAD. Marking READ here
+                    // requires authoritative evidence (inspector says read AND html says read, handled
+                    // by the inspectorUnread=false branch below, or an explicit open/mark elsewhere).
+                    if (cachedUnread) {
                         val count = maxOf(htmlPlusCount, cachedCount).coerceAtLeast(1)
                         return Result(
                                 FavoriteReadState.UNREAD,
