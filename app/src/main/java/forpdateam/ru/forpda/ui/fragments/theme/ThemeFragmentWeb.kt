@@ -1954,6 +1954,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         actions.add("if(typeof resetThemeRuntimeState==='function'){resetThemeRuntimeState();}")
         // Log 292: scheduleSoftLoadAnchorScroll must run AFTER resetThemeRuntimeState — reset calls
         // clearThemeRuntimeAsyncWork() and cancelled the 1ms soft-scroll timer (read topics stayed at y=0).
+        var softAnchorScheduledAsBlockingEnd = false
         if (ThemeDomLoadAnchorPolicy.shouldScheduleSoftAnchorScroll(
                         hasUnreadTarget = hasUnreadTarget,
                         loadAction = loadAction,
@@ -1969,14 +1970,26 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                 // Scroll to the BOTTOM of that final post (like END) instead of its top, otherwise a
                 // tall final post strands the viewport mid-page (ratio ~0.66-0.89, bottom=false).
                 if (pageInstance?.resumeToLastPageBottom == true) {
-                    actions.add(jsApi.scheduleSoftLoadAnchorBottomScroll(postId))
+                    // Device log 26_06-17-52: the non-blocking soft-anchor-bottom scroll has no
+                    // scroll-command completion, so the reveal fired at the page top (reason=scrollSettled)
+                    // and the user SAW the page smooth-scroll down to the last post. Use the BLOCKING
+                    // END-anchor scroll command instead: it is reveal-gated (hasBlockingScrollPending),
+                    // so the page is positioned at the last post BEFORE it is un-hidden — no visible scroll.
+                    softAnchorScheduledAsBlockingEnd = true
+                    actions.add(
+                            webController.buildScrollCommandAction(
+                                    ThemeScrollCommand.endAnchorOrBottom(postId)
+                            )
+                    )
                 } else {
                     actions.add(jsApi.scheduleSoftLoadAnchorScroll(postId))
                 }
             }
-            actions.add(jsApi.clearUnreadAnchorHybridGuard("soft_anchor_scheduled"))
-            // Soft anchor has no scroll-command completion callback — short sticky+fallback only.
-            armToolbarSuppressForProgrammaticScroll()
+            if (!softAnchorScheduledAsBlockingEnd) {
+                actions.add(jsApi.clearUnreadAnchorHybridGuard("soft_anchor_scheduled"))
+                // Soft anchor has no scroll-command completion callback — short sticky+fallback only.
+                armToolbarSuppressForProgrammaticScroll()
+            }
         }
         if (isPostedPageScroll && !postedScrollAnchor.isNullOrBlank()) {
             actions.add(
