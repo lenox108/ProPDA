@@ -902,8 +902,23 @@
                 ppdaApplied.postId = postId;
                 ppdaApplied.node = target;
                 if (!ppdaIsInViewport(target)) {
-                    try { target.scrollIntoView({ block: "center", behavior: "smooth" }); }
-                    catch (e) { try { target.scrollIntoView(); } catch (_) {} }
+                    // Bring the highlighted post into view INSTANTLY. A smooth scrollIntoView here is the
+                    // visible "forced scroll" the user sees on open / link nav / back: the highlight is
+                    // applied AFTER the WebView is revealed and, whenever the anchor/restore scroll did not
+                    // place the post (e.g. the blocking command was abandoned by the reveal watchdog), this
+                    // line animates the viewport all the way to the post (device log 26_06-18-42: page 595
+                    // ramped scrollY 0 -> 1648 over ~680ms, 60fps ease-in-out). This WebView animates
+                    // scrollIntoView even with behavior:"auto", so position via a DIRECT scrollTop assignment,
+                    // which is always instant. Centers the post, matching the old block:"center" intent.
+                    try {
+                        var ppdaRect = target.getBoundingClientRect();
+                        var ppdaSe = document.scrollingElement || document.documentElement;
+                        var ppdaCurY = (ppdaSe ? ppdaSe.scrollTop : 0) || window.pageYOffset || 0;
+                        var ppdaVh = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 0) || 0;
+                        var ppdaY = Math.max(0, Math.round(ppdaRect.top + ppdaCurY - Math.max(0, (ppdaVh - ppdaRect.height) / 2)));
+                        if (ppdaSe) { ppdaSe.scrollTop = ppdaY; }
+                        if (document.body && document.body !== ppdaSe) { document.body.scrollTop = ppdaY; }
+                    } catch (e) {}
                 }
                 if (typeof window.PPDA_scheduleHighlightFadeout === "function") {
                     window.PPDA_scheduleHighlightFadeout(ppdaHighlight.generationId, 2000);
