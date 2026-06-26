@@ -2369,6 +2369,24 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         val hasUnreadTarget = page?.hasUnreadTarget == true
         val safetyFallbackReveal = ThemeOpenScrollCoalescePolicy.isSafetyFallbackRevealReason(reason)
         val expectsJsAnchorScroll = presenter.expectsJsAnchorPositioningOnOpen()
+        // Central guard for ALL safety-reveal watchdogs (alphaRevealSafety / scrollStuckReveal /
+        // renderWatchdog*): while a BACK REFRESH_RESTORE settle loop is still landing on the target
+        // post (theme.js BACK_ANCHOR_SETTLE_DEADLINE_MS), do NOT un-hide the WebView at the page top
+        // mid-settle — that is exactly the "back lands on the first post of the page" bug (device logs
+        // 26_06-16-50 … 26_06-17-38). Re-check after a short delay; the settle's completion reveals at
+        // the post, and its own deadline / the presenter grace window bound this so it can never hang.
+        if (safetyFallbackReveal && presenter.isRefreshRestoreSettleInProgress()) {
+            if (BuildConfig.DEBUG) {
+                Log.i(REFRESH_SCROLL_TAG, "reveal deferred reason=$reason refreshRestoreSettleInProgress")
+            }
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main.immediate) {
+                delay(250)
+                if (isAdded && view != null && ::webView.isInitialized && webView.alpha < 1f) {
+                    revealThemeContentIfReady(reason, domPostsVerified)
+                }
+            }
+            return
+        }
         if (ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
                         hasBlockingScrollPending = presenter.hasBlockingScrollPending(),
                         expectedPosts = expectedPosts,
