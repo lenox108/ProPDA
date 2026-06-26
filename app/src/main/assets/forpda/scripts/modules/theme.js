@@ -1582,11 +1582,32 @@ function getThemeBottomSpacerHeight() {
 }
 
 function restoreThemeRefreshScrollAnchorWithRetries() {
-    cancelThemeAnchorScrollRetries();
     if (!isThemeRuntimeAlive()) return;
+    // Re-dispatch guard (device log 26_06-16-36, BACK to 1121483 #entry143876380 landing on the page
+    // top 143860995). On a BACK/REFRESH restore this is invoked from BOTH the Kotlin REFRESH_RESTORE
+    // command AND the per-render BACK/REFRESH branch, so repeated renders (HYBRID neighbor insert /
+    // hat-overlay preload) call it again for the SAME restoreId. Each call cancelled the prior retry
+    // chain, so the FINAL retry — the one that fires maybeCompleteThemeScrollCommand — never ran: the
+    // command was abandoned via scrollStuckReveal and the page revealed at scrollY=0 (page top) instead
+    // of the restored post. If a chain for this restoreId is already in flight and not yet completed,
+    // let it finish (its own retries re-scroll as the content lays out) instead of restarting.
+    var __restoreId = window.refreshRestoreId;
+    if (__restoreId &&
+        __restoreId === window.__activeRestoreId &&
+        window.__activeRestoreCompleted === false &&
+        window.refreshRestoreMode !== "BOTTOM"
+    ) {
+        if (typeof logRefreshScroll === "function") {
+            logRefreshScroll("restoreSkipReentry id=" + __restoreId + " mode=" + window.refreshRestoreMode);
+        }
+        return;
+    }
+    cancelThemeAnchorScrollRetries();
     if (typeof applyBottomSpacer === "function") {
         applyBottomSpacer();
     }
+    window.__activeRestoreId = __restoreId || "";
+    window.__activeRestoreCompleted = false;
     if (window.refreshRestoreMode === "BOTTOM") {
         restoreThemeToBottomAfterRefreshWithRetries();
         return;
@@ -1606,6 +1627,7 @@ function restoreThemeRefreshScrollAnchorWithRetries() {
                     var isFinalRetry = ms === delays[delays.length - 1];
                     restoreThemeRefreshScrollAnchorOnce(scrollGeneration, (isFinalRetry ? "final+" : "retry+") + ms, isFinalRetry);
                     if (isFinalRetry) {
+                        window.__activeRestoreCompleted = true;
                         maybeCompleteThemeScrollCommand(true);
                     }
                     if (window.loadWasNearBottom && ms >= 900) {
