@@ -674,6 +674,12 @@ class ThemeViewModel @Inject constructor(
     private var titleFromFirstPageJob: Job? = null
     /** One-shot getnewpost→findpost upgrade per open trace (hybrid unread anchor guard). */
     private var unreadFindPostUpgradeTraceId: String? = null
+    /**
+     * Trace whose getnewpost redirect hit the BOTTOM boundary of a non-last page, so we advanced to
+     * the next page to reach the genuine first-unread. When that next page carries no HTML unread
+     * markers its first content post IS the first-unread (device log 26_06-15-24, topic 1050118).
+     */
+    private var nextPageUnreadReloadTraceId: String? = null
     /** Hat overlay WebView reload scheduled after first anchor scroll settles. */
     private var pendingHatOverlayRenderAfterScroll = false
     /** Marks hatOverlayEnsure reload so pageComplete restores scroll natively instead of INITIAL_ANCHOR. */
@@ -1332,6 +1338,7 @@ class ThemeViewModel @Inject constructor(
             renderSettledTraceId = null
             initialAnchorScrollSettledTraceId = null
             unreadFindPostUpgradeTraceId = null
+            nextPageUnreadReloadTraceId = null
         }
         pendingHatOverlayRenderAfterScroll = false
         hatOverlayReinjectionTraceId = null
@@ -1627,6 +1634,30 @@ class ThemeViewModel @Inject constructor(
         ) {
             page.hasUnreadTarget = true
         }
+        // Next-page unread reload landed (the getnewpost redirect hit the bottom boundary of the
+        // previous page and we advanced here). If this page has no HTML unread markers, the genuine
+        // first-unread is simply its FIRST content post — the post right after the boundary (device
+        // log 26_06-15-24, topic 1050118: page 4396 had htmlUnreadCount=0, so the open lost the unread
+        // target and fell to last_post_on_page_fallback / a visible drift). Anchor there explicitly.
+        if (nextPageUnreadReloadTraceId == openTrace.id) {
+            nextPageUnreadReloadTraceId = null
+            if (!page.hasUnreadTarget) {
+                val firstUnreadPostId = TopicPrependedHatPolicy
+                        .filterPostsForPageList(page)
+                        .firstOrNull { it.id > 0 }
+                        ?.id
+                if (firstUnreadPostId != null) {
+                    page.anchors.clear()
+                    page.addAnchor("entry$firstUnreadPostId")
+                    page.anchorPostId = firstUnreadPostId.toString()
+                    page.hasUnreadTarget = true
+                    Log.i(
+                            TopicUnreadFindPostReloadPolicy.LOG_TAG,
+                            "next_page_first_unread_anchor topic=${page.id} st=${page.st} page=${page.pagination.current} firstUnread=$firstUnreadPostId trace=$openTrace.id"
+                    )
+                }
+            }
+        }
         if (themeUrl.contains("view=getnewpost", ignoreCase = true)) {
             // Log 25_06-10-39 (1103268): a genuine list-unread getnewpost redirected to the BOTTOM
             // post of page 1317 while pageTotal=1318 — the real first-unread is the top of page 1318.
@@ -1641,6 +1672,7 @@ class ThemeViewModel @Inject constructor(
                     unreadFindPostUpgradeTraceId != openTrace.id
             ) {
                 unreadFindPostUpgradeTraceId = openTrace.id
+                nextPageUnreadReloadTraceId = openTrace.id
                 // Plain page URL (NOT view=getnewpost): the server's getnewpost ignores st and would
                 // re-redirect to the same page-1317 bottom boundary. Loading the next page directly
                 // lands on the real final page (log line 1941: st=26340 → page 1318/1318), whose HTML
