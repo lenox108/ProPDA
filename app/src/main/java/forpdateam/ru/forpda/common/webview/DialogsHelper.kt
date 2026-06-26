@@ -36,6 +36,8 @@ class DialogsHelper(
         val saveImage = context.getString(R.string.wv_save_image)
         val copyImageUrl = context.getString(R.string.wv_copy_image_link)
 
+        // androidx.core.util.Pair exposes nullable first/second, but handleContextMenu()
+        // always builds the Pair with non-null values, so `!!` documents that invariant.
         dynamicDialogMenu.addItem(openNewTab) { ctx, data -> linkHandler.handle(data.second!!, router) }
         dynamicDialogMenu.addItem(openBrowser) { ctx, data -> systemLinkHandler.handle(data.second!!) }
         dynamicDialogMenu.addItem(copyUrl) { ctx, data -> Utils.copyToClipBoard(data.second!!, clipboardHelper) }

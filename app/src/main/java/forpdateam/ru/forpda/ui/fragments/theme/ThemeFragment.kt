@@ -752,10 +752,36 @@ abstract class ThemeFragment : TabFragment() {
                     .setTitle(R.string.funny_theme_error_title)
                     .setDesc(R.string.funny_theme_error_desc)
                     .addAction(R.string.retry) { presenter.reload() }
+            // Тема рисует контент под нижней панелью (shouldDrawBehindBottomNav), поэтому
+            // у контейнера плейсхолдеров нет нижнего отступа — резервируем его сами,
+            // иначе заглушка/снэкбар перекрываются нижним таббаром.
+            applyErrorViewBottomChromePadding(funnyContent)
             contentController.addContent(funnyContent, ContentController.TAG_ERROR)
         }
         contentController.showContent(ContentController.TAG_ERROR)
         message?.let { showSnackbar(it) }
+    }
+
+    /**
+     * Резервирует снизу место под полоску вкладок + системную навигацию, повторяя расчёт
+     * [forpdateam.ru.forpda.ui.BottomNavWindowInset] из MainActivity. Применяется только когда
+     * фрагмент рисует под нижней панелью ([shouldDrawBehindBottomNav]).
+     */
+    private fun applyErrorViewBottomChromePadding(view: View) {
+        if (!shouldDrawBehindBottomNav()) return
+        val baseBar = resources.getDimensionPixelSize(R.dimen.bottom_nav_tab_bar_height)
+        val rootInsets = ViewCompat.getRootWindowInsets(fragmentContainer)
+        val bottomChrome = forpdateam.ru.forpda.ui.BottomNavWindowInset.fragmentsBottomPaddingPx(
+                baseTabBarPx = baseBar,
+                rootInsets = rootInsets,
+                fallbackNavBottomPx = dimensionsProvider.getDimensions().navigationBar
+        )
+        view.setPadding(
+                view.paddingLeft,
+                view.paddingTop,
+                view.paddingRight,
+                view.paddingBottom + bottomChrome
+        )
     }
 
     protected fun updateTopicScrollModeSubtitle(mode: AppPreferences.Main.TopicScrollMode) {

@@ -420,6 +420,51 @@ class TopicUnreadOpenPolicyTest {
         assertEquals("entry143813742", page.anchor)
     }
 
+    // --- U-01: genuine-unread off-page → controlled findpost reload (not posts.first fallback) ---
+
+    @Test
+    fun offPageUnreadFindPostReloadId_returnsAnchor_whenUnreadTargetOffPage() {
+        // A genuine unread open (hasUnreadTarget=true) whose confirmed first-unread post is NOT
+        // on the loaded page window must NOT be realigned to the first parsed post — instead the
+        // off-page unread id is returned so onLoadData can reload at view=findpost&p=<unreadId>.
+        val page = forpdateam.ru.forpda.entity.remote.theme.ThemePage().apply {
+            id = topic1103268
+            url = "${base}$topic1103268&st=24420#entry143804664"
+            anchorPostId = "143999999" // off-page unread target
+            hasUnreadTarget = true
+            posts.add(forpdateam.ru.forpda.entity.remote.theme.ThemePost().apply { id = 143804664 })
+            posts.add(forpdateam.ru.forpda.entity.remote.theme.ThemePost().apply { id = 143804839 })
+        }
+        assertEquals(143999999, TopicUnreadOpenPolicy.offPageUnreadFindPostReloadId(page))
+    }
+
+    @Test
+    fun offPageUnreadFindPostReloadId_null_whenAnchorOnPage() {
+        // On-page unread target needs no reload — the post is already present to scroll/highlight.
+        val page = forpdateam.ru.forpda.entity.remote.theme.ThemePage().apply {
+            id = topic1103268
+            url = "${base}$topic1103268&st=24420#entry143804664"
+            anchorPostId = "143804664"
+            hasUnreadTarget = true
+            posts.add(forpdateam.ru.forpda.entity.remote.theme.ThemePost().apply { id = 143804664 })
+            posts.add(forpdateam.ru.forpda.entity.remote.theme.ThemePost().apply { id = 143804839 })
+        }
+        assertNull(TopicUnreadOpenPolicy.offPageUnreadFindPostReloadId(page))
+    }
+
+    @Test
+    fun offPageUnreadFindPostReloadId_null_whenNotUnreadTarget() {
+        // Read-resume (hasUnreadTarget=false) is handled by offPageReadResumeFindPostReloadId, not here.
+        val page = forpdateam.ru.forpda.entity.remote.theme.ThemePage().apply {
+            id = topic1103268
+            url = "${base}$topic1103268&st=24420#entry143804664"
+            anchorPostId = "143999999"
+            hasUnreadTarget = false
+            posts.add(forpdateam.ru.forpda.entity.remote.theme.ThemePost().apply { id = 143804664 })
+        }
+        assertNull(TopicUnreadOpenPolicy.offPageUnreadFindPostReloadId(page))
+    }
+
 
     @Test
     fun anchor_logSession_1121483_lastUnreadSetting_bottomRedirectIsAmbiguous_log156() {
@@ -977,6 +1022,188 @@ class TopicUnreadOpenPolicyTest {
                         page,
                         url,
                         parserListUnreadHint = true,
+                )
+        )
+    }
+
+    // --- Regression (log 25_06-10-09, topic 1103268): a genuine first-unread open that lands on the
+    // last page must NOT be auto-marked read on load, or every re-open degrades to READ_RESUME and
+    // restores an already-read post. Suppress only when the unread post is NOT at the page bottom. ---
+
+    private fun firstUnreadLastPage(
+            unreadAnchorPostId: Int,
+            pagePostIds: List<Int>,
+            hasUnreadTarget: Boolean = true,
+            resumeBottom: Boolean = false,
+    ) = forpdateam.ru.forpda.entity.remote.theme.ThemePage().apply {
+        id = 1103268
+        this.hasUnreadTarget = hasUnreadTarget
+        resumeToLastPageBottom = resumeBottom
+        anchorPostId = unreadAnchorPostId.toString()
+        pagination.current = 1317
+        pagination.all = 1317
+        pagePostIds.forEach { pid ->
+            posts.add(forpdateam.ru.forpda.entity.remote.theme.ThemePost().apply { id = pid })
+        }
+    }
+
+    @Test
+    fun firstUnreadOpen_unreadPostAbovePageBottom_suppressesEagerMarkRead() {
+        // Server getnewpost resolved unread 143998112 near the TOP of the tall last page
+        // (last post 143999430). Loading the page must NOT mark the whole topic read.
+        val page = firstUnreadLastPage(
+                unreadAnchorPostId = 143998112,
+                pagePostIds = listOf(135617646, 143998112, 143998164, 143999430),
+        )
+        assertTrue(
+                TopicUnreadOpenPolicy.shouldSuppressMarkReadForSession(
+                        TopicUnreadOpenPolicy.TopicOpenSessionKind.FIRST_UNREAD,
+                        page,
+                )
+        )
+        // The findpost-reload reclassifies the session EXPLICIT_POST but keeps hasUnreadTarget=true;
+        // suppression must still hold (that is the exact state at mark-read time in the log).
+        assertTrue(
+                TopicUnreadOpenPolicy.shouldSuppressMarkReadForSession(
+                        TopicUnreadOpenPolicy.TopicOpenSessionKind.EXPLICIT_POST,
+                        page,
+                )
+        )
+    }
+
+    @Test
+    fun firstUnreadOpen_unreadPostIsLastOnPage_doesNotSuppressMarkRead() {
+        // When the first-unread post IS the last post on the page, the user is already at the end;
+        // the normal end-of-topic mark-read must still fire.
+        val page = firstUnreadLastPage(
+                unreadAnchorPostId = 143999430,
+                pagePostIds = listOf(135617646, 143998112, 143999430),
+        )
+        assertFalse(
+                TopicUnreadOpenPolicy.shouldSuppressMarkReadForSession(
+                        TopicUnreadOpenPolicy.TopicOpenSessionKind.FIRST_UNREAD,
+                        page,
+                )
+        )
+    }
+
+    @Test
+    fun firstUnreadOpen_resumeToLastPageBottom_doesNotSuppressMarkRead() {
+        val page = firstUnreadLastPage(
+                unreadAnchorPostId = 143998112,
+                pagePostIds = listOf(135617646, 143998112, 143999430),
+                resumeBottom = true,
+        )
+        assertFalse(
+                TopicUnreadOpenPolicy.shouldSuppressMarkReadForSession(
+                        TopicUnreadOpenPolicy.TopicOpenSessionKind.FIRST_UNREAD,
+                        page,
+                )
+        )
+    }
+
+    @Test
+    fun explicitBookmarkOpen_noUnreadTarget_doesNotSuppressMarkRead() {
+        // A pure explicit deep link (bookmark/mention) does NOT carry a server unread target, so it
+        // must continue to mark read on the last page exactly as before.
+        val page = firstUnreadLastPage(
+                unreadAnchorPostId = 143998112,
+                pagePostIds = listOf(135617646, 143998112, 143999430),
+                hasUnreadTarget = false,
+        )
+        assertFalse(
+                TopicUnreadOpenPolicy.shouldSuppressMarkReadForSession(
+                        TopicUnreadOpenPolicy.TopicOpenSessionKind.EXPLICIT_POST,
+                        page,
+                )
+        )
+    }
+
+    // --- Regression (log 25_06-10-39, topic 1103268): server getnewpost redirected to the BOTTOM
+    // post of page 1317 while pageTotal=1318. The genuine first-unread is the top of page 1318, so the
+    // open must advance to the next page instead of parking on the page-1317 bottom (which left the
+    // topic forever-unread and "showed the last post"). ---
+
+    private fun bottomRedirectNonFinalPage(
+            topicId: Int = 1103268,
+            current: Int = 1317,
+            all: Int = 1318,
+            perPage: Int = 20,
+            bottomPostId: Int = 143999480,
+            pagePostIds: List<Int> = listOf(135617646, 143999300, 143999480),
+            anchorPostId: String? = "143999480",
+            hasUnreadTarget: Boolean = true,
+            ambiguous: Boolean = false,
+    ) = forpdateam.ru.forpda.entity.remote.theme.ThemePage().apply {
+        id = topicId
+        this.hasUnreadTarget = hasUnreadTarget
+        ambiguousLastUnreadBottomRedirect = ambiguous
+        this.anchorPostId = anchorPostId
+        url = "https://4pda.to/forum/index.php?showtopic=$topicId&st=${(current - 1) * perPage}#entry$bottomPostId"
+        pagination.current = current
+        pagination.all = all
+        pagination.perPage = perPage
+        pagePostIds.forEach { pid ->
+            posts.add(forpdateam.ru.forpda.entity.remote.theme.ThemePost().apply { id = pid })
+        }
+    }
+
+    @Test
+    fun nextPageUnreadReloadSt_bottomRedirectOnNonFinalPage_returnsNextPageSt() {
+        val page = bottomRedirectNonFinalPage()
+        // page 1317 → next page 1318 → st = 1317 * 20 = 26340.
+        assertEquals(26340, TopicUnreadOpenPolicy.nextPageUnreadReloadSt(page))
+    }
+
+    @Test
+    fun nextPageUnreadReloadSt_onFinalPage_returnsNull() {
+        // When current == all (genuine last page) the bottom post IS the end — do not advance.
+        val page = bottomRedirectNonFinalPage(current = 1318, all = 1318)
+        assertNull(TopicUnreadOpenPolicy.nextPageUnreadReloadSt(page))
+    }
+
+    @Test
+    fun nextPageUnreadReloadSt_redirectNotBottomPost_returnsNull() {
+        // Redirect lands on a mid-page post (genuine on-page unread) — not the boundary case.
+        val page = bottomRedirectNonFinalPage(
+                bottomPostId = 143999300,
+                anchorPostId = "143999300",
+        )
+        assertNull(TopicUnreadOpenPolicy.nextPageUnreadReloadSt(page))
+    }
+
+    @Test
+    fun nextPageUnreadReloadSt_noUnreadTarget_returnsNull() {
+        val page = bottomRedirectNonFinalPage(hasUnreadTarget = false)
+        assertNull(TopicUnreadOpenPolicy.nextPageUnreadReloadSt(page))
+    }
+
+    @Test
+    fun nextPageUnreadReloadSt_ambiguousBottomRedirect_returnsNull() {
+        // Ambiguous all-read bottom redirect has its own resume handling — do not advance pages.
+        val page = bottomRedirectNonFinalPage(ambiguous = true)
+        assertNull(TopicUnreadOpenPolicy.nextPageUnreadReloadSt(page))
+    }
+
+    @Test
+    fun nextPageUnreadReloadSt_anchorDiffersFromBottomRedirect_returnsNull() {
+        // A distinct resolved on-page unread anchor (not the bottom boundary) must not trigger advance.
+        val page = bottomRedirectNonFinalPage(anchorPostId = "143999300")
+        assertNull(TopicUnreadOpenPolicy.nextPageUnreadReloadSt(page))
+    }
+
+    @Test
+    fun readResumeOpen_withUnreadTarget_doesNotSuppress_sessionGate() {
+        // READ_RESUME is not an unread-nav session; even with the flag set defensively it must not
+        // be suppressed by the first-unread path (it has its own all-read semantics).
+        val page = firstUnreadLastPage(
+                unreadAnchorPostId = 143998112,
+                pagePostIds = listOf(135617646, 143998112, 143999430),
+        )
+        assertFalse(
+                TopicUnreadOpenPolicy.shouldSuppressMarkReadForFirstUnreadOpen(
+                        TopicUnreadOpenPolicy.TopicOpenSessionKind.READ_RESUME,
+                        page,
                 )
         )
     }

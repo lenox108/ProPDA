@@ -18,6 +18,14 @@ class NotesAdapter(
 ) : ListDelegationAdapter<MutableList<ListItem>>() {
 
 
+    /**
+     * The base [ListDelegationAdapter.items] is declared nullable, but we always
+     * initialise it in [init] and never null it out, so this accessor documents the
+     * invariant and avoids scattering `!!` across the adapter.
+     */
+    private val itemList: MutableList<ListItem>
+        get() = requireNotNull(items) { "NotesAdapter items not initialised" }
+
     init {
         items = mutableListOf()
         delegatesManager.apply {
@@ -41,10 +49,11 @@ class NotesAdapter(
             foldersTitle: String,
             withoutFolderTitle: String
     ) {
-        val oldList = ArrayList(items!!)
-        items!!.clear()
-        items!!.addAll(infoList.map { CloseableInfoListItem(it) })
-        items!!.addAll(
+        val oldList = ArrayList(itemList)
+        val newItems = itemList
+        newItems.clear()
+        newItems.addAll(infoList.map { CloseableInfoListItem(it) })
+        newItems.addAll(
                 buildNoteTreeItems(
                         notes = notes,
                         folders = folders,
@@ -59,9 +68,9 @@ class NotesAdapter(
         )
         DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize() = oldList.size
-            override fun getNewListSize() = items!!.size
-            override fun areItemsTheSame(o: Int, n: Int) = oldList[o] == items!![n]
-            override fun areContentsTheSame(o: Int, n: Int) = oldList[o] == items!![n]
+            override fun getNewListSize() = newItems.size
+            override fun areItemsTheSame(o: Int, n: Int) = oldList[o] == newItems[n]
+            override fun areContentsTheSame(o: Int, n: Int) = oldList[o] == newItems[n]
         }).dispatchUpdatesTo(this)
     }
 

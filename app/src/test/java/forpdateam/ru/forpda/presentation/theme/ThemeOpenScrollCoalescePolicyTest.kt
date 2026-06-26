@@ -160,8 +160,13 @@ class ThemeOpenScrollCoalescePolicyTest {
     }
 
     @Test
-    fun `reveals all read topic when dom verified despite blocking initial anchor log1121483`() {
-        assertFalse(
+    fun `P1 anchor-before-reveal defers all-read blocking initial anchor until settle or fallback`() {
+        // P1: a non-unread blocking INITIAL_ANCHOR (explicit-post / read resume / first-page near a
+        // bottom anchor) must NOT reveal merely because the DOM is ready — `domReadyForReveal` flips
+        // true while scrollY is still 0, so revealing here showed the visible top→anchor travel.
+        // Hold until the JS anchor scroll settles or the bounded fallback fires.
+        assertTrue(
+                "must defer while blocking anchor scroll is still in flight (no settle/fallback)",
                 ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
                         hasBlockingScrollPending = true,
                         expectedPosts = 14,
@@ -171,6 +176,36 @@ class ThemeOpenScrollCoalescePolicyTest {
                         domPostsVerified = true,
                         blockingScrollKind = ThemeScrollCommand.Kind.INITIAL_ANCHOR,
                         hasUnreadTarget = false,
+                )
+        )
+        // Reveals once the JS anchor scroll reports it settled (instant, already positioned).
+        assertFalse(
+                "reveals after the JS anchor scroll settled",
+                ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
+                        hasBlockingScrollPending = true,
+                        expectedPosts = 14,
+                        contentHeight = 3794,
+                        blankContentThreshold = 4,
+                        renderCompleteForActiveKey = true,
+                        domPostsVerified = true,
+                        blockingScrollKind = ThemeScrollCommand.Kind.INITIAL_ANCHOR,
+                        hasUnreadTarget = false,
+                        jsAnchorScrollSettled = true,
+                )
+        )
+        // Bounded fallback still guarantees a reveal so alpha can never trap at 0 (log1121483).
+        assertFalse(
+                "bounded safety fallback still reveals so alpha never traps",
+                ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
+                        hasBlockingScrollPending = true,
+                        expectedPosts = 14,
+                        contentHeight = 3794,
+                        blankContentThreshold = 4,
+                        renderCompleteForActiveKey = true,
+                        domPostsVerified = true,
+                        blockingScrollKind = ThemeScrollCommand.Kind.INITIAL_ANCHOR,
+                        hasUnreadTarget = false,
+                        safetyFallbackReveal = true,
                 )
         )
     }
@@ -374,6 +409,234 @@ class ThemeOpenScrollCoalescePolicyTest {
                         renderCompleteForActiveKey = true,
                         domPostsVerified = true,
                         primaryOpenComplete = true,
+                )
+        )
+    }
+
+    // --- Reveal-at-anchor (A/B): JS-owned anchor scroll hold -------------------------------------
+
+    @Test
+    fun `defers webView reveal for explicit-post open so JS anchor scroll lands before reveal`() {
+        // Defect A: explicit-post open (239158 p=143994024). render complete + DOM verified, but the
+        // INSTANT JS anchor scroll has not confirmed it positioned the viewport yet -> hold so the
+        // WebView is uncovered already at the post instead of revealing at scrollY~0 then animating.
+        assertTrue(
+                ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
+                        hasBlockingScrollPending = false,
+                        expectedPosts = 20,
+                        contentHeight = 8000,
+                        blankContentThreshold = 4,
+                        renderCompleteForActiveKey = true,
+                        domPostsVerified = true,
+                        expectsJsAnchorScroll = true,
+                        jsAnchorScrollSettled = false,
+                )
+        )
+    }
+
+    @Test
+    fun `reveals once JS anchor scroll has settled`() {
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
+                        hasBlockingScrollPending = false,
+                        expectedPosts = 20,
+                        contentHeight = 8000,
+                        blankContentThreshold = 4,
+                        renderCompleteForActiveKey = true,
+                        domPostsVerified = true,
+                        expectsJsAnchorScroll = true,
+                        jsAnchorScrollSettled = true,
+                )
+        )
+    }
+
+    @Test
+    fun `JS anchor hold releases on safety fallback watchdog so alpha never traps at zero`() {
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
+                        hasBlockingScrollPending = false,
+                        expectedPosts = 20,
+                        contentHeight = 8000,
+                        blankContentThreshold = 4,
+                        renderCompleteForActiveKey = true,
+                        domPostsVerified = true,
+                        expectsJsAnchorScroll = true,
+                        jsAnchorScrollSettled = false,
+                        safetyFallbackReveal = true,
+                )
+        )
+    }
+
+    @Test
+    fun `JS anchor hold does not engage before render completes (no extra hold)`() {
+        // Before render completes the existing gates already defer; the JS-anchor branch must not
+        // change that path, and must not hold a command-less load that has no anchor.
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.shouldDeferWebViewReveal(
+                        hasBlockingScrollPending = false,
+                        expectedPosts = 20,
+                        contentHeight = 8000,
+                        blankContentThreshold = 4,
+                        renderCompleteForActiveKey = true,
+                        domPostsVerified = true,
+                        expectsJsAnchorScroll = false,
+                        jsAnchorScrollSettled = false,
+                )
+        )
+    }
+
+    @Test
+    fun `explicit post open no longer holds JS anchor gate - routes through blocking INITIAL_ANCHOR`() {
+        // STEP 1: explicit-post opens now arm the blocking INITIAL_ANCHOR path (via
+        // `explicitAnchorBlocking`), so the JS-anchor reveal hold must NOT engage. The blocking
+        // INITIAL_ANCHOR gate handles the reveal-at-anchor itself.
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                        loadAction = ThemeLoadAction.Normal,
+                        isExplicitPostOpen = true,
+                        isEndNavigation = false,
+                        isRefreshRestoreToBottom = false,
+                        hasUnreadTarget = false,
+                        anchorPostId = "143994024",
+                        pageAnchor = null,
+                        explicitAnchorBlocking = true,
+                )
+        )
+        // Without the explicitAnchorBlocking flag (legacy callers), the old behavior is preserved
+        // so a Normal non-explicit open still does not engage the JS-anchor hold.
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                        loadAction = ThemeLoadAction.Normal,
+                        isExplicitPostOpen = true,
+                        isEndNavigation = false,
+                        isRefreshRestoreToBottom = false,
+                        hasUnreadTarget = false,
+                        anchorPostId = "143994024",
+                        pageAnchor = null,
+                )
+        )
+    }
+
+    @Test
+    fun `explicit post open arms blocking INITIAL_ANCHOR when anchor present`() {
+        // STEP 1 regression: an explicit-post open arms the SAME blocking INITIAL_ANCHOR path as an
+        // unread open, without hasUnreadTarget. This is what routes the anchor through the event-based
+        // guard `shouldBlockHybridUntilInitialAnchorSettled` so top-autoload cannot pre-empt it.
+        assertTrue(
+                ThemeOpenScrollCoalescePolicy.shouldArmInitialAnchorOnPageComplete(
+                        traceId = "abc",
+                        initialAnchorScrollSettledTraceId = null,
+                        pendingScrollKind = null,
+                        hatOverlayReinjectionTraceId = null,
+                        hasUnreadTarget = false,
+                        explicitAnchorBlocking = true,
+                )
+        )
+        assertTrue(
+                ThemeOpenScrollCoalescePolicy.expectsInitialAnchorScrollOnOpen(
+                        shouldArmInitialAnchor = true,
+                        anchorPostId = "143994024",
+                        pageAnchor = null,
+                        hasUnreadTarget = false,
+                        explicitAnchorBlocking = true,
+                )
+        )
+        // No anchor → no blocking arm (nothing to land on).
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.expectsInitialAnchorScrollOnOpen(
+                        shouldArmInitialAnchor = true,
+                        anchorPostId = null,
+                        pageAnchor = null,
+                        hasUnreadTarget = false,
+                        explicitAnchorBlocking = true,
+                )
+        )
+    }
+
+    @Test
+    fun `expects JS anchor positioning on back restore to a post`() {
+        assertTrue(
+                ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                        loadAction = ThemeLoadAction.Back,
+                        isExplicitPostOpen = false,
+                        isEndNavigation = false,
+                        isRefreshRestoreToBottom = false,
+                        hasUnreadTarget = false,
+                        anchorPostId = null,
+                        pageAnchor = "entry143876380",
+                )
+        )
+    }
+
+    @Test
+    fun `does not expect JS anchor positioning without an anchor`() {
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                        loadAction = ThemeLoadAction.Back,
+                        isExplicitPostOpen = false,
+                        isEndNavigation = false,
+                        isRefreshRestoreToBottom = false,
+                        hasUnreadTarget = false,
+                        anchorPostId = null,
+                        pageAnchor = null,
+                )
+        )
+    }
+
+    @Test
+    fun `does not expect JS anchor positioning when unread target owns INITIAL_ANCHOR`() {
+        // Unread opens keep their own blocking INITIAL_ANCHOR gate; the JS-anchor hold must defer to it.
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                        loadAction = ThemeLoadAction.Normal,
+                        isExplicitPostOpen = true,
+                        isEndNavigation = false,
+                        isRefreshRestoreToBottom = false,
+                        hasUnreadTarget = true,
+                        anchorPostId = "143994024",
+                        pageAnchor = null,
+                )
+        )
+    }
+
+    @Test
+    fun `does not expect JS anchor positioning for end navigation or refresh-to-bottom`() {
+        // End navigation and refresh-restore-to-bottom land at the page bottom, not on a post anchor.
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                        loadAction = ThemeLoadAction.Normal,
+                        isExplicitPostOpen = true,
+                        isEndNavigation = true,
+                        isRefreshRestoreToBottom = false,
+                        hasUnreadTarget = false,
+                        anchorPostId = "143994024",
+                        pageAnchor = null,
+                )
+        )
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                        loadAction = ThemeLoadAction.Refresh,
+                        isExplicitPostOpen = false,
+                        isEndNavigation = false,
+                        isRefreshRestoreToBottom = true,
+                        hasUnreadTarget = false,
+                        anchorPostId = "143994024",
+                        pageAnchor = null,
+                )
+        )
+    }
+
+    @Test
+    fun `normal open without explicit-post flag does not hold for JS anchor`() {
+        assertFalse(
+                ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                        loadAction = ThemeLoadAction.Normal,
+                        isExplicitPostOpen = false,
+                        isEndNavigation = false,
+                        isRefreshRestoreToBottom = false,
+                        hasUnreadTarget = false,
+                        anchorPostId = "143994024",
+                        pageAnchor = null,
                 )
         )
     }

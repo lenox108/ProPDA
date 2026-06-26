@@ -33,6 +33,7 @@ import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.interactors.theme.ThemeNavigationUseCase
 import forpdateam.ru.forpda.model.repository.theme.ThemeReadPositionRepository
+import forpdateam.ru.forpda.model.repository.theme.TopicReturnPositionStore
 import com.github.terrakok.cicerone.ResultListenerHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
@@ -63,6 +64,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import forpdateam.ru.forpda.entity.app.EditPostSyncData
 import forpdateam.ru.forpda.diagnostic.FpdaDebugLog
+import forpdateam.ru.forpda.diagnostic.NavBackstackTrace
 import forpdateam.ru.forpda.diagnostic.ThemePostReadStateDiagnostics
 import kotlinx.coroutines.flow.asSharedFlow
 import org.json.JSONObject
@@ -109,7 +111,8 @@ class ThemeViewModel @Inject constructor(
         private val interactionUseCase: ThemeInteractionUseCase,
         private val navigationUseCase: ThemeNavigationUseCase,
         private val router: TabRouter,
-        private val readPositionRepository: ThemeReadPositionRepository
+        private val readPositionRepository: ThemeReadPositionRepository,
+        private val returnPositionStore: TopicReturnPositionStore
 ) : BaseViewModel(), ThemeWebCallbacks {
 
     // SharedFlow для MVVM (замена callback-методов ThemeView)
@@ -396,7 +399,43 @@ class ThemeViewModel @Inject constructor(
                     pendingScrollKind = pendingScrollCommand?.kind,
                     hatOverlayReinjectionTraceId = hatOverlayReinjectionTraceId,
                     hasUnreadTarget = currentPage?.hasUnreadTarget == true,
+                    explicitAnchorBlocking = isExplicitAnchorBlockingOpen(),
             )
+
+    /**
+     * STEP 1: an explicit-post / findpost open (`view=findpost&p=`) arms the SAME blocking
+     * INITIAL_ANCHOR path as an unread open, but WITHOUT the unread side-effects (mark-read,
+     * `armUnreadInitialAnchorScroll`). True only when this is a fresh Normal open of an
+     * EXPLICIT_POST session that actually carries an anchor to land on.
+     */
+    private fun isExplicitAnchorBlockingOpen(): Boolean {
+        val page = currentPage ?: return false
+        if (page.hasUnreadTarget) return false
+        if (_loadAction != ThemeLoadAction.Normal) return false
+        if (page.openSessionKind !=
+                TopicUnreadOpenPolicy.TopicOpenSessionKind.EXPLICIT_POST.name
+        ) {
+            return false
+        }
+        return !page.anchorPostId.isNullOrBlank() ||
+                !page.anchor?.removePrefix("entry")?.takeIf { it.isNotBlank() }.isNullOrBlank()
+    }
+
+    /** STEP 2 — controller-facing probe for the sticky explicit-anchor intent. */
+    internal fun isExplicitAnchorBlockingOpenForController(): Boolean = isExplicitAnchorBlockingOpen()
+
+    /**
+     * STEP 2 — controller-facing probe for whether the blocking INITIAL_ANCHOR scroll for the
+     * pending explicit anchor has settled. Set true by [onScrollCommandComplete] when the
+     * INITIAL_ANCHOR command reports success; cleared on topic change in [resetTransientStateForNewTopic].
+     */
+    private var explicitAnchorScrollSettled: Boolean = false
+
+    internal fun isExplicitAnchorScrollSettledForController(): Boolean = explicitAnchorScrollSettled
+
+    fun resetExplicitAnchorScrollSettled() {
+        explicitAnchorScrollSettled = false
+    }
 
     fun expectsInitialAnchorScrollOnOpen(): Boolean =
             ThemeOpenScrollCoalescePolicy.expectsInitialAnchorScrollOnOpen(
@@ -404,7 +443,30 @@ class ThemeViewModel @Inject constructor(
                     anchorPostId = currentPage?.anchorPostId,
                     pageAnchor = currentPage?.anchor,
                     hasUnreadTarget = currentPage?.hasUnreadTarget == true,
+                    explicitAnchorBlocking = isExplicitAnchorBlockingOpen(),
             )
+
+    /**
+     * Reveal-at-anchor gate (A/B): true when the page positioning on this open/navigation is
+     * owned by the INSTANT JS anchor scroll (explicit-post open or BACK/refresh restore to a
+     * post) rather than a blocking Kotlin command. The reveal is held one DOM confirmation so the
+     * WebView is uncovered already at the anchor instead of revealing at scrollY≈0 and then
+     * visibly auto-scrolling to the post.
+     */
+    fun expectsJsAnchorPositioningOnOpen(): Boolean {
+        val page = currentPage ?: return false
+        return ThemeOpenScrollCoalescePolicy.expectsJsAnchorPositioningOnOpen(
+                loadAction = _loadAction,
+                isExplicitPostOpen = page.openSessionKind ==
+                        TopicUnreadOpenPolicy.TopicOpenSessionKind.EXPLICIT_POST.name,
+                isEndNavigation = isEndNavigationPending(),
+                isRefreshRestoreToBottom = page.wasNearBottom,
+                hasUnreadTarget = page.hasUnreadTarget,
+                anchorPostId = page.anchorPostId,
+                pageAnchor = page.anchor,
+                explicitAnchorBlocking = isExplicitAnchorBlockingOpen(),
+        )
+    }
 
     fun isHatOverlayReinjectionRender(): Boolean =
             hatOverlayReinjectionTraceId == openTrace.id
@@ -458,6 +520,13 @@ class ThemeViewModel @Inject constructor(
         if (pending?.commandId != commandId) return
         when (pending.kind) {
             ThemeScrollCommand.Kind.INITIAL_ANCHOR -> {
+                // STEP 2: a successful INITIAL_ANCHOR completion is the event-based settle signal
+                // for the sticky explicit-anchor intent. The JS side only reports completion after
+                // the `scrollToElementWithRetries` final retry confirmed the anchor is near the
+                // viewport top, so this clears the sticky intent and lets the highlight arm once.
+                if (success) {
+                    explicitAnchorScrollSettled = true
+                }
                 ThemePostReadStateDiagnostics.scrollSettled(
                         topicId = currentPage?.id,
                         traceId = openTrace.id,
@@ -484,14 +553,33 @@ class ThemeViewModel @Inject constructor(
                         scrollYAfter = parseScrollYFromCommandReason(reason)
                 )
             }
-            else -> Unit
+            else -> {
+                // Phase 1 (audit §13): emit a structured trace for the remaining scroll-command
+                // completions (ANCHOR / SCROLL_Y / UNREAD / REFRESH_RESTORE) so every onScrollCommandComplete
+                // exit is observable when diagnosing problems #1/#2/#9. Diagnostics-only, no behavior change.
+                if (BuildConfig.DEBUG) {
+                    ThemePostReadStateDiagnostics.scrollSettled(
+                            topicId = currentPage?.id,
+                            traceId = openTrace.id,
+                            anchorPostId = currentPage?.anchorPostId ?: currentPage?.anchor,
+                            finalScrolledPostId = ThemePostReadStateDiagnostics.parseLastPostFromScrollReason(reason),
+                            scrollKind = pending.kind.name,
+                            success = success,
+                            reason = reason
+                    )
+                }
+            }
         }
     }
 
     fun getPendingScrollCommand(): ThemeScrollCommand? = pendingScrollCommand
 
     fun shouldBlockHybridUntilInitialAnchorSettled(): Boolean {
-        if (currentPage?.hasUnreadTarget != true) return false
+        // STEP 1: explicit-post opens arm the blocking INITIAL_ANCHOR path via `explicitAnchorBlocking`
+        // (without unread side-effects). Drop the unread-only pre-gate so the hybrid block fires for
+        // those opens too; the underlying policy is event/state-based (pendingScrollKind ==
+        // INITIAL_ANCHOR or expectsInitialAnchorScroll) and never enables mark-read itself.
+        if (currentPage?.hasUnreadTarget != true && !isExplicitAnchorBlockingOpen()) return false
         return ThemeUnreadHybridAnchorGuardPolicy.shouldBlockHybridUntilInitialAnchorSettled(
                 traceId = openTrace.id,
                 initialAnchorScrollSettledTraceId = initialAnchorScrollSettledTraceId,
@@ -596,6 +684,8 @@ class ThemeViewModel @Inject constructor(
     private var pendingHistorySourceAnchor: ThemeLinkSourceAnchor? = null
     private var pendingHistorySourceTopicId: Int? = null
     private var pendingHistorySourceSt: Int? = null
+    /** R-02: gesture-scoped single-dispatch guard for the triple navigation entry path. */
+    private val navigationGestureGuard = NavigationGestureDispatchGuard()
 
     /** После успешной отправки из дочернего редактора не откатываемся на сохранённый scrollY. */
     private var restorePostedPageAfterChildRemoval = false
@@ -1194,6 +1284,9 @@ class ThemeViewModel @Inject constructor(
         )
         activeLoadListTopicMarkedUnread = listOpenHints?.topicMarkedUnread == true
         val explicitTargetPostId = explicitTargetPostIdFromUrl(url)
+        // R-02: a fresh load settles the previous gesture; open a new dispatch window so the next
+        // distinct user navigation is allowed even if no source-anchor capture preceded it.
+        navigationGestureGuard.reset()
         clearPendingScrollCommand()
         loadThemeJob?.cancel()
         postOpenEnrichmentController.reset()
@@ -1535,6 +1628,37 @@ class ThemeViewModel @Inject constructor(
             page.hasUnreadTarget = true
         }
         if (themeUrl.contains("view=getnewpost", ignoreCase = true)) {
+            // Log 25_06-10-39 (1103268): a genuine list-unread getnewpost redirected to the BOTTOM
+            // post of page 1317 while pageTotal=1318 — the real first-unread is the top of page 1318.
+            // Parking on the page-1317 bottom post made the open "show the last post", blocked the
+            // mark-read gate (`not_last_page` current=1317 < all=1318), and left the topic unread
+            // forever (every re-open re-resolved the same boundary). Advance to the next page once per
+            // trace so the user reaches the genuine unread content and the topic can later be marked
+            // read by the normal scroll-to-bottom exit policy.
+            val nextPageUnreadSt = TopicUnreadOpenPolicy.nextPageUnreadReloadSt(page)
+            if (nextPageUnreadSt != null &&
+                    page.id > 0 &&
+                    unreadFindPostUpgradeTraceId != openTrace.id
+            ) {
+                unreadFindPostUpgradeTraceId = openTrace.id
+                // Plain page URL (NOT view=getnewpost): the server's getnewpost ignores st and would
+                // re-redirect to the same page-1317 bottom boundary. Loading the next page directly
+                // lands on the real final page (log line 1941: st=26340 → page 1318/1318), whose HTML
+                // unread markers let the parser resolve the genuine first-unread post.
+                val nextPageUrl =
+                        "https://4pda.to/forum/index.php?showtopic=${page.id}&st=$nextPageUnreadSt"
+                forpdateam.ru.forpda.diagnostic.TopicUnreadAnchorDiagnostics.findPostReloadStarted(
+                        topicId = page.id,
+                        anchorPostId = "next_page_st_$nextPageUnreadSt",
+                        traceId = openTrace.id,
+                )
+                Log.w(
+                        TopicUnreadFindPostReloadPolicy.LOG_TAG,
+                        "reload_next_page_unread topic=${page.id} st=$nextPageUnreadSt current=${page.pagination.current} all=${page.pagination.all} trace=$openTrace.id"
+                )
+                loadData(nextPageUrl, ThemeLoadAction.Normal, preserveOpenTrace = true)
+                return
+            }
             // Log 14_06-21-08: a fully-read read-row (1121483) redirects via getnewpost to a
             // bottom bookmark (#entry143852904) that is NOT on the loaded last page window
             // (last on-page post is 143852868). realignOffPageGetNewPostAnchor would otherwise
@@ -1560,6 +1684,40 @@ class ThemeViewModel @Inject constructor(
                 loadData(findPostUrl, ThemeLoadAction.Normal, preserveOpenTrace = true)
                 return
             }
+            // U-01 (audit Finding U-01, Critical): a GENUINE unread open whose confirmed first-unread
+            // post is off the loaded page window must not fall through to realignOffPageGetNewPostAnchor
+            // (which would anchor to the first parsed post of the loaded — usually last — page). Reload
+            // once at view=findpost&p=<unreadPostId> to fetch the real page that contains the unread post,
+            // so the highlight/scroll target is actually present.
+            val offPageUnreadReloadId = TopicUnreadOpenPolicy.offPageUnreadFindPostReloadId(page)
+            if (offPageUnreadReloadId != null &&
+                    page.id > 0 &&
+                    unreadFindPostUpgradeTraceId != openTrace.id
+            ) {
+                unreadFindPostUpgradeTraceId = openTrace.id
+                val offPageUnreadAnchor = offPageUnreadReloadId.toString()
+                val findPostUrl = TopicUnreadFindPostReloadPolicy.buildFindPostUrl(page.id, offPageUnreadAnchor)
+                forpdateam.ru.forpda.diagnostic.TopicUnreadAnchorDiagnostics.openTarget(
+                        topicId = page.id,
+                        openTarget = "unread_off_page",
+                        expectedPostId = offPageUnreadAnchor,
+                        actualPostId = page.posts.firstOrNull { it.id > 0 }?.id?.toString(),
+                        hasUnreadTarget = true,
+                        anchorSource = "off_page_unread_findpost_reload",
+                        traceId = openTrace.id,
+                )
+                forpdateam.ru.forpda.diagnostic.TopicUnreadAnchorDiagnostics.findPostReloadStarted(
+                        topicId = page.id,
+                        anchorPostId = offPageUnreadAnchor,
+                        traceId = openTrace.id,
+                )
+                Log.w(
+                        TopicUnreadFindPostReloadPolicy.LOG_TAG,
+                        "reload_findpost_unread_offpage topic=${page.id} anchor=$offPageUnreadAnchor trace=$openTrace.id"
+                )
+                loadData(findPostUrl, ThemeLoadAction.Normal, preserveOpenTrace = true)
+                return
+            }
             TopicUnreadOpenPolicy.realignOffPageGetNewPostAnchor(page)
             // Log 14_06-18-05-59: 1121483/1103268/1109539/528252/1115025 are fully read.
             // The server returns a bottom #entry redirect (last-read bookmark) and the parser
@@ -1579,10 +1737,21 @@ class ThemeViewModel @Inject constructor(
         val redirectEntryId = forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
                 .extractHashEntryPostIdFromTopicUrl(page.url.orEmpty())
                 ?.toIntOrNull()
-        val ambiguousFindPostAnchor = TopicUnreadFindPostReloadPolicy.resolveAmbiguousListUnreadFindPostAnchor(
-                loadedPagePostIds = loadedPostIds,
-                redirectEntryId = redirectEntryId,
-        )
+        val redirectIsBottomEntry = redirectEntryId != null &&
+                loadedPostIds.lastOrNull() == redirectEntryId
+        val listUnreadBottomRedirectAnchor = TopicUnreadFindPostReloadPolicy
+                .resolveListUnreadBottomRedirectFindPostAnchor(
+                        loadedPagePostIds = loadedPostIds,
+                        redirectEntryId = redirectEntryId,
+                )
+        val ambiguousFindPostAnchor = if (redirectIsBottomEntry && activeLoadListTopicMarkedUnread) {
+            listUnreadBottomRedirectAnchor
+        } else {
+            TopicUnreadFindPostReloadPolicy.resolveAmbiguousListUnreadFindPostAnchor(
+                    loadedPagePostIds = loadedPostIds,
+                    redirectEntryId = redirectEntryId,
+            )
+        }
         val shouldReloadFindPost = TopicUnreadFindPostReloadPolicy.shouldReloadAsFindPost(
                 requestUrl = themeUrl,
                 loadAction = _loadAction,
@@ -1606,8 +1775,8 @@ class ThemeViewModel @Inject constructor(
                 ambiguousBottomRedirect = page.ambiguousLastUnreadBottomRedirect,
                 hasUnreadTarget = page.hasUnreadTarget,
                 fallbackAnchorPostId = ambiguousFindPostAnchor,
-                redirectIsBottomEntry = redirectEntryId != null &&
-                        loadedPostIds.lastOrNull() == redirectEntryId,
+                redirectIsBottomEntry = redirectIsBottomEntry,
+                listTopicMarkedUnread = activeLoadListTopicMarkedUnread,
         )
         val findPostUpgradeAnchor = when {
             shouldReloadFindPost -> unreadAnchorPostId
@@ -1920,6 +2089,31 @@ class ThemeViewModel @Inject constructor(
             )
         }
         if (_loadAction == ThemeLoadAction.Normal || _loadAction == ThemeLoadAction.End) {
+            // Multi-back anchor loss fix (log 239158): a page opened via an explicit findpost / `p=`
+            // link is pushed with the CLICKED post as its anchor. Record it as the authoritative
+            // history anchor so a later in-tab link tapped from a different (scrolled-to) post cannot
+            // overwrite the entry's anchor with that trailing visible post — BACK must return to the
+            // exact source post the page was opened at, not a neighbor (push #entry132558585, not 132558226).
+            //
+            // Regression fix (log 25_06-09-41-46): scope this to a genuine IN-TAB findpost link tap.
+            // A FRESH topic open (favorites/topics/unread/already-read) also resolves through a
+            // getnewpost/findpost redirect URL, so openedViaFindPostLink is incidentally true there;
+            // pinning that open anchor as authoritative froze the entry on the server bookmark and
+            // blocked the user's real scroll position from being saved, so tab re-entry restored a
+            // stale post. A fresh open must land on last-read/unread via the read/return position.
+            if (ThemeAuthoritativeAnchorPolicy.shouldRecordAuthoritativeAnchor(
+                            openedViaFindPostLink = openedViaFindPostLink,
+                            isFreshTopicOpen = isFreshTopicOpen(),
+                            isExplicitPostTarget =
+                                    lastOpenResolution?.targetType == TopicOpenTargetType.EXPLICIT_POST,
+                    )
+            ) {
+                val explicitAnchor = (page.anchorPostId ?: page.anchor?.removePrefix("entry"))
+                        ?.takeIf { it.isNotBlank() }
+                if (explicitAnchor != null) {
+                    page.authoritativeAnchorPostId = explicitAnchor
+                }
+            }
             historyController.saveToHistory(page)
         }
         if (_loadAction == ThemeLoadAction.Refresh || _loadAction == ThemeLoadAction.Back) {
@@ -2156,6 +2350,45 @@ class ThemeViewModel @Inject constructor(
                         "reason" to resolution.reason
                 )
         )
+        // Single source of truth for anchor precedence on a URL-open. [TopicAnchorResolver] collapses
+        // the historically competing reads (server target vs saved return position vs history) into
+        // ONE deterministic decision driven by {openIntent × server target}. A fresh list open of a
+        // still-unread topic ALWAYS resolves to the server first-unread (never a drifted saved
+        // snapshot — logs 25_06-10-52 / 25_06-14-34); only a read-topic resume / genuine re-entry
+        // restores a saved in-progress position. In-tab / cross-topic BACK are served by the history
+        // subsystem and do not reach this path.
+        val isExplicitLink = TopicOpenTargetResolver.hasFindPostMarker(trimmedUrl) ||
+                explicitTargetPostIdFromUrl(url) != null ||
+                resolution.targetType == TopicOpenTargetType.EXPLICIT_POST ||
+                resolution.targetType == TopicOpenTargetType.EXPLICIT_PAGE
+        val anchorDecision = TopicAnchorResolver.resolve(
+                TopicAnchorResolver.Input(
+                        topicId = incomingTopicId,
+                        openIntent = TopicAnchorResolver.classifyOpenIntent(
+                                isExplicitLink = isExplicitLink,
+                                isFreshOpenIntent = isFreshTopicOpen(),
+                                isRestoreIntent = isRestoreTopicOpen(),
+                        ),
+                        readState = TopicAnchorResolver.ReadState.UNKNOWN,
+                        serverTarget = TopicAnchorResolver.ServerTarget(
+                                url = resolution.url,
+                                type = resolution.targetType,
+                                reason = resolution.reason,
+                        ),
+                        savedReturnPosition = incomingTopicId?.let { returnPositionStore.peek(it) },
+                )
+        )
+        if (anchorDecision is TopicAnchorResolver.Decision.RestoreSavedPosition) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "loadUrl tab_reentry_restore target=${anchorDecision.url} source=$sourceScreen topic=$incomingTopicId savedSt=${anchorDecision.position.pageSt} savedPost=${anchorDecision.position.postId} resolverReason=${resolution.reason} decision=${anchorDecision.reason}"
+            )
+            themeUrl = anchorDecision.url
+            suppressScrollRestoreForOpen = false
+            pendingUnreadOpenSuppressScroll = false
+            loadData(anchorDecision.url, ThemeLoadAction.Back)
+            return
+        }
         Log.i(
                 THEME_HISTORY_TAG,
                 "loadUrl normal target=${resolution.url} source=$sourceScreen sourceTopic=${currentPage?.id} sourceSt=${getRefreshCapturePageInstance()?.st} sourceVisible=$visibleCurrentPage pendingSourcePost=${pendingHistorySourceAnchor?.postId} reason=${resolution.reason}"
@@ -2859,6 +3092,9 @@ class ThemeViewModel @Inject constructor(
         lastLinkSourceAnchor = null
         skipNextUnreadJumpAfterTabSwitch = false
         initialOpenSettledAt = 0L
+        // STEP 2: a new topic (or findpost-reload of the same topic) drops the sticky
+        // explicit-anchor intent so the new open arms cleanly.
+        resetExplicitAnchorScrollSettled()
         if (clearHistory) {
             historyController.clear()
         }
@@ -2926,12 +3162,91 @@ class ThemeViewModel @Inject constructor(
     }
 
     private fun buildBackRestoreUrl(page: ThemePage): String {
-        val cleanUrl = buildCleanThemeUrl(page.id, page.st)
-        val postId = page.anchorPostId
-                ?.removePrefix("entry")
-                ?.takeIf { it.all(Char::isDigit) }
-                ?: return cleanUrl
-        return "$cleanUrl#entry$postId"
+        // B-02: prefer the page anchor, then the persisted native back snapshot (which
+        // survives independently of the 15s JS source-anchor TTL), then any url-hash.
+        // This keeps #entry<postId> in the back-restore URL even after a slow read of the
+        // target topic expired the JS source-anchor.
+        val nativeSnapshot = historyController.peekBackSnapshot(page.id, page.st)
+                ?.takeIf { it.isUsable() }
+        val nativeSnapshotPostId = nativeSnapshot?.visiblePostId
+        // Cross-tab durable fallback (device log 26_06-10-34, cross-topic BACK landed on the page-top
+        // post 143861523 instead of the source post). The per-tab back snapshots live in this tab's
+        // [historyController] and are wiped by `resetTransientStateForNewTopic -> clear()` when the
+        // source topic's tab is REUSED for the cross-topic open. With the snapshot gone, both the
+        // page anchor and `peekBackSnapshot`/`findUsableBackSnapshotByPost` yield nothing and the URL
+        // degrades to a bare `st=` page — i.e. the first post of that page. [returnPositionStore] is
+        // app-scoped and survives the tab reset (its documented cross-tab purpose), so consult it to
+        // recover the precise #entry post + the st it was captured on. Strictly a gap-filler: it is
+        // only used when the page anchor and per-tab snapshot are both absent, so the working
+        // same-tab path (native snapshot present) is unchanged.
+        val durableReturn = returnPositionStore.peek(page.id)
+                ?.takeIf { !it.postId.isNullOrBlank() }
+        // Cross-topic BACK st/anchor mismatch fix (log 1121483): in HYBRID the loaded page.st (e.g.
+        // 1260/page-64) can differ from the page the user navigated FROM (st=1240/page-63 where the
+        // restore anchor post lives). The native back snapshot for that source post is keyed by the
+        // SOURCE st, so reconcile: if the post we are about to restore was captured at a DIFFERENT st,
+        // build the URL with the snapshot's st so the #entry post is actually on the loaded page.
+        val restoreAnchorPostId = page.anchorPostId?.takeIf { it.isNotBlank() }
+                ?: nativeSnapshotPostId
+                ?: durableReturn?.postId
+        val sourceSnapshot = historyController
+                .findUsableBackSnapshotByPost(page.id, restoreAnchorPostId)
+                ?.takeIf { it.pageSt != page.st && it.visiblePostId != null }
+        // Prefer a per-tab st reconciliation; otherwise, when we are recovering purely from the
+        // durable cross-tab store (no page anchor, no per-tab snapshot), use the st it was saved on.
+        val durableReturnStForUrl = durableReturn
+                ?.takeIf { page.anchorPostId.isNullOrBlank() && nativeSnapshotPostId.isNullOrBlank() }
+                ?.pageSt
+        val restoreSt = sourceSnapshot?.pageSt ?: durableReturnStForUrl ?: page.st
+        if (BuildConfig.DEBUG && sourceSnapshot != null) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "back_restore_st_reconciled topic=${page.id} pageSt=${page.st} sourceSt=${sourceSnapshot.pageSt} post=$restoreAnchorPostId"
+            )
+        }
+        val url = ThemeBackRestoreUrlPolicy.buildRestoreUrl(
+                topicId = page.id,
+                st = restoreSt,
+                anchorPostId = page.anchorPostId,
+                pageUrl = page.url,
+                // Native per-tab snapshot first; durable cross-tab store fills the gap when the tab
+                // was reused and the per-tab snapshot was wiped (keeps #entry instead of page-top).
+                nativeSnapshotPostId = nativeSnapshotPostId ?: durableReturn?.postId
+        )
+        if (BuildConfig.DEBUG &&
+                page.anchorPostId.isNullOrBlank() &&
+                nativeSnapshotPostId.isNullOrBlank() &&
+                durableReturn?.postId != null &&
+                url.contains("#entry")
+        ) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "back_restore_from_return_store topic=${page.id} st=$restoreSt durablePost=${durableReturn.postId} durableSt=${durableReturn.pageSt} url=$url"
+            )
+            NavBackstackTrace.log(
+                    event = "back_restore_from_return_store",
+                    navigator = "ThemeViewModel",
+                    topicId = page.id,
+                    reason = "per_tab_snapshot_wiped_cross_tab_recover"
+            )
+        }
+        if (BuildConfig.DEBUG &&
+                page.anchorPostId.isNullOrBlank() &&
+                !nativeSnapshotPostId.isNullOrBlank() &&
+                url.contains("#entry")
+        ) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "back_restore_from_native_snapshot topic=${page.id} st=${page.st} snapshotPost=$nativeSnapshotPostId status=${nativeSnapshot?.status} url=$url"
+            )
+            NavBackstackTrace.log(
+                    event = "back_restore_from_native_snapshot",
+                    navigator = "ThemeViewModel",
+                    topicId = page.id,
+                    reason = "source_anchor_ttl_independent"
+            )
+        }
+        return url
     }
 
     private suspend fun mapEntityWithPostListGuard(page: ThemePage, reason: String) {
@@ -3141,6 +3456,7 @@ class ThemeViewModel @Inject constructor(
 
     private fun stripDuplicateHatFromNonFirstPage(page: ThemePage, requestedPage: Int): Boolean {
         val before = page.posts.size
+        val beforeIds = if (BuildConfig.DEBUG) page.posts.map { it.id } else emptyList()
         val knownHatId = TopicPrependedHatPolicy.resolvePrependedHatId(
                 page = page,
                 requestedPage = requestedPage,
@@ -3157,6 +3473,16 @@ class ThemeViewModel @Inject constructor(
         )
         if (before > page.posts.size) {
             Timber.w("Removed prepended hat post from non-first page")
+            if (BuildConfig.DEBUG) {
+                val afterIds = page.posts.map { it.id }
+                val removed = beforeIds.filterNot { it in afterIds }
+                Log.i(
+                        THEME_HISTORY_TAG,
+                        "hat_strip_diag topic=${page.id} reqPage=$requestedPage knownHatId=$knownHatId " +
+                                "anchorPostId=${page.anchorPostId} anchors=${page.anchors} " +
+                                "removed=$removed kept=$afterIds"
+                )
+            }
         }
         return kept
     }
@@ -3334,8 +3660,21 @@ class ThemeViewModel @Inject constructor(
             wasNearBottom: Boolean? = null
     ) {
         val pendingSource = pendingHistorySourceAnchor?.takeIf { sourceAnchorAppliesTo(target, it) }
+        // Multi-back anchor loss fix (log 239158): a trailing snapshot for an in-tab findpost page
+        // carries the click-time visible post (e.g. 132558226), which must NOT overwrite the entry's
+        // authoritative open anchor (e.g. 132558585). Prefer the authoritative #entry as the restored
+        // anchor while still honoring the source anchor's scroll metadata.
+        val authoritativeAnchor = target.authoritativeAnchorPostId?.takeIf { it.isNotBlank() }
         val effectiveScrollY = pendingSource?.scrollY ?: scrollY
-        val effectiveAnchorPostId = pendingSource?.postId ?: anchorPostId
+        val rawEffectiveAnchorPostId = pendingSource?.postId ?: anchorPostId
+        val keepAuthoritativeAnchor = ThemeAuthoritativeAnchorPolicy.shouldKeepAuthoritative(
+                authoritativeAnchorPostId = authoritativeAnchor,
+                candidateAnchorPostId = rawEffectiveAnchorPostId,
+        )
+        val effectiveAnchorPostId = ThemeAuthoritativeAnchorPolicy.resolveEntryAnchor(
+                authoritativeAnchorPostId = authoritativeAnchor,
+                candidateAnchorPostId = rawEffectiveAnchorPostId,
+        )
         val effectiveAnchorOffsetTop = pendingSource?.offsetTop ?: anchorOffsetTop
         val effectiveScrollRatio = pendingSource?.ratio ?: scrollRatio
         // Log 14_06-19: prior code hard-reset wasNearBottom=false whenever a sourceAnchor was
@@ -3364,6 +3703,46 @@ class ThemeViewModel @Inject constructor(
                 effectiveScrollRatio,
                 effectiveWasNearBottom
         )
+        // Multi-back anchor loss: mirror the committed in-tab scroll position into the cross-tab
+        // return-position store so tab re-entry can restore it (the per-tab history is cleared on
+        // topic switch). Uses effective anchor/scroll, which already honor an active source anchor.
+        //
+        // Trailing-capture overwrite fix (device log 25_06-19-16-48, cross-topic back to wrong
+        // post): when the JS source-anchor TTL has expired and the user has manually scrolled
+        // within the source page, a trailing onPauseOrHide JS capture of the visible post (e.g.
+        // 143873895) flows through updatePageHistoryHtml. The shouldKeepAuthoritative branch above
+        // protects the page's own anchorPostId, but a raw `returnPositionStore.save(effectiveAnchorPostId)`
+        // would still overwrite the durable cross-topic back snapshot's post id (143876380) with
+        // that scrolled-to visible post. The next reentry / tab switch / favorites re-open would
+        // then restore the wrong post — the dynamic wrong-post smoking gun (143860995, 143986594,
+        // 143873895 — different per log because it's the user's last visible post).
+        //
+        // The durable back-snapshot was stamped at crossTopicOpen time with the click-time source
+        // post and survives independently of the JS TTL. Prefer it for the cross-tab save. Falls
+        // back to the authoritative explicit-open anchor (in-tab findpost) and finally to the raw
+        // effective anchor (normal scroll pages keep updating their genuine viewed anchor).
+        val durableBackSnapshotPostId = historyController.peekBackSnapshot(target.id, target.st)
+                ?.takeIf { it.isUsable() }
+                ?.visiblePostId
+        val returnPostId = ThemeAuthoritativeAnchorPolicy.resolveReturnPositionPostId(
+                durableBackSnapshotPostId = durableBackSnapshotPostId,
+                pageAuthoritativeAnchorPostId = target.authoritativeAnchorPostId,
+                candidateAnchorPostId = effectiveAnchorPostId,
+        )
+        if (target.id > 0 && !returnPostId.isNullOrBlank()) {
+            returnPositionStore.save(
+                    topicId = target.id,
+                    pageSt = target.st,
+                    postId = returnPostId,
+                    scrollY = effectiveScrollY
+            )
+        }
+        if (keepAuthoritativeAnchor) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "history snapshot kept authoritative topic=${target.id} st=${target.st} page=${target.pagination.current} authoritativePostId=$authoritativeAnchor ignoredPost=$rawEffectiveAnchorPostId href=${pendingSource?.href}"
+            )
+        }
         if (pendingSource != null) {
             Log.i(
                     THEME_HISTORY_TAG,
@@ -3481,6 +3860,10 @@ class ThemeViewModel @Inject constructor(
                 capturedAt = SystemClock.uptimeMillis()
         )
         lastLinkSourceAnchor = anchor
+        // R-02: a capture-phase source-anchor is the start of a NEW user gesture. Open a fresh
+        // dispatch window so the next handleNewUrl claim succeeds, while repeat dispatches from
+        // the same gesture (handleUri + onPageStarted for the same tap) are suppressed.
+        navigationGestureGuard.beginGesture()
         val sourcePage = getRefreshCapturePageInstance()
         pendingHistorySourceAnchor = anchor
         pendingHistorySourceTopicId = sourcePage?.id
@@ -3534,10 +3917,43 @@ class ThemeViewModel @Inject constructor(
                 ?.takeIf { matchingRequest == null }
                 ?.takeIf { sourceAnchorAppliesTo(target, it) }
         val effectiveScrollY = pendingSource?.scrollY ?: scrollY
-        val effectiveAnchorPostId = pendingSource?.postId ?: anchorPostId
+        val rawEffectiveAnchorPostId = pendingSource?.postId ?: anchorPostId
+        // Multi-back anchor loss fix (log 239158, in-tab findpost): this is the SECOND snapshot path
+        // (parallel to updatePageHistoryHtml). A trailing source/visible-anchor snapshot for an
+        // in-tab findpost page carries the click-time visible post (e.g. 121429251) which must NOT
+        // overwrite the entry's authoritative open anchor (e.g. 121429450) — BACK must pop the source
+        // post, not the neighbor. Mirror the updatePageHistoryHtml guard so both snapshot paths agree.
+        val authoritativeAnchor = target.authoritativeAnchorPostId?.takeIf { it.isNotBlank() }
+        val keepAuthoritativeAnchor = ThemeAuthoritativeAnchorPolicy.shouldKeepAuthoritative(
+                authoritativeAnchorPostId = authoritativeAnchor,
+                candidateAnchorPostId = rawEffectiveAnchorPostId,
+        )
+        val effectiveAnchorPostId = ThemeAuthoritativeAnchorPolicy.resolveEntryAnchor(
+                authoritativeAnchorPostId = authoritativeAnchor,
+                candidateAnchorPostId = rawEffectiveAnchorPostId,
+        )
         val effectiveAnchorOffsetTop = pendingSource?.offsetTop ?: anchorOffsetTop
         val effectiveScrollRatio = pendingSource?.ratio ?: scrollRatio
         val effectiveWasNearBottom = if (pendingSource != null) false else wasNearBottom
+        // Geometry-consistency guard (device log 25_06-22-18-38, cross-topic / in-tab BACK lands on
+        // the wrong post 143860995 instead of source 143876380). When this is a source-anchor capture
+        // (NO matching refresh request) for a page whose authoritative explicit-open anchor DIFFERS
+        // from the visible post, the candidate carries the authoritative post id (kept by
+        // resolveEntryAnchor) but the VISIBLE post's pixel geometry (`effectiveScrollY` = the post the
+        // user scrolled to, e.g. 143860995 at y=11810). [applyRefreshSnapshot] would write that
+        // mismatched tuple onto the live page instance, and the in-tab `cross_topic_return_in_place`
+        // BACK restores `top.scrollY` directly — so BACK shows `#entry143876380` scrolled to 11810
+        // (143860995's location). Reject the geometry mutation here, exactly like
+        // [updatePageHistoryHtml]'s shouldKeepAuthoritative branch, so the page keeps the
+        // authoritative post's own geometry. A genuine refresh restore (matchingRequest != null) is
+        // never affected; the cross-topic equal-value case has keepAuthoritativeAnchor=false.
+        if (keepAuthoritativeAnchor && matchingRequest == null) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "refresh snapshot rejected mismatched geometry topic=${target.id} st=${target.st} page=${target.pagination.current} authoritativePostId=$authoritativeAnchor ignoredPost=$rawEffectiveAnchorPostId ignoredY=$effectiveScrollY href=${pendingSource?.href}"
+            )
+            return
+        }
         applyRefreshSnapshot(target, matchingRequest, effectiveScrollY, effectiveAnchorPostId, effectiveAnchorOffsetTop, effectiveScrollRatio, effectiveWasNearBottom)
         if (matchingRequest != null) {
             val upgradedMode = ThemeRefreshScrollRestorePolicy.effectiveRestoreMode(
@@ -3560,6 +3976,12 @@ class ThemeViewModel @Inject constructor(
                         wasNearBottom = target.wasNearBottom
                 )
             }
+        }
+        if (keepAuthoritativeAnchor) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "refresh snapshot kept authoritative topic=${target.id} st=${target.st} page=${target.pagination.current} authoritativePostId=$authoritativeAnchor ignoredPost=$rawEffectiveAnchorPostId href=${pendingSource?.href}"
+            )
         }
         if (pendingSource != null) {
             Log.i(
@@ -3594,14 +4016,128 @@ class ThemeViewModel @Inject constructor(
     }
 
     private fun applyLinkSourceAnchorSnapshot(target: ThemePage, anchor: ThemeLinkSourceAnchor, reason: String) {
+        // Multi-back anchor loss fix (log 239158): if this page was opened at an explicit findpost
+        // post, a NEW in-tab link tapped from a DIFFERENT (scrolled-to) post must not overwrite the
+        // entry's authoritative anchor with that click-time visible post. Keep the authoritative
+        // #entry as the restore target; the new source anchor still updates scroll metadata + native
+        // back snapshot. When the source post EQUALS the authoritative anchor (the working cross-topic
+        // case, e.g. 143876380), this guard is a no-op and behavior is unchanged.
+        val authoritative = target.authoritativeAnchorPostId?.takeIf { it.isNotBlank() }
+        val keepAuthoritative = ThemeAuthoritativeAnchorPolicy.shouldKeepAuthoritative(
+                authoritativeAnchorPostId = authoritative,
+                candidateAnchorPostId = anchor.postId,
+        )
+        if (keepAuthoritative) {
+            // Geometry consistency fix (device log 25_06-22-18-38, in-tab link from a DIFFERENT
+            // post than the page's authoritative anchor): the click-time visible post (e.g.
+            // 143860995 at y=11810) describes a DIFFERENT screen location than the authoritative
+            // anchor (143876380 at y=3807). Earlier fixes correctly preserved `anchorPostId` but
+            // still adopted the visible post's `scrollY`/`anchorOffsetTop`/`scrollRatio` and fed
+            // that inconsistent tuple into the native back snapshot — so BACK loaded
+            // `#entry143876380` but scrolled to y=11810 (the location of 143860995), leaving the
+            // user looking at the wrong post. The authoritative post's recorded geometry (from the
+            // last render at that post) is the only self-consistent value, so when we keep the
+            // authoritative anchor we must reject the ENTIRE geometry mutation from this snapshot
+            // and must NOT capture a new back snapshot (the existing one for the authoritative
+            // post survives untouched). The cross-topic equal-value case is unaffected because
+            // `keepAuthoritative` is false there.
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "sourceAnchor kept authoritative reason=$reason topic=${target.id} st=${target.st} authoritativePostId=$authoritative ignoredSourcePost=${anchor.postId} ignoredY=${anchor.scrollY} href=${anchor.href}"
+            )
+            return
+        }
         target.scrollY = anchor.scrollY
         target.anchorPostId = anchor.postId
+        // Multi-hop BACK wrong-post fix (log 239158): the cached back-remap path replays `prev.url`
+        // and renders `page.anchor` for the scroll. Keep url + anchor self-consistent with the
+        // post that actually wins the restore (the clicked source post here).
+        val restoreAnchorPostId = target.anchorPostId
+                ?.takeIf { it.isNotBlank() }
+                ?.removePrefix("entry")
+        if (restoreAnchorPostId != null) {
+            // `anchor` is a computed getter over `anchors.last()`; rewrite the list so the cached
+            // back-remap render scrolls to the authoritative source post, not the stale one.
+            val entryName = "entry$restoreAnchorPostId"
+            if (target.anchor != entryName) {
+                target.anchors.clear()
+                target.anchors.add(entryName)
+            }
+            target.url = ThemeBackRestoreUrlPolicy.replaceEntryHash(target.url, restoreAnchorPostId)
+        }
         target.anchorOffsetTop = anchor.offsetTop ?: 0.0
         target.scrollRatio = anchor.ratio
         target.wasNearBottom = (anchor.ratio ?: 0.0) >= TopicReadExitPolicy.LAST_PAGE_MARK_READ_RATIO_THRESHOLD
+        // B-02/B-01: persist a native back snapshot scoped to topicId+st the moment the user
+        // follows a link. This is independent of the 15s JS source-anchor TTL, so building the
+        // back-restore URL ([buildBackRestoreUrl]) can keep #entry<postId> even if the JS anchor
+        // expired during a slow read of the target topic.
+        captureNativeBackSnapshot(target, reason)
         Log.i(
                 THEME_HISTORY_TAG,
                 "sourceAnchor applied reason=$reason topic=${target.id} st=${target.st} page=${target.pagination.current} sourcePostId=${anchor.postId} offset=${target.anchorOffsetTop} y=${anchor.scrollY} ratio=${anchor.ratio} href=${anchor.href}"
+        )
+    }
+
+    /**
+     * B-01/B-02: durably capture the current source page position into the history controller
+     * as a native back snapshot. Scoped to topicId+st, it survives independently of the JS
+     * source-anchor TTL so that returning to this topic restores the original post/scroll even
+     * when the cross-topic target was read for longer than [SOURCE_ANCHOR_TTL_MS].
+     */
+    private fun captureNativeBackSnapshot(target: ThemePage, reason: String) {
+        if (target.id <= 0) return
+        val effectiveVisiblePostId = effectiveVisiblePostIdOf(target)
+        historyController.captureBackSnapshot(
+                TopicBackSnapshot.fromPage(
+                        topicId = target.id,
+                        pageSt = target.st,
+                        visiblePostId = effectiveVisiblePostId,
+                        scrollOffset = target.scrollY,
+                        scrollRatio = target.scrollRatio,
+                        wasNearBottom = target.wasNearBottom,
+                        status = TopicBackSnapshotStatus.CAPTURED
+                )
+        )
+        saveReturnPosition(target)
+        if (BuildConfig.DEBUG) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "native back snapshot captured reason=$reason topic=${target.id} st=${target.st} post=$effectiveVisiblePostId y=${target.scrollY} ratio=${target.scrollRatio}"
+            )
+        }
+    }
+
+    /**
+     * STEP 3 — effective visible post id for a back-restore snapshot. Always prefers
+     * [ThemePage.anchorPostId], falls back to the entry-prefixed [ThemePage.anchor] so the
+     * snapshot carries a post id even on parser paths that only fill `anchor` (findpost reload).
+     * A snapshot without a post id falls back to lossy pixel/ratio restore, which a reflow
+     * (prepend, late image render) corrupts — so we always populate it when any anchor exists.
+     */
+    private fun effectiveVisiblePostIdOf(page: ThemePage): String? {
+        page.anchorPostId?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        return page.anchor
+                ?.trim()
+                ?.removePrefix("entry")
+                ?.removePrefix("ENTRY")
+                ?.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Multi-back anchor loss (log 24_06-23-12-50): persist the real per-topic viewed position into
+     * the app-scoped [returnPositionStore] so a later TAB re-entry (after the per-tab
+     * [ThemeHistoryController] was cleared) can restore it instead of re-opening fresh via
+     * getlastpost/getnewpost. Stores only when a usable anchor post id is present (the store itself
+     * ignores blank ids), so a bare page-top open never downgrades a good saved position.
+     */
+    private fun saveReturnPosition(target: ThemePage) {
+        if (target.id <= 0) return
+        returnPositionStore.save(
+                topicId = target.id,
+                pageSt = target.st,
+                postId = effectiveVisiblePostIdOf(target),
+                scrollY = target.scrollY
         )
     }
 
@@ -4213,8 +4749,33 @@ class ThemeViewModel @Inject constructor(
         val showTopicParam = uri.getQueryParameter("showtopic")
         if (BuildConfig.DEBUG) Timber.d("param showtopic: $showTopicParam")
 
-        if (showTopicParam != null && showTopicParam != Uri.parse(themeUrl).getQueryParameter("showtopic")) {
+        val isCrossTopicOpen = showTopicParam != null &&
+                showTopicParam != Uri.parse(themeUrl).getQueryParameter("showtopic")
+        val isFindPost = isFindPostNavigation(uri)
+        // R-02: a single user gesture can reach handleForumNavigation via both
+        // WebViewClient.handleUri and WebViewClient.onPageStarted. Claim the gesture once so a
+        // single tap cannot double-open a tab / double-push history. Distinct gestures (each
+        // preceded by a fresh source-anchor capture) and fresh loadData windows still dispatch.
+        if ((isCrossTopicOpen || isFindPost) && !navigationGestureGuard.tryClaimDispatch()) {
+            NavBackstackTrace.log(
+                    event = "nav_dispatch_suppressed_same_gesture",
+                    navigator = "ThemeViewModel",
+                    reason = if (isCrossTopicOpen) "cross_topic" else "findpost"
+            )
+            if (BuildConfig.DEBUG) {
+                Timber.d("handleForumNavigation: suppressed duplicate dispatch for url=$url")
+            }
+            return true
+        }
+
+        if (isCrossTopicOpen) {
             setTopicOpenIntent(TopicOpenIntentClassifier.freshIntentForSource(lastOpenSourceScreen))
+            // B-01 (lower-risk option): BEFORE opening Topic B in a new tab, durably capture
+            // Topic A's clicked source-anchor / current position as a native back snapshot.
+            // This makes Topic A's restore robust independent of the JS source-anchor TTL,
+            // without touching the new-tab behavior (the high-risk option). When no source
+            // anchor is available we emit a diagnostic so the loss is observable in logs.
+            captureBackSnapshotBeforeCrossTopicOpen(url)
             // Fix E: push a new top-level Theme tab so system back works even
             // if the in-tab history is corrupted. Fall back to in-tab loadUrl
             // if the router refused (e.g. the URL did not yield a topic id).
@@ -4225,12 +4786,80 @@ class ThemeViewModel @Inject constructor(
             return true
         }
 
-                    if (isFindPostNavigation(uri)) {
+        if (isFindPost) {
             handleFindPostNavigation(uri, url)
             return true
         }
 
         return false
+    }
+
+    /**
+     * B-01: durably capture Topic A's position right before a cross-topic link opens Topic B
+     * in a new tab. The in-tab history controller of Topic A does not record the cross-topic
+     * transition, so returning to Topic A's tab relies on this native snapshot (independent of
+     * the JS source-anchor TTL) rather than on the JS anchor still being live.
+     */
+    private fun captureBackSnapshotBeforeCrossTopicOpen(targetUrl: String) {
+        val sourcePage = getRefreshCapturePageInstance()
+        if (sourcePage == null || sourcePage.id <= 0) {
+            NavBackstackTrace.log(
+                    event = "source_anchor_missing",
+                    navigator = "ThemeViewModel",
+                    reason = "cross_topic_no_source_page"
+            )
+            Log.i(THEME_HISTORY_TAG, "source_anchor_missing target=$targetUrl reason=no_source_page")
+            return
+        }
+        val pendingAnchor = pendingHistorySourceAnchor?.takeIf { sourceAnchorAppliesTo(sourcePage, it) }
+        if (pendingAnchor != null) {
+            applyLinkSourceAnchorSnapshot(sourcePage, pendingAnchor, "crossTopicOpen")
+        } else if (sourcePage.anchorPostId.isNullOrBlank()) {
+            NavBackstackTrace.log(
+                    event = "source_anchor_missing",
+                    navigator = "ThemeViewModel",
+                    topicId = sourcePage.id,
+                    reason = "cross_topic_no_anchor"
+            )
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "source_anchor_missing topic=${sourcePage.id} st=${sourcePage.st} target=$targetUrl reason=no_anchor"
+            )
+        }
+        // Geometry-consistency back-snapshot guard (device log 25_06-22-18-38, cross-topic BACK lands
+        // on the wrong post 143860995 instead of source 143876380). When the page carries an
+        // authoritative explicit-open anchor (143876380) but the user tapped the link from a DIFFERENT
+        // visible post (143860995 at y=11810), `sourcePage.scrollY`/`scrollRatio` still describe that
+        // visible post, while [applyLinkSourceAnchorSnapshot] kept `anchorPostId=143876380` (geometry
+        // rejected, early return). Re-capturing here would pair the authoritative post id with the
+        // visible post's pixel offset, so BACK loads `#entry143876380` but scrolls to y=11810 → the
+        // user lands on 143860995. Skip the overwrite: the existing back snapshot (captured at the
+        // last render that was actually AT the authoritative post) holds the only self-consistent
+        // geometry. When the tapped source post EQUALS the authoritative anchor (normal cross-topic
+        // case), the guard is false and the snapshot is captured with genuine geometry as before.
+        val authoritativeAnchor = sourcePage.authoritativeAnchorPostId?.takeIf { it.isNotBlank() }
+        val tappedSourcePostId = pendingAnchor?.postId
+        val rejectMismatchedGeometry = ThemeAuthoritativeAnchorPolicy
+                .shouldRejectAuthoritativeMismatchedBackSnapshot(
+                        authoritativeAnchorPostId = authoritativeAnchor,
+                        candidateVisiblePostId = tappedSourcePostId,
+                )
+        if (rejectMismatchedGeometry) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "crossTopicOpen kept authoritative geometry topic=${sourcePage.id} st=${sourcePage.st} authoritativePostId=$authoritativeAnchor ignoredVisiblePost=$tappedSourcePostId ignoredY=${sourcePage.scrollY} target=$targetUrl"
+            )
+        } else {
+            // Always persist the best-known position so back-restore can rebuild #entry from a
+            // native snapshot even after the JS TTL window closes during a long read of Topic B.
+            captureNativeBackSnapshot(sourcePage, "crossTopicOpen")
+        }
+        // C-fix: the cross-topic link opens Topic B in a NEW tab without pushing an in-tab entry,
+        // so the source page (sourcePage) stays the in-tab history TOP. Arm the return guard so
+        // the first back after returning to this tab restores THIS exact page (st + #entry) rather
+        // than popping past it onto an earlier page of the same topic (log: landed on st=1260/page
+        // 64 instead of st=1180/post 143876380).
+        historyController.armCrossTopicReturnGuard(sourcePage.id, sourcePage.st)
     }
 
     private fun handleFindPostNavigation(uri: Uri, url: String) {
@@ -4612,11 +5241,30 @@ class ThemeViewModel @Inject constructor(
         val snapshot = (activeNavigationTarget as? TopicOpenTarget.BackRestore)?.snapshot?.takeIf { it.isUsable() }
                 ?: historyController.consumeBackSnapshot(page.id, page.st)?.takeIf { it.isUsable() }
                 ?: historyController.peekBackSnapshot(page.id, page.st)?.takeIf { it.isUsable() }
+                // By-post fallback: in HYBRID the loaded page.st can differ from the st the snapshot
+                // was keyed on, so the exact-key lookups above miss; recover it by the anchor post id
+                // the restore URL was built with (mirrors [buildBackRestoreUrl]'s st reconciliation).
+                ?: historyController.findUsableBackSnapshotByPost(page.id, page.anchorPostId)
         if (snapshot != null) {
             page.scrollY = snapshot.scrollOffset
             page.anchorPostId = snapshot.visiblePostId ?: page.anchorPostId
             page.scrollRatio = snapshot.scrollRatio ?: page.scrollRatio
             page.wasNearBottom = snapshot.wasNearBottom
+            // HYBRID infinite-scroll reanchor fix (device log 25_06-23-04-44, cross-topic BACK to the
+            // source post 143876380 lands on the neighbor 143860995). The back snapshot carries a
+            // post id + page scrollY but NO trustworthy intra-post offsetTop — the only offsetTop on
+            // the page is the stale CLICK-TIME value (e.g. 278.44, captured when the user tapped the
+            // link with 143876380 scrolled to the lower part of the viewport, ratio=0.759). The JS
+            // STEP-3 restore subtracts that as an intra-post offset, so it places 143876380 LOW on
+            // screen; the post ABOVE it (143860995) becomes the topmost-visible post, and the STEP-4
+            // HYBRID top-prepend then pins to that neighbor (`applyInfiniteEnd ... pinned=143860995`)
+            // — the scroll drifts and the user lands on 143860995, not the source post. A back-restore
+            // must TOP-ALIGN its anchor post (offset 0, like a findpost open and like the working
+            // `offset=null` back path) so the source post is the topmost-visible post and the prepend
+            // pins it. Drop the stale click-time offset; the snapshot never carried a real one.
+            if (ThemeBackRestoreUrlPolicy.shouldTopAlignBackRestoreAnchor(snapshot.visiblePostId)) {
+                page.anchorOffsetTop = null
+            }
             if (!page.anchorPostId.isNullOrBlank() || page.scrollY > 0 || page.scrollRatio != null || page.wasNearBottom) {
                 page.refreshRestoreId = UUID.randomUUID().toString().replace("-", "").take(8)
                 page.refreshRestoreMode = "ANCHOR"
@@ -4625,13 +5273,22 @@ class ThemeViewModel @Inject constructor(
             logBackRestoreApplied(page, source = "historyBackSnapshot")
             return
         }
-        val historyPage = historyController.currentPage ?: return
-        if (historyPage.id != page.id || historyPage.st != page.st) return
+        val historyPage = historyController.currentPage
+        if (historyPage == null || historyPage.id != page.id || historyPage.st != page.st) {
+            applyDurableReturnRestore(page)
+            return
+        }
         page.scrollY = historyPage.scrollY
         page.anchorPostId = historyPage.anchorPostId ?: page.anchorPostId
         page.anchorOffsetTop = historyPage.anchorOffsetTop ?: page.anchorOffsetTop
         page.scrollRatio = historyPage.scrollRatio ?: page.scrollRatio
         page.wasNearBottom = historyPage.wasNearBottom
+        // Same HYBRID infinite-scroll reanchor fix as the snapshot branch above (device log
+        // 25_06-23-04-44): a back restore with a real anchor post must top-align it so the prepend
+        // pins the source post, not a neighbor that happened to be above it on screen.
+        if (ThemeBackRestoreUrlPolicy.shouldTopAlignBackRestoreAnchor(page.anchorPostId)) {
+            page.anchorOffsetTop = null
+        }
         if (!page.anchorPostId.isNullOrBlank() || page.scrollY > 0 || page.scrollRatio != null || page.wasNearBottom) {
             page.refreshRestoreId = historyPage.refreshRestoreId
                     ?: UUID.randomUUID().toString().replace("-", "").take(8)
@@ -4639,6 +5296,35 @@ class ThemeViewModel @Inject constructor(
             page.refreshRestoreSource = "historyBack"
         }
         logBackRestoreApplied(page, source = "historyBack")
+    }
+
+    /**
+     * Last-resort BACK restore from the app-scoped, cross-tab [returnPositionStore] (device log
+     * 26_06-10-34, cross-topic BACK to page-top 143861523). Reached only when BOTH the per-tab back
+     * snapshots and the per-tab history are gone — the documented "source topic's tab was reused for
+     * the cross-topic open, so `resetTransientStateForNewTopic -> clear()` wiped them" case. The
+     * return store survives the tab reset, so it still knows the precise post the user left on.
+     *
+     * Only engages when the restore URL already targets that durable post (i.e. [buildBackRestoreUrl]
+     * recovered the same #entry from the store): we just top-align it and arm the restore fields so
+     * the HYBRID prepend pins the source post instead of letting the page settle at the page-top post.
+     * Never overrides a real per-tab snapshot/history (those returned earlier).
+     */
+    private fun applyDurableReturnRestore(page: ThemePage) {
+        val durable = returnPositionStore.peek(page.id)?.takeIf { !it.postId.isNullOrBlank() } ?: return
+        if (page.st != durable.pageSt) return
+        val anchor = page.anchorPostId?.removePrefix("entry")?.takeIf { it.isNotBlank() }
+        if (anchor != durable.postId) return
+        if (durable.scrollY > 0) page.scrollY = durable.scrollY
+        // Top-align the recovered anchor post (same HYBRID reanchor fix as the snapshot branch) so the
+        // source post is the topmost-visible post and the top-prepend pins it, not a neighbor.
+        if (ThemeBackRestoreUrlPolicy.shouldTopAlignBackRestoreAnchor(page.anchorPostId)) {
+            page.anchorOffsetTop = null
+        }
+        page.refreshRestoreId = UUID.randomUUID().toString().replace("-", "").take(8)
+        page.refreshRestoreMode = "ANCHOR"
+        page.refreshRestoreSource = "returnPositionStore"
+        logBackRestoreApplied(page, source = "returnPositionStore")
     }
 
     private fun logBackRestoreApplied(page: ThemePage, source: String) {

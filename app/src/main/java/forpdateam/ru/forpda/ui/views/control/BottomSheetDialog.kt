@@ -103,21 +103,23 @@ class BottomSheetDialog : AppCompatDialog {
         if (layoutResId != 0 && contentView == null) {
             contentView = layoutInflater.inflate(layoutResId, coordinator, false)
         }
-        bottomSheetView = binding.designBottomSheet
-        behavior = BottomSheetBehaviorFixed.from(bottomSheetView!!)
-        behavior!!.addBottomSheetCallback(bottomSheetCallback)
-        behavior!!.isHideable = cancelable
+        val sheetView = binding.designBottomSheet
+        bottomSheetView = sheetView
+        val sheetBehavior = BottomSheetBehaviorFixed.from(sheetView)
+        behavior = sheetBehavior
+        sheetBehavior.addBottomSheetCallback(bottomSheetCallback)
+        sheetBehavior.isHideable = cancelable
         if (params == null) {
-            bottomSheetView!!.addView(contentView)
+            sheetView.addView(contentView)
         } else {
-            bottomSheetView!!.addView(contentView, params)
+            sheetView.addView(contentView, params)
         }
         binding.touchOutside.setOnClickListener {
             if (cancelable && isShowing && shouldWindowCloseOnTouchOutside()) {
                 cancel()
             }
         }
-        ViewCompat.setAccessibilityDelegate(bottomSheetView!!, object : AccessibilityDelegateCompat() {
+        ViewCompat.setAccessibilityDelegate(sheetView, object : AccessibilityDelegateCompat() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
                 super.onInitializeAccessibilityNodeInfo(host, info)
                 if (cancelable) {
@@ -136,7 +138,7 @@ class BottomSheetDialog : AppCompatDialog {
                 return super.performAccessibilityAction(host, action, args)
             }
         })
-        bottomSheetView!!.setOnTouchListener { _, _ -> true }
+        sheetView.setOnTouchListener { _, _ -> true }
         return container
     }
 

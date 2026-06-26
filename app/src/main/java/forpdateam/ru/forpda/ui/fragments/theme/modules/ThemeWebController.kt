@@ -126,6 +126,54 @@ class ThemeWebController(
     private var highlightArmedPostId: Long = 0L
     /** Generation for which the JS fade-out timer has been armed (independent of apply). */
     private var highlightFadeoutScheduledGeneration: Int = 0
+    /**
+     * H-03 (device log 24_06-20-37, topics 1121483 / 1103268 / 1115025): the
+     * `already_armed` guard short-circuited the VERY FIRST reapply of a fresh
+     * render — `armedGeneration` already equalled the page's `renderGenerationId`
+     * — yet ZERO `js_highlight_applied` / `native_highlight_bound` ever appeared
+     * in the whole session. The armed bookkeeping had drifted into "satisfied"
+     * without the apply JS ever being dispatched, so `PPDA_applyHighlight` was
+     * never called and the outline never painted.
+     *
+     * These two fields are the authoritative record of an *actual* dispatch:
+     * they are written ONLY immediately after `jsApi.eval(applyHighlight(...))`
+     * runs. The `already_armed` skip now requires that the apply was genuinely
+     * dispatched for THIS exact (generation, postId); a generation/postId that
+     * was merely "armed" but never dispatched no longer suppresses the apply.
+     */
+    private var highlightApplyDispatchedGeneration: Int = 0
+    private var highlightApplyDispatchedPostId: Long = 0L
+    /**
+     * Double-light-up latch (device log 24_06-23-12): the authoritative record
+     * that a `(renderGenerationId, postId)` has ALREADY run its single
+     * light-up + fade-out cycle. Unlike [highlightApplyDispatchedGeneration]
+     * (reset by [renderThemePage] / [resetRenderState] /
+     * [reapplyTopicHighlightAfterScrollSettled]), these fields are NEVER cleared
+     * by a re-render or a reveal/scroll-settled re-arm — they are only
+     * superseded when a genuinely NEW generation+post is dispatched. This makes
+     * a smart-patch re-render or a repeated reveal event for the SAME
+     * generation+post a NO-OP, so the ring lights once and fades once.
+     * See [HighlightArmingPolicy.isHighlightCycleAlreadyCompleted].
+     */
+    private var highlightCompletedGeneration: Int = 0
+    private var highlightCompletedPostId: Long = 0L
+    /**
+     * STEP 2 — sticky pending ScrollIntent for an explicit-anchor open. Stored separately from
+     * `renderGeneration` so a generation bump (reload / smart-patch re-render) does NOT drop the
+     * pending anchor. Cleared via [ThemeViewModel.isExplicitAnchorScrollSettledForController]
+     * once the blocking INITIAL_ANCHOR scroll for it reports success — the JS side only reports
+     * completion after the `scrollToElementWithRetries` final retry confirmed the anchor is near
+     * the viewport top (`isThemeAnchorNearViewportTop`), so the clear is event/state-based.
+     */
+    private var pendingExplicitAnchorPostId: Long = 0L
+    /**
+     * H-02 (audit Finding H-02): last page `renderGenerationId` observed by [reapplyTopicHighlight].
+     * Used to explicitly invalidate the per-render armed/fadeout flags when the page changes (a new
+     * generation is stamped) even on paths that bypass [renderThemePage]'s reset (cached-page restore,
+     * back-nav remap, smart-patch re-render). Without this, a stale armed generation could make
+     * [HighlightArmingPolicy.shouldArmForCurrentTarget] skip a valid new target.
+     */
+    private var lastObservedHighlightRenderGeneration: Int = 0
 
     /**
      * All updates to the per-render armed flag go through this helper so we
@@ -362,6 +410,9 @@ class ThemeWebController(
                 newValue = 0,
                 caller = "renderThemePage"
         )
+        // H-03: a new render must always allow a fresh apply dispatch for the new generation.
+        highlightApplyDispatchedGeneration = 0
+        highlightApplyDispatchedPostId = 0L
         // Additive shared-controller mirror (Phase 4): no behavior change, diagnostics only.
         val sharedSession = sharedRenderController.beginRender(
                 owner = WebViewRenderSession.Owner.THEME,
@@ -560,6 +611,10 @@ class ThemeWebController(
         pageLifecycleGeneration = 0
         setHighlightArmedGeneration(newValue = 0, caller = "resetRenderState")
         setHighlightArmedPostId(newValue = 0L, caller = "resetRenderState")
+        highlightApplyDispatchedGeneration = 0
+        highlightApplyDispatchedPostId = 0L
+        // STEP 2: a full render reset (topic change) drops the sticky explicit-anchor intent.
+        pendingExplicitAnchorPostId = 0L
         missedLifecycleFlushGeneration = 0
         if (BuildConfig.DEBUG) Log.i(REFRESH_SCROLL_TAG, "controller resetRenderState")
     }
@@ -1595,6 +1650,10 @@ class ThemeWebController(
                 newValue = 0L,
                 caller = "reapplyTopicHighlightAfterScrollSettled"
         )
+        // H-03: clear the dispatch record too so the deferred re-arm can actually dispatch the
+        // apply that the initial (deferApply=true) pass skipped.
+        highlightApplyDispatchedGeneration = 0
+        highlightApplyDispatchedPostId = 0L
         reapplyTopicHighlight()
     }
 
@@ -1710,26 +1769,103 @@ class ThemeWebController(
             }
             return
         }
+        // STEP 2 — arm the sticky explicit-anchor intent. An explicit-post / findpost open arms the
+        // blocking INITIAL_ANCHOR path (Step 1). Store the target postId separately from generation
+        // so a generation bump (reload / smart-patch re-render) does NOT drop the pending anchor.
+        // Cleared by [onInitialAnchorScrollSettled] once the blocking scroll reports success —
+        // event/state-based, not a timer.
+        if (presenter.isExplicitAnchorBlockingOpenForController() && postId != pendingExplicitAnchorPostId) {
+            pendingExplicitAnchorPostId = postId
+            presenter.resetExplicitAnchorScrollSettled()
+        }
+        // H-02 (audit Finding H-02): when the page's render generation changed since we last armed,
+        // invalidate the stale armed/fadeout flags so the new target re-arms cleanly. Covers page-change
+        // paths that bypass renderThemePage's reset. Idempotent for an unchanged generation.
+        if (generation != lastObservedHighlightRenderGeneration) {
+            if (lastObservedHighlightRenderGeneration != 0 &&
+                    (highlightArmedGeneration != 0 || highlightFadeoutScheduledGeneration != 0)
+            ) {
+                setHighlightArmedGeneration(newValue = 0, caller = "reapplyTopicHighlight.generationChanged")
+                setHighlightArmedPostId(newValue = 0L, caller = "reapplyTopicHighlight.generationChanged")
+                setHighlightFadeoutScheduledGeneration(
+                        newValue = 0,
+                        caller = "reapplyTopicHighlight.generationChanged"
+                )
+                // H-03: a changed render generation invalidates the prior dispatch too.
+                highlightApplyDispatchedGeneration = 0
+                highlightApplyDispatchedPostId = 0L
+            }
+            lastObservedHighlightRenderGeneration = generation
+        }
+        // Double-light-up latch (device log 24_06-23-12): once this exact
+        // (generation, postId) has run its single light+fade cycle, ALL later
+        // re-arms for the same pair are no-ops — no re-dispatch, no re-schedule.
+        // This survives renderThemePage / resetRenderState /
+        // reapplyTopicHighlightAfterScrollSettled (which reset the dispatch
+        // guard) so a smart-patch re-render or a repeated reveal/scroll-settled
+        // event cannot re-light the ring. A genuinely new generation+post does
+        // not match the latch and still lights up once.
+        //
+        // STEP 2 — sticky explicit-anchor exception: an explicit-anchor open whose post has
+        // NOT yet settled near the viewport top must NOT be dropped by this latch. A generation
+        // bump (reload / smart-patch re-render) used to drop the pending anchor with
+        // `reason=generation_done` and the user landed on a random post. The sticky intent
+        // survives the bump and is re-armed until the JS side confirms the post is in the
+        // viewport (`isThemeAnchorNearViewportTop`).
+        if (HighlightArmingPolicy.isHighlightCycleAlreadyCompleted(
+                        completedGeneration = highlightCompletedGeneration,
+                        completedPostId = highlightCompletedPostId,
+                        currentGeneration = generation,
+                        currentPostId = postId,
+                ) && !HighlightArmingPolicy.isPendingExplicitAnchorUnsettled(
+                        pendingPostId = pendingExplicitAnchorPostId,
+                        anchorSettled = presenter.isExplicitAnchorScrollSettledForController(),
+                )) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = topicId.toLong(),
+                        reason = "generation_done",
+                        renderGenerationId = generation,
+                        postId = postId,
+                        armedGeneration = highlightApplyDispatchedGeneration,
+                        fadeoutScheduledGeneration = highlightFadeoutScheduledGeneration
+                )
+            }
+            return
+        }
         val typeName = highlight.type.jsName
         val blockingScrollPending = presenter.hasBlockingScrollPending()
         val deferApply = HighlightArmingPolicy.shouldDeferUntilScrollSettled(blockingScrollPending)
-        val shouldScheduleFadeout = highlightFadeoutScheduledGeneration != generation
-        val shouldApply = !deferApply && HighlightArmingPolicy.shouldArmForCurrentTarget(
-                armedGeneration = highlightArmedGeneration,
-                armedPostId = highlightArmedPostId,
+        // H-03 (log 24_06-20-37): anchor the apply decision on whether the apply JS was actually
+        // DISPATCHED for this (generation, postId) — not on the `armed*` bookkeeping, which the log
+        // showed pre-satisfied on the first reapply with zero applies ever dispatched.
+        val shouldApply = !deferApply && HighlightArmingPolicy.shouldDispatchApplyForCurrentTarget(
+                dispatchedGeneration = highlightApplyDispatchedGeneration,
+                dispatchedPostId = highlightApplyDispatchedPostId,
                 currentGeneration = generation,
                 currentPostId = postId,
         )
+        // H-01 (audit Finding H-01): the 2-second fade-out window must be armed ONLY after the
+        // highlight is actually applied (confirmed js_highlight_applied). Previously the fade-out
+        // was scheduled independently of apply, so when apply was deferred until the blocking scroll
+        // settled (deferApply=true) the timer started counting against an invisible/unpainted post —
+        // the ring could fade before it was ever visible. When apply is deferred we now defer the
+        // fade-out scheduling too; it is armed on the deferred re-arm path
+        // (reapplyTopicHighlightAfterScrollSettled → onWebViewContentRevealed).
+        val shouldScheduleFadeout = shouldApply && highlightFadeoutScheduledGeneration != generation
         if (!shouldScheduleFadeout && !shouldApply) {
             if (BuildConfig.DEBUG) {
                 TopicHighlightDiagnostics.highlightArmSkipped(
                         topicId = topicId.toLong(),
-                        reason = if (deferApply) "deferred_and_already_armed" else "already_armed",
+                        // H-01: distinguish "apply (and fade-out) deferred until scroll settles" from
+                        // "already armed for this exact (generation, postId)". The deferred case re-arms
+                        // later via reapplyTopicHighlightAfterScrollSettled.
+                        reason = if (deferApply) "deferred_until_scroll_settled" else "already_dispatched",
                         renderGenerationId = generation,
                         postId = postId,
                         deferApply = deferApply,
                         blockingScrollPending = blockingScrollPending,
-                        armedGeneration = highlightArmedGeneration,
+                        armedGeneration = highlightApplyDispatchedGeneration,
                         fadeoutScheduledGeneration = highlightFadeoutScheduledGeneration
                 )
             }
@@ -1747,11 +1883,32 @@ class ThemeWebController(
             }
         }
         jsApi.eval(js)
+        if (shouldApply) {
+            // H-03: record the *dispatch* the instant the apply JS leaves native, BEFORE the armed
+            // flags. This is the value the `already_dispatched` guard reads, so the first genuine
+            // resolve can never be suppressed by stale armed bookkeeping.
+            highlightApplyDispatchedGeneration = generation
+            highlightApplyDispatchedPostId = postId
+            TopicHighlightDiagnostics.nativeHighlightDispatched(
+                    topicId = topicId.toLong(),
+                    page = page.pagination.current,
+                    renderGenerationId = generation,
+                    highlightType = typeName,
+                    postId = postId
+            )
+        }
         if (shouldScheduleFadeout) {
             setHighlightFadeoutScheduledGeneration(
                     newValue = generation,
                     caller = "reapplyTopicHighlight.scheduleFadeout"
             )
+            // Double-light-up latch: the single light+fade cycle for this exact
+            // (generation, postId) is now committed (apply dispatched + fadeout
+            // armed). Record it durably so any later re-render / reveal /
+            // scroll-settled re-arm for the same pair short-circuits above and
+            // can never re-light the ring. NOT cleared by render/reset paths.
+            highlightCompletedGeneration = generation
+            highlightCompletedPostId = postId
             ReadPositionSaveGate.onHighlightArmed(generation)
             TopicHighlightDiagnostics.highlightFadeoutScheduled(
                     topicId = topicId.toLong(),

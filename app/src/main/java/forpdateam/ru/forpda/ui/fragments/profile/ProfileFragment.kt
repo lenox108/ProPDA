@@ -64,6 +64,7 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
     private lateinit var progressView: CircularProgressIndicator
 
     private var blurLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var hideProgressRunnable: Runnable? = null
 
     private lateinit var copyLinkMenuItem: MenuItem
     private lateinit var writeMenuItem: MenuItem
@@ -166,6 +167,10 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         blurLayoutListener?.let { listener ->
             _binding?.toolbarImageBackground?.viewTreeObserver?.removeOnGlobalLayoutListener(listener)
             blurLayoutListener = null
+        }
+        hideProgressRunnable?.let { runnable ->
+            if (::progressView.isInitialized) progressView.removeCallbacks(runnable)
+            hideProgressRunnable = null
         }
         super.onDestroyView()
     }
@@ -335,9 +340,10 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         progressView.startAnimation(AlphaAnimation(1f, 0f).apply {
 
         })
-        progressView.postDelayed({
-            progressView.visibility = View.GONE
-        }, 500)
+        hideProgressRunnable?.let { progressView.removeCallbacks(it) }
+        val runnable = Runnable { progressView.visibility = View.GONE }
+        hideProgressRunnable = runnable
+        progressView.postDelayed(runnable, 500)
     }
 
     private fun blur(bkg: Bitmap) {

@@ -766,17 +766,8 @@ button,
     }
 
 }
-@-webkit-keyframes highlight {
-    0% {
-        opacity: 0;
-    }
-    20% {
-        opacity: @postFlashOpacity;
-    }
-    100% {
-        opacity: 0;
-    }
-}
+// `@keyframes highlight` REMOVED (Audit Finding H-04): drove the legacy
+// `.post_container.active:before` block-overlay flash. No longer referenced.
 @avatarSize: 56/16em;
 @fullAvatarSize: (56+2)/16em;
 body {
@@ -1440,25 +1431,11 @@ body {
             fill-opacity: 1;
         }
     }
-    &:before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        height: 100%;
-        width: 100%;
-        background: @postFlashColor;
-        z-index: 10;
-        opacity: 0;
-        pointer-events: none;
-    }
-    &.active {
-        &:before {
-            /*transform: scale(1);
-            opacity: 0.25;*/
-            -webkit-animation: highlight 1s;
-        }
-    }
+    // Legacy `.post_container:before` black overlay + `.active:before` flash
+    // animation REMOVED (Audit Finding H-04): the full-block tint was the
+    // "whole post flashes" defect. The "where I stopped" highlight is now a
+    // pure `.ppda_highlight_post` box-shadow ring (below). theme.js no longer
+    // adds the `.active` class for the highlight-flash purpose.
     // Topic "where I stopped" highlight. JS (template_theme.html) toggles
     // `.ppda_highlight_post` on the post wrapper; `.ppda_highlight_fading` is
     // added when the visible window elapses so the ring/background animate out.
@@ -1476,23 +1453,42 @@ body {
     // `.post_container { box-shadow: ... !important }`, which would otherwise win
     // the cascade regardless of selector specificity.
     &.ppda_highlight_post {
-        // Inset box-shadow ring only — NO `background` tint (the old color-mix
-        // tint recoloured the whole post block, which users reported as "the
-        // whole post flashes", and also broke on Android WebView builds that
-        // predate `color-mix()`). The post wrapper keeps its base background;
-        // the highlight is communicated purely by a thick inset ring + a faint
-        // inner glow.
-        box-shadow: inset 0 0 0 (3.2/16rem) var(--ppda-accent, var(--surface-accent, @surface_accent)),
-            inset 0 0 (8/16rem) (1.6/16rem) var(--ppda-accent, var(--surface-accent, @surface_accent)),
-            0rem 1/16rem 1/16rem fade(#000, 12%),
-            0rem 0rem 1/16rem fade(#000, 12%) !important;
-        -webkit-transition: box-shadow 0.3s ease;
-        transition: box-shadow 0.3s ease;
+        // Visible accent ring (CONTOUR) around the whole post — NO `background`
+        // tint (the old color-mix tint recoloured the whole post block, which
+        // users reported as "the whole post flashes", and also broke on Android
+        // WebView builds that predate `color-mix()`). The post wrapper keeps
+        // its base background. The PRIMARY ring is a transparent-fill bordered
+        // pseudo-element (`::before`): a 1px palette `.post_container {
+        // box-shadow: inset 0 0 0 1px ... !important }` rule (sepia/sepia-blue/
+        // amoled) was WINNING the box-shadow property on device, so the
+        // box-shadow ring was invisible. A `border` on a dedicated
+        // pseudo-element is a DIFFERENT property/box, so no palette box-shadow
+        // can override it, and it draws on ALL FOUR sides inside `overflow:hidden`.
+        // The inset box-shadow is kept only as a soft inner glow (best-effort).
+        box-shadow: inset 0 0 (8/16rem) (1.6/16rem) var(--ppda-accent, var(--surface-accent, @surface_accent)) !important;
+        &::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            border: (3/16rem) solid var(--ppda-accent, var(--surface-accent, @surface_accent));
+            .bRad(inherit);
+            background: transparent;
+            pointer-events: none;
+            z-index: 5;
+            opacity: 1;
+            -webkit-transition: opacity 0.3s ease;
+            transition: opacity 0.3s ease;
+        }
         &.ppda_highlight_fading {
             box-shadow: inset 0 0 0 0 transparent,
                 0rem 1/16rem 1/16rem fade(#000, 12%),
                 0rem 0rem 1/16rem fade(#000, 12%) !important;
-            background: @card_background !important;
+            &::before {
+                opacity: 0;
+            }
         }
     }
     &:after {

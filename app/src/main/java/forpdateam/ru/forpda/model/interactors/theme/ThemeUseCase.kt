@@ -59,6 +59,7 @@ class ThemeUseCase @Inject constructor(
         private val errorHandler: IErrorHandler,
         private val eventsRepository: EventsRepository,
         private val favoritesRepository: FavoritesRepository,
+        private val returnPositionStore: forpdateam.ru.forpda.model.repository.theme.TopicReturnPositionStore,
         private val userHolder: IUserHolder,
         private val topicPreferencesHolder: TopicPreferencesHolder,
         private val mainPreferencesHolder: MainPreferencesHolder,
@@ -246,6 +247,11 @@ class ThemeUseCase @Inject constructor(
      * Editor prefetch is deferred to post-open enrichment ([prefetchEditorForOpenedPage]).
      */
     fun onPrimaryThemeLoaded(page: ThemePage) {
+        // Topic is genuinely unread again -> lift any READ seal so the in-progress position can be
+        // recorded for tab re-entry. A still-read re-open keeps the seal (server getlastpost wins).
+        if (page.id > 0 && page.hasUnreadTarget) {
+            returnPositionStore.clearReadSeal(page.id)
+        }
         if (page.pagination.current >= page.pagination.all &&
                 !TopicUnreadOpenPolicy.shouldSuppressMarkReadForSession(
                         TopicUnreadOpenPolicy.parseOpenSessionKind(page.openSessionKind),
@@ -295,6 +301,11 @@ class ThemeUseCase @Inject constructor(
                 reason = reason,
                 source = source
         )
+        // Seal the cross-tab return position: a finished topic must re-open at the server last-read
+        // bookmark, not at a drifted-up viewport snapshot saved while re-reading (log 25_06-10-52-43,
+        // "stuck on stale already-read post"). This is the single chokepoint covering every mark-read
+        // reason (last_page_loaded / last_page_bottom_reached / after_end).
+        returnPositionStore.markRead(topicId)
         crossScreenInteractor.onLoadTopic(topicId)
         // Тема открыта напрямую из приложения и дошли до последней страницы —
         // снимаем «висящие» уведомления из шторки для этой темы.

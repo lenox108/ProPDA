@@ -10,8 +10,9 @@ import kotlinx.coroutines.flow.map
 
 /**
  * Composes the HTML shell for rendered articles, themes, QMS
- * messages, etc. Delegates CSS composition to [TemplateCssComposer]
- * and asset loading to [TemplateAssetLoader]; only orchestration
+ * messages, etc. Delegates CSS composition to [TemplateCssComposer],
+ * asset loading to [TemplateAssetLoader], and the localized
+ * static-string map to [TemplateStaticStrings]; only orchestration
  * and the palette query delegation live here.
  *
  * Extracted from a single god-class as part of §1.1 of
@@ -34,17 +35,14 @@ class TemplateManager(
         const val TEMPLATE_ANNOUNCE = "announce"
     }
 
-    private val staticStrings = mutableMapOf<String, String>()
+    private val staticStrings = TemplateStaticStrings()
     private val paletteResolver = TemplatePaletteResolver(mainPreferencesHolder, dayNightHelper)
     private val assetLoader = TemplateAssetLoader(context)
     private val cssComposer = TemplateCssComposer(mainPreferencesHolder, dayNightHelper, paletteResolver)
 
-    fun setStaticStrings(strings: Map<String, String>) {
-        staticStrings.clear()
-        staticStrings.putAll(strings)
-    }
+    fun setStaticStrings(strings: Map<String, String>) = staticStrings.setStaticStrings(strings)
 
-    fun getStaticString(key: String): String? = staticStrings[key]
+    fun getStaticString(key: String): String? = staticStrings.getStaticString(key)
 
     fun observeThemeTypeFlow(): Flow<String> = dayNightHelper
             .isNightFlow
@@ -72,7 +70,7 @@ class TemplateManager(
 
     fun fillStaticStrings(template: MiniTemplator): MiniTemplator = template.apply {
         variables.forEach { entry ->
-            staticStrings[entry.key]?.let {
+            staticStrings.getStaticString(entry.key)?.let {
                 setVariable(entry.key, it)
             }
         }

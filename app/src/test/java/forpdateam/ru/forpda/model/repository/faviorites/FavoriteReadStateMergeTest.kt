@@ -72,6 +72,28 @@ class FavoriteReadStateMergeTest {
     }
 
     @Test
+    fun freshRefreshDoesNotDowngradeCachedUnreadWhenInspectorStillUnread_log240620() {
+        // Device log 24_06-20-37 (FPDA_FAVORITES_UNREAD): pull-to-refresh flipped a
+        // genuinely-unread favorite to READ without the user opening it. The cache said
+        // UNREAD, the inspector ALSO reported unread, and the favorites HTML merely lacked
+        // the +N marker. A fresh refresh must NOT treat that missing marker as authoritative
+        // evidence of a read — both the cache and the inspector corroborate unread.
+        val cached = fav(readState = FavoriteReadState.UNREAD, isNew = true, unreadPostCount = 3)
+        val result = FavoriteReadStateMerge.merge(
+                network = FavoriteReadState.READ,
+                networkUnreadCount = 0,
+                cached = cached,
+                inspectorUnread = true,
+                inspectorPresent = true,
+                networkIsFreshRefresh = true
+        )
+
+        assertEquals(FavoriteReadState.UNREAD, result.readState)
+        assertEquals(3, result.unreadPostCount)
+        assertEquals("preserve_cached_unread_over_stale_html", result.reason)
+    }
+
+    @Test
     fun htmlReadBeatsStaleInspectorWithoutCache_log1103268() {
         val result = FavoriteReadStateMerge.merge(
                 network = FavoriteReadState.READ,

@@ -213,4 +213,65 @@ class TopicUnreadFindPostReloadPolicyTest {
                 )
         )
     }
+
+    /**
+     * Log 24_06-20-07 (1103268, trace 415ab025): a GENUINELY unread favorites topic
+     * (`topicMarkedUnread=true`) whose new post arrived at the bottom of the last page. The server
+     * getnewpost redirected to that bottom #entry; previously the bottom-entry guard stranded the
+     * user there. Now the bottom entry is the first-unread → reload findpost directly to it.
+     */
+    @Test
+    fun reloadsGenuineListUnreadBottomRedirect_log1103268_415ab025() {
+        val bottomId = 143_993_409
+        val postIds = listOf(135_617_646, bottomId)
+        assertEquals(
+                bottomId.toString(),
+                TopicUnreadFindPostReloadPolicy.resolveListUnreadBottomRedirectFindPostAnchor(
+                        loadedPagePostIds = postIds,
+                        redirectEntryId = bottomId,
+                )
+        )
+        assertTrue(
+                TopicUnreadFindPostReloadPolicy.shouldReloadAmbiguousListUnreadAsFindPost(
+                        requestUrl = "https://4pda.to/forum/index.php?showtopic=1103268&view=getnewpost",
+                        loadAction = ThemeLoadAction.Normal,
+                        scrollMode = AppPreferences.Main.TopicScrollMode.HYBRID,
+                        suppressScrollRestore = true,
+                        openedViaFindPost = false,
+                        alreadyUpgradedThisTrace = false,
+                        parserListUnreadHint = true,
+                        ambiguousBottomRedirect = true,
+                        hasUnreadTarget = false,
+                        fallbackAnchorPostId = bottomId.toString(),
+                        redirectIsBottomEntry = true,
+                        listTopicMarkedUnread = true,
+                )
+        )
+    }
+
+    /**
+     * Log 24_06-20-07 (1121483): a READ favorites row opened via getnewpost only because of the
+     * LAST_UNREAD setting (`topicMarkedUnread=false`) lands on the all-read bottom bookmark. This must
+     * still NOT reload findpost — the bottom redirect is the last-read bookmark, not a new unread.
+     */
+    @Test
+    fun doesNotReloadReadResumeBottomRedirect_log1121483() {
+        val bottomId = 143_992_836
+        assertFalse(
+                TopicUnreadFindPostReloadPolicy.shouldReloadAmbiguousListUnreadAsFindPost(
+                        requestUrl = "https://4pda.to/forum/index.php?showtopic=1121483&view=getnewpost",
+                        loadAction = ThemeLoadAction.Normal,
+                        scrollMode = AppPreferences.Main.TopicScrollMode.HYBRID,
+                        suppressScrollRestore = true,
+                        openedViaFindPost = false,
+                        alreadyUpgradedThisTrace = false,
+                        parserListUnreadHint = true,
+                        ambiguousBottomRedirect = true,
+                        hasUnreadTarget = false,
+                        fallbackAnchorPostId = bottomId.toString(),
+                        redirectIsBottomEntry = true,
+                        listTopicMarkedUnread = false,
+                )
+        )
+    }
 }

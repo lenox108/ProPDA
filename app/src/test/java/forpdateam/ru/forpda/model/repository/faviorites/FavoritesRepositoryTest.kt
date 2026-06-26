@@ -301,8 +301,11 @@ class FavoritesRepositoryTest {
         val items = favoritesCache.getItems()
         assertEquals(listOf(42, 44), items.map { it.topicId })
         assertEquals(items.size, items.map { it.favId }.toSet().size)
-        assertEquals(false, items.single { it.topicId == 42 }.isNew)
-        assertEquals(0, items.single { it.topicId == 42 }.unreadPostCount)
+        // Topic 42 was cached UNREAD and the inspector still reports a NEW event for it, so a
+        // refresh whose HTML merely lacks the +N marker must NOT downgrade it to READ
+        // (preserve_cached_unread_over_stale_html). It only clears once the user opens it or the
+        // inspector authoritatively reports read. See FavoriteReadStateMerge + device log 24_06-20-37.
+        assertEquals(true, items.single { it.topicId == 42 }.isNew)
         assertEquals(false, items.single { it.topicId == 44 }.isNew)
     }
 

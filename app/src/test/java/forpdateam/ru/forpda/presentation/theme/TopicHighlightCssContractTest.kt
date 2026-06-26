@@ -146,5 +146,55 @@ class TopicHighlightCssContractTest {
                 "$cssRelativePath: $selector must NOT use the color-mix() CSS function (no background tint anymore; the ring is box-shadow only): $ruleBody",
                 !ruleBody.contains("color-mix("),
         )
+        // The VISIBLE 4-sided contour is now drawn by a transparent-fill
+        // bordered `::before` pseudo-element. A 1px palette `.post_container {
+        // box-shadow: inset 0 0 0 1px <border> !important }` rule
+        // (sepia/sepia-blue/amoled) kept WINNING the box-shadow property on
+        // device (log: boxShadow=[rgb(53,65,72) 0 0 0 1px inset, ...]), so the
+        // box-shadow ring was invisible AND showed only top/bottom on full-bleed
+        // posts. `border` on `::before` is a different property/box that no
+        // palette box-shadow can override, and `inset:0 + border` draws on all
+        // four sides inside the wrapper's overflow:hidden. Pin it.
+        assertPseudoRingRule(cssRelativePath, cssNoComments)
+    }
+
+    private fun assertPseudoRingRule(cssRelativePath: String, cssNoComments: String) {
+        val pseudoSelector = ".post_container.ppda_highlight_post::before"
+        assertTrue(
+                "$cssRelativePath must contain a transparent bordered ring rule for $pseudoSelector",
+                cssNoComments.contains(pseudoSelector),
+        )
+        val ringBody = cssNoComments.substringAfter("$pseudoSelector {", "")
+                .substringBefore("}")
+                .lowercase()
+        // The ring contour is a `border` (NOT box-shadow): a different property
+        // than the palette `.post_container { box-shadow ... }` so it cannot be
+        // overridden by it.
+        assertTrue(
+                "$cssRelativePath: $pseudoSelector must draw the contour with a border: $ringBody",
+                ringBody.contains("border:") || ringBody.contains("border "),
+        )
+        // Colour must be palette-adaptive via --ppda-accent.
+        assertTrue(
+                "$cssRelativePath: $pseudoSelector border colour must use var(--ppda-accent, ...) so it adapts per palette: $ringBody",
+                ringBody.contains("--ppda-accent"),
+        )
+        // inset:0 (left/top/right/bottom: 0) keeps the ring inside the wrapper
+        // so overflow:hidden never clips the left/right sides.
+        assertTrue(
+                "$cssRelativePath: $pseudoSelector must be positioned with left/top/right/bottom 0 (so all 4 sides are inside overflow:hidden): $ringBody",
+                ringBody.contains("left: 0") && ringBody.contains("right: 0") &&
+                        ringBody.contains("top: 0") && ringBody.contains("bottom: 0"),
+        )
+        // Transparent fill — explicitly NOT the legacy black/opacity overlay
+        // flash. The ring communicates highlight via its border only.
+        assertTrue(
+                "$cssRelativePath: $pseudoSelector must have a transparent fill (no block tint / legacy flash): $ringBody",
+                ringBody.contains("background: transparent"),
+        )
+        assertTrue(
+                "$cssRelativePath: $pseudoSelector must NOT use the color-mix() CSS function: $ringBody",
+                !ringBody.contains("color-mix("),
+        )
     }
 }

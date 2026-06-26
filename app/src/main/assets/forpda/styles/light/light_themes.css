@@ -809,17 +809,8 @@ button:active,
             filter: blur(1px);*/
   background: url(../../res/file-outline.svg) no-repeat center center;
 }
-@-webkit-keyframes highlight {
-  0% {
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.25;
-  }
-  100% {
-    opacity: 0;
-  }
-}
+/* `@keyframes highlight` REMOVED (Audit Finding H-04): drove the legacy
+   `.post_container.active:before` black-overlay flash. No longer referenced. */
 body.circle_avatar .post_header .avatar .img {
   -webkit-border-radius: 3.5em;
   border-radius: 3.5em;
@@ -1547,53 +1538,64 @@ body.hide_avatar .post-block.quote > .block-title .avatar .image {
   display: table;
   clear: both;
 }
-.post_container:before {
+/* Legacy `.post_container:before` black overlay + `.active:before` flash
+   animation REMOVED (Audit Finding H-04): the full-block black tint was the
+   "whole post flashes" defect. The "where I stopped" highlight is now a pure
+   `.ppda_highlight_post` box-shadow ring (below). No feature reads
+   `.post_container.active` for visuals (verified). */
+body#topic .post_container.ppda_highlight_post,
+.post_container.ppda_highlight_post {
+  /* Visible accent ring (CONTOUR) around the whole post — NO `background`
+     tint (the old color-mix tint recoloured the whole post block, which users
+     reported as "the whole post flashes", and also broke on Android WebView
+     builds that predate `color-mix()`). The post wrapper keeps its base
+     background. The PRIMARY ring is now a transparent-fill bordered
+     pseudo-element (`::before`, below): a 1px palette `.post_container {
+     box-shadow: inset 0 0 0 1px ... !important }` rule (sepia/sepia-blue/amoled)
+     was WINNING the box-shadow property on device, so the box-shadow ring was
+     invisible (device log: boxShadow=[rgb(53,65,72) 0 0 0 1px inset, ...]).
+     A `border` on a dedicated pseudo-element is a DIFFERENT property/box, so no
+     `.post_container { box-shadow }` palette rule can override it, and it is
+     drawn on ALL FOUR sides inside the wrapper's `overflow:hidden`. The inset
+     box-shadow below is kept only as a soft inner glow (best-effort; may be
+     overridden by a palette box-shadow, which is fine — the ::before carries
+     the visible contour). */
+  -webkit-box-shadow:
+    inset 0 0 0.5rem 0.1rem var(--ppda-accent, var(--surface-accent, #2177af)) !important;
+  box-shadow:
+    inset 0 0 0.5rem 0.1rem var(--ppda-accent, var(--surface-accent, #2177af)) !important;
+}
+body#topic .post_container.ppda_highlight_post::before,
+.post_container.ppda_highlight_post::before {
+  /* 4-sided accent contour ring. Transparent fill (NOT a black/opacity overlay
+     — that legacy flash was removed). `inset: 0` + `border` keeps the ring
+     INSIDE the post bounds so `overflow:hidden` never clips it (incl. left/
+     right edges on full-bleed posts). `border-radius: inherit` follows the
+     post's rounded corners. Adaptive colour via `--ppda-accent`. */
   content: "";
   position: absolute;
   left: 0;
   top: 0;
-  height: 100%;
-  width: 100%;
-  background: #000000;
-  z-index: 10;
-  opacity: 0;
+  right: 0;
+  bottom: 0;
+  border: 0.1875rem solid var(--ppda-accent, var(--surface-accent, #2177af));
+  -webkit-border-radius: inherit;
+  border-radius: inherit;
+  background: transparent;
   pointer-events: none;
+  z-index: 5;
+  opacity: 1;
+  -webkit-transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease;
 }
-.post_container.active:before {
-  /*transform: scale(1);
-            opacity: 0.25;*/
-  -webkit-animation: highlight 1s;
-}
-body#topic .post_container.ppda_highlight_post,
-.post_container.ppda_highlight_post {
-  /* Inset box-shadow ring only — NO `background` tint (the old color-mix
-     tint recoloured the whole post block, which users reported as "the
-     whole post flashes", and also broke on Android WebView builds that
-     predate `color-mix()`). The post wrapper keeps its base background;
-     the highlight is communicated purely by a thick inset ring + a faint
-     inner glow.
-     The wrapper has `overflow:hidden` and a `border-radius`, so a rectangular
-     `outline` would get clipped at the rounded corners and at horizontal
-     edges when the post spans the full viewport — inset shadow is painted
-     inside the border-radius and is never clipped by `overflow:hidden`. */
-  -webkit-box-shadow:
-    inset 0 0 0 0.2rem var(--ppda-accent, var(--surface-accent, #2177af)),
-    inset 0 0 0.5rem 0.1rem var(--ppda-accent, var(--surface-accent, #2177af)),
-    0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12),
-    0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
-  box-shadow:
-    inset 0 0 0 0.2rem var(--ppda-accent, var(--surface-accent, #2177af)),
-    inset 0 0 0.5rem 0.1rem var(--ppda-accent, var(--surface-accent, #2177af)),
-    0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12),
-    0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
-  -webkit-transition: box-shadow 0.3s ease;
-  transition: box-shadow 0.3s ease;
+body#topic .post_container.ppda_highlight_post.ppda_highlight_fading::before,
+.post_container.ppda_highlight_post.ppda_highlight_fading::before {
+  opacity: 0;
 }
 body#topic .post_container.ppda_highlight_post.ppda_highlight_fading,
 .post_container.ppda_highlight_post.ppda_highlight_fading {
   -webkit-box-shadow: inset 0 0 0 0rem rgba(0, 0, 0, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
   box-shadow: inset 0 0 0 0rem rgba(0, 0, 0, 0), 0rem 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12), 0rem 0rem 0.0625rem rgba(0, 0, 0, 0.12) !important;
-  background: #ffffff !important;
 }
 .post_container:after {
   content: "";

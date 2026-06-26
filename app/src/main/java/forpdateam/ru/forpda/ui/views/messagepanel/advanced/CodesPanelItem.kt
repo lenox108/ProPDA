@@ -22,7 +22,9 @@ import forpdateam.ru.forpda.ui.views.messagepanel.colorpicker.ColorPaletteView
 import forpdateam.ru.forpda.ui.views.messagepanel.colorpicker.ColorPicker
 import forpdateam.ru.forpda.ui.views.messagepanel.inserthelper.InsertHelper
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
-import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
@@ -38,7 +40,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
     }
 
     private val openedCodes: MutableList<String> = mutableListOf()
-    private val viewScope = MainScope()
+    private val viewScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val codeItems: MutableList<ButtonData> = getCodes()
 
     private val clickListener = object : PanelItemAdapter.OnItemClickListener {

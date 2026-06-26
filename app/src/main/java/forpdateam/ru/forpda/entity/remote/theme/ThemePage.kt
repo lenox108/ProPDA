@@ -27,6 +27,16 @@ class ThemePage {
 
     var scrollY = 0
     var anchorPostId: String? = null
+    /**
+     * Multi-back anchor loss fix (log 239158 in-tab findpost): the post id this page was
+     * EXPLICITLY opened at (e.g. a findpost / explicit `p=` link). When set, this is the
+     * authoritative history anchor for the entry: BACK must restore THIS post, not a later
+     * click-time visible post that a trailing source-anchor snapshot would otherwise write
+     * over [anchorPostId]. A subsequent in-tab link tapped from a different (scrolled-to)
+     * post must NOT silently overwrite this. Null for ordinary scroll-opened pages, whose
+     * genuine viewed anchor is free to update.
+     */
+    var authoritativeAnchorPostId: String? = null
     var anchorOffsetTop: Double? = null
     var scrollRatio: Double? = null
     var wasNearBottom: Boolean = false

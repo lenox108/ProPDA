@@ -33,6 +33,9 @@ class ThemeJsApi(
         val commandIdJs = JSONObject.quote(commandId)
         eval(
                 "window.__themeScrollCommandId=$commandIdJs;" +
+                        // R-04: capture the live render generation so this command's
+                        // completion is dropped if a reload bumps the generation first.
+                        "window.__themeScrollCommandGenerationAtExec=(Number(window.__themeScrollCommandGeneration)||0);" +
                         "if(typeof scrollToThemePageAndBottom==='function'){scrollToThemePageAndBottom($pageNumber);}" +
                         "else{if(typeof scrollToThemePage==='function'){scrollToThemePage($pageNumber);}" +
                         "if(typeof scrollToThemeBottomWithRetries==='function'){scrollToThemeBottomWithRetries();}}"
@@ -178,13 +181,21 @@ class ThemeJsApi(
     /** CSS-pixel scroll target for native WebView fallback when JS INITIAL_ANCHOR stalls (log 033). */
     fun nativeScrollToAnchorPost(anchorName: String): String {
         val quoted = JSONObject.quote(anchorName)
+        // S2 (top-clip fix, log 25_06-16-26): align the post TOP to the visible top, consistent with
+        // the JS [doScroll] / end-anchor placement which subtract `topChromePadding` (the sticky
+        // top toolbar). A fresh first-unread / explicit open has no saved viewport offset
+        // (`loadAnchorOffsetTop === null`); the old hardcoded `45` over/under-subtracted vs the real
+        // chrome height, leaving the post half ABOVE the viewport top (clipped). Prefer a genuine
+        // saved offset (back/restore resumes the user's exact viewport), else use the real
+        // `topChromePadding`, else 0 — never the magic 45.
         return """(function(){
             var name=$quoted;
             var el=document.getElementsByName(name)[0];
             if(!el){var id=String(name).replace(/^entry/i,'');el=document.getElementById('entry'+id);}
             if(!el){return -1;}
             var top=el.getBoundingClientRect().top+(window.pageYOffset||document.documentElement.scrollTop||0);
-            var offset=(typeof window.loadAnchorOffsetTop==='number'&&isFinite(window.loadAnchorOffsetTop))?window.loadAnchorOffsetTop:45;
+            var topReserve=(typeof topChromePadding!=='undefined')?Math.max(0,Number(topChromePadding)||0):0;
+            var offset=(typeof window.loadAnchorOffsetTop==='number'&&isFinite(window.loadAnchorOffsetTop))?window.loadAnchorOffsetTop:topReserve;
             var y=Math.max(0,Math.round(top-offset));
             window.scrollTo(0,y);
             return y;
@@ -194,6 +205,18 @@ class ThemeJsApi(
     fun clearUnreadAnchorHybridGuard(reason: String): String {
         val quoted = JSONObject.quote(reason)
         return "if(typeof clearUnreadAnchorHybridGuard==='function'){clearUnreadAnchorHybridGuard($quoted);}"
+    }
+
+    /**
+     * S-01 / R-03: announce that Kotlin's INITIAL_ANCHOR [ThemeScrollCommand] will
+     * own the initial-anchor scroll for this page-load. Issued in the DOM-content
+     * batch BEFORE `nativeEvents.onNativeDomComplete()` runs the legacy DOM
+     * listener, so the JS DOM-anchor path becomes fallback-only: it yields for up
+     * to [windowMs] ms for the Kotlin command and only runs if none arrives.
+     * A non-positive [windowMs] disarms the handshake (no command expected).
+     */
+    fun setThemeInitialAnchorExpected(windowMs: Int): String {
+        return "if(typeof setThemeInitialAnchorExpected==='function'){setThemeInitialAnchorExpected($windowMs);}"
     }
 
     fun setLoadAnchorOffsetTop(offsetTop: Double?): String {
@@ -258,11 +281,6 @@ class ThemeJsApi(
 
     fun restoreRefreshScrollWithRetries(): String {
         return "if(typeof restoreThemeRefreshScrollAnchorWithRetries==='function'){restoreThemeRefreshScrollAnchorWithRetries();}"
-    }
-
-    fun revealAfterFirstRestore(id: String): String {
-        val idJs = JSONObject.quote(id)
-        return "if(typeof revealThemeAfterFirstRestore==='function'){revealThemeAfterFirstRestore($idJs);}"
     }
 
     /**

@@ -185,11 +185,14 @@
             android:focusable="false"
             android:visibility="gone" />
 
+        <!-- Размещаем плейсхолдеры (прогресс/ошибка) ниже AppBarLayout, иначе кнопка «Повторить»
+             и верх контента перекрываются тулбаром (см. fragment_content). -->
         <FrameLayout
             android:id="@+id/additional_content"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:clickable="false">
+            android:clickable="false"
+            app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
             <ProgressBar
                 android:id="@+id/content_progress"

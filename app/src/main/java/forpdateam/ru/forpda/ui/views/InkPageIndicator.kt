@@ -203,10 +203,11 @@ class InkPageIndicator @JvmOverloads constructor(
         val requiredWidth = getRequiredWidth()
         val startLeft = left + (right - left - requiredWidth) / 2f + dotRadius
 
-        dotCenterX = FloatArray(pageCount)
+        val centers = FloatArray(pageCount)
         for (i in 0 until pageCount) {
-            dotCenterX!![i] = startLeft + i * (dotDiameter + gap)
+            centers[i] = startLeft + i * (dotDiameter + gap)
         }
+        dotCenterX = centers
         dotTopY = top.toFloat()
         dotCenterY = top + dotRadius
         dotBottomY = (top + dotDiameter).toFloat()
@@ -215,13 +216,13 @@ class InkPageIndicator @JvmOverloads constructor(
     }
 
     private fun setCurrentPageImmediate() {
-        if (viewPager != null) {
-            currentPage = viewPager!!.currentItem
-        } else {
-            currentPage = 0
-        }
-        if (dotCenterX != null && dotCenterX!!.isNotEmpty() && (moveAnimation == null || !moveAnimation!!.isStarted)) {
-            selectedDotX = dotCenterX!![currentPage]
+        currentPage = viewPager?.currentItem ?: 0
+        val centers = dotCenterX
+        val anim = moveAnimation
+        if (centers != null && centers.isNotEmpty() && (anim == null || !anim.isStarted)
+            && currentPage in centers.indices
+        ) {
+            selectedDotX = centers[currentPage]
         }
     }
 
@@ -269,18 +270,22 @@ class InkPageIndicator @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         if (viewPager == null || pageCount == 0) return
+        // dotCenterX is populated in calculateDotPositions() during onMeasure(); guard
+        // against a draw pass that races ahead of measurement to avoid an NPE.
+        if (dotCenterX == null) return
         drawUnselected(canvas)
         drawSelected(canvas)
     }
 
     private fun drawUnselected(canvas: Canvas) {
+        val centers = dotCenterX ?: return
         combinedUnselectedPath.rewind()
 
         for (page in 0 until pageCount) {
             val nextXIndex = if (page == pageCount - 1) page else page + 1
             val unselectedPath = getUnselectedPath(page,
-                dotCenterX!![page],
-                dotCenterX!![nextXIndex],
+                centers[page],
+                centers[nextXIndex],
                 if (page == pageCount - 1) INVALID_FRACTION else joiningFractions[page],
                 dotRevealFractions[page])
             combinedUnselectedPath.addPath(unselectedPath)
@@ -307,7 +312,8 @@ class InkPageIndicator @JvmOverloads constructor(
             && !(page == currentPage && selectedDotInPosition)
         ) {
             // case #1 – At rest
-            unselectedDotPath.addCircle(dotCenterX!![page], dotCenterY, dotRadius, Path.Direction.CW)
+            val centerForPage = dotCenterX?.getOrNull(page) ?: centerX
+            unselectedDotPath.addCircle(centerForPage, dotCenterY, dotRadius, Path.Direction.CW)
         }
 
         if (joiningFraction > 0f && joiningFraction <= 0.5f
@@ -432,6 +438,9 @@ class InkPageIndicator @JvmOverloads constructor(
 
     private fun setSelectedPage(now: Int) {
         if (now == currentPage) return
+        // Selection animations rely on measured dot positions; bail out until measured.
+        val centers = dotCenterX ?: return
+        if (now !in centers.indices) return
 
         pageChanging = true
         previousPage = currentPage
@@ -450,7 +459,7 @@ class InkPageIndicator @JvmOverloads constructor(
             }
         }
 
-        moveAnimation = createMoveSelectedAnimator(dotCenterX!![now], previousPage, now, steps)
+        moveAnimation = createMoveSelectedAnimator(centers[now], previousPage, now, steps)
         moveAnimation!!.start()
     }
 
@@ -537,12 +546,16 @@ class InkPageIndicator @JvmOverloads constructor(
             duration = animHalfDuration
             setInterpolator(interpolator)
 
-            val initialX1 = if (now > was) Math.min(dotCenterX!![was], selectedDotX) - dotRadius
-            else dotCenterX!![now] - dotRadius
-            val finalX1 = dotCenterX!![now] - dotRadius
-            val initialX2 = if (now > was) dotCenterX!![now] + dotRadius
-            else Math.max(dotCenterX!![was], selectedDotX) + dotRadius
-            val finalX2 = dotCenterX!![now] + dotRadius
+            // Positions are guaranteed non-null here because this animator is only
+            // constructed from setSelectedPage(), which bails out when dotCenterX is null.
+            val centers = dotCenterX ?: FloatArray(pageCount)
+
+            val initialX1 = if (now > was) Math.min(centers[was], selectedDotX) - dotRadius
+            else centers[now] - dotRadius
+            val finalX1 = centers[now] - dotRadius
+            val initialX2 = if (now > was) centers[now] + dotRadius
+            else Math.max(centers[was], selectedDotX) + dotRadius
+            val finalX2 = centers[now] + dotRadius
 
             revealAnimations = arrayOfNulls(steps)
             val dotsToHide = IntArray(steps)
@@ -550,7 +563,7 @@ class InkPageIndicator @JvmOverloads constructor(
                 setFloatValues(initialX1, finalX1)
                 for (i in 0 until steps) {
                     revealAnimations!![i] = PendingRevealAnimator(was + i,
-                        RightwardStartPredicate(dotCenterX!![was + i]))
+                        RightwardStartPredicate(centers[was + i]))
                     dotsToHide[i] = was + i
                 }
                 addUpdateListener { valueAnimator ->
@@ -564,7 +577,7 @@ class InkPageIndicator @JvmOverloads constructor(
                 setFloatValues(initialX2, finalX2)
                 for (i in 0 until steps) {
                     revealAnimations!![i] = PendingRevealAnimator(was - i,
-                        LeftwardStartPredicate(dotCenterX!![was - i]))
+                        LeftwardStartPredicate(centers[was - i]))
                     dotsToHide[i] = was - i
                 }
                 addUpdateListener { valueAnimator ->

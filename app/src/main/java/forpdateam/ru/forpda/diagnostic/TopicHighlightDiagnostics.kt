@@ -110,6 +110,35 @@ object TopicHighlightDiagnostics {
         )
     }
 
+    /**
+     * Emitted the instant `jsApi.eval(applyHighlight(...))` has been dispatched to
+     * the WebView, BEFORE the per-render armed flag is set. This is the
+     * authoritative "the apply JS actually went out" marker: if a future device
+     * log shows `highlight_target_resolved` but no `native_highlight_dispatched`,
+     * the apply never left native; if it shows dispatched but the outline is not
+     * visible, the failure is JS-side (e.g. a ReferenceError aborting the batch)
+     * or a reveal-timing issue. Decouples the dispatch fact from the
+     * `armedGeneration` bookkeeping the `already_armed` guard reads.
+     */
+    fun nativeHighlightDispatched(
+            topicId: Long,
+            page: Int,
+            renderGenerationId: Int,
+            highlightType: String,
+            postId: Long
+    ) {
+        log(
+                "native_highlight_dispatched",
+                linkedMapOf(
+                        "topicId" to topicId,
+                        "page" to page,
+                        "renderGenerationId" to renderGenerationId,
+                        "highlightType" to highlightType,
+                        "postId" to postId
+                )
+        )
+    }
+
     fun nativeHighlightBound(
             topicId: Long,
             page: Int,

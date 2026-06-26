@@ -29,6 +29,42 @@ window.refreshRestoreSource = "";
 window.themeLastLinkSourceAnchor = null;
 window.__themeLastClickedPostAnchor = null;
 /**
+ * S-01 / R-03 (audit Finding S-01 / R-03): single-owner handshake for the
+ * initial-anchor scroll. Kotlin's [ThemeScrollCommand] (INITIAL_ANCHOR) is the
+ * authoritative owner. When Kotlin intends to send that command for the current
+ * page-load it sets [window.__themeInitialAnchorExpectedUntil] (a monotonic
+ * deadline) via [setThemeInitialAnchorExpected] BEFORE the legacy DOM listener
+ * runs. While that deadline is in the future the JS DOM-anchor path yields
+ * instead of racing on whether [window.__themeScrollCommandId] happens to be set
+ * yet. The JS DOM path stays a FALLBACK: it only runs after the deadline
+ * elapses with no Kotlin command (the safety net when Kotlin sends none).
+ */
+window.__themeInitialAnchorExpectedUntil = 0;
+/**
+ * R-04 (audit Finding R-04): render-generation scope for the scroll command id.
+ * A bare [window.__themeScrollCommandId] could lose its completion across a
+ * reload (a stale completion from a previous topic being misattributed). The
+ * generation is bumped on every new page-load setup ([setLoadAction]); a
+ * completion is only delivered when the command's captured generation still
+ * matches the live one. The whole `window` is recreated on `loadDataWithBaseURL`
+ * so this counter naturally resets per topic.
+ */
+window.__themeScrollCommandGeneration = 0;
+window.__themeScrollCommandGenerationAtExec = 0;
+/** Default window (ms) the DOM-anchor fallback waits for a Kotlin INITIAL_ANCHOR command. */
+var INITIAL_ANCHOR_KOTLIN_HANDSHAKE_MS = 700;
+/** Bounded window (ms) after the initial anchor settles during which a late media load may re-anchor (S-02). */
+var INITIAL_ANCHOR_MEDIA_REANCHOR_WINDOW_MS = 2500;
+/**
+ * S-02 (audit Finding S-02): the active initial-anchor name and a monotonic
+ * deadline. While the deadline is in the future and the user has not scrolled,
+ * a tall image that finishes loading after the initial scroll triggers ONE
+ * bounded re-anchor so the target does not drift below the fold. Cleared once
+ * the user scrolls, the window elapses, or a new page-load arms a new anchor.
+ */
+var themeInitialAnchorReanchorName = "";
+var themeInitialAnchorReanchorUntil = 0;
+/**
  * Monotonic timestamp of the last successful initial end-anchor scroll for the
  * CURRENT page-load. Set on the final retry of
  * [scrollToEndAnchorOrBottomWithRetries] (the "end_anchor" completion path) and
@@ -49,6 +85,36 @@ window.__themeLastClickedPostAnchor = null;
  * initial scrolls are not blocked.
  */
 var endAnchorScrollSettledAt = 0;
+/**
+ * Monotonic generation counter for the JS anchor-scroll retry chain. Bumped by
+ * [cancelThemeAnchorScrollRetries] so any in-flight retry whose captured
+ * generation no longer matches is dropped ([isThemeAnchorScrollCurrent]). It is
+ * read (via `++` and equality checks) before it is ever explicitly assigned, so
+ * it MUST be declared here — otherwise the first read throws a ReferenceError
+ * that aborts the whole theme.js runtime (regression observed in the field:
+ * "Uncaught ReferenceError: themeAnchorScrollGeneration is not defined").
+ */
+var themeAnchorScrollGeneration = 0;
+/**
+ * Name of the anchor a retry chain is currently pending on. Read by the DOM
+ * initial-anchor fallback before any retry has written it, so it must be
+ * declared up-front for the same reason as [themeAnchorScrollGeneration].
+ */
+var themeAnchorRetryPendingName = "";
+/**
+ * Currently-resolved scroll anchor element and the post container that carries
+ * the legacy `.active` class. Both are mutated as implicit globals throughout
+ * the scroll/activation paths ([scrollToElement], [doScroll], [destroyRuntime])
+ * and — critically — READ before they are ever assigned: [doScroll] reads
+ * [elemToActivation] (line ~2435) on the very first scroll, and
+ * [logScrollAnchorDiag] reads [anchorElem] before the anchor path assigns it.
+ * An undeclared read throws "Uncaught ReferenceError: elemToActivation is not
+ * defined" (observed in the field at theme.js:2435) which aborts the whole JS
+ * action batch — the same failure mode as [themeAnchorScrollGeneration]. They
+ * MUST be declared up-front so the first read yields `undefined`, not a throw.
+ */
+var anchorElem = null;
+var elemToActivation = null;
 var themeRuntimeDestroyed = false;
 var themeRuntimeTimers = [];
 var themeRuntimeRafs = [];
@@ -327,6 +393,8 @@ function onThemeAnchorScrollCancelInput(event) {
     // control now, so clear it so a future [setLoadAnchorPostId] can drive a
     // fresh end-anchor scroll if the user navigates elsewhere.
     endAnchorScrollSettledAt = 0;
+    // S-02: the user is driving the scroll now — never re-anchor on late media.
+    clearThemeInitialAnchorMediaReanchor();
     cancelThemeAnchorScrollRetries();
     logRefreshScroll("cancel userInput event=" + (event && event.type ? event.type : "") + " y=" + getScrollTop());
 }
@@ -761,6 +829,12 @@ function setLoadAction(loadAction) {
     // first scrollToEndAnchorOrBottomWithRetries() for this load can run.
     // See the comment on `endAnchorScrollSettledAt` for the full rationale.
     endAnchorScrollSettledAt = 0;
+    // R-04: a new page-load opens a new scroll-command generation so a stale
+    // completion from the previous load cannot be misattributed to a new id.
+    window.__themeScrollCommandGeneration = (Number(window.__themeScrollCommandGeneration) || 0) + 1;
+    // S-02: a new page-load invalidates any pending late-media re-anchor.
+    themeInitialAnchorReanchorName = "";
+    themeInitialAnchorReanchorUntil = 0;
     if (loadAction == END_ACTION && typeof PageInfo !== "undefined") {
         PageInfo.elemToScroll = "";
         window.loadScrollY = 0;
@@ -803,6 +877,31 @@ function setLoadAnchorPostId(postId) {
             armUnreadInitialAnchorScroll(anchorName);
         }
     }
+}
+
+/**
+ * S-01 / R-03: Kotlin announces that it will own the initial-anchor scroll for
+ * this page-load by arming a short handshake window. Called from
+ * [ThemeFragmentWeb.onDomContentComplete] BEFORE `nativeEvents.onNativeDomComplete()`
+ * runs the legacy DOM listener, so the DOM fallback yields deterministically
+ * (instead of depending on whether the Kotlin command id happens to be set yet).
+ * Passing a non-positive value, or omitting it, disarms the window.
+ */
+function setThemeInitialAnchorExpected(windowMs) {
+    var ms = Number(windowMs);
+    if (!isFinite(ms) || ms <= 0) {
+        window.__themeInitialAnchorExpectedUntil = 0;
+        logThemeRender("setThemeInitialAnchorExpected disarmed");
+        return;
+    }
+    window.__themeInitialAnchorExpectedUntil = Date.now() + ms;
+    logThemeRender("setThemeInitialAnchorExpected windowMs=" + ms);
+}
+
+/** True while a Kotlin INITIAL_ANCHOR command is still expected for the current page-load (S-01/R-03). */
+function isThemeInitialAnchorExpected() {
+    var until = Number(window.__themeInitialAnchorExpectedUntil) || 0;
+    return until > 0 && Date.now() < until;
 }
 
 /** Best-effort scroll after reveal for all-read last-read resume; does not block WebView alpha. */
@@ -897,7 +996,21 @@ function setRefreshRestoreRequest(id, mode, source) {
 function maybeCompleteThemeScrollCommand(success, reason) {
     var commandId = window.__themeScrollCommandId;
     if (!commandId) return;
+    // R-04: drop a completion whose render generation no longer matches the live
+    // one — a reload between the command and its completion already invalidated
+    // it, and delivering it would misattribute a stale completion to a new id.
+    var execGeneration = Number(window.__themeScrollCommandGenerationAtExec) || 0;
+    var liveGeneration = Number(window.__themeScrollCommandGeneration) || 0;
+    if (execGeneration !== 0 && execGeneration !== liveGeneration) {
+        window.__themeScrollCommandId = "";
+        window.__themeScrollCommandGenerationAtExec = 0;
+        if (typeof logRefreshScroll === "function") {
+            logRefreshScroll("scrollCmdComplete dropped stale gen exec=" + execGeneration + " live=" + liveGeneration + " id=" + commandId);
+        }
+        return;
+    }
     window.__themeScrollCommandId = "";
+    window.__themeScrollCommandGenerationAtExec = 0;
     var reasonText = String(reason || "");
     if (reasonText.indexOf("end_") === 0 || reasonText.indexOf("bottom") >= 0) {
         themeInfiniteScroll.endScrollPending = false;
@@ -932,7 +1045,14 @@ function executeThemeScrollCommand(payload) {
         maybeCompleteThemeScrollCommand(false, "bad_payload");
         return;
     }
+    // S-01 / R-03: Kotlin owns the initial-anchor scroll — the command arriving
+    // disarms the DOM-fallback handshake window so the JS DOM path stays a pure
+    // safety net (it only runs when no command ever arrives).
+    window.__themeInitialAnchorExpectedUntil = 0;
     window.__themeScrollCommandId = data.commandId;
+    // R-04: capture the live render generation so a completion that arrives after
+    // a reload (which bumped the generation) is dropped instead of misattributed.
+    window.__themeScrollCommandGenerationAtExec = Number(window.__themeScrollCommandGeneration) || 0;
     if (typeof logRefreshScroll === "function") {
         logRefreshScroll("execScrollCmd kind=" + data.kind + " id=" + data.commandId + " restoreId=" + (data.restoreId || "") + " restoreMode=" + (data.restoreMode || "") + " anchor=" + (data.anchorPostId || "") + " alive=" + isThemeRuntimeAlive());
     }
@@ -1013,32 +1133,6 @@ function executeThemeScrollCommand(payload) {
         default:
             maybeCompleteThemeScrollCommand(false, "unsupported_kind");
     }
-}
-
-function revealThemeAfterFirstRestore(id) {
-    window.__themeRevealAfterRestoreId = id || "";
-    document.documentElement.style.opacity = "0";
-    document.body.style.opacity = "0";
-    logRefreshScroll("reveal armed id=" + window.__themeRevealAfterRestoreId);
-}
-
-function notifyThemeRestoreApplied(reason) {
-    if (!window.__themeRevealAfterRestoreId) return;
-    if (window.__themeRevealAfterRestoreId !== window.refreshRestoreId) {
-        logRefreshScroll("reveal stale armed=" + window.__themeRevealAfterRestoreId + " current=" + window.refreshRestoreId);
-        return;
-    }
-    var armedId = window.__themeRevealAfterRestoreId;
-    window.__themeRevealAfterRestoreId = "";
-    themeRuntimeRequestAnimationFrame(function () {
-        if (window.refreshRestoreId !== armedId) return;
-        document.documentElement.style.opacity = "";
-        document.body.style.opacity = "";
-        logRefreshScroll("reveal applied id=" + armedId + " reason=" + reason + " y=" + getThemeScrollMetrics().scrollY);
-        if (window.__themeScrollCommandId) {
-            maybeCompleteThemeScrollCommand(true, String(reason || "restore"));
-        }
-    });
 }
 
 function cancelThemeAnchorScrollRetries() {
@@ -1183,6 +1277,31 @@ function findLastRealThemePostInDom() {
         if (isRealThemePost(posts[i])) return posts[i];
     }
     return null;
+}
+
+/**
+ * STEP 4 — topmost visible real post for position-preserving top-prepend. Returns the first
+ * real (non-hat) post whose top is at or below the viewport top (the post the user is currently
+ * looking at the top of). Falls back to the first real post in the DOM when none is in/below
+ * view (e.g. scrolled to the very top hat). Excludes topic-hat entries so a prepended hat does
+ * not get pinned.
+ */
+function findTopmostVisibleRealThemePostForPrepend() {
+    var posts = document.querySelectorAll(".post_container[data-post-id]:not(.topic_hat_entry):not(.topic_hat_fixed)");
+    var viewportTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+    var first = null;
+    for (var i = 0; i < posts.length; i++) {
+        var node = posts[i];
+        if (!isRealThemePost(node)) continue;
+        if (first === null) first = node;
+        var rect = node.getBoundingClientRect();
+        // First post whose top is at/under the viewport top — the topmost visible post.
+        if (rect.top >= -1) {
+            return node;
+        }
+    }
+    // Viewport scrolled past all post tops (e.g. mid-post): pin to the last post above the fold.
+    return first;
 }
 
 function findLastRealThemePostOnLastLoadedPageInDom() {
@@ -1397,12 +1516,18 @@ function restoreThemeRefreshScrollAnchorOnce(scrollGeneration, reason, allowMiss
     if (!isExplicitBottomRestore && window.loadWasNearBottom && anchorId && typeof resolveEndScrollTargetPostId === "function") {
         anchorId = resolveEndScrollTargetPostId(anchorId);
     }
-    if (!isExplicitBottomRestore && !window.loadWasNearBottom && anchorId && window.loadAnchorOffsetTop !== null) {
+    // STEP 3 — anchor-relative restore is PRIMARY. When the anchor post IS in the DOM, use its
+    // current getBoundingClientRect().top (reflow-safe: always current even after a prepend or
+    // late image/smile render) plus the saved intra-post offset. Pixel/ratio fallbacks only run
+    // when the anchor is genuinely missing — a reflow-corrupted ratio can otherwise bleed in and
+    // land the viewport on the wrong post.
+    if (!isExplicitBottomRestore && anchorId) {
         var post = findRealThemePostById(anchorId);
         var anchor = post || document.querySelector('[name="entry' + anchorId + '"]');
         if (anchor) {
             var rect = (post || anchor).getBoundingClientRect();
-            targetY = metrics.scrollY + rect.top - Number(window.loadAnchorOffsetTop);
+            var intraOffset = Number(window.loadAnchorOffsetTop) || 0;
+            targetY = metrics.scrollY + rect.top - intraOffset;
             method = "anchor-offset";
             logThemeHistory("restore found reason=" + reason + " post=" + anchorId + " method=" + method + " rectTop=" + rect.top + " targetY=" + targetY);
         } else {
@@ -1430,7 +1555,6 @@ function restoreThemeRefreshScrollAnchorOnce(scrollGeneration, reason, allowMiss
         window.scrollTo(0, targetY);
     }
     updateVisibleThemePage();
-    notifyThemeRestoreApplied(reason);
     return true;
 }
 
@@ -1575,7 +1699,6 @@ function restoreThemeToBottomAfterRefreshWithRetries() {
                 }
                 var finalMetrics = getThemeScrollMetrics();
                 logRefreshScroll("bottomRestore final y=" + finalMetrics.scrollY + " max=" + finalMetrics.maxScroll + " delta=" + Math.max(0, finalMetrics.maxScroll - finalMetrics.scrollY) + " attempts=" + attempt + " contentHeight=" + finalMetrics.scrollHeight + " viewport=" + finalMetrics.clientHeight + " spacer=" + getThemeBottomSpacerHeight());
-                notifyThemeRestoreApplied("bottomFinal");
                 maybeCompleteThemeScrollCommand(true);
             }
         }, 32);
@@ -1821,6 +1944,11 @@ function markThemeMediaImageLoaded(image) {
     applyThemeMediaAspectRatio(image);
     image.classList.remove("theme-media-pending");
     image.classList.add("theme-media-loaded");
+    // S-02: a tall image that finished after the initial scroll may have pushed
+    // the anchor below the fold; re-pin it once (bounded, no-op after user scroll).
+    if (typeof maybeReanchorInitialAfterMediaLoad === "function") {
+        maybeReanchorInitialAfterMediaLoad();
+    }
 }
 
 function queueThemeMediaImageLoaded(image) {
@@ -2029,6 +2157,51 @@ function maybeReanchorUnreadInitialAfterTopPrepend() {
 }
 
 /**
+ * S-02: arm a bounded window during which a late-loading tall image may re-pin
+ * the just-settled initial anchor. The retry ladder ([1,120,400,900]) can settle
+ * before a tall image finishes decoding, drifting the target below the fold; a
+ * single re-anchor on the late media load corrects that. Bounded by
+ * [INITIAL_ANCHOR_MEDIA_REANCHOR_WINDOW_MS] and disarmed by user scroll / new
+ * page-load, so it can never loop or fight the user.
+ */
+function armThemeInitialAnchorMediaReanchor(name) {
+    if (typeof name !== "string" || !name.length) return;
+    themeInitialAnchorReanchorName = name;
+    themeInitialAnchorReanchorUntil = Date.now() + INITIAL_ANCHOR_MEDIA_REANCHOR_WINDOW_MS;
+}
+
+function clearThemeInitialAnchorMediaReanchor() {
+    themeInitialAnchorReanchorName = "";
+    themeInitialAnchorReanchorUntil = 0;
+}
+
+/**
+ * S-02: re-pin the active initial anchor after a tall image finishes loading.
+ * No-op once the user has scrolled, the bounded window has elapsed, the anchor
+ * is already near the viewport top, or a blocking command/unread anchor is in
+ * flight (those own the scroll). Single, instant correction — never a loop.
+ */
+function maybeReanchorInitialAfterMediaLoad() {
+    if (!themeInitialAnchorReanchorName) return;
+    if (Date.now() >= themeInitialAnchorReanchorUntil) {
+        clearThemeInitialAnchorMediaReanchor();
+        return;
+    }
+    if (themeInfiniteScroll.userScrolled) {
+        clearThemeInitialAnchorMediaReanchor();
+        return;
+    }
+    // A live command / pending unread anchor owns the scroll; let it finish.
+    if (window.__themeScrollCommandId || themeInfiniteScroll.unreadInitialAnchorPending) return;
+    var name = themeInitialAnchorReanchorName;
+    var anchor = resolveThemeAnchorElement(name);
+    if (!anchor) return;
+    if (isThemeAnchorNearViewportTop(name)) return;
+    logThemeRender("media reanchor initial anchor=" + name);
+    scrollToElement(name, true);
+}
+
+/**
  * Повторы после сдвига вёрстки (картинки, шрифты): один вызов scrollToElement часто оставляет верх страницы.
  */
 function scrollToElementWithRetries(name, requireFinalRetry) {
@@ -2065,6 +2238,7 @@ function scrollToElementWithRetries(name, requireFinalRetry) {
                     themeAnchorRetryPendingName = "";
                     cancelThemeAnchorScrollRetries();
                     clearUnreadInitialAnchorScroll("initial_anchor_early");
+                    armThemeInitialAnchorMediaReanchor(name);
                     maybeCompleteThemeScrollCommand(true, "initial_anchor");
                     return;
                 }
@@ -2079,6 +2253,9 @@ function scrollToElementWithRetries(name, requireFinalRetry) {
                         clearUnreadInitialAnchorScroll("initial_anchor_final");
                     }
                     if (ms === finalDelay) {
+                        if (successfulScrolls > 0 && requireFinalRetry) {
+                            armThemeInitialAnchorMediaReanchor(name);
+                        }
                         maybeCompleteThemeScrollCommand(successfulScrolls > 0, requireFinalRetry ? "initial_anchor" : "");
                         if (successfulScrolls > 0 && requireFinalRetry) {
                             scheduleThemeInfiniteScrollBootstrap(80);
@@ -2271,17 +2448,20 @@ function doScroll(tAnchorElem, scrollIntoElem) {
         toScroll.scrollIntoView();
     }
 
-    //Активация элементов, убирается класс active с уже активированных
-    if (elemToActivation)
+    // Legacy `.active` block-flash highlight REMOVED (Audit Finding H-04).
+    // Adding `.active` to the scrolled-to `.post_container` triggered the
+    // `.post_container.active:before { -webkit-animation: highlight 1s }` rule —
+    // a full-size black `:before` overlay that tinted the WHOLE post for ~1s
+    // ("the whole block flashes"). The "where I stopped" highlight is now owned
+    // solely by the native `ppda_highlight_post` box-shadow ring
+    // (ThemeWebController.reapplyTopicHighlight -> PPDA_applyHighlight), so the
+    // legacy flash is intentionally not re-applied here. `elemToActivation`
+    // stays declared/reset (destroyRuntime) for the read-before-assign safety
+    // documented at its declaration; we simply never add the `active` class.
+    if (elemToActivation) {
         elemToActivation.classList.remove('active');
-
-    var postElem = tAnchorElem;
-    while (postElem && !postElem.classList.contains("post_container")) {
-        postElem = postElem.parentElement;
+        elemToActivation = null;
     }
-    elemToActivation = postElem;
-    if (elemToActivation)
-        elemToActivation.classList.add('active');
 }
 
 function selectionToQuote() {
@@ -2590,21 +2770,51 @@ nativeEvents.addEventListener(nativeEvents.DOM, function () {
         return;
     }
     if (window.loadAction == NORMAL_ACTION) {
-        if (window.__themeScrollCommandId || themeInfiniteScroll.unreadInitialAnchorPending) {
-            return;
-        }
-        var domInitialAnchor = resolveThemeInitialAnchorName();
-        if (domInitialAnchor && typeof scrollToElementWithRetries === "function") {
-            if (themeAnchorRetryPendingName === domInitialAnchor || isThemeAnchorNearViewportTop(domInitialAnchor)) {
-                logThemeRender("skip duplicate dom initial anchor " + domInitialAnchor);
-                return;
-            }
-            scrollToElementWithRetries(domInitialAnchor, true);
-        }
+        maybeRunDomInitialAnchorFallback("dom_event");
         return;
     }
     scrollToElement();
 });
+
+/**
+ * S-01 / R-03: FALLBACK-ONLY DOM-anchor scroll for a NORMAL load. Kotlin's
+ * INITIAL_ANCHOR command is the authoritative owner; this path must only run
+ * when no Kotlin command owns or is expected to own the scroll. While a Kotlin
+ * command is still expected (handshake window armed by
+ * [setThemeInitialAnchorExpected]) the fallback re-schedules itself for the end
+ * of the window instead of racing on whether [__themeScrollCommandId] is set
+ * yet. This preserves the legacy retry ladder ([scrollToElementWithRetries])
+ * and the near-top / pending de-dup that the JS-facing tests pin.
+ */
+function maybeRunDomInitialAnchorFallback(source) {
+    if (!isThemeRuntimeAlive()) return;
+    if (window.loadAction != NORMAL_ACTION) return;
+    // A command is already executing or an unread initial anchor is pending —
+    // Kotlin owns this scroll; never run the fallback.
+    if (window.__themeScrollCommandId || themeInfiniteScroll.unreadInitialAnchorPending) {
+        return;
+    }
+    // A Kotlin command is still expected: yield and re-check after the handshake
+    // window. If the command arrives it disarms the window (see
+    // executeThemeScrollCommand) and the rescheduled check will bail above.
+    if (isThemeInitialAnchorExpected()) {
+        var remaining = Math.max(1, (Number(window.__themeInitialAnchorExpectedUntil) || 0) - Date.now());
+        logThemeRender("dom initial anchor deferred source=" + source + " remainingMs=" + remaining);
+        themeRuntimeSetTimeout(function () {
+            maybeRunDomInitialAnchorFallback("handshake_timeout");
+        }, remaining + 16);
+        return;
+    }
+    var domInitialAnchor = resolveThemeInitialAnchorName();
+    if (domInitialAnchor && typeof scrollToElementWithRetries === "function") {
+        if (themeAnchorRetryPendingName === domInitialAnchor || isThemeAnchorNearViewportTop(domInitialAnchor)) {
+            logThemeRender("skip duplicate dom initial anchor " + domInitialAnchor);
+            return;
+        }
+        logThemeRender("dom initial anchor fallback source=" + source + " anchor=" + domInitialAnchor);
+        scrollToElementWithRetries(domInitialAnchor, true);
+    }
+}
 nativeEvents.addEventListener(nativeEvents.DOM, initThemeInfiniteScroll);
 
 /**
@@ -3170,6 +3380,13 @@ function applyThemeInfinitePage(direction, html) {
     }
     logThemeRender("applyInfiniteStart direction=" + direction + " fragmentHtml=" + html.length + " " + describeThemeRenderDom("beforeApply"));
     if (direction === "top") {
+        // STEP 4 — position-preserving top-prepend by element. The legacy document-height-delta
+        // restore (`oldY + max(0, newHeight - oldHeight)`) drifted when late image/smile rendering
+        // shifted content after the prepend. Pin to the topmost visible real post instead: its
+        // getBoundingClientRect().top is current before AND after the insert (the element is stable
+        // across reflow above it), so scrollBy(topAfter - topBefore) keeps it visually fixed.
+        var pinnedElement = findTopmostVisibleRealThemePostForPrepend();
+        var pinnedTopBefore = pinnedElement ? pinnedElement.getBoundingClientRect().top : null;
         var oldHeight = document.documentElement.scrollHeight;
         var oldY = window.pageYOffset || document.documentElement.scrollTop || 0;
         var topState = document.getElementById("theme_infinite_top");
@@ -3183,11 +3400,21 @@ function applyThemeInfinitePage(direction, html) {
             stripPrependedTopicHatFromList(PageInfo.topicHatPostId);
         }
         themeRuntimeRequestAnimationFrame(function () {
-            var newHeight = document.documentElement.scrollHeight;
-            window.scrollTo(0, oldY + Math.max(0, newHeight - oldHeight));
+            // STEP 4: prefer element-relative pinning. Fall back to the height-delta formula only
+            // when no pinnable post was captured (e.g. hat-only first page), preserving old behavior.
+            if (pinnedElement && pinnedTopBefore !== null) {
+                var pinnedTopAfter = pinnedElement.getBoundingClientRect().top;
+                var delta = pinnedTopAfter - pinnedTopBefore;
+                if (delta !== 0) {
+                    window.scrollBy(0, delta);
+                }
+            } else {
+                var newHeight = document.documentElement.scrollHeight;
+                window.scrollTo(0, oldY + Math.max(0, newHeight - oldHeight));
+            }
             maybeReanchorUnreadInitialAfterTopPrepend();
             themeInfiniteScroll.loadingTop = false;
-            logThemeRender("applyInfiniteEnd direction=top oldHeight=" + oldHeight + " newHeight=" + newHeight + " " + describeThemeRenderDom("afterApplyTop"));
+            logThemeRender("applyInfiniteEnd direction=top oldHeight=" + oldHeight + " pinned=" + (pinnedElement ? pinnedElement.getAttribute("data-post-id") : "none") + " " + describeThemeRenderDom("afterApplyTop"));
             scheduleVisibleThemePageLayoutChecks();
             if (!themeInfiniteScroll.unreadInitialAnchorPending) {
                 scheduleThemeInfiniteScrollBootstrap(80);
@@ -3363,7 +3590,6 @@ function resetThemeRuntimeState() {
     themeInfiniteScroll.userScrolled = false;
     themeInfiniteScroll.visiblePageRafPending = false;
     themeInfiniteScroll.visiblePageThrottleTimer = null;
-    window.__themeRevealAfterRestoreId = "";
 }
 
 function destroyThemeInfiniteScrollRuntime() {
@@ -3399,7 +3625,6 @@ function destroyThemeRuntime(reason) {
     clearThemeRuntimeAsyncWork();
     window.themeLastLinkSourceAnchor = null;
     window.__themeLastClickedPostAnchor = null;
-    window.__themeRevealAfterRestoreId = "";
     window.__themeRenderToken = "";
     anchorElem = null;
     elemToActivation = null;

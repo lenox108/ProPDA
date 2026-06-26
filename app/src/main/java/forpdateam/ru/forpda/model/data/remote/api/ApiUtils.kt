@@ -2,7 +2,7 @@ package forpdateam.ru.forpda.model.data.remote.api
 
 import android.text.Spanned
 import android.text.TextUtils
-import forpdateam.ru.forpda.common.Html
+import forpdateam.ru.forpda.common.html.HtmlEntityDecoder
 import org.json.JSONObject
 
 /**
@@ -19,7 +19,7 @@ object ApiUtils {
      */
     @JvmStatic
     fun coloredFromHtml(s: String?): Spanned? {
-        return s?.let { Html.fromHtml(it, Html.FROM_HTML_OPTION_USE_CSS_COLORS) }
+        return HtmlEntityDecoder.decodeColoredToSpanned(s)
     }
 
     /**
@@ -32,7 +32,7 @@ object ApiUtils {
      */
     @JvmStatic
     fun spannedFromHtml(s: String?): Spanned? {
-        return s?.let { Html.fromHtml(it, Html.FROM_HTML_MODE_LEGACY) }
+        return HtmlEntityDecoder.decodeToSpanned(s)
     }
 
     /**
@@ -44,7 +44,7 @@ object ApiUtils {
      */
     @JvmStatic
     fun fromHtml(s: String?): String? {
-        return s?.let { spannedFromHtml(it)?.toString() }
+        return HtmlEntityDecoder.decodeToString(s)
     }
 
     /**
