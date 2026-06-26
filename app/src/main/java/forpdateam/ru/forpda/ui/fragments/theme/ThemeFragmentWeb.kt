@@ -1997,14 +1997,27 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         }
         // The bridge only accepts destructive calls from the latest completed trusted render.
         actions.add("window.__themeRenderToken=${JSONObject.quote(renderGuard.newToken())};")
-        if (!shouldBlockScrollRestoreForUnread &&
+        val refreshRestoreEligible = !shouldBlockScrollRestoreForUnread &&
                 (effectiveRestoreMode == "ANCHOR" || effectiveRestoreMode == "BOTTOM") &&
                 !restoreId.isNullOrBlank()
-        ) {
+        if (refreshRestoreEligible) {
             actions.add(
                     webController.buildScrollCommandAction(
-                            ThemeScrollCommand.refreshRestore(restoreId, effectiveRestoreMode ?: restoreMode.orEmpty())
+                            ThemeScrollCommand.refreshRestore(restoreId!!, effectiveRestoreMode ?: restoreMode.orEmpty())
                     )
+            )
+        }
+        // Diagnostic (holistic back-restore, device log 26_06-17-21): the back's REFRESH_RESTORE is
+        // dispatched HERE (onDomContentComplete render batch), NOT via executeScrollCommand. Surfaces,
+        // in logcat (survives the WebConsole quota), whether the restore action was actually added to
+        // the batch and with which restoreId — so a missing/empty restoreId or a blocked-for-unread
+        // skip is visible directly instead of inferred from absent JS logs.
+        if (loadAction == forpdateam.ru.forpda.presentation.theme.ThemeLoadAction.Back ||
+                !restoreId.isNullOrBlank()
+        ) {
+            Log.i(
+                    "ThemeHistory",
+                    "dom_batch_restore action=$loadAction added=$refreshRestoreEligible restoreId=$restoreId mode=$effectiveRestoreMode blockedForUnread=$shouldBlockScrollRestoreForUnread anchor=$anchorPostId jsReady=${webView.isJsReady}"
             )
         }
         // S-01 / R-03: when Kotlin owns the initial-anchor scroll for this open,
