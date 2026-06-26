@@ -1091,7 +1091,7 @@ function executeThemeScrollCommand(payload) {
             if (typeof scrollToThemeBottomWithRetries === "function") {
                 scrollToThemeBottomWithRetries();
             } else {
-                window.scrollTo(0, document.documentElement.scrollHeight);
+                themeInstantScrollToY(document.documentElement.scrollHeight);
                 maybeCompleteThemeScrollCommand(true, "bottom");
             }
             break;
@@ -1111,7 +1111,7 @@ function executeThemeScrollCommand(payload) {
             } else if (typeof scrollToEndAnchorOrBottomWithRetries === "function") {
                 scrollToEndAnchorOrBottomWithRetries(data.anchorPostId);
             } else {
-                window.scrollTo(0, document.documentElement.scrollHeight);
+                themeInstantScrollToY(document.documentElement.scrollHeight);
                 maybeCompleteThemeScrollCommand(true, "bottom_fallback");
             }
             break;
@@ -1524,6 +1524,33 @@ function captureThemeRefreshScrollAnchor(source) {
     }
 }
 
+/**
+ * INSTANT programmatic vertical scroll. A bare two-argument `window.scrollTo(x, y)` is treated as a
+ * SMOOTH (animated) scroll by this WebView in several invocation contexts — most visibly when a
+ * restore/anchor scroll is dispatched as part of a back-gesture touch sequence or a link tap. The
+ * resulting ~660ms scroll ramp from the page top to the target post is exactly the "visible scroll"
+ * the user sees on link navigation, back, and end-of-topic (device log 26_06-18-09: BACK to 239158
+ * animated scrollY 0 → 10590 over 660ms with the WebView already revealed). The OBJECT form with an
+ * explicit `behavior: "auto"` is reliably instant on every code path; route ALL programmatic
+ * positioning through these helpers so a stray bare call can never re-introduce the animation.
+ */
+function themeInstantScrollToY(top) {
+    var y = Number(top);
+    if (!isFinite(y)) y = 0;
+    if (y < 0) y = 0;
+    window.scrollTo({left: 0, top: y, behavior: "auto"});
+}
+
+function themeInstantScrollIntoView(el, alignBottom) {
+    if (!el || typeof el.scrollIntoView !== "function") return;
+    try {
+        el.scrollIntoView({block: alignBottom ? "end" : "start", inline: "nearest", behavior: "auto"});
+    } catch (ex) {
+        // Older engines without the options overload: the boolean form is instant.
+        el.scrollIntoView(alignBottom ? false : true);
+    }
+}
+
 function restoreThemeRefreshScrollAnchorOnce(scrollGeneration, reason, allowMissingAnchorFallback) {
     if (!isThemeAnchorScrollCurrent(scrollGeneration)) return false;
     var metrics = getThemeScrollMetrics();
@@ -1570,7 +1597,7 @@ function restoreThemeRefreshScrollAnchorOnce(scrollGeneration, reason, allowMiss
     logRefreshScroll("restore " + reason + " method=" + method + " source=" + window.refreshRestoreSource + " fromY=" + metrics.scrollY + " toY=" + targetY + " max=" + metrics.maxScroll + " post=" + anchorId + " offset=" + window.loadAnchorOffsetTop + " ratio=" + window.loadScrollRatio + " wasNearBottom=" + window.loadWasNearBottom + " spacer=" + getThemeBottomSpacerHeight());
     logThemeHistory("restore final reason=" + reason + " method=" + method + " post=" + anchorId + " fromY=" + metrics.scrollY + " toY=" + targetY + " max=" + metrics.maxScroll);
     if (Math.abs(metrics.scrollY - targetY) > 2) {
-        window.scrollTo(0, targetY);
+        themeInstantScrollToY(targetY);
     }
     updateVisibleThemePage();
     return true;
@@ -1783,7 +1810,7 @@ function restoreThemeToBottomAfterRefreshWithRetries() {
         }
 
         if (Math.abs(before.scrollY - targetY) > bottomTolerancePx) {
-            window.scrollTo(0, targetY);
+            themeInstantScrollToY(targetY);
         }
         updateVisibleThemePage();
 
@@ -1793,7 +1820,7 @@ function restoreThemeToBottomAfterRefreshWithRetries() {
             var afterSpacer = getThemeBottomSpacerHeight();
             var delta = Math.max(0, after.maxScroll - after.scrollY);
             if (delta > bottomTolerancePx) {
-                window.scrollTo(0, after.maxScroll);
+                themeInstantScrollToY(after.maxScroll);
                 after = getThemeScrollMetrics();
                 delta = Math.max(0, after.maxScroll - after.scrollY);
             }
@@ -1830,7 +1857,7 @@ function restoreThemeToBottomAfterRefreshWithRetries() {
             } else {
                 var finalTarget = getThemeScrollMetrics().maxScroll;
                 if (Math.abs(getThemeScrollMetrics().scrollY - finalTarget) > bottomTolerancePx) {
-                    window.scrollTo(0, finalTarget);
+                    themeInstantScrollToY(finalTarget);
                 }
                 var finalMetrics = getThemeScrollMetrics();
                 logRefreshScroll("bottomRestore final y=" + finalMetrics.scrollY + " max=" + finalMetrics.maxScroll + " delta=" + Math.max(0, finalMetrics.maxScroll - finalMetrics.scrollY) + " attempts=" + attempt + " contentHeight=" + finalMetrics.scrollHeight + " viewport=" + finalMetrics.clientHeight + " spacer=" + getThemeBottomSpacerHeight());
@@ -1847,7 +1874,7 @@ function restoreThemeToBottomAfterRefreshWithRetries() {
                 var metrics = getThemeScrollMetrics();
                 var delta = Math.max(0, metrics.maxScroll - metrics.scrollY);
                 if (delta > bottomTolerancePx) {
-                    window.scrollTo(0, metrics.maxScroll);
+                    themeInstantScrollToY(metrics.maxScroll);
                     metrics = getThemeScrollMetrics();
                     delta = Math.max(0, metrics.maxScroll - metrics.scrollY);
                 }
@@ -2185,16 +2212,16 @@ function scrollToElement(name, keepScrollGeneration) {
             var backElem = document.querySelector('[name="entry' + backAnchorPostId + '"]');
             if (backElem) {
                 scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
-                    backElem.scrollIntoView();
+                    themeInstantScrollIntoView(backElem);
                 });
             } else {
                 scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
-                    window.scrollTo(0, window.loadScrollY);
+                    themeInstantScrollToY(window.loadScrollY);
                 });
             }
         } else {
             scheduleThemeScrollAttempt(scrollGeneration, 1, function () {
-                window.scrollTo(0, window.loadScrollY);
+                themeInstantScrollToY(window.loadScrollY);
             });
         }
     } else if (window.loadAction == END_ACTION && !explicitAnchor) {
@@ -2539,7 +2566,7 @@ function scrollToEndAnchorOrBottomWithRetries(postId) {
                     if (typeof scrollToThemeBottomWithRetries === "function") {
                         scrollToThemeBottomWithRetries();
                     } else {
-                        window.scrollTo(0, document.documentElement.scrollHeight, {behavior: "auto"});
+                        themeInstantScrollToY(document.documentElement.scrollHeight);
                         updateVisibleThemePage();
                         themeInfiniteScroll.endScrollPending = false;
                         maybeCompleteThemeScrollCommand(true, "end_bottom_fallback");
@@ -2588,10 +2615,10 @@ function doScroll(tAnchorElem, scrollIntoElem) {
         var topReserve = (typeof topChromePadding !== 'undefined' ? Math.max(0, Number(topChromePadding) || 0) : 0);
         var maxY = Math.max(0, document.documentElement.scrollHeight - viewport);
         var y = postTopAbs - topReserve;
-        window.scrollTo(0, Math.max(0, Math.min(maxY, y)));
+        themeInstantScrollToY(Math.max(0, Math.min(maxY, y)));
     } catch (ex) {
         logThemeRuntimeWarning("ThemeScroll", ex);
-        toScroll.scrollIntoView();
+        themeInstantScrollIntoView(toScroll);
     }
 
     // Legacy `.active` block-flash highlight REMOVED (Audit Finding H-04).
@@ -2910,7 +2937,7 @@ nativeEvents.addEventListener(nativeEvents.DOM, function () {
         } else if (window.loadAnchorPostId && window.loadAnchorPostId.length && typeof scrollToEndAnchorOrBottomWithRetries === "function") {
             scrollToEndAnchorOrBottomWithRetries(window.loadAnchorPostId);
         } else {
-            window.scrollTo(0, document.documentElement.scrollHeight);
+            themeInstantScrollToY(document.documentElement.scrollHeight);
             maybeCompleteThemeScrollCommand(true, "end_dom_bottom");
         }
         return;
@@ -3552,11 +3579,11 @@ function applyThemeInfinitePage(direction, html) {
                 var pinnedTopAfter = pinnedElement.getBoundingClientRect().top;
                 var delta = pinnedTopAfter - pinnedTopBefore;
                 if (delta !== 0) {
-                    window.scrollBy(0, delta);
+                    window.scrollBy({left: 0, top: delta, behavior: "auto"});
                 }
             } else {
                 var newHeight = document.documentElement.scrollHeight;
-                window.scrollTo(0, oldY + Math.max(0, newHeight - oldHeight));
+                themeInstantScrollToY(oldY + Math.max(0, newHeight - oldHeight));
             }
             maybeReanchorUnreadInitialAfterTopPrepend();
             themeInfiniteScroll.loadingTop = false;
@@ -3629,7 +3656,7 @@ function scrollToThemePage(pageNumber) {
     if (!target) {
         return false;
     }
-    target.scrollIntoView();
+    themeInstantScrollIntoView(target);
     updateVisibleThemePage();
     return true;
 }
@@ -3653,7 +3680,7 @@ function scrollToThemePageAndBottom(pageNumber) {
     if (typeof scrollToThemeBottomWithRetries === "function") {
         scrollToThemeBottomWithRetries();
     } else {
-        window.scrollTo(0, document.documentElement.scrollHeight);
+        themeInstantScrollToY(document.documentElement.scrollHeight);
         maybeCompleteThemeScrollCommand(true, "bottom_fallback");
     }
 }
@@ -3669,7 +3696,7 @@ function scrollToThemeBottomOnce() {
     suppressThemeInfiniteScrollFor(1800);
     var viewport = window.innerHeight || document.documentElement.clientHeight || 0;
     var targetY = Math.max(0, getThemeDocumentScrollHeight() - viewport);
-    window.scrollTo(0, targetY);
+    themeInstantScrollToY(targetY);
     updateVisibleThemePage();
 }
 
