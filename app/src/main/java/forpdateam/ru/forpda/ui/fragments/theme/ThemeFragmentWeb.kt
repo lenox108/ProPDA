@@ -2193,15 +2193,25 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                         restoreSource
                 )
         )
-        if (!blockScrollRestoreForUnread &&
+        val pageRestoreEligible = !blockScrollRestoreForUnread &&
                 !wasEnd &&
                 (restoreMode == "ANCHOR" || restoreMode == "BOTTOM") &&
                 !restoreId.isNullOrBlank()
-        ) {
+        if (pageRestoreEligible) {
             actions.add(
                     webController.buildScrollCommandAction(
-                            ThemeScrollCommand.refreshRestore(restoreId, restoreMode)
+                            ThemeScrollCommand.refreshRestore(restoreId!!, restoreMode)
                     )
+            )
+        }
+        // Diagnostic (holistic back-restore, device log 26_06-17-31): the 1121483 BACK restore is
+        // dispatched HERE (onPageComplete batch), not onDomContentComplete. Surfaces in logcat whether
+        // the restore action was added and the restoreId actually sent to JS — note restoreId is sent
+        // as null when blockScrollRestoreForUnread, which would strand the back at the page top.
+        if (wasBack || !restoreId.isNullOrBlank()) {
+            Log.i(
+                    "ThemeHistory",
+                    "page_batch_restore wasBack=$wasBack added=$pageRestoreEligible restoreId=$restoreId sentToJs=${if (blockScrollRestoreForUnread) "null(blocked)" else restoreId} mode=$restoreMode blockedForUnread=$blockScrollRestoreForUnread jsReady=${webView.isJsReady}"
             )
         }
         if (!wasBack && !wasRefresh && !wasEnd &&

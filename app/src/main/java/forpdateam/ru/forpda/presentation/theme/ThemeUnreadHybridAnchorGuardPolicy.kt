@@ -20,10 +20,17 @@ object ThemeUnreadHybridAnchorGuardPolicy {
     }
 
     fun scrollStuckRevealDelayMs(blockingScrollKind: ThemeScrollCommand.Kind?): Long =
-            if (blockingScrollKind == ThemeScrollCommand.Kind.INITIAL_ANCHOR) {
-                INITIAL_ANCHOR_SCROLL_STUCK_REVEAL_DELAY_MS
-            } else {
-                DEFAULT_SCROLL_STUCK_REVEAL_DELAY_MS
+            when (blockingScrollKind) {
+                ThemeScrollCommand.Kind.INITIAL_ANCHOR -> INITIAL_ANCHOR_SCROLL_STUCK_REVEAL_DELAY_MS
+                // A BACK/refresh REFRESH_RESTORE runs the JS BACK-anchor settle loop, which polls until
+                // the target post is in the DOM and the HYBRID page is laid out (hard deadline 4000ms,
+                // theme.js BACK_ANCHOR_SETTLE_DEADLINE_MS). The old 2000ms stuck-reveal abandoned the
+                // command and revealed at the page top BEFORE the settle could land on the post (device
+                // logs 26_06-16-50 … 26_06-17-31). Give the watchdog a longer leash than the settle
+                // deadline so the restore actually completes on the post; the settle's own deadline
+                // still guarantees the reveal is never blocked indefinitely.
+                ThemeScrollCommand.Kind.REFRESH_RESTORE -> REFRESH_RESTORE_SCROLL_STUCK_REVEAL_DELAY_MS
+                else -> DEFAULT_SCROLL_STUCK_REVEAL_DELAY_MS
             }
 
     fun shouldAbandonBlockingScrollForSafetyReveal(blockingScrollKind: ThemeScrollCommand.Kind?): Boolean =
@@ -69,4 +76,6 @@ object ThemeUnreadHybridAnchorGuardPolicy {
 
     private const val DEFAULT_SCROLL_STUCK_REVEAL_DELAY_MS = 2000L
     private const val INITIAL_ANCHOR_SCROLL_STUCK_REVEAL_DELAY_MS = 3000L
+    /** Must exceed theme.js BACK_ANCHOR_SETTLE_DEADLINE_MS (4000) so the settle can land first. */
+    private const val REFRESH_RESTORE_SCROLL_STUCK_REVEAL_DELAY_MS = 4600L
 }
