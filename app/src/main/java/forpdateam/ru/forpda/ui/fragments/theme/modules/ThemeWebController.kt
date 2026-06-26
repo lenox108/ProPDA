@@ -237,6 +237,14 @@ class ThemeWebController(
     private val pendingCaptureTimeouts = mutableSetOf<Runnable>()
     private var smartScrollRetryGeneration = 0
     private var flushingPendingScrollCommand = false
+    /**
+     * Command id of an anchor/restore scroll command that was DROPPED at dispatch because the JS
+     * bridge was not ready (device log 26_06-17-02, cross-topic BACK: the REFRESH_RESTORE was dropped
+     * at jsReady=false and never executed). [flushPendingScrollCommand] replays exactly this command
+     * once the render is ready; cleared when any anchor/restore command is actually eval'd so a
+     * successfully-dispatched command is never double-executed.
+     */
+    private var deferredAnchorScrollCommandId: String? = null
     private var pendingSmartScrollYBefore = 0
 
     /**
@@ -793,12 +801,19 @@ class ThemeWebController(
         } else {
             reacknowledgeJsBridgeIfRenderedButFlagStale()
             if (webView.isJsReady) {
+                deferredAnchorScrollCommandId = null
                 if (BuildConfig.DEBUG) {
                     Log.i(REFRESH_SCROLL_TAG, "controller execScrollCmd kind=${command.kind} id=${command.commandId} jsReady=true")
                 }
                 jsApi.eval(jsApi.executeScrollCommand(command))
-            } else if (BuildConfig.DEBUG) {
-                Log.w(REFRESH_SCROLL_TAG, "controller execScrollCmd DROPPED kind=${command.kind} id=${command.commandId} jsReady=false content=${webView.contentHeight} posts=$completedRenderHasPosts")
+            } else {
+                // Defer instead of dropping: a BACK/refresh REFRESH_RESTORE (or INITIAL_ANCHOR) dropped
+                // here used to be abandoned via scrollStuckReveal, landing the user on the page top.
+                // [flushPendingScrollCommand] replays it once the render is ready.
+                deferredAnchorScrollCommandId = command.commandId
+                if (BuildConfig.DEBUG) {
+                    Log.w(REFRESH_SCROLL_TAG, "controller execScrollCmd DEFERRED kind=${command.kind} id=${command.commandId} jsReady=false content=${webView.contentHeight} posts=$completedRenderHasPosts")
+                }
             }
         }
     }
@@ -901,6 +916,32 @@ class ThemeWebController(
     fun flushPendingScrollCommand() {
         if (disposed || fragment.view == null || flushingPendingScrollCommand) return
         val command = presenter.getPendingScrollCommand() ?: return
+        // Replay an anchor/restore command that was DEFERRED at dispatch (JS bridge not ready). Only
+        // the exact deferred command is replayed (commandId match), so a command that DID dispatch is
+        // never re-executed. The JS side coalesces / guards re-entry (restoreSkipReentry), so even a
+        // late replay is safe. Device log 26_06-17-02: without this the BACK REFRESH_RESTORE never ran.
+        if (command.commandId == deferredAnchorScrollCommandId &&
+                (command.kind == ThemeScrollCommand.Kind.INITIAL_ANCHOR ||
+                        command.kind == ThemeScrollCommand.Kind.REFRESH_RESTORE ||
+                        command.kind == ThemeScrollCommand.Kind.ANCHOR)
+        ) {
+            reacknowledgeJsBridgeIfRenderedButFlagStale()
+            val renderable = webView.contentHeight > WEBVIEW_BLANK_CONTENT_HEIGHT_THRESHOLD ||
+                    completedRenderHasPosts
+            if (webView.isJsReady && renderable) {
+                deferredAnchorScrollCommandId = null
+                if (BuildConfig.DEBUG) {
+                    Log.i(REFRESH_SCROLL_TAG, "controller execScrollCmd REPLAY kind=${command.kind} id=${command.commandId} jsReady=true content=${webView.contentHeight}")
+                }
+                flushingPendingScrollCommand = true
+                try {
+                    jsApi.eval(jsApi.executeScrollCommand(command))
+                } finally {
+                    flushingPendingScrollCommand = false
+                }
+            }
+            return
+        }
         if (command.kind != ThemeScrollCommand.Kind.BOTTOM &&
                 command.kind != ThemeScrollCommand.Kind.END_ANCHOR_OR_BOTTOM
         ) return
