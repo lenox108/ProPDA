@@ -534,6 +534,13 @@ class ThemeViewModel @Inject constructor(
 
     override fun onScrollCommandComplete(commandId: String, success: Boolean, reason: String) {
         val pending = pendingScrollCommand
+        // Diagnostic (device log 26_06-15-31, 528252): confirm whether the JS scroll completion ever
+        // reaches Kotlin. If this line is ABSENT for an INITIAL_ANCHOR open while `blocked_infinite`
+        // appears, JS dropped the completion (stale render generation) before bridging it here.
+        Log.i(
+                ThemeUnreadHybridAnchorGuardPolicy.LOG_TAG,
+                "scroll_cmd_complete_received id=$commandId success=$success reason=$reason pendingId=${pending?.commandId} pendingKind=${pending?.kind} trace=$openTrace.id"
+        )
         completeScrollCommand(commandId, success)
         if (pending?.commandId != commandId) return
         when (pending.kind) {
@@ -698,6 +705,8 @@ class ThemeViewModel @Inject constructor(
      * markers its first content post IS the first-unread (device log 26_06-15-24, topic 1050118).
      */
     private var nextPageUnreadReloadTraceId: String? = null
+    /** De-dups the high-frequency `blocked_infinite awaiting_anchor` log so it can't flood logcat. */
+    private var lastBlockedInfiniteLogKey: String? = null
     /** Hat overlay WebView reload scheduled after first anchor scroll settles. */
     private var pendingHatOverlayRenderAfterScroll = false
     /** Marks hatOverlayEnsure reload so pageComplete restores scroll natively instead of INITIAL_ANCHOR. */
@@ -4550,15 +4559,24 @@ class ThemeViewModel @Inject constructor(
 
     override fun onInfiniteScrollRequest(direction: String) {
         if (shouldBlockHybridUntilInitialAnchorSettled()) {
-            Log.i(
-                    ThemeUnreadHybridAnchorGuardPolicy.LOG_TAG,
-                    "blocked_infinite direction=$direction reason=awaiting_anchor trace=$openTrace.id"
-            )
+            // Throttle: this fires on every infinite-scroll tick (~30ms) while the guard is armed and
+            // floods logcat (50+ identical lines) — enough to trip Android's per-process LOG_FLOWCTRL
+            // quota and DROP the genuinely useful lines (the INITIAL_ANCHOR completion diagnostics we
+            // need). Log once per (trace, direction) block instead.
+            val blockKey = "${openTrace.id}:$direction"
+            if (blockKey != lastBlockedInfiniteLogKey) {
+                lastBlockedInfiniteLogKey = blockKey
+                Log.i(
+                        ThemeUnreadHybridAnchorGuardPolicy.LOG_TAG,
+                        "blocked_infinite direction=$direction reason=awaiting_anchor trace=$openTrace.id (throttled)"
+                )
+            }
             _uiEvents.tryEmit(
                     ThemeUiEvent.SetInfiniteState(direction, ThemeInfiniteScrollController.InfiniteState.IDLE.jsName, null)
             )
             return
         }
+        lastBlockedInfiniteLogKey = null
         if (direction == "top" && isEndNavigationPending()) {
             if (BuildConfig.DEBUG) {
                 FpdaDebugLog.log(
