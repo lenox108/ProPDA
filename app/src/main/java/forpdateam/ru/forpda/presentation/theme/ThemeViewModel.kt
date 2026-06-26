@@ -88,8 +88,13 @@ private const val MAX_REMEMBERED_TOPIC_TITLES = 32
  * for slower users and reintroduced the "scroll jumps to top" bug.
  */
 internal const val SOURCE_ANCHOR_TTL_MS = 15_000L
-/** Grace window protecting a REFRESH_RESTORE settle from safety reveals; > theme.js BACK_ANCHOR_SETTLE_DEADLINE_MS (4000). */
-internal const val REFRESH_RESTORE_SETTLE_GRACE_MS = 4200L
+/**
+ * Grace window protecting a REFRESH_RESTORE settle from safety reveals. Must exceed theme.js
+ * BACK_ANCHOR_SETTLE_DEADLINE_MS (4000) with margin for timer jitter — the settle always completes
+ * (early/deadline/yield) and clears the command, which ends the protection naturally; this cap only
+ * bounds the pathological "settle never reports" case.
+ */
+internal const val REFRESH_RESTORE_SETTLE_GRACE_MS = 5000L
 
 data class ThemeLinkSourceAnchor(
         val href: String,

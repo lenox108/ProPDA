@@ -1672,8 +1672,32 @@ function restoreThemeRefreshScrollAnchorWithRetries() {
 function restoreBackAnchorUntilSettled(scrollGeneration, anchorId) {
     var startedAt = Date.now();
     var intervalMs = 96;
+    var myRestoreId = window.__activeRestoreId;
+    // Ownership is DECOUPLED from the shared [themeAnchorScrollGeneration]. Device log 26_06-17-45:
+    // the settle started (restoreSchedule mode=BACK_ANCHOR_SETTLE) but NEVER completed because a HYBRID
+    // neighbor insert / hat-overlay re-render bumped that generation, so `isThemeAnchorScrollCurrent`
+    // bailed and the loop returned silently — the REFRESH_RESTORE command then hung until a safety
+    // watchdog revealed the page top. The settle owns the scroll until ITS restore is superseded
+    // (a different restoreId begins), the runtime dies, or the USER scrolls (then we yield to them).
+    function settleStillOwned() {
+        return isThemeRuntimeAlive() &&
+            window.__activeRestoreId === myRestoreId &&
+            window.__activeRestoreCompleted === false &&
+            !(themeInfiniteScroll && themeInfiniteScroll.userScrolled === true);
+    }
     function settleAttempt() {
-        if (!isThemeAnchorScrollCurrent(scrollGeneration)) return;
+        if (!settleStillOwned()) {
+            // Yielded (user scroll / superseded): complete so the Kotlin command + reveal are released
+            // instead of hanging until a safety watchdog fires.
+            if (window.__activeRestoreId === myRestoreId && window.__activeRestoreCompleted === false) {
+                window.__activeRestoreCompleted = true;
+                maybeCompleteThemeScrollCommand(true);
+            }
+            return;
+        }
+        // Re-capture the LIVE generation each tick so a HYBRID re-render bump can't make the scroll
+        // call see itself as "stale" and no-op.
+        var liveGen = themeAnchorScrollGeneration;
         var elapsed = Date.now() - startedAt;
         var metrics = getThemeScrollMetrics();
         var post = findRealThemePostById(anchorId) ||
@@ -1685,7 +1709,7 @@ function restoreBackAnchorUntilSettled(scrollGeneration, anchorId) {
             var settledReason = settledEarly ? "backSettled+" + elapsed : "backDeadline+" + elapsed;
             // allowMissingAnchorFallback=true so the deadline path still positions (ratio/savedY) and
             // never leaves the page un-scrolled.
-            restoreThemeRefreshScrollAnchorOnce(scrollGeneration, settledReason, true);
+            restoreThemeRefreshScrollAnchorOnce(liveGen, settledReason, true);
             // Restore settled: release most of the infinite-scroll suppression (kept long enough only
             // to bridge the restore) so scroll-up auto-load of previous pages resumes promptly.
             if (settledEarly && themeInfiniteScroll.suppressUntil > Date.now() + 600) {
@@ -1701,7 +1725,7 @@ function restoreBackAnchorUntilSettled(scrollGeneration, anchorId) {
         }
         // Not settled yet: nudge toward the post if it exists, then keep polling.
         if (post) {
-            restoreThemeRefreshScrollAnchorOnce(scrollGeneration, "backPoll+" + elapsed, false);
+            restoreThemeRefreshScrollAnchorOnce(liveGen, "backPoll+" + elapsed, false);
         }
         themeRuntimeSetTimeout(function () {
             themeRuntimeRequestAnimationFrame(settleAttempt);
