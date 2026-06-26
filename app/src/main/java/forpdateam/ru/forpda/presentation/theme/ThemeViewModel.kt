@@ -88,6 +88,8 @@ private const val MAX_REMEMBERED_TOPIC_TITLES = 32
  * for slower users and reintroduced the "scroll jumps to top" bug.
  */
 internal const val SOURCE_ANCHOR_TTL_MS = 15_000L
+/** Grace window protecting a REFRESH_RESTORE settle from safety reveals; > theme.js BACK_ANCHOR_SETTLE_DEADLINE_MS (4000). */
+internal const val REFRESH_RESTORE_SETTLE_GRACE_MS = 4200L
 
 data class ThemeLinkSourceAnchor(
         val href: String,
@@ -249,6 +251,8 @@ class ThemeViewModel @Inject constructor(
     private var lastOpenResolution: TopicOpenResolution? = null
     private var activeNavigationTarget: TopicOpenTarget? = null
     private var pendingScrollCommand: ThemeScrollCommand? = null
+    /** uptimeMillis until which a pending REFRESH_RESTORE settle is protected from safety reveals. */
+    private var refreshRestoreSettleDeadlineAtMs: Long = 0L
     private var listOpenHints: TopicOpenListHints? = null
     /** Captured at [resolveTopicOpenUrl]; survives [listOpenHints] clear before async [loadData]. */
     private var pendingParserListUnreadHint: Boolean = false
@@ -316,8 +320,23 @@ class ThemeViewModel @Inject constructor(
             pendingPostedPageScrollCommand = true
         }
         pendingScrollCommand = command
+        if (command.kind == ThemeScrollCommand.Kind.REFRESH_RESTORE) {
+            refreshRestoreSettleDeadlineAtMs =
+                    SystemClock.uptimeMillis() + REFRESH_RESTORE_SETTLE_GRACE_MS
+        }
         return command
     }
+
+    /**
+     * True while a BACK/refresh REFRESH_RESTORE is running its JS settle loop (it polls until the
+     * target post is in the progressively-laid-out HYBRID DOM, theme.js BACK_ANCHOR_SETTLE_DEADLINE_MS).
+     * The reveal-safety watchdogs (alphaRevealSafety / scrollStuckReveal / renderWatchdog*) must NOT
+     * un-hide the WebView or abandon the command before this window elapses, or the page is revealed at
+     * the page top mid-settle and the back lands on the wrong post (device logs 26_06-16-50 … 26_06-17-38).
+     */
+    fun isRefreshRestoreSettleInProgress(): Boolean =
+            pendingScrollCommand?.kind == ThemeScrollCommand.Kind.REFRESH_RESTORE &&
+                    refreshRestoreSettleDeadlineAtMs > SystemClock.uptimeMillis()
 
     /** Drops a deferred smart-end scroll so it cannot replay after navigation/render reset. */
     fun clearPendingScrollCommand() {
