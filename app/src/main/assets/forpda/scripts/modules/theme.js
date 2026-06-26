@@ -53,6 +53,8 @@ window.__themeScrollCommandGeneration = 0;
 window.__themeScrollCommandGenerationAtExec = 0;
 /** Default window (ms) the DOM-anchor fallback waits for a Kotlin INITIAL_ANCHOR command. */
 var INITIAL_ANCHOR_KOTLIN_HANDSHAKE_MS = 700;
+/** Hard deadline (ms) for the BACK-anchor settle loop before it completes with a fallback. */
+var BACK_ANCHOR_SETTLE_DEADLINE_MS = 4000;
 /** Bounded window (ms) after the initial anchor settles during which a late media load may re-anchor (S-02). */
 var INITIAL_ANCHOR_MEDIA_REANCHOR_WINDOW_MS = 2500;
 /**
@@ -1613,6 +1615,24 @@ function restoreThemeRefreshScrollAnchorWithRetries() {
         return;
     }
     var scrollGeneration = themeAnchorScrollGeneration;
+    // A BACK restore that targets a specific post must land ON that post. On a HYBRID page the post is
+    // not in the DOM the instant the restore fires, and the page is still laying out (maxScroll == 0):
+    // the old fixed retry schedule gave up at its final delay and completed with a pageTop / zero-ratio
+    // fallback — device log 26_06-16-50: `scrollCmdComplete ok=true y=0 max=6768`, i.e. the page top.
+    // Route it to a settle loop that keeps polling until the anchor post is actually present AND the
+    // page is laid out (then positions to it and completes), bounded by a hard deadline so the reveal
+    // is never blocked indefinitely. Infinite scroll is suppressed for the whole window so a top-insert
+    // / native-edge cannot reset the scroll to 0 mid-restore.
+    var backAnchorId = window.loadAnchorPostId || "";
+    if (window.loadAction == BACK_ACTION &&
+        backAnchorId.length > 0 &&
+        window.refreshRestoreMode !== "BOTTOM" &&
+        !window.loadWasNearBottom
+    ) {
+        suppressThemeInfiniteScrollFor(BACK_ANCHOR_SETTLE_DEADLINE_MS + 400);
+        restoreBackAnchorUntilSettled(scrollGeneration, backAnchorId);
+        return;
+    }
     suppressThemeInfiniteScrollFor(window.loadWasNearBottom ? 2600 : 1800);
     var delays = window.refreshRestoreMode === "TARGET_POST"
         ? [1, 80, 180, 420]
@@ -1638,6 +1658,59 @@ function restoreThemeRefreshScrollAnchorWithRetries() {
             }, ms);
         })(delays[i]);
     }
+}
+
+/**
+ * BACK-anchor restore settle loop (device log 26_06-16-50, back to 1121483 #entry143876380 landing on
+ * the page top). Polls until the target post is actually in the DOM AND the page is laid out
+ * (maxScroll > 0), then positions to the post and completes the scroll command. This avoids the
+ * fixed-schedule failure where the final retry fired while the HYBRID page was still empty
+ * (maxScroll == 0 → anchor missing / ratio*0 → page top) and completed at y=0. Bounded by
+ * [BACK_ANCHOR_SETTLE_DEADLINE_MS] so the reveal is never blocked indefinitely; cancelled implicitly
+ * when the user scrolls or a new load bumps [themeAnchorScrollGeneration].
+ */
+function restoreBackAnchorUntilSettled(scrollGeneration, anchorId) {
+    var startedAt = Date.now();
+    var intervalMs = 96;
+    function settleAttempt() {
+        if (!isThemeAnchorScrollCurrent(scrollGeneration)) return;
+        var elapsed = Date.now() - startedAt;
+        var metrics = getThemeScrollMetrics();
+        var post = findRealThemePostById(anchorId) ||
+            document.querySelector('[name="entry' + anchorId + '"]');
+        var laidOut = metrics.maxScroll > 0;
+        var deadline = elapsed >= BACK_ANCHOR_SETTLE_DEADLINE_MS;
+        if ((post && laidOut) || deadline) {
+            var settledEarly = post && laidOut;
+            var settledReason = settledEarly ? "backSettled+" + elapsed : "backDeadline+" + elapsed;
+            // allowMissingAnchorFallback=true so the deadline path still positions (ratio/savedY) and
+            // never leaves the page un-scrolled.
+            restoreThemeRefreshScrollAnchorOnce(scrollGeneration, settledReason, true);
+            // Restore settled: release most of the infinite-scroll suppression (kept long enough only
+            // to bridge the restore) so scroll-up auto-load of previous pages resumes promptly.
+            if (settledEarly && themeInfiniteScroll.suppressUntil > Date.now() + 600) {
+                themeInfiniteScroll.suppressUntil = Date.now() + 600;
+            }
+            if (typeof logRefreshScroll === "function") {
+                logRefreshScroll("backAnchorSettle reason=" + settledReason + " post=" + anchorId +
+                    " found=" + !!post + " maxScroll=" + metrics.maxScroll + " y=" + getThemeScrollMetrics().scrollY);
+            }
+            window.__activeRestoreCompleted = true;
+            maybeCompleteThemeScrollCommand(true);
+            return;
+        }
+        // Not settled yet: nudge toward the post if it exists, then keep polling.
+        if (post) {
+            restoreThemeRefreshScrollAnchorOnce(scrollGeneration, "backPoll+" + elapsed, false);
+        }
+        themeRuntimeSetTimeout(function () {
+            themeRuntimeRequestAnimationFrame(settleAttempt);
+        }, intervalMs);
+    }
+    logRefreshScroll("restoreSchedule id=" + window.refreshRestoreId + " mode=BACK_ANCHOR_SETTLE source=" +
+        window.refreshRestoreSource + " action=" + window.loadAction + " anchor=" + anchorId +
+        " ratio=" + window.loadScrollRatio + " savedY=" + window.loadScrollY + " deadline=" + BACK_ANCHOR_SETTLE_DEADLINE_MS);
+    themeRuntimeRequestAnimationFrame(settleAttempt);
 }
 
 function restoreThemeToBottomAfterRefreshWithRetries() {
