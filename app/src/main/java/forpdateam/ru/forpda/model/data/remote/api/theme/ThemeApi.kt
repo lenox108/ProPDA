@@ -231,8 +231,11 @@ class ThemeApi(
 
     /**
      * Merges per-post rating text and +/- controls from desktop HTML into [page].
-     * Mobile topic HTML (including the body returned after posting) often omits `ka_p` / vote UI;
-     * [getTheme] does this merge automatically — call this when using [ThemeParser.parsePage] alone.
+     * Mobile topic HTML (including the body returned after posting) omits `ka_p` / vote UI; this
+     * merge is NOT performed by [getTheme] — first render always uses mobile HTML. It is driven by
+     * [ThemeViewModel.scheduleDeferredPageMetadataEnrichment] (primary open) and
+     * [ThemeViewModel.scheduleDeferredPageMetadataEnrichmentForPage] (hybrid infinite-scroll append),
+     * which defer the fetch so it does not compete with first paint and then emit DOM-patch events.
      */
     suspend fun mergeDesktopRatingsIntoPage(page: ThemePage, finalUrl: String) {
         enrichPageMetadata(page, finalUrl)

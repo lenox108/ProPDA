@@ -207,6 +207,9 @@ class ThemeViewModel @Inject constructor(
         stripDuplicateHatFromNonFirstPage = ::stripDuplicateHatFromNonFirstPage,
         validateNonFirstPagePostNumbers = ::validateNonFirstPagePostNumbers,
         promoteTopicHatForHybridPage = ::promoteTopicHatForHybridPage,
+        scheduleMetadataEnrichmentForPage = { page ->
+            scheduleDeferredPageMetadataEnrichmentForPage(page, openTrace.id)
+        },
         getCurrentPage = { currentPage },
         getLoadedPages = { loadedPages },
         setLoadedPages = { newPages ->
@@ -773,6 +776,7 @@ class ThemeViewModel @Inject constructor(
     private var loadThemeJob: Job? = null
     private var hatMetadataJob: Job? = null
     private var pageMetadataEnrichmentJob: Job? = null
+    private var neighborPageMetadataEnrichmentJob: Job? = null
     private var infiniteSession = 0
     private val loadedPages = linkedMapOf<Int, ThemePage>()
     private var firstPageHatPostId: Int? = null
@@ -931,6 +935,7 @@ class ThemeViewModel @Inject constructor(
         hatMetadataJob?.cancel()
         titleFromFirstPageJob?.cancel()
         pageMetadataEnrichmentJob?.cancel()
+        neighborPageMetadataEnrichmentJob?.cancel()
         postEditCoordinator.dispose()
         infiniteScrollController.cancelAll()
         super.onCleared()
@@ -1353,6 +1358,7 @@ class ThemeViewModel @Inject constructor(
         hatMetadataJob?.cancel()
         titleFromFirstPageJob?.cancel()
         pageMetadataEnrichmentJob?.cancel()
+        neighborPageMetadataEnrichmentJob?.cancel()
         infiniteSession++
         editorUseCase.bumpEditPrefetchGeneration()
         val requestedTopicId = ThemeApi.extractTopicIdFromUrl(url)
@@ -3678,6 +3684,39 @@ class ThemeViewModel @Inject constructor(
                 _uiEvents.tryEmit(event)
             }
             historyController.updateHistoryLast(current)
+        }
+    }
+
+    /**
+     * Deferred desktop/profile metadata enrichment for a *neighbor* page appended via hybrid
+     * infinite scroll (see [ThemeInfiniteScrollController.requestInfinitePage]).
+     *
+     * Mobile topic HTML has no `ka_p`, so appended pages render with `postRating = null` and the
+     * template hides the rating row. This mirrors [scheduleDeferredPageMetadataEnrichment] but is
+     * page-scoped: it snapshots/patches the *passed* [page]'s posts (which is NOT [currentPage])
+     * and emits [ThemeUiEvent.PatchPostRatingUi] / [ThemeUiEvent.PatchUserPostCountUi] events for
+     * those post ids once the desktop HTML is fetched and merged.
+     *
+     * Ordering: the controller invokes this AFTER emitting [ThemeUiEvent.ApplyInfinitePage], so the
+     * post elements are already in the DOM when the patch events arrive at the WebView consumer
+     * (SharedFlow preserves emission order; `applyPostRatingPatch` JS no-ops on missing containers).
+     *
+     * Idempotency: if this neighbor page later becomes [currentPage] (user jumps to it via the page
+     * selector), [scheduleDeferredPageMetadataEnrichment] may re-enrich the same posts. That is safe —
+     * the patcher no-ops when `before == after`, and `PatchPostRatingUi` is an idempotent DOM update.
+     */
+    private fun scheduleDeferredPageMetadataEnrichmentForPage(page: ThemePage, traceId: String) {
+        if (page.id <= 0 || page.posts.isEmpty()) return
+        neighborPageMetadataEnrichmentJob?.cancel()
+        neighborPageMetadataEnrichmentJob = scope.launch {
+            delay(ThemeDeferredMetadataEnrichmentPolicy.DELAY_MS)
+            if (traceId != openTrace.id) return@launch
+            val beforeByPostId = ThemeDeferredMetadataPatcher.snapshotByPostId(page.posts)
+            val changed = themeUseCase.enrichPageMetadata(page)
+            if (!changed || traceId != openTrace.id) return@launch
+            ThemeDeferredMetadataPatcher.uiEvents(beforeByPostId, page.posts).forEach { event ->
+                _uiEvents.tryEmit(event)
+            }
         }
     }
 
