@@ -407,11 +407,41 @@ class ThemeApi(
         }
 
         val profileUrl = "https://4pda.to/forum/index.php?showuser=$userId"
-        val count = runCatching {
-            parseProfileUserPostCount(webClient.get(profileUrl).body)
+        // Fetch the profile with the DESKTOP skin (no mobile cookie + desktop UA), exactly like
+        // [fetchAndMergeDesktopTopicMetadata]. The reliable parse branches in
+        // [parseProfileUserPostCount] (the `title`+`area` layout) mirror the production
+        // `forum_stats`/`site_stats` patterns (patterns.json), which describe the DESKTOP profile.
+        // The mobile-skin profile page can omit the «Постов» stat row (or render it via a layout
+        // none of the branches match), so for a subset of users `webClient.get` returned a body that
+        // parsed to null — the count silently went missing only for them. Forcing the desktop skin
+        // makes the markup consistent for every user.
+        val body = runCatching {
+            val request = NetworkRequest.Builder()
+                    .url(profileUrl)
+                    .addHeader("User-Agent", DESKTOP_USER_AGENT)
+                    .build()
+            webClient.requestWithoutMobileCookie(request).body
         }.onFailure {
-            if (BuildConfig.DEBUG) Timber.tag("ThemeUserPosts").d(it, "profileFallback failed user=%d", userId)
-        }.getOrNull()?.takeIf { it > 0 } ?: return null
+            if (BuildConfig.DEBUG) Timber.tag("ThemeUserPosts").d(it, "profileFallback fetch failed user=%d", userId)
+        }.getOrNull() ?: return null
+        val count = parseProfileUserPostCount(body)?.takeIf { it > 0 } ?: run {
+            if (BuildConfig.DEBUG) {
+                // No exception, but no count parsed — capture exactly what's needed to pin a
+                // not-yet-handled profile layout (or a login wall / redirect) for THIS user.
+                Timber.tag("ThemeUserPosts").d(
+                        "profileFallback parsedNull user=%d nick=%s bodyLen=%d hasTitleArea=%s hasPostsLabel=%s hasDataMemberPosts=%s loginWall=%s",
+                        userId,
+                        post.nick.orEmpty(),
+                        body.length,
+                        body.contains("class=\"area\"", ignoreCase = true) &&
+                                body.contains("class=\"title\"", ignoreCase = true),
+                        body.contains(Regex("""(?i)Постов|Сообщени[йя]|Posts?""")),
+                        body.contains("data-member-posts", ignoreCase = true),
+                        body.contains(Regex("""(?i)act=login|enterusername|name=["']password["']"""))
+                )
+            }
+            return null
+        }
 
         synchronized(profileUserPostCountById) { profileUserPostCountById[userId] = count }
         if (nickKey != null) synchronized(profileUserPostCountByNick) { profileUserPostCountByNick[nickKey] = count }

@@ -177,10 +177,17 @@ class ThemeApiUserPostCountMergeTest {
         }
 
         every { webClient.get(url) } returns NetworkResponse(url = url, code = 200, redirect = url, body = mobileTopicHtmlWithoutPostCount())
-        every { webClient.get(profileUrl) } returns NetworkResponse(url = profileUrl, code = 200, redirect = profileUrl, body = profileHtmlWithForumPostCount())
         every { parser.parsePage(any(), url, any(), any(), any()) } returns page
         every { parser.parseUserPostCountsByPostId(any()) } returns emptyMap()
-        every { webClient.requestWithoutMobileCookie(any()) } returns NetworkResponse(
+        // Both the desktop-topic merge and the profile fallback now use the desktop skin via
+        // requestWithoutMobileCookie; route by request URL.
+        every { webClient.requestWithoutMobileCookie(match { it.url.contains("showuser=777") }) } returns NetworkResponse(
+                url = profileUrl,
+                code = 200,
+                redirect = profileUrl,
+                body = profileHtmlWithForumPostCount()
+        )
+        every { webClient.requestWithoutMobileCookie(match { !it.url.contains("showuser=777") }) } returns NetworkResponse(
                 url = "https://4pda.to/forum/index.php?showtopic=10&st=0",
                 code = 200,
                 redirect = "https://4pda.to/forum/index.php?showtopic=10&st=0",
@@ -192,7 +199,7 @@ class ThemeApiUserPostCountMergeTest {
         api.enrichPageMetadata(loadedPage, url)
 
         assertEquals(listOf(19342, 19342), loadedPage.posts.map { it.userPostCount })
-        verify(exactly = 1) { webClient.get(profileUrl) }
+        verify(exactly = 1) { webClient.requestWithoutMobileCookie(match { it.url.contains("showuser=777") }) }
     }
 
     @Test
@@ -232,6 +239,96 @@ class ThemeApiUserPostCountMergeTest {
     @Test
     fun parsesProfileForumPostCount() {
         assertEquals(19342, ThemeApi.parseProfileUserPostCount(profileHtmlWithForumPostCount()))
+    }
+
+    @Test
+    fun parsesRealisticForumStatsProfilePostCount() {
+        assertEquals(547, ThemeApi.parseProfileUserPostCount(realisticProfileHtmlForumPostsViaSearchLink()))
+    }
+
+    @Test
+    fun prefersForumPostsOverPrecedingSiteStatsBlock() {
+        assertEquals(547, ThemeApi.parseProfileUserPostCount(realisticProfileHtmlSiteStatsBeforeForumPosts()))
+    }
+
+    @Test
+    fun parsesPostsLabelWhenSearchHrefCarriesAdjacentDigits() {
+        // The «Постов» count is in a search link whose href contains the user's numeric mid AND a
+        // result count; a naive "first digit run after the label" grabs href digits, not the count.
+        val html = """
+            <html><body>
+            <div class="user-box"><h1>ja_tyt</h1></div>
+            <ul class="profile-stats forum"><li>
+                <span class="title">Постов</span>
+                <div class="area"><a href="/forum/index.php?act=search&mid=143230576&result=1">3 794</a></div>
+            </li></ul>
+            </body></html>
+        """.trimIndent()
+        assertEquals(3794, ThemeApi.parseProfileUserPostCount(html))
+    }
+
+    @Test
+    fun parsesPostsCountWhenTitleAndAreaSeparatedByMarkup() {
+        // Production `forum_stats` allows arbitrary content ([\s\S]*?) between the title </span> and
+        // <div class="area">. Real profiles wrap stats and can interpose an icon/tooltip/comment node
+        // (NOT only whitespace) between them. The title/area branch must tolerate that.
+        val html = """
+            <html><body>
+            <ul class="forum"><li>
+                <span class="title">Постов</span>
+                <i class="stat-icon" aria-hidden="true"></i><!-- forum posts -->
+                <div class="area"><a href="/forum/index.php?act=search&mid=5">547</a></div>
+            </li></ul>
+            </body></html>
+        """.trimIndent()
+        assertEquals(547, ThemeApi.parseProfileUserPostCount(html))
+    }
+
+    @Test
+    fun parsesPostsCountWrappedInSpanInsideArea() {
+        // forum_stats pattern explicitly allows the number to be wrapped: <a ...><span ...>N</span></a>.
+        val html = """
+            <html><body>
+            <ul class="forum"><li>
+                <span class="title">Постов</span>
+                <div class="area"><a href="/forum/index.php?act=search&mid=5"><span class="cnt">8 419</span></a></div>
+            </li></ul>
+            </body></html>
+        """.trimIndent()
+        assertEquals(8419, ThemeApi.parseProfileUserPostCount(html))
+    }
+
+    @Test
+    fun returnsNullWhenForumProfileExposesNoPostsRow() {
+        // A restricted / minimal forum profile that omits the «Постов» row entirely.
+        val html = """
+            <html><body>
+            <div class="user-box"><h1>lexal346</h1></div>
+            <ul class="forum">
+                <li><span class="title">Репутация</span><div class="area"><a href="/forum/index.php?showuser=5&view=rep">10</a></div></li>
+                <li><span class="title">Тем</span><div class="area">0</div></li>
+            </ul>
+            </body></html>
+        """.trimIndent()
+        assertNull(ThemeApi.parseProfileUserPostCount(html))
+    }
+
+    @Test
+    fun ignoresSiteCommentsBlockAndPicksForumPosts() {
+        // Site block exposes «Комментов» (comments) with a real number; must not be mistaken for posts.
+        val html = """
+            <html><body>
+            <div class="user-box"><h1>ja_tyt</h1></div>
+            <ul class="profile-stats site">
+                <li><span class="title">Комментов</span><div class="area">1234</div></li>
+            </ul>
+            <ul class="profile-stats forum">
+                <li><span class="title">Постов</span>
+                    <div class="area"><a href="/forum/index.php?act=search&mid=999&result=1">42</a></div></li>
+            </ul>
+            </body></html>
+        """.trimIndent()
+        assertEquals(42, ThemeApi.parseProfileUserPostCount(html))
     }
 
     @Test
@@ -320,6 +417,63 @@ class ThemeApiUserPostCountMergeTest {
             <div class="user-box"><h1>Vedmak08</h1></div>
             <span class="title">Постов</span>
             <div class="area"><a href="https://4pda.to/forum/index.php?act=search&source=pst&username=Vedmak08">19 342</a></div>
+            </body></html>
+        """.trimIndent()
+    }
+
+    /**
+     * Faithful to the production `forum_stats` pattern (patterns.json): the «Постов» value lives in an
+     * `<a href="...act=search...">N</a>` link inside `<div class="area">`, the title `<span>` and the
+     * area `<div>` are separated by newlines/indentation (and the `<li>` wrapper), and the search href
+     * itself carries digits (mid=…) that must NOT be mistaken for the post count.
+     */
+    private fun realisticProfileHtmlForumPostsViaSearchLink(): String {
+        return """
+            <html><body>
+            <div class="user-box"><h1>lexal346</h1></div>
+            <ul class="profile-stats forum">
+                <li>
+                    <span class="title">Постов</span>
+                    <div class="area">
+                        <a href="https://4pda.to/forum/index.php?act=search&source=pst&mid=9876543&result=posts">547</a>
+                    </div>
+                </li>
+            </ul>
+            </body></html>
+        """.trimIndent()
+    }
+
+    /**
+     * Real profiles render the SITE stats block (Карма/Постов/Комментов) BEFORE the forum stats block.
+     * The forum «Постов» is the one shown under the nick; a naive first-match must not stop on a site
+     * «Постов» whose area links out without an inline number.
+     */
+    private fun realisticProfileHtmlSiteStatsBeforeForumPosts(): String {
+        return """
+            <html><body>
+            <div class="user-box"><h1>lexal346</h1></div>
+            <ul class="profile-stats site">
+                <li>
+                    <span class="title">Карма</span>
+                    <div class="area">12</div>
+                </li>
+                <li>
+                    <span class="title">Постов</span>
+                    <div class="area"><a href="https://4pda.to/lexal346/posts/"></a></div>
+                </li>
+            </ul>
+            <ul class="profile-stats forum">
+                <li>
+                    <span class="title">Репутация</span>
+                    <div class="area"><a href="https://4pda.to/forum/index.php?showuser=9876543&amp;view=rep">10</a></div>
+                </li>
+                <li>
+                    <span class="title">Постов</span>
+                    <div class="area">
+                        <a href="https://4pda.to/forum/index.php?act=search&source=pst&mid=9876543&result=posts">547</a>
+                    </div>
+                </li>
+            </ul>
             </body></html>
         """.trimIndent()
     }
