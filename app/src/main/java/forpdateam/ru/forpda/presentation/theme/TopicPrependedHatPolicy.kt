@@ -25,6 +25,25 @@ internal object TopicPrependedHatPolicy {
             requestedPage: Int = page.pagination.current,
             knownHatId: Int? = null,
     ): Int? {
+        // The open's NAVIGATION TARGET — the server redirect post in `page.url` (…#entry<id>) — is
+        // NEVER the prepended hat. Resolving it as the hat is the recurring bug: once an earlier strip
+        // pass removes the real hat, the target becomes the first post and `resolvePrependedHatIdRaw`'s
+        // `first.id in anchors` branch returns it; removeAll then strips it via `post.id == hatId`,
+        // BEFORE the anchor guard (device log 26_06-15-03, topic 1111449: the second hatMetadataPreload
+        // strip ate the kept anchor 143983265). We key on the url #entry specifically — NOT the broader
+        // anchor set — because the hat itself can legitimately be a scroll anchor (page.anchors may list
+        // the hat, e.g. when the user navigated to the topic's first post), and that hat must still be
+        // strippable. The url redirect target is always the content post the open lands on.
+        val urlAnchorId = extractEntryHashPostId(page.url)
+        val raw = resolvePrependedHatIdRaw(page, requestedPage, knownHatId)
+        return raw?.takeIf { urlAnchorId == null || it != urlAnchorId }
+    }
+
+    private fun resolvePrependedHatIdRaw(
+            page: ThemePage,
+            requestedPage: Int,
+            knownHatId: Int?,
+    ): Int? {
         knownHatId?.takeIf { it > 0 }?.let { return it }
         if (requestedPage <= 1 && page.pagination.current <= 1) return null
         detectPrependedHat(page)?.id?.takeIf { it > 0 }?.let { return it }
