@@ -3282,7 +3282,32 @@ class ThemeViewModel @Inject constructor(
         // restore anchor post lives). The native back snapshot for that source post is keyed by the
         // SOURCE st, so reconcile: if the post we are about to restore was captured at a DIFFERENT st,
         // build the URL with the snapshot's st so the #entry post is actually on the loaded page.
-        val restoreAnchorPostId = page.anchorPostId?.takeIf { it.isNotBlank() }
+        // Stale history-entry anchor fix (device log 26_06-22-01, topic 239158). The history entry is a
+        // COPY pushed when the page was first opened; its `anchorPostId` is the open-time viewport post
+        // (e.g. 135141139 from the getnewpost-open capture). When the user then scrolls and taps an
+        // in-tab link, `applyLinkSourceAnchorSnapshot` refreshes the LIVE page + the native back snapshot
+        // to the precise tap position (144022004) but does NOT rewrite the already-pushed history copy.
+        // So `page.anchorPostId` here is stale and can name a post on a DIFFERENT page than this entry's
+        // st — back then builds `#entry135141139`, which is not on st=15940, the JS BACK_ANCHOR_SETTLE
+        // polls 4s for it (visible lag/chaos), misses, and ratio-falls-back to a random post. The native
+        // snapshot is scoped to THIS page's st and captured at the exact leaving moment, so when it is
+        // usable and names a different post, prefer it — it is the post that is actually on the page.
+        val sameStSnapshotPostId = nativeSnapshot
+                ?.takeIf { it.pageSt == page.st && !it.visiblePostId.isNullOrBlank() }
+                ?.visiblePostId
+        val primaryAnchorPostId = sameStSnapshotPostId
+                ?: page.anchorPostId?.takeIf { it.isNotBlank() }
+        if (BuildConfig.DEBUG &&
+                sameStSnapshotPostId != null &&
+                !page.anchorPostId.isNullOrBlank() &&
+                sameStSnapshotPostId != page.anchorPostId!!.removePrefix("entry")
+        ) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "back_restore_anchor_reconciled topic=${page.id} st=${page.st} staleEntryAnchor=${page.anchorPostId} snapshotPost=$sameStSnapshotPostId"
+            )
+        }
+        val restoreAnchorPostId = primaryAnchorPostId
                 ?: nativeSnapshotPostId
                 ?: durableReturn?.postId
         val sourceSnapshot = historyController
@@ -3303,7 +3328,7 @@ class ThemeViewModel @Inject constructor(
         val url = ThemeBackRestoreUrlPolicy.buildRestoreUrl(
                 topicId = page.id,
                 st = restoreSt,
-                anchorPostId = page.anchorPostId,
+                anchorPostId = primaryAnchorPostId,
                 pageUrl = page.url,
                 // Native per-tab snapshot first; durable cross-tab store fills the gap when the tab
                 // was reused and the per-tab snapshot was wiped (keeps #entry instead of page-top).
@@ -4694,6 +4719,30 @@ class ThemeViewModel @Inject constructor(
     override fun onVisiblePageChanged(pageNumber: Int) {
         if (!shouldAcceptVisiblePageUpdate(pageNumber)) return
         setVisiblePage(pageNumber)
+        markVisiblePageMentionsRead(pageNumber)
+    }
+
+    /**
+     * Гасим упоминания/ответы по факту того, что страница с постом реально оказалась на экране —
+     * без оглядки на то, откуда тема открыта (избранное, форум, ссылка, история) и совпадает ли
+     * страница с навигационным таргетом. Это покрывает кейс «доскроллил до своего упоминания на
+     * другой странице»: [onRenderedTopicPage] срабатывает только для начально отрисованной страницы
+     * и только при совпадении с целью открытия, а подгружаемые бесконечной прокруткой страницы туда
+     * не попадают вовсе. Помечаем прочитанными все посты видимой страницы — [onTopicPostsRead] внутри
+     * сам отфильтрует и затронет только реальные упоминания этой темы.
+     */
+    private fun markVisiblePageMentionsRead(pageNumber: Int) {
+        val page = loadedPages[pageNumber] ?: return
+        if (page.id <= 0) return
+        val visiblePostIds = linkedSetOf<Int>()
+        page.topicHatPost?.id?.takeIf { it > 0 }?.let { visiblePostIds.add(it) }
+        page.posts
+                .asSequence()
+                .map { it.id }
+                .filter { it > 0 }
+                .forEach { visiblePostIds.add(it) }
+        if (visiblePostIds.isEmpty()) return
+        themeUseCase.onRenderedTopicPosts(page.id, visiblePostIds)
     }
 
     override fun onInfiniteRetry(direction: String) {
@@ -4846,8 +4895,22 @@ class ThemeViewModel @Inject constructor(
         emptyTopicReloadAttempts++
         val perPage = page.pagination.perPage.coerceAtLeast(1)
         val st = (page.pagination.current - 1).coerceAtLeast(0) * perPage
-        val url = buildCleanThemeUrl(page.id, st)
-        Timber.w("Retrying topic load after empty posts key=$reloadKey url=$url")
+        // Posted-post anchor loss fix (log 26_06-19-03): a freshly posted/edited page
+        // (anchor=entry<postId>) whose first render comes back empty was retried with a
+        // bare `&st=` url, dropping the anchor. The clean reload then looked like a FRESH
+        // open and the resolver sent it to getlastpost/page-top instead of the user's post.
+        // Preserve the page anchor as `#entry<postId>` so the retry re-anchors to it (and
+        // routes through the explicit-anchor path, not the fresh-open resolver). With no
+        // anchor, buildRestoreUrl degrades to the same clean url as before — no regression.
+        val anchorPostId = page.anchorPostId?.takeIf { it.isNotBlank() }
+                ?: page.anchor?.removePrefix("entry")?.takeIf { it.isNotEmpty() }
+        val url = ThemeBackRestoreUrlPolicy.buildRestoreUrl(
+                topicId = page.id,
+                st = st,
+                anchorPostId = anchorPostId,
+                pageUrl = page.url
+        )
+        Timber.w("Retrying topic load after empty posts key=$reloadKey url=$url anchor=$anchorPostId")
         loadData(url, _loadAction)
         return true
     }
