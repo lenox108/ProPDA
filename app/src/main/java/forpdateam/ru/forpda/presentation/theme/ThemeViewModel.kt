@@ -500,6 +500,24 @@ class ThemeViewModel @Inject constructor(
         maybeMarkTopicRenderSettledAfterScroll()
     }
 
+    /**
+     * On WebView reveal the initial-anchor positioning window is over, so the hybrid top-autoload
+     * guard must not stay armed. Releases it when the INITIAL_ANCHOR never marked settled for the
+     * current trace — even though [pendingScrollCommand] already cleared, so the
+     * [abandonBlockingScrollForSafetyReveal] path (which needs a pending command) cannot fire.
+     *
+     * Device log 26_06-15-31, topic 528252: the INITIAL_ANCHOR completion was lost to the render-
+     * generation race (a findpost reload / hat-preload re-render bumped the generation, JS dropped the
+     * stale `scrollCmdComplete`), so `initialAnchorScrollSettledTraceId` never matched the open trace.
+     * The guard stayed `awaiting_anchor` forever and hybrid top-autoload of the PREVIOUS pages was
+     * blocked — the user hit one post and could not scroll up. Idempotent: a no-op once settled.
+     */
+    fun releaseInitialAnchorHybridGuardForReveal(reason: String) {
+        if (initialAnchorScrollSettledTraceId == openTrace.id) return
+        if (currentPage?.hasUnreadTarget != true && !isExplicitAnchorBlockingOpen()) return
+        releaseUnreadAnchorHybridGuard("reveal_$reason")
+    }
+
     /** Clears Kotlin + WebView hybrid guard when INITIAL_ANCHOR cannot settle (log 11_06: pageComplete lost). */
     fun releaseUnreadAnchorHybridGuard(reason: String) {
         initialAnchorScrollSettledTraceId = openTrace.id
