@@ -776,7 +776,12 @@ class ThemeViewModel @Inject constructor(
     private var loadThemeJob: Job? = null
     private var hatMetadataJob: Job? = null
     private var pageMetadataEnrichmentJob: Job? = null
-    private var neighborPageMetadataEnrichmentJob: Job? = null
+    /**
+     * Per-page deferred-enrichment jobs for neighbor pages appended via hybrid infinite scroll.
+     * Keyed by page number ([ThemePage.pagination.current]) so appending a new page no longer
+     * cancels an in-flight job for a different page — see [scheduleDeferredPageMetadataEnrichmentForPage].
+     */
+    private val neighborPageMetadataEnrichmentJobs = linkedMapOf<Int, Job>()
     private var infiniteSession = 0
     private val loadedPages = linkedMapOf<Int, ThemePage>()
     private var firstPageHatPostId: Int? = null
@@ -935,7 +940,8 @@ class ThemeViewModel @Inject constructor(
         hatMetadataJob?.cancel()
         titleFromFirstPageJob?.cancel()
         pageMetadataEnrichmentJob?.cancel()
-        neighborPageMetadataEnrichmentJob?.cancel()
+        neighborPageMetadataEnrichmentJobs.values.forEach { it.cancel() }
+        neighborPageMetadataEnrichmentJobs.clear()
         postEditCoordinator.dispose()
         infiniteScrollController.cancelAll()
         super.onCleared()
@@ -1358,7 +1364,8 @@ class ThemeViewModel @Inject constructor(
         hatMetadataJob?.cancel()
         titleFromFirstPageJob?.cancel()
         pageMetadataEnrichmentJob?.cancel()
-        neighborPageMetadataEnrichmentJob?.cancel()
+        neighborPageMetadataEnrichmentJobs.values.forEach { it.cancel() }
+        neighborPageMetadataEnrichmentJobs.clear()
         infiniteSession++
         editorUseCase.bumpEditPrefetchGeneration()
         val requestedTopicId = ThemeApi.extractTopicIdFromUrl(url)
@@ -3666,24 +3673,33 @@ class ThemeViewModel @Inject constructor(
         pageMetadataEnrichmentJob = scope.launch {
             delay(ThemeDeferredMetadataEnrichmentPolicy.DELAY_MS)
             if (traceId != openTrace.id) return@launch
-            val current = currentPage ?: return@launch
-            if (current.id != page.id) return@launch
-            val navigationBefore = ThemeDeferredMetadataEnrichmentPolicy.navigationSnapshot(current)
-            val beforeByPostId = ThemeDeferredMetadataPatcher.snapshotByPostId(current.posts)
-            val changed = themeUseCase.enrichPageMetadata(current)
+            val current = currentPage
+            // Prefer enriching the live [currentPage] when it is still this topic, so history /
+            // navigation side-effects apply. If the user has since navigated to a different topic,
+            // fall back to enriching [page] directly — this is the defensive recovery path: a
+            // neighbor page (appended via hybrid scroll) whose per-page job was cancelled before it
+            // ran still gets its profile/rating metadata merged when it later becomes current via
+            // a page-selector jump. Idempotency is guaranteed by [ThemeDeferredMetadataPatcher]
+            // (`before != after`) and by `PatchPostRatingUi` / `PatchUserPostCountUi` being
+            // idempotent DOM updates, so re-enriching is safe.
+            val target = current?.takeIf { it.id == page.id } ?: page
+            val navigationBefore = ThemeDeferredMetadataEnrichmentPolicy.navigationSnapshot(target)
+            val beforeByPostId = ThemeDeferredMetadataPatcher.snapshotByPostId(target.posts)
+            val changed = themeUseCase.enrichPageMetadata(target)
             if (!changed || traceId != openTrace.id) return@launch
-            if (current.id != page.id) return@launch
             if (!ThemeDeferredMetadataEnrichmentPolicy.navigationUnchanged(
                             navigationBefore,
-                            ThemeDeferredMetadataEnrichmentPolicy.navigationSnapshot(current),
+                            ThemeDeferredMetadataEnrichmentPolicy.navigationSnapshot(target),
                     )
             ) {
                 return@launch
             }
-            ThemeDeferredMetadataPatcher.uiEvents(beforeByPostId, current.posts).forEach { event ->
+            ThemeDeferredMetadataPatcher.uiEvents(beforeByPostId, target.posts).forEach { event ->
                 _uiEvents.tryEmit(event)
             }
-            historyController.updateHistoryLast(current)
+            if (current != null && current.id == page.id) {
+                historyController.updateHistoryLast(current)
+            }
         }
     }
 
@@ -3704,20 +3720,38 @@ class ThemeViewModel @Inject constructor(
      * Idempotency: if this neighbor page later becomes [currentPage] (user jumps to it via the page
      * selector), [scheduleDeferredPageMetadataEnrichment] may re-enrich the same posts. That is safe —
      * the patcher no-ops when `before == after`, and `PatchPostRatingUi` is an idempotent DOM update.
+     *
+     * Per-page keying: jobs are stored in [neighborPageMetadataEnrichmentJobs] keyed by page number,
+     * so fast scrolling past several pages no longer cancels a still-pending job for an earlier page
+     * (the prior single-field design cancelled every previous job on each new append, which combined
+     * with [ThemeDeferredMetadataEnrichmentPolicy.DELAY_MS] dropped enrichment for pages scrolled
+     * past within ~1.5s).
      */
     private fun scheduleDeferredPageMetadataEnrichmentForPage(page: ThemePage, traceId: String) {
         if (page.id <= 0 || page.posts.isEmpty()) return
-        neighborPageMetadataEnrichmentJob?.cancel()
-        neighborPageMetadataEnrichmentJob = scope.launch {
-            delay(ThemeDeferredMetadataEnrichmentPolicy.DELAY_MS)
-            if (traceId != openTrace.id) return@launch
-            val beforeByPostId = ThemeDeferredMetadataPatcher.snapshotByPostId(page.posts)
-            val changed = themeUseCase.enrichPageMetadata(page)
-            if (!changed || traceId != openTrace.id) return@launch
-            ThemeDeferredMetadataPatcher.uiEvents(beforeByPostId, page.posts).forEach { event ->
-                _uiEvents.tryEmit(event)
+        val pageNumber = page.pagination.current
+        // Per-page keying: appending a *different* page no longer cancels an in-flight job for
+        // this page. Only a re-append of the SAME page number replaces its own job.
+        neighborPageMetadataEnrichmentJobs[pageNumber]?.cancel()
+        val job = scope.launch {
+            try {
+                delay(ThemeDeferredMetadataEnrichmentPolicy.DELAY_MS)
+                if (traceId != openTrace.id) return@launch
+                val beforeByPostId = ThemeDeferredMetadataPatcher.snapshotByPostId(page.posts)
+                val changed = themeUseCase.enrichPageMetadata(page)
+                if (!changed || traceId != openTrace.id) return@launch
+                ThemeDeferredMetadataPatcher.uiEvents(beforeByPostId, page.posts).forEach { event ->
+                    _uiEvents.tryEmit(event)
+                }
+            } finally {
+                // Self-evict only if we are still the registered job for this page number,
+                // so a newer job that replaced us doesn't get evicted by our teardown.
+                if (neighborPageMetadataEnrichmentJobs[pageNumber] === this) {
+                    neighborPageMetadataEnrichmentJobs.remove(pageNumber)
+                }
             }
         }
+        neighborPageMetadataEnrichmentJobs[pageNumber] = job
     }
 
     private fun validateNonFirstPagePostNumbers(page: ThemePage, requestedPage: Int = page.pagination.current): Boolean {

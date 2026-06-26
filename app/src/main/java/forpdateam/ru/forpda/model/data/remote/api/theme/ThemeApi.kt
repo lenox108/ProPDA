@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.regex.Pattern
 
 /**
@@ -335,15 +337,18 @@ class ThemeApi(
         if (missingPosts.isEmpty()) return 0
 
         // Профильные fetch'и не зависят друг от друга — выполняем их параллельно (с ограничением),
-        // чтобы не превращать дозагрузку счётчиков в цепочку из ~20 последовательных round-trip'ов.
+        // чтобы не превращать дозагрузку счётчиков в цепочку из ~N последовательных round-trip'ов.
+        // Semaphore ограничивает параллелизм, чтобы не долбить форум десятками одновременных
+        // запросов профилей на страницах с большим числом уникальных авторов.
         // Применение к page.posts — строго последовательно (page не потокобезопасен).
+        val gate = Semaphore(PROFILE_POST_COUNT_FETCH_CONCURRENCY)
         val resolvedCounts: List<Pair<ThemePost, Int>> = if (missingPosts.size == 1) {
             listOfNotNull(resolveProfileUserPostCount(missingPosts.first())?.let { missingPosts.first() to it })
         } else {
             runCatching {
                 coroutineScope {
                     missingPosts
-                            .map { post -> async(Dispatchers.IO) { resolveProfileUserPostCount(post)?.let { post to it } } }
+                            .map { post -> async(Dispatchers.IO) { gate.withPermit { resolveProfileUserPostCount(post)?.let { post to it } } } }
                             .awaitAll()
                             .filterNotNull()
                 }
@@ -713,7 +718,13 @@ class ThemeApi(
         private val topicUrlHighlight = Regex("""[?&]highlight=(\d+)(?=[&#]|$)""", RegexOption.IGNORE_CASE)
         private val topicUrlEntryFragment = Regex("""#entry(\d+)\b""", RegexOption.IGNORE_CASE)
         private val topicUrlSt = Regex("""[?&]st=(\d+)(?=[&#]|$)""", RegexOption.IGNORE_CASE)
-        private const val MAX_PROFILE_POST_COUNT_FETCHES_PER_PAGE = 20
+        private const val MAX_PROFILE_POST_COUNT_FETCHES_PER_PAGE = 200
+        /**
+         * Upper bound on parallel profile-page fetches inside [fetchAndMergeProfileUserPostCounts].
+         * Keeps the forum from being hammered when a page has many distinct authors; profile fetches
+         * are independent so they still run concurrently up to this limit.
+         */
+        private const val PROFILE_POST_COUNT_FETCH_CONCURRENCY = 8
 
         private val topicUrlTopicId = Regex("""[?&]showtopic=(\d+)""", RegexOption.IGNORE_CASE)
         private val topicUrlTopicIdSlash = Regex("""(?:forum/index\.php/topic/|/topic/)(\d+)""", RegexOption.IGNORE_CASE)
@@ -1008,6 +1019,38 @@ class ThemeApi(
         }
 
         internal fun parseProfileUserPostCount(profileHtml: String): Int? {
+            // Modern IPS Community profile layout: a list item whose label is «Сообщений»/«Posts»
+            // and whose count lives in an element carrying the `data-member-posts` marker, e.g.
+            //   <li class="ipsDataItem">
+            //     <span class="ipsDataItem_generic ..."><strong>Сообщений</strong></span>
+            //     <span class="ipsDataItem_main ..." data-member-posts="1234">1 234</span>
+            //   </li>
+            // The attribute may carry the count directly (data-member-posts="1234") or be empty
+            // with the count in the element text. Require BOTH the IPS marker and a nearby
+            // «Сообщений/Постов/Posts» label so this branch can't accidentally grab the wrong
+            // «Сообщений» instance on a non-IPS profile.
+            Regex("""(?is)(Постов|Сообщений|Posts?)(?:\s|&nbsp;|&#1?60;|&#x0?A0;|:|</?[^>]+>){0,80}?<[^>]*\bdata-member-posts\b[^>]*>(?:([^>"']{0,40})|)</[^>]*>""")
+                    .find(profileHtml)
+                    ?.let { match ->
+                        // Prefer the inline text between the marker tag and its closing tag; fall
+                        // back to the `data-member-posts="..."` attribute value when the tag is empty.
+                        val inlineText = match.groups[2]?.value.orEmpty().ifBlank {
+                            Regex("""(?is)\bdata-member-posts\s*=\s*["']([^"']+)["']""")
+                                    .find(match.value)
+                                    ?.groupValues
+                                    ?.getOrNull(1)
+                                    .orEmpty()
+                        }
+                        Regex("""[0-9][0-9\s.,]*""")
+                                .find(inlineText)
+                                ?.value
+                                ?.replace(Regex("""[^\d]"""), "")
+                                ?.takeIf { it.isNotEmpty() }
+                                ?.toIntOrNull()
+                                ?.takeIf { it > 0 }
+                    }
+                    ?.let { return it }
+
             Regex("""(?is)<span\b[^>]*\bclass\s*=\s*["'][^"']*\btitle\b[^"']*["'][^>]*>\s*(Постов|Сообщений|Posts?)\s*</span>\s*<div\b[^>]*\bclass\s*=\s*["'][^"']*\barea\b[^"']*["'][^>]*>([\s\S]*?)</div>""")
                     .findAll(profileHtml)
                     .firstNotNullOfOrNull { match ->

@@ -2619,8 +2619,12 @@ body#topic.density_super_compact {
                     .date {
                         max-width: 7rem;
                     }
-                    &+.user_post_count {
-                        display: none !important;
+                    // In super-compact density the count is too cramped to render inline. Only hide
+                    // the *placeholder* (the empty pre-patch state from ThemeTemplate); real counts
+                    // patched in by `applyUserPostCountPatch` (theme.js) lack the placeholder class
+                    // and must remain visible. No `!important` so the patch JS can always override.
+                    &+.user_post_count.user_post_count_placeholder {
+                        display: none;
                     }
                 }
                 &.menu {
