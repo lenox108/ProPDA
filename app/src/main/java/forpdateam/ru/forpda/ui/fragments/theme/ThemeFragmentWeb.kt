@@ -2383,6 +2383,12 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                 presenter.abandonBlockingScrollForSafetyReveal(reason)
             }
         }
+        // The page is now visible: the initial-anchor window is over, so the hybrid top-autoload guard
+        // must not stay armed. Covers the case where the scroll command already cleared without marking
+        // settled (completion lost to the render-generation race) and the abandon path above can't fire
+        // because there is no pending command — device log 26_06-15-31, topic 528252: top-load of the
+        // previous pages was blocked forever. Idempotent (no-op once settled).
+        presenter.releaseInitialAnchorHybridGuardForReveal(reason)
         revealWebView(reason)
         hideInitialLoadingIndicator()
     }
