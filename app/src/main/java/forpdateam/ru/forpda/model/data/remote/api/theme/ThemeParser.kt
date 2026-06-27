@@ -44,6 +44,16 @@ class ThemeParser(
         )
         val USER_POST_COUNT_INFO_START_PATTERN = Regex("""(?is)<(?:span|div)\b[^>]*(?:\bpost_user_info\b|\bclass\s*=\s*["'][^"']*\bpostdetails\b[^"']*["'])[^>]*>""")
         val POST_ENTRY_ANCHOR_PATTERN = Regex("""(?is)<(?:a|div)\b[^>]*(?:\bname|\bid)\s*=\s*["']entry(\d+)["'][^>]*>""")
+
+        // Hoisted out of String.asUserPostCountText()/toUserPostCount(): those
+        // helpers run once per post (see parseUserPostCountsByPostId loop), so
+        // compiling these literal patterns per call was needless per-post work.
+        // Patterns are byte-for-byte identical to the former inline Regex(...).
+        val USER_POST_COUNT_BR_TAG = Regex("""(?is)<br\b[^>]*>""")
+        val USER_POST_COUNT_HTML_TAG = Regex("""(?is)<[^>]+>""")
+        val USER_POST_COUNT_NBSP = Regex("""(?i)&nbsp;|&#160;|&#x0?A0;""")
+        val USER_POST_COUNT_WHITESPACE = Regex("""\s+""")
+        val USER_POST_COUNT_NON_DIGIT = Regex("""[^\d]""")
     }
 
     private val scope = ParserPatterns.Topic
@@ -379,15 +389,15 @@ class ThemeParser(
     }
 
     private fun String.asUserPostCountText(): String {
-        return replace(Regex("""(?is)<br\b[^>]*>"""), " ")
-                .replace(Regex("""(?is)<[^>]+>"""), " ")
-                .replace(Regex("""(?i)&nbsp;|&#160;|&#x0?A0;"""), " ")
-                .replace(Regex("""\s+"""), " ")
+        return replace(USER_POST_COUNT_BR_TAG, " ")
+                .replace(USER_POST_COUNT_HTML_TAG, " ")
+                .replace(USER_POST_COUNT_NBSP, " ")
+                .replace(USER_POST_COUNT_WHITESPACE, " ")
                 .trim()
     }
 
     private fun String.toUserPostCount(): Int? {
-        return replace(Regex("""[^\d]"""), "")
+        return replace(USER_POST_COUNT_NON_DIGIT, "")
                 .takeIf { it.isNotEmpty() }
                 ?.toIntOrNull()
                 ?.takeIf { it > 0 }

@@ -417,7 +417,8 @@ class DownloadsFragment : RecyclerFragment() {
                             logDeleteError("createDeleteRequest after SecurityException failed", r.exceptionOrNull())
                         }
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    logDeleteError("Unexpected error resolving delete outcome via MediaStore", e)
                 }
 
                 // Файл по пути: из WorkInfo или угадываем public/Download/имя по MediaStore (старые записи без outputPath).

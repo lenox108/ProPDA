@@ -5,6 +5,7 @@ import timber.log.Timber
 import android.content.Context
 import android.graphics.Color
 import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.Spannable
 import android.text.TextWatcher
@@ -34,7 +35,7 @@ class CodeEditor @JvmOverloads constructor(
         val ATTRIBUTE: Pattern = Pattern.compile("(name|date|post)?=?([\\s\\S]+?)\\s?(?=(?:name|date|post)=|\\z)", Pattern.CASE_INSENSITIVE)
     }
 
-    private val updateHandler = Handler()
+    private val updateHandler = Handler(Looper.getMainLooper())
     private val updateRunnable = Runnable {
         val e = text ?: return@Runnable
         highlightWithoutChange(e)
