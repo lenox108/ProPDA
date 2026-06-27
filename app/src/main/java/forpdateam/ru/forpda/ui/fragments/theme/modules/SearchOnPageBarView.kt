@@ -147,10 +147,16 @@ class SearchOnPageBarView(
 
     fun close() {
         if (!_isOpen) return
+        // Mark closed FIRST. A typical host hides the bar in response to
+        // onSearchOnPageClearRequested(), so close() can re-enter — directly,
+        // or via the text-watcher that setText("") fires below. Flipping the
+        // guard before any callback makes that re-entry a no-op instead of
+        // infinite recursion (the hazard that kept this bar unwired). See
+        // SearchOnPageBarViewTest.close_isReentrancySafe*.
+        _isOpen = false
         field?.setText("")
         field?.clearFocus()
         listener.onSearchOnPageClearRequested()
         bar?.visibility = View.GONE
-        _isOpen = false
     }
 }
