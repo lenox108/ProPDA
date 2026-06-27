@@ -114,6 +114,49 @@ class SearchOnPageBarViewTest {
     }
 
     /**
+     * Regression guard: a host commonly hides the bar in response to
+     * [SearchOnPageBarView.Listener.onSearchOnPageClearRequested] by calling
+     * [SearchOnPageBarView.close] again. Because close() also fires that
+     * callback (explicitly, and via the text-watcher of setText("")), this is
+     * a re-entrant call. close() must flip its open-guard BEFORE any callback,
+     * so the re-entry is a no-op rather than unbounded recursion. Without the
+     * guard ordering this test recurses until the safety valve trips.
+     */
+    @Test
+    fun close_isReentrancySafe_whenListenerClosesAgain() {
+        val baseContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val themed = ContextThemeWrapper(baseContext, forpdateam.ru.forpda.R.style.DayNightAppTheme)
+        val appBar = AppBarLayout(themed)
+        var viewRef: SearchOnPageBarView? = null
+        var clearCalls = 0
+        val listener = object : SearchOnPageBarView.Listener {
+            override fun onSearchOnPageTextChanged(query: String) {}
+            override fun onSearchOnPageNext(next: Boolean) {}
+            override fun onSearchOnPageClearRequested() {
+                clearCalls++
+                // Safety valve: if close() were not re-entrancy-safe this would
+                // recurse without bound; cap it so the test fails on the
+                // assertion below instead of StackOverflowError.
+                if (clearCalls < 50) viewRef?.close()
+            }
+            override fun onSearchOnPageShowKeyboard(view: View) {}
+        }
+        val view = SearchOnPageBarView(themed, appBar, listener)
+        viewRef = view
+        view.open()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        view.close()
+
+        assertFalse("bar must be closed after a re-entrant close()", view.isOpen)
+        assertTrue(
+                "close() must be re-entrancy-safe: onSearchOnPageClearRequested " +
+                        "should fire only a small bounded number of times, got $clearCalls",
+                clearCalls in 1..3
+        )
+    }
+
+    /**
      * Locate the AppCompatEditText inside the built bar by reading the
      * private `bar` field, then walking the children of that specific
      * LinearLayout (not the whole view hierarchy).
