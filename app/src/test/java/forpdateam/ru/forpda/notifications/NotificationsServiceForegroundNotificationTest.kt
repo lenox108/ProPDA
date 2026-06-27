@@ -3,13 +3,11 @@ package forpdateam.ru.forpda.notifications
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -35,10 +33,6 @@ class NotificationsServiceForegroundNotificationTest {
      */
     @Test
     fun foregroundChannel_isMinimalAndHidden() {
-        assumeTrue(
-            "NotificationChannel requires API 26+",
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-        )
         val context = RuntimeEnvironment.getApplication()
         val manager = context.getSystemService(NotificationManager::class.java)
         // Best-effort: this is the id used by NotificationsService for the FGS channel.

@@ -239,7 +239,6 @@ open class CustomWebViewClient(
         return handleUri(view, Uri.parse(url))
     }
 
-    @TargetApi(Build.VERSION_CODES.N)
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         initDependencies(view.context)
         return handleUri(view, request.url)

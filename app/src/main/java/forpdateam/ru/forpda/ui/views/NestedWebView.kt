@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.ui.views
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ViewConfiguration
@@ -37,6 +38,13 @@ open class NestedWebView @JvmOverloads constructor(
      * prevents [onTouchEvent] from observing a user drag on some WebView/OEM builds.
      */
     private var userTouchScrollActive: Boolean = false
+    /**
+     * Uptime of the last GENUINE user touch that began a scroll (ACTION_DOWN / outer touch routing).
+     * Unlike [isUserScrollActive], this is NEVER set by the programmatic [onScrollChanged] path, so a
+     * post-open content reflow (hat strip / hybrid prepend) does not look like a user scroll here.
+     */
+    var lastUserTouchScrollAtMs: Long = 0L
+        private set
     private val deferredUntilScrollIdle = ArrayList<() -> Unit>()
     private val endScrollInertiaRunnable = Runnable {
         scrollInertiaActive = false
@@ -195,6 +203,7 @@ open class NestedWebView @JvmOverloads constructor(
     /** Call from outer [View.OnTouchListener] when the WebView scrolls under user control. */
     fun markUserTouchForScroll() {
         userTouchScrollActive = true
+        lastUserTouchScrollAtMs = SystemClock.uptimeMillis()
         beginScrollInertiaTracking()
     }
 

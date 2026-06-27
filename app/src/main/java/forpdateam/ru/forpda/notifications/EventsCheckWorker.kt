@@ -186,8 +186,6 @@ class EventsCheckWorker @AssistedInject constructor(
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
 
-        applyLegacyAlertPreferences(builder)
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (appContext.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -204,16 +202,6 @@ class EventsCheckWorker @AssistedInject constructor(
         }
         notificationManager.notify(event.notifyId(), builder.build())
         if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Published ${event.notificationLogCategory()} background notification")
-    }
-
-    private fun applyLegacyAlertPreferences(builder: NotificationCompat.Builder) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return
-
-        var defaults = 0
-        if (prefs.getMainSoundEnabled()) defaults = defaults or NotificationCompat.DEFAULT_SOUND
-        if (prefs.getMainVibrationEnabled()) defaults = defaults or NotificationCompat.DEFAULT_VIBRATE
-        if (prefs.getMainIndicatorEnabled()) defaults = defaults or NotificationCompat.DEFAULT_LIGHTS
-        builder.setDefaults(defaults)
     }
 
     private fun channelIdFor(e: NotificationEvent): String = when {
@@ -283,10 +271,8 @@ class EventsCheckWorker @AssistedInject constructor(
     }
 
     private fun ensureChannel(channelId: String, channelName: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
-            appContext.getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
-        }
+        val ch = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
+        appContext.getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
     }
 
     companion object {

@@ -525,6 +525,13 @@ class ThemeViewModel @Inject constructor(
         }
         pendingScrollCommand = null
         maybeMarkTopicRenderSettledAfterScroll()
+        // A non-INITIAL_ANCHOR blocking open scroll (END_ANCHOR_OR_BOTTOM for an AMBIGUOUS_ALL_READ /
+        // all-read-bottom open, REFRESH_RESTORE) that we just abandoned left the JS side believing a
+        // command is still in flight (`__themeScrollCommandId`) and the open suppressions
+        // (`loadAmbiguousAllReadBottom`) armed. That deadlocks top autoload — the topic froze on the
+        // last post and previous pages never loaded until a manual refresh (device log 27_06-23-37,
+        // topic 194110). Tell JS to drop those open suppressions so a scroll-up loads previous pages.
+        _uiEvents.tryEmit(ThemeUiEvent.ReleaseOpenScrollSuppression("abandon_$reason"))
     }
 
     /**
@@ -5783,6 +5790,7 @@ sealed class ThemeUiEvent {
     object RefreshToolbarMenu : ThemeUiEvent()
     data class UpdateTopicToolbar(val page: ThemePage) : ThemeUiEvent()
     data class ClearUnreadAnchorHybridGuard(val reason: String) : ThemeUiEvent()
+    data class ReleaseOpenScrollSuppression(val reason: String) : ThemeUiEvent()
     data class SetFontSize(val size: Int) : ThemeUiEvent()
     data class SetAppFontMode(val mode: forpdateam.ru.forpda.ui.AppFontMode) : ThemeUiEvent()
     data class SetStyleType(val styleType: String) : ThemeUiEvent()

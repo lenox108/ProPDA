@@ -48,7 +48,7 @@ android {
     def versionNumber = 350
     def versionMajor = "2"
     def versionMinor = "9"
-    def versionPatch = "6"
+    def versionPatch = "4"
     def versionBuild = 1
     def versionPropsFile = file('version.properties')
     if (versionPropsFile.canRead()) {
@@ -65,13 +65,10 @@ android {
         applicationId "ru.forpdateam.forpda.parallel"
         versionCode versionNumber
         versionName "${versionMajor}.${versionMinor}.${versionPatch}"
-        minSdk 26
+        minSdk 24
         targetSdk 35
         vectorDrawables.useSupportLibrary = true
         buildConfigField "String", 'BUILD_DATE', '"' + getDateTime() + '"'
-        // AppMetrica is store-flavor only; default is empty so non-store builds fail fast
-        // if anything ever tries to read APPMETRICA_API_KEY without the flavor override.
-        buildConfigField "String", 'APPMETRICA_API_KEY', '""'
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
@@ -146,9 +143,6 @@ android {
             dimension "channel"
             applicationId 'ru.forpdateam.forpda'
             versionName "${versionMajor}.${versionMinor}.${versionPatch}"
-            // AppMetrica public API key is gated to the store flavor only.
-            // Empty for dev/beta/parallel/stable to make accidental leaks obvious in logs.
-            buildConfigField "String", 'APPMETRICA_API_KEY', '"a94d9236-cdf3-4a5e-af30-d6dbffaea362"'
             // Оригинальный пакет Play — тот же keystore.properties (debug/release как в проекте).
             if (hasUpstreamReleaseKeystore) {
                 signingConfig signingConfigs.upstreamRelease
@@ -216,9 +210,6 @@ android {
 
     testOptions {
         unitTests.returnDefaultValues = true
-        // Required for Robolectric tests that resolve merged Android resources
-        // (e.g. theme attribute resolution in MaterialYouThemeFallbackTest).
-        unitTests.includeAndroidResources = true
     }
 
     lint {
@@ -359,7 +350,6 @@ dependencies {
     testImplementation libs.kotlinx.coroutines.test
     testImplementation libs.turbine
     testImplementation libs.androidx.test.core
-    testImplementation libs.androidx.test.core.app
 }
 
 ksp {

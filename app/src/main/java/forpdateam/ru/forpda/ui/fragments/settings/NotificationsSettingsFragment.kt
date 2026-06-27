@@ -45,15 +45,11 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     }
 
     private fun configureVersionAwareUi() {
-        preferenceScreen.findPreference<Preference>("notifications.main.sound_enabled")?.isVisible =
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.O
-        preferenceScreen.findPreference<Preference>("notifications.main.vibration_enabled")?.isVisible =
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.O
-        preferenceScreen.findPreference<Preference>("notifications.main.indicator_enabled")?.isVisible =
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+        preferenceScreen.findPreference<Preference>("notifications.main.sound_enabled")?.isVisible = false
+        preferenceScreen.findPreference<Preference>("notifications.main.vibration_enabled")?.isVisible = false
+        preferenceScreen.findPreference<Preference>("notifications.main.indicator_enabled")?.isVisible = false
 
-        preferenceScreen.findPreference<PreferenceCategory>("notifications.system.category")?.isVisible =
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+        preferenceScreen.findPreference<PreferenceCategory>("notifications.system.category")?.isVisible = true
         updateVersionAwareUi()
     }
 
@@ -93,8 +89,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
 
     private fun configureChannelLink(key: String, channelId: String) {
         val preference = preferenceScreen.findPreference<Preference>(key) ?: return
-        preference.isVisible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        preference.isVisible = true
         preference.summary = getString(R.string.pref_summary_channel_settings)
         preference.setOnPreferenceClickListener {
             openAndroidChannelSettings(channelId)
@@ -135,7 +130,6 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     private fun updateSystemNotificationStatus() {
         val context = context ?: return
         val appPreference = preferenceScreen.findPreference<Preference>("notifications.system.app") ?: return
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         appPreference.summary = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -151,26 +145,17 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
 
     private fun openAndroidNotificationSettings() {
         val context = context ?: return
-        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-        } else {
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                    .setData(android.net.Uri.parse("package:${context.packageName}"))
-        }
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         startActivity(intent)
     }
 
     private fun openAndroidChannelSettings(channelId: String) {
         val context = context ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ensureChannels(context)
-            startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    .putExtra(Settings.EXTRA_CHANNEL_ID, channelId))
-        } else {
-            openAndroidNotificationSettings()
-        }
+        ensureChannels(context)
+        startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                .putExtra(Settings.EXTRA_CHANNEL_ID, channelId))
     }
 
     private fun ensureChannels(context: Context) {

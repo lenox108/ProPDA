@@ -2307,6 +2307,30 @@ function clearUnreadAnchorHybridGuard(reason) {
     window.__themeScrollCommandId = "";
 }
 
+/**
+ * Called by Kotlin when a blocking OPEN scroll command is abandoned (reveal watchdog / safety reveal)
+ * for a non-INITIAL_ANCHOR kind (END_ANCHOR_OR_BOTTOM, REFRESH_RESTORE). Drops every "initial open"
+ * suppression so the user's scroll-up can load previous pages. Without this, an AMBIGUOUS_ALL_READ
+ * open whose END_ANCHOR_OR_BOTTOM command never completed (a stale-id completion arrived for a
+ * superseded command) left `loadAmbiguousAllReadBottom` + a lingering `__themeScrollCommandId` set,
+ * which permanently suppressed top autoload AND blocked `userScrolled` from being set — the topic
+ * froze on the last post and previous pages never loaded until a manual refresh (device log
+ * 27_06-23-37, topic 194110). Safe because it only runs once the command has been given up.
+ */
+function releaseThemeOpenScrollSuppression(reason) {
+    window.__themeScrollCommandId = "";
+    window.__themeScrollCommandGenerationAtExec = 0;
+    window.loadAmbiguousAllReadBottom = false;
+    themeInfiniteScroll.endScrollPending = false;
+    clearUnreadInitialAnchorScroll(reason || "open_scroll_released");
+    if (typeof logThemeRender === "function") {
+        logThemeRender("FPDA_THEME_ANCHOR_GUARD open_scroll_suppression_released reason=" + (reason || ""));
+    }
+    if (typeof scheduleThemeInfiniteScrollBootstrap === "function") {
+        scheduleThemeInfiniteScrollBootstrap(0);
+    }
+}
+
 function clearUnreadInitialAnchorScroll(reason) {
     var wasPending = themeInfiniteScroll.unreadInitialAnchorPending === true;
     themeInfiniteScroll.unreadInitialAnchorPending = false;

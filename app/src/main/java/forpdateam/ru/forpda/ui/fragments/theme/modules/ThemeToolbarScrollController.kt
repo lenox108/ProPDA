@@ -109,6 +109,34 @@ class ThemeToolbarScrollController(
         reset()
     }
 
+    /**
+     * Deterministic initial state on topic open: snap the chrome hidden with no visible slide, so the
+     * toolbar is hidden-until-scroll regardless of how the programmatic open/anchor scroll was reported.
+     * Honours [shouldStayVisible] (reply panel / hat / poll / action mode keep the toolbar shown).
+     * Returns false (and shows) when the chrome can't be hidden yet (not laid out / must stay visible),
+     * so the caller can fall back.
+     */
+    fun hideImmediate(): Boolean {
+        if (!bound || !enabled) return false
+        if (shouldStayVisible()) {
+            show(force = true)
+            return false
+        }
+        val height = resolveAppBarHeightPx()
+        if (height <= 0f) {
+            show(force = true)
+            return false
+        }
+        cancelAnimations()
+        animationGeneration++
+        pendingHideAfterLayout = false
+        resetAccumulatedScroll()
+        setTranslation(-height)
+        state = State.HIDDEN
+        lastTransitionAt = SystemClock.uptimeMillis()
+        return true
+    }
+
     fun hide(force: Boolean = false) {
         val height = resolveAppBarHeightPx()
         if (height <= 0f) {

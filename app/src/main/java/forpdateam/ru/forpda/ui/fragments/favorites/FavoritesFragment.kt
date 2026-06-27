@@ -188,9 +188,7 @@ class FavoritesFragment : RecyclerFragment() {
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
         markAllReadMenuItem = item
         MenuItemCompat.setContentDescription(item, getString(R.string.fav_mark_all_read))
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            MenuItemCompat.setTooltipText(item, getString(R.string.fav_mark_all_read))
-        }
+        MenuItemCompat.setTooltipText(item, getString(R.string.fav_mark_all_read))
         menu.add(R.string.sorting_title)
                 .setIcon(R.drawable.ic_toolbar_sort)
                 .setOnMenuItemClickListener {
@@ -265,9 +263,7 @@ class FavoritesFragment : RecyclerFragment() {
             }
         })
         MenuItemCompat.setContentDescription(item, getString(R.string.search))
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            MenuItemCompat.setTooltipText(item, getString(R.string.search))
-        }
+        MenuItemCompat.setTooltipText(item, getString(R.string.search))
     }
 
     private fun openMarkAllFavoritesReadConfirmDialog() {

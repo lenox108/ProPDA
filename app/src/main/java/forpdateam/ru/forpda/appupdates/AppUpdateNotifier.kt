@@ -94,14 +94,12 @@ class AppUpdateNotifier @Inject constructor(
     }
 
     private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                context.getString(R.string.pref_title_app_updates),
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            context.getString(R.string.pref_title_app_updates),
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     companion object {
