@@ -126,9 +126,21 @@ class HighlightJsGuardTest {
                 Path.of("app/src/main/assets/template_theme.html"),
         ).first { Files.exists(it) }
         val template = Files.newInputStream(templatePath).bufferedReader().readText()
+        // It must still bring an off-screen highlighted post into view, but INSTANTLY: this WebView
+        // animates scrollIntoView (even behavior:"auto"), so the smooth scrollInto({block:"center"})
+        // was the visible "forced scroll" on open/link/back. The highlight now centers the post via a
+        // direct scrollTop assignment (instant). Assert it still gates on viewport AND positions.
         assertTrue(
-                "PPDA_applyHighlight must scroll off-screen targets into view before fade-out",
-                template.contains("scrollIntoView({ block: \"center\""),
+                "PPDA_applyHighlight must still bring an off-screen target into view (ppdaIsInViewport gate)",
+                template.contains("if (!ppdaIsInViewport(target))"),
+        )
+        assertTrue(
+                "PPDA_applyHighlight must center an off-screen target INSTANTLY via scrollTop (no animated scrollIntoView)",
+                template.contains("ppdaSe.scrollTop = ppdaY"),
+        )
+        assertTrue(
+                "PPDA_applyHighlight off-screen positioning must not use an animated scrollIntoView",
+                !template.contains("scrollIntoView({ block: \"center\""),
         )
     }
 

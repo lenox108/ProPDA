@@ -158,6 +158,19 @@ class ThemeWebController(
     private var highlightCompletedGeneration: Int = 0
     private var highlightCompletedPostId: Long = 0L
     /**
+     * One-highlight-per-open guard (device log 27_06-10-46, topic 1093640). A getnewpost open landed on
+     * and highlighted the redirect post (144025372); the user then scrolled, HYBRID infinite-scroll
+     * appended the next page, [onDomRendered] re-ran [reapplyTopicHighlight], the target re-resolved to a
+     * DIFFERENT post (the true first-unread 144027468) and a SECOND ring flashed below — the reported
+     * "scrolled and another post highlighted" bug. The highlight is a "where you landed" affordance for
+     * a page render; it must not re-flash a different post on an infinite-scroll re-render. This records
+     * the post actually highlighted since the last [renderThemePage]; a re-resolve to a DIFFERENT post
+     * within the same page render is suppressed. Reset by [renderThemePage] (a genuine page/topic
+     * navigation), NOT by infinite-scroll appends ([applyInfinitePage]), so navigating to a new page
+     * still highlights its target.
+     */
+    private var highlightAppliedPostIdSinceRender: Long = 0L
+    /**
      * STEP 2 — sticky pending ScrollIntent for an explicit-anchor open. Stored separately from
      * `renderGeneration` so a generation bump (reload / smart-patch re-render) does NOT drop the
      * pending anchor. Cleared via [ThemeViewModel.isExplicitAnchorScrollSettledForController]
@@ -421,6 +434,10 @@ class ThemeWebController(
         // H-03: a new render must always allow a fresh apply dispatch for the new generation.
         highlightApplyDispatchedGeneration = 0
         highlightApplyDispatchedPostId = 0L
+        // One-highlight-per-open: a genuine page/topic render may highlight a (possibly new) target.
+        // Infinite-scroll appends do NOT go through renderThemePage, so this stays set across them and
+        // suppresses a re-flash on a different post mid-scroll.
+        highlightAppliedPostIdSinceRender = 0L
         // Additive shared-controller mirror (Phase 4): no behavior change, diagnostics only.
         val sharedSession = sharedRenderController.beginRender(
                 owner = WebViewRenderSession.Owner.THEME,
@@ -933,6 +950,9 @@ class ThemeWebController(
                 if (BuildConfig.DEBUG) {
                     Log.i(REFRESH_SCROLL_TAG, "controller execScrollCmd REPLAY kind=${command.kind} id=${command.commandId} jsReady=true content=${webView.contentHeight}")
                 }
+                // Same as the direct dispatch path: arm toolbar auto-hide suppression so the replayed
+                // anchor scroll can't be misread as a user scroll and toggle the chrome.
+                onProgrammaticScrollStarted()
                 flushingPendingScrollCommand = true
                 try {
                     jsApi.eval(jsApi.executeScrollCommand(command))
@@ -1810,6 +1830,22 @@ class ThemeWebController(
             }
             return
         }
+        // One-highlight-per-open: if a post was already highlighted since the last page render and this
+        // re-resolve targets a DIFFERENT post, suppress it. This is the infinite-scroll re-render path
+        // (onDomRendered after applyInfinitePage) re-resolving to the true first-unread and flashing a
+        // second ring below the landing post (device log 27_06-10-46, 1093640: 144025372 then 144027468).
+        // A genuine page/topic navigation resets the guard in renderThemePage, so it still highlights.
+        if (highlightAppliedPostIdSinceRender != 0L && highlightAppliedPostIdSinceRender != postId) {
+            if (BuildConfig.DEBUG) {
+                TopicHighlightDiagnostics.highlightArmSkipped(
+                        topicId = topicId.toLong(),
+                        reason = "already_highlighted_other_post_this_render",
+                        renderGenerationId = generation,
+                        postId = postId
+                )
+            }
+            return
+        }
         // STEP 2 — arm the sticky explicit-anchor intent. An explicit-post / findpost open arms the
         // blocking INITIAL_ANCHOR path (Step 1). Store the target postId separately from generation
         // so a generation bump (reload / smart-patch re-render) does NOT drop the pending anchor.
@@ -1930,6 +1966,9 @@ class ThemeWebController(
             // resolve can never be suppressed by stale armed bookkeeping.
             highlightApplyDispatchedGeneration = generation
             highlightApplyDispatchedPostId = postId
+            // One-highlight-per-open: remember the post we actually lit so an infinite-scroll re-render
+            // cannot flash a different post until the next genuine page render (renderThemePage resets).
+            highlightAppliedPostIdSinceRender = postId
             TopicHighlightDiagnostics.nativeHighlightDispatched(
                     topicId = topicId.toLong(),
                     page = page.pagination.current,
