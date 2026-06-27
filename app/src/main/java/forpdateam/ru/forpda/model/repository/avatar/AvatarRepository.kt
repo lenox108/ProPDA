@@ -21,20 +21,21 @@ import kotlinx.coroutines.withTimeoutOrNull
  *  3. [getAvatar] (nick only) — `suspend`; throws on miss. Use when
  *     you only have the nick. Internally falls back to
  *     `userSource.getUsers(nick)` via the cache's `getUserByNick`.
- *  4. [getAvatarSync] (nick) — **blocking** (uses `runBlocking` +
- *     `Dispatchers.IO`); returns `null` on miss; **does not throw**.
- *     Use from Java code that cannot `suspend`. The null-vs-throw
- *     contract is part of the Java bridge.
- *  5. [getAvatarForWebViewInterceptSync] (nick) — same as 4 but bounded
+ *  4. [getAvatarForWebViewInterceptSync] (nick) — **blocking** but bounded
  *     by [WEBVIEW_LOOKUP_TIMEOUT_MS] (50ms) so the WebView resource
- *     loader can never block for more than 50ms. Also returns `null`
- *     on miss. **Must not throw** — `CustomWebViewClient.
- *     shouldInterceptRequest` has no try/catch around the lookup.
+ *     loader can never block for more than 50ms; returns `null` on miss.
+ *     **Must not throw** — `CustomWebViewClient.shouldInterceptRequest`
+ *     has no try/catch around the lookup.
  *
- * The five entry points are kept separate because the contract
+ * (An unbounded `getAvatarSync(nick)` blocking variant used to exist for a
+ * hypothetical Java bridge, but it had no callers and no main-thread guard
+ * — an ANR footgun — so it was removed. Use [getAvatar] from coroutines or
+ * the time-bounded [getAvatarForWebViewInterceptSync] from the WebView path.)
+ *
+ * The four entry points are kept separate because the contract
  * (suspending vs blocking, throws vs null, time-bounded vs not)
  * matters at every call site. A future consolidation into a single
- * `AvatarLoader` facade is welcome as long as each of the 5 contracts
+ * `AvatarLoader` facade is welcome as long as each of the 4 contracts
  * is preserved (the
  * `AvatarRepository` is *already* the "AvatarLoader" in spirit; the
  * audit's suggested rename is documentation-only and is not done in
@@ -79,13 +80,6 @@ class AvatarRepository(
             withContext(Dispatchers.IO) {
                 fetchAvatarByNick(nick) ?: throw AvatarNotFoundException(nick = nick)
             }
-
-    /** Блокирующая обёртка для вызова из Java (CustomWebViewClient.shouldInterceptRequest). */
-    fun getAvatarSync(nick: String): String? = runBlocking(Dispatchers.IO) {
-        getCachedAvatarUrl(nick) ?: forumUsersCache.getUserByNick(nick)?.avatar?.also {
-            cacheAvatarUrl(nick, it)
-        }
-    }
 
     fun getAvatarForWebViewInterceptSync(nick: String): String? {
         getCachedAvatarUrl(nick)?.let { return it }

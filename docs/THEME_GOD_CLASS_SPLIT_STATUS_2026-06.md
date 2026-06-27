@@ -201,3 +201,59 @@ After the recommended extractions land:
   test surface (we already have `ThemeLoadStateMachineTest` and
   `TopicHighlightApplyTest`); the controllers can be split one at a time
   with green tests after every step.
+
+## Update 2026-06-27 — progress + the growth trend that matters
+
+Verified current LOC (`wc -l`):
+
+| File | 2026-06-22 | 2026-06-27 | Δ |
+|---|---|---|---|
+| `ThemeFragment.kt` | 1837 | 1865 | +28 |
+| `ThemeFragmentWeb.kt` | ~3000 | 3157 | +157 |
+| `ThemeViewModel.kt` | 4766 | **5883** | **+1117** |
+
+**What landed since 2026-06-22 (good):**
+
+- `presentation/theme/ThemePostEditCoordinator.kt` — extracted. The edit-post
+  cluster is **gone from the VM** (`loadEditPostForm` / `submitEditPost` /
+  `attachFiles` no longer exist in `ThemeViewModel`). This was the doc's
+  recommended "safer first PR" — done.
+- `presentation/theme/ThemeInfiniteScrollController.kt` — extracted; the VM now
+  delegates to it (8 references). The pagination/infinite-scroll cluster is
+  controller-owned.
+- The `presentation/theme/` policy package has grown to **50+** pure
+  policy/controller classes — the extraction *pattern* is healthy and proven.
+
+**The problem (this is the headline):** despite two clean extractions, the VM
+**grew by +1117 LOC**. The cause is the recent anchor/scroll/highlight/back-restore
+regression-fix series (`b5b3c96` … `54fe1bc`): each fix added *orchestration*
+back into `ThemeViewModel` instead of into a policy class. Decomposition is
+currently **losing the race against fix-growth**. Extracting controllers faster
+will not help if new logic keeps landing in the VM.
+
+**Refined recommendation (priority order):**
+
+1. **Stop the bleeding first (process, not code).** New theme open / anchor /
+   scroll / highlight / unread logic MUST land in a new or existing policy class
+   under `presentation/theme/` (pure, unit-testable — see the 50+ precedents).
+   The VM should only *orchestrate*: call policy → apply result → emit state.
+   Add this as a PR-review checklist line in `docs/AI_REGRESSION_CHECKLIST.md`.
+   Without this, every further extraction is undone by the next fix.
+2. **Next extraction: `ThemePageLoader`** (load / network coordination —
+   `loadFromArgs` / `loadTopic` / `loadFromUrl` + retry/backoff, ~500 LOC). With
+   edit-post and infinite-scroll already out, this is now the largest
+   self-contained remaining chunk and has the existing `ThemeLoadStateMachine` /
+   `ThemeLoadStateMachineTest` seam to build on.
+3. **Then `ThemeMessagePanelController`** (message-panel host) — clean external
+   interface, already routes through a `MessagePanel.Listener`.
+4. **Tackle the 80 mutable state vars/flows the VM still holds directly.** Many
+   belong to a single sub-domain (anchor state, highlight state, unread-open
+   state). As each controller is extracted, move *its* state into it — the LOC
+   win is secondary; the real win is that anchor/scroll bugs stop being editable
+   from 80 different methods.
+5. **Wire `SearchOnPageBarView`** into `ThemeFragment` (still unwired; ~30-line
+   change, class already shipped with its own test) to close out the L07 pass.
+
+Discipline unchanged: one controller per PR, full `:app:testDevDebugUnitTest`
+green after each step. The VM growth trend means item 1 (process) is now more
+important than any single extraction.

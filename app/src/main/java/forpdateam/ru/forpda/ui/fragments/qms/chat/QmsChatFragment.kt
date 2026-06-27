@@ -696,7 +696,8 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
             }
             messagePanel.messageField?.setSelection(messagePanel.messageField?.text?.length ?: 0)
             attachmentsPopup?.insertAttachment(notAttached, false)
-        } catch (ignore: Exception) {
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to re-sync not-attached attachments into message panel")
         }
 
     }
