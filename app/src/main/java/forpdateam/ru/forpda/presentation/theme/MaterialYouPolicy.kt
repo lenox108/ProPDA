@@ -15,8 +15,10 @@ import forpdateam.ru.forpda.common.Preferences as AppPreferences
  * цвета к ним не применяются.
  *
  * Степень применения зависит от скина (см. [resolveMode]):
- * - SYSTEM в светлой/тёмной теме → SURFACE: акцент + поверхности + типографика
- *   + хром (полный оверлей [ThemeOverlay.ForPDA.MaterialYouSurface]).
+ * - SYSTEM в светлой/тёмной теме → SURFACE: акцент + динамический базовый фон
+ *   окна (`colorSurface`/`colorOnSurface`); фоны/карточки/тулбар/текст НЕ
+ *   перекрашиваются (ограничение TypedArray — см. KDoc оверлея
+ *   [ThemeOverlay.ForPDA.MaterialYouSurface]).
  * - AMOLED → ACCENT_ONLY: красим только акцент, но НЕ поднимаем поверхности с
  *   чистого чёрного (иначе теряется смысл OLED-экономии).
  * - всё остальное → NONE.
