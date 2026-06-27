@@ -37,10 +37,18 @@ import timber.log.Timber
  * - [R.style.ThemeOverlay_ForPDA_MaterialYouAccent] — только акцент
  *   (`colorAccent`, `link_color`, `colorControlActivated` → `colorPrimary`).
  *   Используется для AMOLED, чтобы не поднимать поверхности с чистого чёрного.
- * - [R.style.ThemeOverlay_ForPDA_MaterialYouSurface] — акцент + поверхности +
- *   типографика + хром (фоны, карточки, списки, тулбары, навбар, текст,
- *   разделители → `colorSurface*`/`colorOnSurface*`/`colorOutlineVariant`).
- *   Используется для SYSTEM в светлой/тёмной теме.
+ * - [R.style.ThemeOverlay_ForPDA_MaterialYouSurface] — акцент (наследует
+ *   Accent) + динамический базовый фон окна (`android:colorBackground` /
+ *   `colorOnBackground` → `colorSurface` / `colorOnSurface`). Используется для
+ *   SYSTEM в светлой/тёмной теме.
+ *
+ * ВАЖНО про реальный охват: динамику обоев получают только акцент, базовый
+ * `colorBackground` и `colorError` (через HarmonizedError ниже). Фоны экранов,
+ * карточки, списки, тулбар, навбар, иконки, разделители и текст НЕ
+ * перекрашиваются — это принципиальное ограничение: наши custom-attr читаются
+ * через `TypedArray.getColorStateList`, который не дерефит `?attr/...`
+ * (TYPE_ATTRIBUTE) и падает с UnsupportedOperationException. Подробности и
+ * история в KDoc `ThemeOverlay.ForPDA.MaterialYouSurface` (`styles.xml`).
  *
  * Выбор оверлея делает [MaterialYouPolicy.resolveMode]. Палитры чтения
  * (Sepia/Minimal) динамику не получают вовсе.
@@ -107,9 +115,9 @@ object MaterialYouApplier {
         }
         if (mode == MaterialYouPolicy.Mode.NONE) return
 
-        // SURFACE: полный оверлей (акцент + поверхности + типографика + хром) для
-        // SYSTEM в светлой/тёмной теме. ACCENT_ONLY: только акцент для AMOLED —
-        // чтобы не поднимать поверхности с чистого чёрного.
+        // SURFACE: акцент + динамический базовый фон (colorSurface) для SYSTEM в
+        // светлой/тёмной теме. ACCENT_ONLY: только акцент для AMOLED — чтобы не
+        // поднимать поверхности с чистого чёрного.
         val overlay = when (mode) {
             MaterialYouPolicy.Mode.SURFACE -> R.style.ThemeOverlay_ForPDA_MaterialYouSurface
             else -> R.style.ThemeOverlay_ForPDA_MaterialYouAccent

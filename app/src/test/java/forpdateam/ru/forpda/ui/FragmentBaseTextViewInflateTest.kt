@@ -38,15 +38,25 @@ import org.robolectric.annotation.Config
  * read `android:textColor` from `?android:attr/textColorPrimary` in the resolved
  * TextAppearance style.
  *
- * Fix: in `MaterialYouSurface` (and `MaterialYouSurface` night), ALL custom
- * slots (those NOT named after a framework Material 3 role) are overridden
- * to CONCRETE `@color/...` references — not only the textColor trio fixed
- * in 65c64b8, but also `background_*`, `cards_background`,
- * `chrome_plane_background`, `contrast_text_color`, `divider_line`,
- * `drawer_item_text*`, `icon_base`, `icon_toolbar`,
- * `main_toolbar_accent_surface`, `status_bar_color`, `toolbar_color`. This
- * eliminates the "hydra" pattern where each partial fix only closes one
- * attr and the crash moves to the next widget's read.
+ * Fix (invariant): when Material You is enabled, EVERY custom slot (those NOT
+ * named after a framework Material 3 role) MUST resolve to a CONCRETE
+ * `@color/...` in the runtime theme — never to a dangling `?attr/...`
+ * (TYPE_ATTRIBUTE). This holds via two complementary sources:
+ *   - `link_color` and the framework `textColor*` trio are pinned CONCRETE
+ *     directly in `MaterialYouSurface` (link_color additionally OVERRIDES the
+ *     `MaterialYouAccent` parent's `?attr/colorPrimary` back to static).
+ *   - All the other chrome/typography slots (`background_*`, `cards_background`,
+ *     `chrome_plane_background`, `contrast_text_color`, `divider_line`,
+ *     `drawer_item_text*`, `icon_base`, `icon_toolbar`,
+ *     `main_toolbar_accent_surface`, `status_bar_color`, `toolbar_color`,
+ *     `default_text_color`, `second_text_color`) are NOT set by the overlay —
+ *     they inherit the same CONCRETE `@color/light_*` / `@color/dark_*` values
+ *     from the base `DayNightAppTheme`. (They used to be re-stated in the
+ *     overlay as no-op duplicates of the base; that dead code was removed —
+ *     the runtime values are identical.)
+ * Either way, none of them may end up TYPE_ATTRIBUTE — this test asserts that
+ * on the assembled activity theme, which guards BOTH the overlay pins AND the
+ * base fallthrough.
  *
  * Only the two framework Material-3 role slots are KEPT as `?attr/...`:
  * `android:colorBackground` → `colorSurface`, and `colorOnBackground` →
@@ -311,15 +321,19 @@ class FragmentBaseTextViewInflateTest {
      * Second-line guard: inspects the SOURCE XML of
      * `ThemeOverlay.ForPDA.MaterialYouSurface` (both day and night) to ensure
      * NO custom slot is defined as a `?attr/...` reference. The set below is
-     * the COMPLETE list of custom (non-M3-role) attrs set by
+     * the list of custom (non-M3-role) slots that MUST NEVER be `?attr/...` in
      * MaterialYouSurface — every one of them is read via
      * `TypedArray.getColorStateList` by some framework widget (TextView,
      * ImageView, Toolbar, CardView, AppBarLayout, CollapsingToolbarLayout,
      * ActionMenuPresenter.OverflowMenuButton, …), so each one MUST be a
-     * concrete `@color/...`. M3-role attrs (`colorPrimary`, `colorOnSurface`,
-     * `colorSurface`, `android:colorBackground`, `colorOnBackground`, …)
-     * are deliberately OUT of this list — the AOSP inflater resolves those
-     * directly via the framework.
+     * concrete `@color/...`. NB: most of these are no longer SET by the overlay
+     * at all — they inherit concrete `@color/...` from the base
+     * `DayNightAppTheme` (the no-op duplicates were removed). The guard is kept
+     * over the FULL set so that re-introducing any of them as a `?attr/...`
+     * entry (the recurring hydra bug) fails the build immediately. M3-role
+     * attrs (`colorPrimary`, `colorOnSurface`, `colorSurface`,
+     * `android:colorBackground`, `colorOnBackground`, …) are deliberately OUT
+     * of this list — the AOSP inflater resolves those directly via the framework.
      *
      * This is a SOURCE-LEVEL assertion (it walks the on-disk XML, not the
      * compiled resources.arsc) so the build fails fast if anyone

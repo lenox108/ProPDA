@@ -482,104 +482,34 @@
 
     <!--
         Material You SURFACE overlay: night-mode override.
-        icon_toolbar / default_text_color / cards_background объявлены
-        КОНКРЕТНЫМИ @color/*, а не ?attr/... — иначе ?icon_toolbar /
-        ?default_text_color / ?cards_background остаются TYPE_ATTRIBUTE в
-        TypedValue и падают в Toolbar.<init> / TextView.<init> /
-        CardView.<init> на TypedArray.getColorStateList →
-        UnsupportedOperationException (см. parent в values/styles.xml).
-        Тёмные цвета берутся те же, что и в базовой DayNightAppTheme (night),
-        чтобы Material You SURFACE на тёмной теме выглядел идентично
-        базовой тёмной — динамический трекинг палитры обоев тут был сломан
-        ещё в commits 775b344 / b8b7b57, фикс полностью убирает его.
+        Зеркало values/styles.xml (см. полный KDoc там). Динамический базовый
+        фон (colorSurface/colorOnSurface) + anti-crash статика для link_color и
+        типографики (ночные @color/dark_*). Остальной хром/фоны/иконки НЕ
+        переопределяются — наследуются из базовой DayNightAppTheme (night) с теми
+        же @color/dark_* значениями; их дубликаты-no-op убраны как мёртвый код.
+        Динамический трекинг палитры обоев для поверхностей тут невозможен
+        (custom-attr через TypedArray.getColorStateList не дерефят TYPE_ATTRIBUTE,
+        см. 775b344 / b8b7b57 / 65c64b8 / e725c7f).
     -->
     <style name="ThemeOverlay.ForPDA.MaterialYouSurface" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
         <!--
-            Базовые M3-роли — динамические, читаются напрямую из layout XML,
-            layout inflater сам делает второй уровень dereference. Оставляем
-            ?attr/... только для фреймворк-M3-ролей (colorSurface,
-            colorOnSurface) — это контракт Material.
+            Динамический базовый фон. Framework-M3-роли (colorSurface /
+            colorOnSurface) — AOSP-инфлейтер резолвит их напрямую.
         -->
         <item name="android:colorBackground">?attr/colorSurface</item>
         <item name="colorOnBackground">?attr/colorOnSurface</item>
 
         <!--
-            Фоны — ВСЕ custom-слоты @color/... для day/night. Custom-attr
-            (background_base, cards_background, ...) читаются через
-            TypedArray.getColorStateList, который НЕ делает 2-го deref для
-            TYPE_ATTRIBUTE. См. 65c64b8 / 7f1de68 и стек MentionsFragment
-            → Toolbar.getOverflowIcon → OverflowMenuButton (ImageView).<init>
-            (TypedArray.getColorStateList(0x7f040272 = icon_toolbar) →
-            UnsupportedOperationException).
+            Anti-crash: КОНКРЕТНЫЕ @color/dark_* (см. KDoc в values/styles.xml).
+            link_color — обязательное переопределение родителя MaterialYouAccent
+            (?attr/colorPrimary → static), иначе TextView.<init> падает.
         -->
-        <item name="background_base">@color/dark_background_base</item>
-        <item name="background_for_cards">@color/dark_background_for_cards</item>
-        <item name="background_for_lists">@color/dark_background_for_lists</item>
-        <item name="cards_background">@color/dark_card_background</item>
-        <item name="chrome_plane_background">@color/dark_card_background</item>
-
-        <!-- Тулбар / верхняя плашка -->
-        <item name="toolbar_color">@color/dark_card_background</item>
-        <item name="main_toolbar_accent_surface">@color/dark_main_toolbar_accent_surface</item>
-
-        <!-- Статус-бар -->
-        <item name="status_bar_color">@color/dark_status_bar_color</item>
-
-        <!-- Типографика
-             NB: default_text_color / second_text_color / link_color задаются
-             НИЖЕ (в блоке «framework android:textColor* и наши default_text_color /
-             second_text_color / link_color — обязательно должны закрываться
-             на КОНКРЕТНЫЙ color-state-list (@color/...)») как @color/...,
-             а не как ?attr/colorOnSurface* — иначе TypedArray.getColorStateList
-             в TextView.<init> кидает UnsupportedOperationException на
-             TYPE_ATTRIBUTE (см. KDoc ниже).
-             Не дублируйте default_text_color / second_text_color / link_color
-             здесь, иначе aapt2 запишет оба варианта в resources.arsc, и в
-             runtime theme второй из них будет перекрыт, и резолв пойдёт в
-             ?attr/colorOnSurface → TYPE_ATTRIBUTE → crash. Эмпирически
-             подтверждено FragmentBaseTextViewInflateTest.
-        -->
-        <item name="contrast_text_color">@color/dark_contrast_text_color</item>
-        <item name="drawer_item_text">@color/dark_drawer_item_text</item>
-        <item name="drawer_item_text_selected">@color/dark_drawer_item_text_selected</item>
-
-        <!-- Иконки -->
-        <item name="icon_base">@color/dark_icon_base</item>
-        <!--
-            icon_toolbar: @color/dark_icon_toolbar.
-            КРИТИЧНЫЙ фикс гидры-крэша MentionsFragment.onViewCreated
-            → TabFragment.tintToolbarIcons → Toolbar.getOverflowIcon →
-            OverflowMenuButton (ImageView).<init>
-            → TypedArray.getColorStateList(0x7f040272) на TYPE_ATTRIBUTE.
-            См. полный KDoc в values/styles.xml.
-        -->
-        <item name="icon_toolbar">@color/dark_icon_toolbar</item>
-
-        <!-- Разделители -->
-        <item name="divider_line">@color/dark_divider_line</item>
-
-        <!--
-            Framework android:textColor* и наши default_text_color /
-            second_text_color / link_color — обязательно должны
-            закрываться на КОНКРЕТНЫЙ color-state-list (@color/...),
-            а не на ?attr/... ссылку. См. полный KDoc в
-            values/styles.xml. Здесь — те же правила, ночные цвета.
-
-            Trade-off: при включённом Material You framework textColor
-            НЕ трекает обои (ограничение TypedArray.getColorStateList,
-            который делает только 1 уровень deref), но зато не падает
-            InflateException.
-        -->
+        <item name="link_color">@color/dark_link_color</item>
         <item name="android:textColor">@color/dark_default_text_color</item>
         <item name="android:textColorPrimary">@color/dark_default_text_color</item>
         <item name="android:textColorSecondary">@color/dark_second_text_color</item>
         <item name="android:textColorLink">@color/dark_link_color</item>
         <item name="android:textColorHint">@color/dark_second_text_color</item>
-
-        <item name="default_text_color">@color/dark_default_text_color</item>
-        <item name="second_text_color">@color/dark_second_text_color</item>
-        <item name="link_color">@color/dark_link_color</item>
-
     </style>
 
 </resources>
