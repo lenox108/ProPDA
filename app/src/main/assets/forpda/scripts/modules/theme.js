@@ -3116,6 +3116,17 @@ function initThemeInfiniteScroll() {
 function onThemeInfiniteScroll() {
     if (!isThemeRuntimeAlive()) return;
     if (!isThemeHybridScrollEnabled()) return;
+    // Self-heal a stuck unread-anchor guard on any scroll. The guard's release timer
+    // (armUnreadInitialAnchorScroll) is a runtime timeout that a HYBRID re-render / async-work clear can
+    // cancel, leaving unreadInitialAnchorPending=true with no timer. That permanently blocks top
+    // autoload AND the bootstrap AND — via the gate below — prevents userScrolled from ever being set,
+    // so the user's own scroll-up can never lift it and previous pages never load until a manual
+    // refresh (floating bug: unread topic opens on the last post of a new page, no scroll/no previous
+    // pages). isUnreadAnchorHybridBlocked() force-releases the guard once past UNREAD_ANCHOR_GUARD_MAX_MS;
+    // calling it here means a real scroll always recovers the page. (No-op before the deadline.)
+    if (themeInfiniteScroll.unreadInitialAnchorPending === true) {
+        isUnreadAnchorHybridBlocked();
+    }
     if (!window.__themeScrollCommandId && !themeInfiniteScroll.unreadInitialAnchorPending) {
         themeInfiniteScroll.userScrolled = true;
         // The viewport is scrolling and no native scroll command is driving
