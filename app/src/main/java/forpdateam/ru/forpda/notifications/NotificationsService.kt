@@ -210,12 +210,7 @@ class NotificationsService : Service() {
     private fun detachForegroundIfPromoted(reason: String) {
         if (!foregroundPromoted) return
         BatteryDebugLogger.logState("NotificationsService", "foregroundDetach", "reason=$reason")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_DETACH)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(false)
-        }
+        stopForeground(STOP_FOREGROUND_DETACH)
         foregroundPromoted = false
     }
 
@@ -283,12 +278,7 @@ class NotificationsService : Service() {
 
     private fun cancelAllNotifications() {
         if (foregroundPromoted) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-            } else {
-                @Suppress("DEPRECATION")
-                stopForeground(true)
-            }
+            stopForeground(STOP_FOREGROUND_REMOVE)
             foregroundPromoted = false
         }
         // На всякий случай снимаем stacked-уведомления и все наши ID. Метод cancel(null)
@@ -448,33 +438,14 @@ class NotificationsService : Service() {
     }
 
     private fun ensureChannel(channelId: String, channelName: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     private fun configureNotification(builder: NotificationCompat.Builder) {
         builder.setAutoCancel(true)
         builder.setPriority(NotificationCompat.PRIORITY_DEFAULT)
         builder.setCategory(NotificationCompat.CATEGORY_SOCIAL)
-        applyLegacyAlertPreferences(builder)
-    }
-
-    private fun applyLegacyAlertPreferences(builder: NotificationCompat.Builder) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return
-
-        var defaults = 0
-        if (notificationPreferencesHolder.getMainSoundEnabled()) {
-            defaults = defaults or NotificationCompat.DEFAULT_SOUND
-        }
-        if (notificationPreferencesHolder.getMainVibrationEnabled()) {
-            defaults = defaults or NotificationCompat.DEFAULT_VIBRATE
-        }
-        if (notificationPreferencesHolder.getMainIndicatorEnabled()) {
-            defaults = defaults or NotificationCompat.DEFAULT_LIGHTS
-        }
-        builder.setDefaults(defaults)
     }
 
     private fun getChannelId(event: NotificationEvent): String {
@@ -643,7 +614,6 @@ class NotificationsService : Service() {
 
         @JvmStatic
         fun createEventChannels(context: Context) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             manager.deleteNotificationChannel(LEGACY_CHANNEL_DEFAULT_ID)
             manager.createNotificationChannels(listOf(
@@ -690,11 +660,7 @@ class NotificationsService : Service() {
                 // На API 26+ запуск в фоне с background-опросом требует
                 // startForegroundService: иначе нас прибьют во время опроса,
                 // и уведомления о QMS/ответах просто не дойдут.
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                context.startForegroundService(intent)
             } catch (ignore: Exception) {
             }
         }

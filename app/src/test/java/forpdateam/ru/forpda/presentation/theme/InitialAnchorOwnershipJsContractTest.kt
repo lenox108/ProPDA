@@ -201,7 +201,8 @@ class InitialAnchorOwnershipJsContractTest {
         )
         assertTrue(
                 "setLoadAction must bump the scroll-command generation per page-load",
-                js.contains("window.__themeScrollCommandGeneration = (Number(window.__themeScrollCommandGeneration) || 0) + 1;")
+                js.contains("var __prevScrollGen = Number(window.__themeScrollCommandGeneration) || 0;") &&
+                        js.contains("window.__themeScrollCommandGeneration = __prevScrollGen + 1;")
         )
     }
 

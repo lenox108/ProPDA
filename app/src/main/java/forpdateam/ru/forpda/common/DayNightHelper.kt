@@ -40,7 +40,9 @@ class DayNightHelper(
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
                     } else {
-                        AppCompatDelegate.MODE_NIGHT_AUTO_BATTERY
+                        val night = isUiModeNight(android.content.res.Resources.getSystem().configuration)
+                        if (night) AppCompatDelegate.MODE_NIGHT_YES
+                        else AppCompatDelegate.MODE_NIGHT_NO
                     }
                 }
             }

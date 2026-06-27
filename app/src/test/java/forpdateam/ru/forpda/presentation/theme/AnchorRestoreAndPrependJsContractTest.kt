@@ -64,8 +64,8 @@ class AnchorRestoreAndPrependJsContractTest {
                 js.contains("var pinnedTopAfter = pinnedElement.getBoundingClientRect().top;")
         )
         assertTrue(
-                "must scrollBy the delta rather than scrollTo the height-delta",
-                js.contains("window.scrollBy(0, delta);")
+                "must apply the pinned element's delta INSTANTLY (scrollBy animates in this WebView, so it is an instant scrollTop by delta)",
+                js.contains("themeInstantScrollToY(curY + delta);")
         )
     }
 
@@ -75,8 +75,8 @@ class AnchorRestoreAndPrependJsContractTest {
         // The legacy height-delta formula must still exist but only as the fallback inside the
         // `else` branch (when no pinnable element was captured).
         assertTrue(
-                "height-delta formula kept as a fallback",
-                js.contains("window.scrollTo(0, oldY + Math.max(0, newHeight - oldHeight));")
+                "height-delta formula kept as a fallback (applied instantly via scrollTop)",
+                js.contains("themeInstantScrollToY(oldY + Math.max(0, newHeight - oldHeight));")
         )
     }
 

@@ -16,7 +16,9 @@ class ThemeJsApiTest {
 
         assertFalse(script.contains("scrollToElementWithRetries"))
         assertFalse(script.contains("scrollToElement("))
-        assertTrue(script.contains("window.scrollTo(0,y)"))
+        // Positions INSTANTLY via a direct scrollTop assignment: window.scrollTo animates in this
+        // WebView even with behavior:"auto", so the native-anchor fallback uses the scrollTop setter.
+        assertTrue(script.contains("se.scrollTop=y"))
     }
 
     @Test

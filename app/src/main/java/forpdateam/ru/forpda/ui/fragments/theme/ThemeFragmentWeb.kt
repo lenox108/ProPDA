@@ -2734,6 +2734,11 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                     webView.evaluateJavascript(jsApi.clearUnreadAnchorHybridGuard(event.reason), null)
                 }
             }
+            is forpdateam.ru.forpda.presentation.theme.ThemeUiEvent.ReleaseOpenScrollSuppression -> {
+                if (::webView.isInitialized) {
+                    webView.evaluateJavascript(jsApi.releaseOpenScrollSuppression(event.reason), null)
+                }
+            }
             is forpdateam.ru.forpda.presentation.theme.ThemeUiEvent.SetFontSize -> setFontSize(event.size)
             is forpdateam.ru.forpda.presentation.theme.ThemeUiEvent.SetAppFontMode -> setAppFontMode(event.mode)
             is forpdateam.ru.forpda.presentation.theme.ThemeUiEvent.SetStyleType -> setStyleType(event.styleType)

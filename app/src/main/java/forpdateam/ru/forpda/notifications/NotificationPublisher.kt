@@ -79,7 +79,6 @@ object NotificationPublisher {
         if (largeIcon != null && !event.fromSite()) {
             builder.setLargeIcon(largeIcon)
         }
-        applyLegacyAlertPreferences(prefs, builder)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -136,8 +135,6 @@ object NotificationPublisher {
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
-
-        applyLegacyAlertPreferences(prefs, builder)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -311,20 +308,9 @@ object NotificationPublisher {
         return ApiUtils.spannedFromHtml(content.toString()) ?: content
     }
 
-    private fun applyLegacyAlertPreferences(prefs: NotificationPreferencesHolder, builder: NotificationCompat.Builder) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return
-        var defaults = 0
-        if (prefs.getMainSoundEnabled()) defaults = defaults or NotificationCompat.DEFAULT_SOUND
-        if (prefs.getMainVibrationEnabled()) defaults = defaults or NotificationCompat.DEFAULT_VIBRATE
-        if (prefs.getMainIndicatorEnabled()) defaults = defaults or NotificationCompat.DEFAULT_LIGHTS
-        builder.setDefaults(defaults)
-    }
-
     private fun ensureChannel(context: Context, channelId: String, channelName: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
-            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
-        }
+        val ch = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
+        context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
     }
 }
 

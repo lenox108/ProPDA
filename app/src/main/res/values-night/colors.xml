@@ -103,4 +103,6 @@
     <color name="fpda_unread_accent">#FBBF24</color>
     <color name="fpda_unread_bg">#24FBBF24</color>
     <color name="fpda_unread_outline">#FFD75E</color>
+
+    <color name="ic_launcher_background">#FF1F1F1F</color>
 </resources>

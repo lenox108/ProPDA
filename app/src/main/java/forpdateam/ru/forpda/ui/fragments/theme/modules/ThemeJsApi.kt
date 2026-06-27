@@ -210,6 +210,11 @@ class ThemeJsApi(
         return "if(typeof clearUnreadAnchorHybridGuard==='function'){clearUnreadAnchorHybridGuard($quoted);}"
     }
 
+    fun releaseOpenScrollSuppression(reason: String): String {
+        val quoted = JSONObject.quote(reason)
+        return "if(typeof releaseThemeOpenScrollSuppression==='function'){releaseThemeOpenScrollSuppression($quoted);}"
+    }
+
     /**
      * S-01 / R-03: announce that Kotlin's INITIAL_ANCHOR [ThemeScrollCommand] will
      * own the initial-anchor scroll for this page-load. Issued in the DOM-content

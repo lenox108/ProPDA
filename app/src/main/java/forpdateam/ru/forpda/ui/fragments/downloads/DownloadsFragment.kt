@@ -474,26 +474,20 @@ class DownloadsFragment : RecyclerFragment() {
 
         candidates.add(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsDoc)
-            }
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsDoc)
         })
 
         candidates.add(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsDoc)
-            }
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsDoc)
         })
 
         candidates.add(Intent(Intent.ACTION_GET_CONTENT).apply {
             type = "*/*"
             addCategory(Intent.CATEGORY_OPENABLE)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsDoc)
-            }
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, downloadsDoc)
         })
 
         candidates.add(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS))
