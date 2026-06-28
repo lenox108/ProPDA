@@ -17,6 +17,8 @@ class NotificationPreferencesHolder(
 
     fun mainEnabledFlow(): Flow<Boolean> = dataStore.mainEnabledFlow()
 
+    fun wantsPushNotificationsFlow(): Flow<Boolean> = dataStore.wantsPushNotificationsFlow()
+
     fun bgCheckEnabledFlow(): Flow<Boolean> = dataStore.bgCheckEnabledFlow()
 
     fun bgCheckIntervalMinFlow(): Flow<Long> = dataStore.bgCheckIntervalMinFlow()

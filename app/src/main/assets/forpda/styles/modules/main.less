@@ -578,12 +578,13 @@ li {
                     &:before {
                         content: counter(list);
                         position: absolute;
-                        font-size: 14/16rem;
+                        font-size: var(--topic-code-font-size, 12/16rem);
                         left: 0/16rem;
                         width: 48/16rem;
                         //background: red;
                         padding-left: 8/16rem;
-                        //text-align: center;
+                        padding-right: 8/16rem;
+                        text-align: right;
                         //white-space: nowrap;
                         color: @second_text_color;
                         box-sizing: border-box;

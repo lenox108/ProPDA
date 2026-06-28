@@ -96,8 +96,12 @@ class NotificationsService : Service() {
         createEventChannels(this)
         serviceScope.launch {
             launch {
-                notificationPreferencesHolder.mainEnabledFlow().collect { enabled ->
-                    if (!enabled) {
+                // Глушим сервис не только при выключении общего тумблера, но и когда
+                // выключены ВСЕ семейства push (темы/QMS/упоминания): иначе foreground-сервис
+                // продолжает жить, а его «служебное» уведомление залипает в шторке, хотя
+                // показывать пользователю уже нечего.
+                notificationPreferencesHolder.wantsPushNotificationsFlow().collect { wants ->
+                    if (!wants) {
                         // Принудительно останавливаем WebSocket перед остановкой сервиса
                         eventsRepository.onDestroy()
                         cancelAllNotifications()

@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 
@@ -44,6 +46,7 @@ class NotificationDataStore(private val context: Context) {
     private val mainEnabledFlow = MutableStateFlow(true)
     private val favEnabledFlow = MutableStateFlow(true)
     private val qmsEnabledFlow = MutableStateFlow(true)
+    private val mentionsEnabledFlow = MutableStateFlow(true)
     private val bgCheckEnabledFlow = MutableStateFlow(true)
     private val bgCheckIntervalMinFlow = MutableStateFlow(15L) // 15 минут по умолчанию (минимум AOSP)
     private val mutedTopicsFlow = MutableStateFlow<Set<Int>>(emptySet())
@@ -54,6 +57,7 @@ class NotificationDataStore(private val context: Context) {
             mainEnabledFlow.value = it.getBoolean(KEY_MAIN_ENABLED, true)
             favEnabledFlow.value = it.getBoolean(KEY_FAV_ENABLED, true)
             qmsEnabledFlow.value = it.getBoolean(KEY_QMS_ENABLED, true)
+            mentionsEnabledFlow.value = it.getBoolean(KEY_MENTIONS_ENABLED, true)
             bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
             bgCheckIntervalMinFlow.value = (it.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L)
             mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
@@ -64,6 +68,7 @@ class NotificationDataStore(private val context: Context) {
                     KEY_MAIN_ENABLED -> mainEnabledFlow.value = it.getBoolean(KEY_MAIN_ENABLED, true)
                     KEY_FAV_ENABLED -> favEnabledFlow.value = it.getBoolean(KEY_FAV_ENABLED, true)
                     KEY_QMS_ENABLED -> qmsEnabledFlow.value = it.getBoolean(KEY_QMS_ENABLED, true)
+                    KEY_MENTIONS_ENABLED -> mentionsEnabledFlow.value = it.getBoolean(KEY_MENTIONS_ENABLED, true)
                     KEY_BG_CHECK_ENABLED -> bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
                     KEY_BG_CHECK_INTERVAL_MIN -> bgCheckIntervalMinFlow.value = (it.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L)
                     KEY_MUTED_TOPIC_IDS -> mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
@@ -84,6 +89,24 @@ class NotificationDataStore(private val context: Context) {
     fun qmsEnabledFlow(): Flow<Boolean> = qmsEnabledFlow.asStateFlow()
 
     fun mainEnabledFlow(): Flow<Boolean> = mainEnabledFlow.asStateFlow()
+
+    /**
+     * Реактивный аналог [wantsPushNotificationsSync]: эмитит false, как только выключен
+     * общий тумблер ИЛИ все семейства push-уведомлений (темы/QMS/упоминания). Нужен, чтобы
+     * foreground-сервис мог сам заглушиться и снять «служебное» уведомление из шторки.
+     * Обращение к [prefs] инициализирует StateFlow'ы актуальными значениями из хранилища.
+     */
+    fun wantsPushNotificationsFlow(): Flow<Boolean> {
+        prefs // прогреваем lazy-инициализацию StateFlow'ов перед combine
+        return combine(
+                mainEnabledFlow,
+                favEnabledFlow,
+                qmsEnabledFlow,
+                mentionsEnabledFlow
+        ) { main, fav, qms, mentions ->
+            main && (fav || qms || mentions)
+        }.distinctUntilChanged()
+    }
 
     fun bgCheckEnabledFlow(): Flow<Boolean> = bgCheckEnabledFlow.asStateFlow()
 

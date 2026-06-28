@@ -45,10 +45,10 @@ android {
         viewBinding = true
     }
 
-    def versionNumber = 350
+    def versionNumber = 351
     def versionMajor = "2"
     def versionMinor = "9"
-    def versionPatch = "6"
+    def versionPatch = "7"
     def versionBuild = 1
     def versionPropsFile = file('version.properties')
     if (versionPropsFile.canRead()) {

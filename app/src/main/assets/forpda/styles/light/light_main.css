@@ -587,10 +587,12 @@ li .post-block.hidden {
 .post-block.code > .block-body .lines > div:before {
   content: counter(list);
   position: absolute;
-  font-size: 0.875rem;
+  font-size: var(--topic-code-font-size, 0.75rem);
   left: 0rem;
   width: 3rem;
   padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  text-align: right;
   color: #757575;
   box-sizing: border-box;
   -webkit-touch-callout: none;
