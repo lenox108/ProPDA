@@ -24,16 +24,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Assemble stableDebug
-        run: ./gradlew :app:assembleStableDebug --no-daemon
+        run: ./gradlew :app:assembleStableDebug --no-daemon -Pforpda.allowDebugSignedStable=true
 
       - name: Unit tests (stableDebug)
-        run: ./gradlew :app:testStableDebugUnitTest --no-daemon
+        run: ./gradlew :app:testStableDebugUnitTest --no-daemon -Pforpda.allowDebugSignedStable=true
 
       - name: Assemble stableRelease (R8 / подпись как у debug, если нет keystore)
-        run: ./gradlew :app:assembleStableRelease --no-daemon
+        run: ./gradlew :app:assembleStableRelease --no-daemon -Pforpda.allowDebugSignedStable=true
 
       - name: Lint (stableDebug)
-        run: ./gradlew :app:lintStableDebug --no-daemon -Pforpda.strictLint=true
+        run: ./gradlew :app:lintStableDebug --no-daemon -Pforpda.strictLint=true -Pforpda.allowDebugSignedStable=true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
