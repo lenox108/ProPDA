@@ -345,4 +345,10 @@
         <item>#808080</item>
     </array>
 
+    <!-- Unread-post highlight (light/base). Dark overrides live in values-night/colors.xml; the base
+         declarations here are required so the resource resolves in non-night configurations. -->
+    <color name="fpda_unread_accent">#4F7896</color>
+    <color name="fpda_unread_bg">#244F7896</color>
+    <color name="fpda_unread_outline">#6B95B5</color>
+
 </resources>
