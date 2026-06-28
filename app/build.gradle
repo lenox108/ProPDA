@@ -45,7 +45,7 @@ android {
         viewBinding = true
     }
 
-    def versionNumber = 351
+    def versionNumber = 353
     def versionMajor = "2"
     def versionMinor = "9"
     def versionPatch = "7"
