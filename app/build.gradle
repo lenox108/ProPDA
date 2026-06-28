@@ -45,10 +45,15 @@ android {
         viewBinding = true
     }
 
-    def versionNumber = 353
     def versionMajor = "2"
     def versionMinor = "9"
     def versionPatch = "7"
+    // versionCode выводится из версии: major*10000 + minor*100 + patch.
+    // Монотонно растёт вместе с versionName — нельзя случайно выкатить
+    // даунгрейд (как было с 2.9.6=352 / 2.9.7=351). minor и patch < 100.
+    // 2.9.7 -> 20907; следующая 2.9.8 -> 20908. Все значения заведомо выше
+    // старых ручных кодов (≤352), поэтому установка поверх не ломается.
+    def versionNumber = versionMajor.toInteger() * 10000 + versionMinor.toInteger() * 100 + versionPatch.toInteger()
     def versionBuild = 1
     def versionPropsFile = file('version.properties')
     if (versionPropsFile.canRead()) {
