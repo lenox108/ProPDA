@@ -29,6 +29,9 @@ if (parallelKeystorePropertiesFile.exists()) {
 }
 
 def strictLint = System.getenv("CI") == "true" || project.findProperty("forpda.strictLint") == "true"
+// CI/смоук-сборки: разрешить debug-подпись stable-флавора без keystore.parallel.properties.
+// По умолчанию (локально/релиз) ключ обязателен — гейт ниже не пропустит сборку.
+def allowDebugSignedStable = project.findProperty("forpda.allowDebugSignedStable") == "true"
 def hasUpstreamReleaseKeystore = keystorePropertiesFile.exists()
         && keystoreProperties['RELEASE_STORE_FILE'] != null
         && !keystoreProperties['RELEASE_STORE_FILE'].toString().trim().isEmpty()
@@ -260,10 +263,11 @@ gradle.taskGraph.whenReady { graph ->
         }
         return n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package") || n.startsWith("install") || n.startsWith("publish")
     }
-    if (needsParallelStable && !parallelKeystorePropertiesFile.exists()) {
+    if (needsParallelStable && !parallelKeystorePropertiesFile.exists() && !allowDebugSignedStable) {
         throw new GradleException(
                 "Сборка варианта stable требует keystore.parallel.properties в корне репозитория " +
-                        "(подпись ru.forpdateam.forpda.parallel). См. keystore.parallel.properties.example")
+                        "(подпись ru.forpdateam.forpda.parallel). См. keystore.parallel.properties.example. " +
+                        "Для CI/смоук-сборки с debug-подписью: -Pforpda.allowDebugSignedStable=true")
     }
     def needsOfficialStoreRelease = graph.allTasks.any { task ->
         def n = task.name
