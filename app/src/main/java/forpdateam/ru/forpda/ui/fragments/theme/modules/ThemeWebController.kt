@@ -1830,16 +1830,25 @@ class ThemeWebController(
             }
             return
         }
-        // One-highlight-per-open: if a post was already highlighted since the last page render and this
-        // re-resolve targets a DIFFERENT post, suppress it. This is the infinite-scroll re-render path
-        // (onDomRendered after applyInfinitePage) re-resolving to the true first-unread and flashing a
-        // second ring below the landing post (device log 27_06-10-46, 1093640: 144025372 then 144027468).
-        // A genuine page/topic navigation resets the guard in renderThemePage, so it still highlights.
-        if (highlightAppliedPostIdSinceRender != 0L && highlightAppliedPostIdSinceRender != postId) {
+        // One-highlight-per-render: once ANY post has been highlighted since the last page render,
+        // suppress every later re-resolve for this render — whether it targets a different post OR the
+        // same post under a new generation. Two cases seen on device:
+        //  - different post: infinite-scroll append re-resolves to the true first-unread and flashes a
+        //    second ring below the landing post (log 27_06-10-46, 1093640: 144025372 → 144027468).
+        //  - SAME post, new generation: the async unread-target load flips the type (last-read →
+        //    first-unread) for the SAME post, which bumps renderGenerationId in applyToPage so the
+        //    (gen,post) done-latch no longer matches and the ring re-flashes (log 28_06-10-03, 138395:
+        //    144035134 lit at gen 6 last-read, then again at gen 7 first-unread).
+        // A genuine page/topic navigation resets the guard in renderThemePage, so a new page still
+        // highlights its target.
+        if (highlightAppliedPostIdSinceRender != 0L) {
             if (BuildConfig.DEBUG) {
                 TopicHighlightDiagnostics.highlightArmSkipped(
                         topicId = topicId.toLong(),
-                        reason = "already_highlighted_other_post_this_render",
+                        reason = if (highlightAppliedPostIdSinceRender == postId)
+                            "already_highlighted_same_post_this_render"
+                        else
+                            "already_highlighted_other_post_this_render",
                         renderGenerationId = generation,
                         postId = postId
                 )
