@@ -40,11 +40,12 @@ class ThemeJsApiApplyHighlightTest {
     @Test
     fun applyHighlight_emitsExpectedCallSignature() {
         val script = jsApi.applyHighlight(postId = 143898864L, type = "last-read", generationId = 7)
-        // Function name + argument order match template_theme.html's contract.
+        // Function name + argument order match template_theme.html's contract
+        // window.PPDA_applyHighlight(postId,type,generationId,allowScroll).
         assertTrue(
-                "Expected call to window.PPDA_applyHighlight(postId,type,generationId) but was: $script",
+                "Expected call to window.PPDA_applyHighlight(postId,type,generationId,allowScroll) but was: $script",
                 script.contains("window.PPDA_applyHighlight(143898864,") &&
-                        script.contains(",7)")
+                        script.contains(",7,true)")
         )
     }
 
@@ -90,8 +91,8 @@ class ThemeJsApiApplyHighlightTest {
     fun applyHighlight_interpolatesGenerationIdAsNumber() {
         val script = jsApi.applyHighlight(postId = 1L, type = "last-read", generationId = 12)
         // generationId must be a bare integer literal — the JS guard does
-        // `typeof generationId === "number"` to filter stale callbacks.
-        assertTrue("generationId must be a bare integer: $script", script.contains(",12)"))
+        // `typeof generationId === "number"` to filter stale callbacks. The 4th arg is allowScroll.
+        assertTrue("generationId must be a bare integer: $script", script.contains(",12,true)"))
         assertFalse("generationId must not be stringified: $script", script.contains("\"12\""))
     }
 }

@@ -215,6 +215,10 @@ class ThemeJsApi(
         return "if(typeof releaseThemeOpenScrollSuppression==='function'){releaseThemeOpenScrollSuppression($quoted);}"
     }
 
+    /** Reset the viewport to loadScrollY (page top) for an anchorless NORMAL load — classic page nav. */
+    fun applyNormalLoadTopScroll(): String =
+            "if(typeof applyThemeNormalLoadTopScroll==='function'){applyThemeNormalLoadTopScroll();}"
+
     /**
      * S-01 / R-03: announce that Kotlin's INITIAL_ANCHOR [ThemeScrollCommand] will
      * own the initial-anchor scroll for this page-load. Issued in the DOM-content
@@ -299,10 +303,10 @@ class ThemeJsApi(
      * [HighlightTarget] / `renderGenerationId` so stale callbacks (e.g. superseded
      * renders) are filtered out by the JS guard.
      */
-    fun applyHighlight(postId: Long, type: String, generationId: Int): String {
+    fun applyHighlight(postId: Long, type: String, generationId: Int, allowScroll: Boolean = true): String {
         val postIdJs = postId.toString()
         val typeJs = JSONObject.quote(type)
-        return "if(typeof window.PPDA_applyHighlight==='function'){window.PPDA_applyHighlight($postIdJs,$typeJs,$generationId);}"
+        return "if(typeof window.PPDA_applyHighlight==='function'){window.PPDA_applyHighlight($postIdJs,$typeJs,$generationId,$allowScroll);}"
     }
 
     /**

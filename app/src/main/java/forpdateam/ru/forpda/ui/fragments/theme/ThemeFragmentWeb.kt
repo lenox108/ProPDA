@@ -2142,6 +2142,22 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                     )
             )
         }
+        // Anchorless NORMAL page load (classic-mode next/prev page, or a HYBRID first-page open with no
+        // target): none of the scroll branches above dispatch anything, so the viewport relies on the
+        // WebView resetting scroll on loadData — which Android WebView does NOT do reliably across
+        // loadDataWithBaseURL, leaving a classic page change at the previous page's scroll offset (user
+        // report). Position explicitly at loadScrollY (page top for a fresh page change).
+        val noScrollActionDispatched = !softAnchorScheduledAsBlockingEnd &&
+                !isPostedPageScroll &&
+                !isEndNavigation &&
+                !refreshRestoreEligible &&
+                anchorToUse.isNullOrBlank()
+        if (noScrollActionDispatched &&
+                loadAction == forpdateam.ru.forpda.presentation.theme.ThemeLoadAction.Normal &&
+                !shouldBlockScrollRestoreForUnread
+        ) {
+            actions.add(jsApi.applyNormalLoadTopScroll())
+        }
         // Diagnostic (holistic back-restore, device log 26_06-17-21): the back's REFRESH_RESTORE is
         // dispatched HERE (onDomContentComplete render batch), NOT via executeScrollCommand. Surfaces,
         // in logcat (survives the WebConsole quota), whether the restore action was actually added to

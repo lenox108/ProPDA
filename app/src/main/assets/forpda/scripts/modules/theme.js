@@ -2331,6 +2331,22 @@ function releaseThemeOpenScrollSuppression(reason) {
     }
 }
 
+/**
+ * Land an anchorless NORMAL page load (classic-mode page navigation, or a HYBRID first-page open with
+ * no target) at its intended `loadScrollY` — the page top for a fresh page change. Android WebView does
+ * NOT reliably reset the scroll position across `loadDataWithBaseURL`, so a classic next/prev page kept
+ * the previous page's scroll offset (user report). No anchor / restore / end command runs for this
+ * case, so position it explicitly and instantly here.
+ */
+function applyThemeNormalLoadTopScroll() {
+    var y = Number(window.loadScrollY);
+    if (!isFinite(y) || y < 0) y = 0;
+    themeInstantScrollToY(y);
+    if (typeof updateVisibleThemePage === "function") {
+        updateVisibleThemePage();
+    }
+}
+
 function clearUnreadInitialAnchorScroll(reason) {
     var wasPending = themeInfiniteScroll.unreadInitialAnchorPending === true;
     themeInfiniteScroll.unreadInitialAnchorPending = false;
