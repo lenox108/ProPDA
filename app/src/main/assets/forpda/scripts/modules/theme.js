@@ -3179,7 +3179,10 @@ function runThemeInfiniteScrollCheck() {
     // page that lands at the bottom must still be detected as underfilled even when the spacer inflates
     // the document height, otherwise the upward "load previous" trigger never arms on first open.
     var bottomSpacer = typeof getThemeBottomSpacerHeight === "function" ? getThemeBottomSpacerHeight() : 0;
-    var contentMaxScroll = Math.max(0, height - viewport - bottomSpacer);
+    // The transient page-jump spacer also inflates document height; exclude it so a short last page
+    // is still seen as underfilled (otherwise the upward "load previous" trigger could mis-arm).
+    var jumpSpacer = typeof getThemePageJumpSpacerHeight === "function" ? getThemePageJumpSpacerHeight() : 0;
+    var contentMaxScroll = Math.max(0, height - viewport - bottomSpacer - jumpSpacer);
     var isUnderfilledInitialPage = bounds.hasPrevious &&
         scrollTop <= themeInfiniteScroll.threshold &&
         contentMaxScroll <= Math.max(24, themeInfiniteScroll.threshold);
@@ -3674,6 +3677,8 @@ function applyThemeInfinitePage(direction, html) {
             }
         });
     } else {
+        // Real posts now extend the document below — the transient page-jump spacer is no longer needed.
+        clearThemePageJumpSpacer();
         var bottomState = document.getElementById("theme_infinite_bottom");
         var tempBottom = document.createElement("div");
         tempBottom.innerHTML = html;
@@ -3726,6 +3731,61 @@ function setThemeInfiniteState(direction, state, message) {
     }
 }
 
+// ── Page-jump landing room ────────────────────────────────────────────────────
+// A "go to page N" jump must land on the page's FIRST post — its separator pinned to the viewport
+// top. Scroll is set via `scrollTop = y`, which the engine clamps to [0, scrollHeight − viewport].
+// When the target is the BOTTOM-most loaded page and the document can't scroll far enough, that clamp
+// drops the viewport to the document bottom, so the page wrongly opens on its LAST post (the source of
+// the "some pages open from the end, some from the first post" inconsistency). To make the landing
+// deterministic we reserve transient empty room below the last post so the target separator can always
+// reach the top. The spacer is cleared once real content loads below (infinite bottom append), a fresh
+// render rebuilds the list, or an END/bottom scroll takes over.
+function getThemePageJumpSpacer(createIfMissing) {
+    var spacer = document.getElementById("theme_page_jump_spacer");
+    if (spacer || !createIfMissing) return spacer;
+    var list = document.querySelector(".posts_list");
+    if (!list) return null;
+    spacer = document.createElement("div");
+    spacer.id = "theme_page_jump_spacer";
+    spacer.setAttribute("aria-hidden", "true");
+    spacer.style.width = "100%";
+    spacer.style.height = "0px";
+    spacer.style.pointerEvents = "none";
+    list.appendChild(spacer);
+    return spacer;
+}
+
+function getThemePageJumpSpacerHeight() {
+    var spacer = document.getElementById("theme_page_jump_spacer");
+    if (!spacer) return 0;
+    var h = spacer.offsetHeight || 0;
+    return h > 0 ? h : 0;
+}
+
+function clearThemePageJumpSpacer() {
+    var spacer = document.getElementById("theme_page_jump_spacer");
+    if (spacer) spacer.style.height = "0px";
+}
+
+function ensureThemePageJumpRoom(target) {
+    if (!target || typeof target.getBoundingClientRect !== "function") return;
+    var se = document.scrollingElement || document.documentElement || null;
+    var viewport = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 0) || 0;
+    var pageY = window.pageYOffset || (se ? se.scrollTop : 0) || 0;
+    var targetTop = target.getBoundingClientRect().top + pageY;
+    var height = Math.max(
+        document.documentElement ? document.documentElement.scrollHeight : 0,
+        document.body ? document.body.scrollHeight : 0
+    );
+    var maxScroll = Math.max(0, height - viewport);
+    var deficit = targetTop - maxScroll;
+    if (deficit <= 0) return;
+    var spacer = getThemePageJumpSpacer(true);
+    if (!spacer) return;
+    // +1px absorbs sub-pixel rounding that would otherwise still clamp one pixel short.
+    spacer.style.height = Math.ceil(deficit + 1) + "px";
+}
+
 function scrollToThemePage(pageNumber) {
     var page = Number(pageNumber);
     if (!page || isNaN(page)) {
@@ -3736,6 +3796,10 @@ function scrollToThemePage(pageNumber) {
     if (!target) {
         return false;
     }
+    // Reset any prior jump spacer so the geometry below reflects real content only, then reserve room
+    // if the target separator can't otherwise reach the viewport top.
+    clearThemePageJumpSpacer();
+    ensureThemePageJumpRoom(target);
     themeInstantScrollIntoView(target);
     updateVisibleThemePage();
     return true;
@@ -3812,6 +3876,8 @@ function isThemeEndSettled() {
 
 function scrollToThemeBottomWithRetries(maxRetries) {
     cancelThemeAnchorScrollRetries();
+    // Drop any page-jump spacer so "to the end" lands on the real last post, not the empty reserve.
+    clearThemePageJumpSpacer();
     themeInfiniteScroll.endScrollPending = true;
     themeInfiniteScroll.initialTopAutoloadSuppressedUntil = Date.now() + END_NAV_TOP_SUPPRESS_MS;
     suppressThemeInfiniteScrollFor(END_NAV_TOP_SUPPRESS_MS);
