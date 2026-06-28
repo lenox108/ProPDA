@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:minHeight="56dp"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/list_row_padding_horizontal"
+    android:paddingTop="@dimen/content_padding_vertical"
+    android:paddingEnd="@dimen/list_row_padding_horizontal"
+    android:paddingBottom="@dimen/content_padding_vertical">
+
+    <ImageView
+        android:id="@+id/icon"
+        android:layout_width="@dimen/dp24"
+        android:layout_height="@dimen/dp24"
+        android:layout_marginEnd="@dimen/menu_icon_text_margin_start"
+        android:contentDescription="@null"
+        tools:src="@drawable/ic_star" />
+
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="?default_text_color"
+        android:textSize="@dimen/list_topic_meta_text_size"
+        android:textStyle="bold"
+        tools:text="@string/fragment_title_news_list" />
+
+    <ImageView
+        android:layout_width="@dimen/dp24"
+        android:layout_height="@dimen/dp24"
+        android:alpha="0.45"
+        android:contentDescription="@string/bottom_nav_order_drag_hint"
+        app:srcCompat="@drawable/ic_toolbar_sort"
+        app:tint="?attr/icon_base" />
+</LinearLayout>

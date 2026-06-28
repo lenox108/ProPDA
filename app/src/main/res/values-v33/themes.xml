@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DynamicColors (Material You) на API 33+ подключаются через DynamicColors.applyToActivitiesIfAvailable()
+         в App.onCreate — не через переопределение темы. Пустой override здесь скрывал все кастомные
+         атрибуты (cards_background, link_color и др.) и приводил к крашу при инфлейте layout. -->
+</resources>

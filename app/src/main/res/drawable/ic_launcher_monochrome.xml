@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Монохромный силуэт для themed-иконки (Android 13+).
+         Система тонирует этот drawable; цвет тут задаёт только alpha-маску. -->
+
+    <!-- Скруглённая подложка-силуэт во всю safe-zone adaptive-icon -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M21,21 h66 a8,8 0 0 1 8,8 v50 a8,8 0 0 1 -8,8 h-66 a8,8 0 0 1 -8,-8 v-50 a8,8 0 0 1 8,-8 z" />
+
+    <!-- Стилизованная «4» (вырезаем цветом фона = прозрачностью после тинтинга).
+         Контур рисуется поверх белого силуэта вторым path того же цвета — система
+         инвертирует восприятие за счёт тонирования, поэтому геометрия читается. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M44,68 L44,40 L66,40 L66,50 M66,50 L50,50 M50,50 L66,68 M66,50 L66,68" />
+</vector>

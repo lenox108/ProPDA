@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  M-01: Data extraction / backup hardening.
+
+  Android 12+ uses `dataExtractionRules` (this file). Pre-12 devices use
+  `backup_rules.xml` with the same `full-backup-content` schema. Both
+  files must agree.
+
+  The app holds three categories of state in app-private storage:
+    1. UI preferences (theme, font size, panel layout) — safe to backup.
+    2. Forum session cookies, encrypted by `androidx.security:security-crypto`
+       (see `common/SecureCookiesPreferences`). Backup is technically OK
+       because the key is in the AndroidKeyStore, which does NOT migrate
+       across devices — the encrypted blob is useless on the new device.
+       Still excluded explicitly to keep the backup surface small.
+    3. Diagnostic state (`ColdStartTracer`, no PII). Safe to backup.
+
+  Excluded: anything in `secure_cookies`, `auth_key`, webview databases,
+  cache. Cookies are encrypted at rest but the encryption key does not
+  survive a device migration, so backing them up is misleading and adds
+  the risk of stale-cookie restore attacks.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="secure_cookies.xml" />
+        <!-- The forum auth_key lives in PreferenceManager.getDefaultSharedPreferences,
+             which writes to <applicationId>_preferences.xml for the active flavor
+             (parallel / store / beta / dev). Excluding the legacy `auth_key.xml`
+             here was a no-op (AUDIT-M12) — exclude the real default file per
+             flavor. -->
+        <exclude domain="sharedpref" path="ru.forpdateam.forpda.parallel_preferences.xml" />
+        <exclude domain="sharedpref" path="ru.forpdateam.forpda_preferences.xml" />
+        <exclude domain="sharedpref" path="ru.forpdateam.forpda.beta_preferences.xml" />
+        <exclude domain="sharedpref" path="ru.forpdateam.forpda.debug_preferences.xml" />
+        <exclude domain="database" />
+        <exclude domain="file" path="databases/" />
+        <exclude domain="file" path="cache/" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <!-- On a device transfer we DO want the cookies so the user does not
+             have to log in again. Re-include explicitly to override the
+             cloud-backup exclusion list above. -->
+        <include domain="sharedpref" path="secure_cookies.xml" />
+    </device-transfer>
+</data-extraction-rules>

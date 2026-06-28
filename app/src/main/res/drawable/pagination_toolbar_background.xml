@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Верхняя пагинация в app bar: без stroke — иначе верхняя кромка читается как «тонкая линия»
+     под тулбаром; «воздух» задаётся margin в PaginationHelper + @dimen/pagination_toolbar_below_toolbar_gap. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/cards_background" />
+            <corners android:radius="@dimen/card_corner_radius" />
+        </shape>
+    </item>
+</layer-list>
