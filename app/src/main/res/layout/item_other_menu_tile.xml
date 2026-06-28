@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/other_menu_tile_height"
+    android:minHeight="@dimen/other_menu_tile_height"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="?attr/cards_background"
+    app:cardCornerRadius="@dimen/card_corner_radius"
+    app:cardElevation="0dp"
+    app:strokeColor="?attr/list_plate_stroke_color"
+    app:strokeWidth="?attr/list_plate_stroke_width">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingStart="@dimen/dp6"
+        android:paddingEnd="@dimen/dp6"
+        android:paddingTop="@dimen/dp6"
+        android:paddingBottom="@dimen/dp6">
+
+        <ImageView
+            android:id="@+id/otherMenuIcon"
+            android:layout_width="@dimen/dp24"
+            android:layout_height="@dimen/dp24"
+            android:contentDescription="@null"
+            app:tint="?attr/menu_tile_icon"
+            app:layout_constraintBottom_toTopOf="@+id/otherMenuTitle"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_chainStyle="packed"
+            tools:src="@drawable/ic_star" />
+
+        <TextView
+            android:id="@+id/otherMenuTitle"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/other_menu_tile_title_height"
+            android:layout_marginTop="@dimen/dp4"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:textColor="?attr/default_text_color"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/otherMenuIcon"
+            tools:text="Избранное" />
+
+        <TextView
+            android:id="@+id/otherMenuCounter"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/bottom_tab_badge_min_height"
+            android:background="?attr/count_background"
+            android:gravity="center"
+            android:minWidth="@dimen/bottom_tab_badge_min_width"
+            android:paddingStart="@dimen/bottom_tab_badge_padding_horizontal"
+            android:paddingEnd="@dimen/bottom_tab_badge_padding_horizontal"
+            android:textColor="@android:color/white"
+            android:textSize="@dimen/attachment_error_text_size"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="22"
+            tools:visibility="visible" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</com.google.android.material.card.MaterialCardView>

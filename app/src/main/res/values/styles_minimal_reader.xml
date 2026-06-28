@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="DayNightAppTheme.MinimalReader" parent="DayNightAppTheme">
+        <item name="colorPrimary">@color/minimal_reader_colorPrimary</item>
+        <item name="colorPrimaryDark">@color/minimal_reader_colorPrimaryDark</item>
+        <item name="colorAccent">@color/minimal_reader_colorAccent</item>
+        <item name="colorSecondary">@color/minimal_reader_link_color</item>
+        <item name="colorOnSecondary">@color/minimal_reader_link_color_contrast</item>
+        <item name="link_color">@color/minimal_reader_link_color</item>
+        <item name="link_color_contrast">@color/minimal_reader_link_color_contrast</item>
+        <item name="default_text_color">@color/minimal_reader_default_text_color</item>
+        <item name="contrast_text_color">@color/minimal_reader_contrast_text_color</item>
+        <item name="second_text_color">@color/minimal_reader_second_text_color</item>
+        <item name="drawer_item_text">@color/minimal_reader_default_text_color</item>
+        <item name="drawer_item_text_selected">@color/minimal_reader_default_text_color</item>
+        <item name="background_base">@color/minimal_reader_background_base</item>
+        <item name="background_for_cards">@color/minimal_reader_background_for_cards</item>
+        <item name="background_for_lists">@color/minimal_reader_background_for_lists</item>
+        <item name="divider_line">@color/minimal_reader_divider_line</item>
+        <item name="divider_line_bottom_nav">@color/minimal_reader_divider_line</item>
+        <item name="attachment_overlay_bg">@color/light_attachment_overlay_bg</item>
+        <item name="attachment_description_bg">@color/light_attachment_description_bg</item>
+        <item name="attachment_text">@color/minimal_reader_contrast_text_color</item>
+        <item name="msg_panel_tooltip_bg">@color/minimal_reader_msg_panel_tooltip_bg</item>
+        <item name="profile_overlay_bg">@color/light_profile_overlay_bg</item>
+        <item name="img_viewer_toolbar">@color/light_img_viewer_toolbar</item>
+        <item name="icon_base">@color/minimal_reader_icon_base</item>
+        <item name="menu_tile_icon">@color/minimal_reader_icon_base</item>
+        <item name="icon_base_inverse">@color/dark_icon_base</item>
+        <item name="icon_toolbar">@color/minimal_reader_icon_toolbar</item>
+        <item name="icon_toolbar_inverse">@color/dark_icon_toolbar</item>
+        <item name="cards_background">@color/minimal_reader_card_background</item>
+        <item name="chrome_plane_background">@color/minimal_reader_toolbar</item>
+        <item name="main_toolbar_accent_surface">@color/minimal_reader_main_toolbar_accent_surface</item>
+        <item name="main_toolbar_stroke_width">1dp</item>
+        <item name="main_toolbar_stroke_color">@color/minimal_reader_main_toolbar_stroke</item>
+        <item name="list_plate_stroke_width">1dp</item>
+        <item name="list_plate_stroke_color">@color/minimal_reader_divider_line</item>
+        <item name="toolbar_color">@color/minimal_reader_toolbar</item>
+        <item name="bottom_nav_tab_active_fill">@android:color/transparent</item>
+        <item name="smart_nav_fab_background">@color/minimal_reader_accent_soft</item>
+        <item name="smart_nav_fab_icon">@color/minimal_reader_link_color</item>
+        <item name="actionModeBackground">@color/minimal_reader_colorPrimary</item>
+        <item name="android:windowBackground">@color/minimal_reader_background_base</item>
+        <item name="android:navigationBarColor">@color/minimal_reader_navigation_bar_color</item>
+        <item name="colorSurface">@color/minimal_reader_card_background</item>
+        <item name="colorOnSurface">@color/minimal_reader_default_text_color</item>
+        <item name="colorOnPrimary">@color/minimal_reader_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/minimal_reader_accent_soft</item>
+        <item name="colorOnPrimaryContainer">@color/minimal_reader_default_text_color</item>
+        <item name="colorSecondaryContainer">@color/minimal_reader_accent_soft</item>
+        <item name="colorOnSecondaryContainer">@color/minimal_reader_default_text_color</item>
+        <item name="colorSurfaceVariant">@color/minimal_reader_background_for_cards</item>
+        <item name="colorOnSurfaceVariant">@color/minimal_reader_second_text_color</item>
+        <item name="colorError">@color/minimal_reader_error</item>
+        <item name="colorOnError">@color/minimal_reader_link_color_contrast</item>
+        <item name="colorOutline">@color/minimal_reader_divider_line</item>
+        <item name="colorOutlineVariant">@color/minimal_reader_divider_line</item>
+        <item name="colorControlHighlight">@color/minimal_reader_selection</item>
+        <item name="android:colorControlHighlight">@color/minimal_reader_selection</item>
+        <item name="colorControlActivated">?attr/colorAccent</item>
+        <item name="android:colorControlActivated">?attr/colorAccent</item>
+        <item name="is_use_light_status_bar">@bool/use_light_status_bar_for_palette</item>
+        <item name="item_tab_close_color">@color/minimal_reader_error</item>
+        <item name="app_bar_overlay">@style/DayNightAppTheme.MinimalReader.AppBarOverlay</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.MinimalReader.PopupOverlay</item>
+        <item name="alertDialogTheme">@style/DayNightAppTheme.MinimalReader.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/DayNightAppTheme.MinimalReader.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.MinimalReader.BottomSheetDialog</item>
+    </style>
+
+    <style name="DayNightAppTheme.MinimalReader.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:colorBackground">@color/minimal_reader_card_background</item>
+        <item name="colorAccent">@color/minimal_reader_colorAccent</item>
+        <item name="colorPrimary">@color/minimal_reader_link_color</item>
+        <item name="colorOnSurface">@color/minimal_reader_default_text_color</item>
+        <item name="colorOnPrimary">@color/minimal_reader_link_color_contrast</item>
+        <item name="colorPrimaryContainer">@color/minimal_reader_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/minimal_reader_default_text_color</item>
+        <item name="colorError">@color/minimal_reader_error</item>
+        <item name="colorOnError">@color/minimal_reader_link_color_contrast</item>
+        <item name="colorOutline">@color/minimal_reader_divider_line</item>
+        <item name="colorOutlineVariant">@color/minimal_reader_divider_line</item>
+        <item name="android:textColorPrimary">@color/minimal_reader_default_text_color</item>
+        <item name="android:textColorSecondary">@color/minimal_reader_second_text_color</item>
+        <item name="android:textColorHint">@color/minimal_reader_muted_text_color</item>
+        <item name="colorSurface">@color/minimal_reader_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/minimal_reader_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.MinimalReader.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:colorBackground">@color/minimal_reader_colorPrimary</item>
+        <item name="colorSurface">@color/minimal_reader_colorPrimary</item>
+        <item name="colorOnSurface">@color/minimal_reader_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/minimal_reader_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
+    </style>
+
+    <style name="DayNightAppTheme.MinimalReader.NoActionBarBase" parent="DayNightAppTheme.MinimalReader">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/minimal_reader_navigation_bar_color</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+    </style>
+
+    <style name="DayNightAppTheme.MinimalReader.NoActionBar" parent="DayNightAppTheme.MinimalReader.NoActionBarBase" />
+
+    <style name="DayNightPreferenceTheme.MinimalReader" parent="DayNightAppTheme.MinimalReader">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.MinimalReader.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
+        <item name="android:singleLine">true</item>
+        <item name="colorSurface">@color/minimal_reader_toolbar</item>
+        <item name="colorControlNormal">@color/minimal_reader_icon_toolbar</item>
+        <item name="colorOnSurface">@color/minimal_reader_icon_toolbar</item>
+        <item name="actionMenuTextColor">@color/minimal_reader_icon_toolbar</item>
+        <item name="android:textColorPrimary">@color/minimal_reader_icon_toolbar</item>
+        <item name="android:textColorSecondary">@color/minimal_reader_icon_toolbar</item>
+        <item name="colorPrimary">@color/minimal_reader_link_color</item>
+        <item name="colorPrimaryContainer">@color/minimal_reader_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/minimal_reader_default_text_color</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.MinimalReader.PopupOverlay</item>
+    </style>
+
+    <style name="DayNightAppTheme.MinimalReader.PopupOverlay" parent="DayNightAppTheme.PopupOverlay">
+        <item name="colorSurface">@color/minimal_reader_card_background</item>
+        <item name="colorOnSurface">@color/minimal_reader_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/minimal_reader_second_text_color</item>
+        <item name="android:textColorPrimary">@color/minimal_reader_default_text_color</item>
+        <item name="android:textColorSecondary">@color/minimal_reader_second_text_color</item>
+    </style>
+</resources>

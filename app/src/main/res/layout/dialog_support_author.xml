@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/dp24"
+    android:paddingEnd="@dimen/dp24"
+    android:paddingBottom="@dimen/dp12">
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/supportAuthorMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/support_author_message"
+        android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+        android:textColor="?default_text_color" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/supportAuthorPaymentLink"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/dp16"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground"
+        android:padding="@dimen/dp8"
+        android:text="@string/support_author_payment_link"
+        android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+        android:textColor="@color/support_author_link_text" />
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/supportAuthorCopyTbankCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/dp8"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground"
+        app:cardBackgroundColor="?attr/colorSurfaceVariant"
+        app:cardCornerRadius="@dimen/dp12"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/dp12">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/support_author_card_label"
+                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                android:textColor="?second_text_color" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/supportAuthorCardValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dp4"
+                android:fontFamily="monospace"
+                android:text="@string/support_author_tbank_card"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="?default_text_color"
+                android:textIsSelectable="false" />
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/supportAuthorCopySberCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/dp8"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground"
+        app:cardBackgroundColor="?attr/colorSurfaceVariant"
+        app:cardCornerRadius="@dimen/dp12"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/dp12">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/support_author_sber_label"
+                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                android:textColor="?second_text_color" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/supportAuthorSberValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dp4"
+                android:fontFamily="monospace"
+                android:text="@string/support_author_sber_card"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="?default_text_color"
+                android:textIsSelectable="false" />
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/supportAuthorCopyUsdt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/dp8"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground"
+        app:cardBackgroundColor="?attr/colorSurfaceVariant"
+        app:cardCornerRadius="@dimen/dp12"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/colorOutlineVariant"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/dp12">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/support_author_usdt_label"
+                android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                android:textColor="?second_text_color" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/supportAuthorUsdtValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dp4"
+                android:fontFamily="monospace"
+                android:text="@string/support_author_usdt_trc20"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="?default_text_color"
+                android:textIsSelectable="false" />
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</LinearLayout>

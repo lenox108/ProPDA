@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Light/default day track tints. ONLY concrete colors here:
+    androidx.preference inflates the widget layout via a context that does not
+    always resolve ?attr/* references in ColorStateLists. Using literal ARGB
+    keeps the switch readable in every palette and theme overlay.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#FF4CAF50" android:state_checked="true" />
+    <item android:color="#FF9E9E9E" />
+</selector>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  M-01: Pre-Android-12 backup rules. Mirrors `data_extraction_rules.xml`
+  for cloud-backup only (pre-12 has no device-transfer distinction).
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="secure_cookies.xml" />
+    <!-- Per-flavor default-preferences files. The forum auth_key is stored in
+         <applicationId>_preferences.xml (AUDIT-M12); excluding the legacy
+         `auth_key.xml` was a no-op. -->
+    <exclude domain="sharedpref" path="ru.forpdateam.forpda.parallel_preferences.xml" />
+    <exclude domain="sharedpref" path="ru.forpdateam.forpda_preferences.xml" />
+    <exclude domain="sharedpref" path="ru.forpdateam.forpda.beta_preferences.xml" />
+    <exclude domain="sharedpref" path="ru.forpdateam.forpda.debug_preferences.xml" />
+    <exclude domain="database" />
+    <exclude domain="file" path="databases/" />
+    <exclude domain="file" path="cache/" />
+    <exclude domain="external" />
+</full-backup-content>

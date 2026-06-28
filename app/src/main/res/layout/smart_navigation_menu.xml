@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/smart_nav_root"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="?attr/background_for_cards"
+    android:elevation="8dp"
+    android:clipChildren="true"
+    android:clipToPadding="true"
+    android:paddingTop="@dimen/dp4">
+
+    <!-- Scrollable page list (5 rows visible) -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/smart_nav_page_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:overScrollMode="never"
+        android:scrollbars="none"
+        android:clipToPadding="true"/>
+
+    <!-- Divider -->
+    <View
+        android:id="@+id/smart_nav_divider"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/divider_thin"
+        android:background="?attr/divider_line"/>
+
+    <!-- Actions -->
+    <LinearLayout
+        android:id="@+id/smart_nav_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="@dimen/dp2"
+        android:paddingBottom="@dimen/dp2">
+
+        <include layout="@layout/smart_nav_action_item" android:id="@+id/smart_nav_action_start"/>
+        <include layout="@layout/smart_nav_action_item" android:id="@+id/smart_nav_action_unread"/>
+        <include layout="@layout/smart_nav_action_item" android:id="@+id/smart_nav_action_end"/>
+        <include layout="@layout/smart_nav_action_item" android:id="@+id/smart_nav_action_enter"/>
+    </LinearLayout>
+
+    <!-- Inline page number input (hidden by default) -->
+    <LinearLayout
+        android:id="@+id/smart_nav_input_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="@dimen/dp14"
+        android:paddingEnd="@dimen/dp14"
+        android:paddingTop="@dimen/dp6"
+        android:paddingBottom="@dimen/dp6"
+        android:visibility="gone">
+
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/smart_nav_page_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="@string/smart_nav_page_input_hint"
+            android:inputType="number"
+            android:imeOptions="actionGo"
+            android:maxLines="1"
+            android:textSize="14sp"
+            android:textColor="?attr/default_text_color"
+            android:textColorHint="?attr/second_text_color"
+            android:background="@android:color/transparent"/>
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/smart_nav_page_input_go"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp48"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_arrow_right"
+            android:contentDescription="@string/send"
+            android:tint="?attr/colorAccent"/>
+    </LinearLayout>
+
+</LinearLayout>

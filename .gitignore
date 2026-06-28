@@ -161,8 +161,11 @@ Gemini_Generated_Image_*.png
 PERF_DIAGNOSIS.md
 Снимок экрана*.jpg
 Снимок экрана*.png
-res/
-gh_res/
+# Anchored to repo root: ignore the top-level scratch res/ and gh_res/
+# staging dirs ONLY. Unanchored "res/" also matched app/src/main/res and
+# silently dropped real app resources from git (broke CI resource linking).
+/res/
+/gh_res/
 fix_*.diff
 perf_*.diff
 icon_dark_129.png

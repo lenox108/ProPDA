@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Dark / AMOLED track tints. Literal ARGB so the switch stays visible
+    regardless of theme overlay or palette: the previous selectors used
+    @color references that resolved to the same dark tone as the card
+    background on AMOLED, making both ON and OFF states blend in.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#FF4CAF50" android:state_checked="true" />
+    <item android:color="#66FFFFFF" />
+</selector>

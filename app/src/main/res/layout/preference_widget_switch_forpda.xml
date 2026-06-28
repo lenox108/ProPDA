@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Custom switch widget used by SwitchPreferenceCompat. Tints are set with
+    explicit color resources that contain only literal ARGB selectors, so
+    they never depend on theme attributes that may be missing in some
+    Preference theme overlays (e.g. the AMOLED theme inheriting from
+    Theme.Material3.DayNight without our SwitchPreferenceCompatStyle).
+-->
+<androidx.appcompat.widget.SwitchCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/switchWidget"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@null"
+    android:clickable="false"
+    android:focusable="false"
+    app:thumbTint="@color/preference_switch_thumb_tint"
+    app:trackTint="@color/preference_switch_track_tint" />
