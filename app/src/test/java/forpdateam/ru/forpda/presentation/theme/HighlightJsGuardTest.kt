@@ -131,8 +131,8 @@ class HighlightJsGuardTest {
         // was the visible "forced scroll" on open/link/back. The highlight now centers the post via a
         // direct scrollTop assignment (instant). Assert it still gates on viewport AND positions.
         assertTrue(
-                "PPDA_applyHighlight must still bring an off-screen target into view (ppdaIsInViewport gate)",
-                template.contains("if (!ppdaIsInViewport(target))"),
+                "PPDA_applyHighlight must still bring an off-screen target into view (ppdaIsInViewport gate, honoring allowScroll)",
+                template.contains("!ppdaIsInViewport(target)"),
         )
         assertTrue(
                 "PPDA_applyHighlight must center an off-screen target INSTANTLY via scrollTop (no animated scrollIntoView)",
