@@ -68,6 +68,9 @@ import forpdateam.ru.forpda.presentation.articles.detail.ArticleTemplate
 import forpdateam.ru.forpda.model.repository.note.NotesRepository
 import forpdateam.ru.forpda.model.repository.posteditor.PostEditorRepository
 import forpdateam.ru.forpda.model.repository.profile.ProfileRepository
+import forpdateam.ru.forpda.model.repository.usercp.UserCpRepository
+import forpdateam.ru.forpda.model.data.remote.api.usercp.UserCpApi
+import forpdateam.ru.forpda.model.preferences.ForumPageSizeHolder
 import forpdateam.ru.forpda.model.repository.qms.QmsRepository
 import forpdateam.ru.forpda.model.repository.reputation.ReputationRepository
 import forpdateam.ru.forpda.model.repository.search.ForumSectionTitleIndex
@@ -142,6 +145,9 @@ object DataModule {
     // region Repositories
     @Provides @Singleton
     fun provideAvatarRepository(fucRoom: ForumUsersCacheRoom) = AvatarRepository(fucRoom)
+
+    @Provides @Singleton
+    fun provideUserCpRepository(api: UserCpApi, pageSizeHolder: ForumPageSizeHolder) = UserCpRepository(api, pageSizeHolder)
 
     @Provides @Singleton
     fun provideFavoritesRepository(

@@ -970,4 +970,30 @@
     <string name="webview_not_found_or">или</string>
     <string name="main_link_hint">Введите ссылку</string>
 
+    <!-- Forum settings (UserCP) -->
+    <string name="pref_title_forum_settings">Настройки форума</string>
+    <string name="pref_summary_forum_settings">Серверные настройки вашего профиля на 4PDA</string>
+    <string name="pref_cat_forum_favorites">Избранное</string>
+    <string name="pref_cat_forum_notifications">Уведомления</string>
+    <string name="pref_cat_forum_timezone">Часовой пояс</string>
+    <string name="pref_cat_forum_display">Отображение</string>
+    <string name="pref_title_forum_topicpage">Тем на странице форума</string>
+    <string name="pref_title_forum_postpage">Сообщений на странице темы</string>
+    <string name="pref_title_forum_auto_track">Добавлять темы в избранное</string>
+    <string name="pref_summary_forum_auto_track">Все темы, в которых вы отвечаете, будут добавляться в избранное</string>
+    <string name="pref_title_forum_track_choice">Тип уведомления для избранного</string>
+    <string name="pref_title_forum_mention_notify">Уведомлять об упоминаниях</string>
+    <string name="pref_summary_forum_mention_notify">Приходят уведомления, когда вас упоминают в теме</string>
+    <string name="pref_title_forum_rep_notify">Уведомлять об изменении репутации</string>
+    <string name="pref_summary_forum_rep_notify">Личное сообщение при изменении репутации</string>
+    <string name="pref_title_forum_send_full_msg">Копия сообщений в письме</string>
+    <string name="pref_summary_forum_send_full_msg">Копии сообщений добавляются в письмо-уведомление на e-mail</string>
+    <string name="pref_title_forum_tz_autoset">Автоустановка часового пояса</string>
+    <string name="pref_summary_forum_tz_autoset">Определять временную зону и летнее время автоматически</string>
+    <string name="pref_title_forum_time_offset">Часовой пояс</string>
+    <string name="pref_title_forum_dst">Летнее время</string>
+    <string name="forum_settings_load_error">Не удалось загрузить настройки форума</string>
+    <string name="forum_settings_save_error">Не удалось сохранить настройку</string>
+    <string name="forum_settings_saved">Настройки сохранены</string>
+
 </resources>

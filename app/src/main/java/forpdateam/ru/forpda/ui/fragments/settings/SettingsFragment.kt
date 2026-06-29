@@ -512,6 +512,15 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
+        findPreference<Preference>("open_forum_settings")?.apply {
+            setOnPreferenceClickListener {
+                val intent = Intent(activity, SettingsActivity::class.java)
+                intent.putExtra(SettingsActivity.ARG_NEW_PREFERENCE_SCREEN, ForumSettingsFragment.PREFERENCE_SCREEN_NAME)
+                startActivity(intent)
+                true
+            }
+        }
+
         findPreference<Preference>("open_forum_rules")?.apply {
             setOnPreferenceClickListener {
                 val intent = Intent(requireContext(), MainActivity::class.java).apply {

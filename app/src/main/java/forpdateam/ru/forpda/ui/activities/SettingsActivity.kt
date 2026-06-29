@@ -18,6 +18,7 @@ import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.UiThemeStyles
 import forpdateam.ru.forpda.ui.MaterialYouApplier
 import forpdateam.ru.forpda.ui.fragments.settings.NotificationsSettingsFragment
+import forpdateam.ru.forpda.ui.fragments.settings.ForumSettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.SettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.BaseSettingFragment
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
@@ -88,10 +89,10 @@ class SettingsActivity : AppCompatActivity() {
         }
 
 
-        val fragment: PreferenceFragmentCompat = if (intent?.getStringExtra(ARG_NEW_PREFERENCE_SCREEN) == NotificationsSettingsFragment.PREFERENCE_SCREEN_NAME) {
-            NotificationsSettingsFragment()
-        } else {
-            SettingsFragment()
+        val fragment: PreferenceFragmentCompat = when (intent?.getStringExtra(ARG_NEW_PREFERENCE_SCREEN)) {
+            NotificationsSettingsFragment.PREFERENCE_SCREEN_NAME -> NotificationsSettingsFragment()
+            ForumSettingsFragment.PREFERENCE_SCREEN_NAME -> ForumSettingsFragment()
+            else -> SettingsFragment()
         }
 
         supportFragmentManager.beginTransaction().replace(R.id.fragment_content, fragment).commit()

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Серверные настройки профиля 4PDA (раздел UserCP «Настройки форума»).
+  Значения грузятся и сохраняются по сети из ForumSettingsFragment, поэтому все
+  пункты помечены android:persistent="false" — в SharedPreferences ничего не пишется.
+  Entries/values для time_offset и track_choice проставляются программно.
+-->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:title="@string/pref_title_forum_settings">
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom_top"
+        android:title="@string/pref_cat_forum_display">
+
+        <ListPreference
+            android:dialogTitle="@string/pref_title_forum_topicpage"
+            android:entries="@array/entries_forum_page_size"
+            android:entryValues="@array/entries_forum_page_size"
+            android:key="topicpage"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:title="@string/pref_title_forum_topicpage"
+            app:iconSpaceReserved="false"
+            app:useSimpleSummaryProvider="true" />
+
+        <ListPreference
+            android:dialogTitle="@string/pref_title_forum_postpage"
+            android:entries="@array/entries_forum_page_size"
+            android:entryValues="@array/entries_forum_page_size"
+            android:key="postpage"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:title="@string/pref_title_forum_postpage"
+            app:iconSpaceReserved="false"
+            app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/pref_cat_forum_favorites">
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:key="auto-track"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:summary="@string/pref_summary_forum_auto_track"
+            android:title="@string/pref_title_forum_auto_track"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:dialogTitle="@string/pref_title_forum_track_choice"
+            android:entries="@array/entries_forum_track_choice"
+            android:entryValues="@array/entry_values_forum_track_choice"
+            android:key="trackchoice"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:title="@string/pref_title_forum_track_choice"
+            app:iconSpaceReserved="false"
+            app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/pref_cat_forum_notifications">
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:key="mention-notify"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:summary="@string/pref_summary_forum_mention_notify"
+            android:title="@string/pref_title_forum_mention_notify"
+            app:iconSpaceReserved="false" />
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:key="rep-notify"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:summary="@string/pref_summary_forum_rep_notify"
+            android:title="@string/pref_title_forum_rep_notify"
+            app:iconSpaceReserved="false" />
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:key="send-full-msg"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:summary="@string/pref_summary_forum_send_full_msg"
+            android:title="@string/pref_title_forum_send_full_msg"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/pref_cat_forum_timezone">
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:key="tz-autoset"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:summary="@string/pref_summary_forum_tz_autoset"
+            android:title="@string/pref_title_forum_tz_autoset"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:dialogTitle="@string/pref_title_forum_time_offset"
+            android:entries="@array/entries_forum_time_offset"
+            android:entryValues="@array/entry_values_forum_time_offset"
+            android:key="time-offset"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:title="@string/pref_title_forum_time_offset"
+            app:iconSpaceReserved="false"
+            app:useSimpleSummaryProvider="true" />
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:key="dst-in-use"
+            android:layout="@layout/preference_custom"
+            android:persistent="false"
+            android:title="@string/pref_title_forum_dst"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>
