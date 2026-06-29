@@ -50,7 +50,7 @@ android {
 
     def versionMajor = "2"
     def versionMinor = "9"
-    def versionPatch = "8"
+    def versionPatch = "9"
     // versionCode выводится из версии: major*10000 + minor*100 + patch.
     // Монотонно растёт вместе с versionName — нельзя случайно выкатить
     // даунгрейд (как было с 2.9.6=352 / 2.9.7=351). minor и patch < 100.

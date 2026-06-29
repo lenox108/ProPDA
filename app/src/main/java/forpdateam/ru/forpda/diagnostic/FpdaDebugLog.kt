@@ -14,6 +14,14 @@ import java.util.UUID
  */
 object FpdaDebugLog {
 
+    /**
+     * Gate for ultra–high-frequency per-item logs (per favorite row, per date parse, per bind).
+     * Kept OFF by default: in DEBUG these fire dozens of times per list refresh and blow the
+     * per-process logcat quota (`LOG_FLOWCTRL ... DROPPED`), which can swallow a FATAL crash trace.
+     * Flip to true only when specifically debugging date/bind formatting.
+     */
+    const val VERBOSE_HOT_PATH = false
+
     const val TAG_THEME_OPEN = "FPDA_THEME_OPEN"
     /** Backward-compatible alias for [TAG_THEME_OPEN] in logcat filters. */
     const val TAG_TOPIC_OPEN = TAG_THEME_OPEN

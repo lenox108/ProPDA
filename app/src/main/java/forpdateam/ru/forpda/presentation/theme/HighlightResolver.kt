@@ -142,7 +142,10 @@ object HighlightResolver {
         //    to the bottom of this page).
         if (!hasUnread && pagePostIds.isNotEmpty()) {
             val lastPostId = pagePostIds.last()
-            val target = HighlightTarget.LastRead(lastPostId)
+            // Soft fallback: no genuine target, the ring just defaults to the last post on the page.
+            // Mark it so the view is NOT auto-scrolled to it (a pagination/page jump must stay on the
+            // page's first post; only real unread/last-read/explicit targets drive the highlight scroll).
+            val target = HighlightTarget.LastRead(lastPostId, softFallback = true)
             val resolution = HighlightResolution(
                     target = target,
                     reason = "last_post_on_page_fallback",

@@ -3565,7 +3565,18 @@ class ThemeViewModel @Inject constructor(
     }
 
     private fun promoteTopicHatForHybridPage(page: ThemePage) {
+        // Prefer the KNOWN topic hat id (the real opening post) over speculative detection. The
+        // prepended-hat heuristics in TopicPrependedHatPolicy (ProPDA signature / title match /
+        // anchor-excluded leading post on a sparse deep page) match a regular release-announcement
+        // post by the topic owner — e.g. Lenox30's «ProPDA … Версия: x.y.z» posts. Promoting such a
+        // post as the hat pulls it out of the page list and renders it only as the collapsed hat
+        // header, so the post "disappears" from the thread until a manual refresh (device log
+        // 28_06-22-34, topic 1121483: release post 144046623 hidden while the real hat is 143179849).
+        // Once we know the real hat id, any DIFFERENT detected post is a false positive — reject it
+        // and fall through to the known/cached hat below.
+        val knownHatId = firstPageHatPostId
         val detected = detectTopicHatPost(page)
+                ?.takeIf { knownHatId == null || it.id == knownHatId }
         if (detected != null) {
             page.topicHatPost = detected
             cacheTopicHat(page, detected)
@@ -3573,10 +3584,10 @@ class ThemeViewModel @Inject constructor(
         }
         page.topicHatPost = cachedTopicHatFor(page)
                 ?: currentPage?.topicHatPost?.takeIf { currentPage?.id == page.id }
-                ?: firstPageHatPostId?.let { knownHatId ->
+                ?: knownHatId?.let { hatId ->
                     loadedPages.values
                             .asSequence()
-                            .mapNotNull { it.topicHatPost ?: it.posts.firstOrNull { post -> post.id == knownHatId } }
+                            .mapNotNull { it.topicHatPost ?: it.posts.firstOrNull { post -> post.id == hatId } }
                             .firstOrNull()
                 }
         page.topicHatPost?.let { cacheTopicHat(page, it) }

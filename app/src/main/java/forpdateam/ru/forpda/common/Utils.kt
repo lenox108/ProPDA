@@ -6,6 +6,7 @@ import android.os.Build
 import timber.log.Timber
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.diagnostic.FpdaDebugLog
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
@@ -380,13 +381,15 @@ object Utils {
     private fun currentDeviceZone(): ZoneId = ZoneId.systemDefault()
 
     private fun logForumDateTime(message: String, vararg args: Any?) {
-        if (BuildConfig.DEBUG) {
+        // Per-date-parse log: gated behind VERBOSE_HOT_PATH so it doesn't flood logcat on list binds.
+        if (BuildConfig.DEBUG && FpdaDebugLog.VERBOSE_HOT_PATH) {
             Timber.tag(FORUM_DATE_TIME_TAG).d(message, *args)
         }
     }
 
     private fun logFavDateSync(message: String, vararg args: Any?) {
-        if (BuildConfig.DEBUG) {
+        // Per-item favorite date log: gated behind VERBOSE_HOT_PATH (fires for every row on rebind).
+        if (BuildConfig.DEBUG && FpdaDebugLog.VERBOSE_HOT_PATH) {
             Timber.tag(FAV_DATE_SYNC_TAG).d(message, *args)
         }
     }

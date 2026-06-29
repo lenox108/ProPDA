@@ -35,6 +35,7 @@ import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.ISystemLinkHandler
 import forpdateam.ru.forpda.presentation.theme.HighlightArmingPolicy
+import forpdateam.ru.forpda.presentation.theme.HighlightTarget
 import forpdateam.ru.forpda.presentation.theme.ReadPositionSaveGate
 import forpdateam.ru.forpda.presentation.theme.ThemeLinkNavigationAction
 import forpdateam.ru.forpda.presentation.theme.ThemeLinkNavigationPolicy
@@ -1920,6 +1921,10 @@ class ThemeWebController(
             return
         }
         val typeName = highlight.type.jsName
+        // A soft last_post_on_page_fallback ring must not drive the highlight auto-scroll: on a
+        // pagination/page jump the page is at its FIRST post and scrolling to the last-post guess
+        // would yank it to the bottom. Genuine unread/last-read/explicit targets still scroll.
+        val allowHighlightScroll = !((highlight as? HighlightTarget.LastRead)?.softFallback ?: false)
         val blockingScrollPending = presenter.hasBlockingScrollPending()
         val deferApply = HighlightArmingPolicy.shouldDeferUntilScrollSettled(blockingScrollPending)
         // H-03 (log 24_06-20-37): anchor the apply decision on whether the apply JS was actually
@@ -1961,7 +1966,7 @@ class ThemeWebController(
             append(jsApi.setReadPosObserverEnabled(false))
             if (shouldApply) {
                 append('\n')
-                append(jsApi.applyHighlight(postId, typeName, generation))
+                append(jsApi.applyHighlight(postId, typeName, generation, allowHighlightScroll))
             }
             if (shouldScheduleFadeout) {
                 append('\n')

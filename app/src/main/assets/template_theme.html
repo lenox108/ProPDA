@@ -810,7 +810,7 @@
         installInlineTopicHeaderVisibilityObserver();
 
         (function () {
-            var ppdaHighlight = window.PPDA_HIGHLIGHT || { generationId: 0, postId: 0, type: "none" };
+            var ppdaHighlight = window.PPDA_HIGHLIGHT || { generationId: 0, postId: 0, type: "none", allowScroll: true };
             var ppdaFadeout = window.PPDA_FADEOUT || { scheduledGeneration: 0, fadedGeneration: 0 };
             // Lifecycle bookkeeping so a single highlight lights up ONCE and fades
             // ONCE (no blink, no stuck-lit). `appliedGeneration`/`appliedPostId`
@@ -861,7 +861,7 @@
                 }
             }
 
-            function ppdaApplyHighlightToNode(target, postId, type) {
+            function ppdaApplyHighlightToNode(target, postId, type, allowScroll) {
                 if (!target) {
                     try { console.log("PPDA_HL ppdaApplyHighlightToNode: target=null postId=" + postId + " type=" + type); } catch (_) {}
                     return;
@@ -901,7 +901,7 @@
                 ppdaApplied.generation = ppdaHighlight.generationId;
                 ppdaApplied.postId = postId;
                 ppdaApplied.node = target;
-                if (!ppdaIsInViewport(target)) {
+                if (allowScroll !== false && !ppdaIsInViewport(target)) {
                     // Bring the highlighted post into view INSTANTLY. A smooth scrollIntoView here is the
                     // visible "forced scroll" the user sees on open / link nav / back: the highlight is
                     // applied AFTER the WebView is revealed and, whenever the anchor/restore scroll did not
@@ -925,8 +925,8 @@
                 }
             }
 
-            window.PPDA_applyHighlight = function (postId, type, generationId) {
-                try { console.log("PPDA_HL PPDA_applyHighlight called postId=" + postId + " type=" + type + " gen=" + generationId); } catch (_) {}
+            window.PPDA_applyHighlight = function (postId, type, generationId, allowScroll) {
+                try { console.log("PPDA_HL PPDA_applyHighlight called postId=" + postId + " type=" + type + " gen=" + generationId + " allowScroll=" + allowScroll); } catch (_) {}
                 var callbackGen = Number(generationId) || 0;
                 if (callbackGen < ppdaHighlight.generationId) {
                     try { console.log("PPDA_HL reject stale gen=" + callbackGen + " current=" + ppdaHighlight.generationId); } catch (_) {}
@@ -976,6 +976,7 @@
                 ppdaHighlight.generationId = callbackGen;
                 ppdaHighlight.postId = nextPostId;
                 ppdaHighlight.type = nextType;
+                ppdaHighlight.allowScroll = (allowScroll !== false);
                 var allPosts = document.querySelectorAll(".post_container[data-post-id]");
                 var pagePostIds = {};
                 for (var i = 0; i < allPosts.length; i++) {
@@ -991,7 +992,7 @@
                     var matchPid = parseInt(allPosts[j].getAttribute("data-post-id") || "0", 10);
                     if (matchPid === ppdaHighlight.postId) { target = allPosts[j]; break; }
                 }
-                ppdaApplyHighlightToNode(target, ppdaHighlight.postId, ppdaHighlight.type);
+                ppdaApplyHighlightToNode(target, ppdaHighlight.postId, ppdaHighlight.type, ppdaHighlight.allowScroll);
                 return true;
             };
 
