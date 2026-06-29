@@ -95,6 +95,10 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideForumPageSizeHolder(preferences: SharedPreferences): ForumPageSizeHolder = ForumPageSizeHolder(preferences)
+
+    @Provides
+    @Singleton
     fun providePatternProvider(
             @ApplicationContext context: Context,
             @Named("data_storage") preferences: SharedPreferences

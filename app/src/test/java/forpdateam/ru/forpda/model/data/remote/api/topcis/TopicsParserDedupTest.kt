@@ -1,6 +1,9 @@
 package forpdateam.ru.forpda.model.data.remote.api.topcis
 
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import forpdateam.ru.forpda.model.preferences.ForumPageSizeHolder
+import io.mockk.every
+import io.mockk.mockk
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -15,7 +18,8 @@ import java.util.regex.Pattern
 @Config(sdk = [28])
 class TopicsParserDedupTest {
 
-    private val parser: TopicsParser by lazy { TopicsParser(loadProductionPatterns()) }
+    private val pageSizeHolder: ForumPageSizeHolder = mockk { every { getPostsPerPage() } returns 20 }
+    private val parser: TopicsParser by lazy { TopicsParser(loadProductionPatterns(), pageSizeHolder) }
 
     @Test
     fun duplicateNonPinnedTopics_areDeduplicatedById() {

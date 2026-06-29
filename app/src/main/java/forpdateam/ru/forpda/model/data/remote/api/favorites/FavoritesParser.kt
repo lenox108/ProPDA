@@ -10,9 +10,11 @@ import forpdateam.ru.forpda.entity.remote.others.pagination.Pagination
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import forpdateam.ru.forpda.model.preferences.ForumPageSizeHolder
 
 class FavoritesParser(
         private val patternProvider: IPatternProvider,
+        private val pageSizeHolder: ForumPageSizeHolder,
         private val useJsoup: Boolean = false,
 ) : BaseParser() {
 
@@ -79,7 +81,7 @@ class FavoritesParser(
                         } else {
                             matcher.group(9)?.also {
                                 stParam = it.toIntOrNull() ?: 0
-                                pages = stParam / 20 + 1
+                                pages = stParam / pageSizeHolder.getPostsPerPage() + 1
                             }
                             matcher.group(10)?.also {
                                 desc = it.fromHtml()
