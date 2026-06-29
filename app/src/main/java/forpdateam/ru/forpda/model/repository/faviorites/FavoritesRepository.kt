@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.model.repository.faviorites
 
+import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.diagnostic.FavoritesUnreadTrace
 import forpdateam.ru.forpda.entity.app.TabNotification
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
@@ -147,7 +148,34 @@ class FavoritesRepository(
             sentAtMillis: Long,
             page: ThemePage?
     ) = withContext(Dispatchers.IO) {
-        // Intentionally no-op: avoid local last-post overrides replacing newer refresh data.
+        // Оптимистичный апдейт «последнего поста» в избранном ПОСЛЕ нашей собственной отправки.
+        // Без него список показывает прежнего автора/время (например «натали76, 13:19»), хотя свежий
+        // пост в теме уже наш — пока не придёт ручной/событийный refresh. В отличие от просмотра темы
+        // ([syncTopicLastPost] остаётся no-op), отправка реально создаёт новый последний пост, поэтому
+        // локальный оверрайд здесь корректен. Безопасность: любой сетевой refresh ([loadFavorites] →
+        // saveFavorites) перезаписывает date/lastUserNick серверной правдой (merge сохраняет только
+        // read-state), так что оверрайд недолговечен и не «затирает более свежие данные».
+        if (topicId <= 0 || sentAtMillis <= 0L) return@withContext
+        val favItem = favoritesCache.getItemByTopicId(topicId) ?: return@withContext
+        if (favItem.isForum) return@withContext
+        // Гард: применяем только если наш пост действительно новее уже сохранённого последнего
+        // (на случай, если refresh успел принести ещё более свежую запись).
+        val currentMillis = Utils.parseForumDateTime(favItem.date)?.time ?: Long.MIN_VALUE
+        if (sentAtMillis <= currentMillis) return@withContext
+        favItem.lastUserId = currentUserId
+        if (!currentUserNick.isNullOrBlank()) {
+            favItem.lastUserNick = currentUserNick
+        }
+        favItem.date = Utils.getForumDateTime(java.util.Date(sentAtMillis))
+        // Мы только что отписались — тема прочитана до нашего поста.
+        favItem.isNew = false
+        favItem.readState = FavoriteReadState.READ
+        favItem.unreadPostCount = 0
+        favItem.localReadPostId = topicId
+        favItem.localReadPostDateMillis = sentAtMillis
+        page?.pagination?.all?.takeIf { it > favItem.pages }?.let { favItem.pages = it }
+        favoritesCache.updateItem(favItem)
+        syncFavoritesCounter(favoritesCache.getItems(), source = "favorites_submitted_last_post")
     }
 
     /** Все непрочитанные темы в избранном - на форуме и в локальном кэше. */
