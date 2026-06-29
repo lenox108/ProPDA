@@ -70,8 +70,10 @@ class FavoritesViewModel @Inject constructor(
     private var searchCatalogJob: Job? = null
 
     private var currentSt = 0
-    // Размер страницы для клиентской пагинации (берётся из ответа сервера, дефолт 20).
-    private var clientPerPage = 20
+    // Размер страницы для клиентской пагинации. Сохраняется между сессиями, чтобы холодный
+    // старт считал страницы по реальному размеру, а не по дефолту (иначе число страниц
+    // «прыгает» после первого refresh).
+    private var clientPerPage = listsPreferencesHolder.getFavPerPage()
     private var hiddenTopicIds: Set<Int> = listsPreferencesHolder.getHiddenTopicIds()
     private var hiddenForumIds: Set<Int> = listsPreferencesHolder.getHiddenForumIds()
     private var loadAll = listsPreferencesHolder.getFavLoadAll()
@@ -243,7 +245,10 @@ class FavoritesViewModel @Inject constructor(
                 // на клиенте по видимым (не скрытым) темам.
                 favoritesRepository.loadFavorites(0, true, sorting, forceRefresh)
             }.onSuccess { data ->
-                data.pagination.perPage.takeIf { it > 0 }?.let { clientPerPage = it }
+                data.pagination.perPage.takeIf { it > 0 }?.let {
+                    clientPerPage = it
+                    listsPreferencesHolder.setFavPerPage(it)
+                }
                 scope.launch { _uiEvents.emit(FavoritesUiEvent.OnLoadFavorites(data)) }
             }.onFailure {
                 var message: String? = null
