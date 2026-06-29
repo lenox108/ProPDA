@@ -4580,26 +4580,24 @@ class ThemeViewModel @Inject constructor(
                 .filter { it > 0 }
                 .forEach { renderedPostIds.add(it) }
         if (renderedPostIds.isEmpty()) return
+        // Гасим упоминания/ответы для страницы, на которую реально приземлились, ДО гейта
+        // [shouldCommitRenderedRead]. Гейт сравнивает с навигационным таргетом открытия (последний
+        // прочитанный / first-unread пост), и когда тема открыта из другого раздела (избранное, форум,
+        // ссылка), а таргет-пост оказался НЕ на отрисованной странице (приземление на границе страниц
+        // или резолв в соседнюю страницу), НИ ОДНА из веток гейта ниже не срабатывает — и упоминание на
+        // этой же странице остаётся «висеть» в «Ответах», хотя пост уже на экране. [onTopicPostsRead]
+        // идемпотентен и сам фильтрует только реальные упоминания этой темы, поэтому безусловная
+        // очистка по факту рендера страницы безопасна (та же семантика, что и у [markVisiblePageMentionsRead]
+        // при доскролле на соседнюю страницу).
+        themeUseCase.onRenderedTopicPosts(page.id, renderedPostIds)
+        // Особый случай: явный таргет-пост открытия может находиться ВНЕ отрисованной страницы
+        // (например, открытие на конкретный пост, который попал в DOM соседней страницы). Полная
+        // очистка выше его не покрывает, поэтому добиваем его отдельно при совпадении с гейтом.
         val pageNumber = page.pagination.current.takeIf { it > 0 }
         val explicitTargetPostId = explicitTargetPostIds[page]?.takeIf { it > 0 }
-        if (explicitTargetPostId != null &&
+        if (explicitTargetPostId != null && explicitTargetPostId !in renderedPostIds &&
                 shouldCommitRenderedRead(page.id, explicitTargetPostId, page = pageNumber)) {
             themeUseCase.onRenderedTopicPosts(page.id, listOf(explicitTargetPostId))
-            return
-        }
-        val pendingTargetPostId = pendingRenderedReadTarget?.postId?.takeIf { it > 0 }
-        if (pendingTargetPostId != null && pendingTargetPostId in renderedPostIds &&
-                shouldCommitRenderedRead(page.id, pendingTargetPostId, page = pageNumber)) {
-            themeUseCase.onRenderedTopicPosts(page.id, renderedPostIds)
-            return
-        }
-        if (shouldCommitRenderedRead(page.id, postId = null, page = pageNumber)) {
-            themeUseCase.onRenderedTopicPosts(page.id, renderedPostIds)
-            return
-        }
-        val lastRenderedPostId = renderedPostIds.lastOrNull()
-        if (lastRenderedPostId != null && shouldCommitRenderedRead(page.id, lastRenderedPostId, page = pageNumber)) {
-            themeUseCase.onRenderedTopicPosts(page.id, listOf(lastRenderedPostId))
         }
     }
 
