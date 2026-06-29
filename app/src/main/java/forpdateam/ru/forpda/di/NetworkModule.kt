@@ -31,6 +31,9 @@ import forpdateam.ru.forpda.model.data.remote.api.news.ArticleParser
 import forpdateam.ru.forpda.model.data.remote.api.news.NewsApi
 import forpdateam.ru.forpda.model.data.remote.api.profile.ProfileApi
 import forpdateam.ru.forpda.model.data.remote.api.profile.ProfileParser
+import forpdateam.ru.forpda.model.data.remote.api.usercp.UserCpApi
+import forpdateam.ru.forpda.model.data.remote.api.usercp.UserCpParser
+import forpdateam.ru.forpda.model.preferences.ForumPageSizeHolder
 import forpdateam.ru.forpda.model.data.remote.api.qms.QmsApi
 import forpdateam.ru.forpda.model.data.remote.api.qms.QmsParser
 import forpdateam.ru.forpda.model.data.remote.api.reputation.ReputationApi
@@ -60,9 +63,9 @@ object NetworkModule {
     // region Parsers (concrete classes; @Binds only works for interface→impl binding)
     @Provides @Singleton fun provideAuthParser(pp: IPatternProvider) = AuthParser(pp)
     @Provides @Singleton fun provideDevDbParser(pp: IPatternProvider) = DevDbParser(pp)
-    @Provides @Singleton fun provideThemeParser(pp: IPatternProvider) = ThemeParser(pp)
+    @Provides @Singleton fun provideThemeParser(pp: IPatternProvider, psh: ForumPageSizeHolder) = ThemeParser(pp, psh)
     @Provides @Singleton fun provideEditPostParser(pp: IPatternProvider) = EditPostParser(pp)
-    @Provides @Singleton fun provideFavoritesParser(pp: IPatternProvider) = FavoritesParser(pp)
+    @Provides @Singleton fun provideFavoritesParser(pp: IPatternProvider, psh: ForumPageSizeHolder) = FavoritesParser(pp, psh)
     @Provides @Singleton fun provideForumParser(pp: IPatternProvider) = ForumParser(pp)
     @Provides @Singleton fun provideMentionsParser(pp: IPatternProvider) = MentionsParser(pp)
     @Provides @Singleton fun provideArticleParser(pp: IPatternProvider) = ArticleParser(pp)
@@ -70,8 +73,9 @@ object NetworkModule {
     @Provides @Singleton fun provideQmsParser(pp: IPatternProvider) = QmsParser(pp)
     @Provides @Singleton fun provideReputationParser(pp: IPatternProvider) = ReputationParser(pp)
     @Provides @Singleton fun provideSearchParser(pp: IPatternProvider) = SearchParser(pp)
-    @Provides @Singleton fun provideTopicsParser(pp: IPatternProvider) = TopicsParser(pp)
+    @Provides @Singleton fun provideTopicsParser(pp: IPatternProvider, psh: ForumPageSizeHolder) = TopicsParser(pp, psh)
     @Provides @Singleton fun provideAttachmentsParser(pp: IPatternProvider) = AttachmentsParser(pp)
+    @Provides @Singleton fun provideUserCpParser() = UserCpParser()
     // endregion
 
     // region APIs
@@ -90,5 +94,6 @@ object NetworkModule {
     @Provides @Singleton fun provideSearchApi(wc: IWebClient, p: SearchParser) = SearchApi(wc, p)
     @Provides @Singleton fun provideTopicsApi(wc: IWebClient, p: TopicsParser) = TopicsApi(wc, p)
     @Provides @Singleton fun provideAttachmentsApi(wc: IWebClient, p: AttachmentsParser) = AttachmentsApi(wc, p)
+    @Provides @Singleton fun provideUserCpApi(wc: IWebClient, p: UserCpParser) = UserCpApi(wc, p)
     // endregion
 }

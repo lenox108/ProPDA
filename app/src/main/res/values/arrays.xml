@@ -161,4 +161,99 @@
         <item>120</item>
         <item>240</item>
     </string-array>
+
+    <!-- Forum settings: размер страницы (тем/сообщений) — entries и values совпадают -->
+    <string-array name="entries_forum_page_size">
+        <item>10</item>
+        <item>20</item>
+        <item>25</item>
+        <item>30</item>
+        <item>40</item>
+    </string-array>
+
+    <!-- Forum settings: тип уведомления при добавлении в избранное -->
+    <string-array name="entries_forum_track_choice">
+        <item>Не уведомлять</item>
+        <item>Отложенно (раз в сутки одним письмом)</item>
+        <item>Сразу при новом сообщении</item>
+        <item>Ежедневная сводка</item>
+        <item>Еженедельная сводка</item>
+    </string-array>
+    <string-array name="entry_values_forum_track_choice">
+        <item>none</item>
+        <item>delayed</item>
+        <item>immediate</item>
+        <item>daily</item>
+        <item>weekly</item>
+    </string-array>
+
+    <!-- Forum settings: ручная установка часового пояса -->
+    <string-array name="entries_forum_time_offset">
+        <item>(GMT - 12:00) о.Бейкер, о.Хауленд</item>
+        <item>(GMT - 11:00) о.Мидуэй, Самоа</item>
+        <item>(GMT - 10:00) Гавайи</item>
+        <item>(GMT - 9:00) Аляска</item>
+        <item>(GMT - 8:00) Тихоокеанское время (США и Канада), Тихуана</item>
+        <item>(GMT - 7:00) Горное время (США и Канада), Аризона</item>
+        <item>(GMT - 6:00) Центральное время (США и Канада), Мехико</item>
+        <item>(GMT - 5:00) Восточное время (США и Канада), Богота, Лима, Кито</item>
+        <item>(GMT - 4:00) Атлантическое время (Канада), Каракас, Ла Пас, Сантьяго</item>
+        <item>(GMT - 3:30) Ньюфаундленд</item>
+        <item>(GMT - 3:00) Бразилия, Буэнос-Айрес, Джорджтаун, Гренландия</item>
+        <item>(GMT - 2:00) Среднеатлантическое время</item>
+        <item>(GMT - 1:00) Кабо-Верде, Азорские о-ва</item>
+        <item>(GMT) Касабланка, Дублин, Эдинбург, Лиссабон, Лондон, Монровия</item>
+        <item>(GMT + 1:00) Амстердам, Берлин, Брюссель, Мадрид, Париж, Рим</item>
+        <item>(GMT + 2:00) Каир, Хельсинки, Калининград, Южная Африка, Киев</item>
+        <item>(GMT + 3:00) Москва, Багдад, Эр-Рияд, Найроби</item>
+        <item>(GMT + 3:30) Тегеран</item>
+        <item>(GMT + 4:00) Самара, Абу-Даби, Баку, Тбилиси</item>
+        <item>(GMT + 4:30) Кабул</item>
+        <item>(GMT + 5:00) Екатеринбург, Алма-Ата, Исламабад, Ташкент</item>
+        <item>(GMT + 5:30) Бомбей, Калькутта, Мадрас, Нью-Дели</item>
+        <item>(GMT + 6:00) Омск, Дхака, Бутан</item>
+        <item>(GMT + 7:00) Красноярск, Новосибирск, Бангкок, Ханой, Джакарта</item>
+        <item>(GMT + 8:00) Иркутск, Пекин, Гонконг, Сингапур, Тайпей</item>
+        <item>(GMT + 9:00) Якутск, Токио, Сеул, Пхеньян</item>
+        <item>(GMT + 9:30) Аделаида, Дарвин</item>
+        <item>(GMT + 10:00) Владивосток, Сидней, Брисбен, Гуам</item>
+        <item>(GMT + 11:00) Магадан, Новая Каледония, Соломоновы о-ва</item>
+        <item>(GMT + 12:00) Камчатка, Окленд, Фиджи</item>
+        <item>(GMT + 13:00) Веллингтон, о.Тонга</item>
+        <item>(GMT + 14:00) Киритимати (остров Рождества)</item>
+    </string-array>
+    <string-array name="entry_values_forum_time_offset">
+        <item>-12</item>
+        <item>-11</item>
+        <item>-10</item>
+        <item>-9</item>
+        <item>-8</item>
+        <item>-7</item>
+        <item>-6</item>
+        <item>-5</item>
+        <item>-4</item>
+        <item>-3.5</item>
+        <item>-3</item>
+        <item>-2</item>
+        <item>-1</item>
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>3.5</item>
+        <item>4</item>
+        <item>4.5</item>
+        <item>5</item>
+        <item>5.5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>9.5</item>
+        <item>10</item>
+        <item>11</item>
+        <item>12</item>
+        <item>13</item>
+        <item>14</item>
+    </string-array>
 </resources>
