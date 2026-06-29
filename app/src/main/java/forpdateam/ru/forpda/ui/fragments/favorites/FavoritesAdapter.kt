@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.favorites
 
+import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
@@ -7,8 +8,12 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.graphics.ColorUtils
+import androidx.core.view.ViewCompat
+import androidx.core.widget.TextViewCompat
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.diagnostic.FpdaDebugLog
 import forpdateam.ru.forpda.diagnostic.FavoritesUnreadTrace
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Utils
@@ -101,9 +106,23 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
     private var sorting: Sorting = Sorting()
     private var titleColorNew: Int = 0
     private var titleColor: Int = 0
+    // Режим множественного выбора: подсветка выбранных строк по itemIdentity.
+    private var selectionMode = false
+    private var selectedIdentities: Set<Long> = emptySet()
+    // Цвет выделенной строки = фон плашки, смешанный с акцентом текущей темы.
+    // Выводится из самой палитры, поэтому заметно и гармонично в любой теме.
+    private var selectionRowColor: Int = 0
     private var titleUnread: String = ""
     private var titlePinned: String = ""
     private var titleTopics: String = ""
+    private var titleHidden: String = ""
+    // Свёрнута ли секция «Скрытое» (по умолчанию — да).
+    private var hiddenExpanded = false
+    // Индекс секции «Скрытое» в текущем наборе (-1 — её нет).
+    private var hiddenSectionIndex = -1
+    // Секция, к которой привязан in-list футер пагинации = последняя НЕ-скрытая секция
+    // (-1 — пагинацию вешать некуда, например когда все элементы скрыты).
+    private var paginationFooterSectionIndex = -1
     private var currentItems: List<FavItem>? = null
     private var lastSectionShapeKeys: List<SectionShapeKey> = emptyList()
     var paginationFooterBinder: ((ViewGroup) -> Unit)? = null
@@ -113,6 +132,9 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
     init {
         setHasStableIds(true)
         shouldShowFooters(true)
+        // Свёрнутая секция «Скрытое» подаётся как секция с пустым списком элементов —
+        // чтобы её заголовок-переключатель оставался видимым и кликабельным.
+        shouldShowHeadersForEmptySections(true)
     }
 
     override fun getItemId(section: Int, relativePosition: Int): Long {
@@ -132,7 +154,7 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
 
     fun bindItems(newItems: List<FavItem>) {
         val snapshotItems = newItems.map(::FavItem)
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.DEBUG && FpdaDebugLog.VERBOSE_HOT_PATH) {
             snapshotItems.forEach { item ->
                 if (!item.isForum) {
                     Timber.d(
@@ -152,9 +174,15 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
         val itemsUnread = mutableListOf<FavItem>()
         val pinned = mutableListOf<FavItem>()
         val otherItems = mutableListOf<FavItem>()
+        val hidden = mutableListOf<FavItem>()
         val splitUnread = unreadTop && sorting.key != Sorting.Companion.Key.LAST_POST
 
         for (item in snapshotItems) {
+            // Скрытые уходят в отдельную секцию «Скрытое» (приоритетнее закрепления/непрочитанного).
+            if (item.isHidden) {
+                hidden.add(item)
+                continue
+            }
             if (item.isPin) {
                 pinned.add(item)
             } else {
@@ -175,6 +203,15 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
         }
         if (otherItems.isNotEmpty()) {
             newSections.add(android.util.Pair(titleTopics, otherItems))
+        }
+        // Пагинация привязывается к последней НЕ-скрытой секции (до добавления «Скрытое»).
+        paginationFooterSectionIndex = newSections.size - 1
+        if (hidden.isNotEmpty()) {
+            // Свёрнуто — подаём пустой список (заголовок остаётся виден); раскрыто — элементы.
+            newSections.add(android.util.Pair(titleHidden, if (hiddenExpanded) hidden else emptyList()))
+            hiddenSectionIndex = newSections.size - 1
+        } else {
+            hiddenSectionIndex = -1
         }
         val sectionShapeKeys = newSections.map { section ->
             SectionShapeKey(section.first, section.second.map(::itemIdentity))
@@ -222,6 +259,19 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
         prefsRebindHandler.removeCallbacks(prefsRebindRunnable)
     }
 
+    /** Обновляет режим выбора и набор выбранных (по itemIdentity) и перерисовывает строки. */
+    fun setSelectionState(selectionMode: Boolean, selectedIdentities: Set<Long>) {
+        this.selectionMode = selectionMode
+        this.selectedIdentities = selectedIdentities
+        notifyDataSetChanged()
+    }
+
+    /** Раскрыть/свернуть секцию «Скрытое» по тапу на её заголовок. */
+    private fun toggleHiddenExpanded() {
+        hiddenExpanded = !hiddenExpanded
+        currentItems?.let { bindItems(it) }
+    }
+
     fun setOnItemClickListener(listener: BaseSectionedAdapter.OnItemClickListener<FavItem>) {
         itemClickListener = listener
     }
@@ -239,9 +289,15 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
         val context = recyclerView.context
         titleColor = context.getColorFromAttr(R.attr.second_text_color)
         titleColorNew = context.getColorFromAttr(R.attr.default_text_color)
+        selectionRowColor = ColorUtils.blendARGB(
+                context.getColorFromAttr(R.attr.cards_background),
+                context.getColorFromAttr(androidx.appcompat.R.attr.colorAccent),
+                0.30f
+        )
         titleUnread = context.getString(R.string.fav_unreaded)
         titlePinned = context.getString(R.string.fav_pinned)
         titleTopics = context.getString(R.string.fav_themes)
+        titleHidden = context.getString(R.string.fav_section_hidden)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BaseSectionedViewHolder<FavItem> {
@@ -261,7 +317,7 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
     }
 
     override fun getFooterViewType(section: Int): Int {
-        return if (section == sectionCount - 1) VIEW_TYPE_PAGINATION_FOOTER else VIEW_TYPE_EMPTY_FOOTER
+        return if (section == paginationFooterSectionIndex) VIEW_TYPE_PAGINATION_FOOTER else VIEW_TYPE_EMPTY_FOOTER
     }
 
     override fun onBindHeaderViewHolder(vh: BaseSectionedViewHolder<FavItem>, i: Int, b: Boolean) {
@@ -291,6 +347,20 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
                     density.sectionHeaderPaddingBottomPx
             )
             binding.topicItemTitle.text = sections[section].first
+            if (section == hiddenSectionIndex) {
+                val arrow = if (hiddenExpanded) R.drawable.ic_arrow_up else R.drawable.ic_arrow_down
+                binding.topicItemTitle.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, arrow, 0)
+                TextViewCompat.setCompoundDrawableTintList(
+                        binding.topicItemTitle,
+                        ColorStateList.valueOf(titleColor)
+                )
+                binding.root.setOnClickListener { toggleHiddenExpanded() }
+                binding.root.isClickable = true
+            } else {
+                binding.topicItemTitle.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+                binding.root.setOnClickListener(null)
+                binding.root.isClickable = false
+            }
         }
     }
 
@@ -338,7 +408,7 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
             val gap = res.getDimensionPixelSize(R.dimen.list_plate_group_gap_vertical)
             val count = getItemCount(section)
             val segment = listPlateSegment(relativePosition > 0, relativePosition < count - 1)
-            if (BuildConfig.DEBUG) {
+            if (BuildConfig.DEBUG && FpdaDebugLog.VERBOSE_HOT_PATH) {
                 Timber.d(
                         "[FavUiBind] plate section=%d rel=%d abs=%d count=%d segment=%s topicId=%d favId=%d pin=%s",
                         section,
@@ -410,6 +480,14 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
                 append(item.topicTitle.orEmpty())
                 if (metadataText.isNotBlank()) append(". ").append(metadataText)
             }
+            val isSelected = selectionMode && selectedIdentities.contains(itemIdentity(item))
+            // Тонируем фон плашки (текст поверх остаётся чётким), сохраняя ripple-foreground.
+            // mutate() — чтобы тинт не «протёк» на другие строки через общий ConstantState.
+            binding.root.background?.mutate()
+            ViewCompat.setBackgroundTintList(
+                    binding.root,
+                    if (isSelected) ColorStateList.valueOf(selectionRowColor) else null
+            )
             itemDisplayListener?.invoke(item)
         }
 

@@ -21,6 +21,13 @@
 
     <item name="menu_fav_mark_all_read" type="id" />
     <item name="action_favorites_search" type="id" />
+    <item name="action_favorites_selection_select_all" type="id" />
+    <item name="action_favorites_selection_mark_read" type="id" />
+    <item name="action_favorites_selection_delete" type="id" />
+    <item name="action_favorites_selection_pin" type="id" />
+    <item name="action_favorites_selection_unpin" type="id" />
+    <item name="action_favorites_selection_hide" type="id" />
+    <item name="action_favorites_selection_show" type="id" />
 
     <item name="toolbar_opaque_underlay" type="id" />
 

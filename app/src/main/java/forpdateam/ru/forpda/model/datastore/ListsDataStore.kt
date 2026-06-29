@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import forpdateam.ru.forpda.common.Preferences as AppPreferences
 import forpdateam.ru.forpda.model.data.remote.api.favorites.Sorting
@@ -49,7 +50,13 @@ class ListsDataStore(private val context: Context) {
         val SORTING_ORDER = stringPreferencesKey(AppPreferences.Lists.Favorites.SORTING_ORDER)
         val LEGACY_SORTING_KEY = stringPreferencesKey("sorting_key")
         val LEGACY_SORTING_ORDER = stringPreferencesKey("sorting_order")
+        // Локально скрытые из списка избранного темы/форумы (не удаляются на сервере).
+        val FAV_HIDDEN_TOPIC_IDS = stringSetPreferencesKey("lists.favorites.hidden_topic_ids")
+        val FAV_HIDDEN_FORUM_IDS = stringSetPreferencesKey("lists.favorites.hidden_forum_ids")
     }
+
+    private val mirrorKeyHiddenTopicIds = "lists.favorites.hidden_topic_ids"
+    private val mirrorKeyHiddenForumIds = "lists.favorites.hidden_forum_ids"
 
     private val legacyPrefs = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
 
@@ -164,6 +171,35 @@ class ListsDataStore(private val context: Context) {
     suspend fun getFavShowUnreadBadge(): Boolean =
             observeFavShowUnreadBadgeFlow().map { it }.first()
 
+    // --- Скрытые из списка избранного (локально) ---
+    fun observeHiddenTopicIdsFlow(): Flow<Set<Int>> =
+            safeDataStoreFlow(context.listsDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.FAV_HIDDEN_TOPIC_IDS].toIntIdSet()
+            }, emptySet())
+
+    fun observeHiddenForumIdsFlow(): Flow<Set<Int>> =
+            safeDataStoreFlow(context.listsDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.FAV_HIDDEN_FORUM_IDS].toIntIdSet()
+            }, emptySet())
+
+    fun getHiddenTopicIdsImmediate(): Set<Int> =
+            mirrorPrefs.getStringSet(mirrorKeyHiddenTopicIds, emptySet()).toIntIdSet()
+
+    fun getHiddenForumIdsImmediate(): Set<Int> =
+            mirrorPrefs.getStringSet(mirrorKeyHiddenForumIds, emptySet()).toIntIdSet()
+
+    suspend fun setHiddenTopicIds(value: Set<Int>) {
+        val asStrings = value.map { it.toString() }.toSet()
+        safeEdit { preferences -> preferences[PreferencesKeys.FAV_HIDDEN_TOPIC_IDS] = asStrings }
+        mirrorPrefs.edit().putStringSet(mirrorKeyHiddenTopicIds, asStrings).apply()
+    }
+
+    suspend fun setHiddenForumIds(value: Set<Int>) {
+        val asStrings = value.map { it.toString() }.toSet()
+        safeEdit { preferences -> preferences[PreferencesKeys.FAV_HIDDEN_FORUM_IDS] = asStrings }
+        mirrorPrefs.edit().putStringSet(mirrorKeyHiddenForumIds, asStrings).apply()
+    }
+
     suspend fun getSortingKey(): String =
             context.listsDataStore.data.map { preferences ->
                 val raw = preferences[PreferencesKeys.SORTING_KEY]
@@ -184,3 +220,6 @@ class ListsDataStore(private val context: Context) {
 
 private fun android.content.SharedPreferences.booleanOrNull(key: String): Boolean? =
         if (contains(key)) getBoolean(key, false) else null
+
+private fun Set<String>?.toIntIdSet(): Set<Int> =
+        this?.mapNotNull { it.trim().toIntOrNull() }?.filter { it > 0 }?.toSet() ?: emptySet()

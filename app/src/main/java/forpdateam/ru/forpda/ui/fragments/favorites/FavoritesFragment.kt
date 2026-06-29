@@ -71,8 +71,21 @@ class FavoritesFragment : RecyclerFragment() {
     private var currentSorting: Sorting = Sorting("", "")
     private var searchMenuItem: MenuItem? = null
     private var markAllReadMenuItem: MenuItem? = null
+    private var sortMenuItem: MenuItem? = null
     private var markAllReadProgressDialog: AlertDialog? = null
     private var markAllReadProgressText: TextView? = null
+
+    // --- Множественный выбор ---
+    private var isSelectionMode = false
+    private val selectedItems = linkedMapOf<Long, FavItem>()
+    private var latestItems: List<FavItem> = emptyList()
+    private var selectionSelectAllMenuItem: MenuItem? = null
+    private var selectionMarkReadMenuItem: MenuItem? = null
+    private var selectionDeleteMenuItem: MenuItem? = null
+    private var selectionPinMenuItem: MenuItem? = null
+    private var selectionUnpinMenuItem: MenuItem? = null
+    private var selectionHideMenuItem: MenuItem? = null
+    private var selectionShowMenuItem: MenuItem? = null
 
     private val presenter: FavoritesViewModel by viewModels()
 
@@ -84,16 +97,25 @@ class FavoritesFragment : RecyclerFragment() {
         }
 
         override fun onSelectedPage(pageNumber: Int) {
-            presenter.loadFavorites(pageNumber)
+            // Локальный переход по странице (без сетевого запроса) — пагинация считается на клиенте.
+            presenter.selectClientPage(pageNumber)
         }
     }
 
     private val adapterListener = object : BaseSectionedAdapter.OnItemClickListener<FavItem> {
         override fun onItemClick(item: FavItem) {
-            presenter.onItemClick(item)
+            if (isSelectionMode) {
+                toggleSelection(item)
+            } else {
+                presenter.onItemClick(item)
+            }
         }
 
         override fun onItemLongClick(item: FavItem): Boolean {
+            if (isSelectionMode) {
+                toggleSelection(item)
+                return true
+            }
             presenter.onItemLongClick(item)
             return false
         }
@@ -151,6 +173,12 @@ class FavoritesFragment : RecyclerFragment() {
             addItem(getString(R.string.fav_mute_notifications)) { _, data ->
                 presenter.toggleTopicMute(data)
             }
+            addItem(getString(R.string.fav_hide)) { _, data ->
+                presenter.toggleHidden(data)
+            }
+            addItem(getString(R.string.fav_select)) { _, data ->
+                enterSelectionMode(data)
+            }
         }
 
 
@@ -189,7 +217,7 @@ class FavoritesFragment : RecyclerFragment() {
         markAllReadMenuItem = item
         MenuItemCompat.setContentDescription(item, getString(R.string.fav_mark_all_read))
         MenuItemCompat.setTooltipText(item, getString(R.string.fav_mark_all_read))
-        menu.add(R.string.sorting_title)
+        sortMenuItem = menu.add(R.string.sorting_title)
                 .setIcon(R.drawable.ic_toolbar_sort)
                 .setOnMenuItemClickListener {
                     hideKeyboard()
@@ -226,6 +254,38 @@ class FavoritesFragment : RecyclerFragment() {
                     false
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        addSelectionMenu(menu)
+        updateSelectionUi()
+    }
+
+    private fun addSelectionMenu(menu: Menu) {
+        selectionSelectAllMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_select_all, Menu.NONE, getString(R.string.fav_selection_select_all))
+                .setIcon(R.drawable.ic_toolbar_select_all)
+                .setOnMenuItemClickListener { toggleSelectAllVisible(); true }
+                .setVisible(false)
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        selectionMarkReadMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_mark_read, Menu.NONE, getString(R.string.fav_selection_mark_read))
+                .setIcon(R.drawable.ic_toolbar_done)
+                .setOnMenuItemClickListener { performSelectionMarkRead(); true }
+                .setVisible(false)
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        selectionDeleteMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_delete, Menu.NONE, getString(R.string.delete))
+                .setIcon(R.drawable.ic_toolbar_delete)
+                .setOnMenuItemClickListener { confirmDeleteSelected(); true }
+                .setVisible(false)
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        selectionPinMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_pin, Menu.NONE, getString(R.string.fav_selection_pin))
+                .setOnMenuItemClickListener { performSelectionPin(true); true }
+                .setVisible(false)
+        selectionUnpinMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_unpin, Menu.NONE, getString(R.string.fav_selection_unpin))
+                .setOnMenuItemClickListener { performSelectionPin(false); true }
+                .setVisible(false)
+        selectionHideMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_hide, Menu.NONE, getString(R.string.fav_selection_hide))
+                .setOnMenuItemClickListener { performSelectionHide(true); true }
+                .setVisible(false)
+        selectionShowMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_show, Menu.NONE, getString(R.string.fav_selection_show))
+                .setOnMenuItemClickListener { performSelectionHide(false); true }
+                .setVisible(false)
     }
 
     private fun addSearchItem(menu: Menu) {
@@ -306,6 +366,11 @@ class FavoritesFragment : RecyclerFragment() {
                     }
                 }
                 launch {
+                    presenter.pagination.collect { pagination ->
+                        pagination?.let { paginationHelper.updatePagination(it) }
+                    }
+                }
+                launch {
                     presenter.displayedItems.collect { items ->
                         if (items != null) {
                             onShowFavorite(items)
@@ -340,8 +405,15 @@ class FavoritesFragment : RecyclerFragment() {
             is FavoritesUiEvent.OnToggleMute -> showSnackbar(
                     if (event.nowMuted) R.string.fav_notifications_muted else R.string.fav_notifications_unmuted
             )
+            is FavoritesUiEvent.OnToggleHidden -> showSnackbar(
+                    if (event.nowHidden) R.string.fav_hidden_snackbar else R.string.fav_unhidden_snackbar
+            )
             is FavoritesUiEvent.ShowLoadError -> showLoadError(event.message)
             is FavoritesUiEvent.ShowNeedAuth -> Utils.showNeedAuthDialog(requireContext(), router)
+            is FavoritesUiEvent.ScrollToTop -> {
+                clearToolbarPaginationSubtitle()
+                listScrollTop()
+            }
         }
     }
 
@@ -361,12 +433,19 @@ class FavoritesFragment : RecyclerFragment() {
             getString(R.string.fav_mark_all_read_result, successCount)
         }
         showSnackbar(message)
-        // Confirm server/cache state after the queued operation settles.
-        presenter.refresh()
+        // Local cache is already updated inside markFavoriteTopicsRead (saveFavorites ->
+        // observeItems pushes the read state into the list), so no forced network refresh here:
+        // a full reload+rebind on the main thread right as the activity tears down was an ANR
+        // and stale-window risk. Server state is reconciled on the next natural refresh.
     }
 
     private fun showMarkAllReadProgressDialog(processed: Int, total: Int) {
-        val ctx = context ?: return
+        // The mark-all operation lives in the ViewModel scope and can outlive this fragment's
+        // window (config change / activity recreation under memory pressure). Showing a dialog on
+        // a dead/finishing activity throws BadTokenException, so only attach while resumed.
+        val act = activity ?: return
+        if (!isResumed || act.isFinishing) return
+        val ctx = act
         val padding = (24 * resources.displayMetrics.density).toInt()
         val progressText = TextView(ctx).apply {
             text = getString(R.string.fav_mark_all_read_progress, processed, total)
@@ -391,7 +470,8 @@ class FavoritesFragment : RecyclerFragment() {
     }
 
     private fun dismissMarkAllReadProgressDialog() {
-        markAllReadProgressDialog?.dismiss()
+        // dismiss() on a dialog whose window is already gone throws IllegalArgumentException.
+        runCatching { markAllReadProgressDialog?.dismiss() }
         markAllReadProgressDialog = null
         markAllReadProgressText = null
     }
@@ -399,12 +479,13 @@ class FavoritesFragment : RecyclerFragment() {
     private fun onLoadFavorites(data: FavData) {
         contentController.hideContent(ContentController.TAG_ERROR)
         currentSorting = data.sorting
-        paginationHelper.updatePagination(data.pagination)
+        // Пагинация обновляется из presenter.pagination (клиентский расчёт по видимым темам).
         clearToolbarPaginationSubtitle()
         listScrollTop()
     }
 
     private fun onShowFavorite(items: List<FavItem>) {
+        latestItems = items
         if (items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
                 val funnyContent = FunnyContent(requireContext())
@@ -421,6 +502,8 @@ class FavoritesFragment : RecyclerFragment() {
         recyclerView.post {
             adapter.bindItems(items)
         }
+        // Сбрасываем выбор для исчезнувших элементов и обновляем подсветку/тулбар.
+        updateSelectionUi()
     }
 
     private fun showLoadError(message: String?) {
@@ -443,6 +526,10 @@ class FavoritesFragment : RecyclerFragment() {
     }
 
     override fun onBackPressed(): Boolean {
+        if (isSelectionMode) {
+            clearSelection()
+            return true
+        }
         val item = searchMenuItem
         return if (item?.isActionViewExpanded == true) {
             item.collapseActionView()
@@ -466,6 +553,14 @@ class FavoritesFragment : RecyclerFragment() {
         }
         binding.sortingKey.check(keyId)
         binding.sortingOrder.check(orderId)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Drop the progress dialog before the window can be torn down. The operation keeps running
+        // in the ViewModel scope; when the fragment returns to STARTED the next progress event
+        // re-shows the dialog, and markAllReadRunning (StateFlow, replay=1) dismisses it on finish.
+        dismissMarkAllReadProgressDialog()
     }
 
     override fun onDestroy() {
@@ -497,6 +592,8 @@ class FavoritesFragment : RecyclerFragment() {
     private fun showItemDialogMenu(item: FavItem) {
         dialogMenu.apply {
             disallowAll()
+            // «Выбрать» — вход в режим множественного выбора, первым пунктом.
+            allow(8)
             allow(0)
             if (!item.isForum) {
                 allow(1)
@@ -507,6 +604,9 @@ class FavoritesFragment : RecyclerFragment() {
             allow(5)
             // Меню mute доступно только для тем (не форумов).
             if (!item.isForum) allow(6)
+            // Скрыть/показать — доступно и для тем, и для форумов.
+            changeTitle(7, getString(if (presenter.isHidden(item)) R.string.fav_unhide else R.string.fav_hide))
+            allow(7)
 
             val index = containsIndex(getPinText(!item.isPin))
             if (index != -1)
@@ -529,6 +629,129 @@ class FavoritesFragment : RecyclerFragment() {
 
             show(requireContext(), this@FavoritesFragment, item)
         }
+    }
+
+    // --- Множественный выбор ---
+
+    private fun enterSelectionMode(item: FavItem) {
+        if (searchMenuItem?.isActionViewExpanded == true) {
+            searchMenuItem?.collapseActionView()
+        }
+        isSelectionMode = true
+        selectedItems[FavoritesAdapter.itemIdentity(item)] = item
+        updateSelectionUi()
+    }
+
+    private fun toggleSelection(item: FavItem) {
+        val key = FavoritesAdapter.itemIdentity(item)
+        if (selectedItems.remove(key) == null) {
+            selectedItems[key] = item
+        }
+        if (selectedItems.isEmpty()) {
+            isSelectionMode = false
+        }
+        updateSelectionUi()
+    }
+
+    private fun toggleSelectAllVisible() {
+        val visible = latestItems.filter { !it.isHidden }
+        if (visible.isEmpty()) return
+        val visibleKeys = visible.map { FavoritesAdapter.itemIdentity(it) }
+        if (selectedItems.keys.containsAll(visibleKeys)) {
+            visibleKeys.forEach { selectedItems.remove(it) }
+        } else {
+            visible.forEach { selectedItems[FavoritesAdapter.itemIdentity(it)] = it }
+        }
+        if (selectedItems.isEmpty()) {
+            isSelectionMode = false
+        }
+        updateSelectionUi()
+    }
+
+    private fun clearSelection() {
+        if (!isSelectionMode && selectedItems.isEmpty()) return
+        isSelectionMode = false
+        selectedItems.clear()
+        updateSelectionUi()
+    }
+
+    private fun updateSelectionUi() {
+        if (isSelectionMode) {
+            val validKeys = latestItems.map { FavoritesAdapter.itemIdentity(it) }.toSet()
+            selectedItems.keys.retainAll(validKeys)
+            if (selectedItems.isEmpty()) {
+                isSelectionMode = false
+            }
+        }
+        val inSelection = isSelectionMode
+        val count = selectedItems.size
+
+        searchMenuItem?.isVisible = !inSelection
+        markAllReadMenuItem?.isVisible = !inSelection
+        sortMenuItem?.isVisible = !inSelection
+
+        selectionSelectAllMenuItem?.isVisible = inSelection
+        selectionMarkReadMenuItem?.isVisible = inSelection
+        selectionDeleteMenuItem?.isVisible = inSelection
+        selectionPinMenuItem?.isVisible = inSelection
+        selectionUnpinMenuItem?.isVisible = inSelection
+        selectionHideMenuItem?.isVisible = inSelection
+        selectionShowMenuItem?.isVisible = inSelection
+
+        selectionMarkReadMenuItem?.isEnabled = count > 0
+        selectionDeleteMenuItem?.isEnabled = count > 0
+        selectionPinMenuItem?.isEnabled = count > 0
+        selectionUnpinMenuItem?.isEnabled = count > 0
+        selectionHideMenuItem?.isEnabled = count > 0
+        selectionShowMenuItem?.isEnabled = count > 0
+
+        val visible = latestItems.filter { !it.isHidden }
+        val allVisibleSelected = visible.isNotEmpty() &&
+                selectedItems.keys.containsAll(visible.map { FavoritesAdapter.itemIdentity(it) })
+        selectionSelectAllMenuItem?.setTitle(
+                if (allVisibleSelected) R.string.fav_selection_clear_all else R.string.fav_selection_select_all
+        )
+
+        if (inSelection) {
+            setTitle(getString(R.string.note_selected_count, count))
+        } else {
+            setTitle(null)
+        }
+
+        if (::adapter.isInitialized) {
+            adapter.setSelectionState(inSelection, selectedItems.keys.toSet())
+        }
+    }
+
+    private fun selectedSnapshot(): List<FavItem> = selectedItems.values.toList()
+
+    private fun performSelectionMarkRead() {
+        presenter.markFavoritesRead(selectedSnapshot())
+        clearSelection()
+    }
+
+    private fun performSelectionPin(pin: Boolean) {
+        presenter.setFavoritesPinned(selectedSnapshot(), pin)
+        clearSelection()
+    }
+
+    private fun performSelectionHide(hidden: Boolean) {
+        presenter.setFavoritesHidden(selectedSnapshot(), hidden)
+        clearSelection()
+    }
+
+    private fun confirmDeleteSelected() {
+        val items = selectedSnapshot()
+        if (items.isEmpty()) return
+        MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.fav_selection_delete_title)
+                .setMessage(getString(R.string.fav_selection_delete_confirm, items.size))
+                .setPositiveButton(R.string.delete) { _, _ ->
+                    presenter.deleteFavorites(items)
+                    clearSelection()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .showWithStyledButtons()
     }
 
     companion object {
