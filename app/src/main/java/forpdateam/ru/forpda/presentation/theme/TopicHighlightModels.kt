@@ -54,7 +54,16 @@ sealed class HighlightTarget {
         override val type: HighlightType = HighlightType.FirstUnread
     }
 
-    data class LastRead(override val postId: Long) : HighlightTarget() {
+    data class LastRead(
+            override val postId: Long,
+            /**
+             * True when this is the soft `last_post_on_page_fallback` (already-read topic, no real
+             * unread/last-viewed/explicit target — the ring just defaults to the last post on the page).
+             * Such a guessed target must NOT drive the highlight auto-scroll, otherwise an explicit page
+             * jump (pagination) gets yanked from the page's first post down to its last post.
+             */
+            val softFallback: Boolean = false
+    ) : HighlightTarget() {
         override val type: HighlightType = HighlightType.LastRead
     }
 

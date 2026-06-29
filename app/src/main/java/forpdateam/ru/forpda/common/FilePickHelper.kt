@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import io.appmetrica.analytics.AppMetrica
@@ -21,12 +23,46 @@ object FilePickHelper {
 
     @JvmStatic
     fun pickFile(onlyImages: Boolean): Intent {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-        intent.type = if (onlyImages) "image/*" else "*/*"
-        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-        intent.action = Intent.ACTION_GET_CONTENT
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-        return Intent.createChooser(intent, "Select file")
+        // База — выбор любого документа (приложение «Файлы»/Документы).
+        val getContent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = if (onlyImages) "image/*" else "*/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        val chooser = Intent.createChooser(getContent, "Выберите файл")
+
+        // На Pixel галерея (Google Photos) объявляет обработчик GET_CONTENT только
+        // для image/*-video/*, поэтому при type="*/*" система выкидывает её из чузера —
+        // остаются только «Файлы». Явно добавляем системный Photo Picker и галерею,
+        // чтобы выбор «из галереи» был доступен и для постов (onlyImages=false).
+        val galleryIntents = buildGalleryIntents()
+        if (galleryIntents.isNotEmpty()) {
+            chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, galleryIntents.toTypedArray())
+        }
+        return chooser
+    }
+
+    /**
+     * Интенты для выбора медиа прямо из галереи. Результат (content://-Uri в
+     * [Intent.getData] или [Intent.getClipData]) полностью совместим с [onActivityResult].
+     */
+    private fun buildGalleryIntents(): List<Intent> {
+        val intents = mutableListOf<Intent>()
+        // Системный Photo Picker (Android 13+): без разрешений, нативная галерея Pixel.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intents.add(
+                Intent(MediaStore.ACTION_PICK_IMAGES).apply {
+                    putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit())
+                }
+            )
+        }
+        // Классическая галерея как fallback для более старых версий / других прошивок.
+        intents.add(
+            Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI).apply {
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            }
+        )
+        return intents
     }
 
     @JvmStatic

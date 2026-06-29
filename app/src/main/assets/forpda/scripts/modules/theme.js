@@ -2488,6 +2488,16 @@ function scrollToElementWithRetries(name, requireFinalRetry) {
                     clearUnreadInitialAnchorScroll("initial_anchor_early");
                     armThemeInitialAnchorMediaReanchor(name);
                     maybeCompleteThemeScrollCommand(true, "initial_anchor");
+                    // Re-arm the hybrid bootstrap, exactly like the final-delay and deadline
+                    // completion paths below. The Kotlin anchor guard
+                    // (shouldBlockHybridUntilInitialAnchorSettled) blocks the upward "load previous
+                    // page" request while the INITIAL_ANCHOR scroll is pending; when this FAST early
+                    // path settles (anchor already near the viewport top — e.g. opening from the
+                    // mentions/«Ответы» block onto the newest post of a short last page), nothing else
+                    // re-requested the top load after the guard released, so the previous page never
+                    // auto-loaded and a fresh post above the page divider stayed missing until a manual
+                    // scroll/refresh (device log 28_06-20-50, topic 1121483 st=1300).
+                    scheduleThemeInfiniteScrollBootstrap(80);
                     return;
                 }
                 var shouldComplete = requireFinalRetry
