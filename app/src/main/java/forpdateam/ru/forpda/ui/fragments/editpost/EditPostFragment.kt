@@ -40,6 +40,7 @@ import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.views.CodeEditor
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
+import forpdateam.ru.forpda.ui.views.messagepanel.advanced.AdvancedPopup
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
 import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
@@ -239,6 +240,22 @@ class EditPostFragment : TabFragment() {
         fullPanel.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             applyFullPanelImeFix()
         }
+        // Панель BBCode/смайлов (advanced_popup_host) перекрывает низ редактора, но не даёт IME-инсета,
+        // а размеры самого fullPanel при её показе не меняются — слой выше не дёрнет layout listener.
+        // Поэтому пересчитываем отступ явно по событиям показа/скрытия панели (+ после её анимации).
+        fullPanel.setAdvancedPanelStateListener(object : AdvancedPopup.StateListener {
+            override fun onShow() {
+                applyFullPanelImeFix()
+                fullPanel.post { applyFullPanelImeFix() }
+                fullPanel.postDelayed({ applyFullPanelImeFix() }, 220L)
+            }
+
+            override fun onHide() {
+                applyFullPanelImeFix()
+                fullPanel.post { applyFullPanelImeFix() }
+                fullPanel.postDelayed({ applyFullPanelImeFix() }, 220L)
+            }
+        })
         // Полный редактор в fragment_content — не держим IME margin у пустого message_panel_host.
         syncMessagePanelImeWithDimensions()
     }
@@ -251,18 +268,23 @@ class EditPostFragment : TabFragment() {
         val insets = insetsArg ?: ViewCompat.getRootWindowInsets(fullPanel) ?: return
         val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
         val inner = (fullPanel as? ViewGroup)?.getChildAt(0) ?: return
-        if (ime <= 0) {
-            if (inner.paddingBottom != 0) {
-                inner.setPadding(inner.paddingLeft, inner.paddingTop, inner.paddingRight, 0)
-            }
-            return
+        // Перекрытие клавиатурой (если она поднята).
+        val imeOverlap = if (ime > 0) {
+            val loc = IntArray(2)
+            fullPanel.getLocationInWindow(loc)
+            val panelBottomInWindow = loc[1] + fullPanel.height
+            val windowHeight = activity.window.decorView.height
+            val visibleBottom = windowHeight - ime
+            (panelBottomInWindow - visibleBottom).coerceAtLeast(0)
+        } else {
+            0
         }
-        val loc = IntArray(2)
-        fullPanel.getLocationInWindow(loc)
-        val panelBottomInWindow = loc[1] + fullPanel.height
-        val windowHeight = activity.window.decorView.height
-        val visibleBottom = windowHeight - ime
-        val overlap = (panelBottomInWindow - visibleBottom).coerceAtLeast(0)
+        // Перекрытие встроенной панелью BBCode/смайлов. advanced_popup_host и fragment_content
+        // (где живёт fullPanel) выровнены по одному нижнему краю, поэтому overlap == высоте панели.
+        // IME и панель одновременно не показываются (при открытии панели клавиатура скрывается),
+        // поэтому берём максимум, а не сумму.
+        val advancedOverlap = fullPanel.fullFormAdvancedReservedHeight
+        val overlap = maxOf(imeOverlap, advancedOverlap)
         if (inner.paddingBottom != overlap) {
             inner.setPadding(inner.paddingLeft, inner.paddingTop, inner.paddingRight, overlap)
         }

@@ -92,6 +92,15 @@ class MessagePanel(
     
     var lastHeight = 0
     var heightChangeListener: HeightChangeListener? = null
+
+    /**
+     * Базовый нижний margin хоста [message_panel_host] под нижним таббаром приложения.
+     * Нужен фрагментам, которые рисуют контент под таббаром ([shouldDrawBehindBottomNav]) — там
+     * fragments_container не резервирует место под таббар, поэтому хост сам поднимается на эту высоту.
+     * Используется [AdvancedPopup] при открытии компактной панели BBCode/смайлов, чтобы её нижние
+     * ряды не уходили под таббар. По умолчанию 0 (полноэкранный редактор и т.п.).
+     */
+    var hostBaseBottomMarginProvider: (() -> Int)? = null
     
     private var params: ViewGroup.LayoutParams? = null
     private var isMonospace = true
@@ -708,6 +717,15 @@ class MessagePanel(
     fun hidePopupWindows() {
         advancedPopup?.hidePopupWindows()
     }
+
+    /** Слушатель показа/скрытия панели BBCode/смайлов (для подгонки отступов полноэкранного редактора). */
+    fun setAdvancedPanelStateListener(listener: AdvancedPopup.StateListener?) {
+        advancedPopup?.setStateListener(listener)
+    }
+
+    /** См. [AdvancedPopup.fullFormReservedHeight]. */
+    val fullFormAdvancedReservedHeight: Int
+        get() = advancedPopup?.fullFormReservedHeight ?: 0
 
     /** См. [AdvancedPopup.isCompactBbcodeLayoutHoldActive]. */
     fun isCompactBbcodeLayoutHoldActive(): Boolean =
