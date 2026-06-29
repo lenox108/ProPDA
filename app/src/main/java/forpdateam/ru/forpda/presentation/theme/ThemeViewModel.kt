@@ -3970,12 +3970,25 @@ class ThemeViewModel @Inject constructor(
             )
             return
         }
-        if (target.pagination.current < target.pagination.all) {
+        // HYBRID infinite-scroll fix («прочитал тему до конца, но в избранном висит непрочитанной»):
+        // on exit the snapshot `target` is the page the topic was originally rendered with
+        // (currentPage), NOT the bottom-most page the user infinite-scrolled down to. When a topic is
+        // opened on a non-final page and the user scrolls through to the last page, target.pagination
+        // .current stays at the entry page, so a plain `current < all` check wrongly reported
+        // "not_last_page" and the topic was never marked read. Derive the furthest page actually loaded
+        // for this topic — native wasNearBottom already reflects the bottom of the whole concatenated
+        // WebView content, so reaching that bottom with the last page loaded is a genuine end-of-topic
+        // read.
+        val effectiveCurrentPage = maxOf(
+                target.pagination.current,
+                loadedPageNumbersForTopic(target.id).maxOrNull() ?: target.pagination.current
+        )
+        if (effectiveCurrentPage < target.pagination.all) {
             ThemePostReadStateDiagnostics.markReadSkipped(
                     topicId = target.id,
                     reason = "not_last_page",
                     source = source,
-                    currentPage = target.pagination.current,
+                    currentPage = effectiveCurrentPage,
                     allPages = target.pagination.all
             )
             FpdaDebugLog.warn(
@@ -3983,7 +3996,8 @@ class ThemeViewModel @Inject constructor(
                     "mark_read_gate_not_last_page",
                     mapOf(
                             "topicId" to target.id,
-                            "current" to target.pagination.current,
+                            "current" to effectiveCurrentPage,
+                            "targetCurrent" to target.pagination.current,
                             "all" to target.pagination.all,
                             "source" to source
                     )
