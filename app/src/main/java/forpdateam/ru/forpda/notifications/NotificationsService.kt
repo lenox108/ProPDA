@@ -157,11 +157,11 @@ class NotificationsService : Service() {
                 // снять ограничения background-launch'ей и не держать CPU, оставляя
                 // сервис живым до возврата приложения в foreground.
                 eventsRepository.observeForegroundRealtimeChanges().collect { change ->
-                    if (change.enabled) {
-                        if (!foregroundPromoted) {
-                            promoteToForegroundIfNeeded()
-                        }
-                    } else if (change.reason.contains("process_stop")) {
+                    // На переднем плане (change.enabled) FGS НЕ поднимаем: приложение само
+                    // удерживает процесс в foreground-приоритете, WS жив, а «служебное»
+                    // уведомление в шторке не нужно. При уходе в фон (process_stop) снимаем
+                    // foreground, если он почему-то был поднят (фолбэк-старт из фона).
+                    if (!change.enabled && change.reason.contains("process_stop")) {
                         detachForegroundIfPromoted(change.reason)
                     }
                 }
@@ -188,11 +188,16 @@ class NotificationsService : Service() {
             return START_NOT_STICKY
         }
 
-        // Поднимаемся в foreground-сервис, чтобы Android не убивал нас во время
-        // background-опроса событий (Android 14+ жёстко требует foregroundServiceType
-        // в течение 5 секунд после startForegroundService()). Канал — отдельный
-        // внутренний с минимальной важностью, чтобы не показывать ничего в шторке.
-        promoteToForegroundIfNeeded()
+        // FGS-уведомление («Служебный канал») поднимаем ТОЛЬКО если сервис стартовали
+        // из фона (через startForegroundService — тогда Android требует startForeground
+        // в течение 5 секунд, иначе краш). В штатном случае приложение на переднем плане
+        // стартует нас обычным startService(): процесс и так имеет foreground-приоритет,
+        // WS живёт без FGS, и уведомление в шторке не показывается. Скрыть уведомление
+        // запущенного FGS на API 26+ нельзя — поэтому единственный способ его не показывать
+        // в обычном режиме — не быть foreground-сервисом, пока приложение видимо.
+        if (intent?.getBooleanExtra(EXTRA_STARTED_AS_FGS, false) == true) {
+            promoteToForegroundIfNeeded()
+        }
 
         var checkEvents = intent?.action != null && intent.action == CHECK_LAST_EVENTS
         val time = System.currentTimeMillis()
@@ -598,6 +603,8 @@ class NotificationsService : Service() {
         const val CHANNEL_SITE_ID = "forpda_channel_site"
 
         const val CHECK_LAST_EVENTS = "CHECK_LAST_EVENTS"
+        /** Помечает старт через startForegroundService(): onStartCommand обязан поднять FGS в 5 сек. */
+        private const val EXTRA_STARTED_AS_FGS = "started_as_fgs"
         private const val NOTIFY_STACKED_QMS_ID = -123
         private const val NOTIFY_STACKED_FAV_ID = -234
         private const val STACKED_MAX = 4
@@ -661,10 +668,17 @@ class NotificationsService : Service() {
                 BatteryDebugLogger.logState("NotificationsService", "startAndCheckNoBind")
                 val intent = Intent(context, NotificationsService::class.java)
                         .setAction(CHECK_LAST_EVENTS)
-                // На API 26+ запуск в фоне с background-опросом требует
-                // startForegroundService: иначе нас прибьют во время опроса,
-                // и уведомления о QMS/ответах просто не дойдут.
-                context.startForegroundService(intent)
+                // Все вызовы идут из MainActivity, т.е. приложение на переднем плане:
+                // обычный startService() разрешён и НЕ обязывает показывать FGS-уведомление
+                // «Служебный канал». Если же мы внезапно оказались в фоне (гонка/edge-case),
+                // startService кинет IllegalStateException — тогда поднимаемся как FGS
+                // (помечая интент, чтобы onStartCommand вызвал startForeground в срок).
+                try {
+                    context.startService(intent)
+                } catch (notAllowed: IllegalStateException) {
+                    intent.putExtra(EXTRA_STARTED_AS_FGS, true)
+                    context.startForegroundService(intent)
+                }
             } catch (ignore: Exception) {
             }
         }
