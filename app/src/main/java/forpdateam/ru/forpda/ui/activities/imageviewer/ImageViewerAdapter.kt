@@ -26,6 +26,9 @@ class ImageViewerAdapter : PagerAdapter() {
     private var tapListener: OnPhotoTapListener? = null
     private val items = mutableListOf<String>()
 
+    /** Счётчик авто-ретраев на позицию: сбрасывается при успехе или ручном повторе. */
+    private val autoRetryAttempts = mutableMapOf<Int, Int>()
+
     fun setTapListener(tapListener: OnPhotoTapListener) {
         this.tapListener = tapListener
     }
@@ -72,13 +75,35 @@ class ImageViewerAdapter : PagerAdapter() {
 
                     override fun onSuccess(request: ImageRequest, result: SuccessResult) {
                         binding.progressBar.visibility = View.GONE
+                        autoRetryAttempts.remove(position)
                     }
 
                     override fun onError(request: ImageRequest, result: ErrorResult) {
+                        // Транзиентные сбои (StreamResetException от CDN 4pda, таймауты)
+                        // приходят при чтении тела — уже после интерцептора, поэтому его
+                        // ретрай 503/504 их не ловит. Сами повторяем загрузку несколько
+                        // раз, прежде чем показывать ручной «Повторить».
+                        if (shouldAutoRetry(result.throwable)) {
+                            val attempt = autoRetryAttempts.getOrElse(position) { 0 } + 1
+                            if (attempt <= MAX_AUTO_RETRIES) {
+                                autoRetryAttempts[position] = attempt
+                                logAutoRetry(data, result.throwable, attempt)
+                                binding.progressBar.visibility = View.VISIBLE
+                                binding.photoView.postDelayed(
+                                        { loadImage(container, binding, position) },
+                                        AUTO_RETRY_DELAY_MS * attempt
+                                )
+                                return
+                            }
+                        }
                         binding.progressBar.visibility = View.GONE
+                        autoRetryAttempts.remove(position)
                         logLoadError(data, result.throwable)
                         container.makeSnackbarAboveSystemBars(errorMessageRes(result.throwable), Snackbar.LENGTH_LONG)
-                                .setAction(R.string.retry) { loadImage(container, binding, position) }
+                                .setAction(R.string.retry) {
+                                    autoRetryAttempts.remove(position)
+                                    loadImage(container, binding, position)
+                                }
                                 .show()
                     }
 
@@ -90,6 +115,29 @@ class ImageViewerAdapter : PagerAdapter() {
         ForPdaCoil.imageLoader.enqueue(request)
 
         binding.photoView.setOnPhotoTapListener(tapListener)
+    }
+
+    /**
+     * Стоит ли молча повторить загрузку. Клиентские HTTP-ошибки (401/403 — нужна авторизация,
+     * 404 — нет файла) ретраем не лечатся, поэтому для них сразу показываем снэкбар. Всё
+     * остальное (StreamResetException, обрывы соединения, таймауты) обычно проходит со 2-3 раза.
+     */
+    private fun shouldAutoRetry(throwable: Throwable): Boolean {
+        val code = findResponseException(throwable)?.code
+        return code == null || code !in 400..499
+    }
+
+    private fun logAutoRetry(data: String, throwable: Throwable, attempt: Int) {
+        if (!BuildConfig.DEBUG) return
+        val url = data.toHttpUrlOrNull() ?: return
+        if (!ImageLoadingInterceptor.isFourPdaImageRequest(url)) return
+        Timber.tag("ImageViewer").d(
+            "imageAutoRetry host=%s path=%s type=%s attempt=%d",
+            url.host,
+            url.encodedPath,
+            throwable::class.java.simpleName,
+            attempt
+        )
     }
 
     private fun errorMessageRes(throwable: Throwable): Int {
@@ -133,5 +181,10 @@ class ImageViewerAdapter : PagerAdapter() {
             throwable::class.java.simpleName,
             findResponseException(throwable)?.code?.toString().orEmpty()
         )
+    }
+
+    companion object {
+        private const val MAX_AUTO_RETRIES = 2
+        private const val AUTO_RETRY_DELAY_MS = 350L
     }
 }
