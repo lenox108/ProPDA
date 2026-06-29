@@ -12,6 +12,7 @@ import forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import forpdateam.ru.forpda.model.preferences.ForumPageSizeHolder
 import timber.log.Timber
 import java.util.regex.Matcher
 
@@ -25,7 +26,10 @@ private fun Matcher.groupInt(group: Int): Int? {
 }
 
 class ThemeParser(
-        private val patternProvider: IPatternProvider
+        private val patternProvider: IPatternProvider,
+        // Необязательная зависимость: только для самообучения размера страницы (см. ниже).
+        // Тесты конструируют парсер без неё — поведение разбора от этого не зависит.
+        private val pageSizeHolder: ForumPageSizeHolder? = null
 ) : BaseParser() {
 
     private companion object {
@@ -152,6 +156,11 @@ class ThemeParser(
         }
 
         page.pagination = Pagination.parseForum(response)
+        // Самообучение размера страницы: на многостраничной теме perPage разобран из пагинации
+        // сервера и отражает настройку пользователя — кэшируем для счётчиков «N стр.» в списках.
+        if (page.pagination.all > 1 && page.pagination.perPage > 0) {
+            pageSizeHolder?.setPostsPerPage(page.pagination.perPage)
+        }
 
         patternProvider
                 .getPattern(scope.scope, scope.title)

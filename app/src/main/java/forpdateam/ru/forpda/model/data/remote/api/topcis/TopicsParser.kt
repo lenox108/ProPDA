@@ -7,11 +7,13 @@ import forpdateam.ru.forpda.entity.remote.topics.TopicsData
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import forpdateam.ru.forpda.model.preferences.ForumPageSizeHolder
 import timber.log.Timber
 import java.util.regex.Pattern
 
 class TopicsParser(
         private val patternProvider: IPatternProvider,
+        private val pageSizeHolder: ForumPageSizeHolder,
         private val useJsoup: Boolean = false,
 ) : BaseParser() {
 
@@ -226,7 +228,7 @@ class TopicsParser(
         while (matcher.find()) {
             maxOffset = maxOf(maxOffset, matcher.group(1)?.toIntOrNull() ?: 0)
         }
-        return if (maxOffset > 0) maxOffset / DEFAULT_FORUM_POSTS_PER_PAGE + 1 else 0
+        return if (maxOffset > 0) maxOffset / pageSizeHolder.getPostsPerPage() + 1 else 0
     }
 
     private fun collectShowtopicIds(rowHtml: String): List<Int> {
@@ -245,7 +247,4 @@ class TopicsParser(
                 .trim()
     }
 
-    private companion object {
-        const val DEFAULT_FORUM_POSTS_PER_PAGE = 20
-    }
 }

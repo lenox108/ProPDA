@@ -3,6 +3,9 @@ package forpdateam.ru.forpda.model.data.remote.api.favorites
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import forpdateam.ru.forpda.entity.remote.favorites.FavoriteReadState
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import forpdateam.ru.forpda.model.preferences.ForumPageSizeHolder
+import io.mockk.every
+import io.mockk.mockk
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,7 +21,8 @@ import java.util.regex.Pattern
 @Config(sdk = [28])
 class FavoritesParserTest {
 
-    private val parser: FavoritesParser by lazy { FavoritesParser(loadProductionPatterns()) }
+    private val pageSizeHolder: ForumPageSizeHolder = mockk { every { getPostsPerPage() } returns 20 }
+    private val parser: FavoritesParser by lazy { FavoritesParser(loadProductionPatterns(), pageSizeHolder) }
 
     @Test
     fun modifierPlusMarksTopicUnreadWithoutStrongTitle() {
