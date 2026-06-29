@@ -53,4 +53,9 @@ class ListsPreferencesHolder(
     suspend fun setHiddenTopicIds(value: Set<Int>) = dataStore.setHiddenTopicIds(value)
 
     suspend fun setHiddenForumIds(value: Set<Int>) = dataStore.setHiddenForumIds(value)
+
+    // Размер страницы избранного — сохраняется для корректной пагинации на холодном старте.
+    fun getFavPerPage(): Int = dataStore.getFavPerPageImmediate()
+
+    fun setFavPerPage(value: Int) = dataStore.setFavPerPage(value)
 }
