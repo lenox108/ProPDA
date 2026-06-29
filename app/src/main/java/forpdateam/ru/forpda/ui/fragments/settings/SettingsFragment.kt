@@ -67,6 +67,10 @@ class SettingsFragment : BaseSettingFragment() {
     @Inject lateinit var dayNightHelper: DayNightHelper
     @Inject lateinit var clipboardHelper: ClipboardHelper
 
+    // Запас под последней плашкой («Аккаунт» с правилами форума), чтобы она не липла к низу.
+    override val extraBottomPaddingPx: Int
+        get() = resources.getDimensionPixelSize(R.dimen.dp24)
+
     private var logoutJob: kotlinx.coroutines.Job? = null
     private val prefs by lazy { preferences }
     private val downloadFolderLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->

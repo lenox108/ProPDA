@@ -28,6 +28,13 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
     private var listScrollY = 0
     private var lastIsVisible = false
 
+    /**
+     * Дополнительный отступ снизу под списком (помимо системной навбар-вставки).
+     * По умолчанию 0; экраны переопределяют, если нужен запас под последней плашкой.
+     */
+    protected open val extraBottomPaddingPx: Int
+        get() = 0
+
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
 
     }
@@ -58,7 +65,7 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
             // Fix: Add padding for navigation bar to prevent bottom items from being covered
             ViewCompat.setOnApplyWindowInsetsListener(list) { v, insets ->
                 val navBarInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBarInsets.bottom)
+                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, navBarInsets.bottom + extraBottomPaddingPx)
                 insets
             }
             list.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
