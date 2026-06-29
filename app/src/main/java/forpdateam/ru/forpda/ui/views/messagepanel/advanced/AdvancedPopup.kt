@@ -552,6 +552,18 @@ class AdvancedPopup(
         return v.visibility == View.VISIBLE
     }
 
+    /**
+     * Высота, которую занимает встроенная (in-activity) панель BBCode/смайлов внизу экрана, либо 0.
+     * Используется полноэкранным редактором, чтобы поднять текст/контролы над панелью (как над IME),
+     * иначе панель перекрывает нижнюю половину сообщения.
+     */
+    val fullFormReservedHeight: Int
+        get() = if (fullFormEditor && inActivityHost != null && isInActivityFullFormShowing()) {
+            inActivityAdvancedView?.layoutParams?.height?.takeIf { it > 0 } ?: fullFormPanelHeight()
+        } else {
+            0
+        }
+
     private fun fullFormPanelHeight(dimensions: DimensionHelper.Dimensions = dimensionsProvider.getDimensions()): Int {
         val dm = context.resources.displayMetrics
         val minKb = context.resources.getDimensionPixelSize(R.dimen.default_keyboard_height)
@@ -674,6 +686,13 @@ class AdvancedPopup(
         }
     }
 
+    /**
+     * Убирает IME-отступ хоста (компактная BBCode-панель встроена в layout и сама задаёт высоту),
+     * но СОХРАНЯЕТ базовый резерв под нижний таббар ([MessagePanel.hostBaseBottomMarginProvider]).
+     * Иначе у фрагментов, рисующих под таббаром (тема), нижние ряды BBCode уходят под таббар:
+     * flip isFakeKeyboardShow не переэмитит StateFlow (та же ссылка), поэтому MessagePanelHelper
+     * margin не пересчитает — выставляем корректное значение здесь напрямую.
+     */
     private fun clearCompactHostImeSpacing() {
         val hostParent = compactHost?.parent as? View ?: return
         if (hostParent.paddingBottom != 0) {
@@ -684,9 +703,10 @@ class AdvancedPopup(
                 0
             )
         }
+        val baseMargin = messagePanel.hostBaseBottomMarginProvider?.invoke() ?: 0
         (hostParent.layoutParams as? ViewGroup.MarginLayoutParams)?.also { lp ->
-            if (lp.bottomMargin != 0) {
-                lp.bottomMargin = 0
+            if (lp.bottomMargin != baseMargin) {
+                lp.bottomMargin = baseMargin
                 hostParent.layoutParams = lp
             }
         }

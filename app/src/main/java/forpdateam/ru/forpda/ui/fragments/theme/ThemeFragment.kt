@@ -308,6 +308,9 @@ abstract class ThemeFragment : TabFragment() {
         _themeBinding = FragmentThemeBinding.inflate(inflater, fragmentContent, true)
         refreshLayout = themeBinding.swipeRefreshList
         messagePanel = MessagePanel(requireContext(), fragmentContainer, messagePanelHost, false, mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder)
+        // Тема рисует под таббаром: при открытии компактной BBCode-панели хост должен сохранять
+        // резерв под таббар, иначе нижние ряды BBCode уходят под нижнее меню.
+        messagePanel.hostBaseBottomMarginProvider = { messagePanelBaseBottomMargin() }
         messagePanelHost.background = null
         coordinatorLayout.updateLayoutParams<RelativeLayout.LayoutParams> {
             removeRule(RelativeLayout.ABOVE)
