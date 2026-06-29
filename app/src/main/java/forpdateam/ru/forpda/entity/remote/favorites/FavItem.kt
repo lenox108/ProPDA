@@ -25,6 +25,8 @@ class FavItem : IFavItem {
     var listingHref: String? = null
     /** Inspector fav snapshot marked this topic unread on last merge (not persisted). */
     var inspectorMarkedUnread: Boolean = false
+    /** Locally hidden from the main favorites list (routed into the collapsible "Скрытое" section). Not persisted on the item. */
+    var isHidden: Boolean = false
     override var desc: String? = null
     override var curatorNick: String? = null
     override var subType: String? = null
@@ -64,6 +66,7 @@ class FavItem : IFavItem {
         displayDateOverride = (item as? FavItem)?.displayDateOverride
         listingHref = (item as? FavItem)?.listingHref
         inspectorMarkedUnread = (item as? FavItem)?.inspectorMarkedUnread == true
+        isHidden = (item as? FavItem)?.isHidden == true
         desc = item.desc
         curatorNick = item.curatorNick
         subType = item.subType

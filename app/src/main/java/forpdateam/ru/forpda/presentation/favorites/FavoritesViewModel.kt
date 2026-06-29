@@ -9,7 +9,9 @@ import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.app.TabNotification
 import forpdateam.ru.forpda.entity.remote.favorites.FavData
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
+import forpdateam.ru.forpda.entity.remote.others.pagination.Pagination
 import forpdateam.ru.forpda.model.AuthHolder
+import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.model.data.remote.api.favorites.Sorting
 import forpdateam.ru.forpda.model.interactors.CrossScreenInteractor
 import forpdateam.ru.forpda.model.interactors.theme.ThemePrefetchService
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
 
 @HiltViewModel
 @OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -67,6 +70,10 @@ class FavoritesViewModel @Inject constructor(
     private var searchCatalogJob: Job? = null
 
     private var currentSt = 0
+    // Размер страницы для клиентской пагинации (берётся из ответа сервера, дефолт 20).
+    private var clientPerPage = 20
+    private var hiddenTopicIds: Set<Int> = listsPreferencesHolder.getHiddenTopicIds()
+    private var hiddenForumIds: Set<Int> = listsPreferencesHolder.getHiddenForumIds()
     private var loadAll = listsPreferencesHolder.getFavLoadAll()
     private var unreadTop = listsPreferencesHolder.getUnreadTop()
     private var sorting: Sorting = Sorting(
@@ -88,6 +95,10 @@ class FavoritesViewModel @Inject constructor(
     private val _displayedItems = MutableStateFlow<List<FavItem>?>(null)
     val displayedItems: StateFlow<List<FavItem>?> = _displayedItems.asStateFlow()
 
+    // Пагинация считается локально по видимым (не скрытым) темам.
+    private val _pagination = MutableStateFlow<Pagination?>(null)
+    val pagination: StateFlow<Pagination?> = _pagination.asStateFlow()
+
     fun start() {
         if (subscriptionsStarted) return
         subscriptionsStarted = true
@@ -95,7 +106,24 @@ class FavoritesViewModel @Inject constructor(
         scope.launch { _uiEvents.emit(FavoritesUiEvent.InitSorting(sorting)) }
 
         scope.launch {
-            listsPreferencesHolder.observeFavLoadAllFlow().collect { loadAll = it }
+            listsPreferencesHolder.observeFavLoadAllFlow().collect {
+                loadAll = it
+                publishDisplayed()
+            }
+        }
+
+        scope.launch {
+            listsPreferencesHolder.observeHiddenTopicIdsFlow().collect {
+                hiddenTopicIds = it
+                publishDisplayed()
+            }
+        }
+
+        scope.launch {
+            listsPreferencesHolder.observeHiddenForumIdsFlow().collect {
+                hiddenForumIds = it
+                publishDisplayed()
+            }
         }
 
         scope.launch {
@@ -170,6 +198,13 @@ class FavoritesViewModel @Inject constructor(
         loadFavorites(0, forceRefresh = true)
     }
 
+    /** Локальный переход на страницу (st — смещение элемента), без сетевого запроса. */
+    fun selectClientPage(st: Int) {
+        currentSt = st
+        publishDisplayed()
+        scope.launch { _uiEvents.emit(FavoritesUiEvent.ScrollToTop) }
+    }
+
     fun searchLocal(query: String) {
         searchQuery = query.trim()
         if (searchQuery.isEmpty()) {
@@ -204,9 +239,12 @@ class FavoritesViewModel @Inject constructor(
         loadJob = scope.launch {
             _refreshing.value = true
             runCatching {
-                favoritesRepository.loadFavorites(currentSt, loadAll, sorting, forceRefresh)
-            }.onSuccess {
-                scope.launch { _uiEvents.emit(FavoritesUiEvent.OnLoadFavorites(it)) }
+                // Грузим ВЕСЬ список (all=true), чтобы пагинацию можно было считать
+                // на клиенте по видимым (не скрытым) темам.
+                favoritesRepository.loadFavorites(0, true, sorting, forceRefresh)
+            }.onSuccess { data ->
+                data.pagination.perPage.takeIf { it > 0 }?.let { clientPerPage = it }
+                scope.launch { _uiEvents.emit(FavoritesUiEvent.OnLoadFavorites(data)) }
             }.onFailure {
                 var message: String? = null
                 errorHandler.handle(it) { _, handledMessage -> message = handledMessage }
@@ -232,9 +270,19 @@ class FavoritesViewModel @Inject constructor(
         }
     }
 
-    fun markAllFavoritesRead() {
+    fun markAllFavoritesRead() = runMarkReadEntries(currentMarkReadEntries())
+
+    /** Пакетно отметить прочитанными выбранные темы. */
+    fun markFavoritesRead(items: List<FavItem>) = runMarkReadEntries(
+            items.asSequence()
+                    .filter { item -> !item.isForum && item.topicId > 0 }
+                    .distinctBy { item -> item.topicId }
+                    .map { item -> FavoriteMarkReadEntry(item.favId, item.topicId) }
+                    .toList()
+    )
+
+    private fun runMarkReadEntries(entries: List<FavoriteMarkReadEntry>) {
         if (_markAllReadRunning.value) return
-        val entries = currentMarkReadEntries()
         if (entries.isEmpty()) {
             scope.launch { _uiEvents.emit(FavoritesUiEvent.OnMarkAllRead(FavoriteMarkReadResult(emptySet(), emptySet()))) }
             return
@@ -255,6 +303,64 @@ class FavoritesViewModel @Inject constructor(
     }
 
     fun getMarkAllFavoritesReadCount(): Int = currentMarkReadEntries().size
+
+    /** Пакетно удалить выбранные элементы из избранного (на сервере), затем один перезапрос списка. */
+    fun deleteFavorites(items: List<FavItem>) {
+        val targets = items.filter { it.favId > 0 }
+        if (targets.isEmpty()) return
+        scope.launch {
+            var ok = true
+            targets.forEach { item ->
+                runCatching { favoritesRepository.editFavorites(FavoritesApi.ACTION_DELETE, item.favId, item.favId, null) }
+                        .onFailure { ok = false; errorHandler.handle(it) }
+            }
+            invalidateSearchCatalog()
+            loadFavorites(currentSt)
+            _uiEvents.emit(FavoritesUiEvent.OnChangeFav(ok))
+        }
+    }
+
+    /** Пакетно закрепить/открепить выбранные элементы, затем один перезапрос списка. */
+    fun setFavoritesPinned(items: List<FavItem>, pin: Boolean) {
+        val targets = items.filter { it.favId > 0 && it.isPin != pin }
+        if (targets.isEmpty()) {
+            scope.launch { _uiEvents.emit(FavoritesUiEvent.OnChangeFav(true)) }
+            return
+        }
+        scope.launch {
+            var ok = true
+            targets.forEach { item ->
+                runCatching {
+                    favoritesRepository.editFavorites(
+                            FavoritesApi.ACTION_EDIT_PIN_STATE,
+                            item.favId,
+                            item.favId,
+                            if (pin) "pin" else "unpin"
+                    )
+                }.onFailure { ok = false; errorHandler.handle(it) }
+            }
+            invalidateSearchCatalog()
+            loadFavorites(currentSt)
+            _uiEvents.emit(FavoritesUiEvent.OnChangeFav(ok))
+        }
+    }
+
+    /** Пакетно скрыть/показать выбранные элементы локально (одна запись на тип). */
+    fun setFavoritesHidden(items: List<FavItem>, hidden: Boolean) {
+        if (items.isEmpty()) return
+        scope.launch {
+            val topicIds = items.filter { !it.isForum && it.topicId > 0 }.map { it.topicId }
+            val forumIds = items.filter { it.isForum && it.forumId > 0 }.map { it.forumId }
+            val newTopics = hiddenTopicIds.toMutableSet().apply { if (hidden) addAll(topicIds) else removeAll(topicIds) }
+            val newForums = hiddenForumIds.toMutableSet().apply { if (hidden) addAll(forumIds) else removeAll(forumIds) }
+            hiddenTopicIds = newTopics
+            hiddenForumIds = newForums
+            listsPreferencesHolder.setHiddenTopicIds(newTopics)
+            listsPreferencesHolder.setHiddenForumIds(newForums)
+            publishDisplayed()
+            _uiEvents.emit(FavoritesUiEvent.OnChangeFav(true))
+        }
+    }
 
     fun onItemDisplayed(item: FavItem) {
         // Do not prefetch on bind/display: 4pda `view=getnewpost` can advance server read state.
@@ -331,6 +437,43 @@ class FavoritesViewModel @Inject constructor(
 
     fun isTopicMuted(item: FavItem): Boolean = notificationPreferencesHolder.isTopicMuted(item.topicId)
 
+    /** Скрыта ли тема/форум из основного списка (локально). */
+    fun isHidden(item: FavItem): Boolean = isItemHidden(item)
+
+    private fun isItemHidden(item: FavItem): Boolean =
+            if (item.isForum) item.forumId > 0 && hiddenForumIds.contains(item.forumId)
+            else item.topicId > 0 && hiddenTopicIds.contains(item.topicId)
+
+    /** Локально скрыть/показать тему или форум в списке избранного (на сервере не удаляется). */
+    fun toggleHidden(item: FavItem) {
+        scope.launch {
+            val nowHidden: Boolean
+            if (item.isForum) {
+                if (item.forumId <= 0) return@launch
+                val current = hiddenForumIds.toMutableSet()
+                nowHidden = if (current.contains(item.forumId)) {
+                    current.remove(item.forumId); false
+                } else {
+                    current.add(item.forumId); true
+                }
+                hiddenForumIds = current
+                listsPreferencesHolder.setHiddenForumIds(current)
+            } else {
+                if (item.topicId <= 0) return@launch
+                val current = hiddenTopicIds.toMutableSet()
+                nowHidden = if (current.contains(item.topicId)) {
+                    current.remove(item.topicId); false
+                } else {
+                    current.add(item.topicId); true
+                }
+                hiddenTopicIds = current
+                listsPreferencesHolder.setHiddenTopicIds(current)
+            }
+            publishDisplayed()
+            _uiEvents.emit(FavoritesUiEvent.OnToggleHidden(item, nowHidden))
+        }
+    }
+
     /** Локально (на устройстве) переключить уведомления для темы избранного. */
     fun toggleTopicMute(item: FavItem) {
         if (item.isForum || item.topicId <= 0) return
@@ -344,9 +487,60 @@ class FavoritesViewModel @Inject constructor(
     }
 
     private fun publishDisplayed() {
-        val items = filterDisplayedItems()
-        _displayedItems.value = items
-        scope.launch { _uiEvents.emit(FavoritesUiEvent.OnShowFavorite(items)) }
+        val all = applyHiddenFlags(filterDisplayedItems())
+        val displayed: List<FavItem>
+        val pagination: Pagination
+        if (searchQuery.isNotEmpty()) {
+            // В поиске пагинация не нужна — показываем все совпадения.
+            displayed = all
+            pagination = singlePagePagination(all.size)
+        } else {
+            val hidden = all.filter { it.isHidden }
+            val visible = all.filterNot { it.isHidden }
+            val (slice, pg) = buildPageAndPagination(visible)
+            // Скрытые добавляем после видимой страницы — адаптер сложит их в секцию «Скрытое».
+            displayed = slice + hidden
+            pagination = pg
+        }
+        _displayedItems.value = displayed
+        _pagination.value = pagination
+        scope.launch { _uiEvents.emit(FavoritesUiEvent.OnShowFavorite(displayed)) }
+    }
+
+    /** Нарезает видимые темы на текущую страницу и собирает соответствующий [Pagination]. */
+    private fun buildPageAndPagination(visible: List<FavItem>): Pair<List<FavItem>, Pagination> {
+        // «Загрузить всё» → одна страница со всеми видимыми; иначе — по clientPerPage.
+        val perPage = if (loadAll) visible.size.coerceAtLeast(1) else clientPerPage.coerceAtLeast(1)
+        val totalPages = if (visible.isEmpty()) 1 else ceil(visible.size / perPage.toDouble()).toInt()
+        val pageIndex = (currentSt / perPage).coerceIn(0, totalPages - 1)
+        currentSt = pageIndex * perPage
+        val from = pageIndex * perPage
+        val to = (from + perPage).coerceAtMost(visible.size)
+        val slice = if (from < to) visible.subList(from, to).toList() else emptyList()
+        val pagination = Pagination().apply {
+            isForum = true
+            this.perPage = perPage
+            all = totalPages
+            current = pageIndex + 1
+            st = currentSt
+        }
+        return slice to pagination
+    }
+
+    private fun singlePagePagination(itemCount: Int): Pagination = Pagination().apply {
+        isForum = true
+        perPage = itemCount.coerceAtLeast(1)
+        all = 1
+        current = 1
+        st = 0
+    }
+
+    /** Проставляет транзиентный флаг [FavItem.isHidden] по текущему набору скрытых id. */
+    private fun applyHiddenFlags(list: List<FavItem>): List<FavItem> {
+        for (item in list) {
+            item.isHidden = isItemHidden(item)
+        }
+        return list
     }
 
     private fun filterDisplayedItems(): List<FavItem> {
@@ -396,7 +590,7 @@ class FavoritesViewModel @Inject constructor(
     private fun currentMarkReadEntries(): List<FavoriteMarkReadEntry> =
             currentDisplayedItems()
                     .asSequence()
-                    .filter { item -> item.isNew && !item.isForum && item.topicId > 0 }
+                    .filter { item -> item.isNew && !item.isForum && item.topicId > 0 && !isItemHidden(item) }
                     .distinctBy { item -> item.topicId }
                     .map { item -> FavoriteMarkReadEntry(item.favId, item.topicId) }
                     .toList()
@@ -415,6 +609,8 @@ sealed class FavoritesUiEvent {
     data class OnChangeFav(val result: Boolean) : FavoritesUiEvent()
     data class ShowSubscribeDialog(val item: FavItem) : FavoritesUiEvent()
     data class OnToggleMute(val item: FavItem, val nowMuted: Boolean) : FavoritesUiEvent()
+    data class OnToggleHidden(val item: FavItem, val nowHidden: Boolean) : FavoritesUiEvent()
     data class ShowLoadError(val message: String?) : FavoritesUiEvent()
     object ShowNeedAuth : FavoritesUiEvent()
+    object ScrollToTop : FavoritesUiEvent()
 }

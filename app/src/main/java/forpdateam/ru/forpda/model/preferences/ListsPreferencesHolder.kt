@@ -40,4 +40,17 @@ class ListsPreferencesHolder(
     fun getSortingKey(): String = dataStore.getSortingKeyImmediate()
 
     fun getSortingOrder(): String = dataStore.getSortingOrderImmediate()
+
+    // --- Скрытые из списка избранного (локально, не удаляются на сервере) ---
+    fun observeHiddenTopicIdsFlow(): Flow<Set<Int>> = dataStore.observeHiddenTopicIdsFlow()
+
+    fun observeHiddenForumIdsFlow(): Flow<Set<Int>> = dataStore.observeHiddenForumIdsFlow()
+
+    fun getHiddenTopicIds(): Set<Int> = dataStore.getHiddenTopicIdsImmediate()
+
+    fun getHiddenForumIds(): Set<Int> = dataStore.getHiddenForumIdsImmediate()
+
+    suspend fun setHiddenTopicIds(value: Set<Int>) = dataStore.setHiddenTopicIds(value)
+
+    suspend fun setHiddenForumIds(value: Set<Int>) = dataStore.setHiddenForumIds(value)
 }
