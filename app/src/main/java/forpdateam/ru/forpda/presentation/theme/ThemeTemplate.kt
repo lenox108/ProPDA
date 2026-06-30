@@ -21,6 +21,8 @@ import java.util.regex.Pattern
 import java.security.MessageDigest
 import java.util.LinkedHashMap
 
+private const val THEME_HISTORY_TAG = "ThemeHistory"
+
 class ThemeTemplate(
         private val context: Context,
         private val templateManager: TemplateManager,
@@ -105,10 +107,11 @@ class ThemeTemplate(
         }
         val knownHatId = basePage.topicHatPost?.id?.takeIf { it > 0 }
         val pageFragments = pages.sortedBy { it.pagination.current }.map { page ->
-            TopicPrependedHatPolicy.preparePagePostsForNonFirstPageList(
+            stripPrependedHatForRender(
                     page = page,
                     requestedPage = page.pagination.current,
                     knownHatId = knownHatId ?: page.topicHatPost?.id,
+                    source = "mapHybridPages",
             )
             val postsInner = dedupePostContainersInPostsHtml(
                     extractPostsListInner(
@@ -140,7 +143,12 @@ class ThemeTemplate(
 
     @Synchronized
     fun mapPostsFragment(page: ThemePage): String {
-        TopicPrependedHatPolicy.preparePagePostsForNonFirstPageList(page)
+        stripPrependedHatForRender(
+                page = page,
+                requestedPage = page.pagination.current,
+                knownHatId = null,
+                source = "mapPostsFragment",
+        )
         val key = postsFragmentCacheKey(page)
         postsFragmentCache[key]?.let {
             page.postsFragmentHtml = it
@@ -152,6 +160,48 @@ class ThemeTemplate(
         return buildPageFragment(page.pagination.current, posts).also {
             postsFragmentCache[key] = it
             page.postsFragmentHtml = it
+        }
+    }
+
+    /**
+     * Strips the prepended topic hat for a render fragment, logging (DEBUG) which posts were removed.
+     * This is the render-time strip that decides the visible page list; when it eats a real first
+     * content post of a deep/last page the post vanishes until a manual refresh (see the disappearing
+     * "previous post" report). The diag names the deciding inputs (resolved hat id, expectedMin,
+     * anchors, leading post numbers) so the failing [TopicPrependedHatPolicy] rule can be identified
+     * from a device log.
+     */
+    private fun stripPrependedHatForRender(
+            page: ThemePage,
+            requestedPage: Int,
+            knownHatId: Int?,
+            source: String,
+    ) {
+        val beforeIds = if (BuildConfig.DEBUG) page.posts.map { it.id } else emptyList()
+        val beforeNumbers = if (BuildConfig.DEBUG) page.posts.take(3).map { it.number } else emptyList()
+        val resolvedHatId = if (BuildConfig.DEBUG) {
+            TopicPrependedHatPolicy.resolvePrependedHatId(page, requestedPage, knownHatId)
+        } else {
+            null
+        }
+        val beforeSize = page.posts.size
+        TopicPrependedHatPolicy.preparePagePostsForNonFirstPageList(
+                page = page,
+                requestedPage = requestedPage,
+                knownHatId = knownHatId,
+        )
+        if (BuildConfig.DEBUG && page.posts.size < beforeSize) {
+            val afterIds = page.posts.map { it.id }
+            val removed = beforeIds.filterNot { it in afterIds }
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "hat_strip_render_diag src=$source topic=${page.id} reqPage=$requestedPage " +
+                            "prependedHatPostId=${page.prependedHatPostId} " +
+                            "knownHatId=$knownHatId resolvedHatId=$resolvedHatId " +
+                            "expectedMin=${TopicPrependedHatPolicy.expectedFirstPostNumber(page, requestedPage)} " +
+                            "anchorPostId=${page.anchorPostId} anchors=${page.anchors} url=${page.url} " +
+                            "firstNumbers=$beforeNumbers removed=$removed kept=$afterIds"
+            )
         }
     }
 

@@ -25,6 +25,29 @@ private fun Matcher.groupInt(group: Int): Int? {
     return value.toIntOrNull()
 }
 
+/**
+ * Authoritative prepended-hat marker. On deep pages the server wraps the topic hat in
+ * `<div data-spoil-poll-pinned-content …>` («Показать/Скрыть шапку») and the hat is the first
+ * `data-post="<id>"` inside it. Anchored on `<div …data-spoil-poll-pinned-content` so the CSS-selector
+ * occurrences (`[data-spoil-poll-pinned-content]{…}`) in the page `<style>` are ignored. Verified
+ * against a live page-51 capture (topic 1115315, hat 140711020), a poll-free topic.
+ */
+private val PREPENDED_HAT_PINNED_PATTERN = Regex(
+        """(?is)<div\b[^>]*\bdata-spoil-poll-pinned-content\b[^>]*>[\s\S]{0,4000}?\bdata-post\s*=\s*["'](\d+)["']"""
+)
+
+/**
+ * Returns the server-marked prepended-hat post id from a topic page HTML, or 0 when the page carries no
+ * `data-spoil-poll-pinned-content` hat wrapper (e.g. first page / topics without a designated hat).
+ * Visible for tests so the authoritative Layer-1 detection can be validated against a real capture.
+ */
+internal fun extractPrependedHatPostId(html: String): Int =
+        PREPENDED_HAT_PINNED_PATTERN.find(html)
+                ?.groupValues?.getOrNull(1)
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?: 0
+
 class ThemeParser(
         private val patternProvider: IPatternProvider,
         // Необязательная зависимость: только для самообучения размера страницы (см. ниже).
@@ -244,6 +267,7 @@ class ThemeParser(
                 }
                 .filterNotNull()
         page.posts.addAll(posts)
+        page.prependedHatPostId = extractPrependedHatPostId(response)
         logUserPostCountSourceDiagnostics(page, response)
         applyPaginationFromUrlIfNeeded(page, argUrl, initialRequestUrl)
 

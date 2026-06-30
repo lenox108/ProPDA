@@ -75,6 +75,13 @@ class ThemePage {
     var resumeToLastPageBottom = false
     var openSessionKind: String? = null
     var topicHatPost: ThemePost? = null
+    /**
+     * Authoritative id of the prepended topic hat as marked by the SERVER on deep pages: the post
+     * rendered inside the `data-spoil-poll-pinned-content` («Показать/Скрыть шапку») wrapper. Set by
+     * the parser straight from the markup, so the hat is identified without number/title heuristics.
+     * 0/absent when the page carries no server-marked prepended hat (e.g. page 1).
+     */
+    var prependedHatPostId: Int = 0
     val posts = ArrayList<ThemePost>()
     var pagination = Pagination()
     var poll: Poll? = null

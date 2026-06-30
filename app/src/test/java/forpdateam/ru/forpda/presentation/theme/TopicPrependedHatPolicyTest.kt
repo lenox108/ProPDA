@@ -48,6 +48,86 @@ class TopicPrependedHatPolicyTest {
     }
 
     @Test
+    fun `stripFromNonFirstPage uses server-marked prependedHatPostId and keeps mis-numbered content`() {
+        // Authoritative Layer-1 signal: the server marked the hat via data-spoil-poll-pinned-content,
+        // parser put its id in page.prependedHatPostId. The hat must be stripped by that id and the
+        // (intermittently mis-numbered) first content post kept — no number heuristic involved.
+        val page = ThemePage().apply {
+            id = 1115315
+            url = "https://4pda.to/forum/index.php?showtopic=1115315&st=1000#entry144071947"
+            pagination.current = 51
+            pagination.all = 51
+            pagination.perPage = 20
+            prependedHatPostId = 140711020
+            anchors.add("entry144071947")
+            anchorPostId = "entry144071947"
+            posts.add(regularPost(id = 140711020, number = 1001)) // the prepended hat (as parsed)
+            posts.add(regularPost(id = 144071947, number = 0))     // first real content post, mis-numbered
+        }
+
+        val kept = TopicPrependedHatPolicy.stripFromNonFirstPage(
+                page = page,
+                requestedPage = 51,
+                knownHatId = null,
+        )
+
+        assertTrue(kept)
+        assertEquals(1, page.posts.size)
+        assertEquals(144071947, page.posts.first().id)
+    }
+
+    @Test
+    fun `stripFromNonFirstPage keeps first content post of last page when its number is stale and the real hat is known`() {
+        // Device report 30_06: favorites getlastpost lands on the last page; the first content post of
+        // that page (UberUlow) was left number=0 by the parser while the anchor/last post is numbered.
+        // The real topic hat (the opening post) is known (cached) and is NOT on this page. The bare
+        // number heuristic must not mistake the mis-numbered first content post for the prepended hat.
+        val page = ThemePage().apply {
+            id = 1115315
+            url = "https://4pda.to/forum/index.php?showtopic=1115315&st=1000#entry144072796"
+            pagination.current = 51
+            pagination.all = 51
+            pagination.perPage = 20
+            topicHatPost = hatPost(id = 140711020, number = 1)
+            anchors.add("entry144072796")
+            anchorPostId = "entry144072796"
+            posts.add(regularPost(id = 144072700, number = 0))
+            posts.add(regularPost(id = 144072796, number = 1001))
+        }
+
+        val kept = TopicPrependedHatPolicy.stripFromNonFirstPage(
+                page = page,
+                requestedPage = 51,
+                knownHatId = null,
+        )
+
+        assertTrue(kept)
+        assertEquals(2, page.posts.size)
+        assertEquals(144072700, page.posts.first().id)
+    }
+
+    @Test
+    fun `filterPostsForPageList keeps mis-numbered first content post when the real hat is known`() {
+        val page = ThemePage().apply {
+            id = 1115315
+            url = "https://4pda.to/forum/index.php?showtopic=1115315&st=1000#entry144072796"
+            pagination.current = 51
+            pagination.all = 51
+            pagination.perPage = 20
+            topicHatPost = hatPost(id = 140711020, number = 1)
+            anchors.add("entry144072796")
+            anchorPostId = "entry144072796"
+            posts.add(regularPost(id = 144072700, number = 0))
+            posts.add(regularPost(id = 144072796, number = 1001))
+        }
+
+        val filtered = TopicPrependedHatPolicy.filterPostsForPageList(page, requestedPage = 51)
+
+        assertEquals(2, filtered.size)
+        assertEquals(144072700, filtered.first().id)
+    }
+
+    @Test
     fun `stripFromNonFirstPage removes known hat id even when number parsing is stale`() {
         val page = deepPage(
                 posts = listOf(
