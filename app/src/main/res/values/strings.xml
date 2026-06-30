@@ -932,6 +932,13 @@
     <string name="funny_search_error_desc">Проверьте подключение и повторите запрос.</string>
     <string name="funny_theme_error_title">Не удалось загрузить тему</string>
     <string name="funny_theme_error_desc">Проверьте подключение и повторите загрузку страницы.</string>
+    <string name="crash_report_dialog_title">Приложение аварийно закрылось</string>
+    <string name="crash_report_dialog_message">В прошлый раз произошёл сбой. Отправить отчёт об ошибке разработчику? Он содержит стек ошибки и модель устройства, без личных данных.</string>
+    <string name="crash_report_send">Отправить отчёт</string>
+    <string name="crash_report_later">Позже</string>
+    <string name="crash_report_share_chooser">Отправить отчёт об ошибке</string>
+    <string name="pref_title_crash_report_tg">Слать сбои в Telegram</string>
+    <string name="pref_summary_crash_report_tg">Автоматически отправлять отчёт о вылете боту при следующем запуске</string>
     <string name="funny_article_comments_nodata_title">Нет комментариев</string>
     <string name="favorites_subscribe_email">Уведомления на Email</string>
     <string name="quote_from_clipboard">Цитата из буфера обмена</string>

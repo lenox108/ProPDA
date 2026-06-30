@@ -208,23 +208,31 @@ class ThemeUseCase @Inject constructor(
         mapped
     }
 
-    suspend fun mapHybridPages(basePage: ThemePage, pages: Collection<ThemePage>, reason: String = "hybridRefresh"): ThemePage = withContext(Dispatchers.Default) {
-        val startedAt = SystemClock.uptimeMillis()
-        pages.forEach { page ->
-            page.postsFragmentHtml = themeTemplate.mapPostsFragment(page)
+    suspend fun mapHybridPages(basePage: ThemePage, pages: Collection<ThemePage>, reason: String = "hybridRefresh"): ThemePage {
+        // Снимок на потоке вызывающего (Main) ДО ухода в Dispatchers.Default. Вызыватели
+        // передают живой `loadedPages.values` (view поверх LinkedHashMap); если итерировать его
+        // на фоне, пока Main мутирует map (clear/putAll/put при hybrid-скролле и обновлениях),
+        // получаем ConcurrentModificationException (краш 2.9.9). Копия списка ссылок дёшева и
+        // не ломает обновление самих страниц — это те же объекты ThemePage.
+        val snapshot = pages.toList()
+        return withContext(Dispatchers.Default) {
+            val startedAt = SystemClock.uptimeMillis()
+            snapshot.forEach { page ->
+                page.postsFragmentHtml = themeTemplate.mapPostsFragment(page)
+            }
+            val mapped = themeTemplate.mapHybridPages(basePage, snapshot)
+            if (BuildConfig.DEBUG) {
+                Timber.tag("ThemeLoadTiming").d(
+                        "mapHybridPages reason=%s ms=%d pages=%s html=%d mainThread=%s",
+                        reason,
+                        SystemClock.uptimeMillis() - startedAt,
+                        snapshot.map { it.pagination.current },
+                        mapped.html?.length ?: 0,
+                        Looper.myLooper() == Looper.getMainLooper()
+                )
+            }
+            mapped
         }
-        val mapped = themeTemplate.mapHybridPages(basePage, pages)
-        if (BuildConfig.DEBUG) {
-            Timber.tag("ThemeLoadTiming").d(
-                    "mapHybridPages reason=%s ms=%d pages=%s html=%d mainThread=%s",
-                    reason,
-                    SystemClock.uptimeMillis() - startedAt,
-                    pages.map { it.pagination.current },
-                    mapped.html?.length ?: 0,
-                    Looper.myLooper() == Looper.getMainLooper()
-            )
-        }
-        mapped
     }
 
     suspend fun mapPostsFragment(page: ThemePage): String = withContext(Dispatchers.Default) {

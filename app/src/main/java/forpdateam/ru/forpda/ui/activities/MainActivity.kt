@@ -164,6 +164,10 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
             }
         }
 
+        if (savedInstanceState == null) {
+            maybeOfferCrashReport()
+        }
+
         presenter.setIsRestored(savedInstanceState != null)
         intent?.data?.also {
             presenter.setStartLink(it.toString())
@@ -382,6 +386,29 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
                     .setNegativeButton(newContext.getString(R.string.cancel), null)
                     .showWithStyledButtons()
         }
+    }
+
+    /**
+     * Если в прошлый раз приложение аварийно закрылось ([CrashReporter] записал отчёт),
+     * предлагаем отправить его. Отчёт уже лежит файлом в `Android/data/<package>/files/crash/`,
+     * а отсюда уходит как обычный текст через системный share-лист (без бэкенда и FileProvider).
+     */
+    private fun maybeOfferCrashReport() {
+        // Если включена автоотправка в Telegram — отчёт уйдёт сам в фоне ([App]); ручной диалог
+        // не показываем, чтобы не дублировать.
+        if (forpdateam.ru.forpda.diagnostic.CrashTelegramUploader.isAutoSendActive(this)) return
+        val report = forpdateam.ru.forpda.diagnostic.CrashReporter.consumePendingReport(this) ?: return
+        MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.crash_report_dialog_title)
+                .setMessage(R.string.crash_report_dialog_message)
+                .setPositiveButton(R.string.crash_report_send) { _, _ ->
+                    val share = forpdateam.ru.forpda.diagnostic.CrashReporter.buildShareIntent(report)
+                    runCatching {
+                        startActivity(Intent.createChooser(share, getString(R.string.crash_report_share_chooser)))
+                    }
+                }
+                .setNegativeButton(R.string.crash_report_later, null)
+                .showWithStyledButtons()
     }
 
     override fun onPause() {
