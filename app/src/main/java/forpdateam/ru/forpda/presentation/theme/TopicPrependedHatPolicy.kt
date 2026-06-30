@@ -44,7 +44,13 @@ internal object TopicPrependedHatPolicy {
             requestedPage: Int,
             knownHatId: Int?,
     ): Int? {
+        // The SERVER-marked prepended hat (post inside `data-spoil-poll-pinned-content`) is the most
+        // authoritative signal for THIS page — prefer it over everything below. See [hasAuthoritativeHat].
+        page.prependedHatPostId.takeIf { it > 0 }?.let { return it }
         knownHatId?.takeIf { it > 0 }?.let { return it }
+        // When the authoritative hat is known, it IS the prepended hat — return it instead of letting
+        // the number/anchor heuristics below mis-pick a real content post (see [hasAuthoritativeHat]).
+        page.topicHatPost?.id?.takeIf { it > 0 }?.let { return it }
         if (requestedPage <= 1 && page.pagination.current <= 1) return null
         detectPrependedHat(page)?.id?.takeIf { it > 0 }?.let { return it }
         findHatCandidateInPosts(page, requestedPage)?.id?.takeIf { it > 0 }?.let { return it }
@@ -121,6 +127,10 @@ internal object TopicPrependedHatPolicy {
 
         val anchorIds = anchorEntryIds(page)
         val numbersReliable = pageNumbersReliable(page, requestedPage)
+        // Once the real hat is known the bare number/anchor heuristics may only confirm the hat by id
+        // (looksLikeKnownHat) or a positive signature; they must not trim a non-hat leading post whose
+        // number the parser left low/zero (see [hasAuthoritativeHat]).
+        val allowNumberHeuristics = !hasAuthoritativeHat(page)
         while (page.posts.isNotEmpty()) {
             val first = page.posts.first()
             // Stop trimming once the leading post is the open's anchor target: it is real content the
@@ -131,13 +141,13 @@ internal object TopicPrependedHatPolicy {
             // Only trust the number window when the page actually has trustworthy numbers; otherwise
             // (every post number==0, device log 26_06-12-14 topic 928862) this would eat real content
             // post by post until the unread anchor is gone.
-            val isPrependedByNumber = numbersReliable && first.number < expectedMin
+            val isPrependedByNumber = allowNumberHeuristics && numbersReliable && first.number < expectedMin
             val looksLikeKnownHat = hatId != null && first.id == hatId
-            val looksLikeOnlyPrependedHat = first.number == 1 &&
+            val looksLikeOnlyPrependedHat = allowNumberHeuristics && first.number == 1 &&
                     page.posts.size > 1 &&
                     page.posts[1].number >= expectedMin
-            val legacyPrepended = first.number == 1 && page.pagination.current != 1
-            val anchorPrepended = first.id > 0 &&
+            val legacyPrepended = allowNumberHeuristics && first.number == 1 && page.pagination.current != 1
+            val anchorPrepended = allowNumberHeuristics && first.id > 0 &&
                     first.id in anchorEntryIds(page) &&
                     page.posts.size > 1 &&
                     page.posts[1].number >= expectedMin
@@ -272,6 +282,9 @@ internal object TopicPrependedHatPolicy {
         if (post.id > 0 && post.id in anchorEntryIds(page)) return false
         if (looksLikeProPdaTopicHat(post)) return true
         if (looksLikeTopicTitleHat(post, page)) return true
+        // The real hat is known (and handled by the id match above); a non-matching post that merely
+        // carries a low/zero number is mis-numbered content, not the prepended hat — keep it.
+        if (hasAuthoritativeHat(page)) return false
         if (post.number == 1) return true
         // `number == 0` only signals a hat when the page's numbers are trustworthy. When the parser
         // left every post at number==0 (deep/last page, device log 26_06-12-14 topic 928862) this rule
@@ -309,6 +322,18 @@ internal object TopicPrependedHatPolicy {
         }
         return false
     }
+
+    /**
+     * True when the authoritative topic hat (the real opening post) is known for this page via
+     * [ThemePage.topicHatPost]. When it is, the prepended hat is exactly that post; a DIFFERENT leading
+     * post carrying a low/zero number is content the parser failed to number, NOT the hat. The bare
+     * number / anchor heuristics cannot tell the two apart, so they must be suppressed for non-matching
+     * posts once the real hat is known — the hat itself is still stripped by id. Device report 30_06:
+     * favorites getlastpost, topic 1115315 page 51 — the real hat (140711020) was cached, yet the first
+     * content post of the last page got number-stripped at render and vanished until a manual refresh.
+     */
+    private fun hasAuthoritativeHat(page: ThemePage): Boolean =
+            page.prependedHatPostId > 0 || (page.topicHatPost?.id ?: 0) > 0
 
     private fun anchorEntryIds(page: ThemePage): Set<Int> {
         val ids = linkedSetOf<Int>()
