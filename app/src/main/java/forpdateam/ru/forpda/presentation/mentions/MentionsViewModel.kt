@@ -40,6 +40,7 @@ class MentionsViewModel @Inject constructor(
 
     private var loadJob: Job? = null
     private var subscriptionsStarted = false
+    private var lastLoadStartedElapsedMs = 0L
 
     private val _currentSt = MutableStateFlow(0)
     val currentSt: StateFlow<Int> = _currentSt.asStateFlow()
@@ -61,9 +62,25 @@ class MentionsViewModel @Inject constructor(
         getMentions(cacheFirst = true)
     }
 
+    /**
+     * Сверяем бейдж «Ответы» с реальным состоянием при каждом показе вкладки. Счётчик упоминаний
+     * в шапке форума (source=index_header) обновляется любым запросом (избранное/тема) и может
+     * «висеть» на старом значении даже после того, как пользователь прочитал все упоминания —
+     * локальный непрочитанный снапшот при этом уже 0, но никто не перетягивал бейдж к нему, пока
+     * вкладка не перезагрузит список act=mentions. Дёргаем перезагрузку на показе (с дебаунсом,
+     * чтобы переключения вкладок не спамили сеть и не дублировали стартовую загрузку).
+     */
+    fun onShown() {
+        if (!subscriptionsStarted) return
+        if (loadJob?.isActive == true) return
+        if (SystemClock.elapsedRealtime() - lastLoadStartedElapsedMs < SHOW_REFRESH_MIN_INTERVAL_MS) return
+        getMentions(cacheFirst = false)
+    }
+
     fun getMentions(cacheFirst: Boolean = true) {
         Timber.d("getMentions() called, currentSt=${_currentSt.value}")
         loadJob?.cancel()
+        lastLoadStartedElapsedMs = SystemClock.elapsedRealtime()
         loadJob = scope.launch {
             val page = _currentSt.value
             val cacheStartedAt = SystemClock.uptimeMillis()
@@ -130,6 +147,12 @@ class MentionsViewModel @Inject constructor(
         if (BuildConfig.DEBUG) {
             Timber.d("MentionsPerf %s took %dms %s", label, SystemClock.uptimeMillis() - startedAt, extra)
         }
+    }
+
+    private companion object {
+        // Достаточно мал, чтобы возврат из прочитанной темы обновил бейдж, и достаточно велик,
+        // чтобы погасить дубль стартовой загрузки (onViewCreated.start() + первый onResumeOrShow).
+        const val SHOW_REFRESH_MIN_INTERVAL_MS = 2_000L
     }
 }
 
