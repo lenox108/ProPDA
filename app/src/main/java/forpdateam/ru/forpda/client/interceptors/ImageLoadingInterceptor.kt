@@ -5,6 +5,7 @@ import forpdateam.ru.forpda.client.OkHttpResponseException
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.Response
+import okhttp3.internal.http2.StreamResetException
 import timber.log.Timber
 import java.io.IOException
 import java.util.Locale
@@ -78,17 +79,34 @@ class ImageLoadingInterceptor(
             if (BuildConfig.DEBUG && isImageRequest) {
                 val httpCode = (e as? OkHttpResponseException)?.code
                 Timber.tag(TAG).w(
-                    "imageLoadFailure host=%s path=%s type=%s code=%s cookiesPresent=%s refererPresent=%s",
+                    "imageLoadFailure host=%s path=%s type=%s code=%s detail=%s cookiesPresent=%s refererPresent=%s",
                     original.url.host,
                     original.url.encodedPath,
                     e::class.java.simpleName,
                     httpCode?.toString().orEmpty(),
+                    describeFailure(e),
                     hasCookiesForRequest(original.url),
                     !request.header("Referer").isNullOrBlank()
                 )
             }
             throw e
         }
+    }
+
+    /** Цепочка cause + errorCode для HTTP/2 StreamResetException — см. ImageViewerAdapter. */
+    private fun describeFailure(throwable: Throwable): String {
+        val sb = StringBuilder()
+        var current: Throwable? = throwable
+        var depth = 0
+        while (current != null && depth < 6) {
+            if (depth > 0) sb.append(" <- ")
+            sb.append(current::class.java.simpleName)
+            current.message?.takeIf { it.isNotBlank() }?.let { sb.append('(').append(it.take(140)).append(')') }
+            (current as? StreamResetException)?.errorCode?.name?.let { sb.append("[errorCode=").append(it).append(']') }
+            current = current.cause
+            depth++
+        }
+        return sb.toString()
     }
 
     private fun Response.closeQuietly() {

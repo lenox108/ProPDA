@@ -99,6 +99,12 @@ import kotlin.math.min
 private const val REFRESH_SCROLL_TAG = "RefreshScroll"
 private const val THEME_INSETS_TAG = "ThemeInsets"
 private const val WEBVIEW_BLANK_CONTENT_HEIGHT_THRESHOLD = 4
+/**
+ * Backoff for re-attempting a render that is deferred because the WebView is not yet shown (e.g. the
+ * tab is in the background). Without it the deferred render re-posts itself every frame, which spins
+ * the main thread and floods logcat — evicting the FPDA_THEME diagnostics by the device log quota.
+ */
+private const val WEBVIEW_DEFER_RENDER_RETRY_MS = 50L
 private const val MAX_THEME_BLANK_RENDER_RETRIES = 2
 private const val THEME_BLANK_RENDER_VERIFY_DELAY_MS = 450L
 private const val THEME_ALPHA_REVEAL_SAFETY_DELAY_MS = 3200L
@@ -239,6 +245,10 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     private var lastRenderAt: Long = 0L
     private var pendingRenderPage: ThemePage? = null
     private var renderCount: Int = 0
+    // Dedupe the deferred-render / attach debug logs: only print when the observed state changes, so a
+    // render that stays deferred across many frames (background tab) does not flood logcat.
+    private var lastDeferRenderLogState: String? = null
+    private var lastEnsureAttachLogState: String? = null
     private var renderedThemeOnce: Boolean = false
     private var viewRuntimeGeneration: Int = 0
     private var pageSwipeOverlay: ViewGroup? = null
@@ -398,6 +408,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         scrollHandler.setHeaderScrollListener(object : ExtendedWebView.OnScrollListener {
             override fun onScrollChange(scrollX: Int, scrollY: Int, oldScrollX: Int, oldScrollY: Int) {
                 requestHybridPageIfNearEdge(scrollY)
+                noteReadingScrollBottom(scrollY)
                 if (!isToolbarAutoHideEnabled) return
                 if (toolbarOpenLockActive) {
                     if (shouldReleaseToolbarOpenLock()) {
@@ -1099,18 +1110,22 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         if (!webView.isAttachedToWindow || !webView.isShown) {
             pendingRenderPage = page
             if (BuildConfig.DEBUG) {
-                Log.i(
-                        REFRESH_SCROLL_TAG,
-                        "defer theme render key=$renderKey attached=${webView.isAttachedToWindow} parent=${webView.parent?.javaClass?.simpleName} visible=${webView.visibility} shown=${webView.isShown}"
-                )
+                val state = "key=$renderKey attached=${webView.isAttachedToWindow} parent=${webView.parent?.javaClass?.simpleName} visible=${webView.visibility} shown=${webView.isShown}"
+                if (state != lastDeferRenderLogState) {
+                    lastDeferRenderLogState = state
+                    Log.i(REFRESH_SCROLL_TAG, "defer theme render $state")
+                }
             }
-            postOnActiveView {
+            // Re-attempt with a small backoff instead of every frame: while the WebView is not shown
+            // (background tab) a tight re-post spins the main thread and floods logcat.
+            postOnActiveView(WEBVIEW_DEFER_RENDER_RETRY_MS) {
                 if (pendingRenderPage !== page) return@postOnActiveView
                 pendingRenderPage = null
                 renderThemePageSafely(page)
             }
             return
         }
+        lastDeferRenderLogState = null
         if (pendingRenderPage === page) {
             pendingRenderPage = null
         }
@@ -1224,10 +1239,11 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             resetThemeRenderLifecycle("webViewReattached")
         }
         if (BuildConfig.DEBUG) {
-            Log.i(
-                    REFRESH_SCROLL_TAG,
-                    "ensureWebViewAttached parent=${webView.parent?.javaClass?.simpleName} content=${webView.contentHeight}"
-            )
+            val state = "parent=${webView.parent?.javaClass?.simpleName} content=${webView.contentHeight}"
+            if (reattached || state != lastEnsureAttachLogState) {
+                lastEnsureAttachLogState = state
+                Log.i(REFRESH_SCROLL_TAG, "ensureWebViewAttached $state")
+            }
         }
     }
 
@@ -1644,6 +1660,22 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
                 presenter.requestInfinitePage("bottom")
             }
         }
+    }
+
+    /**
+     * Во время чтения фиксируем достижение низа последней страницы по УСТОЯВШЕЙСЯ геометрии скролла
+     * (контент уже разложен по мере прокрутки). Это надёжный сигнал «дочитал до конца» — в отличие от
+     * exit-захвата в [ThemeWebController.saveScrollYOnHide], где `contentHeight` на момент паузы часто
+     * ещё не устоялся и ratio занижается, из-за чего тема рандомно не помечалась прочитанной. Presenter
+     * сам гейтит по «последней странице» и сбрасывает маркер на свежем открытии.
+     */
+    private fun noteReadingScrollBottom(scrollY: Int) {
+        if (!::webView.isInitialized) return
+        val maxScroll = ((webView.contentHeight * webView.scale).toInt() - webView.height).coerceAtLeast(0)
+        if (maxScroll <= 0) return
+        val nearBottomTolerancePx = (24f * webView.resources.displayMetrics.density).toInt()
+        if (scrollY < maxScroll - nearBottomTolerancePx) return
+        presenter.noteReadingReachedLastPageBottom(true, scrollY.toDouble() / maxScroll.toDouble())
     }
 
     private fun logHybridEdgeThrottled(message: String) {

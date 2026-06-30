@@ -126,6 +126,9 @@ class MentionsFragment : RecyclerFragment() {
     override fun onResumeOrShow() {
         super.onResumeOrShow()
         Timber.d("MentionsFragment onResumeOrShow")
+        // Перезагружаем список при показе вкладки, чтобы бейдж «Ответы» сверился с реальным
+        // состоянием упоминаний, а не оставался на устаревшем счётчике из шапки форума.
+        presenter.onShown()
     }
 
     override fun onDestroyView() {

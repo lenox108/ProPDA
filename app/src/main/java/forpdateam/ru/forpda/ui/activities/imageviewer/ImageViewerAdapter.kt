@@ -19,6 +19,7 @@ import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.makeSnackbarAboveSystemBars
 import forpdateam.ru.forpda.databinding.ImgViewPageBinding
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.internal.http2.StreamResetException
 import timber.log.Timber
 
 class ImageViewerAdapter : PagerAdapter() {
@@ -175,13 +176,38 @@ class ImageViewerAdapter : PagerAdapter() {
         val url = data.toHttpUrlOrNull() ?: return
         if (!ImageLoadingInterceptor.isFourPdaImageRequest(url)) return
         Timber.tag("ImageViewer").w(
-            "imageRequestError host=%s path=%s type=%s code=%s",
+            "imageRequestError host=%s path=%s type=%s code=%s detail=%s",
             url.host,
             url.encodedPath,
             throwable::class.java.simpleName,
-            findResponseException(throwable)?.code?.toString().orEmpty()
+            findResponseException(throwable)?.code?.toString().orEmpty(),
+            describeFailure(throwable)
         )
     }
+
+    /**
+     * Разворачивает цепочку cause в строку с типом+сообщением каждого звена и, для
+     * HTTP/2 StreamResetException, его errorCode (REFUSED_STREAM/ENHANCE_YOUR_CALM =
+     * лимит/throttle CDN; INTERNAL_ERROR/PROTOCOL_ERROR/CANCEL = сбой origin/прокси).
+     * Это и есть недостающий признак, почему именно CDN рвёт отдачу картинки.
+     */
+    private fun describeFailure(throwable: Throwable): String {
+        val sb = StringBuilder()
+        var current: Throwable? = throwable
+        var depth = 0
+        while (current != null && depth < 6) {
+            if (depth > 0) sb.append(" <- ")
+            sb.append(current::class.java.simpleName)
+            current.message?.takeIf { it.isNotBlank() }?.let { sb.append('(').append(it.take(140)).append(')') }
+            streamResetErrorCode(current)?.let { sb.append("[errorCode=").append(it).append(']') }
+            current = current.cause
+            depth++
+        }
+        return sb.toString()
+    }
+
+    private fun streamResetErrorCode(throwable: Throwable): String? =
+        (throwable as? StreamResetException)?.errorCode?.name
 
     companion object {
         private const val MAX_AUTO_RETRIES = 2

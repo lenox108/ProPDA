@@ -1488,6 +1488,11 @@ class ThemeViewModel @Inject constructor(
             }
             return
         }
+        if (action == ThemeLoadAction.Normal) {
+            // Свежее открытие темы — сбрасываем высоководный маркер достижения низа, чтобы повторно
+            // ставшая непрочитанной тема не пометилась прочитанной по маркеру прошлой сессии.
+            lastPageBottomSeenTopicId = 0
+        }
         if (BuildConfig.DEBUG) {
             Timber.d("loadData: url=$url action=$action openedViaFindPost=$openedViaFindPostLink currentPage.id=${currentPage?.id}")
             Log.i(
@@ -3956,6 +3961,43 @@ class ThemeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Высоководный маркер «в этой сессии просмотра реально достигали низа последней страницы».
+     * Захват скролла НА ВЫХОДЕ ([saveScrollYOnHide]) считает ratio из `contentHeight * scale`, который
+     * на момент паузы/ухода часто ещё не устоялся (картинки/раскладка) — ratio занижается и
+     * [TopicReadExitPolicy] флапает, из-за чего тема рандомно не помечается прочитанной (а со второго
+     * захода гаснет). Периодические снапшоты во время скролла ([updatePageRefreshScrollSnapshot])
+     * измеряют геометрию уже устоявшейся, поэтому если хоть раз во время сессии низ последней страницы
+     * был достигнут — запоминаем это здесь и на выходе помечаем тему прочитанной независимо от флапнувшего
+     * exit-захвата. Сбрасывается на каждом свежем Normal-открытии (см. [loadData]), чтобы повторно ставшая
+     * непрочитанной тема не пометилась прочитанной по устаревшему маркеру.
+     */
+    private var lastPageBottomSeenTopicId: Int = 0
+
+    /**
+     * Вызывается из нативного scroll-листенера ВО ВРЕМЯ чтения, когда пользователь докрутил до низа.
+     * Геометрия здесь устоявшаяся (контент уже разложен по мере прокрутки), поэтому это надёжный
+     * сигнал «низ последней страницы достигнут» — в отличие от exit-захвата. Фиксируем высоководный
+     * маркер, чтобы пометить тему прочитанной на выходе даже если exit-захват флапнет.
+     */
+    fun noteReadingReachedLastPageBottom(wasNearBottom: Boolean, scrollRatio: Double) {
+        val page = currentPage ?: return
+        if (page.id <= 0 || lastPageBottomSeenTopicId == page.id) return
+        noteLastPageBottomReached(page, wasNearBottom, scrollRatio)
+    }
+
+    private fun noteLastPageBottomReached(target: ThemePage, wasNearBottom: Boolean?, scrollRatio: Double?) {
+        if (target.id <= 0) return
+        val effectiveCurrentPage = maxOf(
+                target.pagination.current,
+                loadedPageNumbersForTopic(target.id).maxOrNull() ?: target.pagination.current
+        )
+        if (effectiveCurrentPage < target.pagination.all) return
+        if (TopicReadExitPolicy.shouldMarkReadOnLastPageExit(wasNearBottom, scrollRatio)) {
+            lastPageBottomSeenTopicId = target.id
+        }
+    }
+
     private fun markTopicReadIfEndReached(
             target: ThemePage,
             wasNearBottom: Boolean?,
@@ -4023,6 +4065,24 @@ class ThemeViewModel @Inject constructor(
             return
         }
         if (!TopicReadExitPolicy.shouldMarkReadOnLastPageExit(wasNearBottom, scrollRatio)) {
+            // Exit-захват флапнул (неустоявшийся contentHeight), но если низ последней страницы уже
+            // достигали во время этой сессии скролла — тема реально дочитана, помечаем прочитанной.
+            if (lastPageBottomSeenTopicId == target.id) {
+                ThemePostReadStateDiagnostics.markReadGateCheck(
+                        topicId = target.id,
+                        currentPage = target.pagination.current,
+                        allPages = target.pagination.all,
+                        wasNearBottom = wasNearBottom,
+                        scrollRatio = scrollRatio,
+                        result = "pass_session_bottom_high_water"
+                )
+                themeUseCase.markTopicRead(
+                        topicId = target.id,
+                        reason = "theme_last_page_bottom_seen_session",
+                        source = source
+                )
+                return
+            }
             ThemePostReadStateDiagnostics.markReadSkipped(
                     topicId = target.id,
                     reason = "exit_policy_fail",
@@ -4168,6 +4228,9 @@ class ThemeViewModel @Inject constructor(
             return
         }
         applyRefreshSnapshot(target, matchingRequest, effectiveScrollY, effectiveAnchorPostId, effectiveAnchorOffsetTop, effectiveScrollRatio, effectiveWasNearBottom)
+        // Высоководный маркер достижения низа последней страницы во время скролла (геометрия здесь
+        // устоявшаяся, в отличие от exit-захвата) — см. [lastPageBottomSeenTopicId].
+        noteLastPageBottomReached(target, effectiveWasNearBottom, effectiveScrollRatio)
         if (matchingRequest != null) {
             val upgradedMode = ThemeRefreshScrollRestorePolicy.effectiveRestoreMode(
                     requestedMode = matchingRequest.restoreMode.name,
