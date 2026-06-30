@@ -1,10 +1,13 @@
 -optimizationpasses 5
 -dontskipnonpubliclibraryclassmembers
 -allowaccessmodification
-# Не обфусцируем имена классов/методов: R8 продолжает вырезать неиспользуемый код
-# (shrink), но стектрейсы крашей остаются читаемыми без mapping.txt/retrace —
-# отчёты из Telegram-бота сразу понятны. APK от этого почти не растёт.
--dontobfuscate
+# Свой код оставляем читаемым в стектрейсах крашей без mapping.txt/retrace —
+# отчёты из Telegram-бота сразу понятны. Библиотеки при этом продолжают
+# обфусцироваться и перепаковываться (-repackageclasses ниже), поэтому
+# org.ccil.cowan.tagsoup уезжает с родного имени и НЕ коллизит с системной
+# копией TagSoup в /system/framework/ext.jar на Samsung/OEM (иначе фатальный
+# NoSuchMethodError при старте App.onCreate). НЕ возвращать -dontobfuscate.
+-keepnames class forpdateam.ru.forpda.** { *; }
 # Prevent crashes on API < 30 where getWindowInsetsController() doesn't exist.
 -keepclassmembers class android.view.View {
     public android.view.WindowInsetsController getWindowInsetsController();

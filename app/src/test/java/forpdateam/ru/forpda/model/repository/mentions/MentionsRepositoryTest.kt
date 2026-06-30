@@ -370,6 +370,95 @@ class MentionsRepositoryTest {
         assertEquals(listOf(43), snapshot.topicPostIds)
     }
 
+    @Test
+    fun eventUnreadOverride_keepsRowBoldWhenServerReturnsRead() = runTest {
+        // act=mentions отдаёт упоминание прочитанным, но realtime-уведомление знает, что пост не открывали.
+        every { mentionsApi.getMentions(0) } returns MentionsData().apply {
+            items.add(mention(1, 42, MentionItem.STATE_READ))
+        }
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.markMentionUnreadFromNotification(1, 42)
+        val loaded = repository.refreshMentions(0)
+
+        assertEquals(listOf(false), loaded.items.map { it.isRead })
+        assertEquals(1, repository.getUnreadSnapshot().unreadCount)
+    }
+
+    @Test
+    fun eventUnreadOverride_clearedWhenPostOpened() = runTest {
+        every { mentionsApi.getMentions(0) } returns MentionsData().apply {
+            items.add(mention(1, 42, MentionItem.STATE_READ))
+        }
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.markMentionUnreadFromNotification(1, 42)
+        repository.refreshMentions(0)
+        repository.markPostsRead(1, listOf(42))
+        val afterOpen = repository.refreshMentions(0)
+
+        assertEquals(listOf(true), afterOpen.items.map { it.isRead })
+        assertEquals(0, repository.getUnreadSnapshot().unreadCount)
+    }
+
+    @Test
+    fun eventUnreadOverride_ignoredWhenAlreadyLocallyRead() = runTest {
+        every { mentionsApi.getMentions(0) } returns MentionsData().apply {
+            items.add(mention(1, 42, MentionItem.STATE_READ))
+        }
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.refreshMentions(0)
+        repository.markPostsRead(1, listOf(42))
+        // Запоздавшее уведомление не должно воскрешать уже прочитанное упоминание.
+        repository.markMentionUnreadFromNotification(1, 42)
+        val afterLateEvent = repository.refreshMentions(0)
+
+        assertEquals(listOf(true), afterLateEvent.items.map { it.isRead })
+        assertEquals(0, repository.getUnreadSnapshot().unreadCount)
+    }
+
+    @Test
+    fun eventUnreadOverride_survivesRepositoryReinitViaPrefs() = runTest {
+        val preferences = InMemorySharedPreferences()
+        val firstApi = mockk<MentionsApi> {
+            every { getMentions(0) } returns MentionsData().apply {
+                items.add(mention(1, 42, MentionItem.STATE_READ))
+            }
+        }
+        val firstRepository = MentionsRepository(firstApi, preferences)
+        firstRepository.markMentionUnreadFromNotification(1, 42)
+
+        val secondApi = mockk<MentionsApi> {
+            every { getMentions(0) } returns MentionsData().apply {
+                items.add(mention(1, 42, MentionItem.STATE_READ))
+            }
+        }
+        val secondRepository = MentionsRepository(secondApi, preferences)
+        val afterRestart = secondRepository.refreshMentions(0)
+
+        assertEquals(listOf(false), afterRestart.items.map { it.isRead })
+        assertEquals(1, secondRepository.getUnreadSnapshot().unreadCount)
+    }
+
+    @Test
+    fun removeUnreadFromEvent_dropsOverrideWithoutForcingPermanentRead() = runTest {
+        every { mentionsApi.getMentions(0) } returnsMany listOf(
+                MentionsData().apply { items.add(mention(1, 42, MentionItem.STATE_READ)) },
+                MentionsData().apply { items.add(mention(1, 42, MentionItem.STATE_UNREAD)) }
+        )
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.markMentionUnreadFromNotification(1, 42)
+        repository.refreshMentions(0)
+        repository.removeUnreadFromEvent(1, 42)
+        // Override снят, но не помечен прочитанным навсегда: серверный unread снова делает строку жирной.
+        val afterServerUnread = repository.refreshMentions(0)
+
+        assertEquals(listOf(false), afterServerUnread.items.map { it.isRead })
+        assertEquals(1, repository.getUnreadSnapshot().unreadCount)
+    }
+
     private fun pagination(current: Int, all: Int) = forpdateam.ru.forpda.entity.remote.others.pagination.Pagination().apply {
         this.current = current
         this.all = all

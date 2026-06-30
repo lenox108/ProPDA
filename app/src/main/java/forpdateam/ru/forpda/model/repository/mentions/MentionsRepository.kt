@@ -21,10 +21,21 @@ class MentionsRepository(
 
     private val stateLock = Any()
     private val readStateStore = MentionsReadStateStore(preferences)
+    private val unreadEventsStore = MentionsUnreadEventsStore(preferences)
     private val cachedPages = linkedMapOf<Int, MentionsData>()
-    private val locallyUnreadKeys = linkedSetOf<String>()
     private val locallyReadKeys = linkedSetOf<String>().apply {
         addAll(readStateStore.getReadKeys())
+    }
+    // Упоминания, про которые realtime-уведомление сообщило «непрочитано», но страница
+    // act=mentions отдаёт их уже прочитанными (сервер гасит «жирность» в списке «Ответы»
+    // по факту просмотра, тогда как бейдж в шапке держится до реального захода в тему).
+    // Держим этот набор авторитетным источником «жирной» строки, пока пост не откроют.
+    private val unreadFromEventsKeys = linkedSetOf<String>().apply {
+        addAll(unreadEventsStore.getKeys())
+        removeAll(locallyReadKeys)
+    }
+    private val locallyUnreadKeys = linkedSetOf<String>().apply {
+        addAll(unreadFromEventsKeys)
     }
     private var hasLoadedMentions = false
 
@@ -84,6 +95,43 @@ class MentionsRepository(
         markAnswersReadInternal(topicId, postIds).let { it.changed to it.snapshot }
     }
 
+    /**
+     * Помечаем упоминание непрочитанным по realtime-уведомлению (topic+post). Это держит строку в
+     * списке «Ответы» жирной, даже если act=mentions отдаёт её прочитанной, — список совпадает с
+     * бейджем. Набор переживает рестарт процесса (prefs) и снимается только при реальном прочтении
+     * поста ([markAnswersReadInternal] / [removeUnreadFromEvent]).
+     */
+    suspend fun markMentionUnreadFromNotification(topicId: Int, postId: Int): UnreadMentionsSnapshot = withContext(Dispatchers.IO) {
+        if (topicId <= 0 || postId <= 0) return@withContext getUnreadSnapshotInternalLocked()
+        val key = MentionReadKey(topicId, postId).value
+        synchronized(stateLock) {
+            // Уже прочитано локально (открывали пост) — не воскрешаем.
+            if (key !in locallyReadKeys && unreadFromEventsKeys.add(key)) {
+                locallyUnreadKeys.add(key)
+                unreadEventsStore.saveKeys(unreadFromEventsKeys)
+                markCachedItemUnreadLocked(key)
+            }
+        }
+        getUnreadSnapshotInternalLocked()
+    }
+
+    /**
+     * Снимаем override непрочитанного упоминания (например, пришло READ-событие по WebSocket —
+     * пост прочитан на другом устройстве), не помечая его при этом локально прочитанным навсегда.
+     */
+    suspend fun removeUnreadFromEvent(topicId: Int, postId: Int): UnreadMentionsSnapshot = withContext(Dispatchers.IO) {
+        if (topicId <= 0 || postId <= 0) return@withContext getUnreadSnapshotInternalLocked()
+        val key = MentionReadKey(topicId, postId).value
+        synchronized(stateLock) {
+            if (unreadFromEventsKeys.remove(key)) {
+                locallyUnreadKeys.remove(key)
+                unreadEventsStore.saveKeys(unreadFromEventsKeys)
+                markCachedItemReadLocked(key)
+            }
+        }
+        getUnreadSnapshotInternalLocked()
+    }
+
     suspend fun recomputeUnreadSnapshot(): UnreadMentionsSnapshot = withContext(Dispatchers.IO) {
         getUnreadSnapshotInternalLocked()
     }
@@ -107,6 +155,9 @@ class MentionsRepository(
         val result = synchronized(stateLock) {
             var changed = false
             val wasUnread = locallyUnreadKeys.remove(key)
+            if (unreadFromEventsKeys.remove(key)) {
+                unreadEventsStore.saveKeys(unreadFromEventsKeys)
+            }
             if (locallyReadKeys.add(key)) {
                 val markedUnread = markCachedItemReadLocked(key)
                 readStateStore.saveReadKeys(locallyReadKeys)
@@ -132,6 +183,9 @@ class MentionsRepository(
             val keysToRead = visiblePostIds.map { MentionReadKey(topicId, it).value }.toSet()
             for (key in keysToRead) {
                 val wasUnread = locallyUnreadKeys.remove(key)
+                if (unreadFromEventsKeys.remove(key)) {
+                    unreadEventsStore.saveKeys(unreadFromEventsKeys)
+                }
                 if (locallyReadKeys.add(key)) {
                     val markedUnread = markCachedItemReadLocked(key)
                     readStateStore.saveReadKeys(locallyReadKeys)
@@ -164,6 +218,15 @@ class MentionsRepository(
         return markedUnread
     }
 
+    private fun markCachedItemUnreadLocked(key: String) {
+        for (page in cachedPages.values) {
+            page.items
+                    .asSequence()
+                    .filter { it.localReadStateKey() == key }
+                    .forEach { it.state = MentionItem.STATE_UNREAD }
+        }
+    }
+
     private fun extractPostId(link: String): Int? = extractMentionPostId(link)
 
     private fun restoreLocalUnreadStateLocked(data: MentionsData) {
@@ -172,6 +235,12 @@ class MentionsRepository(
             if (key in locallyReadKeys) {
                 locallyUnreadKeys.remove(key)
                 item.state = MentionItem.STATE_READ
+            } else if (key in unreadFromEventsKeys) {
+                // Сервер на act=mentions отдаёт это упоминание прочитанным, но из realtime-уведомления
+                // мы знаем, что пост ещё не открывали. Держим строку жирной, чтобы список «Ответы»
+                // совпадал с бейджем; снимется при реальном прочтении поста.
+                locallyUnreadKeys.add(key)
+                item.state = MentionItem.STATE_UNREAD
             } else if (item.isRead && key in locallyUnreadKeys) {
                 if (hasLoadedMentions) {
                     item.state = MentionItem.STATE_UNREAD
@@ -287,5 +356,28 @@ private class MentionsReadStateStore(
 
     private companion object {
         const val KEY_READ_MENTION_KEYS = "mentions_read_state_keys"
+    }
+}
+
+private class MentionsUnreadEventsStore(
+        private val preferences: SharedPreferences?
+) {
+    fun getKeys(): Set<String> {
+        return preferences
+                ?.getStringSet(KEY_UNREAD_EVENT_KEYS, emptySet())
+                ?.filter { it.isNotBlank() }
+                ?.toSet()
+                ?: emptySet()
+    }
+
+    fun saveKeys(keys: Set<String>) {
+        preferences
+                ?.edit()
+                ?.putStringSet(KEY_UNREAD_EVENT_KEYS, keys.toSet())
+                ?.apply()
+    }
+
+    private companion object {
+        const val KEY_UNREAD_EVENT_KEYS = "mentions_unread_event_keys"
     }
 }
