@@ -173,3 +173,5 @@ icon_white_129.png
 /thumb_down_final.png
 /thumb_up_final.png
 .vscode/
+# Отладочные bugreport-архивы с устройства/эмулятора (adb bugreport)
+bugreport-*
