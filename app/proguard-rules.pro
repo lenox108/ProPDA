@@ -1,6 +1,10 @@
 -optimizationpasses 5
 -dontskipnonpubliclibraryclassmembers
 -allowaccessmodification
+# Не обфусцируем имена классов/методов: R8 продолжает вырезать неиспользуемый код
+# (shrink), но стектрейсы крашей остаются читаемыми без mapping.txt/retrace —
+# отчёты из Telegram-бота сразу понятны. APK от этого почти не растёт.
+-dontobfuscate
 # Prevent crashes on API < 30 where getWindowInsetsController() doesn't exist.
 -keepclassmembers class android.view.View {
     public android.view.WindowInsetsController getWindowInsetsController();

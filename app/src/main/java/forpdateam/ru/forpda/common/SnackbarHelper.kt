@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.common
 
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -10,6 +11,7 @@ import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
 import com.google.android.material.snackbar.Snackbar
 import forpdateam.ru.forpda.R
+import timber.log.Timber
 import kotlin.math.max
 
 /**
@@ -25,11 +27,11 @@ fun Fragment.showSnackbar(@StringRes messageRes: Int, duration: Int = Snackbar.L
 }
 
 fun View.showSnackbar(message: String, duration: Int = Snackbar.LENGTH_SHORT) {
-    makeSnackbarAboveSystemBars(message, duration).show()
+    showSnackbarSafely(message, duration)
 }
 
 fun View.showSnackbar(@StringRes messageRes: Int, duration: Int = Snackbar.LENGTH_SHORT) {
-    makeSnackbarAboveSystemBars(messageRes, duration).show()
+    showSnackbarSafely(context.getString(messageRes), duration)
 }
 
 fun Fragment.showSnackbarAboveSystemBars(message: String, duration: Int = Snackbar.LENGTH_SHORT) {
@@ -41,19 +43,46 @@ fun Fragment.showSnackbarAboveSystemBars(@StringRes messageRes: Int, duration: I
 }
 
 fun View.showSnackbarAboveSystemBars(message: String, duration: Int = Snackbar.LENGTH_SHORT) {
-    makeSnackbarAboveSystemBars(message, duration).show()
+    showSnackbarSafely(message, duration)
 }
 
 fun View.showSnackbarAboveSystemBars(@StringRes messageRes: Int, duration: Int = Snackbar.LENGTH_SHORT) {
-    makeSnackbarAboveSystemBars(messageRes, duration).show()
+    showSnackbarSafely(context.getString(messageRes), duration)
+}
+
+/**
+ * Показ Snackbar, который НЕ роняет приложение.
+ *
+ * На некоторых устройствах/темах (зафиксирован краш на Samsung Galaxy S25 / Android 16) контекст
+ * подходящего родителя Snackbar не содержит Material-атрибут `colorOnSurface`, и инфляция
+ * `Snackbar$SnackbarLayout` падает с InflateException. [makeSnackbarAboveSystemBars] уже пытается
+ * пересобрать снэк на корневом content-view (его тема — гарантированно Material). Здесь — последний
+ * рубеж: если и это не помогло, тихо деградируем до Toast вместо вылета.
+ */
+private fun View.showSnackbarSafely(message: CharSequence, duration: Int) {
+    try {
+        makeSnackbarAboveSystemBars(message, duration).show()
+    } catch (e: Throwable) {
+        Timber.w(e, "Snackbar inflate/show failed; falling back to Toast")
+        runCatching { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
+    }
 }
 
 fun View.makeSnackbarAboveSystemBars(message: CharSequence, duration: Int = Snackbar.LENGTH_SHORT): Snackbar {
-    return Snackbar.make(this, message, duration).applyNavigationBarInset(this)
+    return runCatching {
+        Snackbar.make(this, message, duration).applyNavigationBarInset(this)
+    }.getOrElse { e ->
+        // Тема контекста этого view не отдала Material-атрибуты — пробуем content-view Activity,
+        // у него тема приложения (Material3, colorOnSurface есть). Если и тут провал — пробрасываем,
+        // верхний showSnackbarSafely уйдёт в Toast.
+        Timber.w(e, "Snackbar make failed on view context; retrying on activity content view")
+        val content = rootView?.findViewById<View>(android.R.id.content) ?: rootView ?: throw e
+        Snackbar.make(content, message, duration).applyNavigationBarInset(content)
+    }
 }
 
 fun View.makeSnackbarAboveSystemBars(@StringRes messageRes: Int, duration: Int = Snackbar.LENGTH_SHORT): Snackbar {
-    return Snackbar.make(this, messageRes, duration).applyNavigationBarInset(this)
+    return makeSnackbarAboveSystemBars(context.getString(messageRes), duration)
 }
 
 private fun Snackbar.applyNavigationBarInset(anchor: View): Snackbar {

@@ -2723,7 +2723,9 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     presenter.uiEvents.collect { event ->
-                        handleUiEvent(event)
+                        guardThemeRender("uiEvent:${event::class.java.simpleName}", showErrorState = false) {
+                            handleUiEvent(event)
+                        }
                     }
                 }
             }

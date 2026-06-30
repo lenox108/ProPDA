@@ -155,6 +155,16 @@ class App : Application(), androidx.work.Configuration.Provider {
             Timber.plant(Timber.DebugTree())
         }
 
+        // Ставим локальный обработчик краша КАК МОЖНО РАНЬШЕ и до setupAppMetrica:
+        // тогда обработчик AppMetrica (store-флейвор) встанет поверх и вызовет наш в цепочке,
+        // а на dev/beta/parallel/stable наш останется единственным, кто фиксирует падение.
+        forpdateam.ru.forpda.diagnostic.CrashReporter.install(this)
+        // Краш прошлой сессии (если был) дослать боту в фоне — сам процесс на момент падения
+        // уже умер, поэтому отправляем при следующем запуске. No-op, если бот не настроен/выключен.
+        appScope.launch(Dispatchers.IO) {
+            runCatching { forpdateam.ru.forpda.diagnostic.CrashTelegramUploader.trySendPending(this@App) }
+        }
+
         setupStrictMode()
         setupMaterialYouMigration()
         setupAppMetrica()

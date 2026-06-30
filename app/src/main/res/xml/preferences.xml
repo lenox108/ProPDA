@@ -358,6 +358,14 @@
             android:title="ProPDA"
             app:iconSpaceReserved="false" />
 
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
+            android:key="crash_report_tg_auto_send"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_crash_report_tg"
+            android:title="@string/pref_title_crash_report_tg"
+            app:iconSpaceReserved="false" />
+
     </PreferenceCategory>
 
     <PreferenceCategory

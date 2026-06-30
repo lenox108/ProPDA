@@ -420,8 +420,8 @@ abstract class ThemeFragment : TabFragment() {
                         }
                     }
                 }
-                launch { presenter.onLoadData.collect { onLoadData(it) } }
-                launch { presenter.updateView.collect { updateView(it) } }
+                launch { presenter.onLoadData.collect { guardThemeRender("onLoadData") { onLoadData(it) } } }
+                launch { presenter.updateView.collect { guardThemeRender("updateView") { updateView(it) } } }
             }
         }
 
@@ -742,6 +742,39 @@ abstract class ThemeFragment : TabFragment() {
 
     open fun updateView(page: ThemePage) {
         applyTopicToolbarState(page)
+    }
+
+    /**
+     * Защитная «сетка» для главного потока. У части устройств открытие заблокированной по
+     * РФ-IP темы (4pda отдаёт страницу «Тема не найдена» без постов) роняло приложение в
+     * момент отрисовки в WebView — ДО показа страницы. Получить стек краша с этих устройств
+     * не удалось, поэтому ставим перехват: любой сбой внутри [block] больше не уносит процесс.
+     * Он логируется, репортится в AppMetrica и, если [showErrorState], сворачивается в обычную
+     * заглушку «Не удалось загрузить тему» с кнопкой «Повторить» (тот же экран, что и для
+     * сетевых ошибок). CancellationException пробрасывается, чтобы не глушить штатную отмену
+     * корутин-collect.
+     */
+    protected fun guardThemeRender(reason: String, showErrorState: Boolean = true, block: () -> Unit) {
+        try {
+            block()
+        } catch (cancel: kotlinx.coroutines.CancellationException) {
+            throw cancel
+        } catch (e: Throwable) {
+            Timber.e(e, "Theme render guard caught at %s", reason)
+            // Локальный файл-лог: краша уже нет (сетка поймала), но стек сохраняем, чтобы его
+            // можно было достать/отправить даже на флейворах без AppMetrica.
+            context?.let { ctx ->
+                forpdateam.ru.forpda.diagnostic.CrashReporter.logHandled(ctx, "theme_render:$reason", e)
+            }
+            if (!BuildConfig.DEBUG) {
+                runCatching {
+                    io.appmetrica.analytics.AppMetrica.reportError("theme_render_guard:$reason:${e.message}", e)
+                }
+            }
+            if (showErrorState) {
+                runCatching { showThemeLoadErrorState(getString(R.string.funny_theme_error_title)) }
+            }
+        }
     }
 
     protected fun showThemeLoadErrorState(message: String?) {
