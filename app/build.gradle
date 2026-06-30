@@ -48,9 +48,9 @@ android {
         viewBinding = true
     }
 
-    def versionMajor = "2"
-    def versionMinor = "9"
-    def versionPatch = "9"
+    def versionMajor = "3"
+    def versionMinor = "0"
+    def versionPatch = "0"
     // versionCode выводится из версии: major*10000 + minor*100 + patch.
     // Монотонно растёт вместе с versionName — нельзя случайно выкатить
     // даунгрейд (как было с 2.9.6=352 / 2.9.7=351). minor и patch < 100.
@@ -80,6 +80,11 @@ android {
         // AppMetrica is store-flavor only; default is empty so non-store builds fail fast
         // if anything ever tries to read APPMETRICA_API_KEY without the flavor override.
         buildConfigField "String", 'APPMETRICA_API_KEY', '""'
+        // Автоотправка отчётов о сбоях в Telegram-бота. Значения берутся из gradle.properties
+        // (forpda.telegramBotToken / forpda.telegramChatId), чтобы токен не попадал в исходники.
+        // Пусто по умолчанию → автоотправка выключена (фича сама себя не активирует).
+        buildConfigField "String", 'TELEGRAM_BOT_TOKEN', '"' + (project.findProperty('forpda.telegramBotToken') ?: '') + '"'
+        buildConfigField "String", 'TELEGRAM_CHAT_ID', '"' + (project.findProperty('forpda.telegramChatId') ?: '') + '"'
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
