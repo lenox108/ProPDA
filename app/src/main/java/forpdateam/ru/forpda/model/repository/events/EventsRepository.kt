@@ -341,6 +341,37 @@ class EventsRepository(
         }
     }
 
+    /**
+     * Регистрируем непрочитанное упоминание (topic+post) из realtime-уведомления в [mentionsRepository],
+     * чтобы строка в списке «Ответы» оставалась жирной, даже если act=mentions отдаёт её прочитанной.
+     * Бейдж уже горит из шапки форума (index_header); здесь мы лишь синхронизируем с ним список.
+     */
+    private fun feedMentionUnreadFromEvent(event: NotificationEvent) {
+        if (!event.fromTheme() || !event.isMention || event.isRead) return
+        val topicId = event.sourceId
+        val postId = event.messageId
+        if (topicId <= 0 || postId <= 0) return
+        repoScope.launch(ioDispatcher) {
+            runCatching { mentionsRepository.markMentionUnreadFromNotification(topicId, postId) }
+                    .onFailure { Timber.e(it, "feedMentionUnreadFromEvent failed") }
+        }
+    }
+
+    /**
+     * READ-событие по упоминанию (например, прочитано на другом устройстве) — снимаем override
+     * «жирной» строки, чтобы список «Ответы» не держал упоминание непрочитанным после факта прочтения.
+     */
+    private fun clearMentionUnreadOverride(event: NotificationEvent) {
+        if (!event.fromTheme() || !event.isMention) return
+        val topicId = event.sourceId
+        val postId = event.messageId
+        if (topicId <= 0 || postId <= 0) return
+        repoScope.launch(ioDispatcher) {
+            runCatching { mentionsRepository.removeUnreadFromEvent(topicId, postId) }
+                    .onFailure { Timber.e(it, "clearMentionUnreadOverride failed") }
+        }
+    }
+
     private fun start(checkEvents: Boolean, force: Boolean) {
         if (BuildConfig.DEBUG) {
             Timber.d("Start: net=${networkStateProvider.getState()} ws=${webSocketController.isConnected()} check=$checkEvents id=${webSocketController.getCurrentId()}")
@@ -426,6 +457,7 @@ class EventsRepository(
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: topic muted")
             return
         }
+        feedMentionUnreadFromEvent(event)
         eventsHistory[event.notifyId()] = event
         if (!checkNotify(event, event.source)) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: category preference disabled")
@@ -573,9 +605,11 @@ class EventsRepository(
         }
 
         if (event.isRead) {
+            clearMentionUnreadOverride(event)
             checkOldEvent(event)
             return
         }
+        feedMentionUnreadFromEvent(event)
         eventsHistory[event.notifyId()] = event
         notifyTabs(TabNotification(
                 event.source,
