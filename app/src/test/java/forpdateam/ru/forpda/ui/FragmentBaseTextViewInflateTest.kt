@@ -62,7 +62,7 @@ import org.robolectric.annotation.Config
  *     `MaterialYouSurface`.
  *   - All the other chrome/typography slots still left as custom attrs
  *     (`background_for_lists`, `chrome_plane_background`, `contrast_text_color`,
- *     `icon_base`, `icon_toolbar`, `main_toolbar_accent_surface`,
+ *     `icon_base`, `icon_toolbar`,
  *     `status_bar_color`) are NOT set by the overlay — they inherit the same
  *     CONCRETE `@color/light_*` / `@color/dark_*` values from the base
  *     `DayNightAppTheme`.
@@ -267,7 +267,6 @@ class FragmentBaseTextViewInflateTest {
                 R.attr.contrast_text_color,
                 R.attr.icon_base,
                 R.attr.icon_toolbar,
-                R.attr.main_toolbar_accent_surface,
                 R.attr.status_bar_color,
         )
         val criticalAttrNames = mapOf(
@@ -281,7 +280,6 @@ class FragmentBaseTextViewInflateTest {
                 R.attr.contrast_text_color to "contrast_text_color",
                 R.attr.icon_base to "icon_base",
                 R.attr.icon_toolbar to "icon_toolbar",
-                R.attr.main_toolbar_accent_surface to "main_toolbar_accent_surface",
                 R.attr.status_bar_color to "status_bar_color",
         )
 
@@ -353,7 +351,6 @@ class FragmentBaseTextViewInflateTest {
             "contrast_text_color",
             "icon_base",
             "icon_toolbar",
-            "main_toolbar_accent_surface",
             "status_bar_color",
         )
         // The test JVM's CWD is `app/` when running under gradle :app:test*, so
