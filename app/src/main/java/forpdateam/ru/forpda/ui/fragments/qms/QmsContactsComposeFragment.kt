@@ -10,6 +10,7 @@ import androidx.fragment.app.viewModels
 import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.presentation.qms.contacts.QmsContactsViewModel
 import forpdateam.ru.forpda.ui.compose.screens.QmsContactsScreen
+import forpdateam.ru.forpda.ui.compose.theme.ForpdaTheme
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 
 /**
@@ -40,10 +41,12 @@ class QmsContactsComposeFragment : RecyclerFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                QmsContactsScreen(
-                    viewModel = viewModel,
-                    onItemClick = { contact -> viewModel.onItemClick(contact) }
-                )
+                ForpdaTheme {
+                    QmsContactsScreen(
+                        viewModel = viewModel,
+                        onItemClick = { contact -> viewModel.onItemClick(contact) }
+                    )
+                }
             }
         }
     }

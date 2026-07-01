@@ -10,6 +10,7 @@ import androidx.fragment.app.viewModels
 import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.presentation.favorites.FavoritesViewModel
 import forpdateam.ru.forpda.ui.compose.screens.FavoritesScreen
+import forpdateam.ru.forpda.ui.compose.theme.ForpdaTheme
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 
 /**
@@ -42,10 +43,12 @@ class FavoritesComposeFragment : RecyclerFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                FavoritesScreen(
-                        viewModel = viewModel,
-                        onItemClick = { item -> viewModel.onItemClick(item) }
-                )
+                ForpdaTheme {
+                    FavoritesScreen(
+                            viewModel = viewModel,
+                            onItemClick = { item -> viewModel.onItemClick(item) }
+                    )
+                }
             }
         }
     }

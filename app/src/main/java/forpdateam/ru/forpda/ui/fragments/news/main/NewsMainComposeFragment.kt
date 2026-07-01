@@ -10,6 +10,7 @@ import androidx.fragment.app.viewModels
 import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.presentation.articles.list.ArticlesListViewModel
 import forpdateam.ru.forpda.ui.compose.screens.ArticlesListScreen
+import forpdateam.ru.forpda.ui.compose.theme.ForpdaTheme
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 
 /**
@@ -42,10 +43,12 @@ class NewsMainComposeFragment : RecyclerFragment() {
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                ArticlesListScreen(
-                        viewModel = viewModel,
-                        onItemClick = { item -> viewModel.onItemClick(item) }
-                )
+                ForpdaTheme {
+                    ArticlesListScreen(
+                            viewModel = viewModel,
+                            onItemClick = { item -> viewModel.onItemClick(item) }
+                    )
+                }
             }
         }
     }
