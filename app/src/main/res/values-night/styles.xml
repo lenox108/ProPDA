@@ -56,6 +56,10 @@
         <item name="link_color_contrast">@color/dark_link_color_contrast</item>
         <item name="contrast_text_color">@color/dark_contrast_text_color</item>
         <item name="colorSurfaceContainerLowest">@color/dark_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/dark_background_base</item>
+        <item name="colorSurfaceContainer">@color/dark_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/dark_card_background</item>
+        <item name="colorSurfaceContainerHighest">@color/dark_card_background</item>
         <item name="background_for_lists">@color/dark_background_for_lists</item>
         <item name="attachment_overlay_bg">@color/dark_attachment_overlay_bg</item>
         <item name="attachment_description_bg">@color/dark_attachment_description_bg</item>

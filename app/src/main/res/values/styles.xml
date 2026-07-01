@@ -325,6 +325,10 @@
         <item name="link_color_contrast">@color/light_link_color_contrast</item>
         <item name="contrast_text_color">@color/light_contrast_text_color</item>
         <item name="colorSurfaceContainerLowest">@color/light_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/light_background_base</item>
+        <item name="colorSurfaceContainer">@color/light_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/light_background_for_cards</item>
+        <item name="colorSurfaceContainerHighest">@color/light_background_for_cards</item>
         <item name="background_for_lists">@color/light_background_for_lists</item>
         <item name="attachment_overlay_bg">@color/light_attachment_overlay_bg</item>
         <item name="attachment_description_bg">@color/light_attachment_description_bg</item>

@@ -10,6 +10,10 @@
         <item name="link_color_contrast">@color/minimal_reader_link_color_contrast</item>
         <item name="contrast_text_color">@color/minimal_reader_contrast_text_color</item>
         <item name="colorSurfaceContainerLowest">@color/minimal_reader_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/minimal_reader_background_base</item>
+        <item name="colorSurfaceContainer">@color/minimal_reader_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/minimal_reader_background_for_cards</item>
+        <item name="colorSurfaceContainerHighest">@color/minimal_reader_background_for_cards</item>
         <item name="background_for_lists">@color/minimal_reader_background_for_lists</item>
         <item name="divider_line_bottom_nav">@color/minimal_reader_divider_line</item>
         <item name="attachment_overlay_bg">@color/light_attachment_overlay_bg</item>
