@@ -72,9 +72,7 @@ class CodeEditor @JvmOverloads constructor(
     fun attachToScrollView(sv: ScrollView) {
         scrollView = sv
 
-        sv.addOnLayoutChangeListener { v, _, _, _, bottom, _, _, _, oldBottom ->
-            val heightWas = oldBottom - (v.top - (v.bottom - bottom))
-            val oldHeight = oldBottom
+        sv.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, oldBottom ->
             if (v.height != oldBottom - v.top) {
                 smartUpdateHighlighting()
             }
@@ -178,8 +176,6 @@ class CodeEditor @JvmOverloads constructor(
                 val scrollViewHeight = scrollView!!.height
                 visibleStart = getOffsetForPosition(0f, scrollY.toFloat())
                 visibleEnd = getOffsetForPosition(0f, (scrollY + scrollViewHeight).toFloat())
-                val _vs = Math.max(0, visibleStart - 100)
-                val _ve = Math.min(e.length, visibleEnd + 100)
             }
 
             val hlText = e.subSequence(visibleStart, visibleEnd)

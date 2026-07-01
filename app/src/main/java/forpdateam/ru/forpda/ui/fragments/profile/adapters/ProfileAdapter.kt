@@ -1,7 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.profile.adapters
 
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -111,10 +110,6 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
     }
 
     override fun getItemCount(): Int = items.size
-
-    private fun inflateLayout(parent: ViewGroup, id: Int): View {
-        return LayoutInflater.from(parent.context).inflate(id, parent, false)
-    }
 
     private inner class StatsHolder(binding: ProfileItemStatsBinding) : BaseViewHolder<ProfileModel>(binding.root) {
         private val list: RecyclerView = binding.profileStatsList

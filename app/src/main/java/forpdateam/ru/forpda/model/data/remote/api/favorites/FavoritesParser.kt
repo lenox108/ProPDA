@@ -138,52 +138,6 @@ class FavoritesParser(
                 .find()
     }
 
-    /**
-     * Успех «пометить прочитанным» (tact=read). Полная страница — [checkIsComplete] (зелёный блок + #navstrip).
-     * XHR часто отдаёт фрагмент без navstrip — расширяем эвристиками, иначе массовая пометка ломается и даёт «failed» через десятки секунд.
-     */
-    fun checkFavoritesReadComplete(result: String): Boolean {
-        if (checkIsComplete(result)) {
-            return true
-        }
-        if (looksLikeFavoritesReadFailure(result)) {
-            return false
-        }
-        val r = result.lowercase()
-        // Green/success colors
-        if (r.contains("dff0d8") || r.contains("d4edda") || r.contains("c3e6cb") ||
-            r.contains("28a745") || r.contains("5cb85c") || r.contains("4caf50")) {
-            return true
-        }
-        // Success classes
-        if (result.contains("alert-success", ignoreCase = true) ||
-            result.contains("alert_success", ignoreCase = true)) {
-            return true
-        }
-        if (r.contains("message-success") || r.contains("ipsmessage_success") ||
-            r.contains("success", ignoreCase = true)) {
-            return true
-        }
-        // Text indicators
-        val compact = result.replace(Regex("\\s+"), " ").lowercase()
-        if (compact.contains("помечен") && compact.contains("прочитан")) {
-            return true
-        }
-        if (compact.contains("marked") && compact.contains("read")) {
-            return true
-        }
-        // Server returns full favorites page on success - check for favorites indicators
-        if (compact.contains("избранное") || compact.contains("favorites") ||
-            compact.contains("selectedtids") || compact.contains("act=fav")) {
-            return true
-        }
-        // If response contains fav-related content without error, consider success
-        if (compact.contains("fav") && !looksLikeFavoritesReadFailure(result)) {
-            return true
-        }
-        return false
-    }
-
     private fun looksLikeFavoritesReadFailure(result: String): Boolean {
         val r = result.lowercase()
         if (r.contains("f2dede") || r.contains("f8d7da") || r.contains("ebccd1")) {

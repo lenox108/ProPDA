@@ -139,7 +139,6 @@ internal class HtmlToSpannedConverter(
     }
     private fun handleBr(text: Editable) { text.append('\n') }
     private fun startLi(text: Editable, attributes: Attributes, marginListItem: Int) { startBlockElement(text, attributes, marginListItem); start(text, Bullet()); startCssStyle(text, attributes) }
-    private fun endLi(text: Editable) { endCssStyle(text); endBlockElement(text); end(text, Bullet::class.java, BulletSpan()) }
     private fun startBlockquote(text: Editable, attributes: Attributes) { startBlockElement(text, attributes, getMarginBlockquote()); start(text, Blockquote()) }
     private fun startHeading(text: Editable, attributes: Attributes, level: Int) { startBlockElement(text, attributes, getMarginHeading()); start(text, Heading(level)) }
     private fun endHeading(text: Editable) { val h = getLast(text, Heading::class.java); if (h != null) setSpanFromMark(text, h, RelativeSizeSpan(HEADING_SIZES[h.mLevel]), StyleSpan(Typeface.BOLD)); endBlockElement(text) }

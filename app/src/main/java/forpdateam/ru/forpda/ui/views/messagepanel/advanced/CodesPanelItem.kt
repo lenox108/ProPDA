@@ -39,7 +39,6 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
         private var colors: MutableMap<String, String>? = null
     }
 
-    private val openedCodes: MutableList<String> = mutableListOf()
     private val viewScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val codeItems: MutableList<ButtonData> = getCodes()
 
