@@ -200,7 +200,10 @@ class BottomDrawer(
 
             bottomSheet2.apply {
                 clipToOutline = false
-                background = ColorDrawable(activity.getColorFromAttr(R.attr.background_for_lists))
+                // M3 NavigationBar: панель на colorSurfaceContainer (тональная высота) —
+                // значение совпадает с прежним background_for_lists, но теперь трекает
+                // Material You как остальные поверхности.
+                background = ColorDrawable(activity.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer))
                 ViewCompat.setElevation(this, 0f)
                 ViewCompat.setTranslationZ(this, 0f)
             }
@@ -441,11 +444,6 @@ class BottomDrawer(
 
     fun destroy() {
         scope.cancel()
-    }
-
-    private fun selectMenuItem(item: DrawerMenuItem) {
-        if (BuildConfig.DEBUG) Timber.d("selectMenuItem ${item.appItem.screen?.getKey()}")
-        item.appItem.screen?.getKey()?.let { menuAdapter.setSelected(it) }
     }
 
     private fun findMenuItem(appMenuId: Int): DrawerMenuItem? {

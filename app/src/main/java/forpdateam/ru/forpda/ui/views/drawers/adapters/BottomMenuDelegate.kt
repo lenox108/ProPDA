@@ -54,8 +54,10 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
 
                 binding.tabActiveBackground.visibility = if (selected) View.VISIBLE else View.GONE
                 val inactiveColor = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+                // M3 NavigationBar: активная иконка лежит на «таблетке» colorSecondaryContainer,
+                // поэтому её тон — colorOnSecondaryContainer (не colorOnSurface).
                 val iconColor = if (selected) {
-                    context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+                    context.getColorFromAttr(com.google.android.material.R.attr.colorOnSecondaryContainer)
                 } else {
                     inactiveColor
                 }
