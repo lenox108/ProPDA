@@ -10,6 +10,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.entity.app.notes.NoteItem
 import forpdateam.ru.forpda.presentation.notes.NotesViewModel
 import forpdateam.ru.forpda.ui.compose.screens.NotesScreen
+import forpdateam.ru.forpda.ui.compose.theme.ForpdaTheme
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 
 /**
@@ -30,14 +31,16 @@ class NotesComposeFragment : RecyclerFragment() {
         return androidx.compose.ui.platform.ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                NotesScreen(
-                    viewModel = viewModel,
-                    onNavigateToLink = { link ->
-                        viewModel.onItemClick(forpdateam.ru.forpda.entity.app.notes.NoteItem().apply {
-                            this.link = link
-                        })
-                    }
-                )
+                ForpdaTheme {
+                    NotesScreen(
+                        viewModel = viewModel,
+                        onNavigateToLink = { link ->
+                            viewModel.onItemClick(forpdateam.ru.forpda.entity.app.notes.NoteItem().apply {
+                                this.link = link
+                            })
+                        }
+                    )
+                }
             }
         }
     }
