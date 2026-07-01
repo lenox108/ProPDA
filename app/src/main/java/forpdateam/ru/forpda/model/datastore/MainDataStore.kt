@@ -69,6 +69,7 @@ class MainDataStore(private val context: Context) {
         val ACCENT_PALETTE = stringPreferencesKey("accent_palette")
         val ACCENT_CUSTOM_COLOR = intPreferencesKey("accent_custom_color")
         val ACCENT_VIBRANT = booleanPreferencesKey("accent_vibrant")
+        val ACCENT_STYLE = stringPreferencesKey("accent_style")
         val APP_FONT_MODE = stringPreferencesKey("app_font_mode")
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
         val STARTUP_SCREEN = stringPreferencesKey("startup_screen")
@@ -619,6 +620,33 @@ class MainDataStore(private val context: Context) {
             preferences[PreferencesKeys.ACCENT_VIBRANT] = value
         }
         mirrorPrefs.edit().putString("accent_vibrant", value.toString()).apply()
+    }
+
+    /**
+     * Стиль акцента (TONAL/VIBRANT/EXPRESSIVE). Если ключ ещё не задан —
+     * мигрируем из legacy-булева [getAccentVibrantImmediate] (true→VIBRANT).
+     */
+    fun getAccentStyleImmediate(): AppPreferences.Main.AccentStyle {
+        val mirrored = mirrorPrefs.getString("accent_style", null)
+            ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                .getString(AppPreferences.Main.ACCENT_STYLE, null)
+        if (mirrored != null) return parseAccentStyle(mirrored)
+        // Миграция со старого тумблера «Насыщенные цвета».
+        return if (getAccentVibrantImmediate()) AppPreferences.Main.AccentStyle.VIBRANT
+        else AppPreferences.Main.AccentStyle.TONAL
+    }
+
+    suspend fun setAccentStyle(value: AppPreferences.Main.AccentStyle) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.ACCENT_STYLE] = value.name
+        }
+        mirrorPrefs.edit().putString("accent_style", value.name).apply()
+    }
+
+    private fun parseAccentStyle(value: String): AppPreferences.Main.AccentStyle = try {
+        AppPreferences.Main.AccentStyle.valueOf(value)
+    } catch (_: IllegalArgumentException) {
+        AppPreferences.Main.AccentStyle.TONAL
     }
 
     private fun parseAccentPalette(value: String): AppPreferences.Main.AccentPalette = try {

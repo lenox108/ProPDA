@@ -113,6 +113,9 @@ class MainPreferencesHolder(
 
     fun getAccentVibrant(): Boolean = dataStore.getAccentVibrantImmediate()
 
+    fun getAccentStyle(): forpdateam.ru.forpda.common.Preferences.Main.AccentStyle =
+        dataStore.getAccentStyleImmediate()
+
     fun getUseSystemFont(): Boolean = dataStore.getUseSystemFontImmediate()
 
     fun getAppFontMode(): AppFontMode = dataStore.getAppFontModeImmediate()
@@ -133,6 +136,9 @@ class MainPreferencesHolder(
     suspend fun setAccentCustomColor(color: Int) = dataStore.setAccentCustomColor(color)
 
     suspend fun setAccentVibrant(value: Boolean) = dataStore.setAccentVibrant(value)
+
+    suspend fun setAccentStyle(value: forpdateam.ru.forpda.common.Preferences.Main.AccentStyle) =
+        dataStore.setAccentStyle(value)
 
     suspend fun setShowBottomArrow(value: Boolean) = dataStore.setShowBottomArrow(value)
 

@@ -684,6 +684,9 @@
     <string name="accent_preview_button">Кнопка</string>
     <string name="accent_preview_link">Ссылка</string>
     <string name="accent_preview_chip">Чип</string>
+    <string name="accent_style_tonal">Обычный</string>
+    <string name="accent_style_vibrant">Насыщенный</string>
+    <string name="accent_style_expressive">Экспрессивный</string>
     <string name="palette_preview_sample">Пример текста в этой палитре</string>
     <string name="palette_preview_link">Ссылка</string>
     <string name="font_preview_sample">Аа Бб Вв  Ag Qq  0123</string>

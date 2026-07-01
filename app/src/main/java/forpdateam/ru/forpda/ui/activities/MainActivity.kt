@@ -98,7 +98,7 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
     private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
     private var appliedMaterialYou: Boolean = false
     private lateinit var appliedAccent: Preferences.Main.AccentPalette
-    private var appliedAccentVibrant: Boolean = false
+    private var appliedAccentStyle: Preferences.Main.AccentStyle = Preferences.Main.AccentStyle.TONAL
 
     private val notificationPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()
@@ -156,10 +156,10 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         } catch (e: Exception) {
             Preferences.Main.AccentPalette.NEUTRAL
         }
-        appliedAccentVibrant = try {
-            tempDataStore.getAccentVibrantImmediate()
+        appliedAccentStyle = try {
+            tempDataStore.getAccentStyleImmediate()
         } catch (e: Exception) {
-            false
+            Preferences.Main.AccentStyle.TONAL
         }
         setTheme(UiThemeStyles.mainNoActionBar(appliedUiPalette, themeMode, resources.configuration))
         FontController.applyNativeTheme(this, appliedFontMode)
@@ -406,10 +406,10 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
             recreate()
             return
         }
-        val vibrantNow = mainPreferencesHolder.getAccentVibrant()
-        if (vibrantNow != appliedAccentVibrant) {
-            appliedAccentVibrant = vibrantNow
-            if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=accentVibrant")
+        val accentStyleNow = mainPreferencesHolder.getAccentStyle()
+        if (accentStyleNow != appliedAccentStyle) {
+            appliedAccentStyle = accentStyleNow
+            if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=accentStyle")
             recreate()
             return
         }

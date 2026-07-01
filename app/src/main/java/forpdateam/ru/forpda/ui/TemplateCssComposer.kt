@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
+import com.google.android.material.color.utilities.SchemeExpressive
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.SchemeVibrant
 import forpdateam.ru.forpda.BuildConfig
@@ -76,9 +77,12 @@ class TemplateCssComposer(
                 Preferences.Main.AccentPalette.CUSTOM -> mainPreferencesHolder.getAccentCustomColor()
                 else -> curatedSeeds[accent] ?: return@runCatching null
             }
-            val vibrant = mainPreferencesHolder.getAccentVibrant()
             val hct = Hct.fromInt(seed)
-            val scheme = if (vibrant) SchemeVibrant(hct, isNight, 0.0) else SchemeTonalSpot(hct, isNight, 0.0)
+            val scheme = when (mainPreferencesHolder.getAccentStyle()) {
+                Preferences.Main.AccentStyle.VIBRANT -> SchemeVibrant(hct, isNight, 0.0)
+                Preferences.Main.AccentStyle.EXPRESSIVE -> SchemeExpressive(hct, isNight, 0.0)
+                else -> SchemeTonalSpot(hct, isNight, 0.0)
+            }
             val argb = MaterialDynamicColors().primary().getArgb(scheme)
             "#%06X".format(argb and 0xFFFFFF)
         }.getOrNull()

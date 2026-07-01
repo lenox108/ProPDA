@@ -251,15 +251,6 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
-        if (key == forpdateam.ru.forpda.common.Preferences.Main.ACCENT_VIBRANT) {
-            val value = sharedPrefs.getBoolean(key, false)
-            if (isAdded) {
-                lifecycleScope.launch {
-                    mainPreferencesHolder.setAccentVibrant(value)
-                    activity?.recreate()
-                }
-            }
-        }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.DOWNLOAD_METHOD) {
             val value = sharedPrefs.getString(key, Preferences.Main.DownloadMethod.SYSTEM.name)
             val method = try {
@@ -311,8 +302,6 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = mainPreferencesHolder.getEditorDefaultHidden()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.USE_MATERIAL_YOU)
                 ?.isChecked = mainPreferencesHolder.getUseMaterialYou()
-            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.ACCENT_VIBRANT)
-                ?.isChecked = mainPreferencesHolder.getAccentVibrant()
             findPreference<Preference>(Preferences.Main.APP_FONT_MODE)
                 ?.let {
                     updateAppFontSummary(mainPreferencesHolder.observeAppFontModeFlow().first())
@@ -442,13 +431,14 @@ class SettingsFragment : BaseSettingFragment() {
                         requireContext(),
                         mainPreferencesHolder.getAccentPalette(),
                         mainPreferencesHolder.getAccentCustomColor(),
-                        mainPreferencesHolder.getAccentVibrant(),
-                ) { picked, customColor ->
+                        mainPreferencesHolder.getAccentStyle(),
+                ) { picked, customColor, style ->
                     if (!isAdded) return@show
                     lifecycleScope.launch {
                         if (picked == Preferences.Main.AccentPalette.CUSTOM && customColor != null) {
                             mainPreferencesHolder.setAccentCustomColor(customColor)
                         }
+                        mainPreferencesHolder.setAccentStyle(style)
                         mainPreferencesHolder.setAccentPalette(picked)
                         updateAccentSummary(picked)
                         activity?.recreate()

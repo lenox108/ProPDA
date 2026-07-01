@@ -105,10 +105,11 @@ class TemplateCssComposerHighlightAccentTest {
         )
     }
 
-    // H1: тумблер «Насыщенные цвета» меняет тон акцента контента (Vibrant vs TonalSpot).
+    // H1/Expressive: стиль акцента меняет тон акцента контста форума
+    // (TonalSpot vs Vibrant vs Expressive — три разных схемы M3 из одного seed).
     @Test
-    fun compose_ppdaAccentDiffersBetweenTonalAndVibrant() {
-        fun accentHexFor(vibrant: Boolean): String {
+    fun compose_ppdaAccentDiffersBetweenAccentStyles() {
+        fun accentHexFor(style: forpdateam.ru.forpda.common.Preferences.Main.AccentStyle): String {
             val dayNightHelper = mockk<DayNightHelper>()
             val paletteResolver = mockk<TemplatePaletteResolver>()
             every { dayNightHelper.isNight() } returns false
@@ -120,14 +121,18 @@ class TemplateCssComposerHighlightAccentTest {
             every { holder.getUseMaterialYou() } returns false
             every { holder.getAccentPalette() } returns
                     forpdateam.ru.forpda.common.Preferences.Main.AccentPalette.RED
-            every { holder.getAccentVibrant() } returns vibrant
+            every { holder.getAccentStyle() } returns style
             val css = TemplateCssComposer(
                     mockk<android.content.Context>(relaxed = true), holder, dayNightHelper, paletteResolver
             ).compose()
             return Regex("--ppda-accent\\s*:\\s*(#[0-9A-Fa-f]{6})\\s*;").find(css)!!.groupValues[1].uppercase()
         }
-        assertTrue("Vibrant accent must differ from muted (TonalSpot) accent",
-                accentHexFor(vibrant = false) != accentHexFor(vibrant = true))
+        val tonal = accentHexFor(forpdateam.ru.forpda.common.Preferences.Main.AccentStyle.TONAL)
+        val vibrant = accentHexFor(forpdateam.ru.forpda.common.Preferences.Main.AccentStyle.VIBRANT)
+        val expressive = accentHexFor(forpdateam.ru.forpda.common.Preferences.Main.AccentStyle.EXPRESSIVE)
+        assertTrue("Vibrant accent must differ from muted (TonalSpot)", tonal != vibrant)
+        assertTrue("Expressive accent must differ from TonalSpot", tonal != expressive)
+        assertTrue("Expressive accent must differ from Vibrant", vibrant != expressive)
     }
 
     @Test

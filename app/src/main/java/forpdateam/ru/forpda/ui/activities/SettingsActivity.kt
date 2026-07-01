@@ -43,7 +43,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
     private var appliedMaterialYou: Boolean = false
     private lateinit var appliedAccent: Preferences.Main.AccentPalette
-    private var appliedAccentVibrant: Boolean = false
+    private var appliedAccentStyle: Preferences.Main.AccentStyle = Preferences.Main.AccentStyle.TONAL
 
     override fun attachBaseContext(base: Context) {
         val localizedContext = LocaleHelper.onAttach(base)
@@ -75,10 +75,10 @@ class SettingsActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Preferences.Main.AccentPalette.NEUTRAL
         }
-        appliedAccentVibrant = try {
-            tempDataStore.getAccentVibrantImmediate()
+        appliedAccentStyle = try {
+            tempDataStore.getAccentStyleImmediate()
         } catch (e: Exception) {
-            false
+            Preferences.Main.AccentStyle.TONAL
         }
         setTheme(UiThemeStyles.settingsPreferenceScreen(appliedUiPalette, themeMode, resources.configuration))
         FontController.applyNativeTheme(this, appliedFontMode)
@@ -148,9 +148,9 @@ class SettingsActivity : AppCompatActivity() {
             recreate()
             return
         }
-        val vibrantNow = mainPreferencesHolder.getAccentVibrant()
-        if (vibrantNow != appliedAccentVibrant) {
-            appliedAccentVibrant = vibrantNow
+        val accentStyleNow = mainPreferencesHolder.getAccentStyle()
+        if (accentStyleNow != appliedAccentStyle) {
+            appliedAccentStyle = accentStyleNow
             recreate()
             return
         }

@@ -14,11 +14,13 @@ import android.widget.TextView
 import androidx.annotation.StringRes
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
+import com.google.android.material.color.utilities.SchemeExpressive
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.SchemeVibrant
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Preferences.Main.AccentPalette
+import forpdateam.ru.forpda.common.Preferences.Main.AccentStyle
 import forpdateam.ru.forpda.common.getColorFromAttr
 import kotlin.math.roundToInt
 
@@ -62,8 +64,8 @@ object AccentPickerDialog {
             context: Context,
             current: AccentPalette,
             currentCustomColor: Int,
-            vibrant: Boolean,
-            onPick: (AccentPalette, Int?) -> Unit,
+            currentStyle: AccentStyle,
+            onPick: (AccentPalette, Int?, AccentStyle) -> Unit,
     ) {
         val dp = context.resources.displayMetrics.density
         fun px(v: Int) = (v * dp).roundToInt()
@@ -71,6 +73,11 @@ object AccentPickerDialog {
                 Configuration.UI_MODE_NIGHT_YES
         val onSurface = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val outline = context.getColorFromAttr(com.google.android.material.R.attr.colorOutline)
+
+        // Изменяемый выбор (превью до применения).
+        var selected = current
+        var selectedCustom = currentCustomColor
+        var selectedStyle = currentStyle
 
         fun rolesFor(palette: AccentPalette, customColor: Int): Roles {
             val seed = when (palette) {
@@ -82,16 +89,16 @@ object AccentPickerDialog {
                 AccentPalette.CUSTOM -> customColor
                 else -> entries.first { it.palette == palette }.seed!!
             }
-            val scheme = if (vibrant) SchemeVibrant(Hct.fromInt(seed), isDark, 0.0)
-            else SchemeTonalSpot(Hct.fromInt(seed), isDark, 0.0)
+            val hct = Hct.fromInt(seed)
+            val scheme = when (selectedStyle) {
+                AccentStyle.VIBRANT -> SchemeVibrant(hct, isDark, 0.0)
+                AccentStyle.EXPRESSIVE -> SchemeExpressive(hct, isDark, 0.0)
+                else -> SchemeTonalSpot(hct, isDark, 0.0)
+            }
             val m = MaterialDynamicColors()
             return Roles(m.primary().getArgb(scheme), m.onPrimary().getArgb(scheme),
                     m.primaryContainer().getArgb(scheme), m.onPrimaryContainer().getArgb(scheme))
         }
-
-        // Изменяемый выбор (превью до применения).
-        var selected = current
-        var selectedCustom = currentCustomColor
 
         // --- Превью-карточка: кнопка + ссылка + чип ---
         val previewButton = TextView(context).apply {
@@ -154,6 +161,42 @@ object AccentPickerDialog {
             }
         }
 
+        // --- Ряд стиля акцента: Обычный / Насыщенный / Экспрессивный ---
+        val styleChips = mutableMapOf<AccentStyle, TextView>()
+        fun refreshStyleChips() {
+            val r = rolesFor(selected, selectedCustom)
+            styleChips.forEach { (st, chip) ->
+                val on = st == selectedStyle
+                chip.setTextColor(if (on) r.onPrimary else onSurface)
+                chip.background = GradientDrawable().apply {
+                    cornerRadius = px(16).toFloat()
+                    setColor(if (on) r.primary else Color.TRANSPARENT)
+                    setStroke(px(1), if (on) r.primary else outline)
+                }
+            }
+        }
+        fun makeStyleChip(st: AccentStyle, @StringRes labelRes: Int): TextView = TextView(context).apply {
+            text = context.getString(labelRes)
+            textSize = 13f
+            setPadding(px(14), px(6), px(14), px(6))
+            gravity = Gravity.CENTER
+            setOnClickListener {
+                selectedStyle = st
+                renderPreview(); refreshRings(); refreshStyleChips()
+            }
+            styleChips[st] = this
+        }
+        val styleRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(px(16), px(2), px(16), px(8))
+            addView(makeStyleChip(AccentStyle.TONAL, R.string.accent_style_tonal))
+            addView(View(context), LinearLayout.LayoutParams(px(8), 1))
+            addView(makeStyleChip(AccentStyle.VIBRANT, R.string.accent_style_vibrant))
+            addView(View(context), LinearLayout.LayoutParams(px(8), 1))
+            addView(makeStyleChip(AccentStyle.EXPRESSIVE, R.string.accent_style_expressive))
+        }
+
         lateinit var dialog: androidx.appcompat.app.AlertDialog
 
         fun makeCell(palette: AccentPalette, title: String, onClick: () -> Unit) {
@@ -179,22 +222,23 @@ object AccentPickerDialog {
         entries.forEach { entry ->
             makeCell(entry.palette, context.getString(entry.title)) {
                 selected = entry.palette
-                renderPreview(); refreshRings()
+                renderPreview(); refreshRings(); refreshStyleChips()
             }
         }
         makeCell(AccentPalette.CUSTOM, context.getString(R.string.accent_custom)) {
             showHueDialog(context, selectedCustom) { seed ->
                 selected = AccentPalette.CUSTOM
                 selectedCustom = seed
-                renderPreview(); refreshRings()
+                renderPreview(); refreshRings(); refreshStyleChips()
             }
         }
 
-        renderPreview(); refreshRings()
+        renderPreview(); refreshRings(); refreshStyleChips()
 
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(previewRow)
+            addView(styleRow)
             addView(android.widget.ScrollView(context).apply { addView(grid) })
         }
 
@@ -202,7 +246,7 @@ object AccentPickerDialog {
                 .setTitle(R.string.accent_dialog_title)
                 .setView(content)
                 .setPositiveButton(android.R.string.ok) { _, _ ->
-                    onPick(selected, if (selected == AccentPalette.CUSTOM) selectedCustom else null)
+                    onPick(selected, if (selected == AccentPalette.CUSTOM) selectedCustom else null, selectedStyle)
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
