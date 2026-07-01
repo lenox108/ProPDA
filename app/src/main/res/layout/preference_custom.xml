@@ -71,7 +71,7 @@
                 android:ellipsize="marquee"
                 android:singleLine="true"
                 android:textAppearance="?textAppearanceListItem"
-                android:textColor="?default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 android:textSize="@dimen/list_topic_title_text_size" />
 
             <TextView
@@ -82,7 +82,7 @@
                 android:layout_alignStart="@android:id/title"
                 android:ellipsize="end"
                 android:maxLines="10"
-                android:textColor="?second_text_color"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="@dimen/list_topic_meta_text_size" />
 
         </RelativeLayout>
@@ -101,7 +101,7 @@
         android:id="@+id/prefRowDivider"
         android:layout_width="match_parent"
         android:layout_height="@dimen/divider_thin"
-        android:background="?divider_line"
+        android:background="?attr/colorOutlineVariant"
         android:visibility="gone" />
 
 </LinearLayout>

@@ -142,7 +142,7 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         toolbarLayout.isTitleEnabled = true
         toolbarTitleView.visibility = View.GONE
 
-        val toolbarIconColor = requireContext().getColorFromAttr(R.attr.icon_toolbar)
+        val toolbarIconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val scrimHelper = ScrimHelper(appBarLayout, toolbarLayout)
         scrimHelper.setScrimListener { scrim: Boolean ->
             isScrim = scrim

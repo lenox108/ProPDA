@@ -5,6 +5,13 @@
         <item name="android:windowBackground">@drawable/bg_splash_dark</item>
     </style>
 
+    <!-- Night-вариант SplashScreen-темы (см. values/styles.xml Theme.ForPDA.Splash). -->
+    <style name="Theme.ForPDA.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/dark_colorPrimary</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/DayNightAppTheme.NoActionBar</item>
+    </style>
+
     <!--
         DARK THEME - Original dark gray theme
     -->
@@ -41,24 +48,15 @@
         <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left</item>
         <item name="android:textSelectHandleRight">@drawable/text_select_handle_right</item>
         <item name="android:textSelectHandleWindowStyle">@style/Widget.ForPDA.TextSelectHandleWindow</item>
-        <item name="colorSwitchTrackNormal">?attr/second_text_color</item>
-        <item name="colorSwitchThumbNormal">?attr/default_text_color</item>
         <item name="actionBarTheme">@style/DayNightAppTheme.AppBarOverlay</item>
         <item name="toolbarStyle">@style/ToolbarStyle.Dark</item>
 
         <!-- Colors attr settings -->
         <item name="status_bar_color">@color/dark_status_bar_color</item>
-        <item name="link_color">@color/dark_link_color</item>
         <item name="link_color_contrast">@color/dark_link_color_contrast</item>
-        <item name="default_text_color">@color/dark_default_text_color</item>
         <item name="contrast_text_color">@color/dark_contrast_text_color</item>
-        <item name="second_text_color">@color/dark_second_text_color</item>
-        <item name="drawer_item_text">@color/dark_drawer_item_text</item>
-        <item name="drawer_item_text_selected">@color/dark_drawer_item_text_selected</item>
-        <item name="background_base">@color/dark_background_base</item>
-        <item name="background_for_cards">@color/dark_background_for_cards</item>
+        <item name="colorSurfaceContainerLowest">@color/dark_background_base</item>
         <item name="background_for_lists">@color/dark_background_for_lists</item>
-        <item name="divider_line">@color/dark_divider_line</item>
         <item name="attachment_overlay_bg">@color/dark_attachment_overlay_bg</item>
         <item name="attachment_description_bg">@color/dark_attachment_description_bg</item>
         <item name="attachment_text">@color/dark_attachment_text</item>
@@ -71,7 +69,6 @@
         <item name="icon_toolbar">@color/dark_icon_toolbar</item>
         <item name="icon_toolbar_inverse">@color/dark_icon_toolbar_inverse</item>
         <item name="count_background">@drawable/count_background_dark</item>
-        <item name="cards_background">@color/dark_card_background</item>
         <item name="chrome_plane_background">@color/dark_card_background</item>
         <item name="main_toolbar_accent_surface">@color/dark_main_toolbar_accent_surface</item>
         <item name="main_toolbar_stroke_width">1dp</item>
@@ -88,7 +85,6 @@
 
 
         <!-- Styles settings-->
-        <item name="toolbar_color">@color/dark_card_background</item>
         <item name="app_bar_overlay">@style/DayNightAppTheme.AppBarOverlay</item>
         <item name="popup_overlay">@style/DayNightAppTheme.PopupOverlay</item>
         <item name="bottom_sheet_dialog_theme">@style/DayNightAppTheme.BottomSheetDialog</item>
@@ -216,17 +212,10 @@
 
         <!-- Colors attr settings - AMOLED pure black -->
         <item name="status_bar_color">@android:color/transparent</item>
-        <item name="link_color">@color/dark_link_color</item>
         <item name="link_color_contrast">@color/dark_link_color_contrast</item>
-        <item name="default_text_color">@color/dark_default_text_color</item>
         <item name="contrast_text_color">@color/dark_contrast_text_color</item>
-        <item name="second_text_color">@color/dark_second_text_color</item>
-        <item name="drawer_item_text">@color/dark_drawer_item_text</item>
-        <item name="drawer_item_text_selected">@color/dark_drawer_item_text_selected</item>
-        <item name="background_base">@color/amoled_background_base</item>
-        <item name="background_for_cards">@color/amoled_background_for_cards</item>
+        <item name="colorSurfaceContainerLowest">@color/amoled_background_base</item>
         <item name="background_for_lists">@color/amoled_background_for_lists</item>
-        <item name="divider_line">@color/amoled_divider_line</item>
         <item name="attachment_overlay_bg">@color/dark_attachment_overlay_bg</item>
         <item name="attachment_description_bg">@color/dark_attachment_description_bg</item>
         <item name="attachment_text">@color/dark_attachment_text</item>
@@ -239,7 +228,6 @@
         <item name="icon_toolbar">@color/dark_icon_toolbar</item>
         <item name="icon_toolbar_inverse">@color/dark_icon_toolbar_inverse</item>
         <item name="count_background">@drawable/count_background_dark</item>
-        <item name="cards_background">@color/amoled_card_background</item>
         <item name="chrome_plane_background">@color/amoled_background_base</item>
         <item name="main_toolbar_accent_surface">@color/amoled_main_toolbar_accent_surface</item>
         <item name="main_toolbar_stroke_width">1dp</item>
@@ -248,14 +236,13 @@
         <item name="list_plate_stroke_color">@color/amoled_list_plate_stroke</item>
         <item name="bottom_nav_bar_shape_appearance">@style/ShapeAppearance.ForPDA.BottomNavBar</item>
         <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
-        <item name="smart_nav_fab_icon">?attr/default_text_color</item>
+        <item name="smart_nav_fab_icon">?attr/colorOnSurface</item>
         <item name="divider_line_bottom_nav">@color/amoled_divider_line_bottom_nav</item>
         <item name="notify_dot_tab">@drawable/notify_dot_tab_dark</item>
         <item name="is_use_light_status_bar">false</item>
         <item name="item_tab_close_color">@color/dark_item_tab_close</item>
 
         <!-- Styles settings-->
-        <item name="toolbar_color">@color/amoled_colorPrimary</item>
         <item name="app_bar_overlay">@style/AmoledAppTheme.AppBarOverlay</item>
         <item name="popup_overlay">@style/AmoledAppTheme.PopupOverlay</item>
         <item name="bottom_sheet_dialog_theme">@style/AmoledAppTheme.BottomSheetDialog</item>
@@ -331,7 +318,7 @@
     <style name="AmoledAppTheme.NoActionBar" parent="AmoledAppTheme.NoActionBarBase" />
 
     <style name="AmoledAppTheme.AppBarOverlay" parent="ThemeOverlay.Material3.Dark.ActionBar">
-        <item name="colorSurface">?attr/cards_background</item>
+        <item name="colorSurface">?attr/colorSurface</item>
         <item name="colorControlNormal">?icon_toolbar</item>
         <item name="colorOnSurface">?icon_toolbar</item>
         <item name="actionMenuTextColor">?icon_toolbar</item>
@@ -350,8 +337,8 @@
 
     <style name="DayNightAppTheme.AppBarOverlay" parent="ThemeOverlay.Material3.Dark.ActionBar">
         <item name="android:singleLine">true</item>
-        <!-- Плашка вкладок = ?attr/cards_background -->
-        <item name="colorSurface">?attr/cards_background</item>
+        <!-- Плашка вкладок = ?attr/colorSurface -->
+        <item name="colorSurface">?attr/colorSurface</item>
         <item name="colorControlNormal">?icon_toolbar</item>
         <item name="colorOnSurface">?icon_toolbar</item>
         <item name="actionMenuTextColor">?icon_toolbar</item>
@@ -376,11 +363,11 @@
 
     <style name="DayNightAppTheme.PopupOverlay" parent="ThemeOverlay.Material3.Dark">
         <item name="elevation">0dp</item>
-        <item name="colorSurface">?attr/cards_background</item>
-        <item name="colorOnSurface">?attr/default_text_color</item>
-        <item name="colorOnSurfaceVariant">?attr/second_text_color</item>
-        <item name="android:textColorPrimary">?attr/default_text_color</item>
-        <item name="android:textColorSecondary">?attr/second_text_color</item>
+        <item name="colorSurface">?attr/colorSurface</item>
+        <item name="colorOnSurface">@color/dark_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/dark_second_text_color</item>
+        <item name="android:textColorPrimary">@color/dark_default_text_color</item>
+        <item name="android:textColorSecondary">@color/dark_second_text_color</item>
         <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
         <item name="popupMenuStyle">@style/Widget.ForPDA.PopupMenu</item>
         <item name="android:popupMenuStyle">@style/Widget.ForPDA.PopupMenu</item>
@@ -429,10 +416,9 @@
 
     <style name="Widget.ForPDA.PopupMenu" parent="Widget.Material3.PopupMenu">
         <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
-        <!-- LayoutInflater-safe (см. аналогичный комментарий в values/styles.xml). -->
-        <item name="android:colorBackground">?attr/cards_background</item>
-        <item name="android:textColorPrimary">?attr/default_text_color</item>
-        <item name="android:textColorSecondary">?attr/second_text_color</item>
+        <item name="android:colorBackground">?attr/colorSurface</item>
+        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
+        <item name="android:textColorSecondary">?attr/colorOnSurfaceVariant</item>
     </style>
 
     <style name="Widget.ForPDA.PopupMenu.Overflow" parent="Widget.ForPDA.PopupMenu" />
@@ -459,7 +445,7 @@
     <!-- RadioButton: выбранный кружок должен быть виден — используем colorAccent вместо colorPrimary -->
     <style name="Widget.ForPDA.RadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
         <item name="colorPrimary">?attr/colorAccent</item>
-        <item name="colorOnSurface">?attr/second_text_color</item>
+        <item name="colorOnSurface">?attr/colorOnSurfaceVariant</item>
     </style>
 
     <!-- Toolbar icon styles for dark theme -->
@@ -504,7 +490,6 @@
             link_color — обязательное переопределение родителя MaterialYouAccent
             (?attr/colorPrimary → static), иначе TextView.<init> падает.
         -->
-        <item name="link_color">@color/dark_link_color</item>
         <item name="android:textColor">@color/dark_default_text_color</item>
         <item name="android:textColorPrimary">@color/dark_default_text_color</item>
         <item name="android:textColorSecondary">@color/dark_second_text_color</item>

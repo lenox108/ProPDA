@@ -44,7 +44,7 @@
             android:layout_marginTop="@dimen/content_padding_horizontal"
             android:clickable="false"
             tools:text="@string/test_nick"
-            android:textColor="?attr/default_text_color" />
+            android:textColor="?attr/colorOnSurface" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/item_rating"

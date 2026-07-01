@@ -24,6 +24,7 @@ import android.view.ViewGroup
 import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.*
+import com.google.android.material.chip.ChipGroup
 
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -102,8 +103,11 @@ open class TabFragment : Fragment() {
     protected val toolbarImageView: ImageView get() = binding.toolbarImageIcon
     protected val toolbarTitleView: TextView get() = binding.toolbarTitle
     protected val toolbarSubtitleView: TextView get() = binding.toolbarSubtitle
-    protected val toolbarSpinner: Spinner get() = binding.toolbarSpinner
-    /** Невидимая растяжка справа от [toolbarSpinner]: держит спиннер у левого края блока действий без «улёта» к поиску. */
+    /** M3 single-select chip-фильтр категорий (бывший toolbarSpinner). */
+    protected val toolbarFilterChips: ChipGroup get() = binding.toolbarFilterChips
+    /** Контейнер горизонтального скролла chip-фильтра; его видимость и есть «фильтр показан». */
+    protected val toolbarFilterScroll: View get() = binding.toolbarFilterScroll
+    /** Невидимая растяжка справа от chip-фильтра: держит его у левого края блока действий без «улёта» к поиску. */
     protected val toolbarSpinnerEndSpacer: View get() = binding.toolbarSpinnerEndSpacer
     protected lateinit var viewFragment: View
     protected val fab: FloatingActionButton get() = binding.fab
@@ -199,6 +203,19 @@ open class TabFragment : Fragment() {
         Timber.d("onBackPressed %s", this)
         return false
     }
+
+    /**
+     * Side-effect-free: перехватит ли фрагмент «назад» ПРЯМО СЕЙЧАС (открытый
+     * диалог/панель/selection/поиск/черновик) — read-only зеркало условий
+     * [onBackPressed]. Нужно [forpdateam.ru.forpda.ui.activities.MainActivity],
+     * чтобы точно знать, выйдет ли следующий «назад» из приложения, и показать
+     * предиктивную анимацию отслаивания к лаунчеру (Android 13+) ТОЛЬКО когда
+     * перехватывать нечего. Реализации ДОЛЖНЫ быть без сайд-эффектов (только
+     * чтение состояния) — иначе можно исказить back-логику. Дефолт false
+     * (обычный список без внутреннего состояния — «назад» с корневой вкладки
+     * выходит из приложения).
+     */
+    open fun hasBackHandling(): Boolean = false
 
     @CallSuper
     open fun onToolbarNavigationClick(): Boolean {
@@ -374,7 +391,7 @@ open class TabFragment : Fragment() {
     protected fun syncToolbarSpinnerEndSpacer() {
         if (_binding == null) return
         toolbarSpinnerEndSpacer.visibility = when {
-            toolbarSpinner.visibility == View.VISIBLE && titlesWrapper.visibility != View.VISIBLE ->
+            toolbarFilterScroll.visibility == View.VISIBLE && titlesWrapper.visibility != View.VISIBLE ->
                 View.VISIBLE
             else -> View.GONE
         }
@@ -483,12 +500,12 @@ open class TabFragment : Fragment() {
     @JvmOverloads
     protected fun setListsBackground(view: View = coordinatorLayout) {
         // Align with settings / grouped lists: page tint = background_base, elevated rows = cards_background (plates).
-        view.setBackgroundColor(requireContext().getColorFromAttr(R.attr.background_base))
+        view.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
     }
 
     @JvmOverloads
     protected fun setCardsBackground(view: View = coordinatorLayout) {
-        view.setBackgroundColor(requireContext().getColorFromAttr(R.attr.background_for_cards))
+        view.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
     }
 
     protected fun ensureOpaquePinnedToolbarUnderlay() {
@@ -666,7 +683,7 @@ open class TabFragment : Fragment() {
     }
 
     protected fun tintMenuItems(menu: Menu) {
-        val iconColor = requireContext().getColorFromAttr(R.attr.icon_toolbar)
+        val iconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         for (i in 0 until menu.size()) {
             menu.getItem(i).icon?.mutate()?.setTint(iconColor)
         }
@@ -689,11 +706,11 @@ open class TabFragment : Fragment() {
 
     protected fun refreshLayoutStyle(refreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout) {
         val progressColor = requireContext().getColorFromAttr(R.attr.colorAccent)
-        refreshLayout.setProgressBackgroundColorSchemeColor(requireContext().getColorFromAttr(R.attr.background_for_cards))
+        refreshLayout.setProgressBackgroundColorSchemeColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
         refreshLayout.setColorSchemeColors(
                 progressColor,
                 requireContext().getColorFromAttr(MaterialR.attr.colorSecondary),
-                requireContext().getColorFromAttr(R.attr.link_color)
+                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
         )
         contentProgress.indeterminateTintList = ColorStateList.valueOf(progressColor)
         toolbarProgress.indeterminateTintList = ColorStateList.valueOf(progressColor)

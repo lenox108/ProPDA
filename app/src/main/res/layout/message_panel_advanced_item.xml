@@ -29,5 +29,5 @@
         android:textSize="@dimen/list_section_header_text_size"
         android:visibility="gone"
         android:clickable="false"
-        android:textColor="?attr/second_text_color"/>
+        android:textColor="?attr/colorOnSurfaceVariant"/>
 </FrameLayout>

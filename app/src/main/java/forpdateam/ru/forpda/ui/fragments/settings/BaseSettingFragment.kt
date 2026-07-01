@@ -60,7 +60,7 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         super.onViewCreated(view, savedInstanceState)
         // Keep Settings background consistent with "Menu"/grouped lists:
         // page = background_base, plates = cards_background (see pref_plate_*.xml).
-        view.setBackgroundColor(view.context.getColorFromAttr(R.attr.background_base))
+        view.setBackgroundColor(view.context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         view.findViewById<androidx.recyclerview.widget.RecyclerView>(androidx.preference.R.id.recycler_view)?.also { list ->
             // Fix: Add padding for navigation bar to prevent bottom items from being covered
             ViewCompat.setOnApplyWindowInsetsListener(list) { v, insets ->

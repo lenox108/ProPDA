@@ -223,7 +223,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         appBarLayout.setExpanded(true, false)
         ensureOpaquePinnedToolbarUnderlay()
         setListsBackground()
-        messagePanelHost.setBackgroundColor(requireContext().getColorFromAttr(R.attr.background_base))
+        messagePanelHost.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
 
         jsInterface = QmsChatJsInterface(presenter)
         webView.setJsLifeCycleListener(this)
@@ -2562,6 +2562,12 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         }
         return false
     }
+
+    // Экран чата QMS почти всегда перехватывает «назад» (панель сообщения,
+    // подтверждение потери несохранённого текста/вложений) и открывается над
+    // списком контактов — одиночной корневой вкладкой не бывает. Консервативно
+    // true: без «домой»-анимации отсюда и без риска для логики панели/черновика.
+    override fun hasBackHandling(): Boolean = true
 
     override fun onResume() {
         super.onResume()

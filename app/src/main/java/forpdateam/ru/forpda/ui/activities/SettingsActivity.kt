@@ -16,6 +16,7 @@ import forpdateam.ru.forpda.ui.EdgeToEdge
 import forpdateam.ru.forpda.ui.FontController
 import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.UiThemeStyles
+import forpdateam.ru.forpda.ui.AccentApplier
 import forpdateam.ru.forpda.ui.MaterialYouApplier
 import forpdateam.ru.forpda.ui.fragments.settings.NotificationsSettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.ForumSettingsFragment
@@ -66,6 +67,7 @@ class SettingsActivity : AppCompatActivity() {
         // (setTheme wipes any overlay applied earlier by the global applier). The
         // per-Activity applier is the canonical entry point — see MaterialYouApplier KDoc.
         MaterialYouApplier.applyIfEnabled(this)
+        AccentApplier.applyIfEnabled(this)
         super.onCreate(savedInstanceState)
         val barColor = getColorFromAttr(R.attr.main_toolbar_accent_surface)
         setContentView(R.layout.activity_settings)

@@ -8,7 +8,7 @@
     android:paddingTop="@dimen/dp16"
     android:paddingEnd="@dimen/content_padding_horizontal"
     android:paddingBottom="@dimen/dp8"
-    android:textColor="?attr/second_text_color"
+    android:textColor="?attr/colorOnSurfaceVariant"
     android:textSize="@dimen/list_section_header_text_size"
     android:textStyle="bold"
     tools:text="Папки" />

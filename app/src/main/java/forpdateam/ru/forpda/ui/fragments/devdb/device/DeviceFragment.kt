@@ -148,14 +148,14 @@ class DeviceFragment : TabFragment() {
         toolbarLayout.isTitleEnabled = false
 
         tabLayout.tabMode = TabLayout.MODE_SCROLLABLE
-        tabLayout.setBackgroundColor(requireContext().getColorFromAttr(R.attr.cards_background))
+        tabLayout.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurface))
         tabLayout.setTabTextColors(
-                requireContext().getColorFromAttr(R.attr.second_text_color),
-                requireContext().getColorFromAttr(R.attr.default_text_color)
+                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant),
+                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         )
         tabLayout.setSelectedTabIndicatorColor(requireContext().getColorFromAttr(R.attr.colorAccent))
 
-        imagesPager.setIndicatorTintColorScheme(requireContext().getColorFromAttr(R.attr.default_text_color), requireContext().getColorFromAttr(R.attr.second_text_color))
+        imagesPager.setIndicatorTintColorScheme(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface), requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
 
         appBarLayout.addOnOffsetChangedListener(AppBarLayout.OnOffsetChangedListener { _, offset ->
             appBarOffset = offset

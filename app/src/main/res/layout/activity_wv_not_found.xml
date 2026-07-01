@@ -28,7 +28,7 @@
             android:layout_marginTop="@dimen/dp24"
             android:gravity="center"
             android:text="@string/webview_not_found"
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="@dimen/empty_state_title_text_size"
             android:textStyle="bold" />
 
@@ -57,7 +57,7 @@
             android:layout_marginTop="@dimen/content_spacing"
             android:gravity="center"
             android:text="@string/webview_not_found_or"
-            android:textColor="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/empty_state_subtitle_text_size" />
 
         <ImageView
@@ -74,7 +74,7 @@
             android:layout_marginTop="@dimen/content_spacing"
             android:gravity="center"
             android:text="@string/webview_not_found_or"
-            android:textColor="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/empty_state_subtitle_text_size" />
 
         <ImageView

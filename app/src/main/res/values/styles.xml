@@ -7,13 +7,8 @@
 
     <!-- Material3 по умолчанию красит выбранный таб colorPrimary — на тёмном toolbar/card он сливается с фоном -->
     <style name="Widget.ForPDA.TabLayout" parent="Widget.Material3.TabLayout">
-        <item name="tabTextColor">?attr/second_text_color</item>
-        <!-- LayoutInflater-safe: tabSelectedTextColor резолвится через 2-ой уровень
-             deref при инфлейте таба (LayoutInflater, не raw TypedArray.getColor);
-             ?default_text_color → ?attr/colorOnSurface в Material You SURFACE →
-             concrete @color/light_default_text_color / @color/dark_default_text_color
-             в базовой DayNightAppTheme (api<31 fallback). -->
-        <item name="tabSelectedTextColor">?attr/default_text_color</item>
+        <item name="tabTextColor">?attr/colorOnSurfaceVariant</item>
+        <item name="tabSelectedTextColor">?attr/colorOnSurface</item>
         <item name="tabIndicatorColor">?attr/colorAccent</item>
     </style>
 
@@ -44,13 +39,15 @@
         Material You: оверлей акцентов поверх динамических цветов.
         DynamicColors переопределяет только стандартные M3-роли (colorPrimary
         и т.д.), а весь «хром» приложения (FAB, переключатели, индикатор табов,
-        ссылки, кнопки диалогов) красится через собственные атрибуты
-        ?attr/colorAccent и ?attr/link_color, которые в теме захардкожены.
-        Поэтому без этого оверлея тумблер Material You визуально ничего не менял.
-        Оверлей перенаправляет эти атрибуты на динамический ?attr/colorPrimary,
-        поэтому накладывается ПОСЛЕ DynamicColors (см. App.setupMaterialYou()).
-        Работает для светлой и тёмной тем, т.к. ссылается на уже разрешённый
-        день/ночь ?attr/colorPrimary.
+        кнопки диалогов) красится через собственные атрибуты ?attr/colorAccent,
+        которые в теме захардкожены. Поэтому без этого оверлея тумблер
+        Material You визуально ничего не менял. Оверлей перенаправляет эти
+        атрибуты на динамический ?attr/colorPrimary, поэтому накладывается
+        ПОСЛЕ DynamicColors (см. App.setupMaterialYou()). Работает для светлой
+        и тёмной тем, т.к. ссылается на уже разрешённый день/ночь
+        ?attr/colorPrimary. (`link_color` упоминался здесь до Этапа C
+        `concurrent-dreaming-wren` — атрибут полностью удалён, leaf-потребители
+        ссылок теперь читают `?attr/colorSecondary` напрямую.)
     -->
     <!--
         Material You: акцент-оверлей. Родитель явно ThemeOverlay.Material3,
@@ -66,7 +63,6 @@
     <style name="ThemeOverlay.ForPDA.MaterialYouAccent" parent="ThemeOverlay.Material3">
         <item name="colorAccent">?attr/colorPrimary</item>
         <item name="android:colorAccent">?attr/colorPrimary</item>
-        <item name="link_color">?attr/colorPrimary</item>
         <item name="link_color_contrast">?attr/colorPrimary</item>
         <item name="colorControlActivated">?attr/colorPrimary</item>
         <item name="android:colorControlActivated">?attr/colorPrimary</item>
@@ -89,17 +85,21 @@
           3) Пинит link_color и типографику на КОНКРЕТНЫЕ @color/... (anti-crash,
              см. ниже).
 
-        Чего он НЕ делает (важно для честного понимания охвата): фоны экранов,
-        карточки, списки, тулбар, навбар, иконки, разделители и большая часть
-        текста НЕ перекрашиваются динамикой — они наследуют те же @color/light_*
-        из базовой DayNightAppTheme. Раньше все эти слоты дублировались здесь
-        статикой (наследие борьбы с hydra-крэшем 7f1de68/65c64b8/e725c7f), но
-        это были no-op дубликаты базовой темы — убраны как мёртвый код, поведение
-        идентично. Глубокого «динамического» перекраса поверхностей нет и быть
-        не может: custom-attr читаются через TypedArray.getColorStateList, который
-        не дерефит TYPE_ATTRIBUTE (т.е. `?attr/colorSurface*`) и падает с
-        UnsupportedOperationException. Поэтому динамику обоев получают только
-        акцент, colorError (через HarmonizedError) и базовый colorBackground.
+        Чего он НЕ делает (обновлено после Этапа C `concurrent-dreaming-wren`
+        consumer-side миграции — см. план): page background, карточки/списки,
+        разделители и часть текста/тулбара ТЕПЕРЬ перекрашиваются динамикой —
+        НЕ через этот оверлей, а потому что их XML/код-потребители были
+        перенаправлены напрямую на M3-роли (colorSurfaceContainerLowest,
+        colorSurface/colorSurfaceVariant, colorOutlineVariant, colorOnSurface/
+        colorOnSurfaceVariant/colorSecondary), которые DynamicColors красит
+        автоматически ДО применения этого оверлея. Остаются статичными: то, что
+        ПИНИТСЯ здесь явно (textColor*/link_color — обязательно, см. anti-crash
+        ниже), и атрибуты, у которых ещё нет M3-зеркала (contrast_text_color,
+        icon_base, chrome_plane_background и пр. — см. план). Глубже мигрировать
+        нельзя «редиректом» самого custom-attr (а не его потребителей): он
+        читается через TypedArray.getColorStateList, который не дерефит
+        TYPE_ATTRIBUTE и падает с UnsupportedOperationException — см.
+        FragmentBaseTextViewInflateTest.
     -->
     <style name="ThemeOverlay.ForPDA.MaterialYouSurface" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
         <!--
@@ -120,17 +120,20 @@
             ?attr/default_text_color; см. 7f1de68 / 65c64b8 / e725c7f и
             FragmentBaseTextViewInflateTest).
 
-            link_color здесь — ОБЯЗАТЕЛЬНОЕ переопределение родителя
-            MaterialYouAccent (он мапит link_color → ?attr/colorPrimary): без
-            этого ?attr/link_color остался бы TYPE_ATTRIBUTE и упал бы в
-            TextView.<init>. Остальные custom-слоты (default_text_color,
-            second_text_color и пр. фоны/иконки) НЕ переопределяются здесь —
-            они уже КОНКРЕТНЫ в базовой DayNightAppTheme.
+            До Этапа C `concurrent-dreaming-wren` здесь ТАКЖЕ обязательно
+            пинился `link_color` (родитель MaterialYouAccent мапит его в
+            ?attr/colorPrimary, что ломало TextView.<init> у потребителей).
+            Атрибут `link_color` полностью удалён в Этапе C — его единственный
+            уязвимый leaf-потребитель (`android:textColor` в одном из стилей)
+            перенаправлен напрямую на `?attr/colorSecondary` (framework-роль,
+            безопасна), поэтому пин здесь больше не нужен. Остальные
+            custom-слоты (default_text_color, second_text_color и пр.
+            фоны/иконки) НЕ переопределяются здесь — они уже КОНКРЕТНЫ в
+            базовой DayNightAppTheme.
 
             Trade-off (как и раньше): при включённом Material You текст и хром
             НЕ трекают обои — это цена за стабильную инфляцию.
         -->
-        <item name="link_color">@color/light_link_color</item>
         <item name="android:textColor">@color/light_default_text_color</item>
         <item name="android:textColorPrimary">@color/light_default_text_color</item>
         <item name="android:textColorSecondary">@color/light_second_text_color</item>
@@ -252,6 +255,20 @@
     </style>
 
     <!--
+        Android 12+ SplashScreen API (backported via androidx.core:core-splashscreen).
+        Применяется к MainActivity в манифесте; `installSplashScreen()` в onCreate
+        (ДО super.onCreate) перехватывает её и плавно переходит на postSplashScreenTheme.
+        Иконка — launcher-icon (вписывается в круглую маску API31+ без обрезки, в
+        отличие от старого wordmark `img_logo_splash_*`). Фон — брендовый светлый.
+        Night-вариант — в values-night/styles.xml.
+    -->
+    <style name="Theme.ForPDA.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/light_colorPrimary</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/DayNightAppTheme.NoActionBar</item>
+    </style>
+
+    <!--
         LIGHT THEME
     -->
     <style name="DayNightAppTheme" parent="Theme.Material3.DayNight">
@@ -293,17 +310,10 @@
 
         <!-- Colors attr settings-->
         <item name="status_bar_color">@color/light_status_bar_color</item>
-        <item name="link_color">@color/light_link_color</item>
         <item name="link_color_contrast">@color/light_link_color_contrast</item>
-        <item name="default_text_color">@color/light_default_text_color</item>
         <item name="contrast_text_color">@color/light_contrast_text_color</item>
-        <item name="second_text_color">@color/light_second_text_color</item>
-        <item name="drawer_item_text">@color/light_drawer_item_text</item>
-        <item name="drawer_item_text_selected">@color/light_drawer_item_text_selected</item>
-        <item name="background_base">@color/light_background_base</item>
-        <item name="background_for_cards">@color/light_background_for_cards</item>
+        <item name="colorSurfaceContainerLowest">@color/light_background_base</item>
         <item name="background_for_lists">@color/light_background_for_lists</item>
-        <item name="divider_line">@color/light_divider_line</item>
         <item name="attachment_overlay_bg">@color/light_attachment_overlay_bg</item>
         <item name="attachment_description_bg">@color/light_attachment_description_bg</item>
         <item name="attachment_text">@color/light_attachment_text</item>
@@ -316,7 +326,6 @@
         <item name="icon_toolbar">@color/light_icon_toolbar</item>
         <item name="icon_toolbar_inverse">@color/light_icon_toolbar_inverse</item>
         <item name="count_background">@drawable/count_background_light</item>
-        <item name="cards_background">@color/light_card_background</item>
         <item name="chrome_plane_background">@color/light_card_background</item>
         <item name="main_toolbar_accent_surface">@color/light_main_toolbar_accent_surface</item>
         <item name="main_toolbar_stroke_width">0dp</item>
@@ -332,7 +341,6 @@
         <item name="item_tab_close_color">@color/light_item_tab_close</item>
 
         <!-- Styles settings-->
-        <item name="toolbar_color">@color/light_card_background</item>
         <item name="app_bar_overlay">@style/DayNightAppTheme.AppBarOverlay</item>
         <item name="popup_overlay">@style/DayNightAppTheme.PopupOverlay</item>
         <item name="bottom_sheet_dialog_theme">@style/DayNightAppTheme.BottomSheetDialog</item>
@@ -428,8 +436,8 @@
 
     <style name="DayNightAppTheme.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
         <item name="android:singleLine">true</item>
-        <!-- Плашка вкладок = ?attr/cards_background — ripple/surface совпадают с карточками списков -->
-        <item name="colorSurface">?attr/cards_background</item>
+        <!-- Плашка вкладок = ?attr/colorSurface — ripple/surface совпадают с карточками списков -->
+        <item name="colorSurface">?attr/colorSurface</item>
         <item name="colorControlNormal">?icon_toolbar</item>
         <item name="colorOnSurface">?icon_toolbar</item>
         <item name="actionMenuTextColor">?icon_toolbar</item>
@@ -462,11 +470,11 @@
 
     <style name="DayNightAppTheme.PopupOverlay" parent="ThemeOverlay.Material3">
         <item name="elevation">0dp</item>
-        <item name="colorSurface">?attr/cards_background</item>
-        <item name="colorOnSurface">?attr/default_text_color</item>
-        <item name="colorOnSurfaceVariant">?attr/second_text_color</item>
-        <item name="android:textColorPrimary">?attr/default_text_color</item>
-        <item name="android:textColorSecondary">?attr/second_text_color</item>
+        <item name="colorSurface">?attr/colorSurface</item>
+        <item name="colorOnSurface">@color/light_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/light_second_text_color</item>
+        <item name="android:textColorPrimary">@color/light_default_text_color</item>
+        <item name="android:textColorSecondary">@color/light_second_text_color</item>
         <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
         <item name="popupMenuStyle">@style/Widget.ForPDA.PopupMenu</item>
         <item name="android:popupMenuStyle">@style/Widget.ForPDA.PopupMenu</item>
@@ -567,11 +575,9 @@
 
     <style name="Widget.ForPDA.PopupMenu" parent="Widget.Material3.PopupMenu">
         <item name="android:popupBackground">@drawable/bg_popup_menu_m3</item>
-        <!-- LayoutInflater-safe: PopupMenu/ListPopupWindow резолвит colorBackground
-             и textColorPrimary/Secondary через 2-ой уровень deref при инфлейте. -->
-        <item name="android:colorBackground">?attr/cards_background</item>
-        <item name="android:textColorPrimary">?attr/default_text_color</item>
-        <item name="android:textColorSecondary">?attr/second_text_color</item>
+        <item name="android:colorBackground">?attr/colorSurface</item>
+        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
+        <item name="android:textColorSecondary">?attr/colorOnSurfaceVariant</item>
     </style>
 
     <style name="Widget.ForPDA.PopupMenu.Overflow" parent="Widget.ForPDA.PopupMenu" />
@@ -594,7 +600,7 @@
     </style>
 
     <style name="MyTextViewStyle" parent="android:Widget.TextView">
-        <item name="android:textColor">?default_text_color</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
         <item name="android:fontFamily">?android:fontFamily</item>
     </style>
 
@@ -610,7 +616,7 @@
     <!-- RadioButton: выбранный кружок должен быть виден — используем colorAccent вместо colorPrimary -->
     <style name="Widget.ForPDA.RadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
         <item name="colorPrimary">?attr/colorAccent</item>
-        <item name="colorOnSurface">?attr/second_text_color</item>
+        <item name="colorOnSurface">?attr/colorOnSurfaceVariant</item>
     </style>
 
     <style name="Widget.ForPDA.DialogButton" parent="Widget.Material3.Button.TextButton.Dialog">
@@ -618,7 +624,7 @@
         <item name="android:minWidth">@dimen/dp64</item>
         <item name="android:paddingStart">@dimen/dp16</item>
         <item name="android:paddingEnd">@dimen/dp16</item>
-        <item name="android:textColor">?attr/link_color</item>
+        <item name="android:textColor">?attr/colorSecondary</item>
     </style>
 
     <style name="CardStyle.Item" parent="CardView">
@@ -626,7 +632,7 @@
         <item name="cardElevation">@dimen/card_elevation</item>
         <!-- LayoutInflater-safe: CardView инфлейтится через LayoutInflater, который
              сам делает 2-ой уровень deref для ?attr/... и трекает палитру обоев. -->
-        <item name="cardBackgroundColor">?attr/cards_background</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
         <item name="cardUseCompatPadding">true</item>
     </style>
 
@@ -666,7 +672,7 @@
         <!-- Иначе LabelLarge тянет colorPrimary — на тёмном colorPrimary таб «сливается» с фоном -->
         <item name="fontFamily">?fontFamily</item>
         <item name="android:fontFamily">?android:fontFamily</item>
-        <item name="android:textColor">?attr/default_text_color</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
     </style>

@@ -23,7 +23,7 @@
             android:paddingStart="@dimen/dp0"
             android:paddingTop="@dimen/content_spacing"
             tools:text="@string/test_drawer_item_name"
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="@dimen/list_topic_meta_text_size"
             android:textStyle="bold" />
 

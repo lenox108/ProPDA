@@ -7,7 +7,7 @@
     android:minHeight="48dp"
     android:gravity="center_vertical"
     android:textAppearance="?attr/textAppearanceBodyLarge"
-    android:textColor="?attr/default_text_color"
+    android:textColor="?attr/colorOnSurface"
     android:paddingStart="@dimen/content_padding_horizontal"
     android:paddingEnd="@dimen/content_padding_horizontal"
     android:paddingTop="8dp"

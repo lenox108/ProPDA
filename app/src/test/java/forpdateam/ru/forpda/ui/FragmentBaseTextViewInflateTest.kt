@@ -38,35 +38,57 @@ import org.robolectric.annotation.Config
  * read `android:textColor` from `?android:attr/textColorPrimary` in the resolved
  * TextAppearance style.
  *
+ * `default_text_color`/`second_text_color` (the two attrs the original crash
+ * above was about) are ALSO fully retired now, by the same `concurrent-dreaming-
+ * wren` Этап C migration: every leaf consumer (layout/code) was repointed at
+ * `?attr/colorOnSurface`/`?attr/colorOnSurfaceVariant` directly, and every
+ * remaining internal style-cascade reference (TabLayout, PopupMenu, PopupOverlay,
+ * RadioButton, MyTextViewStyle, MessagePanelAdvancedTabText, smart_nav_fab_icon)
+ * was repointed at the same framework roles (or, where the target itself IS a
+ * framework role being set inside a separately-applied overlay like
+ * `PopupOverlay`, at the literal `@color/...` token) — never left as a
+ * `custom_attr` → `?attr/m3role` redirect, which would reintroduce this exact
+ * crash class. `icon_toolbar` is the one exception: its leaf consumers were
+ * migrated the same way, but the attr itself stays alive — it has ~30 internal
+ * cascade references (ToolbarStyle, AppBarOverlay, ActionModeStyle, …) and an
+ * explicit prod-verified warning in `styles.xml` against chaining it further
+ * (CollapsingToolbarLayout inflate crash), so it was deliberately left as-is.
+ *
  * Fix (invariant): when Material You is enabled, EVERY custom slot (those NOT
  * named after a framework Material 3 role) MUST resolve to a CONCRETE
  * `@color/...` in the runtime theme — never to a dangling `?attr/...`
  * (TYPE_ATTRIBUTE). This holds via two complementary sources:
- *   - `link_color` and the framework `textColor*` trio are pinned CONCRETE
- *     directly in `MaterialYouSurface` (link_color additionally OVERRIDES the
- *     `MaterialYouAccent` parent's `?attr/colorPrimary` back to static).
- *   - All the other chrome/typography slots (`background_*`, `cards_background`,
- *     `chrome_plane_background`, `contrast_text_color`, `divider_line`,
- *     `drawer_item_text*`, `icon_base`, `icon_toolbar`,
- *     `main_toolbar_accent_surface`, `status_bar_color`, `toolbar_color`,
- *     `default_text_color`, `second_text_color`) are NOT set by the overlay —
- *     they inherit the same CONCRETE `@color/light_*` / `@color/dark_*` values
- *     from the base `DayNightAppTheme`. (They used to be re-stated in the
- *     overlay as no-op duplicates of the base; that dead code was removed —
- *     the runtime values are identical.)
+ *   - the framework `textColor*` trio is pinned CONCRETE directly in
+ *     `MaterialYouSurface`.
+ *   - All the other chrome/typography slots still left as custom attrs
+ *     (`background_for_lists`, `chrome_plane_background`, `contrast_text_color`,
+ *     `icon_base`, `icon_toolbar`, `main_toolbar_accent_surface`,
+ *     `status_bar_color`) are NOT set by the overlay — they inherit the same
+ *     CONCRETE `@color/light_*` / `@color/dark_*` values from the base
+ *     `DayNightAppTheme`.
  * Either way, none of them may end up TYPE_ATTRIBUTE — this test asserts that
  * on the assembled activity theme, which guards BOTH the overlay pins AND the
  * base fallthrough.
  *
- * Only the two framework Material-3 role slots are KEPT as `?attr/...`:
- * `android:colorBackground` → `colorSurface`, and `colorOnBackground` →
+ * Only the framework Material-3 role slots are KEPT as `?attr/...`:
+ * `android:colorBackground` → `colorSurface`, `colorOnBackground` →
  * `colorOnSurface`. The AOSP inflater resolves framework attrs directly,
- * so those don't go through the broken 2-level TypedArray path.
+ * so those don't go through the broken 2-level TypedArray path. As part of
+ * the THEMES_OVERHAUL consumer-side migration (`concurrent-dreaming-wren`
+ * plan, Этап C), custom slots are being retired one at a time: their XML/code
+ * CONSUMERS are repointed directly at the matching M3 role (e.g.
+ * `?attr/divider_line` → `?attr/colorOutlineVariant`, `?attr/cards_background`
+ * → `?attr/colorSurface`) and the custom attr is then deleted from
+ * `attrs.xml`/the theme files instead of being kept as a redirect — a
+ * redirect (`custom_attr` → `?attr/m3role`) would reintroduce the exact
+ * 2-level TYPE_ATTRIBUTE crash this test guards against. Retired slots are
+ * removed from the invariant lists below as they're migrated.
  *
  * Trade-off: the static slots lose dynamic M3 wallpaper tracking. M3
  * framework roles (`colorPrimary`, `colorSurface`, `colorOnSurface`, …)
  * still track the wallpaper via the upstream `DynamicColors.Light` overlay
- * from MaterialYouApplier; the loss only affects our custom chrome slots.
+ * from MaterialYouApplier; the loss only affects our custom chrome slots
+ * that haven't been migrated yet.
  *
  * The first test below is the canonical regression test: it actually inflates
  * fragment_base.xml against the production theme chain and asserts no
@@ -235,52 +257,32 @@ class FragmentBaseTextViewInflateTest {
         // colorOnSurface) are framework attrs that the AOSP inflater resolves
         // directly, so they are excluded.
         val criticalAttrIds = intArrayOf(
-                R.attr.default_text_color,
-                R.attr.second_text_color,
-                R.attr.link_color,
                 android.R.attr.textColor,
                 android.R.attr.textColorPrimary,
                 android.R.attr.textColorSecondary,
                 android.R.attr.textColorLink,
                 android.R.attr.textColorHint,
-                R.attr.background_base,
-                R.attr.background_for_cards,
                 R.attr.background_for_lists,
-                R.attr.cards_background,
                 R.attr.chrome_plane_background,
                 R.attr.contrast_text_color,
-                R.attr.divider_line,
-                R.attr.drawer_item_text,
-                R.attr.drawer_item_text_selected,
                 R.attr.icon_base,
                 R.attr.icon_toolbar,
                 R.attr.main_toolbar_accent_surface,
                 R.attr.status_bar_color,
-                R.attr.toolbar_color,
         )
         val criticalAttrNames = mapOf(
-                R.attr.default_text_color to "default_text_color",
-                R.attr.second_text_color to "second_text_color",
-                R.attr.link_color to "link_color",
                 android.R.attr.textColor to "android:textColor",
                 android.R.attr.textColorPrimary to "android:textColorPrimary",
                 android.R.attr.textColorSecondary to "android:textColorSecondary",
                 android.R.attr.textColorLink to "android:textColorLink",
                 android.R.attr.textColorHint to "android:textColorHint",
-                R.attr.background_base to "background_base",
-                R.attr.background_for_cards to "background_for_cards",
                 R.attr.background_for_lists to "background_for_lists",
-                R.attr.cards_background to "cards_background",
                 R.attr.chrome_plane_background to "chrome_plane_background",
                 R.attr.contrast_text_color to "contrast_text_color",
-                R.attr.divider_line to "divider_line",
-                R.attr.drawer_item_text to "drawer_item_text",
-                R.attr.drawer_item_text_selected to "drawer_item_text_selected",
                 R.attr.icon_base to "icon_base",
                 R.attr.icon_toolbar to "icon_toolbar",
                 R.attr.main_toolbar_accent_surface to "main_toolbar_accent_surface",
                 R.attr.status_bar_color to "status_bar_color",
-                R.attr.toolbar_color to "toolbar_color",
         )
 
         val unresolved = mutableListOf<String>()
@@ -346,23 +348,13 @@ class FragmentBaseTextViewInflateTest {
     @Test
     fun `MaterialYouSurface source XML has no broken textColor slot references`() {
         val forbidden = setOf(
-            "default_text_color",
-            "second_text_color",
-            "link_color",
-            "background_base",
-            "background_for_cards",
             "background_for_lists",
-            "cards_background",
             "chrome_plane_background",
             "contrast_text_color",
-            "divider_line",
-            "drawer_item_text",
-            "drawer_item_text_selected",
             "icon_base",
             "icon_toolbar",
             "main_toolbar_accent_surface",
             "status_bar_color",
-            "toolbar_color",
         )
         // The test JVM's CWD is `app/` when running under gradle :app:test*, so
         // we need to look up the project root via the user.dir system property

@@ -121,8 +121,8 @@ class ThemeLoadingIndicator(
 
     private fun createLoadingSkeletonView(): ViewGroup {
         val background = context.getColorFromAttr(R.attr.background_for_lists)
-        val card = context.getColorFromAttr(R.attr.cards_background)
-        val muted = context.getColorFromAttr(R.attr.divider_line)
+        val card = context.getColorFromAttr(com.google.android.material.R.attr.colorSurface)
+        val muted = context.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant)
         val lineColor = blendColors(card, muted, 0.42f)
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL

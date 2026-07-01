@@ -19,7 +19,7 @@
             android:paddingStart="@dimen/content_padding_horizontal"
             android:paddingTop="@dimen/content_block_padding_vertical"
             android:text="@string/profile_title_note"
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="@dimen/list_topic_meta_text_size"
             android:textStyle="bold" />
 

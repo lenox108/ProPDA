@@ -186,7 +186,7 @@ class NewsDetailsFragment : TabFragment(), TabTopScroller {
         toolbar.visibility = View.VISIBLE
         toolbar.setBackgroundColor(requireContext().getColorFromAttr(topBarSurfaceColorAttr()))
 
-        val iconColor = requireContext().getColorFromAttr(R.attr.icon_toolbar)
+        val iconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         arguments?.apply {
             val newsTitle = getString(ARG_NEWS_TITLE)
             if (newsTitle != null) {

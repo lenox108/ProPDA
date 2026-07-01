@@ -15,7 +15,7 @@
         android:layout_toStartOf="@+id/forum_item_icon"
         tools:text="@string/test_forum_title"
         android:textAppearance="?attr/textAppearanceTitleMedium"
-        android:textColor="?attr/default_text_color" />
+        android:textColor="?attr/colorOnSurface" />
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/forum_item_icon"

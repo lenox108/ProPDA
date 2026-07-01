@@ -6,7 +6,7 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="?attr/background_for_cards"
+    android:background="?attr/colorSurfaceVariant"
     android:elevation="8dp"
     android:clipChildren="true"
     android:clipToPadding="true"
@@ -26,7 +26,7 @@
         android:id="@+id/smart_nav_divider"
         android:layout_width="match_parent"
         android:layout_height="@dimen/divider_thin"
-        android:background="?attr/divider_line"/>
+        android:background="?attr/colorOutlineVariant"/>
 
     <!-- Actions -->
     <LinearLayout
@@ -66,8 +66,8 @@
             android:imeOptions="actionGo"
             android:maxLines="1"
             android:textSize="14sp"
-            android:textColor="?attr/default_text_color"
-            android:textColorHint="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurface"
+            android:textColorHint="?attr/colorOnSurfaceVariant"
             android:background="@android:color/transparent"/>
 
         <androidx.appcompat.widget.AppCompatImageButton

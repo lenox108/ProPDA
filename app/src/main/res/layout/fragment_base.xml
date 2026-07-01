@@ -14,7 +14,7 @@
         android:layout_height="match_parent"
         android:layout_alignParentTop="true"
         android:layout_above="@id/message_panel_host"
-        android:background="?attr/background_base"
+        android:background="?attr/colorSurfaceContainerLowest"
         android:clipChildren="false">
 
         <!-- Верхний inset даёт MainActivity (paddingTop на fragments_container в updateDimens), иначе двойной отступ. -->
@@ -58,7 +58,7 @@
                     android:layout_height="match_parent"/>
 
 
-                <androidx.appcompat.widget.Toolbar
+                <com.google.android.material.appbar.MaterialToolbar
                     android:id="@+id/toolbar"
                     android:layout_width="match_parent"
                     android:layout_height="?attr/actionBarSize"
@@ -115,14 +115,14 @@
                                     android:ellipsize="end"
                                     android:maxLines="1"
                                     android:textAppearance="?attr/textAppearanceTitleMedium"
-                                    android:textColor="?attr/default_text_color"/>
+                                    android:textColor="?attr/colorOnSurface"/>
 
                                 <androidx.appcompat.widget.AppCompatTextView
                                     android:id="@+id/toolbar_subtitle"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:textAppearance="?attr/textAppearanceBodySmall"
-                                    android:textColor="?attr/second_text_color"
+                                    android:textColor="?attr/colorOnSurfaceVariant"
                                     android:visibility="gone"/>
                             </LinearLayout>
 
@@ -138,15 +138,27 @@
                                 android:visibility="invisible"/>
                         </LinearLayout>
 
-                        <!-- Category / filter: wrap_content at start of row; flex space is the trailing View so the
-                             control does not sit flush against the search action and remains tappable. -->
-                        <androidx.appcompat.widget.AppCompatSpinner
-                            android:id="@+id/toolbar_spinner"
+                        <!-- Category / filter: горизонтально-скроллируемая single-select ChipGroup (M3 FilterChip)
+                             вместо старого Spinner. wrap_content в начале ряда; flex-пространство — трейлинг View,
+                             чтобы контрол не прилипал к иконке поиска и оставался тапабельным. -->
+                        <HorizontalScrollView
+                            android:id="@+id/toolbar_filter_scroll"
                             android:layout_width="wrap_content"
                             android:layout_height="match_parent"
-                            android:gravity="center_vertical"
-                            android:minWidth="@dimen/dp120"
-                            android:visibility="gone"/>
+                            android:scrollbars="none"
+                            android:overScrollMode="never"
+                            android:visibility="gone">
+
+                            <com.google.android.material.chip.ChipGroup
+                                android:id="@+id/toolbar_filter_chips"
+                                android:layout_width="wrap_content"
+                                android:layout_height="match_parent"
+                                android:gravity="center_vertical"
+                                app:chipSpacingHorizontal="@dimen/dp8"
+                                app:singleLine="true"
+                                app:singleSelection="true"
+                                app:selectionRequired="true"/>
+                        </HorizontalScrollView>
 
                         <View
                             android:id="@+id/toolbar_spinner_end_spacer"
@@ -159,7 +171,7 @@
                             android:visibility="gone"/>
 
                     </LinearLayout>
-                </androidx.appcompat.widget.Toolbar>
+                </com.google.android.material.appbar.MaterialToolbar>
 
             </com.google.android.material.appbar.CollapsingToolbarLayout>
 
@@ -170,7 +182,7 @@
             android:id="@+id/fragment_content"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="?attr/background_base"
+            android:background="?attr/colorSurfaceContainerLowest"
             android:clipChildren="false"
             android:clipToPadding="false"
             app:layout_behavior="@string/appbar_scrolling_view_behavior"/>

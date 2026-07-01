@@ -15,7 +15,7 @@
         android:layout_alignParentStart="true"
         android:layout_toStartOf="@+id/item_count"
         tools:text="@string/test_topic_title"
-        android:textColor="?attr/default_text_color" />
+        android:textColor="?attr/colorOnSurface" />
 
     <TextView
         android:id="@+id/item_count"

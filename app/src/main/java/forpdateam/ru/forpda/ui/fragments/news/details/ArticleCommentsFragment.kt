@@ -105,7 +105,7 @@ class ArticleCommentsFragment : Fragment(), ArticleCommentsAdapter.ClickListener
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         _binding = ArticleCommentsBinding.inflate(inflater, container, false)
-        binding.root.setBackgroundColor(requireContext().getColorFromAttr(R.attr.background_base))
+        binding.root.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         refreshLayout = binding.swipeRefreshList
         recyclerView = binding.baseList
         writePanel = binding.commentWritePanel
@@ -125,7 +125,7 @@ class ArticleCommentsFragment : Fragment(), ArticleCommentsAdapter.ClickListener
         )
         refreshLayout.setOnRefreshListener { presenter.updateComments() }
 
-        recyclerView.setBackgroundColor(requireContext().getColorFromAttr(R.attr.background_base))
+        recyclerView.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
         recyclerView.tuneForListPerformance()
         recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(dp12, false))

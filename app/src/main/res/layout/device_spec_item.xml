@@ -14,7 +14,7 @@
         android:paddingEnd="@dimen/content_padding_horizontal"
         android:paddingStart="@dimen/content_padding_horizontal"
         android:text="@string/profile_title_about"
-        android:textColor="?attr/default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_topic_meta_text_size"
         android:textStyle="bold" />
 
@@ -27,7 +27,7 @@
         android:paddingStart="@dimen/content_padding_horizontal"
         android:paddingEnd="@dimen/content_padding_horizontal"
         android:paddingBottom="@dimen/content_block_padding_vertical"
-        android:textColor="?attr/default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_topic_title_text_size"
         tools:text="ajskldjklasjdlkajls;kjdklk;asd"/>
 </androidx.cardview.widget.CardView>

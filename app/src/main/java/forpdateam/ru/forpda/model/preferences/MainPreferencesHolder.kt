@@ -38,6 +38,8 @@ class MainPreferencesHolder(
 
     fun observeUiPaletteFlow(): Flow<AppPreferences.Main.UiPalette> = dataStore.observeUiPaletteFlow()
 
+    fun observeAccentPaletteFlow(): Flow<AppPreferences.Main.AccentPalette> = dataStore.observeAccentPaletteFlow()
+
     fun observeEditorMonospaceFlow(): Flow<Boolean> = dataStore.observeEditorMonospaceFlow()
 
     fun observeShowBottomArrowFlow(): Flow<Boolean> = dataStore.observeShowBottomArrowFlow()
@@ -105,6 +107,8 @@ class MainPreferencesHolder(
 
     fun getUiPalette(): AppPreferences.Main.UiPalette = dataStore.getUiPaletteImmediate()
 
+    fun getAccentPalette(): AppPreferences.Main.AccentPalette = dataStore.getAccentPaletteImmediate()
+
     fun getUseSystemFont(): Boolean = dataStore.getUseSystemFontImmediate()
 
     fun getAppFontMode(): AppFontMode = dataStore.getAppFontModeImmediate()
@@ -119,6 +123,8 @@ class MainPreferencesHolder(
     suspend fun setThemeMode(mode: AppPreferences.Main.ThemeMode) = dataStore.setThemeMode(mode)
 
     suspend fun setUiPalette(palette: AppPreferences.Main.UiPalette) = dataStore.setUiPalette(palette)
+
+    suspend fun setAccentPalette(palette: AppPreferences.Main.AccentPalette) = dataStore.setAccentPalette(palette)
 
     suspend fun setShowBottomArrow(value: Boolean) = dataStore.setShowBottomArrow(value)
 

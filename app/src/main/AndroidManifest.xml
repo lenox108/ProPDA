@@ -59,7 +59,7 @@
             android:configChanges="keyboardHidden|screenSize|orientation"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/SplashTheme"
+            android:theme="@style/Theme.ForPDA.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

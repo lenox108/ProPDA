@@ -4,5 +4,5 @@
     android:id="@+id/profile_list"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/background_for_cards"/>
+    android:background="?attr/colorSurfaceVariant"/>
 

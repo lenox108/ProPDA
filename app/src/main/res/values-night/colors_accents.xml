@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    СГЕНЕРИРОВАНО AccentPaletteGenerator (material-color-utilities, SchemeTonalSpot).
+    НЕ РЕДАКТИРОВАТЬ ВРУЧНУЮ — перегенерировать через генератор (см. его KDoc).
+    Вариант: DARK (values-night).
+-->
+<resources>
+    <!-- blue (seed #0B57D0) -->
+    <color name="accent_blue_primary">#B2C5FF</color>
+    <color name="accent_blue_on_primary">#172E60</color>
+    <color name="accent_blue_primary_container">#304578</color>
+    <color name="accent_blue_on_primary_container">#DAE2FF</color>
+    <color name="accent_blue_inverse_primary">#495D92</color>
+    <color name="accent_blue_secondary">#C0C6DD</color>
+    <color name="accent_blue_on_secondary">#2A3042</color>
+    <color name="accent_blue_secondary_container">#404659</color>
+    <color name="accent_blue_on_secondary_container">#DCE2F9</color>
+    <color name="accent_blue_tertiary">#E1BBDD</color>
+    <color name="accent_blue_on_tertiary">#412741</color>
+    <color name="accent_blue_tertiary_container">#5A3D59</color>
+    <color name="accent_blue_on_tertiary_container">#FED7F9</color>
+    <!-- indigo (seed #4355B9) -->
+    <color name="accent_indigo_primary">#BAC3FF</color>
+    <color name="accent_indigo_on_primary">#222C61</color>
+    <color name="accent_indigo_primary_container">#394379</color>
+    <color name="accent_indigo_on_primary_container">#DEE0FF</color>
+    <color name="accent_indigo_inverse_primary">#515B92</color>
+    <color name="accent_indigo_secondary">#C3C5DD</color>
+    <color name="accent_indigo_on_secondary">#2D2F42</color>
+    <color name="accent_indigo_secondary_container">#434659</color>
+    <color name="accent_indigo_on_secondary_container">#E0E1F9</color>
+    <color name="accent_indigo_tertiary">#E6BAD7</color>
+    <color name="accent_indigo_on_tertiary">#44263D</color>
+    <color name="accent_indigo_tertiary_container">#5D3C55</color>
+    <color name="accent_indigo_on_tertiary_container">#FFD7F1</color>
+    <!-- violet (seed #7B4FCF) -->
+    <color name="accent_violet_primary">#D2BCFD</color>
+    <color name="accent_violet_on_primary">#38265C</color>
+    <color name="accent_violet_primary_container">#4F3D74</color>
+    <color name="accent_violet_on_primary_container">#EADDFF</color>
+    <color name="accent_violet_inverse_primary">#67548E</color>
+    <color name="accent_violet_secondary">#CDC2DB</color>
+    <color name="accent_violet_on_secondary">#342D40</color>
+    <color name="accent_violet_secondary_container">#4B4358</color>
+    <color name="accent_violet_on_secondary_container">#E9DEF8</color>
+    <color name="accent_violet_tertiary">#F0B7C5</color>
+    <color name="accent_violet_on_tertiary">#4A2530</color>
+    <color name="accent_violet_tertiary_container">#643B46</color>
+    <color name="accent_violet_on_tertiary_container">#FFD9E1</color>
+    <!-- purple (seed #9C27B0) -->
+    <color name="accent_purple_primary">#EBB5ED</color>
+    <color name="accent_purple_on_primary">#49204E</color>
+    <color name="accent_purple_primary_container">#613766</color>
+    <color name="accent_purple_on_primary_container">#FFD6FE</color>
+    <color name="accent_purple_inverse_primary">#7B4E7F</color>
+    <color name="accent_purple_secondary">#D7BFD5</color>
+    <color name="accent_purple_on_secondary">#3B2B3C</color>
+    <color name="accent_purple_secondary_container">#534153</color>
+    <color name="accent_purple_on_secondary_container">#F4DBF1</color>
+    <color name="accent_purple_tertiary">#F6B8AD</color>
+    <color name="accent_purple_on_tertiary">#4C251F</color>
+    <color name="accent_purple_tertiary_container">#673B34</color>
+    <color name="accent_purple_on_tertiary_container">#FFDAD4</color>
+    <!-- pink (seed #C2185B) -->
+    <color name="accent_pink_primary">#FFB1C2</color>
+    <color name="accent_pink_on_primary">#551D2D</color>
+    <color name="accent_pink_primary_container">#713343</color>
+    <color name="accent_pink_on_primary_container">#FFD9DF</color>
+    <color name="accent_pink_inverse_primary">#8D4A5A</color>
+    <color name="accent_pink_secondary">#E4BDC3</color>
+    <color name="accent_pink_on_secondary">#43292F</color>
+    <color name="accent_pink_secondary_container">#5B3F45</color>
+    <color name="accent_pink_on_secondary_container">#FFD9DF</color>
+    <color name="accent_pink_tertiary">#ECBE91</color>
+    <color name="accent_pink_on_tertiary">#462A09</color>
+    <color name="accent_pink_tertiary_container">#60401D</color>
+    <color name="accent_pink_on_tertiary_container">#FFDCBD</color>
+    <!-- red (seed #D32F2F) -->
+    <color name="accent_red_primary">#FFB3AC</color>
+    <color name="accent_red_on_primary">#571E1A</color>
+    <color name="accent_red_primary_container">#73332F</color>
+    <color name="accent_red_on_primary_container">#FFDAD6</color>
+    <color name="accent_red_inverse_primary">#904A45</color>
+    <color name="accent_red_secondary">#E7BDB8</color>
+    <color name="accent_red_on_secondary">#442927</color>
+    <color name="accent_red_secondary_container">#5D3F3C</color>
+    <color name="accent_red_on_secondary_container">#FFDAD6</color>
+    <color name="accent_red_tertiary">#E1C38C</color>
+    <color name="accent_red_on_tertiary">#3F2D04</color>
+    <color name="accent_red_tertiary_container">#584419</color>
+    <color name="accent_red_on_tertiary_container">#FEDEA6</color>
+    <!-- deeporange (seed #E64A19) -->
+    <color name="accent_deeporange_primary">#FFB5A0</color>
+    <color name="accent_deeporange_on_primary">#561F0F</color>
+    <color name="accent_deeporange_primary_container">#723523</color>
+    <color name="accent_deeporange_on_primary_container">#FFDBD1</color>
+    <color name="accent_deeporange_inverse_primary">#8F4B38</color>
+    <color name="accent_deeporange_secondary">#E7BDB2</color>
+    <color name="accent_deeporange_on_secondary">#442A22</color>
+    <color name="accent_deeporange_secondary_container">#5D4037</color>
+    <color name="accent_deeporange_on_secondary_container">#FFDBD1</color>
+    <color name="accent_deeporange_tertiary">#D9C58D</color>
+    <color name="accent_deeporange_on_tertiary">#3B2F05</color>
+    <color name="accent_deeporange_tertiary_container">#534619</color>
+    <color name="accent_deeporange_on_tertiary_container">#F6E1A6</color>
+    <!-- orange (seed #EF6C00) -->
+    <color name="accent_orange_primary">#FFB68F</color>
+    <color name="accent_orange_on_primary">#532201</color>
+    <color name="accent_orange_primary_container">#703714</color>
+    <color name="accent_orange_on_primary_container">#FFDBCA</color>
+    <color name="accent_orange_inverse_primary">#8C4E29</color>
+    <color name="accent_orange_secondary">#E6BEAB</color>
+    <color name="accent_orange_on_secondary">#432B1D</color>
+    <color name="accent_orange_secondary_container">#5C4132</color>
+    <color name="accent_orange_on_secondary_container">#FFDBCA</color>
+    <color name="accent_orange_tertiary">#CEC991</color>
+    <color name="accent_orange_on_tertiary">#343208</color>
+    <color name="accent_orange_tertiary_container">#4B481D</color>
+    <color name="accent_orange_on_tertiary_container">#EAE5AB</color>
+    <!-- amber (seed #FF8F00) -->
+    <color name="accent_amber_primary">#FFB77A</color>
+    <color name="accent_amber_on_primary">#4C2700</color>
+    <color name="accent_amber_primary_container">#6B3B05</color>
+    <color name="accent_amber_on_primary_container">#FFDCC2</color>
+    <color name="accent_amber_inverse_primary">#88511D</color>
+    <color name="accent_amber_secondary">#E3C0A5</color>
+    <color name="accent_amber_on_secondary">#412C19</color>
+    <color name="accent_amber_secondary_container">#5A422E</color>
+    <color name="accent_amber_on_secondary_container">#FFDCC2</color>
+    <color name="accent_amber_tertiary">#C4CB97</color>
+    <color name="accent_amber_on_tertiary">#2D330D</color>
+    <color name="accent_amber_tertiary_container">#444A22</color>
+    <color name="accent_amber_on_tertiary_container">#E0E7B1</color>
+    <!-- green (seed #2E7D32) -->
+    <color name="accent_green_primary">#A1D39A</color>
+    <color name="accent_green_on_primary">#0A390F</color>
+    <color name="accent_green_primary_container">#245024</color>
+    <color name="accent_green_on_primary_container">#BCF0B4</color>
+    <color name="accent_green_inverse_primary">#3C6939</color>
+    <color name="accent_green_secondary">#BACCB3</color>
+    <color name="accent_green_on_secondary">#253423</color>
+    <color name="accent_green_secondary_container">#3B4B38</color>
+    <color name="accent_green_on_secondary_container">#D6E8CE</color>
+    <color name="accent_green_tertiary">#A0CFD4</color>
+    <color name="accent_green_on_tertiary">#00363B</color>
+    <color name="accent_green_tertiary_container">#1F4D52</color>
+    <color name="accent_green_on_tertiary_container">#BCEBF0</color>
+    <!-- teal (seed #00796B) -->
+    <color name="accent_teal_primary">#83D5C6</color>
+    <color name="accent_teal_on_primary">#003730</color>
+    <color name="accent_teal_primary_container">#005047</color>
+    <color name="accent_teal_on_primary_container">#9FF2E2</color>
+    <color name="accent_teal_inverse_primary">#006B5E</color>
+    <color name="accent_teal_secondary">#B1CCC5</color>
+    <color name="accent_teal_on_secondary">#1C3530</color>
+    <color name="accent_teal_secondary_container">#334B46</color>
+    <color name="accent_teal_on_secondary_container">#CDE8E1</color>
+    <color name="accent_teal_tertiary">#ACCAE5</color>
+    <color name="accent_teal_on_tertiary">#133348</color>
+    <color name="accent_teal_tertiary_container">#2C4A60</color>
+    <color name="accent_teal_on_tertiary_container">#CAE6FF</color>
+    <!-- cyan (seed #0097A7) -->
+    <color name="accent_cyan_primary">#82D3E0</color>
+    <color name="accent_cyan_on_primary">#00363D</color>
+    <color name="accent_cyan_primary_container">#004F58</color>
+    <color name="accent_cyan_on_primary_container">#9EEFFD</color>
+    <color name="accent_cyan_inverse_primary">#006874</color>
+    <color name="accent_cyan_secondary">#B1CBD0</color>
+    <color name="accent_cyan_on_secondary">#1C3438</color>
+    <color name="accent_cyan_secondary_container">#334B4F</color>
+    <color name="accent_cyan_on_secondary_container">#CDE7EC</color>
+    <color name="accent_cyan_tertiary">#BAC6EA</color>
+    <color name="accent_cyan_on_tertiary">#24304D</color>
+    <color name="accent_cyan_tertiary_container">#3B4664</color>
+    <color name="accent_cyan_on_tertiary_container">#DAE2FF</color>
+</resources>

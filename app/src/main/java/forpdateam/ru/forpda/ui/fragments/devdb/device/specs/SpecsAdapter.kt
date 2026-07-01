@@ -50,7 +50,7 @@ class SpecsAdapter : RecyclerView.Adapter<SpecsAdapter.ViewHolder>() {
             val pair = item.second[i]
             val strColor = String.format(
                 "#%06X",
-                0xFFFFFF and holder.binding.root.context.getColorFromAttr(R.attr.second_text_color)
+                0xFFFFFF and holder.binding.root.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
             )
             builder.append("<small style=\"font-size:10px\"><span style=\"color: ")
                 .append(strColor)

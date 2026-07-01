@@ -499,6 +499,13 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
         return super.onBackPressed()
     }
 
+    // Read-only зеркало onBackPressed: перехватываем «назад» пока открыт tooltip,
+    // диалог настроек или раскрыт поиск (см. hasBackHandling в TabFragment).
+    override fun hasBackHandling(): Boolean =
+            (tooltip?.isShowing == true) ||
+                    (::settingsDialog.isInitialized && settingsDialog.isShowing) ||
+                    (searchItem?.isActionViewExpanded == true)
+
     fun setStyleType(type: String) {
         webView.evalJs("changeStyleType(\"$type\")")
     }

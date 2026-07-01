@@ -6,7 +6,7 @@
     style="@style/CardStyle.Item.Wide"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?cards_background"
+    android:background="?attr/colorSurface"
     android:foreground="?attr/selectableItemBackground">
 
 
@@ -111,7 +111,7 @@
                     android:id="@+id/news_full_item_username"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="?default_text_color"
+                    android:textColor="?attr/colorOnSurface"
                     android:textAppearance="@style/TextAppearance.AppCompat.Small"
                     tools:text="Вася в разносе" />
 
@@ -147,5 +147,5 @@
         android:layout_width="match_parent"
         android:layout_height="@dimen/divider_thin"
         android:layout_gravity="bottom"
-        android:background="?attr/divider_line" />
+        android:background="?attr/colorOutlineVariant" />
 </FrameLayout>

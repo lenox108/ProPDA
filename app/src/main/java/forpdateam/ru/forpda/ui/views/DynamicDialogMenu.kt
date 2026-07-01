@@ -153,7 +153,7 @@ class DynamicDialogMenu<T, E> {
             text = title
             gravity = Gravity.CENTER_VERTICAL
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge)
-            setTextColor(resolveColorStateList(context, R.attr.default_text_color))
+            setTextColor(resolveColorStateList(context, com.google.android.material.R.attr.colorOnSurface))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, style.titleTextSizeSp)
             includeFontPadding = true
             setPadding(dp(24), dp(style.contentVerticalPaddingDp), dp(24), dp(style.titleBottomPaddingDp))
@@ -173,7 +173,7 @@ class DynamicDialogMenu<T, E> {
             gravity = Gravity.CENTER_VERTICAL
             minHeight = dp(style?.itemMinHeightDp ?: 48)
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
-            setTextColor(resolveColorStateList(context, R.attr.default_text_color))
+            setTextColor(resolveColorStateList(context, com.google.android.material.R.attr.colorOnSurface))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, style?.itemTextSizeSp ?: 16f)
             includeFontPadding = false
             setPadding(dp(24), dp(style?.itemVerticalPaddingDp ?: 8), dp(24), dp(style?.itemVerticalPaddingDp ?: 8))

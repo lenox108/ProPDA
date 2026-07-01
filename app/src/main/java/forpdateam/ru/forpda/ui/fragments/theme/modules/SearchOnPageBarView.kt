@@ -81,8 +81,8 @@ class SearchOnPageBarView(
             isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_FULLSCREEN
             inputType = android.text.InputType.TYPE_CLASS_TEXT
-            setTextColor(context.getColorFromAttr(R.attr.default_text_color))
-            setHintTextColor(context.getColorFromAttr(R.attr.second_text_color))
+            setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            setHintTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
             background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
             minHeight = itemSize
             setPadding(0, 0, context.resources.getDimensionPixelSize(R.dimen.dp8), 0)

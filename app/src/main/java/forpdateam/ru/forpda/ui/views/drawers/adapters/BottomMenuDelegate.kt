@@ -53,9 +53,9 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
                 binding.itemBottomMenuIcon.setImageDrawable(ContextCompat.getDrawable(context, item.icon))
 
                 binding.tabActiveBackground.visibility = if (selected) View.VISIBLE else View.GONE
-                val inactiveColor = context.getColorFromAttr(R.attr.second_text_color)
+                val inactiveColor = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
                 val iconColor = if (selected) {
-                    context.getColorFromAttr(R.attr.default_text_color)
+                    context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
                 } else {
                     inactiveColor
                 }

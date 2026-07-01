@@ -114,7 +114,7 @@ private fun View.setDialogPanelBackground() {
 }
 
 private fun resolveLinkColor(context: Context): Int {
-    return resolveColor(context, R.attr.link_color, 0xff2177af.toInt())
+    return resolveColor(context, com.google.android.material.R.attr.colorSecondary, 0xff2177af.toInt())
 }
 
 private fun resolveColor(context: Context, @AttrRes attr: Int, fallback: Int): Int {

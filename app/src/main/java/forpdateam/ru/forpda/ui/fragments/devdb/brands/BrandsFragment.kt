@@ -5,8 +5,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
+import com.google.android.material.chip.Chip
 
 import java.util.ArrayList
 
@@ -52,24 +51,13 @@ class BrandsFragment : RecyclerFragment(), BaseSectionedAdapter.OnItemClickListe
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
         refreshLayout.setOnRefreshListener { presenter.loadBrands() }
         titlesWrapper.visibility = View.GONE
-        toolbarSpinner.visibility = View.VISIBLE
+        toolbarFilterScroll.visibility = View.VISIBLE
+        toolbarFilterChips.contentDescription = getString(R.string.devdb_category_picker_prompt)
         syncToolbarSpinnerEndSpacer()
         clearToolbarScrollFlags()
 
         adapter = BrandsAdapter()
         recyclerView.adapter = adapter
-
-
-        toolbarSpinner.contentDescription = getString(R.string.devdb_category_picker_prompt)
-        toolbarSpinner.prompt = getString(R.string.devdb_category_picker_prompt)
-        toolbarSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                presenter.selectCategory(position)
-                presenter.loadBrands()
-            }
-
-            override fun onNothingSelected(arg0: AdapterView<*>) {}
-        }
 
         adapter.setOnItemClickListener(this)
 
@@ -121,11 +109,23 @@ class BrandsFragment : RecyclerFragment(), BaseSectionedAdapter.OnItemClickListe
     }
 
     private fun initCategories(categories: Array<String>, position: Int) {
-        val spinnerTitles = categories.map { getCategoryTitle(it) ?: it }
-        val spinnerAdapter = ArrayAdapter(requireContext(), R.layout.toolbar_spinner_item, spinnerTitles)
-        spinnerAdapter.setDropDownViewResource(R.layout.toolbar_spinner_dropdown_item)
-        toolbarSpinner.adapter = spinnerAdapter
-        toolbarSpinner.setSelection(position)
+        toolbarFilterChips.removeAllViews()
+        categories.forEachIndexed { index, category ->
+            val chip = layoutInflater.inflate(
+                    R.layout.toolbar_filter_chip, toolbarFilterChips, false) as Chip
+            chip.id = View.generateViewId()
+            chip.text = getCategoryTitle(category) ?: category
+            chip.isChecked = index == position
+            // singleSelection + selectionRequired в ChipGroup гарантируют, что отмечен
+            // ровно один чип; клик по нему грузит свою категорию.
+            chip.setOnClickListener {
+                if (chip.isChecked) {
+                    presenter.selectCategory(index)
+                    presenter.loadBrands()
+                }
+            }
+            toolbarFilterChips.addView(chip)
+        }
     }
 
     private fun showData(data: Brands) {

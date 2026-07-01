@@ -29,7 +29,7 @@
             android:paddingBottom="@dimen/dp8"
             android:paddingEnd="@dimen/dp8"
             android:paddingStart="@dimen/content_spacing_half"
-            android:textColor="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/list_topic_meta_text_size"
             tools:ignore="HardcodedText"/>
     </LinearLayout>
@@ -47,7 +47,7 @@
         android:minWidth="@dimen/dp64"
         android:paddingStart="@dimen/dp16"
         android:paddingEnd="@dimen/dp16"
-        android:textColor="?attr/default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_section_header_text_size"
         tools:visibility="visible"
         tools:ignore="HardcodedText"/>

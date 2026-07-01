@@ -540,6 +540,11 @@ class FavoritesFragment : RecyclerFragment() {
         }
     }
 
+    // Read-only зеркало onBackPressed: перехватываем «назад» пока активен выбор
+    // или раскрыт поиск (см. hasBackHandling в TabFragment).
+    override fun hasBackHandling(): Boolean =
+            isSelectionMode || searchMenuItem?.isActionViewExpanded == true
+
     private fun selectSortingInto(binding: FavoriteSortingBinding, sorting: Sorting) {
         val keyId = when (sorting.key) {
             Sorting.Companion.Key.LAST_POST -> R.id.sorting_key_last_post

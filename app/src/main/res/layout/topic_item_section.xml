@@ -23,7 +23,7 @@
         android:paddingStart="@dimen/list_row_padding_horizontal"
         android:paddingTop="@dimen/dp8"
         android:textAllCaps="true"
-        android:textColor="?attr/second_text_color"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="@dimen/list_section_header_text_size"
         tools:text="@string/test_topic_section_title"/>
 

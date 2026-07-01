@@ -23,5 +23,5 @@
     app:tabPaddingStart="@dimen/dp0"
     app:tabTextAppearance="@style/TextAppearance.ForPDA.PaginationPage"
     app:tabIconTint="@null"
-    app:tabSelectedTextColor="?attr/icon_toolbar"
-    app:tabTextColor="?attr/icon_toolbar" />
+    app:tabSelectedTextColor="?attr/colorOnSurface"
+    app:tabTextColor="?attr/colorOnSurface" />

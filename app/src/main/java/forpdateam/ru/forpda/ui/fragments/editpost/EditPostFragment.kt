@@ -380,6 +380,12 @@ class EditPostFragment : TabFragment() {
         return false
     }
 
+    // Экран написания/редактирования поста практически всегда перехватывает
+    // «назад» (панель BB-кодов, подтверждение потери черновика) и открывается
+    // над списком/темой — одиночной корневой вкладкой не бывает. Консервативно
+    // true: не показываем «домой»-анимацию отсюда и не рискуем draft-логикой.
+    override fun hasBackHandling(): Boolean = true
+
     private fun tryPickFile() {
         // ACTION_GET_CONTENT / Open Document не требует WRITE_EXTERNAL_STORAGE; на API 33+ это разрешение не выдаётся.
         pickFileLauncher.launch(FilePickHelper.pickFile(false))

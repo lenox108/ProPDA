@@ -4,7 +4,7 @@
     android:id="@+id/article_content_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/background_base">
+    android:background="?attr/colorSurfaceContainerLowest">
 
     <FrameLayout
         android:id="@+id/article_webview_container"

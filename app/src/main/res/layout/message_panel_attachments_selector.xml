@@ -9,13 +9,13 @@
         android:layout_width="match_parent"
         android:layout_height="@dimen/dp48"
         android:layout_marginEnd="@dimen/dp48"
-        android:background="?attr/cards_background"
+        android:background="?attr/colorSurface"
         app:tabBackground="@android:color/transparent"
         app:tabIconTint="@color/message_panel_selector_tab_icon"
         app:tabIndicatorHeight="@dimen/dp2"
         app:tabIndicatorColor="?attr/colorAccent"
-        app:tabSelectedTextColor="?attr/default_text_color"
-        app:tabTextColor="?attr/second_text_color" />
+        app:tabSelectedTextColor="?attr/colorOnSurface"
+        app:tabTextColor="?attr/colorOnSurfaceVariant" />
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/selectorReverse"

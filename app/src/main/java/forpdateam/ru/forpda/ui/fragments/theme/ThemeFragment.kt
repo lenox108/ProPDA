@@ -548,6 +548,13 @@ abstract class ThemeFragment : TabFragment() {
         return false
     }
 
+    // Тема форума почти всегда tabCount>1 (тема поверх списка), поэтому этот
+    // запрос почти не участвует в решении о выходе. Консервативно true: не даём
+    // предиктивной «домой»-анимации из открытой темы (редкий случай одиночной
+    // вкладки-темы) и НЕ трогаем сложную back-логику presenter/overlay. Покрывает
+    // и ThemeFragmentWeb через наследование — без правок самого хрупкого файла.
+    override fun hasBackHandling(): Boolean = true
+
 
     override fun setRefreshing(isRefreshing: Boolean) {
         if (lastAppliedRefreshingState == isRefreshing) {
@@ -603,11 +610,11 @@ abstract class ThemeFragment : TabFragment() {
         val progressTintList = ColorStateList.valueOf(progressTint)
         contentProgress.indeterminateTintList = progressTintList
         toolbarProgress.indeterminateTintList = progressTintList
-        refreshLayout.setProgressBackgroundColorSchemeColor(requireContext().getColorFromAttr(R.attr.background_for_cards))
+        refreshLayout.setProgressBackgroundColorSchemeColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
         refreshLayout.setColorSchemeColors(
                 progressTint,
-                requireContext().getColorFromAttr(R.attr.link_color),
-                requireContext().getColorFromAttr(R.attr.default_text_color)
+                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSecondary),
+                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         )
     }
 
@@ -1080,10 +1087,10 @@ abstract class ThemeFragment : TabFragment() {
 
     private fun applyTopicToolbarTextChrome(compact: Boolean) {
         val titleColor = requireContext().getColorFromAttr(
-                R.attr.icon_toolbar
+                com.google.android.material.R.attr.colorOnSurface
         )
         val subtitleColor = requireContext().getColorFromAttr(
-                R.attr.icon_toolbar
+                com.google.android.material.R.attr.colorOnSurface
         )
         toolbarTitleView.setTextColor(titleColor)
         toolbarSubtitleView.setTextColor(subtitleColor)
@@ -1231,7 +1238,7 @@ abstract class ThemeFragment : TabFragment() {
             toolbarLayout.addView(this)
             compactToolbarDivider = this
         }
-        divider.setBackgroundColor(requireContext().getColorFromAttr(R.attr.divider_line))
+        divider.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant))
         divider.alpha = if (compact) 0.45f else 0f
         divider.visibility = if (compact) View.VISIBLE else View.GONE
         divider.bringToFront()
@@ -1259,7 +1266,7 @@ abstract class ThemeFragment : TabFragment() {
 
     private fun compactActionItem(item: MenuItem, onClick: () -> Unit) {
         val icon = item.icon ?: return
-        val iconColor = requireContext().getColorFromAttr(R.attr.icon_toolbar)
+        val iconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val outValue = TypedValue()
         requireContext().theme.resolveAttribute(android.R.attr.actionBarItemBackground, outValue, true)
         val button = AppCompatImageButton(requireContext()).apply {
@@ -1280,7 +1287,7 @@ abstract class ThemeFragment : TabFragment() {
     }
 
     private fun refreshCompactActionIcon(item: MenuItem) {
-        val iconColor = requireContext().getColorFromAttr(R.attr.icon_toolbar)
+        val iconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         (item.actionView as? ImageButton)?.apply {
             setImageDrawable(item.icon?.mutate()?.apply { setTint(iconColor) })
             imageTintList = ColorStateList.valueOf(iconColor)
@@ -1288,7 +1295,7 @@ abstract class ThemeFragment : TabFragment() {
     }
 
     private fun tintTopicToolbarActionViews() {
-        val iconColor = requireContext().getColorFromAttr(R.attr.icon_toolbar)
+        val iconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         for (i in 0 until toolbar.menu.size()) {
             val item = toolbar.menu.getItem(i)
             (item.actionView as? ImageButton)?.apply {
@@ -1577,8 +1584,8 @@ abstract class ThemeFragment : TabFragment() {
             isSingleLine = true
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH or android.view.inputmethod.EditorInfo.IME_FLAG_NO_FULLSCREEN
             inputType = android.text.InputType.TYPE_CLASS_TEXT
-            setTextColor(requireContext().getColorFromAttr(R.attr.default_text_color))
-            setHintTextColor(requireContext().getColorFromAttr(R.attr.second_text_color))
+            setTextColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            setHintTextColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
             background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
             minHeight = itemSize
             setPadding(0, 0, resources.getDimensionPixelSize(R.dimen.dp8), 0)
