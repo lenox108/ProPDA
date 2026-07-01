@@ -586,6 +586,9 @@
     <string name="accent_custom">Custom</string>
     <string name="pref_title_accent_vibrant">Vivid colors</string>
     <string name="pref_summary_accent_vibrant">A more saturated accent instead of muted</string>
+    <string name="accent_preview_button">Button</string>
+    <string name="accent_preview_link">Link</string>
+    <string name="accent_preview_chip">Chip</string>
     <string name="pref_title_ui_palette">Interface colors</string>
     <string name="pref_summary_ui_palette_system">Base colors from the selected theme. AMOLED keeps the deepest background.</string>
     <string name="pref_summary_ui_palette_sepia_reading">Warm palette for long reading: softer surfaces and accents without changing navigation.</string>
