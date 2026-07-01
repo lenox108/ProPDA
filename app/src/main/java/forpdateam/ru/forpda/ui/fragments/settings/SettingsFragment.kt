@@ -454,6 +454,7 @@ class SettingsFragment : BaseSettingFragment() {
                         requireContext(),
                         mainPreferencesHolder.getAccentPalette(),
                         mainPreferencesHolder.getAccentCustomColor(),
+                        mainPreferencesHolder.getAccentVibrant(),
                 ) { picked, customColor ->
                     if (!isAdded) return@show
                     lifecycleScope.launch {
