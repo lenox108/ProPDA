@@ -133,22 +133,43 @@ open class GithubReleaseSource @Inject constructor() {
             )
         }
 
-        val tag = title?.trim().orEmpty()
-        if (tag.isBlank()) return null
+        val titleText = title?.trim().orEmpty()
+        if (titleText.isBlank()) return null
 
         // SemanticVersion.parse ищет X.Y.Z в строке, поэтому "v3.0.0" разбирается как есть.
-        val version = SemanticVersion.parse(tag)
+        val version = SemanticVersion.parse(titleText)
             ?: throw AppUpdateRepository.CheckException(
                 AppUpdateRepository.FailureReason.Parse,
-                "Atom release title is not a semantic version: '$tag'"
+                "Atom release title is not a semantic version: '$titleText'"
             )
+
+        val releaseUrl = link?.takeIf { it.isNotBlank() } ?: RELEASES_PAGE_URL
 
         return Candidate(
             version = version,
-            url = link?.takeIf { it.isNotBlank() } ?: RELEASES_PAGE_URL,
+            url = releaseUrl,
             description = content?.takeIf { it.isNotBlank() },
-            downloads = emptyList()
+            // Atom-фид не содержит ссылок на ассеты. Но имя APK у релизов ProPDA
+            // строго по шаблону `ProPDA-<x.y.z>.apk`, а download-URL детерминирован:
+            // .../releases/download/<tag>/<file>. Тег берём из ссылки записи
+            // (…/releases/tag/<tag>). Так возвращаем прямую кнопку «Скачать», не
+            // трогая лимитируемый api.github.com. Если файл вдруг назван иначе —
+            // скачивание даст 404, и UI откатится на «Открыть тему».
+            downloads = buildConventionalDownloads(version, releaseUrl)
         )
+    }
+
+    /**
+     * Собирает предполагаемую прямую ссылку на APK по соглашению об имени релизов
+     * ProPDA (`ProPDA-<version>.apk`). Возвращает пустой список, если тег не
+     * извлекается из [releaseUrl] (тогда обновление деградирует до «Открыть тему»).
+     */
+    private fun buildConventionalDownloads(version: SemanticVersion, releaseUrl: String): List<DownloadLink> {
+        val tag = releaseUrl.substringAfter("/releases/tag/", "").trim().trim('/')
+        if (tag.isBlank()) return emptyList()
+        val fileName = "$APK_ASSET_PREFIX$version.apk"
+        val url = "https://github.com/$OWNER/$REPO/releases/download/$tag/$fileName"
+        return listOf(DownloadLink(url = url, fileName = fileName, sizeBytes = null))
     }
 
     /**
@@ -207,6 +228,8 @@ open class GithubReleaseSource @Inject constructor() {
         // JSON API оставлен для parseRelease-тестов и возможного авторизованного пути.
         const val LATEST_RELEASE_URL = "https://api.github.com/repos/$OWNER/$REPO/releases/latest"
         const val RELEASES_PAGE_URL = "https://github.com/$OWNER/$REPO/releases/latest"
+        // Соглашение об имени APK-ассета релизов: `ProPDA-<x.y.z>.apk`.
+        private const val APK_ASSET_PREFIX = "ProPDA-"
         private const val USER_AGENT = "ProPDA-AppUpdateChecker"
     }
 }
