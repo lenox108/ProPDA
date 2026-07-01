@@ -591,6 +591,7 @@
     <string name="accent_preview_chip">Chip</string>
     <string name="palette_preview_sample">Sample text in this palette</string>
     <string name="palette_preview_link">Link</string>
+    <string name="font_preview_sample">Аа Бб Вв  Ag Qq  0123</string>
     <string name="pref_title_ui_palette">Interface colors</string>
     <string name="pref_summary_ui_palette_system">Base colors from the selected theme. AMOLED keeps the deepest background.</string>
     <string name="pref_summary_ui_palette_sepia_reading">Warm palette for long reading: softer surfaces and accents without changing navigation.</string>

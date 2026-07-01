@@ -11,21 +11,6 @@
         <item>ru</item>
     </string-array>
 
-    <string-array name="entries_app_font_mode">
-        <item>@string/pref_value_app_font_system</item>
-        <item>@string/pref_value_app_font_roboto</item>
-        <item>@string/pref_value_app_font_inter</item>
-        <item>@string/pref_value_app_font_source_sans_3</item>
-        <item>@string/pref_value_app_font_open_sans</item>
-    </string-array>
-    <string-array name="entry_values_app_font_mode">
-        <item>SYSTEM</item>
-        <item>ROBOTO</item>
-        <item>INTER</item>
-        <item>SOURCE_SANS_3</item>
-        <item>OPEN_SANS</item>
-    </string-array>
-
     <string-array name="entries_bottom_nav_columns">
         <item>@string/pref_value_bottom_nav_columns_5</item>
         <item>@string/pref_value_bottom_nav_columns_6</item>
