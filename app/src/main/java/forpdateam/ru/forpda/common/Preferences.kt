@@ -49,6 +49,7 @@ object Preferences {
         const val BOTTOM_NAV_COLUMNS = PREFIX + "bottom_nav_columns"
         const val UI_PALETTE = PREFIX + "ui.palette"
         const val ACCENT_PALETTE = PREFIX + "accent"
+        const val ACCENT_CUSTOM_COLOR = PREFIX + "accent_custom_color"
         const val APP_FONT_MODE = PREFIX + "app_font_mode"
         const val USE_SYSTEM_FONT = PREFIX + "use_system_font"
         const val STARTUP_SCREEN = PREFIX + "startup_screen"
@@ -67,11 +68,14 @@ object Preferences {
         /**
          * Курируемые акцент-палитры «смены цвета». NEUTRAL — текущий монохромный
          * бренд (без оверлея). Остальные накладывают M3-акцент (см. AccentApplier +
-         * ThemeOverlay.ForPDA.Accent.*). Порядок = порядок в гриде настроек.
+         * ThemeOverlay.ForPDA.Accent.*). CUSTOM — произвольный seed-цвет
+         * пользователя (см. [ACCENT_CUSTOM_COLOR]): на API 31+ генерится динамикой
+         * из seed, на API < 31 — снап к ближайшей курируемой палитре.
+         * Порядок = порядок в гриде настроек.
          */
         enum class AccentPalette {
             NEUTRAL, BLUE, INDIGO, VIOLET, PURPLE, PINK, RED,
-            DEEPORANGE, ORANGE, AMBER, GREEN, TEAL, CYAN
+            DEEPORANGE, ORANGE, AMBER, GREEN, TEAL, CYAN, CUSTOM
         }
         enum class DownloadMethod { SYSTEM, EXTERNAL_MANAGER, BROWSER, ASK }
         enum class TopicScrollMode { HYBRID, CLASSIC }

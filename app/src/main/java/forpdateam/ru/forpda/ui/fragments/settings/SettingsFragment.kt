@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.view.View
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import forpdateam.ru.forpda.common.makeSnackbarAboveSystemBars
@@ -441,9 +442,13 @@ class SettingsFragment : BaseSettingFragment() {
                 forpdateam.ru.forpda.ui.views.dialog.AccentPickerDialog.show(
                         requireContext(),
                         mainPreferencesHolder.getAccentPalette(),
-                ) { picked ->
+                        mainPreferencesHolder.getAccentCustomColor(),
+                ) { picked, customColor ->
                     if (!isAdded) return@show
                     lifecycleScope.launch {
+                        if (picked == Preferences.Main.AccentPalette.CUSTOM && customColor != null) {
+                            mainPreferencesHolder.setAccentCustomColor(customColor)
+                        }
                         mainPreferencesHolder.setAccentPalette(picked)
                         updateAccentSummary(picked)
                         activity?.recreate()
@@ -1015,6 +1020,7 @@ class SettingsFragment : BaseSettingFragment() {
             } else {
                 getString(R.string.app_update_available, result.version.toString())
             }
+            runCatching {
             root.makeSnackbarAboveSystemBars(message, Snackbar.LENGTH_LONG)
                 .setAction(
                     if (preferred != null) R.string.app_update_action_download
@@ -1045,6 +1051,13 @@ class SettingsFragment : BaseSettingFragment() {
                     }
                 }
                 .show()
+            }.onFailure { e ->
+                // Снэк со Snackbar-темой всё же не построился (крайне маловероятно
+                // после фикса контекста в makeSnackbarAboveSystemBars) — не роняем
+                // настройки, показываем сообщение о доступном обновлении как Toast.
+                Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "update-available snackbar failed; toast fallback")
+                runCatching { Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show() }
+            }
         }
     }
 
