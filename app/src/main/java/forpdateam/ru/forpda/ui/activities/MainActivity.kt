@@ -95,6 +95,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
 
     private lateinit var appliedUiPalette: Preferences.Main.UiPalette
     private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
+    private var appliedMaterialYou: Boolean = false
+    private lateinit var appliedAccent: Preferences.Main.AccentPalette
 
     private val notificationPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestPermission()
@@ -139,6 +141,19 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
             Preferences.Main.ThemeMode.SYSTEM
         }
         appliedFontMode = tempDataStore.getAppFontModeImmediate()
+        // Запоминаем Material You + accent, чтобы onResume пересоздал активити при
+        // их изменении (как уже делается для палитры/шрифта) — иначе переключение
+        // в настройках не подхватывалось бы на уже открытых экранах без рестарта.
+        appliedMaterialYou = try {
+            tempDataStore.getUseMaterialYouImmediate()
+        } catch (e: Exception) {
+            false
+        }
+        appliedAccent = try {
+            tempDataStore.getAccentPaletteImmediate()
+        } catch (e: Exception) {
+            Preferences.Main.AccentPalette.NEUTRAL
+        }
         setTheme(UiThemeStyles.mainNoActionBar(appliedUiPalette, themeMode, resources.configuration))
         FontController.applyNativeTheme(this, appliedFontMode)
         // Material You (Dynamic Color) must be layered on top of the just-set theme
@@ -365,6 +380,20 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         if (::appliedFontMode.isInitialized && fontModeNow != appliedFontMode) {
             appliedFontMode = fontModeNow
             if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=fontMode selectedFontMode=%s", fontModeNow)
+            recreate()
+            return
+        }
+        val materialYouNow = mainPreferencesHolder.getUseMaterialYou()
+        if (materialYouNow != appliedMaterialYou) {
+            appliedMaterialYou = materialYouNow
+            if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=materialYou")
+            recreate()
+            return
+        }
+        val accentNow = mainPreferencesHolder.getAccentPalette()
+        if (::appliedAccent.isInitialized && accentNow != appliedAccent) {
+            appliedAccent = accentNow
+            if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=accent")
             recreate()
             return
         }
