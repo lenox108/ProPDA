@@ -28,7 +28,6 @@ import forpdateam.ru.forpda.presentation.*
 import forpdateam.ru.forpda.ui.DimensionsProvider
 import forpdateam.ru.forpda.ui.TemplateManager
 import forpdateam.ru.forpda.downloads.InternalDownloader
-import forpdateam.ru.forpda.appupdates.AppUpdateParser
 import javax.inject.Named
 import javax.inject.Singleton
 
@@ -119,10 +118,6 @@ object AppModule {
             mainPreferencesHolder: MainPreferencesHolder,
             @Named("data_storage") dataStoragePreferences: SharedPreferences
     ): InternalDownloader = InternalDownloader(permissionHelper, mainPreferencesHolder, dataStoragePreferences)
-
-    @Provides
-    @Singleton
-    fun provideAppUpdateParser(): AppUpdateParser = AppUpdateParser()
 
     @Provides
     @Singleton

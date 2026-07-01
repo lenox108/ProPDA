@@ -27,11 +27,11 @@ open class GithubReleaseSource @Inject constructor() {
     }
 
     /**
-     * @return [AppUpdateParser.Candidate] последнего релиза, либо null если
-     *   релизов ещё нет (404) или последний релиз — черновик.
+     * @return [Candidate] последнего релиза, либо null если релизов ещё нет
+     *   (404) или последний релиз — черновик.
      * @throws AppUpdateRepository.CheckException при сетевых/HTTP/парс-ошибках.
      */
-    open fun fetchLatestRelease(): AppUpdateParser.Candidate? {
+    open fun fetchLatestRelease(): Candidate? {
         val request = Request.Builder()
             .url(LATEST_RELEASE_URL)
             .header("Accept", "application/vnd.github+json")
@@ -73,7 +73,7 @@ open class GithubReleaseSource @Inject constructor() {
     /**
      * Чистый разбор JSON ответа GitHub `releases/latest`. Без сети — тестируемо.
      */
-    fun parseRelease(json: String): AppUpdateParser.Candidate? {
+    fun parseRelease(json: String): Candidate? {
         val root = try {
             JSONObject(json)
         } catch (e: Exception) {
@@ -96,7 +96,7 @@ open class GithubReleaseSource @Inject constructor() {
         val releaseUrl = root.optString("html_url").ifBlank { RELEASES_PAGE_URL }
         val description = root.optString("body").takeIf { it.isNotBlank() }
 
-        val downloads = mutableListOf<AppUpdateParser.DownloadLink>()
+        val downloads = mutableListOf<DownloadLink>()
         val assets = root.optJSONArray("assets")
         if (assets != null) {
             for (i in 0 until assets.length()) {
@@ -105,18 +105,15 @@ open class GithubReleaseSource @Inject constructor() {
                 val url = asset.optString("browser_download_url")
                 if (url.isNotBlank() && name.endsWith(".apk", ignoreCase = true)) {
                     val size = asset.optLong("size").takeIf { it > 0 }
-                    downloads += AppUpdateParser.DownloadLink(url = url, fileName = name, sizeBytes = size)
+                    downloads += DownloadLink(url = url, fileName = name, sizeBytes = size)
                 }
             }
         }
 
-        return AppUpdateParser.Candidate(
+        return Candidate(
             version = version,
             url = releaseUrl,
-            postId = null,
-            confidence = 100,
             description = description,
-            sourceSt = null,
             downloads = downloads
         )
     }

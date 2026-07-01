@@ -17,14 +17,12 @@ class AppUpdateRepositoryTest {
 
     @Test
     fun check_updateAvailableFromGithubRelease() = runTest {
-        val candidate = AppUpdateParser.Candidate(
+        val candidate = Candidate(
             version = SemanticVersion(3, 0, 0),
             url = "https://github.com/lenox108/ProPDA/releases/tag/v3.0.0",
-            postId = null,
-            confidence = 100,
             description = "release notes",
             downloads = listOf(
-                AppUpdateParser.DownloadLink("https://x/ProPDA-3.0.0.apk", "ProPDA-3.0.0.apk", 123L)
+                DownloadLink("https://x/ProPDA-3.0.0.apk", "ProPDA-3.0.0.apk", 123L)
             )
         )
         val repository = newRepository(FakeGithubReleaseSource(candidate))
@@ -41,11 +39,9 @@ class AppUpdateRepositoryTest {
 
     @Test
     fun check_upToDateWhenGithubVersionNotNewer() = runTest {
-        val candidate = AppUpdateParser.Candidate(
+        val candidate = Candidate(
             version = SemanticVersion(3, 0, 0),
             url = "https://github.com/lenox108/ProPDA/releases/tag/v3.0.0",
-            postId = null,
-            confidence = 100,
             description = null
         )
         val repository = newRepository(FakeGithubReleaseSource(candidate))
@@ -67,8 +63,8 @@ class AppUpdateRepositoryTest {
     @Test
     fun pickPreferredDownload_picksMatchingFlavor() {
         val downloads = listOf(
-            AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3-stableRelease.apk", "ProPDA-2.9.3-stableRelease.apk"),
-            AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3-parallel.apk", "ProPDA-2.9.3-parallel.apk")
+            DownloadLink("https://x/ProPDA-2.9.3-stableRelease.apk", "ProPDA-2.9.3-stableRelease.apk"),
+            DownloadLink("https://x/ProPDA-2.9.3-parallel.apk", "ProPDA-2.9.3-parallel.apk")
         )
         val chosen = newRepository().pickPreferredDownload(downloads, flavor = "parallel")
         assertEquals("ProPDA-2.9.3-parallel.apk", chosen?.fileName)
@@ -77,8 +73,8 @@ class AppUpdateRepositoryTest {
     @Test
     fun pickPreferredDownload_fallsBackToFirstWhenNoMatch() {
         val downloads = listOf(
-            AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3-stableRelease.apk", "ProPDA-2.9.3-stableRelease.apk"),
-            AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3-beta.apk", "ProPDA-2.9.3-beta.apk")
+            DownloadLink("https://x/ProPDA-2.9.3-stableRelease.apk", "ProPDA-2.9.3-stableRelease.apk"),
+            DownloadLink("https://x/ProPDA-2.9.3-beta.apk", "ProPDA-2.9.3-beta.apk")
         )
         // store: "store" нет в именах, "stable" — в первом.
         val chosen = newRepository().pickPreferredDownload(downloads, flavor = "store")
@@ -87,7 +83,7 @@ class AppUpdateRepositoryTest {
 
     @Test
     fun pickPreferredDownload_singleLinkReturnsThatLink() {
-        val only = AppUpdateParser.DownloadLink("https://x/ProPDA-2.9.3.apk", "ProPDA-2.9.3.apk")
+        val only = DownloadLink("https://x/ProPDA-2.9.3.apk", "ProPDA-2.9.3.apk")
         val chosen = newRepository().pickPreferredDownload(listOf(only), flavor = "dev")
         assertEquals(only.url, chosen?.url)
     }
@@ -102,8 +98,8 @@ class AppUpdateRepositoryTest {
     )
 
     private class FakeGithubReleaseSource(
-        private val candidate: AppUpdateParser.Candidate?
+        private val candidate: Candidate?
     ) : GithubReleaseSource() {
-        override fun fetchLatestRelease(): AppUpdateParser.Candidate? = candidate
+        override fun fetchLatestRelease(): Candidate? = candidate
     }
 }

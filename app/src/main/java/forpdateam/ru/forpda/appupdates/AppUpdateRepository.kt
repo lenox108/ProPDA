@@ -18,7 +18,7 @@ class AppUpdateRepository @Inject constructor(
             val version: SemanticVersion,
             val topicUrl: String,
             val description: String?,
-            val downloads: List<AppUpdateParser.DownloadLink> = emptyList()
+            val downloads: List<DownloadLink> = emptyList()
         ) : CheckResult()
 
         data class UpToDate(val latestVersion: SemanticVersion?) : CheckResult()
@@ -85,9 +85,9 @@ class AppUpdateRepository @Inject constructor(
      * GitHub-релизы обычно содержат один APK — тогда возвращается он.
      */
     fun pickPreferredDownload(
-        downloads: List<AppUpdateParser.DownloadLink>,
+        downloads: List<DownloadLink>,
         flavor: String = BuildConfig.FLAVOR
-    ): AppUpdateParser.DownloadLink? {
+    ): DownloadLink? {
         if (downloads.isEmpty()) return null
         val scored = downloads.map { link ->
             link to flavorScore(link.fileName, flavor)
@@ -109,7 +109,7 @@ class AppUpdateRepository @Inject constructor(
         return markers.indexOfFirst { name.contains(it) }.let { if (it < 0) Int.MAX_VALUE else it }
     }
 
-    private fun loadBestCandidate(verbose: Boolean): AppUpdateParser.Candidate? {
+    private fun loadBestCandidate(verbose: Boolean): Candidate? {
         val best = githubSource.fetchLatestRelease()
             ?: throw CheckException(FailureReason.NotFound, "No published GitHub release found")
         logInfo(

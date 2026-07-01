@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import android.content.SharedPreferences
 import forpdateam.ru.forpda.model.AuthHolder
-import forpdateam.ru.forpda.appupdates.AppUpdateParser
+import forpdateam.ru.forpda.appupdates.DownloadLink
 import forpdateam.ru.forpda.appupdates.AppUpdatePreferences
 import forpdateam.ru.forpda.appupdates.AppUpdateRepository
 import forpdateam.ru.forpda.appupdates.AppUpdateScheduler
@@ -1048,7 +1048,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
     }
 
-    private fun startApkDownload(link: AppUpdateParser.DownloadLink) {
+    private fun startApkDownload(link: DownloadLink) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link.url)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
