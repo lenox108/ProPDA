@@ -11,21 +11,6 @@
         <item>ru</item>
     </string-array>
 
-    <string-array name="entries_theme_mode">
-        <item>@string/pref_value_theme_mode_light</item>
-        <item>@string/pref_value_theme_mode_dark</item>
-        <item>@string/pref_value_theme_mode_amoled</item>
-        <item>@string/pref_value_theme_mode_system</item>
-        <item>@string/pref_value_theme_mode_system_amoled</item>
-    </string-array>
-    <string-array name="entry_values_theme_mode">
-        <item>LIGHT</item>
-        <item>DARK</item>
-        <item>AMOLED</item>
-        <item>SYSTEM</item>
-        <item>SYSTEM_AMOLED</item>
-    </string-array>
-
     <string-array name="entries_app_font_mode">
         <item>@string/pref_value_app_font_system</item>
         <item>@string/pref_value_app_font_roboto</item>

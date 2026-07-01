@@ -11,14 +11,10 @@
     <PreferenceCategory
         android:layout="@layout/preference_category_custom_top"
         android:title="@string/pref_title_appereance">
-        <ListPreference
-            android:dialogTitle="@string/pref_title_theme_mode"
-            android:entries="@array/entries_theme_mode"
-            android:entryValues="@array/entry_values_theme_mode"
+        <Preference
             android:key="main.theme.mode"
             android:layout="@layout/preference_custom"
             android:summary="@string/pref_summary_theme_mode_system"
-            android:defaultValue="SYSTEM"
             android:title="@string/pref_title_theme_mode"
             app:iconSpaceReserved="false" />
 
