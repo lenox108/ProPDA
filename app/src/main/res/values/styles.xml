@@ -299,7 +299,6 @@
         <item name="colorPrimaryContainer">@color/light_background_for_cards</item>
         <item name="colorOnPrimaryContainer">@color/light_default_text_color</item>
         <item name="colorSecondaryContainer">@color/light_background_for_cards</item>
-        <item name="bottom_nav_tab_active_fill">@android:color/transparent</item>
         <item name="colorOnSecondaryContainer">@color/light_default_text_color</item>
         <item name="colorSurfaceVariant">@color/light_background_for_cards</item>
         <item name="colorOnSurfaceVariant">@color/light_second_text_color</item>
