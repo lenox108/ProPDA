@@ -112,8 +112,26 @@ class AppUpdateRepository @Inject constructor(
     }
 
     private fun loadBestCandidate(verbose: Boolean): Candidate? {
-        val best = githubSource.fetchLatestRelease()
-            ?: throw CheckException(FailureReason.NotFound, "No published GitHub release found")
+        val best = try {
+            githubSource.fetchLatestRelease()
+                ?: throw CheckException(FailureReason.NotFound, "No published GitHub release found")
+        } catch (e: CheckException) {
+            // Фид временно недоступен (лимит/сеть/сервер) — отдаём последнюю
+            // известную версию из кэша, чтобы проверка не «падала» ошибкой, а
+            // показывала актуальное на момент прошлой успешной проверки состояние.
+            // downloads в кэше нет (Atom их не даёт) → обновление ведёт на тему 4pda.
+            val cached = cachedCandidate()
+            if (cached != null &&
+                (e.reason == FailureReason.RateLimited ||
+                    e.reason == FailureReason.Network ||
+                    e.reason == FailureReason.Server)
+            ) {
+                logInfo(verbose, "feed failed (%s); serving cached version=%s", e.reason, cached.version)
+                cached
+            } else {
+                throw e
+            }
+        }
         logInfo(
             verbose,
             "selected latest=%s url=%s downloads=%d",
@@ -122,6 +140,17 @@ class AppUpdateRepository @Inject constructor(
             best.downloads.size
         )
         return best
+    }
+
+    /** Последняя успешно найденная версия из prefs, как [Candidate] без ассетов. */
+    private fun cachedCandidate(): Candidate? {
+        val version = preferences.getLastFoundVersion()?.let { SemanticVersion.parse(it) } ?: return null
+        return Candidate(
+            version = version,
+            url = GithubReleaseSource.RELEASES_PAGE_URL,
+            description = null,
+            downloads = emptyList()
+        )
     }
 
     private fun logInfo(enabled: Boolean, message: String, vararg args: Any?) {
