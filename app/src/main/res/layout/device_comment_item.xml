@@ -27,7 +27,7 @@
                 android:paddingEnd="@dimen/content_padding_horizontal"
                 android:paddingStart="@dimen/content_padding_horizontal"
                 android:text="@string/profile_title_about"
-                android:textColor="?attr/default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 android:textSize="@dimen/list_topic_meta_text_size"
                 android:textStyle="bold" />
 
@@ -41,7 +41,7 @@
                 android:paddingEnd="@dimen/content_padding_horizontal"
                 android:paddingStart="@dimen/content_padding_horizontal"
                 tools:text="@string/test_topic_date"
-                android:textColor="?attr/second_text_color"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="@dimen/list_topic_meta_text_size" />
         </RelativeLayout>
 
@@ -50,7 +50,7 @@
             android:id="@+id/item_desc"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:gravity="top"
             android:paddingBottom="@dimen/content_block_padding_vertical"
             android:paddingEnd="@dimen/content_padding_horizontal"

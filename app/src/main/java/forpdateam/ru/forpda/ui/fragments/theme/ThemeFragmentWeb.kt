@@ -688,7 +688,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
         val contentView = androidx.appcompat.widget.AppCompatTextView(requireContext()).apply {
             text = topicTitle
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
-            setTextColor(requireContext().getColorFromAttr(R.attr.default_text_color))
+            setTextColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             gravity = Gravity.START
             maxLines = 4
             maxWidth = resources.displayMetrics.widthPixels - dp16 * 2
@@ -704,7 +704,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             isOutsideTouchable = true
             elevation = resources.getDimension(R.dimen.dp4)
             setBackgroundDrawable(GradientDrawable().apply {
-                setColor(requireContext().getColorFromAttr(R.attr.cards_background))
+                setColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurface))
                 cornerRadius = dp8.toFloat()
             })
             setOnDismissListener {
@@ -733,12 +733,12 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             progress = 0
             isIndeterminate = false
             progressTintList = progressTint
-            progressBackgroundTintList = ColorStateList.valueOf(context.getColorFromAttr(R.attr.divider_line))
+            progressBackgroundTintList = ColorStateList.valueOf(context.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant))
         }
         val label = TextView(context).apply {
             text = getString(R.string.theme_bottom_refresh_pull)
             gravity = Gravity.CENTER
-            setTextColor(context.getColorFromAttr(R.attr.default_text_color))
+            setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             textSize = 12f
             maxLines = 1
         }
@@ -802,20 +802,20 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             isClickable = false
             setPadding(dp16, dp8, dp16, dp8)
             background = GradientDrawable().apply {
-                setColor(context.getColorFromAttr(R.attr.cards_background))
+                setColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSurface))
                 cornerRadius = dp16.toFloat()
             }
             elevation = resources.getDimension(R.dimen.dp4)
         }
         val directionLabel = TextView(context).apply {
             gravity = Gravity.CENTER
-            setTextColor(context.getColorFromAttr(R.attr.default_text_color))
+            setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             textSize = 20f
             maxLines = 1
         }
         val label = TextView(context).apply {
             gravity = Gravity.CENTER
-            setTextColor(context.getColorFromAttr(R.attr.default_text_color))
+            setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             textSize = 12f
             maxLines = 1
         }
@@ -824,7 +824,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
             progress = 0
             isIndeterminate = false
             progressTintList = progressTint
-            progressBackgroundTintList = ColorStateList.valueOf(context.getColorFromAttr(R.attr.divider_line))
+            progressBackgroundTintList = ColorStateList.valueOf(context.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant))
         }
         overlay.addView(directionLabel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         overlay.addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {

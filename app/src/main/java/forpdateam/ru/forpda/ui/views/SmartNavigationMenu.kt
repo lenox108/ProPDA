@@ -180,7 +180,7 @@ class SmartNavigationMenu(
         view.layoutParams = ViewGroup.LayoutParams(fixedWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         val bgDrawable = GradientDrawable().apply {
-            setColor(context.getColorFromAttr(R.attr.background_for_cards))
+            setColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
             cornerRadius = context.dp16.toFloat()
             val strokeWidth = context.getDimensionFromAttr(R.attr.list_plate_stroke_width)
             if (strokeWidth > 0) {

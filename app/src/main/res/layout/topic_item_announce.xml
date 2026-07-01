@@ -16,7 +16,7 @@
         android:id="@+id/topic_item_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="?attr/default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_topic_title_text_size"
         android:textStyle="bold"
         tools:text="@string/test_topic_title"/>

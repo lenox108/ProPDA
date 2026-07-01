@@ -42,13 +42,30 @@ import timber.log.Timber
  *   `colorOnBackground` → `colorSurface` / `colorOnSurface`). Используется для
  *   SYSTEM в светлой/тёмной теме.
  *
- * ВАЖНО про реальный охват: динамику обоев получают только акцент, базовый
- * `colorBackground` и `colorError` (через HarmonizedError ниже). Фоны экранов,
- * карточки, списки, тулбар, навбар, иконки, разделители и текст НЕ
- * перекрашиваются — это принципиальное ограничение: наши custom-attr читаются
- * через `TypedArray.getColorStateList`, который не дерефит `?attr/...`
- * (TYPE_ATTRIBUTE) и падает с UnsupportedOperationException. Подробности и
- * история в KDoc `ThemeOverlay.ForPDA.MaterialYouSurface` (`styles.xml`).
+ * ВАЖНО про реальный охват (обновлено после Этапа C `concurrent-dreaming-wren`
+ * consumer-side миграции — см. план): динамику обоев получают акцент, базовый
+ * `colorBackground`/`colorOnBackground`, `colorError` (через HarmonizedError
+ * ниже), и ТЕПЕРЬ ТАКЖЕ — везде, где XML/код были перенаправлены на прямые
+ * M3-роли вместо custom-attr — page background (`colorSurfaceContainerLowest`,
+ * было `background_base`), карточки/списки (`colorSurface`/`colorSurfaceVariant`,
+ * было `cards_background`/`background_for_cards`), разделители
+ * (`colorOutlineVariant`, было `divider_line`), и большая часть текста
+ * (`colorOnSurface`/`colorOnSurfaceVariant`/`colorSecondary` — было
+ * `default_text_color`/`second_text_color`/`link_color`, оба атрибута
+ * полностью удалены; `icon_toolbar` мигрирован частично — leaf-потребители
+ * на `colorOnSurface`, сам атрибут жив для ~30 внутренних ссылок каскада
+ * тулбара, см. план).
+ * Остаются статичными: текст/иконки/фон ВНУТРИ самого оверлея
+ * `MaterialYouSurface` (пины `android:textColor*`/`link_color` — обязательны,
+ * см. его KDoc) и атрибуты, у которых ещё нет M3-зеркала (`contrast_text_color`,
+ * `icon_base`, `chrome_plane_background`, scrim-цвета и пр. — см. план,
+ * раздел «Снятые с рассмотрения»). Корень принципиального ограничения тот же:
+ * наши ОСТАВШИЕСЯ custom-attr читаются через `TypedArray.getColorStateList`,
+ * который не дерефит `?attr/...` (TYPE_ATTRIBUTE) и падает с
+ * UnsupportedOperationException — поэтому миграция идёт со стороны
+ * потребителя (XML/код → M3-роль напрямую), а не редиректом самого атрибута.
+ * Подробности и история в KDoc `ThemeOverlay.ForPDA.MaterialYouSurface`
+ * (`styles.xml`) и в `FragmentBaseTextViewInflateTest`.
  *
  * Выбор оверлея делает [MaterialYouPolicy.resolveMode]. Палитры чтения
  * (Sepia/Minimal) динамику не получают вовсе.

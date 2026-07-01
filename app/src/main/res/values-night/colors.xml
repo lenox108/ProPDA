@@ -25,8 +25,6 @@
     <color name="sepia_default_text_color">#F2E6D3</color>
     <color name="sepia_contrast_text_color">#15100B</color>
     <color name="sepia_second_text_color">#B89F82</color>
-    <color name="sepia_drawer_item_text">@color/sepia_default_text_color</color>
-    <color name="sepia_drawer_item_text_selected">@color/sepia_default_text_color</color>
     <color name="sepia_background_base">#15100B</color>
     <color name="sepia_background_for_cards">#20160F</color>
     <color name="sepia_background_for_lists">#15100B</color>

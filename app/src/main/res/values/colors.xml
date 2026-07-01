@@ -53,8 +53,6 @@
     <color name="light_second_text_color">#636366</color>
     <!-- Подсказки в outlined TextInputLayout / диалогах (день) -->
     <color name="dialog_textinput_hint">@color/light_second_text_color</color>
-    <color name="light_drawer_item_text">@color/light_default_text_color</color>
-    <color name="light_drawer_item_text_selected">@color/light_default_text_color</color>
 
     <color name="light_background_base">#F2F2F7</color>
     <color name="light_background_for_cards">#E5E5EA</color>
@@ -94,8 +92,6 @@
     <color name="dark_default_text_color">#ffffff</color>
     <color name="dark_contrast_text_color">@color/light_default_text_color</color>
     <color name="dark_second_text_color">#98989F</color>
-    <color name="dark_drawer_item_text">@color/dark_default_text_color</color>
-    <color name="dark_drawer_item_text_selected">@color/dark_default_text_color</color>
 
     <color name="dark_background_base">#121212</color>
     <color name="dark_background_for_cards">#242424</color>
@@ -210,8 +206,6 @@
     <color name="sepia_default_text_color">#3A2E22</color>
     <color name="sepia_contrast_text_color">#FFF8E7</color>
     <color name="sepia_second_text_color">#7A6A58</color>
-    <color name="sepia_drawer_item_text">@color/sepia_default_text_color</color>
-    <color name="sepia_drawer_item_text_selected">@color/sepia_default_text_color</color>
     <color name="sepia_background_base">#F4ECD8</color>
     <color name="sepia_background_for_cards">#EFE3C8</color>
     <color name="sepia_background_for_lists">#F4ECD8</color>

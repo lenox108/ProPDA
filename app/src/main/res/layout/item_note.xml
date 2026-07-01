@@ -53,7 +53,7 @@
             tools:text="@string/test_topic_date"
             android:layout_alignBaseline="@+id/item_title"
             android:layout_marginStart="@dimen/dp8"
-            android:textColor="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:visibility="gone"/>
 
         <androidx.appcompat.widget.AppCompatTextView

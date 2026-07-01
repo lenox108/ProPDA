@@ -86,8 +86,8 @@ class TabAdapter : BaseAdapter<TabFragment, TabAdapter.TabHolder>() {
             )
 
             val ctx = binding.root.context
-            val onSurface = ctx.getColorFromAttr(R.attr.default_text_color)
-            val accent = ctx.getColorFromAttr(R.attr.link_color)
+            val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+            val accent = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
 
             binding.drawerItemTitle.apply {
                 text = item.getTabTitle()

@@ -16,7 +16,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="@dimen/content_block_padding_vertical"
         android:text="@string/user_nick"
-        android:textColor="?attr/second_text_color" />
+        android:textColor="?attr/colorOnSurfaceVariant" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
@@ -33,7 +33,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint=""
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:textColorHint="@color/dialog_textinput_hint"
             android:inputType="textPersonName"
             android:maxLines="1"
@@ -47,7 +47,7 @@
         android:layout_marginTop="@dimen/content_block_padding_vertical"
         android:layout_marginBottom="@dimen/content_block_padding_vertical"
         android:text="@string/theme"
-        android:textColor="?attr/second_text_color" />
+        android:textColor="?attr/colorOnSurfaceVariant" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
@@ -64,7 +64,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint=""
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:textColorHint="@color/dialog_textinput_hint"
             android:inputType="text"
             android:maxLines="1"

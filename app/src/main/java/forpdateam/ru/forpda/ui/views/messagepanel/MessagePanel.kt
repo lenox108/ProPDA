@@ -201,7 +201,7 @@ class MessagePanel(
         layoutParams = params
         radius = 0f
         preventCornerOverlap = false
-        setCardBackgroundColor(if (fullForm) context.getColorFromAttr(R.attr.cards_background) else Color.TRANSPARENT)
+        setCardBackgroundColor(if (fullForm) context.getColorFromAttr(com.google.android.material.R.attr.colorSurface) else Color.TRANSPARENT)
         if (!fullForm) {
             setCardElevation(0f)
             setMaxCardElevation(0f)
@@ -555,8 +555,8 @@ class MessagePanel(
         }
 
         val previewView = TextView(context).apply {
-            setTextColor(context.getColorFromAttr(R.attr.default_text_color))
-            setLinkTextColor(context.getColorFromAttr(R.attr.link_color))
+            setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            setLinkTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSecondary))
             textSize = 16f
             setLineSpacing(0f, 1.15f)
             setPadding(
@@ -570,7 +570,7 @@ class MessagePanel(
         }
 
         val previewContainer = ScrollView(context).apply {
-            setBackgroundColor(context.getColorFromAttr(R.attr.cards_background))
+            setBackgroundColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSurface))
             addView(previewView, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT

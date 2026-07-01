@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Один M3 FilterChip для тулбар-фильтра категорий (DevDB BrandsFragment).
+    Инфлейтится по одному на категорию в ChipGroup#toolbar_filter_chips.
+    Стиль Widget.Material3.Chip.Filter трекает M3-роли темы (включая Material You).
+-->
+<com.google.android.material.chip.Chip
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    style="@style/Widget.Material3.Chip.Filter"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:checkable="true" />

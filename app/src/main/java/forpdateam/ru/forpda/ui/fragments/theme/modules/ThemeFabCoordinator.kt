@@ -277,7 +277,7 @@ class ThemeFabCoordinator(
             setPadding(context.dp16, context.dp12, context.dp16, context.dp8)
             layoutParams = ViewGroup.LayoutParams(panelWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
             background = GradientDrawable().apply {
-                setColor(context.getColorFromAttr(R.attr.background_for_cards))
+                setColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
                 cornerRadius = context.dp16.toFloat()
                 val strokeWidth = context.getDimensionFromAttr(R.attr.list_plate_stroke_width)
                 if (strokeWidth > 0) {
@@ -289,7 +289,7 @@ class ThemeFabCoordinator(
 
         panel.addView(TextView(context).apply {
             text = context.getString(R.string.smart_nav_hint)
-            setTextColor(context.getColorFromAttr(R.attr.default_text_color))
+            setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -299,9 +299,9 @@ class ThemeFabCoordinator(
 
         val checkbox = AppCompatCheckBox(context).apply {
             text = context.getString(R.string.smart_nav_hint_never_show)
-            setTextColor(context.getColorFromAttr(R.attr.default_text_color))
+            setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            buttonTintList = android.content.res.ColorStateList.valueOf(context.getColorFromAttr(R.attr.link_color))
+            buttonTintList = android.content.res.ColorStateList.valueOf(context.getColorFromAttr(com.google.android.material.R.attr.colorSecondary))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -316,7 +316,7 @@ class ThemeFabCoordinator(
 
         panel.addView(AppCompatButton(context).apply {
             text = context.getString(R.string.ok)
-            setTextColor(context.getColorFromAttr(R.attr.link_color))
+            setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSecondary))
             minHeight = context.dp24
             minimumHeight = context.dp24
             background = null

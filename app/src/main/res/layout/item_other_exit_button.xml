@@ -14,7 +14,7 @@
         android:contentDescription="@string/menu_item_exit"
         android:focusable="true"
         android:foreground="?attr/selectableItemBackground"
-        app:cardBackgroundColor="?attr/cards_background"
+        app:cardBackgroundColor="?attr/colorSurface"
         app:cardCornerRadius="28dp"
         app:cardElevation="0dp"
         app:strokeColor="?attr/list_plate_stroke_color"

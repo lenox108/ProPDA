@@ -36,7 +36,7 @@
         android:layout_marginEnd="@dimen/content_padding_horizontal"
         android:lineSpacingMultiplier="0.9"
         android:textAppearance="@style/TextAppearance.AppCompat.Title"
-        android:textColor="?attr/default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_news_title_text_size"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
@@ -54,7 +54,7 @@
         android:ellipsize="end"
         android:maxLines="3"
         android:textAppearance="@style/TextAppearance.AppCompat.Small"
-        android:textColor="?attr/default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_topic_meta_text_size"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -95,7 +95,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="@style/TextAppearance.AppCompat.Small"
-                android:textColor="?attr/second_text_color"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="@dimen/list_topic_meta_text_size"
                 tools:text="Вася в разносе" />
 
@@ -123,7 +123,7 @@
             android:layout_height="wrap_content"
             android:layout_marginEnd="@dimen/content_padding_horizontal"
             android:textAppearance="@style/TextAppearance.AppCompat.Small"
-            android:textColor="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="2560" />
 
@@ -132,7 +132,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TextAppearance.AppCompat.Small"
-            android:textColor="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="20.09.1985" />
 

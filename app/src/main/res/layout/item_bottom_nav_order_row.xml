@@ -29,7 +29,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textColor="?default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_topic_meta_text_size"
         android:textStyle="bold"
         tools:text="@string/fragment_title_news_list" />

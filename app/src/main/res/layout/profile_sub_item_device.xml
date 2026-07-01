@@ -15,6 +15,6 @@
         android:id="@+id/item_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="?attr/default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_topic_title_text_size" />
 </LinearLayout>

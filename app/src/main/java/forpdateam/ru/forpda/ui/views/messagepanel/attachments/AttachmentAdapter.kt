@@ -196,7 +196,7 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
         private var listener: TabLayout.OnTabSelectedListener
 
         init {
-            val selectedIcon = tabLayout.context.getColorFromAttr(R.attr.default_text_color)
+            val selectedIcon = tabLayout.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
             val normalIcon = tabLayout.context.getColorFromAttr(R.attr.icon_base)
             val iconTint = ColorStateList(
                 arrayOf(
@@ -235,7 +235,7 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
             reverseBtn.isSelected = _isReverse
             reverseBtn.imageTintList = ColorStateList.valueOf(
                 reverseBtn.context.getColorFromAttr(
-                    if (_isReverse) R.attr.default_text_color else R.attr.icon_base
+                    if (_isReverse) com.google.android.material.R.attr.colorOnSurface else R.attr.icon_base
                 )
             )
             tabLayout.addOnTabSelectedListener(listener)

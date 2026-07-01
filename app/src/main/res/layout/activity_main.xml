@@ -155,7 +155,7 @@
                 android:paddingEnd="@dimen/list_row_padding_horizontal"
                 android:paddingBottom="@dimen/content_block_padding_vertical"
                 android:text="@string/bottom_nav_open_tabs_section"
-                android:textColor="?attr/default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 android:textSize="@dimen/list_topic_meta_text_size"
                 android:textStyle="bold"
                 android:visibility="gone"
@@ -189,7 +189,7 @@
                 android:paddingStart="@dimen/list_row_padding_horizontal"
                 android:paddingEnd="@dimen/list_row_padding_horizontal"
                 android:text="@string/close_other_tabs"
-                android:textColor="?attr/default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 android:visibility="gone"
                 app:layout_constraintBottom_toTopOf="@id/bottomMenuRecycler"
                 app:layout_constraintTop_toBottomOf="@id/bottomTabsRecycler" />

@@ -39,13 +39,13 @@ fun SearchView.applyToolbarSearchPlateChrome() {
     clearBackground(AppCompatR.id.search_edit_frame)
     clearBackground(AppCompatR.id.search_plate)
 
-    val iconTint = ColorStateList.valueOf(ctx.getColorFromAttr(R.attr.icon_toolbar))
+    val iconTint = ColorStateList.valueOf(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
     findViewById<ImageView>(AppCompatR.id.search_mag_icon)?.imageTintList = iconTint
     findViewById<ImageView>(AppCompatR.id.search_close_btn)?.imageTintList = iconTint
 
     (findViewById<View>(AppCompatR.id.search_src_text) as? TextView)?.apply {
-        setTextColor(ctx.getColorFromAttr(R.attr.default_text_color))
-        setHintTextColor(ctx.getColorFromAttr(R.attr.second_text_color))
+        setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+        setHintTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
     }
 }
 

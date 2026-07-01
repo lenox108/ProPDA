@@ -317,8 +317,8 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
             hint = getString(R.string.note_search_hint)
             setSingleLine()
             inputType = InputType.TYPE_CLASS_TEXT
-            setTextColor(requireContext().getColorFromAttr(R.attr.default_text_color))
-            setHintTextColor(requireContext().getColorFromAttr(R.attr.second_text_color))
+            setTextColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            setHintTextColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
             background = ColorDrawable(Color.TRANSPARENT)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 textCursorDrawable = requireContext().getDrawable(R.drawable.text_cursor)

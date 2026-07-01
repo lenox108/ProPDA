@@ -73,7 +73,7 @@ class OtherFragment : TabFragment() {
         super.onViewCreated(view, savedInstanceState)
         appBarLayout.visibility = View.GONE
         // Иначе под списком просвечивает ?background_for_lists координатора — полоса над нижним меню.
-        coordinatorLayout.setBackgroundColor(requireContext().getColorFromAttr(R.attr.background_base))
+        coordinatorLayout.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         listRecycler.apply {
             listBaseBottomPadding = paddingBottom
             val gridLayoutManager = GridLayoutManager(this.context, MENU_GRID_SPAN_COUNT)
@@ -178,6 +178,10 @@ class OtherFragment : TabFragment() {
             super.onBackPressed()
         }
     }
+
+    // Read-only зеркало onBackPressed: перехватываем «назад» в режиме
+    // редактирования меню (см. hasBackHandling в TabFragment).
+    override fun hasBackHandling(): Boolean = otherAdapter.isMenuEditMode()
 
     override fun onBottomChromePaddingChanged(padding: Int) {
         super.onBottomChromePaddingChanged(padding)

@@ -32,7 +32,7 @@
             android:layout_marginTop="@dimen/dp24"
             android:gravity="center"
             android:text="@string/empty_layout_error"
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="@dimen/empty_state_title_text_size"
             android:textStyle="bold"
             tools:ignore="HardcodedText"/>
@@ -43,7 +43,7 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="@dimen/content_spacing"
             android:gravity="center"
-            android:textColor="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/empty_state_subtitle_text_size"
             tools:text="Sorry Valera, but your device is not supported."
             tools:ignore="HardcodedText"/>
@@ -58,7 +58,7 @@
             android:paddingStart="@dimen/dp16"
             android:paddingEnd="@dimen/dp16"
             android:text="@string/empty_layout_version"
-            android:textColor="?attr/link_color"
+            android:textColor="?attr/colorSecondary"
             android:textSize="@dimen/list_topic_meta_text_size"
             android:textStyle="bold"
             tools:ignore="HardcodedText"/>

@@ -6,15 +6,10 @@
         <item name="colorPrimaryDark">@color/classic_dark_colorPrimaryDark</item>
         <item name="colorAccent">@color/classic_dark_colorAccent</item>
         <item name="colorSecondary">@color/classic_dark_link_color</item>
-        <item name="link_color">@color/classic_dark_link_color</item>
-        <item name="second_text_color">@color/classic_dark_second_text_color</item>
-        <item name="background_base">@color/classic_dark_background_base</item>
-        <item name="background_for_cards">@color/classic_dark_background_for_cards</item>
         <item name="background_for_lists">@color/classic_dark_background_for_lists</item>
         <item name="divider_line_bottom_nav">@color/classic_dark_divider_line_bottom_nav</item>
         <item name="icon_base">@color/classic_dark_icon_base</item>
         <item name="menu_tile_icon">?attr/icon_base</item>
-        <item name="cards_background">@color/classic_dark_card_background</item>
         <item name="chrome_plane_background">@color/classic_dark_card_background</item>
         <item name="main_toolbar_accent_surface">@color/classic_dark_main_toolbar_accent_surface</item>
         <item name="main_toolbar_stroke_width">1dp</item>
@@ -26,7 +21,6 @@
         <item name="android:windowBackground">@color/classic_dark_background_base</item>
         <item name="android:navigationBarColor">@color/dark_navigation_bar_color</item>
         <item name="colorSurface">@color/classic_dark_card_background</item>
-        <item name="toolbar_color">@color/classic_dark_card_background</item>
         <item name="colorOnPrimary">@color/dark_default_text_color</item>
         <item name="colorPrimaryContainer">@color/classic_dark_card_background</item>
         <item name="colorOnPrimaryContainer">@color/dark_default_text_color</item>
@@ -91,7 +85,7 @@
 
     <style name="DayNightAppTheme.Classic4pda.AppBarOverlay" parent="ThemeOverlay.Material3.Dark.ActionBar">
         <item name="android:singleLine">true</item>
-        <item name="colorSurface">?attr/cards_background</item>
+        <item name="colorSurface">?attr/colorSurface</item>
         <item name="colorControlNormal">?icon_toolbar</item>
         <item name="colorPrimary">@color/classic_dark_link_color</item>
         <item name="colorPrimaryContainer">@color/classic_dark_card_background</item>

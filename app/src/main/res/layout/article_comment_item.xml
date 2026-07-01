@@ -21,7 +21,7 @@
         android:ellipsize="end"
         android:gravity="center_vertical"
         android:maxLines="1"
-        android:textColor="?second_text_color"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="@dimen/list_topic_meta_text_size"
         android:textStyle="bold"
         tools:text="radiation15" />
@@ -38,7 +38,7 @@
             android:id="@+id/comment_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="?second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/list_topic_meta_text_size"
             tools:text="4.09.17, 12:02" />
 
@@ -48,7 +48,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/content_spacing_half"
             android:text="✎"
-            android:textColor="?second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/list_topic_meta_text_size"
             android:visibility="gone"
             tools:visibility="visible" />
@@ -70,7 +70,7 @@
             android:layout_marginStart="@dimen/content_spacing_half"
             android:gravity="center_vertical"
             android:text="30"
-            android:textColor="?second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/list_section_header_text_size" />
 
         <ImageView

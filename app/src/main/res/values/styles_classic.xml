@@ -6,18 +6,11 @@
         <item name="colorPrimaryDark">@color/classic_light_colorPrimaryDark</item>
         <item name="colorAccent">@color/classic_light_colorAccent</item>
         <item name="colorSecondary">@color/classic_light_colorAccent</item>
-        <item name="link_color">@color/classic_light_link_color</item>
-        <item name="default_text_color">@color/classic_light_default_text_color</item>
-        <item name="second_text_color">@color/classic_light_second_text_color</item>
-        <item name="background_base">@color/classic_light_background_base</item>
-        <item name="background_for_cards">@color/classic_light_background_for_cards</item>
         <item name="background_for_lists">@color/classic_light_background_for_lists</item>
-        <item name="divider_line">@color/classic_light_divider_line</item>
         <item name="divider_line_bottom_nav">@color/classic_light_divider_line_bottom_nav</item>
         <item name="icon_base">@color/classic_light_icon_base</item>
         <item name="menu_tile_icon">?attr/icon_base</item>
         <item name="icon_toolbar">@color/classic_light_icon_toolbar</item>
-        <item name="cards_background">@color/classic_light_card_background</item>
         <item name="chrome_plane_background">@color/classic_light_card_background</item>
         <item name="main_toolbar_accent_surface">@color/classic_light_main_toolbar_accent_surface</item>
         <item name="main_toolbar_stroke_width">0dp</item>
@@ -94,7 +87,7 @@
 
     <style name="DayNightAppTheme.Classic4pda.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
         <item name="android:singleLine">true</item>
-        <item name="colorSurface">?attr/cards_background</item>
+        <item name="colorSurface">?attr/colorSurface</item>
         <item name="colorControlNormal">?icon_toolbar</item>
         <item name="colorPrimary">@color/classic_light_link_color</item>
         <item name="colorPrimaryContainer">@color/classic_light_background_for_cards</item>

@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:text="@string/support_author_message"
         android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-        android:textColor="?default_text_color" />
+        android:textColor="?attr/colorOnSurface" />
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/supportAuthorPaymentLink"
@@ -54,7 +54,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/support_author_card_label"
                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                android:textColor="?second_text_color" />
+                android:textColor="?attr/colorOnSurfaceVariant" />
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/supportAuthorCardValue"
@@ -64,7 +64,7 @@
                 android:fontFamily="monospace"
                 android:text="@string/support_author_tbank_card"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:textColor="?default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 android:textIsSelectable="false" />
 
         </LinearLayout>
@@ -95,7 +95,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/support_author_sber_label"
                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                android:textColor="?second_text_color" />
+                android:textColor="?attr/colorOnSurfaceVariant" />
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/supportAuthorSberValue"
@@ -105,7 +105,7 @@
                 android:fontFamily="monospace"
                 android:text="@string/support_author_sber_card"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:textColor="?default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 android:textIsSelectable="false" />
 
         </LinearLayout>
@@ -136,7 +136,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/support_author_usdt_label"
                 android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
-                android:textColor="?second_text_color" />
+                android:textColor="?attr/colorOnSurfaceVariant" />
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/supportAuthorUsdtValue"
@@ -146,7 +146,7 @@
                 android:fontFamily="monospace"
                 android:text="@string/support_author_usdt_trc20"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                android:textColor="?default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 android:textIsSelectable="false" />
 
         </LinearLayout>

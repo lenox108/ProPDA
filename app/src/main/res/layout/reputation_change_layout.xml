@@ -15,7 +15,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="@dimen/dp16"
         android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
-        android:textColor="?attr/default_text_color" />
+        android:textColor="?attr/colorOnSurface" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/reputation_input_layout"

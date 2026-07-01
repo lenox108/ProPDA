@@ -17,7 +17,7 @@
         android:layout_marginEnd="@dimen/dp10"
         android:contentDescription="@null"
         android:importantForAccessibility="no"
-        app:tint="?attr/second_text_color"/>
+        app:tint="?attr/colorOnSurfaceVariant"/>
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/smart_nav_action_title"
@@ -26,6 +26,6 @@
         android:layout_weight="1"
         android:gravity="center_vertical|start"
         android:textSize="13sp"
-        android:textColor="?attr/default_text_color"/>
+        android:textColor="?attr/colorOnSurface"/>
 
 </LinearLayout>

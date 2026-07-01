@@ -32,7 +32,7 @@
             android:layout_toEndOf="@+id/item_image"
             android:maxLines="3"
             tools:text="@string/test_topic_title"
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="@dimen/list_topic_title_text_size" />
 
         <androidx.appcompat.widget.AppCompatTextView
@@ -42,7 +42,7 @@
             android:layout_below="@+id/item_title"
             android:layout_toEndOf="@+id/item_image"
             tools:text="@string/test_topic_description"
-            android:textColor="?attr/second_text_color"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/list_topic_meta_text_size"
             android:visibility="gone" />
 
@@ -53,7 +53,7 @@
             android:layout_below="@+id/item_desc"
             android:layout_toEndOf="@+id/item_image"
             tools:text="@string/test_topic_date"
-            android:textColor="?attr/second_text_color" />
+            android:textColor="?attr/colorOnSurfaceVariant" />
 
     </RelativeLayout>
 </androidx.cardview.widget.CardView>

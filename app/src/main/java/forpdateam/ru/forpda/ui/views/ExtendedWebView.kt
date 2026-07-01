@@ -198,7 +198,7 @@ open class ExtendedWebView @JvmOverloads constructor(
             WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
         setRelativeFontSize(16)
-        setBackgroundColor(context.getColorFromAttr(R.attr.background_base))
+        setBackgroundColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         // Note: textZoom is set earlier (X-04) so the first paint uses the
         // correct font scale. Do not reset it here.
 

@@ -105,10 +105,10 @@ internal class SmartNavPageViewHolder(
                 }
             }
             rowLayout.background = currentPageBg
-            numberView.setTextColor(context.getColorFromAttr(R.attr.default_text_color))
+            numberView.setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
         } else {
             rowLayout.background = null
-            numberView.setTextColor(context.getColorFromAttr(R.attr.default_text_color))
+            numberView.setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
         }
     }
 }

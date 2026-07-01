@@ -48,6 +48,7 @@ object Preferences {
         const val SHOW_BOTTOM_ARROW = PREFIX + "show_bottom_arrow"
         const val BOTTOM_NAV_COLUMNS = PREFIX + "bottom_nav_columns"
         const val UI_PALETTE = PREFIX + "ui.palette"
+        const val ACCENT_PALETTE = PREFIX + "accent"
         const val APP_FONT_MODE = PREFIX + "app_font_mode"
         const val USE_SYSTEM_FONT = PREFIX + "use_system_font"
         const val STARTUP_SCREEN = PREFIX + "startup_screen"
@@ -62,6 +63,16 @@ object Preferences {
 
         enum class ThemeMode { LIGHT, DARK, AMOLED, SYSTEM, SYSTEM_AMOLED }
         enum class UiPalette { SYSTEM, SEPIA_READING, SEPIA_BLUE, MINIMAL_READER }
+
+        /**
+         * Курируемые акцент-палитры «смены цвета». NEUTRAL — текущий монохромный
+         * бренд (без оверлея). Остальные накладывают M3-акцент (см. AccentApplier +
+         * ThemeOverlay.ForPDA.Accent.*). Порядок = порядок в гриде настроек.
+         */
+        enum class AccentPalette {
+            NEUTRAL, BLUE, INDIGO, VIOLET, PURPLE, PINK, RED,
+            DEEPORANGE, ORANGE, AMBER, GREEN, TEAL, CYAN
+        }
         enum class DownloadMethod { SYSTEM, EXTERNAL_MANAGER, BROWSER, ASK }
         enum class TopicScrollMode { HYBRID, CLASSIC }
         enum class TopicPostDensity { COMFORTABLE, COMPACT, SUPER_COMPACT }

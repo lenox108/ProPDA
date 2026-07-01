@@ -29,7 +29,7 @@
         android:layout_toStartOf="@+id/qms_contact_count"
         android:ellipsize="end"
         android:maxLines="1"
-        android:textColor="?attr/default_text_color"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/qms_contact_title_text_size"
         tools:text="@string/test_nick"/>
 

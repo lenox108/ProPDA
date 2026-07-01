@@ -21,7 +21,7 @@
             android:paddingEnd="@dimen/dp0"
             android:paddingStart="@dimen/content_padding_horizontal"
             android:paddingTop="@dimen/content_padding_vertical"
-            android:textColor="?attr/default_text_color"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="@dimen/list_topic_meta_text_size"
             android:textStyle="bold"
             tools:text="@string/test_drawer_item_name" />
@@ -35,6 +35,6 @@
             android:clickable="true"
             android:padding="@dimen/dp12"
             app:srcCompat="@drawable/ic_clear"
-            app:tint="?attr/second_text_color" />
+            app:tint="?attr/colorOnSurfaceVariant" />
     </RelativeLayout>
 </FrameLayout>

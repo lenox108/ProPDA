@@ -19,7 +19,7 @@
         app:tabPaddingEnd="@dimen/content_padding_horizontal"
         app:tabPaddingStart="@dimen/content_padding_horizontal"
         app:tabSelectedTextColor="?attr/colorAccent"
-        app:tabTextColor="?attr/second_text_color" />
+        app:tabTextColor="?attr/colorOnSurfaceVariant" />
 
     <androidx.viewpager.widget.ViewPager
         android:id="@+id/color_picker_pager"

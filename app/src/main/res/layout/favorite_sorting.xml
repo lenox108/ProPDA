@@ -20,7 +20,7 @@
             android:paddingTop="@dimen/content_spacing"
             android:text="@string/sort_by"
             android:textAllCaps="true"
-            android:textColor="?attr/second_text_color" />
+            android:textColor="?attr/colorOnSurfaceVariant" />
 
         <RadioGroup
             android:id="@+id/sorting_key"
@@ -35,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:minHeight="@dimen/dp48"
                 android:text="@string/fav_sort_last_post"
-                android:textColor="?attr/default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 app:buttonTint="@color/favorite_sorting_radio_button" />
 
             <com.google.android.material.radiobutton.MaterialRadioButton
@@ -44,7 +44,7 @@
                 android:layout_height="wrap_content"
                 android:minHeight="@dimen/dp48"
                 android:text="@string/fav_sort_title"
-                android:textColor="?attr/default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 app:buttonTint="@color/favorite_sorting_radio_button" />
         </RadioGroup>
 
@@ -56,7 +56,7 @@
             android:paddingTop="@dimen/content_spacing"
             android:text="@string/sort_order"
             android:textAllCaps="true"
-            android:textColor="?attr/second_text_color" />
+            android:textColor="?attr/colorOnSurfaceVariant" />
 
         <RadioGroup
             android:id="@+id/sorting_order"
@@ -71,7 +71,7 @@
                 android:layout_height="wrap_content"
                 android:minHeight="@dimen/dp48"
                 android:text="@string/sorting_asc"
-                android:textColor="?attr/default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 app:buttonTint="@color/favorite_sorting_radio_button" />
 
             <com.google.android.material.radiobutton.MaterialRadioButton
@@ -80,7 +80,7 @@
                 android:layout_height="wrap_content"
                 android:minHeight="@dimen/dp48"
                 android:text="@string/sorting_desc"
-                android:textColor="?attr/default_text_color"
+                android:textColor="?attr/colorOnSurface"
                 app:buttonTint="@color/favorite_sorting_radio_button" />
         </RadioGroup>
 

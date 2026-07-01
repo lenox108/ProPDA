@@ -4,17 +4,9 @@
     <!-- Status bar color attr: tinted at theme time, used by AppBarOverlay/MaterialYouSurface overlays. -->
     <attr name="status_bar_color" extension="reference" format="color" />
 
-    <attr name="link_color" extension="reference" format="color" />
     <attr name="link_color_contrast" extension="reference" format="color" />
-    <attr name="default_text_color" extension="reference" format="color" />
     <attr name="contrast_text_color" extension="reference" format="color" />
-    <attr name="second_text_color" extension="reference" format="color" />
-    <attr name="drawer_item_text" extension="reference" format="color" />
-    <attr name="drawer_item_text_selected" extension="reference" format="color" />
-    <attr name="background_base" extension="reference" format="color" />
-    <attr name="background_for_cards" extension="reference" format="color" />
     <attr name="background_for_lists" extension="reference" format="color" />
-    <attr name="divider_line" extension="reference" format="color" />
     <attr name="divider_line_bottom_nav" extension="reference" format="color" />
     <attr name="attachment_overlay_bg" extension="reference" format="color" />
     <attr name="attachment_description_bg" extension="reference" format="color" />
@@ -28,7 +20,6 @@
     <attr name="icon_toolbar" extension="reference" format="color" />
     <attr name="icon_toolbar_inverse" extension="reference" format="color" />
     <attr name="count_background" extension="reference" />
-    <attr name="cards_background" extension="reference" format="color" />
     <!-- Toolbar plaque + BottomDrawer bar: surface/card color in light and regular dark; AMOLED may stay pure black. -->
     <attr name="chrome_plane_background" extension="reference" format="color" />
     <!-- Primary section top toolbar plate: soft accent-tinted surface, separate from popups/dialogs/bottom chrome. -->
@@ -50,7 +41,6 @@
     <attr name="smart_nav_fab_background" extension="reference" format="color" />
     <attr name="smart_nav_fab_icon" extension="reference" format="color" />
 
-    <attr name="toolbar_color" format="color" />
     <attr name="app_bar_overlay" extension="reference" />
     <attr name="popup_overlay" extension="reference" />
     <attr name="bottom_sheet_dialog_theme" extension="reference" />
@@ -58,8 +48,6 @@
     <attr name="is_use_light_status_bar" format="boolean" />
 
     <attr name="ProfileToolbarTextStyle" extension="reference" />
-    <attr name="colorSwitchTrackNormal" format="color" />
-    <attr name="colorSwitchThumbNormal" format="color" />
 
     <declare-styleable name="AspectRatio">
         <attr name="aspectRatio" format="float" />

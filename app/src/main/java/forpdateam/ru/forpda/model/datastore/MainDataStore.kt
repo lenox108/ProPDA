@@ -66,6 +66,7 @@ class MainDataStore(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val SHOW_BOTTOM_ARROW = booleanPreferencesKey("show_bottom_arrow")
         val UI_PALETTE = stringPreferencesKey("ui_palette")
+        val ACCENT_PALETTE = stringPreferencesKey("accent_palette")
         val APP_FONT_MODE = stringPreferencesKey("app_font_mode")
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
         val STARTUP_SCREEN = stringPreferencesKey("startup_screen")
@@ -175,6 +176,16 @@ class MainDataStore(private val context: Context) {
                         ?: AppPreferences.Main.UiPalette.SYSTEM.name
                 )
             }, AppPreferences.Main.UiPalette.SYSTEM)
+
+    fun observeAccentPaletteFlow(): Flow<AppPreferences.Main.AccentPalette> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                parseAccentPalette(
+                    preferences[PreferencesKeys.ACCENT_PALETTE]
+                        ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                            .getString(AppPreferences.Main.ACCENT_PALETTE, null)
+                        ?: AppPreferences.Main.AccentPalette.NEUTRAL.name
+                )
+            }, AppPreferences.Main.AccentPalette.NEUTRAL)
 
     fun observeEditorMonospaceFlow(): Flow<Boolean> =
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
@@ -562,6 +573,27 @@ class MainDataStore(private val context: Context) {
         }
         // Mirror for instant synchronous theme selection before Activity.onCreate.
         mirrorPrefs.edit().putString("ui_palette", palette.name).apply()
+    }
+
+    suspend fun setAccentPalette(palette: AppPreferences.Main.AccentPalette) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.ACCENT_PALETTE] = palette.name
+        }
+        // Mirror for instant synchronous accent selection before Activity.onCreate.
+        mirrorPrefs.edit().putString("accent_palette", palette.name).apply()
+    }
+
+    fun getAccentPaletteImmediate(): AppPreferences.Main.AccentPalette {
+        val mirrored = mirrorPrefs.getString("accent_palette", null)
+        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+            .getString(AppPreferences.Main.ACCENT_PALETTE, null)
+        return parseAccentPalette(mirrored ?: legacy ?: AppPreferences.Main.AccentPalette.NEUTRAL.name)
+    }
+
+    private fun parseAccentPalette(value: String): AppPreferences.Main.AccentPalette = try {
+        AppPreferences.Main.AccentPalette.valueOf(value)
+    } catch (_: IllegalArgumentException) {
+        AppPreferences.Main.AccentPalette.NEUTRAL
     }
 
     suspend fun setEditorMonospace(value: Boolean) {

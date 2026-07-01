@@ -17,15 +17,18 @@ import org.robolectric.annotation.Config
  * Pre-Android-12 hardening for the canonical Material You refactor.
  *
  * Background. The `MaterialYouSurface` overlay (see `values/styles.xml`)
- * remaps `icon_toolbar` / `default_text_color` / `cards_background` to the
- * M3 dynamic roles `?attr/colorOnSurface*` / `?attr/colorSurfaceContainer*`.
- * On API >= 31 the overlay is applied per-Activity by
- * [MaterialYouApplier.applyIfEnabled]; on API < 31 it is **not** applied
- * (the applier early-returns on `Build.VERSION.SDK_INT < S`), and the
- * activity uses the base `DayNightAppTheme` directly.
+ * remaps `icon_toolbar` to the M3 dynamic role `?attr/colorOnSurface*`. On
+ * API >= 31 the overlay is applied per-Activity by
+ * [MaterialYouApplier.applyIfEnabled]; on API < 31 it is **not** applied (the
+ * applier early-returns on `Build.VERSION.SDK_INT < S`), and the activity
+ * uses the base `DayNightAppTheme` directly. (`cards_background` and
+ * `default_text_color` were both retired by the Этап C
+ * `concurrent-dreaming-wren` consumer-side migration — their leaf consumers
+ * now read `?attr/colorSurface` / `?attr/colorOnSurface` directly; see the
+ * `colorSurface` / `colorOnSurface` tests below.)
  *
  * Both code paths must hold for the canonical refactor:
- *  - Pre-31 path: `?icon_toolbar` / `?default_text_color` / `?cards_background`
+ *  - Pre-31 path: `?icon_toolbar` / `?attr/colorSurface` / `?attr/colorOnSurface`
  *    resolve to **concrete ints** in the base `DayNightAppTheme`
  *    (e.g. `@color/light_icon_toolbar`). Otherwise
  *    `Toolbar.<init> / TextView.<init> / CardView.<init>` would call
@@ -96,33 +99,29 @@ class MaterialYouThemeFallbackTest {
         assertNotEquals("icon_toolbar must not be transparent black (0)", 0, tv.data)
     }
 
-    @Test
-    fun `base DayNightAppTheme defines default_text_color as concrete int on pre-31`() {
-        val tv = TypedValue()
-        val resolved = ctx.theme.resolveAttribute(R.attr.default_text_color, tv, /* resolveRefs = */ true)
-        assertTrue("?default_text_color must resolve on the base theme", resolved)
-        assertNotEquals(
-                "default_text_color must NOT stay as TYPE_ATTRIBUTE — TextView.<init> would crash",
-                TypedValue.TYPE_ATTRIBUTE, tv.type
-        )
-        assertResolvedToColorInt(
-                "default_text_color must resolve to a concrete color int (@color/light_default_text_color)",
-                tv
-        )
-        assertNotEquals(0, tv.data)
-    }
+    // `default_text_color` (the legacy custom attr TextView consumers used to read)
+    // was retired by the Этап C `concurrent-dreaming-wren` consumer-side migration —
+    // every leaf TextView consumer now reads `?attr/colorOnSurface` directly. The
+    // `colorOnSurface as concrete int on pre-31` test below already covers this
+    // invariant under the new role; no separate test is needed.
 
     @Test
-    fun `base DayNightAppTheme defines cards_background as concrete int on pre-31`() {
+    fun `base DayNightAppTheme defines colorSurface as concrete int on pre-31`() {
+        // `cards_background` (the legacy custom attr CardView consumers used to read)
+        // was retired by the Этап C consumer-side migration — every CardView
+        // consumer now reads `?attr/colorSurface` directly. This test takes over
+        // the original invariant under the new role.
         val tv = TypedValue()
-        val resolved = ctx.theme.resolveAttribute(R.attr.cards_background, tv, /* resolveRefs = */ true)
-        assertTrue("?cards_background must resolve on the base theme", resolved)
+        val resolved = ctx.theme.resolveAttribute(
+                com.google.android.material.R.attr.colorSurface, tv, /* resolveRefs = */ true
+        )
+        assertTrue("?attr/colorSurface must resolve on the base theme", resolved)
         assertNotEquals(
-                "cards_background must NOT stay as TYPE_ATTRIBUTE — CardView.<init> would crash",
+                "colorSurface must NOT stay as TYPE_ATTRIBUTE — CardView.<init> would crash",
                 TypedValue.TYPE_ATTRIBUTE, tv.type
         )
         assertResolvedToColorInt(
-                "cards_background must resolve to a concrete color int (@color/light_card_background)",
+                "colorSurface must resolve to a concrete color int (@color/light_card_background)",
                 tv
         )
         assertNotEquals(0, tv.data)

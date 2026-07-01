@@ -37,8 +37,8 @@ class MentionsAdapter : BaseAdapter<MentionItem, MentionsAdapter.MentionHolder>(
 
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
         super.onAttachedToRecyclerView(recyclerView)
-        titleColor = recyclerView.context.getColorFromAttr(R.attr.second_text_color)
-        titleColorNew = recyclerView.context.getColorFromAttr(R.attr.default_text_color)
+        titleColor = recyclerView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+        titleColorNew = recyclerView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
     }
 
     override fun getItemViewType(position: Int): Int {

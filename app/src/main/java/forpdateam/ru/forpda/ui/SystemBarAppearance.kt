@@ -27,7 +27,7 @@ object SystemBarAppearance {
 
     fun syncStatusBarIconContrast(activity: Activity, backgroundColor: Int) {
         val opaqueBackground = if (Color.alpha(backgroundColor) < 255) {
-            ColorUtils.compositeColors(backgroundColor, activity.getColorFromAttr(R.attr.background_base))
+            ColorUtils.compositeColors(backgroundColor, activity.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         } else {
             backgroundColor
         }

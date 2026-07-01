@@ -16,9 +16,13 @@ import forpdateam.ru.forpda.common.Preferences as AppPreferences
  *
  * Степень применения зависит от скина (см. [resolveMode]):
  * - SYSTEM в светлой/тёмной теме → SURFACE: акцент + динамический базовый фон
- *   окна (`colorSurface`/`colorOnSurface`); фоны/карточки/тулбар/текст НЕ
- *   перекрашиваются (ограничение TypedArray — см. KDoc оверлея
- *   [ThemeOverlay.ForPDA.MaterialYouSurface]).
+ *   окна (`colorSurface`/`colorOnSurface`) через сам оверлей, ПЛЮС (после
+ *   consumer-side миграции Этапа C `concurrent-dreaming-wren` — см. план)
+ *   page background/карточки/списки/разделители/часть текста, чьи XML/код-
+ *   потребители перенаправлены на M3-роли напрямую — те тоже трекают обои.
+ *   Не перекрашивается то, что ПИНИТСЯ статикой внутри оверлея (защита от
+ *   TypedArray-краша — см. KDoc [ThemeOverlay.ForPDA.MaterialYouSurface]), и
+ *   атрибуты без M3-зеркала (см. план).
  * - AMOLED → ACCENT_ONLY: красим только акцент, но НЕ поднимаем поверхности с
  *   чистого чёрного (иначе теряется смысл OLED-экономии).
  * - всё остальное → NONE.

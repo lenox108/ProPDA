@@ -3,7 +3,6 @@
     <style name="AmoledAppTheme.SepiaReading" parent="AmoledAppTheme">
         <item name="colorAccent">@color/sepia_colorAccent</item>
         <item name="colorSecondary">@color/sepia_link_color</item>
-        <item name="link_color">@color/sepia_link_color</item>
         <item name="link_color_contrast">@color/sepia_link_color_contrast</item>
         <item name="menu_tile_icon">@color/sepia_colorAccent</item>
         <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
@@ -28,12 +27,7 @@
     <style name="AmoledAppTheme.SepiaBlue" parent="AmoledAppTheme">
         <item name="colorAccent">@color/sepia_blue_colorAccent</item>
         <item name="colorSecondary">@color/sepia_blue_link_color</item>
-        <item name="link_color">@color/sepia_blue_link_color</item>
         <item name="link_color_contrast">@color/sepia_blue_link_color_contrast</item>
-        <item name="default_text_color">@color/sepia_blue_default_text_color</item>
-        <item name="second_text_color">@color/sepia_blue_second_text_color</item>
-        <item name="drawer_item_text">@color/sepia_blue_default_text_color</item>
-        <item name="drawer_item_text_selected">@color/sepia_blue_default_text_color</item>
         <item name="icon_base">@color/sepia_blue_icon_base</item>
         <item name="icon_toolbar">@color/sepia_blue_icon_toolbar</item>
         <item name="menu_tile_icon">@color/sepia_blue_colorAccent</item>
@@ -61,7 +55,6 @@
     <style name="AmoledAppTheme.MinimalReader" parent="AmoledAppTheme">
         <item name="colorAccent">@color/minimal_reader_colorAccent</item>
         <item name="colorSecondary">@color/minimal_reader_link_color</item>
-        <item name="link_color">@color/minimal_reader_link_color</item>
         <item name="link_color_contrast">@color/minimal_reader_link_color_contrast</item>
         <item name="menu_tile_icon">@color/minimal_reader_icon_base</item>
         <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>

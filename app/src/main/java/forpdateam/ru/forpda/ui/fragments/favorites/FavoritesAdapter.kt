@@ -287,10 +287,10 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
         super.onAttachedToRecyclerView(recyclerView)
         val context = recyclerView.context
-        titleColor = context.getColorFromAttr(R.attr.second_text_color)
-        titleColorNew = context.getColorFromAttr(R.attr.default_text_color)
+        titleColor = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+        titleColorNew = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         selectionRowColor = ColorUtils.blendARGB(
-                context.getColorFromAttr(R.attr.cards_background),
+                context.getColorFromAttr(com.google.android.material.R.attr.colorSurface),
                 context.getColorFromAttr(androidx.appcompat.R.attr.colorAccent),
                 0.30f
         )

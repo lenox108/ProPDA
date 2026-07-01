@@ -165,6 +165,11 @@ class QmsContactsFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<
         }
     }
 
+    // Read-only зеркало onBackPressed: перехватываем «назад» пока раскрыт поиск
+    // (см. hasBackHandling в TabFragment).
+    override fun hasBackHandling(): Boolean =
+            toolbar.menu.findItem(R.id.action_search)?.isActionViewExpanded == true
+
     override fun onItemClick(item: QmsContact) {
         viewModel.onItemClick(item)
     }

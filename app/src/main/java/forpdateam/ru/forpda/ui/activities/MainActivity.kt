@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import timber.log.Timber
 import android.view.View
 import android.view.inputmethod.InputMethodManager
@@ -59,6 +60,7 @@ import forpdateam.ru.forpda.presentation.TabRouter
 import forpdateam.ru.forpda.ui.DimensionsProvider
 import forpdateam.ru.forpda.common.PermissionHelper
 import forpdateam.ru.forpda.common.WebViewChecker
+import forpdateam.ru.forpda.ui.AccentApplier
 import forpdateam.ru.forpda.ui.MaterialYouApplier
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import javax.inject.Inject
@@ -117,6 +119,11 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Android 12+ SplashScreen API (backported via androidx.core:core-splashscreen).
+        // Должен вызываться ПЕРВЫМ — до super.onCreate() и setContentView.
+        // installSplashScreen() сам переключает тему на postSplashScreenTheme;
+        // ниже мы всё равно перекрываем её палитро-специфичной mainNoActionBar(...).
+        installSplashScreen()
         if (BuildConfig.DEBUG) Timber.d("[INTENT] onCreate: hasData=${intent?.data != null}, action=${intent?.action}, hasExtras=${intent?.extras != null}")
         // Get theme settings directly from DataStore before super.onCreate() (DI not available yet)
         // Using SharedPreferences mirror for instant synchronous read (<1ms vs 50-200ms DataStore)
@@ -139,6 +146,9 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         // per-Activity applier is the canonical entry point and is what makes the
         // Material You toggle visually change the colors on the native UI shell.
         MaterialYouApplier.applyIfEnabled(this)
+        // Курируемый акцент («смена цвета») — после Material You; взаимоисключающи
+        // по AccentPolicy (Material You приоритетнее, когда реально доступен).
+        AccentApplier.applyIfEnabled(this)
         super.onCreate(savedInstanceState)
         dayNightHelper.setIsNight(DayNightHelper.isUiModeNight(resources.configuration))
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -208,21 +218,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
             }
         })
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                Timber.d("onBackPressed")
-                try {
-                    if (::bottomDrawer.isInitialized && bottomDrawer.isShown()) {
-                        bottomDrawer.hide()
-                    } else {
-                        backHandler()
-                    }
-                } catch (e: Exception) {
-                    Timber.e(e, "Error in onBackPressed")
-                    finishAffinity()
-                }
-            }
-        })
+        onBackPressedDispatcher.addCallback(this, mainBackCallback)
+        updateBackDispatchEnabled()
 
         val defaultStatusBarHeight = resources.getDimensionPixelSize(R.dimen.default_statusbar_height)
         val defaultKeyboardHeight = resources.getDimensionPixelSize(R.dimen.default_keyboard_height)
@@ -374,6 +371,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         syncStatusBarIconContrast()
         syncNavigationBarAppearance()
         presenter.onActivityResume()
+        // После смены вкладки/восстановления — освежить enabled предиктивного back.
+        updateBackDispatchEnabled()
         if (lang == null) {
             lang = LocaleHelper.getLanguage(this)
         }
@@ -483,6 +482,62 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         WindowCompat.getInsetsController(window, view).show(WindowInsetsCompat.Type.ime())
         val iim = getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager?
         iim?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    /**
+     * Единственный `OnBackPressedCallback` приложения (pull-based диспетчер:
+     * фрагмент решает через [TabFragment.onBackPressed]). Его `enabled` теперь
+     * ДИНАМИЧЕСКИЙ — см. [updateBackDispatchEnabled]: когда следующий «назад»
+     * гарантированно выйдет из приложения, callback выключается, и Android 13+
+     * показывает предиктивную анимацию отслаивания к лаунчеру. Пока enabled —
+     * поведение ровно прежнее (backHandler всегда делает корректное действие),
+     * поэтому «ложно-enabled» не даёт регрессий, а «ложно-disabled» исключён
+     * консервативным [backWillExitApp] + пересчётом на onUserInteraction/onResume.
+     */
+    private val mainBackCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            Timber.d("onBackPressed")
+            try {
+                if (::bottomDrawer.isInitialized && bottomDrawer.isShown()) {
+                    bottomDrawer.hide()
+                } else {
+                    backHandler()
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error in onBackPressed")
+                finishAffinity()
+            } finally {
+                updateBackDispatchEnabled()
+            }
+        }
+    }
+
+    /**
+     * Выйдет ли следующий «назад» из приложения. КОНСЕРВАТИВНО: возвращает true
+     * (выход → показать предиктивную анимацию) только когда мы уверены, что
+     * перехватывать нечего. Любая неопределённость → false (остаёмся enabled,
+     * прежнее поведение, без регрессий).
+     */
+    private fun backWillExitApp(): Boolean {
+        if (::bottomDrawer.isInitialized && bottomDrawer.isShown()) return false
+        val active = tabNavigator.getCurrentFragment() ?: return true
+        // Есть куда навигировать назад (не последняя вкладка) → не выход.
+        if (tabNavigator.tabController.getList().size > 1) return false
+        // Единственная (корневая) вкладка: выход, только если фрагмент сейчас
+        // ничего не перехватывает (read-only запрос, без сайд-эффектов).
+        return !active.hasBackHandling()
+    }
+
+    /** Пересчитать enabled главного back-callback. Дёшево; безопасно звать часто. */
+    private fun updateBackDispatchEnabled() {
+        mainBackCallback.isEnabled = !backWillExitApp()
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        // Любое изменение back-состояния (вход в selection/поиск/панель, показ
+        // drawer) инициируется касанием → к следующему back-жесту enabled свеж.
+        updateBackDispatchEnabled()
     }
 
     private fun backHandler() {

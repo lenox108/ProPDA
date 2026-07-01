@@ -129,9 +129,9 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
     private fun applyComposePanelTheme(view: View) {
         val themed = requireActivity()
         val panelColor = themed.getColorFromAttr(R.attr.colorPrimary)
-        val textColor = themed.getColorFromAttr(R.attr.default_text_color)
-        val hintColor = themed.getColorFromAttr(R.attr.second_text_color)
-        val linkColor = themed.getColorFromAttr(R.attr.link_color)
+        val textColor = themed.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+        val hintColor = themed.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+        val linkColor = themed.getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
 
         view.setBackgroundColor(panelColor)
         (dialog as? BottomSheetDialog)

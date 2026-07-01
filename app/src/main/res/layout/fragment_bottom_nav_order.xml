@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/background_base"
+    android:background="?attr/colorSurfaceContainerLowest"
     android:orientation="vertical">
 
     <TextView
@@ -13,7 +13,7 @@
         android:paddingEnd="@dimen/content_padding_horizontal"
         android:paddingBottom="@dimen/content_spacing"
         android:text="@string/bottom_nav_order_hint"
-        android:textColor="?attr/second_text_color"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="@dimen/list_topic_meta_text_size" />
 
     <androidx.recyclerview.widget.RecyclerView
