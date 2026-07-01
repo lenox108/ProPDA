@@ -52,4 +52,47 @@ class GithubReleaseSourceTest {
         val json = """{"tag_name":"3.1.2","html_url":"https://github.com/x/y/releases/tag/3.1.2"}"""
         assertEquals(SemanticVersion(3, 1, 2), source.parseRelease(json)?.version)
     }
+
+    @Test
+    fun parsesAtomFeedFirstEntry() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <title>Release notes from ProPDA</title>
+              <entry>
+                <id>tag:github.com,2008:Repository/1/v3.1.0</id>
+                <updated>2026-07-01T10:00:00Z</updated>
+                <link rel="alternate" type="text/html" href="https://github.com/lenox108/ProPDA/releases/tag/v3.1.0"/>
+                <title>v3.1.0</title>
+                <content type="html">newer notes</content>
+              </entry>
+              <entry>
+                <id>tag:github.com,2008:Repository/1/v3.0.0</id>
+                <link rel="alternate" type="text/html" href="https://github.com/lenox108/ProPDA/releases/tag/v3.0.0"/>
+                <title>v3.0.0</title>
+                <content type="html">older notes</content>
+              </entry>
+            </feed>
+        """.trimIndent()
+
+        val candidate = source.parseAtom(xml)!!
+
+        // Берётся ПЕРВАЯ (свежая) запись, feed-level <title> игнорируется.
+        assertEquals(SemanticVersion(3, 1, 0), candidate.version)
+        assertEquals("https://github.com/lenox108/ProPDA/releases/tag/v3.1.0", candidate.url)
+        assertEquals("newer notes", candidate.description)
+        // В Atom нет APK-ассетов.
+        assertEquals(0, candidate.downloads.size)
+    }
+
+    @Test
+    fun emptyAtomFeedReturnsNull() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <title>Release notes from ProPDA</title>
+            </feed>
+        """.trimIndent()
+        assertNull(source.parseAtom(xml))
+    }
 }
