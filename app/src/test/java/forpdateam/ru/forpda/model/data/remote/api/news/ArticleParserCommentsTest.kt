@@ -76,9 +76,14 @@ class ArticleParserCommentsTest {
                     }
             )
         }
-        parser.applyFallbackOwnCommentActions(root, authUserId = 5)
+        parser.applyFallbackOwnCommentActions(root, authUserId = 5, articleId = 100)
         val comment = root.children.single()
-        assertEquals("https://4pda.to/wp-admin/admin-ajax.php?action=editcomment&c=10", comment.actions.edit?.url)
+        // Правка идёт обычным POST на wp-comments-post.php с comment_ID (механизм 4pda), а НЕ через
+        // несуществующий admin-ajax editcomment (404), из-за которого редактирование не работало.
+        assertEquals("https://4pda.to/wp-comments-post.php", comment.actions.edit?.url)
+        assertEquals("10", comment.actions.edit?.fields?.get("comment_ID"))
+        assertEquals("100", comment.actions.edit?.fields?.get("comment_post_ID"))
+        // Удаление не менялось — оно работало через admin-ajax deletecomment.
         assertEquals("https://4pda.to/wp-admin/admin-ajax.php?action=deletecomment&c=10", comment.actions.delete?.url)
         assertTrue(ArticleCommentActionVisibility.canShowEdit(auth = true, authUserId = 5, comment = comment))
     }
@@ -778,6 +783,23 @@ class ArticleParserCommentsTest {
     }
 
     @Test
+    fun parseComments_editedPlainTextWithoutClass_isDetectedAndStripped() {
+        // Живой кейс 4pda: маркер правки — просто текст «(отредактирован)» в контенте,
+        // без class="edited" на узле. Детект держится только на текстовом regex, а он
+        // из-за ASCII-\b (java.util.regex) не видел кириллицу → маркер не срабатывал.
+        val html = """<ul class="comment-list"><li><div id="comment-12" class="comment">
+        <a class="nickname">User</a>
+        <p class="content">В какой момент должен наступить эмейзинг? (отредактирован)</p>
+    </div></li></ul>"""
+        val parser = ArticleParser(ArticlesPatternProviderStub())
+        val comment = parser.parseComments(SparseArray<Comment.Karma>(), html).children.single()
+
+        assertTrue(comment.isEdited)
+        assertTrue(comment.content.orEmpty().contains("эмейзинг"))
+        assertTrue(!comment.content.orEmpty().contains("отредактирован"))
+    }
+
+    @Test
     fun parseComments_unauthorizedComment_hasNoNetworkActions() {
         val html = """<ul class="comment-list"><li><div id="comment-13" class="comment">
         <a class="nickname">User</a>
@@ -1238,5 +1260,23 @@ class ArticleParserCommentsTest {
         assertNull(batch.children[0].likeAction)
         assertEquals("https://4pda.to/pages/karma?p=456&c=101&v=1", batch.children[1].likeAction?.url)
         assertNull(batch.children[2].likeAction)
+    }
+
+    @Test
+    fun parseCommentsBatch_editedPlainText_isDetectedAndStripped() {
+        // Живой inline-путь (пагинированные комментарии) идёт через parseCommentsFromTags,
+        // а не через основной parseComments. Раньше он вообще не помечал правку: isEdited
+        // оставался false и «(отредактирован)» висел прямо в тексте.
+        val html = """<ul class="comment-list level-0"><li><div id="comment-100" class="comment">
+        <a class="nickname">Huts</a>
+        <p class="content">В какой момент должен наступить эмейзинг? (отредактирован)</p>
+    </div></li></ul>"""
+        val parser = ArticleParser(ArticlesPatternProviderStub())
+        val batch = parser.parseCommentsBatch(SparseArray<Comment.Karma>(), html, skip = 0, limit = 3)
+
+        val comment = batch.children.single()
+        assertTrue(comment.isEdited)
+        assertTrue(comment.content.orEmpty().contains("эмейзинг"))
+        assertTrue(!comment.content.orEmpty().contains("отредактирован"))
     }
 }
