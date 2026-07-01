@@ -36,19 +36,60 @@ object AccentApplier {
         val materialYouEnabled = runCatching { dataStore.getUseMaterialYouImmediate() }
                 .getOrDefault(false)
 
-        if (!AccentPolicy.shouldApply(accent, palette, materialYouEnabled, Build.VERSION.SDK_INT)) {
+        // Только CURATED достаётся этому аппликатору (WALLPAPER/CUSTOM_SEED —
+        // MaterialYouApplier, NONE — ничего). См. AccentPolicy.
+        if (AccentPolicy.resolveMode(materialYouEnabled, palette, accent, Build.VERSION.SDK_INT)
+                != AccentPolicy.Mode.CURATED) {
             return
         }
-        val overlay = overlayFor(accent) ?: return
+        // CUSTOM на API < 31: снап произвольного seed к ближайшей курируемой
+        // палитре (нативную инъекцию произвольного цвета ниже 31 сделать нельзя).
+        val effective = if (accent == Preferences.Main.AccentPalette.CUSTOM) {
+            val seed = runCatching { dataStore.getAccentCustomColorImmediate() }.getOrDefault(0xFF1976D2.toInt())
+            nearestCuratedPalette(seed)
+        } else {
+            accent
+        }
+        val overlay = overlayFor(effective) ?: return
         activity.theme.applyStyle(overlay, true)
         if (BuildConfig.DEBUG) {
-            Timber.tag(LOG_TAG).d("applied accent=%s to %s", accent, activity.javaClass.simpleName)
+            Timber.tag(LOG_TAG).d("applied accent=%s (effective=%s) to %s",
+                    accent, effective, activity.javaClass.simpleName)
         }
     }
 
-    /** Стиль-оверлей для палитры (см. `styles_accents.xml`). NEUTRAL → null. */
+    /** Seed-цвета курируемых палитр — синхронно с AccentPaletteGenerator. */
+    private val curatedSeeds: List<Pair<Preferences.Main.AccentPalette, Int>> = listOf(
+            Preferences.Main.AccentPalette.BLUE to 0xFF0B57D0.toInt(),
+            Preferences.Main.AccentPalette.INDIGO to 0xFF4355B9.toInt(),
+            Preferences.Main.AccentPalette.VIOLET to 0xFF7B4FCF.toInt(),
+            Preferences.Main.AccentPalette.PURPLE to 0xFF9C27B0.toInt(),
+            Preferences.Main.AccentPalette.PINK to 0xFFC2185B.toInt(),
+            Preferences.Main.AccentPalette.RED to 0xFFD32F2F.toInt(),
+            Preferences.Main.AccentPalette.DEEPORANGE to 0xFFE64A19.toInt(),
+            Preferences.Main.AccentPalette.ORANGE to 0xFFEF6C00.toInt(),
+            Preferences.Main.AccentPalette.AMBER to 0xFFFF8F00.toInt(),
+            Preferences.Main.AccentPalette.GREEN to 0xFF2E7D32.toInt(),
+            Preferences.Main.AccentPalette.TEAL to 0xFF00796B.toInt(),
+            Preferences.Main.AccentPalette.CYAN to 0xFF0097A7.toInt(),
+    )
+
+    /** Ближайшая курируемая палитра к произвольному seed по HCT-hue (для API < 31). */
+    internal fun nearestCuratedPalette(seed: Int): Preferences.Main.AccentPalette {
+        val seedHue = com.google.android.material.color.utilities.Hct.fromInt(seed).hue
+        return curatedSeeds.minByOrNull { hueDistance(seedHue, com.google.android.material.color.utilities.Hct.fromInt(it.second).hue) }
+                ?.first ?: Preferences.Main.AccentPalette.BLUE
+    }
+
+    private fun hueDistance(a: Double, b: Double): Double {
+        val d = Math.abs(a - b) % 360.0
+        return if (d > 180.0) 360.0 - d else d
+    }
+
+    /** Стиль-оверлей для палитры (см. `styles_accents.xml`). NEUTRAL/CUSTOM → null. */
     internal fun overlayFor(accent: Preferences.Main.AccentPalette): Int? = when (accent) {
         Preferences.Main.AccentPalette.NEUTRAL -> null
+        Preferences.Main.AccentPalette.CUSTOM -> null
         Preferences.Main.AccentPalette.BLUE -> R.style.ThemeOverlay_ForPDA_Accent_Blue
         Preferences.Main.AccentPalette.INDIGO -> R.style.ThemeOverlay_ForPDA_Accent_Indigo
         Preferences.Main.AccentPalette.VIOLET -> R.style.ThemeOverlay_ForPDA_Accent_Violet

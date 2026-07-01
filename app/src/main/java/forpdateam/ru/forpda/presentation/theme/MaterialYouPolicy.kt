@@ -71,7 +71,7 @@ object MaterialYouPolicy {
         return if (isAmoledSkin(themeMode, isNight)) Mode.ACCENT_ONLY else Mode.SURFACE
     }
 
-    private fun isAmoledSkin(
+    internal fun isAmoledSkin(
             themeMode: AppPreferences.Main.ThemeMode,
             isNight: Boolean
     ): Boolean = when (themeMode) {

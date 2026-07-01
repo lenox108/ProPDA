@@ -109,6 +109,8 @@ class MainPreferencesHolder(
 
     fun getAccentPalette(): AppPreferences.Main.AccentPalette = dataStore.getAccentPaletteImmediate()
 
+    fun getAccentCustomColor(): Int = dataStore.getAccentCustomColorImmediate()
+
     fun getUseSystemFont(): Boolean = dataStore.getUseSystemFontImmediate()
 
     fun getAppFontMode(): AppFontMode = dataStore.getAppFontModeImmediate()
@@ -125,6 +127,8 @@ class MainPreferencesHolder(
     suspend fun setUiPalette(palette: AppPreferences.Main.UiPalette) = dataStore.setUiPalette(palette)
 
     suspend fun setAccentPalette(palette: AppPreferences.Main.AccentPalette) = dataStore.setAccentPalette(palette)
+
+    suspend fun setAccentCustomColor(color: Int) = dataStore.setAccentCustomColor(color)
 
     suspend fun setShowBottomArrow(value: Boolean) = dataStore.setShowBottomArrow(value)
 

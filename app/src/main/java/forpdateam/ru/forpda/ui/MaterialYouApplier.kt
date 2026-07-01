@@ -10,6 +10,7 @@ import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.DayNightHelper
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.model.datastore.MainDataStore
+import forpdateam.ru.forpda.presentation.theme.AccentPolicy
 import forpdateam.ru.forpda.presentation.theme.MaterialYouPolicy
 import timber.log.Timber
 
@@ -120,26 +121,44 @@ object MaterialYouApplier {
         val enabled = runCatching { dataStore.getUseMaterialYouImmediate() }.getOrDefault(false)
         val palette = runCatching { dataStore.getUiPaletteImmediate() }
                 .getOrDefault(Preferences.Main.UiPalette.SYSTEM)
+        val accent = runCatching { dataStore.getAccentPaletteImmediate() }
+                .getOrDefault(Preferences.Main.AccentPalette.NEUTRAL)
         val themeMode = runCatching { dataStore.getThemeModeImmediate() }
                 .getOrDefault(Preferences.Main.ThemeMode.SYSTEM)
         val isNight = DayNightHelper.isUiModeNight(activity.resources.configuration)
-        val mode = MaterialYouPolicy.resolveMode(enabled, palette, themeMode, isNight)
+
+        // Единое решение (обои vs произвольный seed vs курируемая палитра vs
+        // ничего). DynamicColors обрабатывает только WALLPAPER и CUSTOM_SEED —
+        // CURATED/NONE достаются AccentApplier.
+        val decision = AccentPolicy.resolveMode(enabled, palette, accent, Build.VERSION.SDK_INT)
+        val contentSeed: Int? = when (decision) {
+            AccentPolicy.Mode.WALLPAPER -> null
+            AccentPolicy.Mode.CUSTOM_SEED ->
+                runCatching { dataStore.getAccentCustomColorImmediate() }.getOrNull()
+            else -> {
+                if (BuildConfig.DEBUG) Timber.tag(LOG_TAG).d("decision=%s -> DynamicColors skip", decision)
+                return
+            }
+        }
+
+        // SURFACE (акцент + динамический фон) для light/dark; ACCENT_ONLY для
+        // AMOLED (не поднимаем поверхности с чистого чёрного). Работает и для
+        // обоев, и для произвольного seed.
+        val overlay = if (MaterialYouPolicy.isAmoledSkin(themeMode, isNight)) {
+            R.style.ThemeOverlay_ForPDA_MaterialYouAccent
+        } else {
+            R.style.ThemeOverlay_ForPDA_MaterialYouSurface
+        }
         if (BuildConfig.DEBUG) {
             Timber.tag(LOG_TAG).d(
-                    "precondition: enabled=%s palette=%s themeMode=%s night=%s sdk=%d -> mode=%s",
-                    enabled, palette, themeMode, isNight, Build.VERSION.SDK_INT, mode
+                    "decision=%s seed=%s night=%s sdk=%d overlay=surface?%s",
+                    decision, contentSeed?.let { "#%08X".format(it) } ?: "wallpaper",
+                    isNight, Build.VERSION.SDK_INT,
+                    (overlay == R.style.ThemeOverlay_ForPDA_MaterialYouSurface)
             )
         }
-        if (mode == MaterialYouPolicy.Mode.NONE) return
-
-        // SURFACE: акцент + динамический базовый фон (colorSurface) для SYSTEM в
-        // светлой/тёмной теме. ACCENT_ONLY: только акцент для AMOLED — чтобы не
-        // поднимать поверхности с чистого чёрного.
-        val overlay = when (mode) {
-            MaterialYouPolicy.Mode.SURFACE -> R.style.ThemeOverlay_ForPDA_MaterialYouSurface
-            else -> R.style.ThemeOverlay_ForPDA_MaterialYouAccent
-        }
         val options = DynamicColorsOptions.Builder()
+                .apply { if (contentSeed != null) setContentBasedSource(contentSeed) }
                 .setOnAppliedCallback {
                     activity.theme.applyStyle(overlay, true)
                     // M3 Color Harmonization: сдвигает тон M3 error-ролей

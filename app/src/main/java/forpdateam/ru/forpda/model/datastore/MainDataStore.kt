@@ -67,6 +67,7 @@ class MainDataStore(private val context: Context) {
         val SHOW_BOTTOM_ARROW = booleanPreferencesKey("show_bottom_arrow")
         val UI_PALETTE = stringPreferencesKey("ui_palette")
         val ACCENT_PALETTE = stringPreferencesKey("accent_palette")
+        val ACCENT_CUSTOM_COLOR = intPreferencesKey("accent_custom_color")
         val APP_FONT_MODE = stringPreferencesKey("app_font_mode")
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
         val STARTUP_SCREEN = stringPreferencesKey("startup_screen")
@@ -590,6 +591,20 @@ class MainDataStore(private val context: Context) {
         return parseAccentPalette(mirrored ?: legacy ?: AppPreferences.Main.AccentPalette.NEUTRAL.name)
     }
 
+    /** Произвольный seed-цвет (ARGB) для AccentPalette.CUSTOM. Дефолт — приятный синий. */
+    fun getAccentCustomColorImmediate(): Int {
+        val mirrored = mirrorPrefs.getInt("accent_custom_color", 0)
+        if (mirrored != 0) return mirrored
+        return DEFAULT_ACCENT_CUSTOM_COLOR
+    }
+
+    suspend fun setAccentCustomColor(color: Int) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.ACCENT_CUSTOM_COLOR] = color
+        }
+        mirrorPrefs.edit().putInt("accent_custom_color", color).apply()
+    }
+
     private fun parseAccentPalette(value: String): AppPreferences.Main.AccentPalette = try {
         AppPreferences.Main.AccentPalette.valueOf(value)
     } catch (_: IllegalArgumentException) {
@@ -955,5 +970,7 @@ class MainDataStore(private val context: Context) {
 
     private companion object {
         private const val LOG_TAG = "MainDataStore"
+        /** Дефолтный seed для AccentPalette.CUSTOM — приятный синий (Material Blue 700). */
+        private const val DEFAULT_ACCENT_CUSTOM_COLOR = 0xFF1976D2.toInt()
     }
 }
