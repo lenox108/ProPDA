@@ -17,6 +17,7 @@ import forpdateam.ru.forpda.ui.FontController
 import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.UiThemeStyles
 import forpdateam.ru.forpda.ui.AccentApplier
+import forpdateam.ru.forpda.ui.ContrastApplier
 import forpdateam.ru.forpda.ui.MaterialYouApplier
 import forpdateam.ru.forpda.ui.fragments.settings.NotificationsSettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.ForumSettingsFragment
@@ -86,6 +87,8 @@ class SettingsActivity : AppCompatActivity() {
         // per-Activity applier is the canonical entry point — see MaterialYouApplier KDoc.
         MaterialYouApplier.applyIfEnabled(this)
         AccentApplier.applyIfEnabled(this)
+        // Последний слой: усиление контраста по системной настройке (a11y, Android 14+).
+        ContrastApplier.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
         val barColor = getColorFromAttr(R.attr.main_toolbar_accent_surface)
         setContentView(R.layout.activity_settings)

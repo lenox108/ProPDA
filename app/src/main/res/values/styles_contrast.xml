@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Оверлеи усиленного контраста для a11y. Material ColorContrast
+  (см. ContrastApplier) накладывает Medium или High автоматически по системной
+  настройке контраста (Settings → Accessibility → Contrast, Android 14+).
+  Перекрываем только высокоэффективные для читаемости роли, не трогая акцент и
+  поверхности — так контраст складывается с любой палитрой/акцентом/Material You.
+-->
+<resources>
+    <style name="ThemeOverlay.ForPDA.MediumContrast" parent="">
+        <item name="colorOnSurface">@color/contrast_medium_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/contrast_medium_on_surface_variant</item>
+        <item name="colorOutline">@color/contrast_medium_outline</item>
+        <item name="colorOutlineVariant">@color/contrast_medium_outline_variant</item>
+    </style>
+
+    <style name="ThemeOverlay.ForPDA.HighContrast" parent="">
+        <item name="colorOnSurface">@color/contrast_high_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/contrast_high_on_surface_variant</item>
+        <item name="colorOutline">@color/contrast_high_outline</item>
+        <item name="colorOutlineVariant">@color/contrast_high_outline_variant</item>
+    </style>
+</resources>

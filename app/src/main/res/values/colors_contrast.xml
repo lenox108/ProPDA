@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Токены усиленного контраста (a11y). Применяются оверлеями
+  ThemeOverlay.ForPDA.Medium/HighContrast, которые Material ColorContrast
+  накладывает автоматически по СИСТЕМНОЙ настройке контраста (Android 14+).
+  Значения тут — светлая тема; тёмные в values-night/colors_contrast.xml.
+  Усиливаем именно низкоконтрастные роли: вторичный текст (onSurfaceVariant) и
+  обводки/разделители (outline/outlineVariant); основной текст (onSurface)
+  дожимаем до чистого чёрного.
+-->
+<resources>
+    <color name="contrast_medium_on_surface">#000000</color>
+    <color name="contrast_high_on_surface">#000000</color>
+    <color name="contrast_medium_on_surface_variant">#383838</color>
+    <color name="contrast_high_on_surface_variant">#1C1C1C</color>
+    <color name="contrast_medium_outline">#565656</color>
+    <color name="contrast_high_outline">#2C2C2C</color>
+    <color name="contrast_medium_outline_variant">#7A7A7A</color>
+    <color name="contrast_high_outline_variant">#4A4A4A</color>
+</resources>
