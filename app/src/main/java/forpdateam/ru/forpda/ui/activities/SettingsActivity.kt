@@ -40,6 +40,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var appliedUiPalette: Preferences.Main.UiPalette
     private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
+    private var appliedMaterialYou: Boolean = false
+    private lateinit var appliedAccent: Preferences.Main.AccentPalette
 
     override fun attachBaseContext(base: Context) {
         val localizedContext = LocaleHelper.onAttach(base)
@@ -61,6 +63,16 @@ class SettingsActivity : AppCompatActivity() {
             Preferences.Main.ThemeMode.SYSTEM
         }
         appliedFontMode = tempDataStore.getAppFontModeImmediate()
+        appliedMaterialYou = try {
+            tempDataStore.getUseMaterialYouImmediate()
+        } catch (e: Exception) {
+            false
+        }
+        appliedAccent = try {
+            tempDataStore.getAccentPaletteImmediate()
+        } catch (e: Exception) {
+            Preferences.Main.AccentPalette.NEUTRAL
+        }
         setTheme(UiThemeStyles.settingsPreferenceScreen(appliedUiPalette, themeMode, resources.configuration))
         FontController.applyNativeTheme(this, appliedFontMode)
         // Material You (Dynamic Color) must be layered on top of the just-set theme
@@ -112,6 +124,18 @@ class SettingsActivity : AppCompatActivity() {
         }
         if (::appliedFontMode.isInitialized && fontModeNow != appliedFontMode) {
             appliedFontMode = fontModeNow
+            recreate()
+            return
+        }
+        val materialYouNow = mainPreferencesHolder.getUseMaterialYou()
+        if (materialYouNow != appliedMaterialYou) {
+            appliedMaterialYou = materialYouNow
+            recreate()
+            return
+        }
+        val accentNow = mainPreferencesHolder.getAccentPalette()
+        if (::appliedAccent.isInitialized && accentNow != appliedAccent) {
+            appliedAccent = accentNow
             recreate()
             return
         }
