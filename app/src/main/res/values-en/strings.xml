@@ -569,6 +569,8 @@
     <string name="pref_value_theme_mode_system_amoled">System AMOLED</string>
     <string name="pref_title_accent">Accent color</string>
     <string name="pref_summary_accent">Choose the color of buttons, links and selection</string>
+    <string name="pref_summary_accent_active">%1$s · System palette only</string>
+    <string name="pref_summary_accent_non_system">Unavailable for reading palettes — works only with the System style</string>
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>
     <string name="accent_blue">Blue</string>

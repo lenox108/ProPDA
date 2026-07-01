@@ -448,6 +448,9 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
+        // Акцент/Material You активны только для палитры «Системный стиль».
+        applyAccentPaletteGating()
+
         findPreference<Preference>(Preferences.Main.DOWNLOAD_FOLDER_URI)?.setOnPreferenceClickListener {
             showDownloadFolderDialog()
             true
@@ -729,9 +732,29 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun updateAccentSummary(palette: Preferences.Main.AccentPalette) {
-        findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.setSummary(
-                forpdateam.ru.forpda.ui.views.dialog.AccentPickerDialog.titleRes(palette)
+        findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.summary = getString(
+                R.string.pref_summary_accent_active,
+                getString(forpdateam.ru.forpda.ui.views.dialog.AccentPickerDialog.titleRes(palette))
         )
+    }
+
+    /**
+     * Акцент и Material You действуют только для палитры «Системный стиль»
+     * (см. AccentPolicy: palette != SYSTEM → Mode.NONE). Для палитр чтения
+     * (Sepia/SepiaBlue/Minimal) — гасим оба пункта и поясняем это в описании.
+     */
+    private fun applyAccentPaletteGating() {
+        val isSystem = mainPreferencesHolder.getUiPalette() == Preferences.Main.UiPalette.SYSTEM
+        findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.apply {
+            isEnabled = isSystem
+            if (isSystem) updateAccentSummary(mainPreferencesHolder.getAccentPalette())
+            else setSummary(R.string.pref_summary_accent_non_system)
+        }
+        findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.USE_MATERIAL_YOU)?.apply {
+            isEnabled = isSystem
+            setSummary(if (isSystem) R.string.pref_summary_use_material_you
+            else R.string.pref_summary_accent_non_system)
+        }
     }
 
     private fun updateThemeModeSummary(mode: Preferences.Main.ThemeMode) {
