@@ -50,6 +50,7 @@ object Preferences {
         const val UI_PALETTE = PREFIX + "ui.palette"
         const val ACCENT_PALETTE = PREFIX + "accent"
         const val ACCENT_CUSTOM_COLOR = PREFIX + "accent_custom_color"
+        const val ACCENT_VIBRANT = PREFIX + "accent_vibrant"
         const val APP_FONT_MODE = PREFIX + "app_font_mode"
         const val USE_SYSTEM_FONT = PREFIX + "use_system_font"
         const val STARTUP_SCREEN = PREFIX + "startup_screen"

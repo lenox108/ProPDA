@@ -4,6 +4,7 @@ import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
 import com.google.android.material.color.utilities.SchemeTonalSpot
+import com.google.android.material.color.utilities.SchemeVibrant
 import org.junit.Ignore
 import org.junit.Test
 import java.io.File
@@ -81,12 +82,19 @@ class AccentPaletteGenerator {
         sb.append("    Вариант: ${if (isDark) "DARK (values-night)" else "LIGHT (values)"}.\n")
         sb.append("-->\n")
         sb.append("<resources>\n")
+        // Два набора: приглушённый TonalSpot (по умолчанию) и сочный Vibrant
+        // (тумблер «Насыщенные цвета»). Vibrant-роли идут с инфиксом `_vibrant_`.
         for ((name, seed) in seeds) {
-            val scheme: DynamicScheme = SchemeTonalSpot(Hct.fromInt(seed), isDark, 0.0)
+            val tonal: DynamicScheme = SchemeTonalSpot(Hct.fromInt(seed), isDark, 0.0)
+            val vibrant: DynamicScheme = SchemeVibrant(Hct.fromInt(seed), isDark, 0.0)
             sb.append("    <!-- ${name} (seed #${String.format("%06X", seed and 0xFFFFFF)}) -->\n")
             for ((suffix, selector) in roles) {
-                val argb = selector(mdc).getArgb(scheme)
-                sb.append("    <color name=\"accent_${name}_${suffix}\">#${String.format("%06X", argb and 0xFFFFFF)}</color>\n")
+                val t = selector(mdc).getArgb(tonal)
+                sb.append("    <color name=\"accent_${name}_${suffix}\">#${String.format("%06X", t and 0xFFFFFF)}</color>\n")
+            }
+            for ((suffix, selector) in roles) {
+                val v = selector(mdc).getArgb(vibrant)
+                sb.append("    <color name=\"accent_${name}_vibrant_${suffix}\">#${String.format("%06X", v and 0xFFFFFF)}</color>\n")
             }
         }
         sb.append("</resources>\n")

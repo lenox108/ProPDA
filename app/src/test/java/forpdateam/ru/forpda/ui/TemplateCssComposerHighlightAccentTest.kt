@@ -105,6 +105,31 @@ class TemplateCssComposerHighlightAccentTest {
         )
     }
 
+    // H1: тумблер «Насыщенные цвета» меняет тон акцента контента (Vibrant vs TonalSpot).
+    @Test
+    fun compose_ppdaAccentDiffersBetweenTonalAndVibrant() {
+        fun accentHexFor(vibrant: Boolean): String {
+            val dayNightHelper = mockk<DayNightHelper>()
+            val paletteResolver = mockk<TemplatePaletteResolver>()
+            every { dayNightHelper.isNight() } returns false
+            every { paletteResolver.isSepiaReading() } returns false
+            every { paletteResolver.isSepiaBlue() } returns false
+            every { paletteResolver.isMinimalReader() } returns false
+            every { paletteResolver.isAmoled() } returns false
+            val holder = mockk<MainPreferencesHolder>(relaxed = true)
+            every { holder.getUseMaterialYou() } returns false
+            every { holder.getAccentPalette() } returns
+                    forpdateam.ru.forpda.common.Preferences.Main.AccentPalette.RED
+            every { holder.getAccentVibrant() } returns vibrant
+            val css = TemplateCssComposer(
+                    mockk<android.content.Context>(relaxed = true), holder, dayNightHelper, paletteResolver
+            ).compose()
+            return Regex("--ppda-accent\\s*:\\s*(#[0-9A-Fa-f]{6})\\s*;").find(css)!!.groupValues[1].uppercase()
+        }
+        assertTrue("Vibrant accent must differ from muted (TonalSpot) accent",
+                accentHexFor(vibrant = false) != accentHexFor(vibrant = true))
+    }
+
     @Test
     fun compose_definesPpdaAccentInEveryPaletteAndMode() {
         for (mode in allPaletteModes) {
