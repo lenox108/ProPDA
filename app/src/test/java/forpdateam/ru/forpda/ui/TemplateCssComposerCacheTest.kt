@@ -16,7 +16,7 @@ class TemplateCssComposerCacheTest {
             paletteResolver: TemplatePaletteResolver,
     ): TemplateCssComposer {
         val mainPreferencesHolder = mockk<MainPreferencesHolder>(relaxed = true)
-        return TemplateCssComposer(mainPreferencesHolder, dayNightHelper, paletteResolver)
+        return TemplateCssComposer(mockk<android.content.Context>(relaxed = true), mainPreferencesHolder, dayNightHelper, paletteResolver)
     }
 
     private fun lightNoPalette(): Pair<DayNightHelper, TemplatePaletteResolver> {
