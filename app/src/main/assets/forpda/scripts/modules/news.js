@@ -1030,12 +1030,26 @@ function newsInlineCommentsAppendHtml(html, generation, canLoadMore, totalCount,
     if (!html) {
         return "ok";
     }
-    list.insertAdjacentHTML("beforeend", html);
+    // Idempotent append: skip any comment whose id is already in the DOM so that
+    // re-runs (resume replay, inject retries, duplicate deltas) never duplicate rows.
+    var temp = document.createElement("div");
+    temp.innerHTML = html;
+    var incoming = Array.prototype.slice.call(temp.children);
+    var added = 0;
+    for (var i = 0; i < incoming.length; i++) {
+        var node = incoming[i];
+        var cid = node.getAttribute ? node.getAttribute("data-news-comment-id") : null;
+        if (cid && list.querySelector('[data-news-comment-id="' + cid + '"]')) {
+            continue;
+        }
+        list.appendChild(node);
+        added++;
+    }
     bindNewsInlineCommentActions();
     if (typeof jsEmoticons !== "undefined") {
         jsEmoticons.parseAll("file:///android_asset/smiles/");
     }
-    fpdaCommentsSectionLog("append_ok", { generation: generation, childCount: list.children.length });
+    fpdaCommentsSectionLog("append_ok", { generation: generation, childCount: list.children.length, added: added });
     newsInlineCommentsBindLoadMore(root);
     if (arguments.length >= 3 && typeof newsInlineCommentsUpdateLoadMore === "function") {
         newsInlineCommentsUpdateLoadMore(
