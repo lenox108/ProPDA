@@ -117,47 +117,6 @@ class FavoritesApi(
         return getLastPostMarkReadWithRetry(topicId)
     }
 
-    private suspend fun tryMarkFavoritesReadBatchWithRetry(selectedTids: String): Boolean {
-        var attempt = 0
-        while (attempt < READ_MAX_ATTEMPTS) {
-            try {
-                // Use POST directly for batch marking (GET doesn't work for mass marking)
-                val authKey = webClient.getAuthKey()
-
-                if (BuildConfig.DEBUG) Timber.d("[MarkRead] POST batch marking (attempt ${attempt + 1})")
-
-                val postResponse = webClient.request(
-                        NetworkRequest.Builder()
-                                .url("https://4pda.to/forum/index.php?act=fav")
-                                .xhrHeader()
-                                .formHeader("selectedtids", selectedTids)
-                                .formHeader("tact", "read")
-                                .formHeader("auth_key", authKey)
-                                .build()
-                )
-
-                if (BuildConfig.DEBUG) {
-                    Timber.d("[MarkRead] POST success, response length: ${postResponse.body.length}")
-                }
-
-                val isReadComplete = favoritesParser.checkFavoritesReadComplete(postResponse.body)
-                if (BuildConfig.DEBUG) Timber.d("[MarkRead] POST validation result: $isReadComplete")
-                return isReadComplete
-            } catch (e: Exception) {
-                if (BuildConfig.DEBUG) Timber.e(e, "[MarkRead] POST failed: ${e.message}")
-
-                val shouldRetry = shouldRetryRequest(e, attempt)
-                if (shouldRetry) {
-                    kotlinx.coroutines.delay(backoffAfterErrorMillis(attempt))
-                    attempt++
-                } else {
-                    return false
-                }
-            }
-        }
-        return false
-    }
-
     private suspend fun getLastPostMarkReadWithRetry(topicId: Int): Boolean {
         val url = "https://4pda.to/forum/index.php?showtopic=$topicId&view=getlastpost"
         var attempt = 0
@@ -220,10 +179,6 @@ class FavoritesApi(
 
         /** Пауза между запросами к форуму: действие массовое, но очередь остаётся щадящей. */
         private const val DELAY_MS_BETWEEN_SERVER_CALLS = 300L
-        /** GET getlastpost тяжёлый для лимита — только после паузы. */
-        private const val DELAY_MS_BEFORE_GETLASTPOST = 1_000L
-        /** После успешной массовой пометки — «остыв» перед следующими запросами приложения. */
-        private const val COOLDOWN_AFTER_MARK_ALL_MS = 2_000L
         /** Повторы при любых сетевых/серверных ошибках (429, 5xx, 404, IO). */
         private const val READ_MAX_ATTEMPTS = 6
         private const val READ_BACKOFF_BASE_MS = 2_500L

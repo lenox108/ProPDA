@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.Activity
 import android.app.Application
 import android.content.Context
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.TypedArray
@@ -26,7 +25,6 @@ import androidx.core.app.ActivityCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import androidx.preference.PreferenceManager
 import timber.log.Timber
 import forpdateam.ru.forpda.common.di.AppScope
 import forpdateam.ru.forpda.common.dpToPx
@@ -103,7 +101,6 @@ class App : Application(), androidx.work.Configuration.Provider {
     // endregion
 
     // region Properties
-    private val preferencesLazy = lazy { PreferenceManager.getDefaultSharedPreferences(this) }
     private val webViewFound = AtomicReference<Boolean?>(null)
 
     @javax.inject.Inject
@@ -269,7 +266,12 @@ class App : Application(), androidx.work.Configuration.Provider {
     
     
     private fun setupThemeObserver() {
-        appScope.launch {
+        // DayNightHelper.applyTheme → AppCompatDelegate.setDefaultNightMode →
+        // Activity.recreate(), который обязан вызываться с main thread. appScope
+        // работает на Dispatchers.Default, поэтому при смене темы (напр. AMOLED)
+        // пересоздание активити падало с «Must be called from main thread».
+        // Собираем терминально на Main.immediate.
+        appScope.launch(Dispatchers.Main.immediate) {
             mainPreferencesHolder
                 .observeThemeModeFlow()
                 .collect { DayNightHelper.applyTheme(it) }
@@ -503,8 +505,6 @@ class App : Application(), androidx.work.Configuration.Provider {
     // endregion
 
     // region Private Methods
-    private fun getPreferencesInternal(): SharedPreferences = preferencesLazy.value
-
     private fun cleanupApplicationResources() {
         networkConnectivityTracker?.stop()
         networkConnectivityTracker = null

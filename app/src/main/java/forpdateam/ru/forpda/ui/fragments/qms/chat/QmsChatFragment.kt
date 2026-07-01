@@ -65,7 +65,6 @@ import forpdateam.ru.forpda.ui.views.WebViewSecurityProfile
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
 import java.util.*
-import java.util.regex.Pattern
 import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.ISystemLinkHandler
@@ -679,27 +678,6 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
 
     private fun setAppFontMode(mode: forpdateam.ru.forpda.ui.AppFontMode) {
         webView.setAppFontMode(mode)
-    }
-
-    private fun addUnusedAttachments() {
-        try {
-            val matcher = attachmentPattern.matcher(messagePanel.message)
-            val attachmentsUrls = ArrayList<String>()
-            while (matcher.find()) {
-                matcher.group(1)?.let { attachmentsUrls.add(it) }
-            }
-            val notAttached = ArrayList<AttachmentItem>()
-            for (item in attachmentsPopup?.getAttachments() ?: emptyList()) {
-                if (!attachmentsUrls.contains(item.url)) {
-                    notAttached.add(item)
-                }
-            }
-            messagePanel.messageField?.setSelection(messagePanel.messageField?.text?.length ?: 0)
-            attachmentsPopup?.insertAttachment(notAttached, false)
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to re-sync not-attached attachments into message panel")
-        }
-
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
@@ -2702,7 +2680,6 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
         const val USER_AVATAR_ARG = "USER_AVATAR_ARG"
         const val THEME_ID_ARG = "THEME_ID_ARG"
         const val THEME_TITLE_ARG = "THEME_TITLE_ARG"
-        private val attachmentPattern = Pattern.compile("\\[url=(https:\\/\\/.*?\\.ibb\\.co[^\\]]*?)\\]")
     }
 
     private inner class QmsChatWebViewClient : CustomWebViewClient(avatarRepository, linkHandler, systemLinkHandler) {

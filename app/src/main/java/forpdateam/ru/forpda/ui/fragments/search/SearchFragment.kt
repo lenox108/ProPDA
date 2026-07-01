@@ -539,10 +539,6 @@ class SearchFragment : TabFragment(), ExtendedWebView.JsLifeCycleListener, BaseA
         searchQueryHelper.setForumMode(nickBlock, resultBlock, sortBlock, sourceBlock)
     }
 
-    private fun startSearch() {
-        searchView?.let { searchQueryHelper.setupSubmitButton(submitButton, it, nickField) }
-    }
-
     fun onStartSearch(settings: SearchSettings) {
         hideKeyboard()
         setTitle(searchQueryHelper.buildSearchTitle(settings, presenter.scopedForumTitleForUi()))
