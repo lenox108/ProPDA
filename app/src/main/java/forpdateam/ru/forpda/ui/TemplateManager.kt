@@ -38,7 +38,7 @@ class TemplateManager(
     private val staticStrings = TemplateStaticStrings()
     private val paletteResolver = TemplatePaletteResolver(mainPreferencesHolder, dayNightHelper)
     private val assetLoader = TemplateAssetLoader(context)
-    private val cssComposer = TemplateCssComposer(mainPreferencesHolder, dayNightHelper, paletteResolver)
+    private val cssComposer = TemplateCssComposer(context, mainPreferencesHolder, dayNightHelper, paletteResolver)
 
     fun setStaticStrings(strings: Map<String, String>) = staticStrings.setStaticStrings(strings)
 

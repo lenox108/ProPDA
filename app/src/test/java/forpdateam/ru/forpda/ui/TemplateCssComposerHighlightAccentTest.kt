@@ -72,7 +72,37 @@ class TemplateCssComposerHighlightAccentTest {
         every { paletteResolver.isMinimalReader() } returns mode.minimalReader
         every { paletteResolver.isAmoled() } returns mode.amoled
         val mainPreferencesHolder = mockk<MainPreferencesHolder>(relaxed = true)
-        return TemplateCssComposer(mainPreferencesHolder, dayNightHelper, paletteResolver).compose()
+        return TemplateCssComposer(mockk<android.content.Context>(relaxed = true), mainPreferencesHolder, dayNightHelper, paletteResolver).compose()
+    }
+
+    // G2: с выбранным курируемым акцентом контент форума следует за ним —
+    // --ppda-accent должен стать цветом акцента, а НЕ статическим системным
+    // дефолтом (#2177AF light / #78B8E6 dark).
+    @Test
+    fun compose_ppdaAccentFollowsSelectedCuratedAccent() {
+        val dayNightHelper = mockk<DayNightHelper>()
+        val paletteResolver = mockk<TemplatePaletteResolver>()
+        every { dayNightHelper.isNight() } returns false
+        every { paletteResolver.isSepiaReading() } returns false
+        every { paletteResolver.isSepiaBlue() } returns false
+        every { paletteResolver.isMinimalReader() } returns false
+        every { paletteResolver.isAmoled() } returns false
+        val holder = mockk<MainPreferencesHolder>(relaxed = true)
+        every { holder.getUseMaterialYou() } returns false
+        every { holder.getAccentPalette() } returns
+                forpdateam.ru.forpda.common.Preferences.Main.AccentPalette.RED
+
+        val css = TemplateCssComposer(
+                mockk<android.content.Context>(relaxed = true), holder, dayNightHelper, paletteResolver
+        ).compose()
+
+        val match = Regex("--ppda-accent\\s*:\\s*(#[0-9A-Fa-f]{6})\\s*;").find(css)
+        assertTrue("--ppda-accent must be present and hex. CSS:\n$css", match != null)
+        val hex = match!!.groupValues[1].uppercase()
+        assertTrue(
+                "--ppda-accent should follow the selected RED accent, not the static system default. Got $hex",
+                hex != "#2177AF" && hex != "#78B8E6",
+        )
     }
 
     @Test

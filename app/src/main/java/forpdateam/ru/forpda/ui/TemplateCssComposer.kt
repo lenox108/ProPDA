@@ -1,7 +1,13 @@
 package forpdateam.ru.forpda.ui
 
+import android.content.Context
+import android.os.Build
+import com.google.android.material.color.utilities.Hct
+import com.google.android.material.color.utilities.MaterialDynamicColors
+import com.google.android.material.color.utilities.SchemeTonalSpot
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.common.DayNightHelper
+import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import timber.log.Timber
 
@@ -16,6 +22,7 @@ import timber.log.Timber
  * color palettes, the same return values for the same inputs.
  */
 class TemplateCssComposer(
+        private val context: Context,
         private val mainPreferencesHolder: MainPreferencesHolder,
         private val dayNightHelper: DayNightHelper,
         private val paletteResolver: TemplatePaletteResolver,
@@ -25,6 +32,54 @@ class TemplateCssComposer(
     private fun isSepiaBlue(): Boolean = paletteResolver.isSepiaBlue()
     private fun isMinimalReader(): Boolean = paletteResolver.isMinimalReader()
     private fun isAmoled(): Boolean = paletteResolver.isAmoled()
+
+    /** Seed-цвета курируемых палитр — синхронно с AccentPaletteGenerator/AccentApplier. */
+    private val curatedSeeds: Map<Preferences.Main.AccentPalette, Int> = mapOf(
+            Preferences.Main.AccentPalette.BLUE to 0xFF0B57D0.toInt(),
+            Preferences.Main.AccentPalette.INDIGO to 0xFF4355B9.toInt(),
+            Preferences.Main.AccentPalette.VIOLET to 0xFF7B4FCF.toInt(),
+            Preferences.Main.AccentPalette.PURPLE to 0xFF9C27B0.toInt(),
+            Preferences.Main.AccentPalette.PINK to 0xFFC2185B.toInt(),
+            Preferences.Main.AccentPalette.RED to 0xFFD32F2F.toInt(),
+            Preferences.Main.AccentPalette.DEEPORANGE to 0xFFE64A19.toInt(),
+            Preferences.Main.AccentPalette.ORANGE to 0xFFEF6C00.toInt(),
+            Preferences.Main.AccentPalette.AMBER to 0xFFFF8F00.toInt(),
+            Preferences.Main.AccentPalette.GREEN to 0xFF2E7D32.toInt(),
+            Preferences.Main.AccentPalette.TEAL to 0xFF00796B.toInt(),
+            Preferences.Main.AccentPalette.CYAN to 0xFF0097A7.toInt(),
+    )
+
+    /**
+     * Акцент для контента WebView, СЛЕДУЮЩИЙ за выбором цвета/Material You (G2).
+     * Возвращает hex `#RRGGBB` или null → оставить статический palette-default.
+     *
+     * Считается in-process (у композера @ApplicationContext без per-activity
+     * оверлея, поэтому НЕ читаем тему): Material You → системный `system_accent1`
+     * (API 31+); курируемая/произвольная палитра → M3 primary из seed тем же
+     * SchemeTonalSpot, что и нативные ресурсы. Палитры чтения (Sepia/Minimal)
+     * сохраняют свои выверенные акценты → null.
+     */
+    private fun resolveDynamicAccentHex(): String? {
+        if (isSepiaReading() || isSepiaBlue() || isMinimalReader()) return null
+        val isNight = dayNightHelper.isNight()
+        return runCatching {
+            val materialYou = mainPreferencesHolder.getUseMaterialYou()
+            if (materialYou && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val res = if (isNight) android.R.color.system_accent1_200
+                else android.R.color.system_accent1_600
+                return@runCatching "#%06X".format(context.getColor(res) and 0xFFFFFF)
+            }
+            val accent = mainPreferencesHolder.getAccentPalette()
+            val seed = when (accent) {
+                Preferences.Main.AccentPalette.NEUTRAL -> return@runCatching null
+                Preferences.Main.AccentPalette.CUSTOM -> mainPreferencesHolder.getAccentCustomColor()
+                else -> curatedSeeds[accent] ?: return@runCatching null
+            }
+            val scheme = SchemeTonalSpot(Hct.fromInt(seed), isNight, 0.0)
+            val argb = MaterialDynamicColors().primary().getArgb(scheme)
+            "#%06X".format(argb and 0xFFFFFF)
+        }.getOrNull()
+    }
 
     /**
      * Cache key for the last [compose] result. The composed CSS depends only on
@@ -299,7 +354,9 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
         // accent. The values mirror the per-palette `colors.link` /
         // `colors.accent` baked into the override composers above so the ring
         // colour matches the rest of the palette rather than a hard-coded blue.
-        val accent = when {
+        // G2: если выбран акцент/Material You/произвольный цвет — контент форума
+        // следует за ним; иначе — статический palette-default (как раньше).
+        val accent = resolveDynamicAccentHex() ?: when {
             isSepiaReading() -> if (dayNightHelper.isNight()) "#C9975B" else "#8A5A2B"
             isSepiaBlue() -> if (dayNightHelper.isNight()) "#8FB3C8" else "#4F7896"
             isMinimalReader() -> if (dayNightHelper.isNight()) "#8DA3B8" else "#7C8FA1"
