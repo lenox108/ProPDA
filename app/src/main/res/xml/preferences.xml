@@ -33,6 +33,13 @@
             android:title="@string/pref_title_ui_palette"
             app:iconSpaceReserved="false" />
 
+        <Preference
+            android:key="main.accent"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_accent"
+            android:title="@string/pref_title_accent"
+            app:iconSpaceReserved="false" />
+
         <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="main.use_material_you"
