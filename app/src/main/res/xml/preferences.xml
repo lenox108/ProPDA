@@ -22,13 +22,9 @@
             android:title="@string/pref_title_theme_mode"
             app:iconSpaceReserved="false" />
 
-        <ListPreference
-            android:dialogTitle="@string/pref_title_ui_palette"
-            android:entries="@array/entries_ui_palette"
-            android:entryValues="@array/entry_values_ui_palette"
+        <Preference
             android:key="main.ui.palette"
             android:layout="@layout/preference_custom"
-            android:defaultValue="SYSTEM"
             android:summary="@string/pref_summary_ui_palette_system"
             android:title="@string/pref_title_ui_palette"
             app:iconSpaceReserved="false" />

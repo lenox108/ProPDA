@@ -582,23 +582,19 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
-        findPreference<ListPreference>(Preferences.Main.UI_PALETTE)?.apply {
+        findPreference<Preference>(Preferences.Main.UI_PALETTE)?.apply {
             lifecycleScope.launch {
-                val currentTheme = mainPreferencesHolder.observeThemeModeFlow().first()
-                val currentPalette = mainPreferencesHolder.observeUiPaletteFlow().first()
-                val safePalette = sanitizeUiPaletteForTheme(currentPalette, currentTheme)
-                updateUiPaletteEntries(currentTheme, safePalette)
-                updateUiPaletteSummary(safePalette)
-                if (safePalette != currentPalette) mainPreferencesHolder.setUiPalette(safePalette)
+                updateUiPaletteSummary(mainPreferencesHolder.observeUiPaletteFlow().first())
             }
-            setOnPreferenceChangeListener { _, newValue ->
-                val paletteName = newValue as String
-                val themeMode = mainPreferencesHolder.getThemeMode()
-                val palette = sanitizeUiPaletteForTheme(parseUiPalette(paletteName), themeMode)
-                updateUiPaletteSummary(palette)
-                lifecycleScope.launch {
-                    mainPreferencesHolder.setUiPalette(palette)
-                    activity?.recreate()
+            setOnPreferenceClickListener {
+                forpdateam.ru.forpda.ui.views.dialog.PalettePickerDialog.show(
+                        requireContext(), mainPreferencesHolder.getUiPalette()
+                ) { palette ->
+                    updateUiPaletteSummary(palette)
+                    lifecycleScope.launch {
+                        mainPreferencesHolder.setUiPalette(palette)
+                        activity?.recreate()
+                    }
                 }
                 true
             }
@@ -767,30 +763,6 @@ class SettingsFragment : BaseSettingFragment() {
         Preferences.Main.ThemeMode.SYSTEM
     }
 
-    private fun parseUiPalette(value: String?): Preferences.Main.UiPalette = try {
-        // CLASSIC_4PDA was removed; any legacy stored value falls back to SYSTEM.
-        Preferences.Main.UiPalette.valueOf(value ?: Preferences.Main.UiPalette.SYSTEM.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.UiPalette.SYSTEM
-    }
-
-    private fun sanitizeUiPaletteForTheme(
-            palette: Preferences.Main.UiPalette,
-            themeMode: Preferences.Main.ThemeMode
-    ): Preferences.Main.UiPalette {
-        return palette
-    }
-
-    private fun ListPreference.updateUiPaletteEntries(
-            themeMode: Preferences.Main.ThemeMode,
-            selectedPalette: Preferences.Main.UiPalette
-    ) {
-        val palettes = supportedUiPalettes(themeMode)
-        entries = palettes.map { getUiPaletteLabel(it) }.toTypedArray()
-        entryValues = palettes.map { it.name }.toTypedArray()
-        value = sanitizeUiPaletteForTheme(selectedPalette, themeMode).name
-    }
-
     private fun updateThemeModeSummary(mode: Preferences.Main.ThemeMode) {
         findPreference<ListPreference>("main.theme.mode")?.setSummary(
                 when (mode) {
@@ -804,7 +776,7 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun updateUiPaletteSummary(palette: Preferences.Main.UiPalette) {
-        findPreference<ListPreference>(Preferences.Main.UI_PALETTE)?.setSummary(
+        findPreference<Preference>(Preferences.Main.UI_PALETTE)?.setSummary(
                 when (palette) {
                     Preferences.Main.UiPalette.SEPIA_READING -> R.string.pref_summary_ui_palette_sepia_reading
                     Preferences.Main.UiPalette.SEPIA_BLUE -> R.string.pref_summary_ui_palette_sepia_blue
@@ -943,23 +915,6 @@ class SettingsFragment : BaseSettingFragment() {
                     else -> R.string.download_method_system
                 }
         )
-    }
-
-    private fun supportedUiPalettes(themeMode: Preferences.Main.ThemeMode): List<Preferences.Main.UiPalette> {
-        val palettes = mutableListOf(Preferences.Main.UiPalette.SYSTEM)
-        palettes.add(Preferences.Main.UiPalette.MINIMAL_READER)
-        palettes.add(Preferences.Main.UiPalette.SEPIA_READING)
-        palettes.add(Preferences.Main.UiPalette.SEPIA_BLUE)
-        return palettes
-    }
-
-    private fun getUiPaletteLabel(palette: Preferences.Main.UiPalette): String {
-        return when (palette) {
-            Preferences.Main.UiPalette.SEPIA_READING -> getString(R.string.pref_value_ui_palette_sepia_reading)
-            Preferences.Main.UiPalette.SEPIA_BLUE -> getString(R.string.pref_value_ui_palette_sepia_blue)
-            Preferences.Main.UiPalette.MINIMAL_READER -> getString(R.string.pref_value_ui_palette_minimal_reader)
-            else -> getString(R.string.pref_value_ui_palette_system)
-        }
     }
 
     private fun updateTopicPageSwipePreferenceState(mode: Preferences.Main.TopicScrollMode) {

@@ -26,19 +26,6 @@
         <item>SYSTEM_AMOLED</item>
     </string-array>
 
-    <string-array name="entries_ui_palette">
-        <item>@string/pref_value_ui_palette_system</item>
-        <item>@string/pref_value_ui_palette_minimal_reader</item>
-        <item>@string/pref_value_ui_palette_sepia_reading</item>
-        <item>@string/pref_value_ui_palette_sepia_blue</item>
-    </string-array>
-    <string-array name="entry_values_ui_palette">
-        <item>SYSTEM</item>
-        <item>MINIMAL_READER</item>
-        <item>SEPIA_READING</item>
-        <item>SEPIA_BLUE</item>
-    </string-array>
-
     <string-array name="entries_app_font_mode">
         <item>@string/pref_value_app_font_system</item>
         <item>@string/pref_value_app_font_roboto</item>

@@ -684,6 +684,8 @@
     <string name="accent_preview_button">Кнопка</string>
     <string name="accent_preview_link">Ссылка</string>
     <string name="accent_preview_chip">Чип</string>
+    <string name="palette_preview_sample">Пример текста в этой палитре</string>
+    <string name="palette_preview_link">Ссылка</string>
     <string name="pref_title_use_material_you">Цвета системы (Material You)</string>
     <string name="pref_summary_use_material_you">Использовать акцент из обоев системы (Android 12+). Действует только для палитры «Системная» и не меняет шрифты в WebView.</string>
     <string name="pref_summary_use_material_you_unsupported">Не поддерживается на вашей версии Android.</string>
