@@ -691,39 +691,36 @@ class SettingsFragment : BaseSettingFragment() {
             true
         }
 
-        // Sync ListPreference selection with actual theme stored in DataStore (async to avoid ANR)
-        findPreference<ListPreference>("main.theme.mode")?.apply {
+        // Visual theme picker with light/dark/AMOLED preview panes.
+        findPreference<Preference>("main.theme.mode")?.apply {
             lifecycleScope.launch {
-                val currentMode = mainPreferencesHolder.observeThemeModeFlow().first()
-                if (value != currentMode.name) {
-                    value = currentMode.name
-                }
-                updateThemeModeSummary(currentMode)
+                updateThemeModeSummary(mainPreferencesHolder.observeThemeModeFlow().first())
             }
-        }
-
-        findPreference<ListPreference>("main.theme.mode")?.setOnPreferenceChangeListener { _, newValue ->
-            val modeName = newValue as String
-            Timber.d("[THEME] Preference changed to: $modeName")
-            val mode = parseThemeMode(modeName)
-            updateThemeModeSummary(mode)
-            // 1. Save to DataStore asynchronously (suspend, no runBlocking), then restart
-            lifecycleScope.launch {
-                mainPreferencesHolder.setThemeMode(mode)
-                Timber.d("[THEME] Saved to DataStore: $mode")
-                // 2. Apply night mode immediately
-                DayNightHelper.applyTheme(mode)
-                // 3. Force restart entire app to pick up new theme styles
-                val ctx = requireContext().applicationContext
-                val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            setOnPreferenceClickListener {
+                forpdateam.ru.forpda.ui.views.dialog.ThemeModePickerDialog.show(
+                        requireContext(), mainPreferencesHolder.getThemeMode()
+                ) { mode ->
+                    Timber.d("[THEME] Preference changed to: $mode")
+                    updateThemeModeSummary(mode)
+                    // 1. Save to DataStore asynchronously (suspend, no runBlocking), then restart
+                    lifecycleScope.launch {
+                        mainPreferencesHolder.setThemeMode(mode)
+                        Timber.d("[THEME] Saved to DataStore: $mode")
+                        // 2. Apply night mode immediately
+                        DayNightHelper.applyTheme(mode)
+                        // 3. Force restart entire app to pick up new theme styles
+                        val ctx = requireContext().applicationContext
+                        val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        }
+                        if (intent != null) {
+                            startActivity(intent)
+                            activity?.finishAffinity()
+                        }
+                    }
                 }
-                if (intent != null) {
-                    startActivity(intent)
-                    activity?.finishAffinity()
-                }
+                true
             }
-            true
         }
     }
 
@@ -756,15 +753,8 @@ class SettingsFragment : BaseSettingFragment() {
         )
     }
 
-    private fun parseThemeMode(value: String?): Preferences.Main.ThemeMode = try {
-        Preferences.Main.ThemeMode.valueOf(value ?: Preferences.Main.ThemeMode.SYSTEM.name)
-    } catch (e: Exception) {
-        Timber.e(e, "[THEME] Invalid mode: $value")
-        Preferences.Main.ThemeMode.SYSTEM
-    }
-
     private fun updateThemeModeSummary(mode: Preferences.Main.ThemeMode) {
-        findPreference<ListPreference>("main.theme.mode")?.setSummary(
+        findPreference<Preference>("main.theme.mode")?.setSummary(
                 when (mode) {
                     Preferences.Main.ThemeMode.LIGHT -> R.string.pref_summary_theme_mode_light
                     Preferences.Main.ThemeMode.DARK -> R.string.pref_summary_theme_mode_dark
