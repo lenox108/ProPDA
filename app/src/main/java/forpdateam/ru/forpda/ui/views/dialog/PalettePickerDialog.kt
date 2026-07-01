@@ -53,7 +53,7 @@ object PalettePickerDialog {
         fun px(v: Int) = (v * dp).roundToInt()
 
         val outline = context.getColorFromAttr(com.google.android.material.R.attr.colorOutline)
-        val selectedRing = context.getColorFromAttr(com.google.android.material.R.attr.colorPrimary)
+        val selectedRing = context.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
 
         fun colorsFor(e: Entry): Entry {
             if (e.palette != UiPalette.SYSTEM) return e
@@ -61,7 +61,7 @@ object PalettePickerDialog {
                     bg = context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest),
                     text = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface),
                     text2 = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant),
-                    accent = context.getColorFromAttr(com.google.android.material.R.attr.colorPrimary),
+                    accent = context.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary),
             )
         }
 

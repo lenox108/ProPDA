@@ -343,7 +343,7 @@ class MaterialYouApplierTest {
 
         val colorError = TypedValue()
         val resolved = activity.theme.resolveAttribute(
-                com.google.android.material.R.attr.colorError, colorError, /* resolveRefs = */ true
+                androidx.appcompat.R.attr.colorError, colorError, /* resolveRefs = */ true
         )
         assertTrue("?attr/colorError must resolve on the activity theme", resolved)
         assertNotEquals(

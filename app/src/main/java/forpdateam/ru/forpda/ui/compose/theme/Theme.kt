@@ -84,7 +84,7 @@ internal fun forpdaColorSchemeFromContext(context: Context, isDark: Boolean): Co
         Color(MaterialColors.getColor(context, attr, fallback.toArgb()))
 
     return base.copy(
-        primary = role(MaterialR.attr.colorPrimary, base.primary),
+        primary = role(androidx.appcompat.R.attr.colorPrimary, base.primary),
         onPrimary = role(MaterialR.attr.colorOnPrimary, base.onPrimary),
         primaryContainer = role(MaterialR.attr.colorPrimaryContainer, base.primaryContainer),
         onPrimaryContainer = role(MaterialR.attr.colorOnPrimaryContainer, base.onPrimaryContainer),
@@ -103,7 +103,7 @@ internal fun forpdaColorSchemeFromContext(context: Context, isDark: Boolean): Co
         onSurface = role(MaterialR.attr.colorOnSurface, base.onSurface),
         surfaceVariant = role(MaterialR.attr.colorSurfaceVariant, base.surfaceVariant),
         onSurfaceVariant = role(MaterialR.attr.colorOnSurfaceVariant, base.onSurfaceVariant),
-        surfaceTint = role(MaterialR.attr.colorPrimary, base.surfaceTint),
+        surfaceTint = role(androidx.appcompat.R.attr.colorPrimary, base.surfaceTint),
         inverseSurface = role(MaterialR.attr.colorSurfaceInverse, base.inverseSurface),
         inverseOnSurface = role(MaterialR.attr.colorOnSurfaceInverse, base.inverseOnSurface),
         surfaceBright = role(MaterialR.attr.colorSurfaceBright, base.surfaceBright),
@@ -115,7 +115,7 @@ internal fun forpdaColorSchemeFromContext(context: Context, isDark: Boolean): Co
         surfaceContainerHighest = role(MaterialR.attr.colorSurfaceContainerHighest, base.surfaceContainerHighest),
         outline = role(MaterialR.attr.colorOutline, base.outline),
         outlineVariant = role(MaterialR.attr.colorOutlineVariant, base.outlineVariant),
-        error = role(MaterialR.attr.colorError, base.error),
+        error = role(androidx.appcompat.R.attr.colorError, base.error),
         onError = role(MaterialR.attr.colorOnError, base.onError),
         errorContainer = role(MaterialR.attr.colorErrorContainer, base.errorContainer),
         onErrorContainer = role(MaterialR.attr.colorOnErrorContainer, base.onErrorContainer),

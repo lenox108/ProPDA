@@ -185,7 +185,7 @@ object MaterialYouApplier {
     private fun logResolvedColors(activity: Activity) {
         val tv = TypedValue()
         val primary = if (activity.theme.resolveAttribute(
-                        com.google.android.material.R.attr.colorPrimary, tv, true)) tv.data else 0
+                        androidx.appcompat.R.attr.colorPrimary, tv, true)) tv.data else 0
         val accent = if (activity.theme.resolveAttribute(
                         androidx.appcompat.R.attr.colorAccent, tv, true)) tv.data else 0
         Timber.tag(LOG_TAG).d(
