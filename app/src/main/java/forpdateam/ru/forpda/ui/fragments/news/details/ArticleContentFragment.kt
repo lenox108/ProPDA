@@ -2004,11 +2004,14 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             renderInlineCommentsUi(state)
             return
         }
+        val expectedInDom = state.comments.size
         webView.evaluateJavascript(
                 """(function(){
                   var list = document.querySelector('#news-inline-comments-list');
                   if (!list) return 'no_list';
-                  return list.children && list.children.length > 0 ? 'ok' : 'empty';
+                  var have = list.querySelectorAll('[data-news-comment-id]').length;
+                  if (have <= 0) return 'empty';
+                  return have >= $expectedInDom ? 'ok' : ('short:' + have);
                 })();"""
         ) { raw ->
             if (!isWebViewReady() || commentsSectionState.collapsed) return@evaluateJavascript
@@ -2184,12 +2187,21 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             state: ArticleCommentsState.Loaded,
             generation: Int,
     ) {
-        if (!isWebViewReady() || commentsSectionState.collapsed) return
+        if (commentsSectionState.collapsed) return
+        if (!isWebViewReady()) {
+            // WebView not ready yet (e.g. append arrived while paused/reattaching): don't drop the
+            // new comment silently — retry, mirroring injectCommentsHtml, so it lands once ready.
+            scheduleCommentsInjectRetry(state, "append_webview_not_ready")
+            return
+        }
         val fromIndex = state.appendFromIndex.coerceIn(0, state.comments.size)
         if (fromIndex >= state.comments.size) return
         val batch = state.comments.subList(fromIndex, state.comments.size)
         if (batch.isEmpty()) return
-        if (!commentsExpandCoordinator.isInjectGenerationCurrent(generation)) return
+        if (!commentsExpandCoordinator.isInjectGenerationCurrent(generation)) {
+            scheduleCommentsInjectRetry(state, "append_skipped_stale")
+            return
+        }
         val html = buildInlineCommentsHtml(batch)
         inlineComments = state.comments
         logCommentsSection(
@@ -2233,6 +2245,17 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                                 )
                         )
                 )
+            } else {
+                logCommentsSection(
+                        "render_append_error",
+                        commentsBridgeFields(
+                                eventSource = "appendCommentsHtml",
+                                extra = mapOf("domResult" to result, "generation" to generation)
+                        )
+                )
+                if (result in COMMENTS_INJECT_RETRY_RESULTS) {
+                    scheduleCommentsInjectRetry(state, "append_dom_$result")
+                }
             }
         }
     }
@@ -2946,7 +2969,24 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             if (hasConfirmedArticleRender() && webView.contentHeight > WEBVIEW_BLANK_CONTENT_HEIGHT_THRESHOLD) {
                 webView.acknowledgeJsBridgeFromNativeProbe()
             }
+            reconcileInlineCommentsOnResume()
         }
+    }
+
+    /**
+     * A comment sent right before the screen was backgrounded can finish loading after the
+     * lifecycle collector was already cancelled, so its render never reached the DOM. On return,
+     * reconcile the WebView list against the latest Loaded state (count-checked, idempotent) so the
+     * new comment shows without a manual refresh.
+     */
+    private fun reconcileInlineCommentsOnResume() {
+        if (commentsSectionState.collapsed) return
+        val loaded = commentsViewModel.commentsState.value as? ArticleCommentsState.Loaded ?: return
+        if (loaded.comments.isEmpty()) return
+        webView.postDelayed({
+            if (!isWebViewReady() || commentsSectionState.collapsed) return@postDelayed
+            verifyLoadedCommentsInDomOrReinject(loaded)
+        }, COMMENTS_VERIFY_DELAY_MS)
     }
 
     override fun onPause() {
