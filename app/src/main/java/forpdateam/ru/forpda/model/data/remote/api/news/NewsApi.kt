@@ -922,10 +922,15 @@ class NewsApi(
         }
     }
 
+    // Форма правки готова к сабмиту, если есть поле текста, URL и признак именно РЕДАКТИРОВАНИЯ:
+    // либо модерационный нонс (старый desktop-путь), либо выставленный comment_ID (путь 4pda через
+    // wp-comments-post.php — нонс там не нужен). Раньше нонс требовался всегда, из-за чего валидная
+    // nonce-less форма правки не использовалась и редактирование падало.
     private fun hasParsedEditForm(action: Comment.Action): Boolean =
             action.fields.keys.any { isCommentTextField(it) } &&
-                    action.fields.keys.any { isModerationNonceField(it) } &&
-                    !action.url.isNullOrBlank()
+                    !action.url.isNullOrBlank() &&
+                    (action.fields.keys.any { isModerationNonceField(it) } ||
+                            (action.fields["comment_ID"]?.toIntOrNull() ?: 0) > 0)
 
     private fun looksLikeCommentModerationForm(body: String): Boolean {
         if (body.isBlank()) return false
@@ -1167,7 +1172,7 @@ class NewsApi(
             comments = articleParser.mergeCommentDesktopActions(comments, article.desktopCommentsSource)
             val userId = currentUserId()
             if (userId > 0) {
-                articleParser.applyFallbackOwnCommentActions(comments, userId)
+                articleParser.applyFallbackOwnCommentActions(comments, userId, article.id)
             }
             if (page <= 1) {
                 logOwnCommentActions(comments, article.desktopCommentsSource)
@@ -1208,7 +1213,7 @@ class NewsApi(
         )
         val userId = currentUserId()
         if (userId > 0) {
-            articleParser.applyFallbackOwnCommentActions(comments, userId)
+            articleParser.applyFallbackOwnCommentActions(comments, userId, article.id)
         }
         logOwnCommentActions(comments, article.desktopCommentsSource)
         return comments

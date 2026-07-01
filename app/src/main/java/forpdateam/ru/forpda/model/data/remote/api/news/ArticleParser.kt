@@ -237,7 +237,11 @@ class ArticleParser(
         val firstImageTagRegex = Regex("""(?is)<img\b[^>]*>""")
         val firstSourceTagRegex = Regex("""(?is)<source\b[^>]*>""")
         val articleLightboxImageRegex = Regex("""(?is)<a\b(?=[^>]*\bdata-lightbox\s*=\s*(["'])post-\d+\1)[^>]*>[\s\S]*?<img\b[^>]*>[\s\S]*?</a>""")
-        val commentEditedTextRegex = Regex("""(?i)\bотредактирован[а-я]*\b|(?:message\s+)?edited\s+by\b""")
+        // Кириллическую «отредактирован» матчим ПОДСТРОКОЙ, без \b: на Android regex-движок
+        // ICU (\b уже Unicode-aware, флаг (?U) недоступен и роняет compile), а на JVM в юнит-тестах
+        // \b ASCII-only и границы у кириллицы нет — substring работает одинаково в обоих. Совпадает
+        // с логикой stripEditedMarker, где маркер тоже ищется без \b.
+        val commentEditedTextRegex = Regex("""(?i)отредактирован[а-я]*|(?:message\s+)?edited\s+by\b""")
         val moderationNonceFieldNames = listOf(
                 "_wpnonce",
                 "_ajax_nonce-replyto-comment",
@@ -713,13 +717,13 @@ class ArticleParser(
                 .any { it.userId == authUserId && it.id > 0 && it.hasActionableOwnModeration() }
     }
 
-    fun applyFallbackOwnCommentActions(root: Comment, authUserId: Int) {
+    fun applyFallbackOwnCommentActions(root: Comment, authUserId: Int, articleId: Int = 0) {
         if (authUserId <= 0) return
         root.flattenComments().forEach { comment ->
             if (comment.userId != authUserId || comment.id <= 0) return@forEach
             if (comment.actions.edit?.hasInlineEditPayload() == true) return@forEach
             if (comment.actions.edit?.isActionableModeration() != true) {
-                comment.actions.edit = buildFallbackEditCommentAction(comment.id)
+                comment.actions.edit = buildFallbackEditCommentAction(comment.id, articleId)
             }
             if (comment.actions.delete?.isActionableModeration() != true) {
                 comment.actions.delete = buildFallbackDeleteCommentAction(comment.id)
@@ -727,11 +731,25 @@ class ArticleParser(
         }
     }
 
-    fun buildFallbackEditCommentAction(commentId: Int): Comment.Action =
-            Comment.Action(
-                    url = "https://4pda.to/wp-admin/admin-ajax.php?action=editcomment&c=$commentId",
-                    type = Comment.Action.Type.EDIT
-            )
+    // 4pda редактирует комментарий обычным POST на wp-comments-post.php с выставленным
+    // comment_ID (ровно так делает JS сайта по клику «Изменить»: подставляет comment_ID в
+    // #commentform и сабмитит его). Экшена admin-ajax.php?action=editcomment на сервере НЕТ —
+    // он отдаёт 404, из-за чего прежний фолбэк ломал редактирование. Нонс не требуется.
+    fun buildFallbackEditCommentAction(commentId: Int, articleId: Int = 0): Comment.Action {
+        val fields = linkedMapOf<String, String>()
+        if (articleId > 0) fields["comment_post_ID"] = articleId.toString()
+        fields["comment_ID"] = commentId.toString()
+        fields["comment_reply_ID"] = "0"
+        fields["comment_reply_dp"] = "0"
+        fields["comment"] = ""
+        fields["submit"] = ""
+        return Comment.Action(
+                url = INLINE_COMMENT_EDIT_SUBMIT_URL,
+                method = Comment.Action.METHOD_POST,
+                fields = fields,
+                type = Comment.Action.Type.EDIT
+        )
+    }
 
     fun buildFallbackDeleteCommentAction(commentId: Int): Comment.Action =
             Comment.Action(
@@ -2528,7 +2546,16 @@ class ArticleParser(
                         .find(block)?.groupValues?.getOrNull(1).orEmpty().articleFromHtml()?.trim()
                 val rawContent = commentFallbackContentRegex
                         .find(block)?.groupValues?.getOrNull(1).orEmpty()
-                content = rawContent.articleFromHtml()?.trim().orEmpty()
+                // Тег-путь (пагинированные inline-комментарии, parseCommentsBatch /
+                // parseCommentsViaTagsOnly) раньше НЕ детектил правку: isEdited оставался
+                // false, и «(отредактирован)» висел прямо в тексте вместо аккуратной
+                // иконки-карандаша после даты. Повторяем логику основного parseComments.
+                val edited = hasAnyMarker(openTag.lowercase(), "edited", "modified") ||
+                        commentEditedTextRegex.containsMatchIn(cleanPollText(rawContent)) ||
+                        commentEditedTextRegex.containsMatchIn(cleanPollText(block))
+                isEdited = edited
+                val effectiveContent = if (edited) stripEditedMarker(rawContent) else rawContent
+                content = effectiveContent.articleFromHtml()?.trim().orEmpty()
                 karma = karmaMap.get(id)
                 actions = if (resolveActions) {
                     parseCommentActionsFromTagBlock(block, id, userId)
@@ -2659,7 +2686,20 @@ class ArticleParser(
                 fields[name] = value
             }
         }
-        if (!fields.keys.any { isModerationNonceField(it) }) return null
+        // 4pda применяет правку только на ПОЛНЫЙ сабмит #commentform. На мобильной странице формы нет
+        // (extractCommentFormFields ничего не находит), поэтому сервер получал лишь comment_ID +
+        // comment_post_ID + comment и возвращал 200 БЕЗ применения правки. Дефолтим недостающие
+        // скрытые поля формы в те же значения, что шлёт сам сайт (проверено захватом сети: правка с
+        // этим набором проходит, без него — нет).
+        fields.putIfAbsent("comment_reply_ID", "0")
+        fields.putIfAbsent("comment_reply_dp", "0")
+        fields.putIfAbsent("submit", "")
+        // Раньше требовался модерационный нонс, но у 4pda форма комментариев его НЕ содержит,
+        // и правка проходит без нонса. Достаточно comment_ID + comment_post_ID, чтобы POST на
+        // wp-comments-post.php отредактировал комментарий (иначе валидный экшен отбрасывался).
+        val hasNonce = fields.keys.any { isModerationNonceField(it) }
+        val hasEditKeys = !fields["comment_ID"].isNullOrBlank() && !fields["comment_post_ID"].isNullOrBlank()
+        if (!hasNonce && !hasEditKeys) return null
         return Comment.Action(
                 url = INLINE_COMMENT_EDIT_SUBMIT_URL,
                 method = Comment.Action.METHOD_POST,
