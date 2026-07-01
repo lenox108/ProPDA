@@ -32,8 +32,11 @@ class AppUpdateRepositoryTest {
         assertTrue(result is AppUpdateRepository.CheckResult.UpdateAvailable)
         val update = result as AppUpdateRepository.CheckResult.UpdateAvailable
         assertEquals(SemanticVersion(3, 0, 0), update.version)
-        assertEquals(candidate.url, update.topicUrl)
+        // «Открыть» → тема 4pda, а не страница релиза GitHub.
+        assertEquals(AppUpdateRepository.TOPIC_URL, update.topicUrl)
+        // «Скачать» → прямая ссылка на APK из GitHub-релиза.
         assertEquals(1, update.downloads.size)
+        assertEquals("https://x/ProPDA-3.0.0.apk", update.downloads.first().url)
         assertEquals("release notes", update.description)
     }
 

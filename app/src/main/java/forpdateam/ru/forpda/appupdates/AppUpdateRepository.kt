@@ -54,7 +54,9 @@ class AppUpdateRepository @Inject constructor(
         val result = if (candidate != null && candidate.version > currentVersion) {
             CheckResult.UpdateAvailable(
                 version = candidate.version,
-                topicUrl = candidate.url,
+                // «Открыть» ведёт на тему обсуждения на 4pda;
+                // «Скачать» — прямые ссылки на APK из GitHub-релиза (downloads).
+                topicUrl = TOPIC_URL,
                 description = candidate.description,
                 downloads = candidate.downloads
             )
@@ -135,5 +137,9 @@ class AppUpdateRepository @Inject constructor(
 
     companion object {
         const val LOG_TAG = "AppUpdateCheck"
+
+        // Тема обсуждения приложения на 4pda — цель кнопки «Открыть».
+        const val TOPIC_ID = 1121483
+        const val TOPIC_URL = "https://4pda.to/forum/index.php?showtopic=$TOPIC_ID"
     }
 }
