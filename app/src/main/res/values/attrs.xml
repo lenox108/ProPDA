@@ -34,7 +34,6 @@
     <attr name="item_tab_close_color" extension="reference" format="color" />
 
     <!-- Bottom nav active pill: light = transparent (icon tint only); dark = same as colorSecondaryContainer -->
-    <attr name="bottom_nav_tab_active_fill" format="color" />
     <!-- M3 surface для нижней полоски / BottomDrawer: верхние углы, низ без inset (edge-to-edge) -->
     <attr name="bottom_nav_bar_shape_appearance" format="reference" />
     <!-- Smart navigation FAB colors: AMOLED overrides surface/icon without affecting normal light/dark accents. -->

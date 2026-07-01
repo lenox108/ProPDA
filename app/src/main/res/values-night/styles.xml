@@ -31,7 +31,6 @@
         <item name="colorPrimaryContainer">@color/dark_card_background</item>
         <item name="colorOnPrimaryContainer">@color/dark_default_text_color</item>
         <item name="colorSecondaryContainer">@color/dark_card_background</item>
-        <item name="bottom_nav_tab_active_fill">@android:color/transparent</item>
         <item name="colorOnSecondaryContainer">@color/dark_default_text_color</item>
         <item name="colorSurfaceVariant">@color/dark_card_background</item>
         <item name="colorOnSurfaceVariant">@color/dark_second_text_color</item>
@@ -190,7 +189,6 @@
         <item name="colorPrimaryContainer">@color/amoled_card_background</item>
         <item name="colorOnPrimaryContainer">@color/dark_default_text_color</item>
         <item name="colorSecondaryContainer">@color/amoled_card_background</item>
-        <item name="bottom_nav_tab_active_fill">@color/amoled_bottom_nav_tab_active_fill</item>
         <item name="colorOnSecondaryContainer">@color/dark_default_text_color</item>
         <item name="colorSurfaceVariant">@color/amoled_card_background</item>
         <item name="colorSurfaceContainer">@color/amoled_card_background</item>

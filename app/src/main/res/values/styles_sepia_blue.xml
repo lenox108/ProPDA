@@ -33,7 +33,6 @@
         <item name="main_toolbar_stroke_color">@color/sepia_blue_main_toolbar_stroke</item>
         <item name="list_plate_stroke_width">1dp</item>
         <item name="list_plate_stroke_color">@color/sepia_blue_divider_line</item>
-        <item name="bottom_nav_tab_active_fill">@android:color/transparent</item>
         <item name="smart_nav_fab_background">@color/sepia_blue_colorAccent</item>
         <item name="smart_nav_fab_icon">@color/sepia_blue_link_color_contrast</item>
         <item name="actionModeBackground">@color/sepia_blue_colorPrimary</item>

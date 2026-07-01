@@ -33,7 +33,6 @@
         <item name="main_toolbar_stroke_color">@color/minimal_reader_main_toolbar_stroke</item>
         <item name="list_plate_stroke_width">1dp</item>
         <item name="list_plate_stroke_color">@color/minimal_reader_divider_line</item>
-        <item name="bottom_nav_tab_active_fill">@android:color/transparent</item>
         <item name="smart_nav_fab_background">@color/minimal_reader_accent_soft</item>
         <item name="smart_nav_fab_icon">@color/minimal_reader_link_color</item>
         <item name="actionModeBackground">@color/minimal_reader_colorPrimary</item>
