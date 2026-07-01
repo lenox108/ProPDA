@@ -664,6 +664,8 @@
     <string name="pref_summary_bottom_nav_order">Выберите, какие разделы первыми показываются на нижней панели; остальные остаются в полном меню.</string>
     <string name="pref_title_accent">Цвет акцента</string>
     <string name="pref_summary_accent">Выберите цвет кнопок, ссылок и выделения</string>
+    <string name="pref_summary_accent_active">%1$s · только для палитры «Системный стиль»</string>
+    <string name="pref_summary_accent_non_system">Недоступно для палитр чтения — работает только с «Системным стилем»</string>
     <string name="accent_dialog_title">Цвет акцента</string>
     <string name="accent_neutral">Нейтральный</string>
     <string name="accent_blue">Синий</string>
