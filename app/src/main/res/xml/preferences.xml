@@ -42,6 +42,14 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="false"
+            android:key="main.accent_vibrant"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_accent_vibrant"
+            android:title="@string/pref_title_accent_vibrant"
+            app:iconSpaceReserved="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
             android:key="main.use_material_you"
             android:layout="@layout/preference_custom"
             android:summary="@string/pref_summary_use_material_you"

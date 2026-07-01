@@ -68,6 +68,7 @@ class MainDataStore(private val context: Context) {
         val UI_PALETTE = stringPreferencesKey("ui_palette")
         val ACCENT_PALETTE = stringPreferencesKey("accent_palette")
         val ACCENT_CUSTOM_COLOR = intPreferencesKey("accent_custom_color")
+        val ACCENT_VIBRANT = booleanPreferencesKey("accent_vibrant")
         val APP_FONT_MODE = stringPreferencesKey("app_font_mode")
         val USE_SYSTEM_FONT = booleanPreferencesKey("use_system_font")
         val STARTUP_SCREEN = stringPreferencesKey("startup_screen")
@@ -603,6 +604,21 @@ class MainDataStore(private val context: Context) {
             preferences[PreferencesKeys.ACCENT_CUSTOM_COLOR] = color
         }
         mirrorPrefs.edit().putInt("accent_custom_color", color).apply()
+    }
+
+    /** Насыщенные цвета (Vibrant вместо TonalSpot). Дефолт — false (приглушённые). */
+    fun getAccentVibrantImmediate(): Boolean {
+        val mirrored = mirrorPrefs.getString("accent_vibrant", null)
+        if (mirrored != null) return mirrored.toBoolean()
+        return context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+            .getBoolean(AppPreferences.Main.ACCENT_VIBRANT, false)
+    }
+
+    suspend fun setAccentVibrant(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.ACCENT_VIBRANT] = value
+        }
+        mirrorPrefs.edit().putString("accent_vibrant", value.toString()).apply()
     }
 
     private fun parseAccentPalette(value: String): AppPreferences.Main.AccentPalette = try {

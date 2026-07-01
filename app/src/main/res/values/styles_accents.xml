@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Accent-оверлеи «смены цвета» (курируемые палитры). Накладываются per-activity
-    через AccentApplier.applyStyle ПОВЕРХ базовой темы (light/dark/amoled), только
-    при палитре SYSTEM и когда Material You неактивен. Цвета — @color/accent_* из
-    colors_accents.xml (day) / values-night (night), сгенерированы AccentPaletteGenerator.
-    Перекрываем только акцентные M3-роли — поверхности/фон остаются нейтральными.
+    Accent-оверлеи «смены цвета». Для каждой палитры два стиля:
+    ThemeOverlay.ForPDA.Accent.<Name>        — приглушённый (TonalSpot, по умолчанию)
+    ThemeOverlay.ForPDA.Accent.<Name>.Vibrant — сочный (Vibrant, тумблер «Насыщенные цвета»)
+    Цвета — @color/accent_* / accent_*_vibrant_* из colors_accents.xml (day/night),
+    сгенерированы AccentPaletteGenerator. Перекрываем только акцентные M3-роли.
 -->
 <resources>
     <style name="ThemeOverlay.ForPDA.Accent.Blue" parent="">
@@ -24,6 +24,23 @@
         <item name="colorAccent">@color/accent_blue_primary</item>
         <item name="android:colorAccent">@color/accent_blue_primary</item>
     </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Blue.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_blue_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_blue_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_blue_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_blue_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_blue_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_blue_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_blue_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_blue_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_blue_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_blue_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_blue_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_blue_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_blue_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_blue_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_blue_vibrant_primary</item>
+    </style>
     <style name="ThemeOverlay.ForPDA.Accent.Indigo" parent="">
         <item name="colorPrimary">@color/accent_indigo_primary</item>
         <item name="colorOnPrimary">@color/accent_indigo_on_primary</item>
@@ -40,6 +57,23 @@
         <item name="colorOnTertiaryContainer">@color/accent_indigo_on_tertiary_container</item>
         <item name="colorAccent">@color/accent_indigo_primary</item>
         <item name="android:colorAccent">@color/accent_indigo_primary</item>
+    </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Indigo.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_indigo_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_indigo_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_indigo_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_indigo_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_indigo_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_indigo_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_indigo_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_indigo_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_indigo_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_indigo_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_indigo_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_indigo_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_indigo_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_indigo_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_indigo_vibrant_primary</item>
     </style>
     <style name="ThemeOverlay.ForPDA.Accent.Violet" parent="">
         <item name="colorPrimary">@color/accent_violet_primary</item>
@@ -58,6 +92,23 @@
         <item name="colorAccent">@color/accent_violet_primary</item>
         <item name="android:colorAccent">@color/accent_violet_primary</item>
     </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Violet.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_violet_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_violet_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_violet_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_violet_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_violet_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_violet_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_violet_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_violet_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_violet_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_violet_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_violet_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_violet_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_violet_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_violet_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_violet_vibrant_primary</item>
+    </style>
     <style name="ThemeOverlay.ForPDA.Accent.Purple" parent="">
         <item name="colorPrimary">@color/accent_purple_primary</item>
         <item name="colorOnPrimary">@color/accent_purple_on_primary</item>
@@ -74,6 +125,23 @@
         <item name="colorOnTertiaryContainer">@color/accent_purple_on_tertiary_container</item>
         <item name="colorAccent">@color/accent_purple_primary</item>
         <item name="android:colorAccent">@color/accent_purple_primary</item>
+    </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Purple.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_purple_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_purple_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_purple_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_purple_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_purple_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_purple_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_purple_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_purple_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_purple_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_purple_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_purple_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_purple_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_purple_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_purple_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_purple_vibrant_primary</item>
     </style>
     <style name="ThemeOverlay.ForPDA.Accent.Pink" parent="">
         <item name="colorPrimary">@color/accent_pink_primary</item>
@@ -92,6 +160,23 @@
         <item name="colorAccent">@color/accent_pink_primary</item>
         <item name="android:colorAccent">@color/accent_pink_primary</item>
     </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Pink.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_pink_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_pink_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_pink_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_pink_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_pink_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_pink_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_pink_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_pink_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_pink_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_pink_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_pink_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_pink_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_pink_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_pink_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_pink_vibrant_primary</item>
+    </style>
     <style name="ThemeOverlay.ForPDA.Accent.Red" parent="">
         <item name="colorPrimary">@color/accent_red_primary</item>
         <item name="colorOnPrimary">@color/accent_red_on_primary</item>
@@ -108,6 +193,23 @@
         <item name="colorOnTertiaryContainer">@color/accent_red_on_tertiary_container</item>
         <item name="colorAccent">@color/accent_red_primary</item>
         <item name="android:colorAccent">@color/accent_red_primary</item>
+    </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Red.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_red_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_red_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_red_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_red_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_red_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_red_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_red_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_red_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_red_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_red_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_red_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_red_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_red_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_red_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_red_vibrant_primary</item>
     </style>
     <style name="ThemeOverlay.ForPDA.Accent.DeepOrange" parent="">
         <item name="colorPrimary">@color/accent_deeporange_primary</item>
@@ -126,6 +228,23 @@
         <item name="colorAccent">@color/accent_deeporange_primary</item>
         <item name="android:colorAccent">@color/accent_deeporange_primary</item>
     </style>
+    <style name="ThemeOverlay.ForPDA.Accent.DeepOrange.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_deeporange_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_deeporange_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_deeporange_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_deeporange_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_deeporange_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_deeporange_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_deeporange_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_deeporange_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_deeporange_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_deeporange_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_deeporange_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_deeporange_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_deeporange_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_deeporange_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_deeporange_vibrant_primary</item>
+    </style>
     <style name="ThemeOverlay.ForPDA.Accent.Orange" parent="">
         <item name="colorPrimary">@color/accent_orange_primary</item>
         <item name="colorOnPrimary">@color/accent_orange_on_primary</item>
@@ -142,6 +261,23 @@
         <item name="colorOnTertiaryContainer">@color/accent_orange_on_tertiary_container</item>
         <item name="colorAccent">@color/accent_orange_primary</item>
         <item name="android:colorAccent">@color/accent_orange_primary</item>
+    </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Orange.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_orange_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_orange_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_orange_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_orange_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_orange_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_orange_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_orange_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_orange_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_orange_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_orange_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_orange_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_orange_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_orange_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_orange_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_orange_vibrant_primary</item>
     </style>
     <style name="ThemeOverlay.ForPDA.Accent.Amber" parent="">
         <item name="colorPrimary">@color/accent_amber_primary</item>
@@ -160,6 +296,23 @@
         <item name="colorAccent">@color/accent_amber_primary</item>
         <item name="android:colorAccent">@color/accent_amber_primary</item>
     </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Amber.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_amber_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_amber_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_amber_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_amber_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_amber_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_amber_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_amber_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_amber_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_amber_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_amber_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_amber_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_amber_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_amber_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_amber_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_amber_vibrant_primary</item>
+    </style>
     <style name="ThemeOverlay.ForPDA.Accent.Green" parent="">
         <item name="colorPrimary">@color/accent_green_primary</item>
         <item name="colorOnPrimary">@color/accent_green_on_primary</item>
@@ -176,6 +329,23 @@
         <item name="colorOnTertiaryContainer">@color/accent_green_on_tertiary_container</item>
         <item name="colorAccent">@color/accent_green_primary</item>
         <item name="android:colorAccent">@color/accent_green_primary</item>
+    </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Green.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_green_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_green_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_green_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_green_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_green_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_green_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_green_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_green_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_green_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_green_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_green_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_green_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_green_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_green_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_green_vibrant_primary</item>
     </style>
     <style name="ThemeOverlay.ForPDA.Accent.Teal" parent="">
         <item name="colorPrimary">@color/accent_teal_primary</item>
@@ -194,6 +364,23 @@
         <item name="colorAccent">@color/accent_teal_primary</item>
         <item name="android:colorAccent">@color/accent_teal_primary</item>
     </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Teal.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_teal_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_teal_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_teal_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_teal_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_teal_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_teal_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_teal_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_teal_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_teal_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_teal_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_teal_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_teal_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_teal_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_teal_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_teal_vibrant_primary</item>
+    </style>
     <style name="ThemeOverlay.ForPDA.Accent.Cyan" parent="">
         <item name="colorPrimary">@color/accent_cyan_primary</item>
         <item name="colorOnPrimary">@color/accent_cyan_on_primary</item>
@@ -210,5 +397,22 @@
         <item name="colorOnTertiaryContainer">@color/accent_cyan_on_tertiary_container</item>
         <item name="colorAccent">@color/accent_cyan_primary</item>
         <item name="android:colorAccent">@color/accent_cyan_primary</item>
+    </style>
+    <style name="ThemeOverlay.ForPDA.Accent.Cyan.Vibrant" parent="">
+        <item name="colorPrimary">@color/accent_cyan_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/accent_cyan_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/accent_cyan_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/accent_cyan_vibrant_on_primary_container</item>
+        <item name="colorPrimaryInverse">@color/accent_cyan_vibrant_inverse_primary</item>
+        <item name="colorSecondary">@color/accent_cyan_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/accent_cyan_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/accent_cyan_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/accent_cyan_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/accent_cyan_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/accent_cyan_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/accent_cyan_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/accent_cyan_vibrant_on_tertiary_container</item>
+        <item name="colorAccent">@color/accent_cyan_vibrant_primary</item>
+        <item name="android:colorAccent">@color/accent_cyan_vibrant_primary</item>
     </style>
 </resources>

@@ -679,6 +679,8 @@
     <string name="accent_teal">Бирюзовый</string>
     <string name="accent_cyan">Голубой</string>
     <string name="accent_custom">Свой цвет</string>
+    <string name="pref_title_accent_vibrant">Насыщенные цвета</string>
+    <string name="pref_summary_accent_vibrant">Более сочный акцент вместо приглушённого</string>
     <string name="pref_title_use_material_you">Цвета системы (Material You)</string>
     <string name="pref_summary_use_material_you">Использовать акцент из обоев системы (Android 12+). Действует только для палитры «Системная» и не меняет шрифты в WebView.</string>
     <string name="pref_summary_use_material_you_unsupported">Не поддерживается на вашей версии Android.</string>

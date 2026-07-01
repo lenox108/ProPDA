@@ -261,6 +261,15 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.ACCENT_VIBRANT) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setAccentVibrant(value)
+                    activity?.recreate()
+                }
+            }
+        }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.DOWNLOAD_METHOD) {
             val value = sharedPrefs.getString(key, Preferences.Main.DownloadMethod.SYSTEM.name)
             val method = try {
@@ -312,6 +321,8 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = mainPreferencesHolder.getEditorDefaultHidden()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.USE_MATERIAL_YOU)
                 ?.isChecked = mainPreferencesHolder.getUseMaterialYou()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.ACCENT_VIBRANT)
+                ?.isChecked = mainPreferencesHolder.getAccentVibrant()
             findPreference<ListPreference>(Preferences.Main.APP_FONT_MODE)
                 ?.let {
                     val mode = mainPreferencesHolder.observeAppFontModeFlow().first()
