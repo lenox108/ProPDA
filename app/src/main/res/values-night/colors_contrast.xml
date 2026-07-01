@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Тёмные значения токенов усиленного контраста (см. values/colors_contrast.xml). -->
+<resources>
+    <color name="contrast_medium_on_surface">#FFFFFF</color>
+    <color name="contrast_high_on_surface">#FFFFFF</color>
+    <color name="contrast_medium_on_surface_variant">#D4D4D4</color>
+    <color name="contrast_high_on_surface_variant">#F2F2F2</color>
+    <color name="contrast_medium_outline">#A0A0A0</color>
+    <color name="contrast_high_outline">#D0D0D0</color>
+    <color name="contrast_medium_outline_variant">#707070</color>
+    <color name="contrast_high_outline_variant">#9A9A9A</color>
+</resources>

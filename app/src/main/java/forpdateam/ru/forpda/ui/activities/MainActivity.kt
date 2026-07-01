@@ -61,6 +61,7 @@ import forpdateam.ru.forpda.ui.DimensionsProvider
 import forpdateam.ru.forpda.common.PermissionHelper
 import forpdateam.ru.forpda.common.WebViewChecker
 import forpdateam.ru.forpda.ui.AccentApplier
+import forpdateam.ru.forpda.ui.ContrastApplier
 import forpdateam.ru.forpda.ui.MaterialYouApplier
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import javax.inject.Inject
@@ -170,6 +171,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         // Курируемый акцент («смена цвета») — после Material You; взаимоисключающи
         // по AccentPolicy (Material You приоритетнее, когда реально доступен).
         AccentApplier.applyIfEnabled(this)
+        // Последний слой: усиление контраста по системной настройке (a11y, Android 14+).
+        ContrastApplier.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
         dayNightHelper.setIsNight(DayNightHelper.isUiModeNight(resources.configuration))
         binding = ActivityMainBinding.inflate(layoutInflater)
