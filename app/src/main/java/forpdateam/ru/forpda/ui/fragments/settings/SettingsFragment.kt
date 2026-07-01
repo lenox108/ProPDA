@@ -242,16 +242,6 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
-        if (key == forpdateam.ru.forpda.common.Preferences.Main.APP_FONT_MODE) {
-            val mode = FontController.parseMode(sharedPrefs.getString(key, FontController.DEFAULT_FONT_MODE.name))
-            if (isAdded) {
-                lifecycleScope.launch {
-                    mainPreferencesHolder.setAppFontMode(mode)
-                    updateAppFontSummary(mode)
-                    activity?.recreate()
-                }
-            }
-        }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.USE_MATERIAL_YOU) {
             val value = sharedPrefs.getBoolean(key, false)
             if (isAdded) {
@@ -323,11 +313,9 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = mainPreferencesHolder.getUseMaterialYou()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.ACCENT_VIBRANT)
                 ?.isChecked = mainPreferencesHolder.getAccentVibrant()
-            findPreference<ListPreference>(Preferences.Main.APP_FONT_MODE)
+            findPreference<Preference>(Preferences.Main.APP_FONT_MODE)
                 ?.let {
-                    val mode = mainPreferencesHolder.observeAppFontModeFlow().first()
-                    it.value = mode.name
-                    updateAppFontSummary(mode)
+                    updateAppFontSummary(mainPreferencesHolder.observeAppFontModeFlow().first())
                 }
             findPreference<ListPreference>(Preferences.Main.DOWNLOAD_METHOD)
                 ?.let {
@@ -600,12 +588,15 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
-        findPreference<ListPreference>(Preferences.Main.APP_FONT_MODE)?.setOnPreferenceChangeListener { _, newValue ->
-            val mode = FontController.parseMode(newValue as? String)
-            updateAppFontSummary(mode)
-            lifecycleScope.launch {
-                mainPreferencesHolder.setAppFontMode(mode)
-                activity?.recreate()
+        findPreference<Preference>(Preferences.Main.APP_FONT_MODE)?.setOnPreferenceClickListener {
+            forpdateam.ru.forpda.ui.views.dialog.FontPickerDialog.show(
+                    requireContext(), FontController.getCurrentFontMode(mainPreferencesHolder)
+            ) { mode ->
+                updateAppFontSummary(mode)
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setAppFontMode(mode)
+                    activity?.recreate()
+                }
             }
             true
         }
@@ -736,7 +727,7 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun updateAppFontSummary(mode: AppFontMode) {
-        findPreference<ListPreference>(Preferences.Main.APP_FONT_MODE)?.setSummary(
+        findPreference<Preference>(Preferences.Main.APP_FONT_MODE)?.setSummary(
             when (mode) {
                 AppFontMode.SYSTEM -> R.string.pref_summary_app_font_system
                 AppFontMode.ROBOTO -> R.string.pref_summary_app_font_roboto
