@@ -50,12 +50,13 @@ object AccentApplier {
         } else {
             accent
         }
-        val vibrant = runCatching { dataStore.getAccentVibrantImmediate() }.getOrDefault(false)
-        val overlay = overlayFor(effective, vibrant) ?: return
+        val style = runCatching { dataStore.getAccentStyleImmediate() }
+                .getOrDefault(Preferences.Main.AccentStyle.TONAL)
+        val overlay = overlayFor(effective, style) ?: return
         activity.theme.applyStyle(overlay, true)
         if (BuildConfig.DEBUG) {
-            Timber.tag(LOG_TAG).d("applied accent=%s (effective=%s vibrant=%s) to %s",
-                    accent, effective, vibrant, activity.javaClass.simpleName)
+            Timber.tag(LOG_TAG).d("applied accent=%s (effective=%s style=%s) to %s",
+                    accent, effective, style, activity.javaClass.simpleName)
         }
     }
 
@@ -89,23 +90,34 @@ object AccentApplier {
 
     /**
      * Стиль-оверлей для палитры (см. `styles_accents.xml`). NEUTRAL/CUSTOM → null.
-     * [vibrant] выбирает сочный вариант (Vibrant) вместо приглушённого (TonalSpot).
+     * [style] выбирает набор: приглушённый (TonalSpot), сочный (Vibrant) или
+     * экспрессивный (Expressive).
      */
-    internal fun overlayFor(accent: Preferences.Main.AccentPalette, vibrant: Boolean = false): Int? = when (accent) {
-        Preferences.Main.AccentPalette.NEUTRAL -> null
-        Preferences.Main.AccentPalette.CUSTOM -> null
-        Preferences.Main.AccentPalette.BLUE -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Blue_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Blue
-        Preferences.Main.AccentPalette.INDIGO -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Indigo_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Indigo
-        Preferences.Main.AccentPalette.VIOLET -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Violet_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Violet
-        Preferences.Main.AccentPalette.PURPLE -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Purple_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Purple
-        Preferences.Main.AccentPalette.PINK -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Pink_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Pink
-        Preferences.Main.AccentPalette.RED -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Red_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Red
-        Preferences.Main.AccentPalette.DEEPORANGE -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_DeepOrange_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_DeepOrange
-        Preferences.Main.AccentPalette.ORANGE -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Orange_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Orange
-        Preferences.Main.AccentPalette.AMBER -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Amber_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Amber
-        Preferences.Main.AccentPalette.GREEN -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Green_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Green
-        Preferences.Main.AccentPalette.TEAL -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Teal_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Teal
-        Preferences.Main.AccentPalette.CYAN -> if (vibrant) R.style.ThemeOverlay_ForPDA_Accent_Cyan_Vibrant else R.style.ThemeOverlay_ForPDA_Accent_Cyan
+    internal fun overlayFor(
+            accent: Preferences.Main.AccentPalette,
+            style: Preferences.Main.AccentStyle = Preferences.Main.AccentStyle.TONAL,
+    ): Int? {
+        fun pick(tonal: Int, vibrant: Int, expressive: Int): Int = when (style) {
+            Preferences.Main.AccentStyle.TONAL -> tonal
+            Preferences.Main.AccentStyle.VIBRANT -> vibrant
+            Preferences.Main.AccentStyle.EXPRESSIVE -> expressive
+        }
+        return when (accent) {
+            Preferences.Main.AccentPalette.NEUTRAL -> null
+            Preferences.Main.AccentPalette.CUSTOM -> null
+            Preferences.Main.AccentPalette.BLUE -> pick(R.style.ThemeOverlay_ForPDA_Accent_Blue, R.style.ThemeOverlay_ForPDA_Accent_Blue_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Blue_Expressive)
+            Preferences.Main.AccentPalette.INDIGO -> pick(R.style.ThemeOverlay_ForPDA_Accent_Indigo, R.style.ThemeOverlay_ForPDA_Accent_Indigo_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Indigo_Expressive)
+            Preferences.Main.AccentPalette.VIOLET -> pick(R.style.ThemeOverlay_ForPDA_Accent_Violet, R.style.ThemeOverlay_ForPDA_Accent_Violet_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Violet_Expressive)
+            Preferences.Main.AccentPalette.PURPLE -> pick(R.style.ThemeOverlay_ForPDA_Accent_Purple, R.style.ThemeOverlay_ForPDA_Accent_Purple_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Purple_Expressive)
+            Preferences.Main.AccentPalette.PINK -> pick(R.style.ThemeOverlay_ForPDA_Accent_Pink, R.style.ThemeOverlay_ForPDA_Accent_Pink_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Pink_Expressive)
+            Preferences.Main.AccentPalette.RED -> pick(R.style.ThemeOverlay_ForPDA_Accent_Red, R.style.ThemeOverlay_ForPDA_Accent_Red_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Red_Expressive)
+            Preferences.Main.AccentPalette.DEEPORANGE -> pick(R.style.ThemeOverlay_ForPDA_Accent_DeepOrange, R.style.ThemeOverlay_ForPDA_Accent_DeepOrange_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_DeepOrange_Expressive)
+            Preferences.Main.AccentPalette.ORANGE -> pick(R.style.ThemeOverlay_ForPDA_Accent_Orange, R.style.ThemeOverlay_ForPDA_Accent_Orange_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Orange_Expressive)
+            Preferences.Main.AccentPalette.AMBER -> pick(R.style.ThemeOverlay_ForPDA_Accent_Amber, R.style.ThemeOverlay_ForPDA_Accent_Amber_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Amber_Expressive)
+            Preferences.Main.AccentPalette.GREEN -> pick(R.style.ThemeOverlay_ForPDA_Accent_Green, R.style.ThemeOverlay_ForPDA_Accent_Green_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Green_Expressive)
+            Preferences.Main.AccentPalette.TEAL -> pick(R.style.ThemeOverlay_ForPDA_Accent_Teal, R.style.ThemeOverlay_ForPDA_Accent_Teal_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Teal_Expressive)
+            Preferences.Main.AccentPalette.CYAN -> pick(R.style.ThemeOverlay_ForPDA_Accent_Cyan, R.style.ThemeOverlay_ForPDA_Accent_Cyan_Vibrant, R.style.ThemeOverlay_ForPDA_Accent_Cyan_Expressive)
+        }
     }
 
     private const val LOG_TAG = "AccentApplier"

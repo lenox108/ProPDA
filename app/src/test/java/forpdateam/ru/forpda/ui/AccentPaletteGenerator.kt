@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.ui
 import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
+import com.google.android.material.color.utilities.SchemeExpressive
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.SchemeVibrant
 import org.junit.Ignore
@@ -82,11 +83,13 @@ class AccentPaletteGenerator {
         sb.append("    Вариант: ${if (isDark) "DARK (values-night)" else "LIGHT (values)"}.\n")
         sb.append("-->\n")
         sb.append("<resources>\n")
-        // Два набора: приглушённый TonalSpot (по умолчанию) и сочный Vibrant
-        // (тумблер «Насыщенные цвета»). Vibrant-роли идут с инфиксом `_vibrant_`.
+        // Три набора стилей акцента (см. AccentStyle): приглушённый TonalSpot (по
+        // умолчанию), сочный Vibrant (инфикс `_vibrant_`) и экспрессивный
+        // Expressive (инфикс `_expressive_`, M3 Expressive — сдвинутые оттенки).
         for ((name, seed) in seeds) {
             val tonal: DynamicScheme = SchemeTonalSpot(Hct.fromInt(seed), isDark, 0.0)
             val vibrant: DynamicScheme = SchemeVibrant(Hct.fromInt(seed), isDark, 0.0)
+            val expressive: DynamicScheme = SchemeExpressive(Hct.fromInt(seed), isDark, 0.0)
             sb.append("    <!-- ${name} (seed #${String.format("%06X", seed and 0xFFFFFF)}) -->\n")
             for ((suffix, selector) in roles) {
                 val t = selector(mdc).getArgb(tonal)
@@ -95,6 +98,10 @@ class AccentPaletteGenerator {
             for ((suffix, selector) in roles) {
                 val v = selector(mdc).getArgb(vibrant)
                 sb.append("    <color name=\"accent_${name}_vibrant_${suffix}\">#${String.format("%06X", v and 0xFFFFFF)}</color>\n")
+            }
+            for ((suffix, selector) in roles) {
+                val e = selector(mdc).getArgb(expressive)
+                sb.append("    <color name=\"accent_${name}_expressive_${suffix}\">#${String.format("%06X", e and 0xFFFFFF)}</color>\n")
             }
         }
         sb.append("</resources>\n")
