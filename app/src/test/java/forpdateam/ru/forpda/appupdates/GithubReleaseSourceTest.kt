@@ -63,7 +63,7 @@ class GithubReleaseSourceTest {
                 <id>tag:github.com,2008:Repository/1/v3.1.0</id>
                 <updated>2026-07-01T10:00:00Z</updated>
                 <link rel="alternate" type="text/html" href="https://github.com/lenox108/ProPDA/releases/tag/v3.1.0"/>
-                <title>v3.1.0</title>
+                <title>v3.1.0: chore(release): bump version to 3.1.0</title>
                 <content type="html">newer notes</content>
               </entry>
               <entry>
@@ -81,8 +81,13 @@ class GithubReleaseSourceTest {
         assertEquals(SemanticVersion(3, 1, 0), candidate.version)
         assertEquals("https://github.com/lenox108/ProPDA/releases/tag/v3.1.0", candidate.url)
         assertEquals("newer notes", candidate.description)
-        // В Atom нет APK-ассетов.
-        assertEquals(0, candidate.downloads.size)
+        // APK-ссылка достраивается по соглашению об имени (тег из ссылки записи).
+        assertEquals(1, candidate.downloads.size)
+        assertEquals("ProPDA-3.1.0.apk", candidate.downloads.first().fileName)
+        assertEquals(
+            "https://github.com/lenox108/ProPDA/releases/download/v3.1.0/ProPDA-3.1.0.apk",
+            candidate.downloads.first().url
+        )
     }
 
     @Test
