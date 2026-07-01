@@ -435,6 +435,24 @@ class SettingsFragment : BaseSettingFragment() {
             true
         }
 
+        findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.apply {
+            updateAccentSummary(mainPreferencesHolder.getAccentPalette())
+            setOnPreferenceClickListener {
+                forpdateam.ru.forpda.ui.views.dialog.AccentPickerDialog.show(
+                        requireContext(),
+                        mainPreferencesHolder.getAccentPalette(),
+                ) { picked ->
+                    if (!isAdded) return@show
+                    lifecycleScope.launch {
+                        mainPreferencesHolder.setAccentPalette(picked)
+                        updateAccentSummary(picked)
+                        activity?.recreate()
+                    }
+                }
+                true
+            }
+        }
+
         findPreference<Preference>(Preferences.Main.DOWNLOAD_FOLDER_URI)?.setOnPreferenceClickListener {
             showDownloadFolderDialog()
             true
@@ -716,6 +734,12 @@ class SettingsFragment : BaseSettingFragment() {
                 AppFontMode.SOURCE_SANS_3 -> R.string.pref_summary_app_font_source_sans_3
                 AppFontMode.OPEN_SANS -> R.string.pref_summary_app_font_open_sans
             }
+        )
+    }
+
+    private fun updateAccentSummary(palette: Preferences.Main.AccentPalette) {
+        findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.setSummary(
+                forpdateam.ru.forpda.ui.views.dialog.AccentPickerDialog.titleRes(palette)
         )
     }
 
