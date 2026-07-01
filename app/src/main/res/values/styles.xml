@@ -112,6 +112,18 @@
         <item name="colorOnBackground">?attr/colorOnSurface</item>
 
         <!--
+            Верхняя плашка тулбара под Material You следует за динамическим
+            colorPrimaryContainer (мягкий тон обоев). В базовой теме остаётся
+            фирменный мятный @color/*_main_toolbar_accent_surface — этот редирект
+            действует ТОЛЬКО при активном Material You (когда накладывается этот
+            оверлей). Безопасно как ?attr/: main_toolbar_accent_surface читается
+            исключительно через getColorFromAttr (resolveAttribute дерефит ?attr/),
+            а НЕ через TypedArray.getColorStateList — поэтому здесь допустим
+            TYPE_ATTRIBUTE (в отличие от textColor*/icon-слотов выше).
+        -->
+        <item name="main_toolbar_accent_surface">?attr/colorPrimaryContainer</item>
+
+        <!--
             Anti-crash: КОНКРЕТНЫЕ @color/... для всего, что читается через
             TypedArray.getColorStateList (TextView.readTextAppearance,
             CollapsingToolbarLayout, M3-виджеты). НЕ заменять на ?attr/... —
