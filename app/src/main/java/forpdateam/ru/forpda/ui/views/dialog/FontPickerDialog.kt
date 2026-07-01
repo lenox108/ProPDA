@@ -40,7 +40,7 @@ object FontPickerDialog {
         fun px(v: Int) = (v * dp).roundToInt()
 
         val outline = context.getColorFromAttr(com.google.android.material.R.attr.colorOutline)
-        val selectedRing = context.getColorFromAttr(com.google.android.material.R.attr.colorPrimary)
+        val selectedRing = context.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
         val onSurface = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val onSurfaceVar = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
         val cardBg = context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLow)

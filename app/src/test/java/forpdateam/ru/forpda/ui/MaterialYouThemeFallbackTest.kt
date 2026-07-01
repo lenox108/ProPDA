@@ -206,7 +206,7 @@ class MaterialYouThemeFallbackTest {
         // for the base theme (pre-31 path).
         val tv = TypedValue()
         val resolved = ctx.theme.resolveAttribute(
-                com.google.android.material.R.attr.colorPrimary, tv, true
+                androidx.appcompat.R.attr.colorPrimary, tv, true
         )
         assertTrue("?attr/colorPrimary must resolve", resolved)
         assertResolvedToColorInt(
