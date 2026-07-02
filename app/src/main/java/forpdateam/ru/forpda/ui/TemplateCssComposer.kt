@@ -134,6 +134,7 @@ class TemplateCssComposer(
                 getSepiaBlueOverrideCss(),
                 getMinimalReaderOverrideCss(),
                 getAmoledOverrideCss(),
+                getMaterialYouSurfaceOverrideCss(),
                 getThemeLayoutSafetyCss(),
                 getTopicPostActionIconCss()
         ).filter { it.isNotBlank() }.joinToString(separator = "\n")
@@ -523,6 +524,83 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_up > .rep-act
 body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-action-icon * {
     fill: currentColor !important;
     stroke: none !important;
+}
+""".trimIndent()
+        return "<style>\n$css</style>"
+    }
+
+    /**
+     * Material You → тело форума (WebView, вариант A). DynamicColors красит только
+     * нативный хром (Android M3-роли), а WebView их не читает — у него свой CSS-слой,
+     * где базовые *_themes.css захардкожены. Здесь мостим системные нейтрали/акцент
+     * Material You (framework `system_*` ресурсы, API 31+) в фон/карточки/текст/ссылки
+     * форума, чтобы тело тем тоже тонировалось под обои — как нативная оболочка.
+     *
+     * Строго: только системная палитра (Sepia/Minimal самодостаточны), только при
+     * включённом Material You и API 31+ (иначе `system_*` нет). AMOLED исключён —
+     * там поверхности намеренно чёрные (MaterialYouPolicy.ACCENT_ONLY). Границы
+     * постов (box-shadow) НЕ трогаем — они конфликтуют с кольцом подсветки
+     * «где остановился» (см. CAUSE-2 в getThemeLayoutSafetyCss).
+     */
+    private fun getMaterialYouSurfaceOverrideCss(): String {
+        if (isSepiaReading() || isSepiaBlue() || isMinimalReader() || isAmoled()) return ""
+        if (!mainPreferencesHolder.getUseMaterialYou()) return ""
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return ""
+        val isDark = dayNightHelper.isNight()
+        fun hex(resId: Int): String = "#%06X".format(context.getColor(resId) and 0xFFFFFF)
+        val bg: String; val card: String; val text: String
+        val text2: String; val divider: String; val accent: String
+        if (isDark) {
+            bg = hex(android.R.color.system_neutral1_900)
+            card = hex(android.R.color.system_neutral1_800)
+            text = hex(android.R.color.system_neutral1_50)
+            text2 = hex(android.R.color.system_neutral2_200)
+            divider = hex(android.R.color.system_neutral2_700)
+            accent = hex(android.R.color.system_accent1_200)
+        } else {
+            bg = hex(android.R.color.system_neutral1_50)
+            card = hex(android.R.color.system_neutral1_10)
+            text = hex(android.R.color.system_neutral1_900)
+            text2 = hex(android.R.color.system_neutral2_700)
+            divider = hex(android.R.color.system_neutral2_100)
+            accent = hex(android.R.color.system_accent1_600)
+        }
+        if (BuildConfig.DEBUG) {
+            Timber.tag("MYForum").d("dark=%s bg=%s card=%s text=%s text2=%s accent=%s",
+                    isDark, bg, card, text, text2, accent)
+        }
+        val css = """
+:root {
+    --my-bg: $bg;
+    --my-card: $card;
+    --my-text: $text;
+    --my-text2: $text2;
+    --my-divider: $divider;
+    --my-accent: $accent;
+    --surface-accent: $accent;
+}
+html, body {
+    background: var(--my-bg) !important;
+    color: var(--my-text) !important;
+}
+a { color: var(--my-accent) !important; }
+button, .btn { color: var(--my-accent) !important; }
+.post_container,
+.post_container .hat_content,
+.post_container .post_header,
+.post_container .post_body,
+.post_container .post_footer,
+.topic_hat_fixed,
+.topic_hat_entry,
+.poll, .poll > .title, .poll > .body,
+.navigation,
+.search_post, .search_post_container, .search_result_block,
+.news-detail-header, .news-comments-entry, .news_item, .news_block,
+.news_container, .news_post, #news > .content, .content, .comments,
+.materials, .materials .material_item,
+.mess_list > .mess_container .mess {
+    background: var(--my-card) !important;
+    color: var(--my-text) !important;
 }
 """.trimIndent()
         return "<style>\n$css</style>"
