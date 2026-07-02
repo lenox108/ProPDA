@@ -947,7 +947,10 @@ class ThemeViewModel @Inject constructor(
         hatMetadataJob?.cancel()
         titleFromFirstPageJob?.cancel()
         pageMetadataEnrichmentJob?.cancel()
-        neighborPageMetadataEnrichmentJobs.values.forEach { it.cancel() }
+        // Снапшот .toList(): cancel() синхронно запускает finally job'а, который
+        // self-evict'ит себя из этой же мапы (см. строку ~3798) → без копии
+        // получаем ConcurrentModificationException прямо в onCleared.
+        neighborPageMetadataEnrichmentJobs.values.toList().forEach { it.cancel() }
         neighborPageMetadataEnrichmentJobs.clear()
         postEditCoordinator.dispose()
         infiniteScrollController.cancelAll()
@@ -1371,7 +1374,9 @@ class ThemeViewModel @Inject constructor(
         hatMetadataJob?.cancel()
         titleFromFirstPageJob?.cancel()
         pageMetadataEnrichmentJob?.cancel()
-        neighborPageMetadataEnrichmentJobs.values.forEach { it.cancel() }
+        // Снапшот .toList(): cancel() синхронно запускает finally job'а, который
+        // self-evict'ит себя из этой же мапы → иначе ConcurrentModificationException.
+        neighborPageMetadataEnrichmentJobs.values.toList().forEach { it.cancel() }
         neighborPageMetadataEnrichmentJobs.clear()
         infiniteSession++
         editorUseCase.bumpEditPrefetchGeneration()
