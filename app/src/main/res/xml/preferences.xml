@@ -40,6 +40,14 @@
             android:title="@string/pref_title_use_material_you"
             app:iconSpaceReserved="false" />
 
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="main.haptic_feedback.enable"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_haptic_feedback"
+            android:title="@string/pref_title_haptic_feedback"
+            app:iconSpaceReserved="false" />
+
         <ListPreference
             android:defaultValue="COMFORTABLE"
             android:dialogTitle="@string/pref_title_topic_post_density"
