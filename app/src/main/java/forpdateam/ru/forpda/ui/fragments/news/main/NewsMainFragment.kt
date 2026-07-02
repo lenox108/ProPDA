@@ -38,6 +38,10 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
 
     @Inject lateinit var notesRepository: NotesRepository
     private lateinit var adapter: NewsListAdapter
+    private var skeleton: forpdateam.ru.forpda.ui.views.SkeletonListView? = null
+    private val tagSkeleton = "SKELETON"
+    /** Был ли уже хоть один результат загрузки (данные/пусто/ошибка) — гасит skeleton. */
+    private var hadFirstResult = false
     private val dialogMenu = DynamicDialogMenu<NewsMainFragment, NewsItem>()
     private lateinit var categories: List<NewsCategoryUi>
 
@@ -62,6 +66,15 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
         adapter.setOnClickListener(this)
         adapter.setOnItemDisplayListener { presenter.onItemDisplayed(it) }
         recyclerView.adapter = adapter
+
+        skeleton = forpdateam.ru.forpda.ui.views.SkeletonListView(requireContext()).apply {
+            style = forpdateam.ru.forpda.ui.views.SkeletonListView.Style.CARD
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        contentController.addContent(skeleton!!, tagSkeleton)
 
         dialogMenu.apply {
             addItem(getString(R.string.copy_link)) { _, data ->
@@ -100,7 +113,14 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     presenter.refreshing.collect { isRefreshing ->
-                        refreshLayout.isRefreshing = isRefreshing
+                        val showSkeleton = isRefreshing && !hadFirstResult
+                        if (showSkeleton) {
+                            contentController.showContent(tagSkeleton)
+                            refreshLayout.isRefreshing = false
+                        } else {
+                            contentController.hideContent(tagSkeleton)
+                            refreshLayout.isRefreshing = isRefreshing
+                        }
                     }
                 }
                 launch {
@@ -136,6 +156,8 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
         contentController.hideContent(ContentController.TAG_ERROR)
         synchronized(adapter) {
             if (withClear) {
+                hadFirstResult = true
+                contentController.hideContent(tagSkeleton)
                 if (items.isNotEmpty()) {
                     adapter.setItemsDirect(items)
                     contentController.hideContent(ContentController.TAG_NO_DATA)
@@ -168,6 +190,8 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
     }
 
     private fun showLoadError(message: String?) {
+        hadFirstResult = true
+        contentController.hideContent(tagSkeleton)
         if (adapter.itemCount > 1) {
             showSnackbar(message ?: getString(R.string.error_occurred))
             return
