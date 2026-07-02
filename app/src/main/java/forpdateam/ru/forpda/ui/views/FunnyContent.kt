@@ -2,15 +2,16 @@ package forpdateam.ru.forpda.ui.views
 
 import forpdateam.ru.forpda.common.getVecDrawable
 import android.content.Context
+import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
-import android.widget.Button
-import android.widget.ImageView
 import android.widget.RelativeLayout
-import android.widget.TextView
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.R as MaterialR
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.databinding.FunnyContentBinding
 
 /**
@@ -29,6 +30,10 @@ class FunnyContent(context: Context) : RelativeLayout(context) {
 
     fun setImage(@DrawableRes resId: Int): FunnyContent = apply {
         binding.funnyImage.setImageDrawable(context.getVecDrawable(resId))
+        // Muted M3 empty-state illustration: следует за палитрой/акцентом.
+        binding.funnyImage.imageTintList = ColorStateList.valueOf(
+                context.getColorFromAttr(MaterialR.attr.colorOnSurfaceVariant)
+        )
     }
 
     fun setTitle(@StringRes resId: Int): FunnyContent = apply {
@@ -42,7 +47,7 @@ class FunnyContent(context: Context) : RelativeLayout(context) {
     }
 
     fun addAction(@StringRes textResId: Int, listener: View.OnClickListener): FunnyContent = apply {
-        val button = Button(context).apply {
+        val button = MaterialButton(context, null, MaterialR.attr.materialButtonOutlinedStyle).apply {
             setText(textResId)
             setOnClickListener(listener)
         }
