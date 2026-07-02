@@ -218,6 +218,7 @@ class MessagePanel(
             attachmentsListeners.forEach { it.onClick(v) }
         }
         sendButton?.setOnClickListener { v ->
+            forpdateam.ru.forpda.ui.Haptic.confirm(v)
             sendListeners.forEach { it.onClick(v) }
         }
         previewButton?.setOnClickListener { showLocalPreview() }
