@@ -8,6 +8,11 @@ import com.hannesdorfmann.adapterdelegates4.ListDelegationAdapter
  */
 class BottomMenuAdapter(private val listener: BottomMenuDelegate.Listener) : ListDelegationAdapter<MutableList<ListItem>>() {
 
+    companion object {
+        /** Payload: рисовать grow-in анимацию «таблетки» (только при реальной смене экрана). */
+        const val PAYLOAD_ANIMATE_SELECT = "animate_select"
+    }
+
     private var currentScreenKey: String? = null
 
     init {
@@ -51,6 +56,10 @@ class BottomMenuAdapter(private val listener: BottomMenuDelegate.Listener) : Lis
     }
 
     fun setSelected(screenKey: String) {
+        // Анимируем «таблетку» только при реальном переходе на ДРУГОЙ экран, а не при
+        // rebuild-восстановлении (bindItems → setSelected того же ключа при обновлении
+        // счётчиков по вебсокету) и не на самом первом выборе (холодный старт спокойный).
+        val screenChanged = currentScreenKey != null && currentScreenKey != screenKey
         currentScreenKey = screenKey
         items?.forEachIndexed { index, item ->
             val listItem = (item as BottomTabListItem)
@@ -58,7 +67,11 @@ class BottomMenuAdapter(private val listener: BottomMenuDelegate.Listener) : Lis
             val lastSelected = listItem.selected
             listItem.selected = itemScreenKey == screenKey
             if (lastSelected != listItem.selected) {
-                notifyItemChanged(index)
+                if (screenChanged && listItem.selected) {
+                    notifyItemChanged(index, PAYLOAD_ANIMATE_SELECT)
+                } else {
+                    notifyItemChanged(index)
+                }
             }
         }
     }
