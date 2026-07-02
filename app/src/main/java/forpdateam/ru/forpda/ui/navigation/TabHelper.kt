@@ -38,16 +38,6 @@ object TabHelper {
     private const val EDIT_POST_DRAFT_SYNC_TAG = "EditPostDraftSync"
 
     /**
-     * §3.2 flag: when true, [Screen.QmsContacts] routes through the
-     * Compose-based [forpdateam.ru.forpda.ui.fragments.qms.QmsContactsComposeFragment];
-     * when false (default) it falls back to the legacy
-     * [forpdateam.ru.forpda.ui.fragments.qms.QmsContactsFragment].
-     * Flip this single line to roll back to legacy in case of regressions.
-     */
-    @Volatile
-    var useComposeQmsContacts: Boolean = false
-
-    /**
      * §3.2 flag: when true, [Screen.ArticleList] routes through the
      * Compose-based [forpdateam.ru.forpda.ui.fragments.news.main.NewsMainComposeFragment];
      * when false (default) it falls back to the legacy
@@ -173,11 +163,7 @@ object TabHelper {
                     putString(TabFragment.ARG_TAB, screen.profileUrl)
                 })
             }
-            is Screen.QmsContacts -> if (useComposeQmsContacts) {
-                createFragment(forpdateam.ru.forpda.ui.fragments.qms.QmsContactsComposeFragment::class.java, args)
-            } else {
-                createFragment(QmsContactsFragment::class.java, args)
-            }
+            is Screen.QmsContacts -> createFragment(QmsContactsFragment::class.java, args)
             is Screen.QmsBlackList -> createFragment(QmsBlackListFragment::class.java, args)
             is Screen.QmsThemes -> {
                 createFragment(QmsThemesFragment::class.java, args.apply {
