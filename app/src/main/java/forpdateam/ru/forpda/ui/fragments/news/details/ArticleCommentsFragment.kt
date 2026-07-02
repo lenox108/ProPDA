@@ -1,4 +1,5 @@
 package forpdateam.ru.forpda.ui.fragments.news.details
+import forpdateam.ru.forpda.ui.applyM3RefreshStyle
 
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.databinding.ArticleCommentsBinding
@@ -117,12 +118,7 @@ class ArticleCommentsFragment : Fragment(), ArticleCommentsAdapter.ClickListener
         additionalContentFrame = binding.additionalContent
         contentController = ContentController(null, additionalContentFrame, refreshLayout)
 
-        refreshLayout.setProgressBackgroundColorSchemeColor(requireContext().getColorFromAttr(R.attr.colorPrimary))
-        refreshLayout.setColorSchemeColors(
-                requireContext().getColorFromAttr(R.attr.colorPrimary),
-                requireContext().getColorFromAttr(MaterialR.attr.colorSecondary),
-                requireContext().getColorFromAttr(R.attr.colorAccent)
-        )
+        refreshLayout.applyM3RefreshStyle()
         refreshLayout.setOnRefreshListener { presenter.updateComments() }
 
         recyclerView.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
