@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="@dimen/news_load_more_row_height">
@@ -13,12 +14,15 @@
         android:orientation="horizontal"
         android:visibility="gone"
         tools:visibility="gone">
-        <ProgressBar
-            style="?android:attr/progressBarStyleSmall"
+        <com.google.android.material.progressindicator.CircularProgressIndicator
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:padding="@dimen/dp8"
-            android:indeterminate="true"/>
+            android:indeterminate="true"
+            app:indicatorColor="?attr/colorAccent"
+            app:indicatorSize="22dp"
+            app:trackThickness="3dp"
+            app:trackCornerRadius="2dp"/>
 
         <TextView
             android:layout_width="wrap_content"

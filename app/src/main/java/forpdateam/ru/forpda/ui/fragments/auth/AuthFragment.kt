@@ -54,8 +54,8 @@ class AuthFragment : TabFragment(), AuthFragmentCallbacks {
     private val sendButton: Button get() = authBinding.authSend
     private val skipButton: Button get() = authBinding.authSkip
     private val regButton: Button get() = authBinding.authReg
-    private val loginProgress: ProgressBar get() = authBinding.loginProgress
-    private val captchaProgress: ProgressBar get() = authBinding.captchaProgress
+    private val loginProgress: com.google.android.material.progressindicator.CircularProgressIndicator get() = authBinding.loginProgress
+    private val captchaProgress: com.google.android.material.progressindicator.CircularProgressIndicator get() = authBinding.captchaProgress
     private val hiddenAuth: CheckBox get() = authBinding.authHidden
     private val mainForm: LinearLayout get() = authBinding.authMainForm
     private val complete: RelativeLayout get() = authBinding.authComplete

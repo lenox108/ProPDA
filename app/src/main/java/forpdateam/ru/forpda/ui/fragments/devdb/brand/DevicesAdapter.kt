@@ -55,7 +55,7 @@ class DevicesAdapter : BaseAdapter<Brand.DeviceItem, DevicesAdapter.DeviceItemHo
             ForPdaCoil.loadIntoWithProgress(
                 binding.itemImage,
                 item.imageSrc,
-                binding.itemImage.tag as ProgressBar
+                binding.itemImage.tag as com.google.android.material.progressindicator.CircularProgressIndicator
             )
         }
 

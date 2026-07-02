@@ -95,13 +95,18 @@
                     android:contentDescription="@string/send"
                     app:srcCompat="@drawable/ic_send"/>
 
-                <ProgressBar
+                <com.google.android.material.progressindicator.CircularProgressIndicator
                     android:id="@+id/send_progress"
                     android:layout_width="@dimen/dp48"
                     android:layout_height="@dimen/dp48"
                     android:clickable="false"
                     android:padding="@dimen/dp8"
-                    android:visibility="gone"/>
+                    android:visibility="gone"
+            android:indeterminate="true"
+            app:indicatorColor="?attr/colorAccent"
+            app:indicatorSize="40dp"
+            app:trackThickness="4dp"
+            app:trackCornerRadius="2dp"/>
             </FrameLayout>
         </LinearLayout>
 

@@ -79,7 +79,7 @@ class ArticleCommentsFragment : Fragment(), ArticleCommentsAdapter.ClickListener
     private lateinit var messageField: EditText
     private lateinit var buttonSend: AppCompatImageButton
     private lateinit var buttonClose: AppCompatImageButton
-    private lateinit var progressBarSend: ProgressBar
+    private lateinit var progressBarSend: com.google.android.material.progressindicator.CircularProgressIndicator
     private lateinit var writePanel: RelativeLayout
     private lateinit var fabWrite: FloatingActionButton
     private val adapter by lazy { ArticleCommentsAdapter(authHolder) }
@@ -239,6 +239,10 @@ class ArticleCommentsFragment : Fragment(), ArticleCommentsAdapter.ClickListener
                 showComments(loaded.comments)
             }
             is ArticleCommentUiEvent.OnReplyComment -> onReplyComment()
+            is ArticleCommentUiEvent.PatchComment -> {
+                val loaded = presenter.commentsState.value as? ArticleCommentsState.Loaded ?: return
+                showComments(loaded.comments)
+            }
             ArticleCommentUiEvent.RefreshLoadMoreUi -> Unit
         }
     }
