@@ -195,6 +195,33 @@ class QmsParserChatTest {
         assertTrue(messages.any { it.content?.contains("First message") == true })
     }
 
+    @Test(timeout = 10_000)
+    fun `chat_info pattern has no catastrophic backtracking on message-less new thread`() {
+        // Регресс-гейт: chat_info-паттерн имел катастрофический бэктрекинг O(n²) java.util.regex,
+        // когда опциональная avatar-группа не находила совпадение (первое сообщение НОВОМУ
+        // пользователю: свежий диалог без строки-аватара собеседника) → parseChat висел десятки
+        // секунд на большом ответе create-thread, спиннер отправки крутился «вечно» (таймаутом
+        // корутины НЕ прерывается — CPU-bound). Фикс — атомарная группа (?>...) вокруг скана
+        // list-group-item. На старом паттерне этот матч уходил в многосекундный хог.
+        // Тестируем паттерн напрямую (parseChat зовёт Android-`fromHtml`, недоступный в JVM-юните).
+        val pattern = loadProductionPatterns().getPattern("qms", "chat_info")
+        val head = "<div class=\"nav\"><b><a href=\"x\">SomeUser</a>:</b>New title</span>"
+        val inputs = "<input type=\"hidden\" name=\"mid\" value=\"1303224\">" +
+                "<input type=\"hidden\" name=\"t\" value=\"9999999\">"
+        val row = "<div class=\"list-group-item system-row\">notice text here</div>"
+        val html = head + inputs + row.repeat(6000) + "<div class=\"footer\">end</div>"
+
+        val startedNs = System.nanoTime()
+        val matcher = pattern.matcher(html)
+        val found = matcher.find()
+        val elapsedMs = (System.nanoTime() - startedNs) / 1_000_000
+        assertTrue("chat_info должен матчиться на новом диалоге", found)
+        assertEquals("1303224", matcher.group(3)) // userId (mid)
+        assertEquals("9999999", matcher.group(4)) // themeId (t)
+        assertTrue("chat_info.find() заняла ${elapsedMs}ms (>2000 = вернулся катастрофический бэктрекинг)",
+                elapsedMs < 2_000)
+    }
+
     private fun loadQmsFixture(name: String): String {
         val file = listOf(
                 File("src/test/resources/parser/qms/$name"),
