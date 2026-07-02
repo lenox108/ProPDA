@@ -1,4 +1,5 @@
 package forpdateam.ru.forpda.ui.fragments.theme
+import forpdateam.ru.forpda.ui.applyM3RefreshStyle
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -610,12 +611,7 @@ abstract class ThemeFragment : TabFragment() {
         val progressTintList = ColorStateList.valueOf(progressTint)
         contentProgress.setIndicatorColor(progressTint)
         toolbarProgress.indeterminateTintList = progressTintList
-        refreshLayout.setProgressBackgroundColorSchemeColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
-        refreshLayout.setColorSchemeColors(
-                progressTint,
-                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSecondary),
-                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
-        )
+        refreshLayout.applyM3RefreshStyle()
     }
 
     private fun syncTopicToolbarPaginationOffset(toolbarHeight: Int) {

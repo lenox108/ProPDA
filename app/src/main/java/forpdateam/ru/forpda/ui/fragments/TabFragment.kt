@@ -1,4 +1,5 @@
 package forpdateam.ru.forpda.ui.fragments
+import forpdateam.ru.forpda.ui.applyM3RefreshStyle
 import forpdateam.ru.forpda.BuildConfig
 
 import forpdateam.ru.forpda.common.getColorFromAttr
@@ -710,12 +711,7 @@ open class TabFragment : Fragment() {
 
     protected fun refreshLayoutStyle(refreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout) {
         val progressColor = requireContext().getColorFromAttr(R.attr.colorAccent)
-        refreshLayout.setProgressBackgroundColorSchemeColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
-        refreshLayout.setColorSchemeColors(
-                progressColor,
-                requireContext().getColorFromAttr(MaterialR.attr.colorSecondary),
-                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
-        )
+        refreshLayout.applyM3RefreshStyle()
         contentProgress.setIndicatorColor(progressColor)
         toolbarProgress.indeterminateTintList = ColorStateList.valueOf(progressColor)
         applySwipeRefreshIndicatorBelowToolbar(refreshLayout)
