@@ -17,20 +17,14 @@ import android.view.MenuItem
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
-import android.widget.Toast
 import forpdateam.ru.forpda.common.showSnackbar
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.widget.PopupMenu
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.dp8
 import forpdateam.ru.forpda.common.FilePickHelper
@@ -46,7 +40,6 @@ import forpdateam.ru.forpda.ui.views.ContentController
 import forpdateam.ru.forpda.ui.views.FunnyContent
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 import forpdateam.ru.forpda.model.repository.note.NotesRepository
-import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import javax.inject.Inject
 
 /**
@@ -98,9 +91,9 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
     private var importMenuItem: MenuItem? = null
     private var exportMenuItem: MenuItem? = null
     private var searchField: EditText? = null
-    private var folderManagementDialog: AlertDialog? = null
     private var isSelectionMode = false
     private val selectedNoteIds = linkedSetOf<Long>()
+    private lateinit var notesDialogs: NotesDialogs
 
     private val viewModel: NotesViewModel by viewModels()
 
@@ -114,6 +107,7 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        notesDialogs = NotesDialogs(requireContext(), viewModel, ::clearSelection)
         setCardsBackground()
         clearToolbarScrollFlags()
         adapter = NotesAdapter(this, this, viewModel::onInfoClick)
@@ -291,23 +285,7 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
     }
 
     private fun showFolderSelectorPopup() {
-        clearSelection()
-        PopupMenu(requireContext(), toolbar).apply {
-            menu.add(R.string.note_all_folders).setOnMenuItemClickListener {
-                viewModel.selectAllFolders()
-                true
-            }
-            menu.add(R.string.note_without_folder).setOnMenuItemClickListener {
-                viewModel.selectFolder(null)
-                true
-            }
-            latestState.folders.forEach { folder ->
-                menu.add(folder.name).setOnMenuItemClickListener {
-                    viewModel.selectFolder(folder.id)
-                    true
-                }
-            }
-        }.show()
+        notesDialogs.showFolderSelectorPopup(toolbar, latestState.folders)
     }
 
     private fun showSearch() {
@@ -360,178 +338,31 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
     }
 
     private fun showSortDialog() {
-        clearSelection()
-        val modes = arrayOf(NoteSortMode.CREATED_DESC, NoteSortMode.UPDATED_DESC, NoteSortMode.TITLE_ASC)
-        val titles = arrayOf(
-                getString(R.string.note_sort_created),
-                getString(R.string.note_sort_updated),
-                getString(R.string.note_sort_title)
-        )
-        val checkedIndex = modes.indexOf(latestState.sortMode).takeIf { it >= 0 } ?: 0
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.sorting_title)
-                .setSingleChoiceItems(titles, checkedIndex) { dialog, which ->
-                    viewModel.setSortMode(modes[which])
-                    dialog.dismiss()
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        notesDialogs.showSortDialog(latestState.sortMode)
     }
 
     private fun showCreateFolderDialog(onCreated: ((NoteFolder) -> Unit)? = null) {
-        val input = TextInputEditText(requireContext()).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            setSingleLine()
-        }
-        val inputLayout = TextInputLayout(requireContext()).apply {
-            hint = getString(R.string.note_folder_name)
-            val padding = resources.getDimensionPixelSize(R.dimen.content_padding_horizontal)
-            setPadding(padding, padding / 2, padding, 0)
-            addView(input)
-        }
-        val dialog = MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.note_create_folder)
-                .setView(inputLayout)
-                .setPositiveButton(R.string.add, null)
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
-        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val name = input.text?.toString()?.trim().orEmpty()
-            if (name.isBlank()) {
-                inputLayout.error = getString(R.string.note_folder_name_empty)
-                return@setOnClickListener
-            }
-            inputLayout.error = null
-            viewModel.createFolder(name, onCreated)
-            dialog.dismiss()
-        }
-    }
-
-    private fun showMoveToFolderDialog(note: NoteItem) {
-        val folders = latestState.folders
-        val titles = listOf(getString(R.string.note_without_folder)) + folders.map { it.name }
-        val checkedIndex = note.folderId?.let { id -> folders.indexOfFirst { it.id == id } + 1 }
-                ?.takeIf { it > 0 } ?: 0
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.note_move_to_folder)
-                .setSingleChoiceItems(titles.toTypedArray(), checkedIndex) { dialog, which ->
-                    viewModel.moveNoteToFolder(note.id, if (which == 0) null else folders[which - 1].id)
-                    dialog.dismiss()
-                }
-                .setNeutralButton(R.string.note_create_folder) { _, _ ->
-                    showCreateFolderDialog { folder -> viewModel.moveNoteToFolder(note.id, folder.id) }
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        notesDialogs.showCreateFolderDialog(onCreated)
     }
 
     private fun showMoveSelectedToFolderDialog() {
-        val ids = selectedNoteIds.toList()
-        if (ids.isEmpty()) return
-        val folders = latestState.folders
-        val titles = listOf(getString(R.string.note_without_folder)) + folders.map { it.name }
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.note_move_to_folder)
-                .setItems(titles.toTypedArray()) { dialog, which ->
-                    viewModel.moveNotesToFolder(ids, if (which == 0) null else folders[which - 1].id)
-                    clearSelection()
-                    dialog.dismiss()
-                }
-                .setNeutralButton(R.string.note_create_folder) { _, _ ->
-                    showCreateFolderDialog { folder ->
-                        viewModel.moveNotesToFolder(ids, folder.id)
-                        clearSelection()
-                    }
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        notesDialogs.showMoveSelectedToFolderDialog(selectedNoteIds.toList(), latestState.folders)
     }
 
     private fun confirmDeleteSelectedNotes() {
-        val ids = selectedNoteIds.toList()
-        if (ids.isEmpty()) return
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.note_delete_selected_title)
-                .setMessage(getString(R.string.note_delete_selected_message, ids.size))
-                .setPositiveButton(R.string.delete) { _, _ ->
-                    viewModel.deleteNotes(ids)
-                    clearSelection()
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        notesDialogs.confirmDeleteSelectedNotes(selectedNoteIds.toList())
     }
 
     private fun showFolderManagementDialog() {
-        if (folderManagementDialog?.isShowing == true) return
-        val folders = latestState.folders
-        if (folders.isEmpty()) {
-            Toast.makeText(requireContext(), R.string.funny_notes_nodata_title, Toast.LENGTH_SHORT).show()
-            return
-        }
-        folderManagementDialog = MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.note_manage_folders)
-                .setItems(folders.map { it.name }.toTypedArray()) { _, which ->
-                    showFolderActionsDialog(folders[which])
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
-                .also { dialog ->
-                    dialog.setOnDismissListener { folderManagementDialog = null }
-                }
-    }
-
-    private fun showFolderActionsDialog(folder: NoteFolder) {
-        val actions = arrayOf(getString(R.string.note_rename_folder), getString(R.string.note_delete_folder))
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(folder.name)
-                .setItems(actions) { _, which ->
-                    when (which) {
-                        0 -> showRenameFolderDialog(folder)
-                        1 -> confirmDeleteFolder(folder)
-                    }
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        notesDialogs.showFolderManagementDialog(latestState.folders)
     }
 
     private fun showRenameFolderDialog(folder: NoteFolder) {
-        val input = TextInputEditText(requireContext()).apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            setSingleLine()
-            setText(folder.name)
-            selectAll()
-        }
-        val inputLayout = TextInputLayout(requireContext()).apply {
-            hint = getString(R.string.note_folder_name)
-            val padding = resources.getDimensionPixelSize(R.dimen.content_padding_horizontal)
-            setPadding(padding, padding / 2, padding, 0)
-            addView(input)
-        }
-        val dialog = MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.note_rename_folder)
-                .setView(inputLayout)
-                .setPositiveButton(R.string.save, null)
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
-        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val name = input.text?.toString()?.trim().orEmpty()
-            if (name.isBlank()) {
-                inputLayout.error = getString(R.string.note_folder_name_empty)
-                return@setOnClickListener
-            }
-            inputLayout.error = null
-            viewModel.renameFolder(folder.id, name)
-            dialog.dismiss()
-        }
+        notesDialogs.showRenameFolderDialog(folder)
     }
 
     private fun confirmDeleteFolder(folder: NoteFolder) {
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.note_delete_folder)
-                .setMessage(getString(R.string.note_delete_folder_message, folder.name))
-                .setPositiveButton(R.string.delete) { _, _ -> viewModel.deleteFolder(folder.id) }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        notesDialogs.confirmDeleteFolder(folder)
     }
 
     private fun bindNotes(state: NotesViewModel.UiState) {
