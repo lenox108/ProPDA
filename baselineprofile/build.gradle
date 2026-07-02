@@ -1,0 +1,49 @@
+plugins {
+    // AGP + Kotlin are on the classpath via the root buildscript, so apply without a version
+    // (mirrors the :app module using bare `id 'com.android.application'`).
+    id 'com.android.test'
+    id 'org.jetbrains.kotlin.android'
+    alias libs.plugins.androidx.baselineprofile
+}
+
+android {
+    namespace 'forpdateam.ru.forpda.baselineprofile'
+    compileSdk 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    defaultConfig {
+        // Macrobenchmark/profileable требует API 28+ для надёжной генерации профиля.
+        minSdk 28
+        targetSdk 35
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // :app объявляет flavor-измерение "channel"; профиль генерируем на канале stable
+        // (тот, что раздаётся пользователям как ForPDA 2 / ru.forpdateam.forpda.parallel).
+        missingDimensionStrategy 'channel', 'stable'
+        // Разрешаем прогон на эмуляторе (dev/CI-смоук). ВАЖНО: цифры эмулятора —
+        // ИНДИКАТИВНЫ, не репрезентативны; для реальных метрик гоняйте на физическом
+        // устройстве. Без этого macrobench жёстко падает с ошибкой EMULATOR.
+        testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = "EMULATOR"
+    }
+
+    // Модуль-тест прогоняется против :app и собирает его benchmarkRelease-вариант.
+    targetProjectPath = ':app'
+}
+
+// По умолчанию генерируем на подключённом устройстве/эмуляторе. Для CI можно переключить
+// на Gradle Managed Device (useConnectedDevices = false + managedDevices { ... }).
+baselineProfile {
+    useConnectedDevices = true
+}
+
+dependencies {
+    implementation libs.androidx.test.ext.junit
+    implementation libs.androidx.test.uiautomator
+    implementation libs.androidx.benchmark.macro.junit4
+}
