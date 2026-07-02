@@ -97,8 +97,17 @@ internal fun forpdaColorSchemeFromContext(context: Context, isDark: Boolean): Co
         onTertiary = role(MaterialR.attr.colorOnTertiary, base.onTertiary),
         tertiaryContainer = role(MaterialR.attr.colorTertiaryContainer, base.tertiaryContainer),
         onTertiaryContainer = role(MaterialR.attr.colorOnTertiaryContainer, base.onTertiaryContainer),
-        background = role(android.R.attr.colorBackground, base.background),
-        onBackground = role(MaterialR.attr.colorOnBackground, base.onBackground),
+        // ВАЖНО: читаем background/onBackground из КОНКРЕТНЫХ M3-ролей colorSurface/
+        // colorOnSurface, а НЕ из android:colorBackground / colorOnBackground. В теме
+        // `android:colorBackground = ?attr/colorSurface` (ссылка), и её резолв через
+        // MaterialColors.getColor подхватывает НЕ переопределение палитры, а базовый
+        // M3-colorSurface (нейтральный #FEF7FF) → фон Compose-экранов (QMS Contacts/
+        // Favorites/News, все берут colorScheme.background) на читающих палитрах (Sepia
+        // и др.) вылезал «холодным белым» мимо тёплых карточек. colorSurface же задан
+        // конкретным @color/<palette>_… и резолвится верно. background==surface —
+        // ровно то, что тема и декларирует (`colorBackground = ?attr/colorSurface`).
+        background = role(MaterialR.attr.colorSurface, base.background),
+        onBackground = role(MaterialR.attr.colorOnSurface, base.onBackground),
         surface = role(MaterialR.attr.colorSurface, base.surface),
         onSurface = role(MaterialR.attr.colorOnSurface, base.onSurface),
         surfaceVariant = role(MaterialR.attr.colorSurfaceVariant, base.surfaceVariant),
