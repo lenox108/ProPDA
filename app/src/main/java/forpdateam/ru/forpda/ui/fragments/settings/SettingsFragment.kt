@@ -156,7 +156,7 @@ class SettingsFragment : BaseSettingFragment() {
             updateTopicPageSwipePreferenceState(mode)
         }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_POST_DENSITY) {
-            val density = parseTopicPostDensity(sharedPrefs.getString(key, Preferences.Main.TopicPostDensity.COMFORTABLE.name))
+            val density = SettingsPreferenceParsers.parseTopicPostDensity(sharedPrefs.getString(key, Preferences.Main.TopicPostDensity.COMFORTABLE.name))
             if (isAdded) {
                 lifecycleScope.launch {
                     mainPreferencesHolder.setTopicPostDensity(density)
@@ -165,7 +165,7 @@ class SettingsFragment : BaseSettingFragment() {
             updateTopicPostDensitySummary(density)
         }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_TOOLBAR_BEHAVIOR) {
-            val behavior = parseTopicToolbarBehavior(sharedPrefs.getString(key, Preferences.Main.TopicToolbarBehavior.PINNED.name))
+            val behavior = SettingsPreferenceParsers.parseTopicToolbarBehavior(sharedPrefs.getString(key, Preferences.Main.TopicToolbarBehavior.PINNED.name))
             if (isAdded) {
                 lifecycleScope.launch {
                     mainPreferencesHolder.setTopicToolbarBehavior(behavior)
@@ -190,7 +190,7 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_BACK_BEHAVIOR) {
-            val behavior = parseTopicBackBehavior(sharedPrefs.getString(key, Preferences.Main.TopicBackBehavior.HISTORY.name))
+            val behavior = SettingsPreferenceParsers.parseTopicBackBehavior(sharedPrefs.getString(key, Preferences.Main.TopicBackBehavior.HISTORY.name))
             if (isAdded) {
                 lifecycleScope.launch {
                     mainPreferencesHolder.setTopicBackBehavior(behavior)
@@ -199,7 +199,7 @@ class SettingsFragment : BaseSettingFragment() {
             updateTopicBackBehaviorSummary(behavior)
         }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_OPEN_TARGET) {
-            val target = parseTopicOpenTarget(sharedPrefs.getString(key, Preferences.Main.TopicOpenTarget.LAST_UNREAD.name))
+            val target = SettingsPreferenceParsers.parseTopicOpenTarget(sharedPrefs.getString(key, Preferences.Main.TopicOpenTarget.LAST_UNREAD.name))
             if (isAdded) {
                 lifecycleScope.launch {
                     mainPreferencesHolder.setTopicOpenTarget(target)
@@ -209,7 +209,7 @@ class SettingsFragment : BaseSettingFragment() {
             updateTopicHeaderInitialStateEnabled(target)
         }
         if (key == Preferences.Main.STARTUP_SCREEN) {
-            val startup = parseStartupScreen(sharedPrefs.getString(key, Preferences.Main.StartupScreen.NEWS.name))
+            val startup = SettingsPreferenceParsers.parseStartupScreen(sharedPrefs.getString(key, Preferences.Main.StartupScreen.NEWS.name))
             if (isAdded) {
                 lifecycleScope.launch {
                     mainPreferencesHolder.setStartupScreen(startup)
@@ -218,7 +218,7 @@ class SettingsFragment : BaseSettingFragment() {
             updateStartupScreenSummary(startup)
         }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_HEADER_INITIAL_STATE) {
-            val state = parseTopicHeaderInitialState(sharedPrefs.getString(key, Preferences.Main.TopicHeaderInitialState.EXPANDED.name))
+            val state = SettingsPreferenceParsers.parseTopicHeaderInitialState(sharedPrefs.getString(key, Preferences.Main.TopicHeaderInitialState.EXPANDED.name))
             if (isAdded) {
                 lifecycleScope.launch {
                     mainPreferencesHolder.setTopicHeaderInitialState(state)
@@ -595,7 +595,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
 
         findPreference<ListPreference>(Preferences.Main.TOPIC_SCROLL_MODE)?.setOnPreferenceChangeListener { _, newValue ->
-            val mode = parseTopicScrollMode(newValue as? String)
+            val mode = SettingsPreferenceParsers.parseTopicScrollMode(newValue as? String)
             updateTopicScrollModeSummary(mode)
             updateTopicPageSwipePreferenceState(mode)
             lifecycleScope.launch {
@@ -605,7 +605,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
 
         findPreference<ListPreference>(Preferences.Main.TOPIC_POST_DENSITY)?.setOnPreferenceChangeListener { _, newValue ->
-            val density = parseTopicPostDensity(newValue as? String)
+            val density = SettingsPreferenceParsers.parseTopicPostDensity(newValue as? String)
             updateTopicPostDensitySummary(density)
             lifecycleScope.launch {
                 mainPreferencesHolder.setTopicPostDensity(density)
@@ -614,7 +614,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
 
         findPreference<ListPreference>(Preferences.Main.TOPIC_BACK_BEHAVIOR)?.setOnPreferenceChangeListener { _, newValue ->
-            val behavior = parseTopicBackBehavior(newValue as? String)
+            val behavior = SettingsPreferenceParsers.parseTopicBackBehavior(newValue as? String)
             updateTopicBackBehaviorSummary(behavior)
             lifecycleScope.launch {
                 mainPreferencesHolder.setTopicBackBehavior(behavior)
@@ -623,7 +623,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
 
         findPreference<ListPreference>(Preferences.Main.TOPIC_OPEN_TARGET)?.setOnPreferenceChangeListener { _, newValue ->
-            val target = parseTopicOpenTarget(newValue as? String)
+            val target = SettingsPreferenceParsers.parseTopicOpenTarget(newValue as? String)
             updateTopicOpenTargetSummary(target)
             updateTopicHeaderInitialStateEnabled(target)
             lifecycleScope.launch {
@@ -633,7 +633,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
 
         findPreference<ListPreference>(Preferences.Main.STARTUP_SCREEN)?.setOnPreferenceChangeListener { _, newValue ->
-            val startup = parseStartupScreen(newValue as? String)
+            val startup = SettingsPreferenceParsers.parseStartupScreen(newValue as? String)
             updateStartupScreenSummary(startup)
             lifecycleScope.launch {
                 mainPreferencesHolder.setStartupScreen(startup)
@@ -642,7 +642,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
 
         findPreference<ListPreference>(Preferences.Main.TOPIC_TOOLBAR_BEHAVIOR)?.setOnPreferenceChangeListener { _, newValue ->
-            val behavior = parseTopicToolbarBehavior(newValue as? String)
+            val behavior = SettingsPreferenceParsers.parseTopicToolbarBehavior(newValue as? String)
             updateTopicToolbarBehaviorSummary(behavior)
             lifecycleScope.launch {
                 mainPreferencesHolder.setTopicToolbarBehavior(behavior)
@@ -651,7 +651,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
 
         findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)?.setOnPreferenceChangeListener { _, newValue ->
-            val state = parseTopicHeaderInitialState(newValue as? String)
+            val state = SettingsPreferenceParsers.parseTopicHeaderInitialState(newValue as? String)
             updateTopicHeaderInitialStateSummary(state)
             lifecycleScope.launch {
                 mainPreferencesHolder.setTopicHeaderInitialState(state)
@@ -660,7 +660,7 @@ class SettingsFragment : BaseSettingFragment() {
         }
 
         findPreference<ListPreference>(Preferences.Main.DOWNLOAD_METHOD)?.setOnPreferenceChangeListener { _, newValue ->
-            val method = parseDownloadMethod(newValue as? String)
+            val method = SettingsPreferenceParsers.parseDownloadMethod(newValue as? String)
             updateDownloadMethodSummary(method)
             lifecycleScope.launch {
                 mainPreferencesHolder.setDownloadMethod(method)
@@ -856,54 +856,6 @@ class SettingsFragment : BaseSettingFragment() {
     private fun updateTopicHeaderInitialStateEnabled(target: Preferences.Main.TopicOpenTarget) {
         findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)?.isEnabled =
                 target == Preferences.Main.TopicOpenTarget.FIRST_PAGE
-    }
-
-    private fun parseTopicScrollMode(value: String?): Preferences.Main.TopicScrollMode = try {
-        Preferences.Main.TopicScrollMode.valueOf(value ?: Preferences.Main.TopicScrollMode.HYBRID.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.TopicScrollMode.HYBRID
-    }
-
-    private fun parseTopicPostDensity(value: String?): Preferences.Main.TopicPostDensity = try {
-        Preferences.Main.TopicPostDensity.valueOf(value?.uppercase() ?: Preferences.Main.TopicPostDensity.COMFORTABLE.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.TopicPostDensity.COMFORTABLE
-    }
-
-    private fun parseTopicToolbarBehavior(value: String?): Preferences.Main.TopicToolbarBehavior = try {
-        Preferences.Main.TopicToolbarBehavior.valueOf(value?.uppercase() ?: Preferences.Main.TopicToolbarBehavior.PINNED.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.TopicToolbarBehavior.PINNED
-    }
-
-    private fun parseTopicBackBehavior(value: String?): Preferences.Main.TopicBackBehavior = try {
-        Preferences.Main.TopicBackBehavior.valueOf(value ?: Preferences.Main.TopicBackBehavior.HISTORY.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.TopicBackBehavior.HISTORY
-    }
-
-    private fun parseTopicOpenTarget(value: String?): Preferences.Main.TopicOpenTarget = try {
-        Preferences.Main.TopicOpenTarget.valueOf(value ?: Preferences.Main.TopicOpenTarget.LAST_UNREAD.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.TopicOpenTarget.LAST_UNREAD
-    }
-
-    private fun parseStartupScreen(value: String?): Preferences.Main.StartupScreen = try {
-        Preferences.Main.StartupScreen.valueOf(value ?: Preferences.Main.StartupScreen.NEWS.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.StartupScreen.NEWS
-    }
-
-    private fun parseTopicHeaderInitialState(value: String?): Preferences.Main.TopicHeaderInitialState = try {
-        Preferences.Main.TopicHeaderInitialState.valueOf(value ?: Preferences.Main.TopicHeaderInitialState.EXPANDED.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.TopicHeaderInitialState.EXPANDED
-    }
-
-    private fun parseDownloadMethod(value: String?): Preferences.Main.DownloadMethod = try {
-        Preferences.Main.DownloadMethod.valueOf(value ?: Preferences.Main.DownloadMethod.SYSTEM.name)
-    } catch (_: IllegalArgumentException) {
-        Preferences.Main.DownloadMethod.SYSTEM
     }
 
     private fun updateDownloadMethodSummary(method: Preferences.Main.DownloadMethod) {
