@@ -608,7 +608,7 @@ abstract class ThemeFragment : TabFragment() {
     protected fun styleThemeProgressIndicators() {
         val progressTint = requireContext().getColorFromAttr(R.attr.colorAccent)
         val progressTintList = ColorStateList.valueOf(progressTint)
-        contentProgress.indeterminateTintList = progressTintList
+        contentProgress.setIndicatorColor(progressTint)
         toolbarProgress.indeterminateTintList = progressTintList
         refreshLayout.setProgressBackgroundColorSchemeColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
         refreshLayout.setColorSchemeColors(
