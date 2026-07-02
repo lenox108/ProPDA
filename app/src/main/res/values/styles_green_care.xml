@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="DayNightAppTheme.GreenCare" parent="DayNightAppTheme">
+        <item name="colorPrimary">@color/green_care_colorPrimary</item>
+        <item name="colorPrimaryDark">@color/green_care_colorPrimaryDark</item>
+        <item name="colorAccent">@color/green_care_colorAccent</item>
+        <item name="colorSecondary">@color/green_care_link_color</item>
+        <item name="colorOnSecondary">@color/green_care_link_color_contrast</item>
+        <item name="link_color_contrast">@color/green_care_link_color_contrast</item>
+        <item name="contrast_text_color">@color/green_care_contrast_text_color</item>
+        <item name="colorSurfaceContainerLowest">@color/green_care_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/green_care_background_base</item>
+        <item name="colorSurfaceContainer">@color/green_care_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/green_care_background_for_cards</item>
+        <item name="colorSurfaceContainerHighest">@color/green_care_background_for_cards</item>
+        <item name="background_for_lists">@color/green_care_background_for_lists</item>
+        <item name="divider_line_bottom_nav">@color/green_care_divider_line_bottom_nav</item>
+        <item name="attachment_overlay_bg">@color/green_care_attachment_overlay_bg</item>
+        <item name="attachment_description_bg">@color/green_care_attachment_description_bg</item>
+        <item name="attachment_text">@color/green_care_attachment_text</item>
+        <item name="msg_panel_tooltip_bg">@color/green_care_msg_panel_tooltip_bg</item>
+        <item name="profile_overlay_bg">@color/green_care_profile_overlay_bg</item>
+        <item name="img_viewer_toolbar">@color/green_care_img_viewer_toolbar</item>
+        <item name="icon_base">@color/green_care_icon_base</item>
+        <item name="menu_tile_icon">@color/green_care_colorAccent</item>
+        <item name="icon_base_inverse">@color/dark_icon_base</item>
+        <item name="icon_toolbar">@color/green_care_icon_toolbar</item>
+        <item name="icon_toolbar_inverse">@color/dark_icon_toolbar</item>
+        <item name="chrome_plane_background">@color/green_care_card_background</item>
+        <item name="main_toolbar_accent_surface">@color/green_care_main_toolbar_accent_surface</item>
+        <item name="main_toolbar_stroke_width">1dp</item>
+        <item name="main_toolbar_stroke_color">@color/green_care_main_toolbar_stroke</item>
+        <item name="list_plate_stroke_width">1dp</item>
+        <item name="list_plate_stroke_color">@color/green_care_divider_line</item>
+        <item name="smart_nav_fab_background">@color/green_care_colorAccent</item>
+        <item name="smart_nav_fab_icon">@color/green_care_link_color_contrast</item>
+        <item name="actionModeBackground">@color/green_care_colorPrimary</item>
+        <item name="android:windowBackground">@color/green_care_background_base</item>
+        <item name="android:navigationBarColor">@color/green_care_navigation_bar_color</item>
+        <item name="colorSurface">@color/green_care_card_background</item>
+        <item name="colorOnSurface">@color/green_care_default_text_color</item>
+        <item name="colorOnPrimary">@color/green_care_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/green_care_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/green_care_default_text_color</item>
+        <item name="colorSecondaryContainer">@color/green_care_background_for_cards</item>
+        <item name="colorOnSecondaryContainer">@color/green_care_default_text_color</item>
+        <item name="colorSurfaceVariant">@color/green_care_background_for_cards</item>
+        <item name="colorOnSurfaceVariant">@color/green_care_second_text_color</item>
+        <item name="colorOutline">@color/green_care_divider_line</item>
+        <item name="colorOutlineVariant">@color/green_care_divider_line</item>
+        <item name="colorControlHighlight">@color/green_care_selection</item>
+        <item name="android:colorControlHighlight">@color/green_care_selection</item>
+        <item name="colorControlActivated">?attr/colorAccent</item>
+        <item name="android:colorControlActivated">?attr/colorAccent</item>
+        <item name="is_use_light_status_bar">@bool/use_light_status_bar_for_palette</item>
+        <item name="app_bar_overlay">@style/DayNightAppTheme.GreenCare.AppBarOverlay</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.GreenCare.PopupOverlay</item>
+        <item name="alertDialogTheme">@style/DayNightAppTheme.GreenCare.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/DayNightAppTheme.GreenCare.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.GreenCare.BottomSheetDialog</item>
+    </style>
+
+    <style name="DayNightAppTheme.GreenCare.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:colorBackground">@color/green_care_card_background</item>
+        <item name="colorAccent">@color/green_care_colorAccent</item>
+        <item name="colorPrimary">@color/green_care_link_color</item>
+        <item name="colorOnSurface">@color/green_care_default_text_color</item>
+        <item name="colorOnPrimary">@color/green_care_link_color_contrast</item>
+        <item name="colorPrimaryContainer">@color/green_care_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/green_care_default_text_color</item>
+        <item name="colorOutline">@color/green_care_divider_line</item>
+        <item name="colorOutlineVariant">@color/green_care_divider_line</item>
+        <item name="android:textColorPrimary">@color/green_care_default_text_color</item>
+        <item name="android:textColorSecondary">@color/green_care_second_text_color</item>
+        <item name="android:textColorHint">@color/green_care_second_text_color</item>
+        <item name="colorSurface">@color/green_care_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/green_care_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.GreenCare.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:colorBackground">@color/green_care_colorPrimary</item>
+        <item name="colorSurface">@color/green_care_colorPrimary</item>
+        <item name="colorOnSurface">@color/green_care_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/green_care_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
+    </style>
+
+    <style name="DayNightAppTheme.GreenCare.NoActionBarBase" parent="DayNightAppTheme.GreenCare">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/green_care_navigation_bar_color</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+    </style>
+
+    <style name="DayNightAppTheme.GreenCare.NoActionBar" parent="DayNightAppTheme.GreenCare.NoActionBarBase" />
+
+    <style name="DayNightPreferenceTheme.GreenCare" parent="DayNightAppTheme.GreenCare">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.GreenCare.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
+        <item name="android:singleLine">true</item>
+        <item name="colorSurface">@color/green_care_card_background</item>
+        <item name="colorControlNormal">@color/green_care_icon_toolbar</item>
+        <item name="colorOnSurface">@color/green_care_icon_toolbar</item>
+        <item name="actionMenuTextColor">@color/green_care_icon_toolbar</item>
+        <item name="android:textColorPrimary">@color/green_care_icon_toolbar</item>
+        <item name="android:textColorSecondary">@color/green_care_icon_toolbar</item>
+        <item name="colorPrimary">@color/green_care_link_color</item>
+        <item name="colorPrimaryContainer">@color/green_care_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/green_care_default_text_color</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.GreenCare.PopupOverlay</item>
+    </style>
+
+    <style name="DayNightAppTheme.GreenCare.PopupOverlay" parent="DayNightAppTheme.PopupOverlay">
+        <item name="colorSurface">@color/green_care_card_background</item>
+        <item name="colorOnSurface">@color/green_care_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/green_care_second_text_color</item>
+        <item name="android:textColorPrimary">@color/green_care_default_text_color</item>
+        <item name="android:textColorSecondary">@color/green_care_second_text_color</item>
+    </style>
+</resources>

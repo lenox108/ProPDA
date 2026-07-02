@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="DayNightAppTheme.Gruvbox" parent="DayNightAppTheme">
+        <item name="colorPrimary">@color/gruvbox_colorPrimary</item>
+        <item name="colorPrimaryDark">@color/gruvbox_colorPrimaryDark</item>
+        <item name="colorAccent">@color/gruvbox_colorAccent</item>
+        <item name="colorSecondary">@color/gruvbox_link_color</item>
+        <item name="colorOnSecondary">@color/gruvbox_link_color_contrast</item>
+        <item name="link_color_contrast">@color/gruvbox_link_color_contrast</item>
+        <item name="contrast_text_color">@color/gruvbox_contrast_text_color</item>
+        <item name="colorSurfaceContainerLowest">@color/gruvbox_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/gruvbox_background_base</item>
+        <item name="colorSurfaceContainer">@color/gruvbox_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/gruvbox_background_for_cards</item>
+        <item name="colorSurfaceContainerHighest">@color/gruvbox_background_for_cards</item>
+        <item name="background_for_lists">@color/gruvbox_background_for_lists</item>
+        <item name="divider_line_bottom_nav">@color/gruvbox_divider_line_bottom_nav</item>
+        <item name="attachment_overlay_bg">@color/gruvbox_attachment_overlay_bg</item>
+        <item name="attachment_description_bg">@color/gruvbox_attachment_description_bg</item>
+        <item name="attachment_text">@color/gruvbox_attachment_text</item>
+        <item name="msg_panel_tooltip_bg">@color/gruvbox_msg_panel_tooltip_bg</item>
+        <item name="profile_overlay_bg">@color/gruvbox_profile_overlay_bg</item>
+        <item name="img_viewer_toolbar">@color/gruvbox_img_viewer_toolbar</item>
+        <item name="icon_base">@color/gruvbox_icon_base</item>
+        <item name="menu_tile_icon">@color/gruvbox_colorAccent</item>
+        <item name="icon_base_inverse">@color/dark_icon_base</item>
+        <item name="icon_toolbar">@color/gruvbox_icon_toolbar</item>
+        <item name="icon_toolbar_inverse">@color/dark_icon_toolbar</item>
+        <item name="chrome_plane_background">@color/gruvbox_card_background</item>
+        <item name="main_toolbar_accent_surface">@color/gruvbox_main_toolbar_accent_surface</item>
+        <item name="main_toolbar_stroke_width">1dp</item>
+        <item name="main_toolbar_stroke_color">@color/gruvbox_main_toolbar_stroke</item>
+        <item name="list_plate_stroke_width">1dp</item>
+        <item name="list_plate_stroke_color">@color/gruvbox_divider_line</item>
+        <item name="smart_nav_fab_background">@color/gruvbox_colorAccent</item>
+        <item name="smart_nav_fab_icon">@color/gruvbox_link_color_contrast</item>
+        <item name="actionModeBackground">@color/gruvbox_colorPrimary</item>
+        <item name="android:windowBackground">@color/gruvbox_background_base</item>
+        <item name="android:navigationBarColor">@color/gruvbox_navigation_bar_color</item>
+        <item name="colorSurface">@color/gruvbox_card_background</item>
+        <item name="colorOnSurface">@color/gruvbox_default_text_color</item>
+        <item name="colorOnPrimary">@color/gruvbox_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/gruvbox_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/gruvbox_default_text_color</item>
+        <item name="colorSecondaryContainer">@color/gruvbox_background_for_cards</item>
+        <item name="colorOnSecondaryContainer">@color/gruvbox_default_text_color</item>
+        <item name="colorSurfaceVariant">@color/gruvbox_background_for_cards</item>
+        <item name="colorOnSurfaceVariant">@color/gruvbox_second_text_color</item>
+        <item name="colorOutline">@color/gruvbox_divider_line</item>
+        <item name="colorOutlineVariant">@color/gruvbox_divider_line</item>
+        <item name="colorControlHighlight">@color/gruvbox_selection</item>
+        <item name="android:colorControlHighlight">@color/gruvbox_selection</item>
+        <item name="colorControlActivated">?attr/colorAccent</item>
+        <item name="android:colorControlActivated">?attr/colorAccent</item>
+        <item name="is_use_light_status_bar">@bool/use_light_status_bar_for_palette</item>
+        <item name="app_bar_overlay">@style/DayNightAppTheme.Gruvbox.AppBarOverlay</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Gruvbox.PopupOverlay</item>
+        <item name="alertDialogTheme">@style/DayNightAppTheme.Gruvbox.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/DayNightAppTheme.Gruvbox.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Gruvbox.BottomSheetDialog</item>
+    </style>
+
+    <style name="DayNightAppTheme.Gruvbox.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:colorBackground">@color/gruvbox_card_background</item>
+        <item name="colorAccent">@color/gruvbox_colorAccent</item>
+        <item name="colorPrimary">@color/gruvbox_link_color</item>
+        <item name="colorOnSurface">@color/gruvbox_default_text_color</item>
+        <item name="colorOnPrimary">@color/gruvbox_link_color_contrast</item>
+        <item name="colorPrimaryContainer">@color/gruvbox_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/gruvbox_default_text_color</item>
+        <item name="colorOutline">@color/gruvbox_divider_line</item>
+        <item name="colorOutlineVariant">@color/gruvbox_divider_line</item>
+        <item name="android:textColorPrimary">@color/gruvbox_default_text_color</item>
+        <item name="android:textColorSecondary">@color/gruvbox_second_text_color</item>
+        <item name="android:textColorHint">@color/gruvbox_second_text_color</item>
+        <item name="colorSurface">@color/gruvbox_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/gruvbox_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Gruvbox.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:colorBackground">@color/gruvbox_colorPrimary</item>
+        <item name="colorSurface">@color/gruvbox_colorPrimary</item>
+        <item name="colorOnSurface">@color/gruvbox_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/gruvbox_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
+    </style>
+
+    <style name="DayNightAppTheme.Gruvbox.NoActionBarBase" parent="DayNightAppTheme.Gruvbox">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/gruvbox_navigation_bar_color</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+    </style>
+
+    <style name="DayNightAppTheme.Gruvbox.NoActionBar" parent="DayNightAppTheme.Gruvbox.NoActionBarBase" />
+
+    <style name="DayNightPreferenceTheme.Gruvbox" parent="DayNightAppTheme.Gruvbox">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Gruvbox.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
+        <item name="android:singleLine">true</item>
+        <item name="colorSurface">@color/gruvbox_card_background</item>
+        <item name="colorControlNormal">@color/gruvbox_icon_toolbar</item>
+        <item name="colorOnSurface">@color/gruvbox_icon_toolbar</item>
+        <item name="actionMenuTextColor">@color/gruvbox_icon_toolbar</item>
+        <item name="android:textColorPrimary">@color/gruvbox_icon_toolbar</item>
+        <item name="android:textColorSecondary">@color/gruvbox_icon_toolbar</item>
+        <item name="colorPrimary">@color/gruvbox_link_color</item>
+        <item name="colorPrimaryContainer">@color/gruvbox_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/gruvbox_default_text_color</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Gruvbox.PopupOverlay</item>
+    </style>
+
+    <style name="DayNightAppTheme.Gruvbox.PopupOverlay" parent="DayNightAppTheme.PopupOverlay">
+        <item name="colorSurface">@color/gruvbox_card_background</item>
+        <item name="colorOnSurface">@color/gruvbox_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/gruvbox_second_text_color</item>
+        <item name="android:textColorPrimary">@color/gruvbox_default_text_color</item>
+        <item name="android:textColorSecondary">@color/gruvbox_second_text_color</item>
+    </style>
+</resources>

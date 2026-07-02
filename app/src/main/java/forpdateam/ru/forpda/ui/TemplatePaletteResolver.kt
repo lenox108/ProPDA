@@ -29,6 +29,10 @@ class TemplatePaletteResolver(
             UiThemeStyles.effectivePalette(mainPreferencesHolder.getUiPalette()) ==
                     Preferences.Main.UiPalette.MINIMAL_READER
 
+    /** Активная (нормализованная) палитра — для новых читающих палитр (Green/Nord/…). */
+    fun activePalette(): Preferences.Main.UiPalette =
+            UiThemeStyles.effectivePalette(mainPreferencesHolder.getUiPalette())
+
     fun isAmoled(): Boolean {
         if (!dayNightHelper.isNight()) return false
         return when (mainPreferencesHolder.getThemeMode()) {

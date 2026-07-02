@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="DayNightAppTheme.Solarized" parent="DayNightAppTheme">
+        <item name="colorPrimary">@color/solarized_colorPrimary</item>
+        <item name="colorPrimaryDark">@color/solarized_colorPrimaryDark</item>
+        <item name="colorAccent">@color/solarized_colorAccent</item>
+        <item name="colorSecondary">@color/solarized_link_color</item>
+        <item name="colorOnSecondary">@color/solarized_link_color_contrast</item>
+        <item name="link_color_contrast">@color/solarized_link_color_contrast</item>
+        <item name="contrast_text_color">@color/solarized_contrast_text_color</item>
+        <item name="colorSurfaceContainerLowest">@color/solarized_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/solarized_background_base</item>
+        <item name="colorSurfaceContainer">@color/solarized_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/solarized_background_for_cards</item>
+        <item name="colorSurfaceContainerHighest">@color/solarized_background_for_cards</item>
+        <item name="background_for_lists">@color/solarized_background_for_lists</item>
+        <item name="divider_line_bottom_nav">@color/solarized_divider_line_bottom_nav</item>
+        <item name="attachment_overlay_bg">@color/solarized_attachment_overlay_bg</item>
+        <item name="attachment_description_bg">@color/solarized_attachment_description_bg</item>
+        <item name="attachment_text">@color/solarized_attachment_text</item>
+        <item name="msg_panel_tooltip_bg">@color/solarized_msg_panel_tooltip_bg</item>
+        <item name="profile_overlay_bg">@color/solarized_profile_overlay_bg</item>
+        <item name="img_viewer_toolbar">@color/solarized_img_viewer_toolbar</item>
+        <item name="icon_base">@color/solarized_icon_base</item>
+        <item name="menu_tile_icon">@color/solarized_colorAccent</item>
+        <item name="icon_base_inverse">@color/dark_icon_base</item>
+        <item name="icon_toolbar">@color/solarized_icon_toolbar</item>
+        <item name="icon_toolbar_inverse">@color/dark_icon_toolbar</item>
+        <item name="chrome_plane_background">@color/solarized_card_background</item>
+        <item name="main_toolbar_accent_surface">@color/solarized_main_toolbar_accent_surface</item>
+        <item name="main_toolbar_stroke_width">1dp</item>
+        <item name="main_toolbar_stroke_color">@color/solarized_main_toolbar_stroke</item>
+        <item name="list_plate_stroke_width">1dp</item>
+        <item name="list_plate_stroke_color">@color/solarized_divider_line</item>
+        <item name="smart_nav_fab_background">@color/solarized_colorAccent</item>
+        <item name="smart_nav_fab_icon">@color/solarized_link_color_contrast</item>
+        <item name="actionModeBackground">@color/solarized_colorPrimary</item>
+        <item name="android:windowBackground">@color/solarized_background_base</item>
+        <item name="android:navigationBarColor">@color/solarized_navigation_bar_color</item>
+        <item name="colorSurface">@color/solarized_card_background</item>
+        <item name="colorOnSurface">@color/solarized_default_text_color</item>
+        <item name="colorOnPrimary">@color/solarized_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/solarized_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/solarized_default_text_color</item>
+        <item name="colorSecondaryContainer">@color/solarized_background_for_cards</item>
+        <item name="colorOnSecondaryContainer">@color/solarized_default_text_color</item>
+        <item name="colorSurfaceVariant">@color/solarized_background_for_cards</item>
+        <item name="colorOnSurfaceVariant">@color/solarized_second_text_color</item>
+        <item name="colorOutline">@color/solarized_divider_line</item>
+        <item name="colorOutlineVariant">@color/solarized_divider_line</item>
+        <item name="colorControlHighlight">@color/solarized_selection</item>
+        <item name="android:colorControlHighlight">@color/solarized_selection</item>
+        <item name="colorControlActivated">?attr/colorAccent</item>
+        <item name="android:colorControlActivated">?attr/colorAccent</item>
+        <item name="is_use_light_status_bar">@bool/use_light_status_bar_for_palette</item>
+        <item name="app_bar_overlay">@style/DayNightAppTheme.Solarized.AppBarOverlay</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Solarized.PopupOverlay</item>
+        <item name="alertDialogTheme">@style/DayNightAppTheme.Solarized.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/DayNightAppTheme.Solarized.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Solarized.BottomSheetDialog</item>
+    </style>
+
+    <style name="DayNightAppTheme.Solarized.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:colorBackground">@color/solarized_card_background</item>
+        <item name="colorAccent">@color/solarized_colorAccent</item>
+        <item name="colorPrimary">@color/solarized_link_color</item>
+        <item name="colorOnSurface">@color/solarized_default_text_color</item>
+        <item name="colorOnPrimary">@color/solarized_link_color_contrast</item>
+        <item name="colorPrimaryContainer">@color/solarized_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/solarized_default_text_color</item>
+        <item name="colorOutline">@color/solarized_divider_line</item>
+        <item name="colorOutlineVariant">@color/solarized_divider_line</item>
+        <item name="android:textColorPrimary">@color/solarized_default_text_color</item>
+        <item name="android:textColorSecondary">@color/solarized_second_text_color</item>
+        <item name="android:textColorHint">@color/solarized_second_text_color</item>
+        <item name="colorSurface">@color/solarized_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/solarized_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Solarized.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:colorBackground">@color/solarized_colorPrimary</item>
+        <item name="colorSurface">@color/solarized_colorPrimary</item>
+        <item name="colorOnSurface">@color/solarized_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/solarized_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
+    </style>
+
+    <style name="DayNightAppTheme.Solarized.NoActionBarBase" parent="DayNightAppTheme.Solarized">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/solarized_navigation_bar_color</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+    </style>
+
+    <style name="DayNightAppTheme.Solarized.NoActionBar" parent="DayNightAppTheme.Solarized.NoActionBarBase" />
+
+    <style name="DayNightPreferenceTheme.Solarized" parent="DayNightAppTheme.Solarized">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Solarized.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
+        <item name="android:singleLine">true</item>
+        <item name="colorSurface">@color/solarized_card_background</item>
+        <item name="colorControlNormal">@color/solarized_icon_toolbar</item>
+        <item name="colorOnSurface">@color/solarized_icon_toolbar</item>
+        <item name="actionMenuTextColor">@color/solarized_icon_toolbar</item>
+        <item name="android:textColorPrimary">@color/solarized_icon_toolbar</item>
+        <item name="android:textColorSecondary">@color/solarized_icon_toolbar</item>
+        <item name="colorPrimary">@color/solarized_link_color</item>
+        <item name="colorPrimaryContainer">@color/solarized_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/solarized_default_text_color</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Solarized.PopupOverlay</item>
+    </style>
+
+    <style name="DayNightAppTheme.Solarized.PopupOverlay" parent="DayNightAppTheme.PopupOverlay">
+        <item name="colorSurface">@color/solarized_card_background</item>
+        <item name="colorOnSurface">@color/solarized_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/solarized_second_text_color</item>
+        <item name="android:textColorPrimary">@color/solarized_default_text_color</item>
+        <item name="android:textColorSecondary">@color/solarized_second_text_color</item>
+    </style>
+</resources>

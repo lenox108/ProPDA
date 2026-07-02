@@ -66,7 +66,10 @@ object Preferences {
         }
 
         enum class ThemeMode { LIGHT, DARK, AMOLED, SYSTEM, SYSTEM_AMOLED }
-        enum class UiPalette { SYSTEM, SEPIA_READING, SEPIA_BLUE, MINIMAL_READER }
+        enum class UiPalette {
+            SYSTEM, SEPIA_READING, SEPIA_BLUE, MINIMAL_READER,
+            GREEN_CARE, NORD, SOLARIZED, GRUVBOX, ROSE_PINE, DRACULA
+        }
 
         /**
          * Курируемые акцент-палитры «смены цвета». NEUTRAL — текущий монохромный

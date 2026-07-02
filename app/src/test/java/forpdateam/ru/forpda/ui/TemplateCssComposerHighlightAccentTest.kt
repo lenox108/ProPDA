@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.ui
 
 import forpdateam.ru.forpda.common.DayNightHelper
+import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import io.mockk.every
 import io.mockk.mockk
@@ -71,6 +72,7 @@ class TemplateCssComposerHighlightAccentTest {
         every { paletteResolver.isSepiaBlue() } returns mode.sepiaBlue
         every { paletteResolver.isMinimalReader() } returns mode.minimalReader
         every { paletteResolver.isAmoled() } returns mode.amoled
+        every { paletteResolver.activePalette() } returns Preferences.Main.UiPalette.SYSTEM
         val mainPreferencesHolder = mockk<MainPreferencesHolder>(relaxed = true)
         return TemplateCssComposer(mockk<android.content.Context>(relaxed = true), mainPreferencesHolder, dayNightHelper, paletteResolver).compose()
     }
@@ -87,6 +89,7 @@ class TemplateCssComposerHighlightAccentTest {
         every { paletteResolver.isSepiaBlue() } returns false
         every { paletteResolver.isMinimalReader() } returns false
         every { paletteResolver.isAmoled() } returns false
+        every { paletteResolver.activePalette() } returns Preferences.Main.UiPalette.SYSTEM
         val holder = mockk<MainPreferencesHolder>(relaxed = true)
         every { holder.getUseMaterialYou() } returns false
         every { holder.getAccentPalette() } returns
@@ -117,6 +120,7 @@ class TemplateCssComposerHighlightAccentTest {
             every { paletteResolver.isSepiaBlue() } returns false
             every { paletteResolver.isMinimalReader() } returns false
             every { paletteResolver.isAmoled() } returns false
+            every { paletteResolver.activePalette() } returns Preferences.Main.UiPalette.SYSTEM
             val holder = mockk<MainPreferencesHolder>(relaxed = true)
             every { holder.getUseMaterialYou() } returns false
             every { holder.getAccentPalette() } returns

@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.ui
 
 import forpdateam.ru.forpda.common.DayNightHelper
+import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import io.mockk.every
 import io.mockk.mockk
@@ -27,6 +28,7 @@ class TemplateCssComposerCacheTest {
         every { paletteResolver.isSepiaBlue() } returns false
         every { paletteResolver.isMinimalReader() } returns false
         every { paletteResolver.isAmoled() } returns false
+        every { paletteResolver.activePalette() } returns Preferences.Main.UiPalette.SYSTEM
         return dayNightHelper to paletteResolver
     }
 
@@ -50,6 +52,7 @@ class TemplateCssComposerCacheTest {
         every { paletteResolver.isSepiaBlue() } returns false
         every { paletteResolver.isMinimalReader() } returns false
         every { paletteResolver.isAmoled() } returns false
+        every { paletteResolver.activePalette() } returns Preferences.Main.UiPalette.SYSTEM
         every { dayNightHelper.isNight() } answers { night }
 
         val composer = composer(dayNightHelper, paletteResolver)
@@ -69,6 +72,7 @@ class TemplateCssComposerCacheTest {
         every { paletteResolver.isSepiaBlue() } returns false
         every { paletteResolver.isMinimalReader() } returns false
         every { paletteResolver.isAmoled() } returns false
+        every { paletteResolver.activePalette() } returns Preferences.Main.UiPalette.SYSTEM
         every { paletteResolver.isSepiaReading() } answers { sepiaReading }
 
         val composer = composer(dayNightHelper, paletteResolver)

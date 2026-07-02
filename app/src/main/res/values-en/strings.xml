@@ -780,6 +780,12 @@
     <string name="pref_value_bottom_nav_columns_5">5 columns</string>
     <string name="pref_value_bottom_nav_columns_6">6 columns</string>
     <string name="pref_value_ui_palette_minimal_reader">Minimal Reader UI</string>
+    <string name="pref_value_ui_palette_green_care">Green (eye-care)</string>
+    <string name="pref_value_ui_palette_nord">Nord</string>
+    <string name="pref_value_ui_palette_solarized">Solarized</string>
+    <string name="pref_value_ui_palette_gruvbox">Gruvbox</string>
+    <string name="pref_value_ui_palette_rose_pine">Rosé Pine</string>
+    <string name="pref_value_ui_palette_dracula">Dracula</string>
     <string name="pref_value_ui_palette_sepia_reading">Sepia / Reading</string>
     <string name="pref_value_ui_palette_sepia_blue">Sepia Blue</string>
     <string name="report_post_success">Report sent</string>
