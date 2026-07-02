@@ -632,6 +632,10 @@ open class TabFragment : Fragment() {
     }
 
     protected fun updateToolbarShadow() {
+        // onViewCreated постит это через view.post{}: к моменту выполнения view
+        // мог быть уничтожен (быстрая навигация/пересоздание) и _binding обнулён
+        // в onDestroyView → обращение к preLpShadow (binding!!) роняло NPE.
+        if (_binding == null) return
         val isVisible = !useFlatTopBarChrome() && !useCompactToolbarPaginationChrome() && isShadowVisible()
         val targetVisibility = if (isVisible) View.VISIBLE else View.GONE
         if (preLpShadow.visibility != targetVisibility) {
