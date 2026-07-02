@@ -66,10 +66,25 @@ object NotificationActions {
         ).build()
     }
 
-    /** Навешивает доступные действия на билдер. */
+    /**
+     * Навешивает действия + группировку на билдер одиночного уведомления.
+     * Группировка ([setGroup]) по типу события → Android сам сворачивает
+     * однотипные уведомления (QMS/избранное/упоминания/сайт) в один бандл, при
+     * этом каждое остаётся отдельно-действенным (свои «Ответить»/«Прочитано»).
+     * Явный summary не постим: система авто-генерирует заголовок бандла (N+), а
+     * ручной summary конфликтовал бы с legacy stacked-путём.
+     */
     fun apply(context: Context, builder: NotificationCompat.Builder, event: NotificationEvent) {
         replyAction(context, event)?.let { builder.addAction(it) }
         builder.addAction(markReadAction(context, event))
+        builder.setGroup(groupKeyFor(event))
+    }
+
+    fun groupKeyFor(event: NotificationEvent): String = when {
+        event.isMention -> "forpda.group.mention"
+        event.fromQms() -> "forpda.group.qms"
+        event.fromTheme() -> "forpda.group.fav"
+        else -> "forpda.group.site"
     }
 
     private const val REQ_REPLY = 1
