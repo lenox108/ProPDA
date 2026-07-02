@@ -28,11 +28,16 @@
                 android:clickable="false"
                 android:scaleType="fitCenter" />
 
-            <ProgressBar
+            <com.google.android.material.progressindicator.CircularProgressIndicator
                 android:id="@+id/progress_bar"
                 android:layout_width="@dimen/dp48"
                 android:layout_height="@dimen/dp48"
-                android:layout_gravity="center" />
+                android:layout_gravity="center" 
+            android:indeterminate="true"
+            app:indicatorColor="?attr/colorAccent"
+            app:indicatorSize="40dp"
+            app:trackThickness="4dp"
+            app:trackCornerRadius="2dp"/>
         </FrameLayout>
 
 

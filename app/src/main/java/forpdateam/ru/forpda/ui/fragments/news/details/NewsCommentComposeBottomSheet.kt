@@ -40,7 +40,7 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
     private lateinit var messageField: EditText
     private lateinit var buttonHide: AppCompatImageButton
     private lateinit var buttonSend: MaterialButton
-    private lateinit var sendProgress: ProgressBar
+    private lateinit var sendProgress: com.google.android.material.progressindicator.CircularProgressIndicator
 
     private val presenter: ArticleCommentViewModel by viewModels(
             ownerProducer = { requireParentFragment() },

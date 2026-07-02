@@ -69,7 +69,7 @@ class DeviceFragment : TabFragment() {
     private lateinit var tabLayout: TabLayout
     private lateinit var rating: TextView
     private lateinit var fragmentsPager: ViewPager2
-    private lateinit var progressBar: ProgressBar
+    private lateinit var progressBar: com.google.android.material.progressindicator.CircularProgressIndicator
     private var tabLayoutMediator: TabLayoutMediator? = null
     private var toolbarContent: RelativeLayout? = null
 
