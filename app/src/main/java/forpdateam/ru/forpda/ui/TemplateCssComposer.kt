@@ -66,10 +66,11 @@ class TemplateCssComposer(
             Preferences.Main.UiPalette.ROSE_PINE to Pair(
                     PaletteSpec("#FAF4ED", "#FFFAF3", "#F2E9E1", "#575279", "#797593", "#907AA9", "#E5DDD3", "#F2E9E1"),
                     PaletteSpec("#191724", "#1F1D2E", "#26233A", "#E0DEF4", "#908CAA", "#C4A7E7", "#2A2739", "#1F1D2E")),
-            // Dracula — dark-only схема (иконическая тёмная): light-вариант = dark,
-            // чтобы «Dracula» всегда был тёмным, а не кремовым Alucard'ом в светлом режиме.
+            // Dracula следует светлому/тёмному, как остальные палитры: light — холодный
+            // Alucard (не тёплый крем, чтобы не путать с Sepia; фиолетовый акцент + видимый
+            // разделитель), dark — классическая тёмная Dracula.
             Preferences.Main.UiPalette.DRACULA to Pair(
-                    PaletteSpec("#282A36", "#343746", "#3C3F51", "#F8F8F2", "#A7ABBE", "#BD93F9", "#44475A", "#2E303E"),
+                    PaletteSpec("#F2F2F7", "#FFFFFF", "#E9E9F0", "#1F1F2B", "#565669", "#7A5CD0", "#D3D3E0", "#E9E9F0"),
                     PaletteSpec("#282A36", "#343746", "#3C3F51", "#F8F8F2", "#A7ABBE", "#BD93F9", "#44475A", "#2E303E")),
     )
 
