@@ -35,11 +35,19 @@ class HistoryAdapter : BaseAdapter<HistoryItem, HistoryAdapter.HistoryHolder>() 
 
         init {
             binding.root.setOnClickListener {
-                itemClickListener?.onItemClick(getItem(layoutPosition))
+                // layoutPosition = -1 (NO_POSITION) при удалении/анимации item →
+                // getItem(-1) роняет IndexOutOfBoundsException. Гейтим по границам.
+                val position = layoutPosition
+                if (position in 0 until getItemCount()) {
+                    itemClickListener?.onItemClick(getItem(position))
+                }
             }
             binding.root.setOnLongClickListener {
-                itemClickListener?.let { listener ->
-                    listener.onItemLongClick(getItem(layoutPosition))
+                val position = layoutPosition
+                if (position < 0 || position >= getItemCount()) {
+                    false
+                } else itemClickListener?.let { listener ->
+                    listener.onItemLongClick(getItem(position))
                     true
                 } ?: false
             }
