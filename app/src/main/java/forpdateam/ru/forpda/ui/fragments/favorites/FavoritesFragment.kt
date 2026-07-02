@@ -64,6 +64,10 @@ class FavoritesFragment : RecyclerFragment() {
 
     private lateinit var dialogMenu: DynamicDialogMenu<FavoritesFragment, FavItem>
     private lateinit var adapter: FavoritesAdapter
+    private var skeleton: forpdateam.ru.forpda.ui.views.SkeletonListView? = null
+    private val tagSkeleton = "SKELETON"
+    /** Был ли уже хоть один результат загрузки (данные/пусто/ошибка) — гасит skeleton. */
+    private var hadFirstResult = false
 
     private lateinit var paginationHelper: PaginationHelper
 
@@ -193,6 +197,14 @@ class FavoritesFragment : RecyclerFragment() {
         adapter.setOnItemDisplayListener { presenter.onItemDisplayed(it) }
         adapter.setOnItemTouchDownListener { presenter.onItemTouchDown(it) }
         recyclerView.adapter = adapter
+
+        skeleton = forpdateam.ru.forpda.ui.views.SkeletonListView(requireContext()).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        contentController.addContent(skeleton!!, tagSkeleton)
 
         paginationHelper.setListener(paginationListener)
 
@@ -348,7 +360,16 @@ class FavoritesFragment : RecyclerFragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     presenter.refreshing.collect { isRefreshing ->
-                        refreshLayout.isRefreshing = isRefreshing
+                        // Первая загрузка (список пуст) → показываем shimmer-скелетон
+                        // вместо голого пустого списка со спиннером сверху.
+                        val showSkeleton = isRefreshing && !hadFirstResult
+                        if (showSkeleton) {
+                            contentController.showContent(tagSkeleton)
+                            refreshLayout.isRefreshing = false
+                        } else {
+                            contentController.hideContent(tagSkeleton)
+                            refreshLayout.isRefreshing = isRefreshing
+                        }
                     }
                 }
                 launch {
@@ -485,6 +506,8 @@ class FavoritesFragment : RecyclerFragment() {
     }
 
     private fun onShowFavorite(items: List<FavItem>) {
+        hadFirstResult = true
+        contentController.hideContent(tagSkeleton)
         latestItems = items
         if (items.isEmpty()) {
             if (!contentController.contains(ContentController.TAG_NO_DATA)) {
@@ -507,6 +530,8 @@ class FavoritesFragment : RecyclerFragment() {
     }
 
     private fun showLoadError(message: String?) {
+        hadFirstResult = true
+        contentController.hideContent(tagSkeleton)
         if (adapter.itemCount > 0) {
             showSnackbar(message ?: getString(R.string.error_occurred))
             return
