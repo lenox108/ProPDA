@@ -608,6 +608,8 @@
     <string name="pref_value_ui_palette_system">System style</string>
     <string name="pref_message_ui_palette_sepia_disabled">Sepia is available with light, dark, and system themes</string>
     <string name="pref_summary_use_material_you_unsupported">Not supported on your version of Android.</string>
+    <string name="pref_title_haptic_feedback">Haptic feedback</string>
+    <string name="pref_summary_haptic_feedback">Light vibration on tab switches, sending, and other actions. Respects the system vibration setting.</string>
     <string name="pref_title_show_bottom_arrow">Bottom menu button</string>
     <string name="pref_summary_show_bottom_arrow">Enable if system has gesture at bottom of screen</string>
     <string name="pref_title_webview_compatibility_mode">WebView compatibility mode</string>

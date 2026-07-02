@@ -36,6 +36,7 @@ object Preferences {
         const val IS_EDITOR_MONOSPACE = "message_panel.is_monospace"
         const val IS_EDITOR_DEFAULT_HIDDEN = "message_panel.is_default_hidden"
         const val SCROLL_BUTTON_ENABLE = PREFIX + "scroll_button.enable"
+        const val HAPTIC_FEEDBACK_ENABLE = PREFIX + "haptic_feedback.enable"
         const val TOPIC_PAGINATION_PANEL_ENABLE = PREFIX + "topic_pagination_panel.enable"
         const val TOPIC_SCROLL_MODE = PREFIX + "topic_scroll_mode"
         const val TOPIC_POST_DENSITY = PREFIX + "topic_post_density"
