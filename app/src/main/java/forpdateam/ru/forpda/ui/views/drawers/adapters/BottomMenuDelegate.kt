@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.widget.TextViewCompat
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import androidx.recyclerview.widget.RecyclerView
 import com.hannesdorfmann.adapterdelegates4.AdapterDelegate
 import forpdateam.ru.forpda.R
@@ -20,7 +21,8 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
 
     override fun onBindViewHolder(items: MutableList<ListItem>, position: Int, holder: RecyclerView.ViewHolder, payloads: MutableList<Any>) {
         val item = items[position] as BottomTabListItem
-        (holder as ViewHolder).bind(item.item, item.selected)
+        val animate = payloads.contains(BottomMenuAdapter.PAYLOAD_ANIMATE_SELECT)
+        (holder as ViewHolder).bind(item.item, item.selected, animate)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup): RecyclerView.ViewHolder {
@@ -36,7 +38,7 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
             binding.root.setOnClickListener { clickListener.onTabClick(currentItem) }
         }
 
-        fun bind(item: DrawerMenuItem, selected: Boolean) {
+        fun bind(item: DrawerMenuItem, selected: Boolean, animate: Boolean = false) {
             this.currentItem = item
             binding.root.apply {
                 val title = context.getString(item.title)
@@ -52,7 +54,52 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
                 )
                 binding.itemBottomMenuIcon.setImageDrawable(ContextCompat.getDrawable(context, item.icon))
 
-                binding.tabActiveBackground.visibility = if (selected) View.VISIBLE else View.GONE
+                binding.tabActiveBackground.apply {
+                    visibility = if (selected) View.VISIBLE else View.GONE
+                    animate().cancel()
+                    if (selected && animate) {
+                        // M3 NavigationBar: индикатор «раскрывается» по горизонтали + лёгкий fade.
+                        scaleX = 0.35f
+                        alpha = 0f
+                        animate()
+                                .scaleX(1f)
+                                .alpha(1f)
+                                .setDuration(220L)
+                                .setInterpolator(FastOutSlowInInterpolator())
+                                .withEndAction {
+                                    scaleX = 1f
+                                    alpha = 1f
+                                }
+                                .start()
+                    } else {
+                        scaleX = 1f
+                        alpha = 1f
+                    }
+                }
+                if (selected && animate) {
+                    // Небольшой «поп» иконки в такт раскрытию таблетки.
+                    binding.itemBottomMenuIcon.apply {
+                        animate().cancel()
+                        scaleX = 0.8f
+                        scaleY = 0.8f
+                        animate()
+                                .scaleX(1f)
+                                .scaleY(1f)
+                                .setDuration(220L)
+                                .setInterpolator(FastOutSlowInInterpolator())
+                                .withEndAction {
+                                    scaleX = 1f
+                                    scaleY = 1f
+                                }
+                                .start()
+                    }
+                } else {
+                    binding.itemBottomMenuIcon.apply {
+                        animate().cancel()
+                        scaleX = 1f
+                        scaleY = 1f
+                    }
+                }
                 val inactiveColor = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
                 // M3 NavigationBar: активная иконка лежит на «таблетке» colorSecondaryContainer,
                 // поэтому её тон — colorOnSecondaryContainer (не colorOnSurface).
