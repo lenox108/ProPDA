@@ -35,7 +35,10 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
         private lateinit var currentItem: DrawerMenuItem
 
         init {
-            binding.root.setOnClickListener { clickListener.onTabClick(currentItem) }
+            binding.root.setOnClickListener {
+                forpdateam.ru.forpda.ui.Haptic.tick(it)
+                clickListener.onTabClick(currentItem)
+            }
         }
 
         fun bind(item: DrawerMenuItem, selected: Boolean, animate: Boolean = false) {
