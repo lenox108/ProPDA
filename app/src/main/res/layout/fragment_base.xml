@@ -206,18 +206,15 @@
             android:clickable="false"
             app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-            <com.google.android.material.progressindicator.CircularProgressIndicator
+            <com.google.android.material.loadingindicator.LoadingIndicator
                 android:id="@+id/content_progress"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:contentDescription="@string/loading_data"
-                android:indeterminate="true"
                 android:visibility="gone"
                 app:indicatorColor="?attr/colorAccent"
-                app:indicatorSize="44dp"
-                app:trackThickness="4dp"
-                app:trackCornerRadius="2dp"/>
+                app:indicatorSize="44dp"/>
 
         </FrameLayout>
 

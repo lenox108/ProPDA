@@ -79,7 +79,7 @@ class ArticleCommentsFragment : Fragment(), ArticleCommentsAdapter.ClickListener
     private lateinit var messageField: EditText
     private lateinit var buttonSend: AppCompatImageButton
     private lateinit var buttonClose: AppCompatImageButton
-    private lateinit var progressBarSend: com.google.android.material.progressindicator.CircularProgressIndicator
+    private lateinit var progressBarSend: com.google.android.material.loadingindicator.LoadingIndicator
     private lateinit var writePanel: RelativeLayout
     private lateinit var fabWrite: FloatingActionButton
     private val adapter by lazy { ArticleCommentsAdapter(authHolder) }
