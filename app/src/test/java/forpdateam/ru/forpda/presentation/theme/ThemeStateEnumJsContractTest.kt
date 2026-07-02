@@ -25,13 +25,28 @@ import java.nio.file.Path
 class ThemeStateEnumJsContractTest {
 
     private val themeJs: String by lazy {
-        val candidates = listOf(
-                Path.of("src/main/assets/forpda/scripts/modules/theme.js"),
-                Path.of("app/src/main/assets/forpda/scripts/modules/theme.js"),
+        readSource(
+                "src/main/assets/forpda/scripts/modules/theme.js",
+                "app/src/main/assets/forpda/scripts/modules/theme.js",
         )
-        val path = candidates.firstOrNull { Files.exists(it) }
-                ?: error("theme.js not found in ${candidates.joinToString()}")
-        Files.newInputStream(path).bufferedReader().readText()
+    }
+
+    /**
+     * Исходник ThemeFragmentWeb — читаем как текст, т.к. константы контракта там
+     * `private const val` (недоступны из теста). Парсинг файла = единственный
+     * способ пину двустороннего равенства без раскрытия приватного API.
+     */
+    private val themeFragmentWebSource: String by lazy {
+        readSource(
+                "src/main/java/forpdateam/ru/forpda/ui/fragments/theme/ThemeFragmentWeb.kt",
+                "app/src/main/java/forpdateam/ru/forpda/ui/fragments/theme/ThemeFragmentWeb.kt",
+        )
+    }
+
+    private fun readSource(vararg relativePaths: String): String {
+        val path = relativePaths.map { Path.of(it) }.firstOrNull { Files.exists(it) }
+                ?: error("source not found in ${relativePaths.joinToString()}")
+        return Files.newInputStream(path).bufferedReader().readText()
     }
 
     // ---- ThemeLoadAction ↔ JS *_ACTION consts -------------------------------
@@ -129,6 +144,43 @@ class ThemeStateEnumJsContractTest {
                 "theme.js UNREAD_ANCHOR_GUARD_MAX_MS must equal Kotlin ANCHOR_GUARD_MAX_BLOCK_MS",
                 ThemeUnreadHybridAnchorGuardPolicy.ANCHOR_GUARD_MAX_BLOCK_MS,
                 jsMs,
+        )
+    }
+
+    // ---- INITIAL_ANCHOR handshake window ↔ ThemeFragmentWeb ------------------
+
+    @Test
+    fun initialAnchorHandshakeMs_mirrorsBetweenKotlinAndJs() {
+        val re = Regex("""INITIAL_ANCHOR_KOTLIN_HANDSHAKE_MS\s*=\s*(\d+)""")
+        val js = re.find(themeJs)?.groupValues?.get(1)?.toInt()
+                ?: error("theme.js must declare INITIAL_ANCHOR_KOTLIN_HANDSHAKE_MS = <ms>")
+        val kt = re.find(themeFragmentWebSource)?.groupValues?.get(1)?.toInt()
+                ?: error("ThemeFragmentWeb.kt must declare INITIAL_ANCHOR_KOTLIN_HANDSHAKE_MS = <ms>")
+        assertEquals(
+                "INITIAL_ANCHOR handshake window must match between ThemeFragmentWeb and theme.js " +
+                        "(Kotlin шлёт setThemeInitialAnchorExpected(это значение), JS держит тот же fallback)",
+                kt,
+                js,
+        )
+    }
+
+    // ---- scroll-anchor retry delays: финальная задержка = контракт reveal ----
+
+    @Test
+    fun scrollAnchorRetryDelays_finalRetryStays900() {
+        val arr = Regex("""SCROLL_ANCHOR_RETRY_DELAYS_MS\s*=\s*\[([^\]]+)\]""").find(themeJs)
+                ?.groupValues?.get(1)
+                ?: error("theme.js must declare SCROLL_ANCHOR_RETRY_DELAYS_MS = [...]")
+        val delays = arr.split(',').map { it.trim().toInt() }
+        assertEquals("retry delays should be strictly increasing and start at 1",
+                1, delays.first())
+        // ThemeFragmentWeb.THEME_SCROLL_STUCK_REVEAL_DELAY_MS документирован как
+        // «after SCROLL_ANCHOR_RETRY_DELAYS_MS final retry (900ms) + layout settle» —
+        // reveal-тайминг завязан на финальную задержку 900. Смена без синка ломает его.
+        assertEquals(
+                "final scroll-anchor retry must stay 900ms (assumed by THEME_SCROLL_STUCK_REVEAL_DELAY_MS)",
+                900,
+                delays.last(),
         )
     }
 }
