@@ -1732,6 +1732,17 @@ class ThemeViewModel @Inject constructor(
                     page.addAnchor("entry$firstUnreadPostId")
                     page.anchorPostId = firstUnreadPostId.toString()
                     page.hasUnreadTarget = true
+                    // The next-page reload was issued with a PLAIN `st=` URL (getnewpost ignores st),
+                    // so the parser stamped this page READ_RESUME. We just promoted it to a genuine
+                    // first-unread anchor at the top of the (final) page — re-stamp the session kind to
+                    // FIRST_UNREAD so shouldSuppressMarkReadForFirstUnreadOpen recognises it. Otherwise
+                    // the mark-read gate (current>=all on this final page) fires immediately on load,
+                    // sealing the topic read while the user sits at the top with unread posts below —
+                    // every subsequent open then resumes at the last post (topic 1103268 symptom).
+                    page.openSessionKind =
+                            TopicUnreadOpenPolicy.TopicOpenSessionKind.FIRST_UNREAD.name
+                    activeOpenSessionKind =
+                            TopicUnreadOpenPolicy.TopicOpenSessionKind.FIRST_UNREAD
                     Log.i(
                             TopicUnreadFindPostReloadPolicy.LOG_TAG,
                             "next_page_first_unread_anchor topic=${page.id} st=${page.st} page=${page.pagination.current} firstUnread=$firstUnreadPostId trace=$openTrace.id"
