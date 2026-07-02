@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import forpdateam.ru.forpda.diagnostic.FpdaDebugLog
 import forpdateam.ru.forpda.diagnostic.NavBackstackTrace
 import forpdateam.ru.forpda.presentation.Screen
@@ -34,7 +36,19 @@ class TabNavigator(
 ) : Navigator {
     companion object {
         private const val TAG_PREFIX = "Tab_"
+
+        /** Направление enter-анимации показываемого фрагмента (M3 shared-axis Z). */
+        private const val ENTER_NEUTRAL = 0   // смена вкладки/прочее → кроссфейд
+        private const val ENTER_FORWARD = 1   // вглубь (forward/replace) → входящий растёт
+        private const val ENTER_BACK = -1     // назад (back/backTo) → входящий сжимается
     }
+
+    /**
+     * Тег вкладки, показанной в прошлый раз. Enter-анимация проигрывается ТОЛЬКО
+     * когда текущая вкладка реально сменилась (не при повторном show той же), и
+     * не при первом появлении/восстановлении (lastCurrentTag == null).
+     */
+    private var lastCurrentTag: String? = null
 
     private val fragmentManager by lazy { activity.supportFragmentManager }
     val tabController by lazy { TabController() }
@@ -188,7 +202,52 @@ class TabNavigator(
         updateFragmentsState()
     }
 
-    private fun updateFragmentsState(notifyThemeTabBecameCurrent: Boolean = true) {
+    /**
+     * M3 shared-axis-Z enter-переход для показываемого фрагмента. Анимируется
+     * ТОЛЬКО view контента (тулбар/нижний бар — вне контейнера, не затрагиваются),
+     * поэтому семантика навигации (commitNow/show-hide) не меняется.
+     *
+     * ThemeFragmentWeb — только alpha-кроссфейд, без масштаба: у WebView-темы
+     * тонкая логика scroll/anchor/highlight ([[theme-bare-scrollto-animates]] и
+     * др.), которую нельзя тревожить трансформами.
+     */
+    private fun animateFragmentEnter(fragment: TabFragment?, direction: Int) {
+        val view: View = fragment?.view ?: return
+        view.animate().cancel()
+        val fadeOnly = fragment is ThemeFragmentWeb || direction == ENTER_NEUTRAL
+        view.alpha = 0f
+        if (fadeOnly) {
+            view.scaleX = 1f
+            view.scaleY = 1f
+            view.animate()
+                    .alpha(1f)
+                    .setDuration(if (fragment is ThemeFragmentWeb) 160L else 200L)
+                    .setInterpolator(FastOutSlowInInterpolator())
+                    .withEndAction { view.alpha = 1f }
+                    .start()
+            return
+        }
+        val from = if (direction == ENTER_FORWARD) 0.92f else 1.06f
+        view.scaleX = from
+        view.scaleY = from
+        view.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(250L)
+                .setInterpolator(FastOutSlowInInterpolator())
+                .withEndAction {
+                    view.alpha = 1f
+                    view.scaleX = 1f
+                    view.scaleY = 1f
+                }
+                .start()
+    }
+
+    private fun updateFragmentsState(
+            notifyThemeTabBecameCurrent: Boolean = true,
+            enterDirection: Int = ENTER_NEUTRAL
+    ) {
         /*tabController.getCurrent()?.tag?.let { getByTag(it) }?.also { fragment ->
             fragmentManager
                     .beginTransaction()
@@ -211,6 +270,12 @@ class TabNavigator(
         }
 
         transaction.commitNow()
+        val currentTag = tabController.getCurrent()?.tag
+        // Анимируем только реальную смену вкладки; не при первом появлении/восстановлении.
+        if (currentTag != null && lastCurrentTag != null && currentTag != lastCurrentTag) {
+            animateFragmentEnter(getByTag(currentTag), enterDirection)
+        }
+        lastCurrentTag = currentTag
         if (notifyThemeTabBecameCurrent) {
             notifyCurrentThemeTabJumpToUnread()
         }
@@ -291,7 +356,7 @@ class TabNavigator(
                     .add(containerId, newFragment, tag)
                     .commitNow()
             tabController.addNew(tag, newScreen)
-            updateFragmentsState()
+            updateFragmentsState(enterDirection = ENTER_FORWARD)
         }
     }
 
@@ -313,7 +378,7 @@ class TabNavigator(
                             .remove(fragment)
                             .commitNow()
                     tabController.remove(tab.tag)
-                    updateFragmentsState()
+                    updateFragmentsState(enterDirection = ENTER_BACK)
                     notifyThemeFragmentAfterChildRemoved()
                 }
             }
@@ -362,7 +427,7 @@ class TabNavigator(
                     .add(containerId, newFragment, tag)
                     .commitNow()
             tabController.replace(tag, newScreen)
-            updateFragmentsState()
+            updateFragmentsState(enterDirection = ENTER_FORWARD)
         }
     }
 
@@ -379,7 +444,7 @@ class TabNavigator(
             }
         }
         transaction.commit()
-        updateFragmentsState()
+        updateFragmentsState(enterDirection = ENTER_BACK)
         notifyThemeFragmentAfterChildRemoved()
     }
 
