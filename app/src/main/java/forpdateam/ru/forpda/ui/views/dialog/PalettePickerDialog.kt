@@ -67,13 +67,26 @@ object PalettePickerDialog {
         val outline = context.getColorFromAttr(com.google.android.material.R.attr.colorOutline)
         val selectedRing = context.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
 
+        // Карточка «Системный стиль» должна показывать, как выглядит палитра SYSTEM
+        // (базовая M3-тема light/dark/AMOLED), а НЕ текущую активную читающую палитру.
+        // Поэтому резолвим её M3-роли из отдельного контекста, обёрнутого в базовую
+        // системную тему, а не из context активити (у которого сейчас тема Dracula/Sepia).
+        val systemCtx: Context = run {
+            val sysThemeRes = forpdateam.ru.forpda.ui.UiThemeStyles.mainNoActionBar(
+                    palette = UiPalette.SYSTEM,
+                    themeMode = forpdateam.ru.forpda.model.datastore.MainDataStore(context).getThemeModeImmediate(),
+                    configuration = context.resources.configuration,
+            )
+            android.view.ContextThemeWrapper(context, sysThemeRes)
+        }
+
         fun colorsFor(e: Entry): Entry {
             if (e.palette != UiPalette.SYSTEM) return e
             return e.copy(
-                    bg = context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest),
-                    text = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface),
-                    text2 = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant),
-                    accent = context.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary),
+                    bg = systemCtx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest),
+                    text = systemCtx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface),
+                    text2 = systemCtx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant),
+                    accent = systemCtx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary),
             )
         }
 
