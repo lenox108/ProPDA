@@ -80,7 +80,14 @@ class QmsRepository(
             withContext(Dispatchers.IO) { qmsApi.sendNewTheme(nick, title, mess, files) }
 
     suspend fun sendMessage(userId: Int, themeId: Int, text: String, files: List<AttachmentItem>): List<QmsMessage> =
-            withContext(Dispatchers.IO) { qmsApi.sendMessage(userId, themeId, text, files) }
+            withContext(Dispatchers.IO) {
+                // Гейт по таймауту как у getMessagesFromWs/getMessagesAfter: без него зависший
+                // ответ send-message (сервер сохранил сообщение, но не закрыл соединение) навсегда
+                // держит корутину → спиннер `_messageRefreshing` крутится вечно, сообщение не
+                // отрисовывается, хотя фактически отправлено. Таймаут переводит вечное зависание
+                // в ограниченную ошибку (finally гасит спиннер, сообщение появится при обновлении).
+                withTimeout(30_000L) { qmsApi.sendMessage(userId, themeId, text, files) }
+            }
 
     suspend fun getMessagesFromWs(themeId: Int, messageId: Int, afterMessageId: Int): List<QmsMessage> = withContext(Dispatchers.IO) {
         withTimeout(30_000L) { qmsApi.getMessagesFromWs(themeId, messageId, afterMessageId) }
