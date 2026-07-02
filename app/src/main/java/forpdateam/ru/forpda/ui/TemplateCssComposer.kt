@@ -680,7 +680,7 @@ html, body {
                     // поверхность (цитаты/вложения) заметно светлее — иначе посты сливались с
                     // фоном (border #1A1A1A на #000 был невидим).
                     background = "#000000", card = "#000000", surface = "#17171C",
-                    toolbar = "#000000", border = "#34343B",
+                    toolbar = "#000000", border = "#43434D",
                     primaryText = s.text, secondaryText = s.text2, link = s.link,
                     button = rgba(s.link, 0.14), buttonActive = rgba(s.link, 0.22),
                     actionButtonBorder = "#34343B", buttonShadow = "rgba(0, 0, 0, 0.00)",
@@ -814,7 +814,10 @@ body#qms .mess_list,
 .materials,
 .materials .material_item,
 .mess_list > .mess_container .mess {
-    box-shadow: inset 0 0 0 1px var(--rp-border) !important;
+    box-shadow:
+        inset 0 0 0 1px var(--rp-border),
+        0rem 0.0625rem 0.0625rem var(--rp-button-shadow),
+        0rem 0rem 0.0625rem var(--rp-button-shadow) !important;
 }
 .post_header,
 .post_footer,
