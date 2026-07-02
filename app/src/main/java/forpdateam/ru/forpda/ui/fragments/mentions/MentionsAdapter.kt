@@ -127,12 +127,18 @@ class MentionsAdapter : BaseAdapter<MentionItem, MentionsAdapter.MentionHolder>(
         }
 
         override fun onClick(view: View) {
-            itemClickListener?.onItemClick(getItem(layoutPosition))
+            // layoutPosition = -1 (NO_POSITION), пока item удаляется/анимируется →
+            // getItem(-1) роняло IndexOutOfBoundsException. Гейтим по границам.
+            val position = layoutPosition
+            if (position < 0 || position >= getItemCount()) return
+            itemClickListener?.onItemClick(getItem(position))
         }
 
         override fun onLongClick(view: View): Boolean {
+            val position = layoutPosition
+            if (position < 0 || position >= getItemCount()) return false
             return itemClickListener?.let {
-                it.onItemLongClick(getItem(layoutPosition))
+                it.onItemLongClick(getItem(position))
                 true
             } ?: false
         }
