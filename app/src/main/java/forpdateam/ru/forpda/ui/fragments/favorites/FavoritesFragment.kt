@@ -92,6 +92,7 @@ class FavoritesFragment : RecyclerFragment() {
     private var selectionShowMenuItem: MenuItem? = null
 
     private val presenter: FavoritesViewModel by viewModels()
+    private lateinit var favoritesDialogs: FavoritesDialogs
 
     override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
 
@@ -153,6 +154,7 @@ class FavoritesFragment : RecyclerFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        favoritesDialogs = FavoritesDialogs(requireContext(), presenter) { res -> showSnackbar(res) }
 
         dialogMenu = DynamicDialogMenu()
         dialogMenu.apply {
@@ -339,20 +341,7 @@ class FavoritesFragment : RecyclerFragment() {
     }
 
     private fun openMarkAllFavoritesReadConfirmDialog() {
-        val ctx = context ?: return
-        val count = presenter.getMarkAllFavoritesReadCount()
-        if (count <= 0) {
-            showSnackbar(R.string.fav_mark_all_read_nothing)
-            return
-        }
-        MaterialAlertDialogBuilder(ctx)
-                .setTitle(R.string.fav_mark_all_read_title)
-                .setMessage(getString(R.string.fav_mark_all_read_confirm, count))
-                .setPositiveButton(R.string.fav_mark_all_read_button) { _, _ ->
-                    presenter.markAllFavoritesRead()
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        favoritesDialogs.openMarkAllFavoritesReadConfirmDialog()
     }
 
     private fun observeViewModel() {
@@ -609,14 +598,7 @@ class FavoritesFragment : RecyclerFragment() {
     }
 
     private fun showSubscribeDialog(item: FavItem) {
-        val subTypeIndex = Arrays.asList(*FavoritesApi.SUB_TYPES).indexOf(item.subType)
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.favorites_subscribe_email)
-                .setSingleChoiceItems(getSubNames(requireContext()), subTypeIndex) { dialog, which ->
-                    presenter.changeFav(FavoritesApi.ACTION_EDIT_SUB_TYPE, FavoritesApi.SUB_TYPES[which], item.favId)
-                    dialog.dismiss()
-                }
-                .showWithStyledButtons()
+        favoritesDialogs.showSubscribeDialog(item)
     }
 
     private fun showItemDialogMenu(item: FavItem) {
@@ -771,17 +753,7 @@ class FavoritesFragment : RecyclerFragment() {
     }
 
     private fun confirmDeleteSelected() {
-        val items = selectedSnapshot()
-        if (items.isEmpty()) return
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.fav_selection_delete_title)
-                .setMessage(getString(R.string.fav_selection_delete_confirm, items.size))
-                .setPositiveButton(R.string.delete) { _, _ ->
-                    presenter.deleteFavorites(items)
-                    clearSelection()
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        favoritesDialogs.confirmDeleteSelected(selectedSnapshot(), ::clearSelection)
     }
 
     companion object {
