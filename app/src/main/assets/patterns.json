@@ -1,5 +1,5 @@
 {
-  "version": 30,
+  "version": 31,
   "scopes": [
     {
       "scope":"global",
@@ -271,7 +271,7 @@
         },
         {
           "key": "chat_info",
-          "value": "<div class=\"nav\">[\\s\\S]*?<b>(?:<a[^>]*?>)?([\\s\\S]*?)(?:<\\/a>)?:<\\/b>([\\s\\S]*?)<\\/span>[\\s\\S]*?<input[^>]*?name=\"mid\" value=\"(\\d+)\"[^>]*>[\\s\\S]*?<input[^>]*?name=\"t\" value=\"(\\d+)\"[^>]*>[\\s\\S]*?(?:[\\s\\S]*?list-group-item(?! our-message)[^\"]*?\"[\\s\\S]*?class=\"avatar\"[^>]*?src=\"([^\"]*?)\")?"
+          "value": "<div class=\"nav\">[\\s\\S]*?<b>(?:<a[^>]*?>)?([\\s\\S]*?)(?:<\\/a>)?:<\\/b>([\\s\\S]*?)<\\/span>[\\s\\S]*?<input[^>]*?name=\"mid\" value=\"(\\d+)\"[^>]*>[\\s\\S]*?<input[^>]*?name=\"t\" value=\"(\\d+)\"[^>]*>[\\s\\S]*?(?:(?>[\\s\\S]*?list-group-item(?! our-message)[^\"]*?\")[\\s\\S]*?class=\"avatar\"[^>]*?src=\"([^\"]*?)\")?"
         },
         {
           "key": "chat_pattern",

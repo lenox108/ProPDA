@@ -77,7 +77,14 @@ class QmsRepository(
     }
 
     suspend fun sendNewTheme(nick: String, title: String, mess: String, files: List<AttachmentItem>): QmsChatModel =
-            withContext(Dispatchers.IO) { qmsApi.sendNewTheme(nick, title, mess, files) }
+            withContext(Dispatchers.IO) {
+                // Тот же таймаут-гейт, что и у sendMessage: страховка от зависшего сетевого
+                // ответа create-thread. Основную же причину «вечного спиннера при первом
+                // сообщении новому пользователю» лечит атомарная группа в chat_info-паттерне
+                // (patterns.json) — там был катастрофический бэктрекинг O(n²) java.util.regex,
+                // который таймаутом НЕ прерывается (CPU-bound, не кооперативная отмена).
+                withTimeout(30_000L) { qmsApi.sendNewTheme(nick, title, mess, files) }
+            }
 
     suspend fun sendMessage(userId: Int, themeId: Int, text: String, files: List<AttachmentItem>): List<QmsMessage> =
             withContext(Dispatchers.IO) {
