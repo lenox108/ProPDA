@@ -29,7 +29,10 @@ class RecyclerTopScroller(
     }
 
     override fun toggleScrollTop() {
-        val layoutManager = recyclerView.layoutManager as androidx.recyclerview.widget.LinearLayoutManager
+        // layoutManager может быть null (список ещё не инициализирован / view
+        // пересоздаётся / RecyclerView детачнут) — жёсткий каст ронял NPE при
+        // тапе по таб-кнопке нижнего меню. Нет менеджера → тихо ничего не делаем.
+        val layoutManager = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager ?: return
         if (lastItemOffset > 0 || lastItemPosition > 0) {
             //appBarLayout.setExpanded(false, true);
             val position = lastItemPosition
