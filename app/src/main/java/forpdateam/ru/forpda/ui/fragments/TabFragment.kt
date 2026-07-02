@@ -93,7 +93,7 @@ open class TabFragment : Fragment() {
     protected val messagePanelHost: FrameLayout get() = binding.messagePanelHost
     protected val fragmentContent: ViewGroup get() = binding.fragmentContent
     protected val additionalContent: ViewGroup get() = binding.additionalContent
-    protected val contentProgress: ProgressBar get() = binding.contentProgress
+    protected val contentProgress: com.google.android.material.loadingindicator.LoadingIndicator get() = binding.contentProgress
     protected val titlesWrapper: LinearLayout get() = binding.toolbarTitlesWrapper
     protected val coordinatorLayout: androidx.coordinatorlayout.widget.CoordinatorLayout get() = binding.coordinatorLayout
     protected val appBarLayout: AppBarLayout get() = binding.appbarLayout
@@ -716,7 +716,7 @@ open class TabFragment : Fragment() {
                 requireContext().getColorFromAttr(MaterialR.attr.colorSecondary),
                 requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
         )
-        contentProgress.indeterminateTintList = ColorStateList.valueOf(progressColor)
+        contentProgress.setIndicatorColor(progressColor)
         toolbarProgress.indeterminateTintList = ColorStateList.valueOf(progressColor)
         applySwipeRefreshIndicatorBelowToolbar(refreshLayout)
     }
