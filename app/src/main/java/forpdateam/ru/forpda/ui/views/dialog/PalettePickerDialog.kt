@@ -46,6 +46,18 @@ object PalettePickerDialog {
                     0xFFFFF8E7.toInt(), 0xFF3A2E22.toInt(), 0xFF7A6A58.toInt(), 0xFF8A5A2B.toInt()),
             Entry(UiPalette.SEPIA_BLUE, R.string.pref_value_ui_palette_sepia_blue,
                     0xFFFFF9EE.toInt(), 0xFF2F2A23.toInt(), 0xFF766B5D.toInt(), 0xFF4F7896.toInt()),
+            Entry(UiPalette.GREEN_CARE, R.string.pref_value_ui_palette_green_care,
+                    0xFFC8E6C9.toInt(), 0xFF1B3B24.toInt(), 0xFF4C6B54.toInt(), 0xFF2E7D4F.toInt()),
+            Entry(UiPalette.NORD, R.string.pref_value_ui_palette_nord,
+                    0xFFECEFF4.toInt(), 0xFF2E3440.toInt(), 0xFF4C566A.toInt(), 0xFF5E81AC.toInt()),
+            Entry(UiPalette.SOLARIZED, R.string.pref_value_ui_palette_solarized,
+                    0xFFFDF6E3.toInt(), 0xFF586E75.toInt(), 0xFF839496.toInt(), 0xFF268BD2.toInt()),
+            Entry(UiPalette.GRUVBOX, R.string.pref_value_ui_palette_gruvbox,
+                    0xFFFBF1C7.toInt(), 0xFF3C3836.toInt(), 0xFF665C54.toInt(), 0xFFAF3A03.toInt()),
+            Entry(UiPalette.ROSE_PINE, R.string.pref_value_ui_palette_rose_pine,
+                    0xFFFAF4ED.toInt(), 0xFF575279.toInt(), 0xFF797593.toInt(), 0xFF907AA9.toInt()),
+            Entry(UiPalette.DRACULA, R.string.pref_value_ui_palette_dracula,
+                    0xFF282A36.toInt(), 0xFFF8F8F2.toInt(), 0xFFA7ABBE.toInt(), 0xFFBD93F9.toInt()),
     )
 
     fun show(context: Context, current: UiPalette, onPick: (UiPalette) -> Unit) {

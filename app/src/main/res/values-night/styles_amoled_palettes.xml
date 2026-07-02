@@ -75,4 +75,130 @@
     <style name="DayNightPreferenceTheme.AmoledMinimalReader" parent="AmoledAppTheme.MinimalReader">
         <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
     </style>
+
+    <style name="AmoledAppTheme.GreenCare" parent="AmoledAppTheme">
+        <item name="colorAccent">@color/green_care_colorAccent</item>
+        <item name="colorSecondary">@color/green_care_link_color</item>
+        <item name="link_color_contrast">@color/green_care_link_color_contrast</item>
+        <item name="menu_tile_icon">@color/green_care_colorAccent</item>
+        <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
+        <item name="smart_nav_fab_icon">@color/green_care_link_color</item>
+        <item name="colorControlActivated">@color/green_care_colorAccent</item>
+        <item name="android:colorControlActivated">@color/green_care_colorAccent</item>
+    </style>
+    <style name="AmoledAppTheme.GreenCare.NoActionBarBase" parent="AmoledAppTheme.GreenCare">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/amoled_navigation_bar_color</item>
+    </style>
+    <style name="AmoledAppTheme.GreenCare.NoActionBar" parent="AmoledAppTheme.GreenCare.NoActionBarBase" />
+    <style name="DayNightPreferenceTheme.AmoledGreenCare" parent="AmoledAppTheme.GreenCare">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="AmoledAppTheme.Nord" parent="AmoledAppTheme">
+        <item name="colorAccent">@color/nord_colorAccent</item>
+        <item name="colorSecondary">@color/nord_link_color</item>
+        <item name="link_color_contrast">@color/nord_link_color_contrast</item>
+        <item name="menu_tile_icon">@color/nord_colorAccent</item>
+        <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
+        <item name="smart_nav_fab_icon">@color/nord_link_color</item>
+        <item name="colorControlActivated">@color/nord_colorAccent</item>
+        <item name="android:colorControlActivated">@color/nord_colorAccent</item>
+    </style>
+    <style name="AmoledAppTheme.Nord.NoActionBarBase" parent="AmoledAppTheme.Nord">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/amoled_navigation_bar_color</item>
+    </style>
+    <style name="AmoledAppTheme.Nord.NoActionBar" parent="AmoledAppTheme.Nord.NoActionBarBase" />
+    <style name="DayNightPreferenceTheme.AmoledNord" parent="AmoledAppTheme.Nord">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="AmoledAppTheme.Solarized" parent="AmoledAppTheme">
+        <item name="colorAccent">@color/solarized_colorAccent</item>
+        <item name="colorSecondary">@color/solarized_link_color</item>
+        <item name="link_color_contrast">@color/solarized_link_color_contrast</item>
+        <item name="menu_tile_icon">@color/solarized_colorAccent</item>
+        <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
+        <item name="smart_nav_fab_icon">@color/solarized_link_color</item>
+        <item name="colorControlActivated">@color/solarized_colorAccent</item>
+        <item name="android:colorControlActivated">@color/solarized_colorAccent</item>
+    </style>
+    <style name="AmoledAppTheme.Solarized.NoActionBarBase" parent="AmoledAppTheme.Solarized">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/amoled_navigation_bar_color</item>
+    </style>
+    <style name="AmoledAppTheme.Solarized.NoActionBar" parent="AmoledAppTheme.Solarized.NoActionBarBase" />
+    <style name="DayNightPreferenceTheme.AmoledSolarized" parent="AmoledAppTheme.Solarized">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="AmoledAppTheme.Gruvbox" parent="AmoledAppTheme">
+        <item name="colorAccent">@color/gruvbox_colorAccent</item>
+        <item name="colorSecondary">@color/gruvbox_link_color</item>
+        <item name="link_color_contrast">@color/gruvbox_link_color_contrast</item>
+        <item name="menu_tile_icon">@color/gruvbox_colorAccent</item>
+        <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
+        <item name="smart_nav_fab_icon">@color/gruvbox_link_color</item>
+        <item name="colorControlActivated">@color/gruvbox_colorAccent</item>
+        <item name="android:colorControlActivated">@color/gruvbox_colorAccent</item>
+    </style>
+    <style name="AmoledAppTheme.Gruvbox.NoActionBarBase" parent="AmoledAppTheme.Gruvbox">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/amoled_navigation_bar_color</item>
+    </style>
+    <style name="AmoledAppTheme.Gruvbox.NoActionBar" parent="AmoledAppTheme.Gruvbox.NoActionBarBase" />
+    <style name="DayNightPreferenceTheme.AmoledGruvbox" parent="AmoledAppTheme.Gruvbox">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="AmoledAppTheme.RosePine" parent="AmoledAppTheme">
+        <item name="colorAccent">@color/rose_pine_colorAccent</item>
+        <item name="colorSecondary">@color/rose_pine_link_color</item>
+        <item name="link_color_contrast">@color/rose_pine_link_color_contrast</item>
+        <item name="menu_tile_icon">@color/rose_pine_colorAccent</item>
+        <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
+        <item name="smart_nav_fab_icon">@color/rose_pine_link_color</item>
+        <item name="colorControlActivated">@color/rose_pine_colorAccent</item>
+        <item name="android:colorControlActivated">@color/rose_pine_colorAccent</item>
+    </style>
+    <style name="AmoledAppTheme.RosePine.NoActionBarBase" parent="AmoledAppTheme.RosePine">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/amoled_navigation_bar_color</item>
+    </style>
+    <style name="AmoledAppTheme.RosePine.NoActionBar" parent="AmoledAppTheme.RosePine.NoActionBarBase" />
+    <style name="DayNightPreferenceTheme.AmoledRosePine" parent="AmoledAppTheme.RosePine">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="AmoledAppTheme.Dracula" parent="AmoledAppTheme">
+        <item name="colorAccent">@color/dracula_colorAccent</item>
+        <item name="colorSecondary">@color/dracula_link_color</item>
+        <item name="link_color_contrast">@color/dracula_link_color_contrast</item>
+        <item name="menu_tile_icon">@color/dracula_colorAccent</item>
+        <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
+        <item name="smart_nav_fab_icon">@color/dracula_link_color</item>
+        <item name="colorControlActivated">@color/dracula_colorAccent</item>
+        <item name="android:colorControlActivated">@color/dracula_colorAccent</item>
+    </style>
+    <style name="AmoledAppTheme.Dracula.NoActionBarBase" parent="AmoledAppTheme.Dracula">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/amoled_navigation_bar_color</item>
+    </style>
+    <style name="AmoledAppTheme.Dracula.NoActionBar" parent="AmoledAppTheme.Dracula.NoActionBarBase" />
+    <style name="DayNightPreferenceTheme.AmoledDracula" parent="AmoledAppTheme.Dracula">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
 </resources>

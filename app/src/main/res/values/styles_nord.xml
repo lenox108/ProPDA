@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="DayNightAppTheme.Nord" parent="DayNightAppTheme">
+        <item name="colorPrimary">@color/nord_colorPrimary</item>
+        <item name="colorPrimaryDark">@color/nord_colorPrimaryDark</item>
+        <item name="colorAccent">@color/nord_colorAccent</item>
+        <item name="colorSecondary">@color/nord_link_color</item>
+        <item name="colorOnSecondary">@color/nord_link_color_contrast</item>
+        <item name="link_color_contrast">@color/nord_link_color_contrast</item>
+        <item name="contrast_text_color">@color/nord_contrast_text_color</item>
+        <item name="colorSurfaceContainerLowest">@color/nord_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/nord_background_base</item>
+        <item name="colorSurfaceContainer">@color/nord_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/nord_background_for_cards</item>
+        <item name="colorSurfaceContainerHighest">@color/nord_background_for_cards</item>
+        <item name="background_for_lists">@color/nord_background_for_lists</item>
+        <item name="divider_line_bottom_nav">@color/nord_divider_line_bottom_nav</item>
+        <item name="attachment_overlay_bg">@color/nord_attachment_overlay_bg</item>
+        <item name="attachment_description_bg">@color/nord_attachment_description_bg</item>
+        <item name="attachment_text">@color/nord_attachment_text</item>
+        <item name="msg_panel_tooltip_bg">@color/nord_msg_panel_tooltip_bg</item>
+        <item name="profile_overlay_bg">@color/nord_profile_overlay_bg</item>
+        <item name="img_viewer_toolbar">@color/nord_img_viewer_toolbar</item>
+        <item name="icon_base">@color/nord_icon_base</item>
+        <item name="menu_tile_icon">@color/nord_colorAccent</item>
+        <item name="icon_base_inverse">@color/dark_icon_base</item>
+        <item name="icon_toolbar">@color/nord_icon_toolbar</item>
+        <item name="icon_toolbar_inverse">@color/dark_icon_toolbar</item>
+        <item name="chrome_plane_background">@color/nord_card_background</item>
+        <item name="main_toolbar_accent_surface">@color/nord_main_toolbar_accent_surface</item>
+        <item name="main_toolbar_stroke_width">1dp</item>
+        <item name="main_toolbar_stroke_color">@color/nord_main_toolbar_stroke</item>
+        <item name="list_plate_stroke_width">1dp</item>
+        <item name="list_plate_stroke_color">@color/nord_divider_line</item>
+        <item name="smart_nav_fab_background">@color/nord_colorAccent</item>
+        <item name="smart_nav_fab_icon">@color/nord_link_color_contrast</item>
+        <item name="actionModeBackground">@color/nord_colorPrimary</item>
+        <item name="android:windowBackground">@color/nord_background_base</item>
+        <item name="android:navigationBarColor">@color/nord_navigation_bar_color</item>
+        <item name="colorSurface">@color/nord_card_background</item>
+        <item name="colorOnSurface">@color/nord_default_text_color</item>
+        <item name="colorOnPrimary">@color/nord_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/nord_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/nord_default_text_color</item>
+        <item name="colorSecondaryContainer">@color/nord_background_for_cards</item>
+        <item name="colorOnSecondaryContainer">@color/nord_default_text_color</item>
+        <item name="colorSurfaceVariant">@color/nord_background_for_cards</item>
+        <item name="colorOnSurfaceVariant">@color/nord_second_text_color</item>
+        <item name="colorOutline">@color/nord_divider_line</item>
+        <item name="colorOutlineVariant">@color/nord_divider_line</item>
+        <item name="colorControlHighlight">@color/nord_selection</item>
+        <item name="android:colorControlHighlight">@color/nord_selection</item>
+        <item name="colorControlActivated">?attr/colorAccent</item>
+        <item name="android:colorControlActivated">?attr/colorAccent</item>
+        <item name="is_use_light_status_bar">@bool/use_light_status_bar_for_palette</item>
+        <item name="app_bar_overlay">@style/DayNightAppTheme.Nord.AppBarOverlay</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Nord.PopupOverlay</item>
+        <item name="alertDialogTheme">@style/DayNightAppTheme.Nord.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/DayNightAppTheme.Nord.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Nord.BottomSheetDialog</item>
+    </style>
+
+    <style name="DayNightAppTheme.Nord.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:colorBackground">@color/nord_card_background</item>
+        <item name="colorAccent">@color/nord_colorAccent</item>
+        <item name="colorPrimary">@color/nord_link_color</item>
+        <item name="colorOnSurface">@color/nord_default_text_color</item>
+        <item name="colorOnPrimary">@color/nord_link_color_contrast</item>
+        <item name="colorPrimaryContainer">@color/nord_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/nord_default_text_color</item>
+        <item name="colorOutline">@color/nord_divider_line</item>
+        <item name="colorOutlineVariant">@color/nord_divider_line</item>
+        <item name="android:textColorPrimary">@color/nord_default_text_color</item>
+        <item name="android:textColorSecondary">@color/nord_second_text_color</item>
+        <item name="android:textColorHint">@color/nord_second_text_color</item>
+        <item name="colorSurface">@color/nord_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/nord_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Nord.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:colorBackground">@color/nord_colorPrimary</item>
+        <item name="colorSurface">@color/nord_colorPrimary</item>
+        <item name="colorOnSurface">@color/nord_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/nord_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
+    </style>
+
+    <style name="DayNightAppTheme.Nord.NoActionBarBase" parent="DayNightAppTheme.Nord">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/nord_navigation_bar_color</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+    </style>
+
+    <style name="DayNightAppTheme.Nord.NoActionBar" parent="DayNightAppTheme.Nord.NoActionBarBase" />
+
+    <style name="DayNightPreferenceTheme.Nord" parent="DayNightAppTheme.Nord">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Nord.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
+        <item name="android:singleLine">true</item>
+        <item name="colorSurface">@color/nord_card_background</item>
+        <item name="colorControlNormal">@color/nord_icon_toolbar</item>
+        <item name="colorOnSurface">@color/nord_icon_toolbar</item>
+        <item name="actionMenuTextColor">@color/nord_icon_toolbar</item>
+        <item name="android:textColorPrimary">@color/nord_icon_toolbar</item>
+        <item name="android:textColorSecondary">@color/nord_icon_toolbar</item>
+        <item name="colorPrimary">@color/nord_link_color</item>
+        <item name="colorPrimaryContainer">@color/nord_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/nord_default_text_color</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Nord.PopupOverlay</item>
+    </style>
+
+    <style name="DayNightAppTheme.Nord.PopupOverlay" parent="DayNightAppTheme.PopupOverlay">
+        <item name="colorSurface">@color/nord_card_background</item>
+        <item name="colorOnSurface">@color/nord_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/nord_second_text_color</item>
+        <item name="android:textColorPrimary">@color/nord_default_text_color</item>
+        <item name="android:textColorSecondary">@color/nord_second_text_color</item>
+    </style>
+</resources>

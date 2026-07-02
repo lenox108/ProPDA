@@ -35,6 +35,42 @@ class TemplateCssComposer(
     private fun isMinimalReader(): Boolean = paletteResolver.isMinimalReader()
     private fun isAmoled(): Boolean = paletteResolver.isAmoled()
 
+    /** Активна ли одна из новых читающих палитр (Green/Nord/Solarized/…). */
+    private fun isNewReadingPalette(): Boolean =
+            newPaletteSpecs.containsKey(paletteResolver.activePalette())
+
+    /**
+     * Спеки новых читающих палитр для WebView-репейнта форума. Порядок полей —
+     * page(background)/post(card)/elevated/text/text2/link/divider/toolbar,
+     * ЗЕРКАЛИТ нативные `@color/<pid>_*` токены (styles/colors_reading_palettes).
+     */
+    private class PaletteSpec(
+            val base: String, val card: String, val elevated: String,
+            val text: String, val text2: String, val link: String,
+            val divider: String, val toolbar: String,
+    )
+
+    private val newPaletteSpecs: Map<Preferences.Main.UiPalette, Pair<PaletteSpec, PaletteSpec>> = mapOf(
+            Preferences.Main.UiPalette.GREEN_CARE to Pair(
+                    PaletteSpec("#C8E6C9", "#DFF0E1", "#BEDDC1", "#1B3B24", "#4C6B54", "#2E7D4F", "#AACDAD", "#D3EAD4"),
+                    PaletteSpec("#0F1810", "#1E2E20", "#182619", "#CFE9D3", "#8EB398", "#6FCF97", "#2A3B2D", "#17251A")),
+            Preferences.Main.UiPalette.NORD to Pair(
+                    PaletteSpec("#ECEFF4", "#FFFFFF", "#E5E9F0", "#2E3440", "#4C566A", "#5E81AC", "#D8DEE9", "#E5E9F0"),
+                    PaletteSpec("#2E3440", "#3B4252", "#434C5E", "#ECEFF4", "#AEB6C6", "#88C0D0", "#434C5E", "#353C4B")),
+            Preferences.Main.UiPalette.SOLARIZED to Pair(
+                    PaletteSpec("#F3ECD8", "#FDF6E3", "#EEE8D5", "#586E75", "#839496", "#268BD2", "#E3DCC9", "#EEE8D5"),
+                    PaletteSpec("#002B36", "#073642", "#0A404E", "#93A1A1", "#7C8E8E", "#2AA198", "#0E4B5A", "#063240")),
+            Preferences.Main.UiPalette.GRUVBOX to Pair(
+                    PaletteSpec("#F2E5BC", "#FBF1C7", "#EBDBB2", "#3C3836", "#665C54", "#AF3A03", "#DDCCA7", "#EBDBB2"),
+                    PaletteSpec("#282828", "#32302F", "#3C3836", "#EBDBB2", "#A89984", "#FE8019", "#504945", "#32302F")),
+            Preferences.Main.UiPalette.ROSE_PINE to Pair(
+                    PaletteSpec("#FAF4ED", "#FFFAF3", "#F2E9E1", "#575279", "#797593", "#907AA9", "#E5DDD3", "#F2E9E1"),
+                    PaletteSpec("#191724", "#1F1D2E", "#26233A", "#E0DEF4", "#908CAA", "#C4A7E7", "#2A2739", "#1F1D2E")),
+            Preferences.Main.UiPalette.DRACULA to Pair(
+                    PaletteSpec("#F5F0DE", "#FFFBEB", "#ECE6D0", "#1F1F1F", "#57584F", "#6E5EA6", "#E0DAC6", "#ECE6D0"),
+                    PaletteSpec("#282A36", "#343746", "#3C3F51", "#F8F8F2", "#A7ABBE", "#BD93F9", "#44475A", "#2E303E")),
+    )
+
     /** Seed-цвета курируемых палитр — синхронно с AccentPaletteGenerator/AccentApplier. */
     private val curatedSeeds: Map<Preferences.Main.AccentPalette, Int> = mapOf(
             Preferences.Main.AccentPalette.BLUE to 0xFF0B57D0.toInt(),
@@ -62,7 +98,7 @@ class TemplateCssComposer(
      * сохраняют свои выверенные акценты → null.
      */
     private fun resolveDynamicAccentHex(): String? {
-        if (isSepiaReading() || isSepiaBlue() || isMinimalReader()) return null
+        if (isSepiaReading() || isSepiaBlue() || isMinimalReader() || isNewReadingPalette()) return null
         val isNight = dayNightHelper.isNight()
         return runCatching {
             val materialYou = mainPreferencesHolder.getUseMaterialYou()
@@ -102,6 +138,7 @@ class TemplateCssComposer(
             val sepiaReading: Boolean,
             val sepiaBlue: Boolean,
             val minimalReader: Boolean,
+            val newReadingPalette: Any?,
             val amoled: Boolean,
             val materialYou: Boolean,
             val accent: Any?,
@@ -118,6 +155,7 @@ class TemplateCssComposer(
             sepiaReading = isSepiaReading(),
             sepiaBlue = isSepiaBlue(),
             minimalReader = isMinimalReader(),
+            newReadingPalette = if (isNewReadingPalette()) paletteResolver.activePalette() else null,
             amoled = isAmoled(),
             materialYou = mainPreferencesHolder.getUseMaterialYou(),
             accent = mainPreferencesHolder.getAccentPalette(),
@@ -144,6 +182,7 @@ class TemplateCssComposer(
                 getSepiaReadingOverrideCss(),
                 getSepiaBlueOverrideCss(),
                 getMinimalReaderOverrideCss(),
+                getNewReadingPaletteOverrideCss(),
                 getAmoledOverrideCss(),
                 getForumSurfaceOverrideCss(),
                 getThemeLayoutSafetyCss(),
@@ -379,6 +418,7 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
             isSepiaReading() -> if (dayNightHelper.isNight()) "#C9975B" else "#8A5A2B"
             isSepiaBlue() -> if (dayNightHelper.isNight()) "#8FB3C8" else "#4F7896"
             isMinimalReader() -> if (dayNightHelper.isNight()) "#8DA3B8" else "#7C8FA1"
+            isNewReadingPalette() -> activeNewPaletteColors().link
             isAmoled() -> "#9E9E9E"
             else -> if (dayNightHelper.isNight()) "#78B8E6" else "#2177AF"
         }
@@ -558,7 +598,7 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
      * «где остановился» (см. CAUSE-2 в getThemeLayoutSafetyCss).
      */
     private fun getForumSurfaceOverrideCss(): String {
-        if (isSepiaReading() || isSepiaBlue() || isMinimalReader() || isAmoled()) return ""
+        if (isSepiaReading() || isSepiaBlue() || isMinimalReader() || isNewReadingPalette() || isAmoled()) return ""
         val accentHex = resolveDynamicAccentHex() ?: return ""
         val isDark = dayNightHelper.isNight()
         val materialYou = mainPreferencesHolder.getUseMaterialYou() &&
@@ -610,6 +650,377 @@ html, body {
             Timber.tag("ForumAccent").d("materialYou=%s dark=%s accent=%s", materialYou, isDark, accentHex)
         }
         return "<style>\n:root {\n$root}\n$rules</style>"
+    }
+
+    /** rgba() из #RRGGBB для полупрозрачных акцент-оверлеев. */
+    private fun rgba(hex: String, alpha: Double): String {
+        val v = hex.removePrefix("#")
+        val r = v.substring(0, 2).toInt(16)
+        val g = v.substring(2, 4).toInt(16)
+        val b = v.substring(4, 6).toInt(16)
+        return "rgba($r, $g, $b, $alpha)"
+    }
+
+    private fun colorsFromSpec(s: PaletteSpec, shadow: String): SepiaReadingCssColors =
+            SepiaReadingCssColors(
+                    background = s.base, card = s.card, surface = s.elevated,
+                    toolbar = s.toolbar, border = s.divider,
+                    primaryText = s.text, secondaryText = s.text2, link = s.link,
+                    button = rgba(s.link, 0.12), buttonActive = rgba(s.link, 0.20),
+                    actionButtonBorder = s.divider, buttonShadow = shadow,
+                    tapHighlight = rgba(s.link, 0.22))
+
+    /** AMOLED-вариант новой палитры: чистый чёрный фон + акцент/текст из dark-спека. */
+    private fun amoledColorsFromSpec(s: PaletteSpec): SepiaReadingCssColors =
+            SepiaReadingCssColors(
+                    background = "#000000", card = "#000000", surface = "#0A0A0A",
+                    toolbar = "#000000", border = "#1A1A1A",
+                    primaryText = s.text, secondaryText = s.text2, link = s.link,
+                    button = rgba(s.link, 0.14), buttonActive = rgba(s.link, 0.22),
+                    actionButtonBorder = "#242424", buttonShadow = "rgba(0, 0, 0, 0.00)",
+                    tapHighlight = rgba(s.link, 0.24))
+
+    /** Разрешённые цвета активной новой читающей палитры (по режиму). */
+    private fun activeNewPaletteColors(): SepiaReadingCssColors {
+        val specs = newPaletteSpecs.getValue(paletteResolver.activePalette())
+        val (light, dark) = specs
+        return when {
+            isAmoled() -> amoledColorsFromSpec(dark)
+            dayNightHelper.isNight() -> colorsFromSpec(dark, "rgba(0, 0, 0, 0.18)")
+            else -> colorsFromSpec(light, "rgba(0, 0, 0, 0.12)")
+        }
+    }
+
+    /**
+     * WebView-репейнт форума для новых читающих палитр (Green/Nord/Solarized/
+     * Gruvbox/Rosé Pine/Dracula). Тот же полный набор селекторов, что у Sepia,
+     * но параметризован цветами палитры (--rp-*). Самодостаточен: не следует за
+     * Material You/акцентом (как остальные читающие палитры).
+     */
+    private fun getNewReadingPaletteOverrideCss(): String {
+        if (!isNewReadingPalette()) return ""
+        val c = activeNewPaletteColors()
+        val css = """
+:root {
+    --surface-background: ${'$'}{c.background};
+    --surface-card: ${'$'}{c.card};
+    --surface-elevated: ${'$'}{c.surface};
+    --surface-divider: ${'$'}{c.border};
+    --surface-text-primary: ${'$'}{c.primaryText};
+    --surface-text-secondary: ${'$'}{c.secondaryText};
+    --surface-icon: ${'$'}{c.secondaryText};
+    --surface-accent: ${'$'}{c.link};
+    --surface-control: ${'$'}{c.button};
+    --surface-control-active: ${'$'}{c.buttonActive};
+    --topic-action-icon-color: var(--rp-link);
+    --topic-pagination-surface: ${'$'}{c.toolbar};
+    --topic-pagination-icon: ${'$'}{c.primaryText};
+    --topic-pagination-icon-disabled: ${'$'}{c.primaryText};
+    --surface-radius-small: 0.375rem;
+    --surface-radius-medium: 0.75rem;
+    --surface-radius-large: 0.875rem;
+    --rp-bg: ${'$'}{c.background};
+    --rp-card: ${'$'}{c.card};
+    --rp-surface: ${'$'}{c.surface};
+    --rp-text: ${'$'}{c.primaryText};
+    --rp-text-secondary: ${'$'}{c.secondaryText};
+    --rp-link: ${'$'}{c.link};
+    --rp-border: ${'$'}{c.border};
+    --rp-toolbar: ${'$'}{c.toolbar};
+    --rp-button: ${'$'}{c.button};
+    --rp-button-active: ${'$'}{c.buttonActive};
+    --rp-action-button-border: ${'$'}{c.actionButtonBorder};
+    --rp-button-shadow: ${'$'}{c.buttonShadow};
+    --rp-tap-highlight: ${'$'}{c.tapHighlight};
+}
+html, body {
+    background: var(--rp-bg) !important;
+    color: var(--rp-text) !important;
+}
+a {
+    color: var(--rp-link) !important;
+    -webkit-tap-highlight-color: var(--rp-tap-highlight) !important;
+}
+button,
+.btn {
+    color: var(--rp-link) !important;
+}
+button:active,
+.btn:active,
+.aec:active {
+    background: var(--rp-button) !important;
+}
+.post_container,
+.post_container .hat_content,
+.post_container .post_header,
+.post_container .post_body,
+.post_container .post_footer,
+.topic_hat_fixed,
+.topic_hat_entry,
+.poll,
+.poll > .title,
+.poll > .body,
+.poll > .body .questions,
+.poll > .body .questions .question,
+.poll > .body .questions .question > .items,
+.navigation,
+.search_post,
+.search_post_container,
+.search_result_block,
+.bad-search-result,
+.news-detail-header,
+.news-comments-entry,
+.news_item,
+.news_block,
+.news_container,
+.news_post,
+#news > .content,
+.content,
+.comments,
+.materials,
+.materials .material_item,
+.mess_list > .mess_container .mess,
+.mess_list > .mess_container.our .mess,
+.mess_list > .mess_container.his .mess {
+    background: var(--rp-card) !important;
+    color: var(--rp-text) !important;
+}
+body#qms .wrapper,
+body#qms .mess_list,
+.mess_list > .mess_container,
+.mess_list > .mess_container .mess > .content {
+    background: transparent !important;
+}
+.post_container,
+.poll,
+.navigation,
+.search_post,
+.search_post_container,
+.search_result_block,
+.bad-search-result,
+.news-detail-header,
+.news-comments-entry,
+.news_item,
+.news_block,
+#news > .content,
+.content,
+.comments,
+.materials,
+.materials .material_item,
+.mess_list > .mess_container .mess {
+    box-shadow: inset 0 0 0 1px var(--rp-border) !important;
+}
+.post_header,
+.post_footer,
+.post_title,
+.poll > .title,
+.comments .title,
+.news-detail-header .news-detail-header-text {
+    background: var(--rp-toolbar) !important;
+    border-color: var(--rp-border) !important;
+}
+.post_header .inf,
+.post_header .inf span,
+.post_footer,
+.post_footer *,
+.post_rating,
+.news-detail-header .news-detail-header-meta,
+#search .search_post_id_hint,
+.comments .title,
+.comments .content,
+.materials .material_item .title,
+.poll .votes_info,
+.poll .poll_status {
+    color: var(--rp-text-secondary) !important;
+}
+.post_body,
+#news > .content,
+.content,
+.comments {
+    color: var(--rp-text) !important;
+}
+.post_body a,
+#news > .content a,
+.content a,
+.comments a,
+.post_title a,
+.materials .material_item .title {
+    color: var(--rp-link) !important;
+}
+body#topic .post_container .post_footer {
+    background: var(--rp-card) !important;
+    border-top-color: transparent !important;
+}
+body#topic .post_container .post_header {
+    background: var(--rp-card) !important;
+    border-bottom-color: transparent !important;
+}
+body#topic .post_container .post_footer .post_actions_row {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+.post_container .post_footer .post_actions_row .btn,
+.post_container .post_footer .post_actions_row .btn.rep_up,
+.post_container .post_footer .post_actions_row .btn.rep_down,
+.post_container .post_footer .post_actions_row .btn.reply,
+.post_container .post_footer .post_actions_row .btn.quote {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: var(--topic-action-icon-color) !important;
+    box-shadow: none !important;
+}
+.post_container .post_footer .post_actions_row .btn:active,
+.post_container .post_footer .post_actions_row .btn.rep_up:active,
+.post_container .post_footer .post_actions_row .btn.rep_down:active,
+.post_container .post_footer .post_actions_row .btn.reply:active,
+.post_container .post_footer .post_actions_row .btn.quote:active {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+.post_container .post_footer .post_actions_row .btn > .post-action-icon {
+    color: var(--topic-action-icon-color) !important;
+    fill: none !important;
+    stroke: currentColor !important;
+}
+.post_container .post_footer .post_actions_row .btn > .post-action-stroke-icon,
+.post_container .post_footer .post_actions_row .btn > .post-action-stroke-icon * {
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: var(--post-action-stroke-width, 1.85) !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
+    stroke-opacity: 1 !important;
+    vector-effect: non-scaling-stroke !important;
+}
+.post_container .post_footer .post_actions_row .btn.reply > .post-action-reply-icon,
+.post_container .post_footer .post_actions_row .btn.reply > .post-action-reply-icon *,
+.post_container .post_footer .post_actions_row .btn.quote > .post-action-quote-icon,
+.post_container .post_footer .post_actions_row .btn.quote > .post-action-quote-icon * {
+    stroke-width: var(--post-action-light-stroke-width, 1.2) !important;
+    stroke-opacity: 1 !important;
+}
+.post_container .post_footer .post_actions_row .btn > .rep-action-icon {
+    color: var(--topic-action-icon-color) !important;
+    fill: currentColor !important;
+    stroke: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+.post_container .post_footer .post_actions_row .btn > .rep-action-icon * {
+    fill: currentColor !important;
+    stroke: none !important;
+}
+.post-block,
+blockquote,
+.quote,
+.spoil,
+.hidden,
+.post_body table,
+.poll > .body .questions .question > .items .item.result .range_bar,
+#news > .content blockquote {
+    background: var(--rp-surface) !important;
+    border-color: var(--rp-border) !important;
+}
+body#topic .post-block.spoil {
+    border-top-color: transparent !important;
+    border-bottom-color: transparent !important;
+}
+body#topic .post-block.spoil > .block-title {
+    background: transparent !important;
+    border-bottom: 1px solid var(--rp-border) !important;
+}
+body#topic .post-block.spoil.close > .block-title {
+    border-bottom-color: transparent !important;
+}
+.post-block > .block-title,
+.post-block.spoil > .block-title,
+.poll > .body .questions .question > .title {
+    color: var(--rp-text) !important;
+}
+.poll > .body .questions .question > .items .item.result > .title {
+    background: var(--rp-card) !important;
+    box-shadow: 0.75em 0 0.5em -0.25em var(--rp-card) !important;
+}
+.poll > .body .questions .question > .items .item.result .range_bar .range {
+    background: var(--rp-button-active) !important;
+}
+.poll > .body .buttons > .btn,
+#search a.search_post_btn {
+    background: var(--rp-button) !important;
+    border-color: var(--rp-border) !important;
+    color: var(--rp-link) !important;
+}
+#news > .content div[id*="poll-ajax-frame"].news-poll-normalized .news-poll-browser-button {
+    background: var(--rp-button) !important;
+    border-color: var(--rp-border) !important;
+    color: var(--rp-link) !important;
+    box-shadow: 0 1px 2px var(--rp-button-shadow) !important;
+}
+#news > .content div[id*="poll-ajax-frame"].news-poll-normalized .news-poll-browser-button:active {
+    background: var(--rp-button-active) !important;
+}
+.poll > .body .buttons > .btn.vote {
+    background: var(--rp-link) !important;
+    color: var(--rp-card) !important;
+}
+${newsArticleCtaButtonOverrideCss("var(--rp-link)", "var(--rp-card)")}
+#search .hat_content.close.over_height:after {
+    box-shadow: inset 0 -6rem 3rem -3rem var(--rp-card) !important;
+}
+#news > .content img.app-stable-media,
+#news > .content iframe.app-stable-media,
+.news-detail-header .news-detail-header-image {
+    background: var(--rp-surface) !important;
+}
+.theme_bottom_pagination button {
+    color: var(--topic-pagination-icon) !important;
+}
+.theme_bottom_pagination button.theme_bottom_pagination_current {
+    color: var(--topic-pagination-icon) !important;
+}
+.theme_bottom_pagination button.disabled {
+    color: var(--topic-pagination-icon-disabled) !important;
+}
+.theme_bottom_pagination {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+}
+body#topic {
+    --topic-collapsible-header-color: var(--rp-text);
+    --topic-collapsible-header-icon-color: var(--topic-collapsible-header-color);
+}
+body#topic .post_container.topic_hat_fixed > .hat_button,
+body#topic .post_container.topic_hat_entry > .hat_button,
+body#topic .poll > a.btn.title.aec {
+    color: var(--topic-collapsible-header-color) !important;
+}
+body#topic .post_container.topic_hat_fixed > .hat_button > span,
+body#topic .post_container.topic_hat_entry > .hat_button > span,
+body#topic .poll > a.btn.title.aec > span {
+    color: inherit !important;
+}
+body#topic .post_container.topic_hat_fixed > .hat_button > .icon,
+body#topic .post_container.topic_hat_entry > .hat_button > .icon,
+body#topic .poll > a.btn.title.aec > .icon {
+    color: var(--topic-collapsible-header-icon-color) !important;
+}
+body#topic .post_container.topic_hat_fixed > .hat_button > .icon:after,
+body#topic .post_container.topic_hat_entry > .hat_button > .icon:after,
+body#topic .poll > a.btn.title.aec > .icon:after {
+    border-color: currentColor !important;
+}
+body#topic .post_container.topic_hat_fixed > .hat_button > .icon:before,
+body#topic .post_container.topic_hat_entry > .hat_button > .icon:before,
+body#topic .poll > a.btn.title.aec > .icon:before {
+    background: currentColor !important;
+}
+""".trimIndent()
+        return "<style>\n$css</style>"
     }
 
     private fun getSepiaReadingOverrideCss(): String {

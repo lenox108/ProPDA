@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="DayNightAppTheme.Dracula" parent="DayNightAppTheme">
+        <item name="colorPrimary">@color/dracula_colorPrimary</item>
+        <item name="colorPrimaryDark">@color/dracula_colorPrimaryDark</item>
+        <item name="colorAccent">@color/dracula_colorAccent</item>
+        <item name="colorSecondary">@color/dracula_link_color</item>
+        <item name="colorOnSecondary">@color/dracula_link_color_contrast</item>
+        <item name="link_color_contrast">@color/dracula_link_color_contrast</item>
+        <item name="contrast_text_color">@color/dracula_contrast_text_color</item>
+        <item name="colorSurfaceContainerLowest">@color/dracula_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/dracula_background_base</item>
+        <item name="colorSurfaceContainer">@color/dracula_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/dracula_background_for_cards</item>
+        <item name="colorSurfaceContainerHighest">@color/dracula_background_for_cards</item>
+        <item name="background_for_lists">@color/dracula_background_for_lists</item>
+        <item name="divider_line_bottom_nav">@color/dracula_divider_line_bottom_nav</item>
+        <item name="attachment_overlay_bg">@color/dracula_attachment_overlay_bg</item>
+        <item name="attachment_description_bg">@color/dracula_attachment_description_bg</item>
+        <item name="attachment_text">@color/dracula_attachment_text</item>
+        <item name="msg_panel_tooltip_bg">@color/dracula_msg_panel_tooltip_bg</item>
+        <item name="profile_overlay_bg">@color/dracula_profile_overlay_bg</item>
+        <item name="img_viewer_toolbar">@color/dracula_img_viewer_toolbar</item>
+        <item name="icon_base">@color/dracula_icon_base</item>
+        <item name="menu_tile_icon">@color/dracula_colorAccent</item>
+        <item name="icon_base_inverse">@color/dark_icon_base</item>
+        <item name="icon_toolbar">@color/dracula_icon_toolbar</item>
+        <item name="icon_toolbar_inverse">@color/dark_icon_toolbar</item>
+        <item name="chrome_plane_background">@color/dracula_card_background</item>
+        <item name="main_toolbar_accent_surface">@color/dracula_main_toolbar_accent_surface</item>
+        <item name="main_toolbar_stroke_width">1dp</item>
+        <item name="main_toolbar_stroke_color">@color/dracula_main_toolbar_stroke</item>
+        <item name="list_plate_stroke_width">1dp</item>
+        <item name="list_plate_stroke_color">@color/dracula_divider_line</item>
+        <item name="smart_nav_fab_background">@color/dracula_colorAccent</item>
+        <item name="smart_nav_fab_icon">@color/dracula_link_color_contrast</item>
+        <item name="actionModeBackground">@color/dracula_colorPrimary</item>
+        <item name="android:windowBackground">@color/dracula_background_base</item>
+        <item name="android:navigationBarColor">@color/dracula_navigation_bar_color</item>
+        <item name="colorSurface">@color/dracula_card_background</item>
+        <item name="colorOnSurface">@color/dracula_default_text_color</item>
+        <item name="colorOnPrimary">@color/dracula_default_text_color</item>
+        <item name="colorPrimaryContainer">@color/dracula_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/dracula_default_text_color</item>
+        <item name="colorSecondaryContainer">@color/dracula_background_for_cards</item>
+        <item name="colorOnSecondaryContainer">@color/dracula_default_text_color</item>
+        <item name="colorSurfaceVariant">@color/dracula_background_for_cards</item>
+        <item name="colorOnSurfaceVariant">@color/dracula_second_text_color</item>
+        <item name="colorOutline">@color/dracula_divider_line</item>
+        <item name="colorOutlineVariant">@color/dracula_divider_line</item>
+        <item name="colorControlHighlight">@color/dracula_selection</item>
+        <item name="android:colorControlHighlight">@color/dracula_selection</item>
+        <item name="colorControlActivated">?attr/colorAccent</item>
+        <item name="android:colorControlActivated">?attr/colorAccent</item>
+        <item name="is_use_light_status_bar">@bool/use_light_status_bar_for_palette</item>
+        <item name="app_bar_overlay">@style/DayNightAppTheme.Dracula.AppBarOverlay</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Dracula.PopupOverlay</item>
+        <item name="alertDialogTheme">@style/DayNightAppTheme.Dracula.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/DayNightAppTheme.Dracula.Dialog</item>
+        <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Dracula.BottomSheetDialog</item>
+    </style>
+
+    <style name="DayNightAppTheme.Dracula.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:colorBackground">@color/dracula_card_background</item>
+        <item name="colorAccent">@color/dracula_colorAccent</item>
+        <item name="colorPrimary">@color/dracula_link_color</item>
+        <item name="colorOnSurface">@color/dracula_default_text_color</item>
+        <item name="colorOnPrimary">@color/dracula_link_color_contrast</item>
+        <item name="colorPrimaryContainer">@color/dracula_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/dracula_default_text_color</item>
+        <item name="colorOutline">@color/dracula_divider_line</item>
+        <item name="colorOutlineVariant">@color/dracula_divider_line</item>
+        <item name="android:textColorPrimary">@color/dracula_default_text_color</item>
+        <item name="android:textColorSecondary">@color/dracula_second_text_color</item>
+        <item name="android:textColorHint">@color/dracula_second_text_color</item>
+        <item name="colorSurface">@color/dracula_card_background</item>
+        <item name="colorOnSurfaceVariant">@color/dracula_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Dracula.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:colorBackground">@color/dracula_colorPrimary</item>
+        <item name="colorSurface">@color/dracula_colorPrimary</item>
+        <item name="colorOnSurface">@color/dracula_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/dracula_second_text_color</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+        <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
+    </style>
+
+    <style name="DayNightAppTheme.Dracula.NoActionBarBase" parent="DayNightAppTheme.Dracula">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/dracula_navigation_bar_color</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+    </style>
+
+    <style name="DayNightAppTheme.Dracula.NoActionBar" parent="DayNightAppTheme.Dracula.NoActionBarBase" />
+
+    <style name="DayNightPreferenceTheme.Dracula" parent="DayNightAppTheme.Dracula">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <style name="DayNightAppTheme.Dracula.AppBarOverlay" parent="ThemeOverlay.Material3.ActionBar">
+        <item name="android:singleLine">true</item>
+        <item name="colorSurface">@color/dracula_card_background</item>
+        <item name="colorControlNormal">@color/dracula_icon_toolbar</item>
+        <item name="colorOnSurface">@color/dracula_icon_toolbar</item>
+        <item name="actionMenuTextColor">@color/dracula_icon_toolbar</item>
+        <item name="android:textColorPrimary">@color/dracula_icon_toolbar</item>
+        <item name="android:textColorSecondary">@color/dracula_icon_toolbar</item>
+        <item name="colorPrimary">@color/dracula_link_color</item>
+        <item name="colorPrimaryContainer">@color/dracula_background_for_cards</item>
+        <item name="colorOnPrimaryContainer">@color/dracula_default_text_color</item>
+        <item name="popup_overlay">@style/DayNightAppTheme.Dracula.PopupOverlay</item>
+    </style>
+
+    <style name="DayNightAppTheme.Dracula.PopupOverlay" parent="DayNightAppTheme.PopupOverlay">
+        <item name="colorSurface">@color/dracula_card_background</item>
+        <item name="colorOnSurface">@color/dracula_default_text_color</item>
+        <item name="colorOnSurfaceVariant">@color/dracula_second_text_color</item>
+        <item name="android:textColorPrimary">@color/dracula_default_text_color</item>
+        <item name="android:textColorSecondary">@color/dracula_second_text_color</item>
+    </style>
+</resources>

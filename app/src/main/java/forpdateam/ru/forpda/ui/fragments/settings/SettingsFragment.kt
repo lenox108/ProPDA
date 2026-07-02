@@ -775,6 +775,12 @@ class SettingsFragment : BaseSettingFragment() {
                     Preferences.Main.UiPalette.SEPIA_READING -> R.string.pref_summary_ui_palette_sepia_reading
                     Preferences.Main.UiPalette.SEPIA_BLUE -> R.string.pref_summary_ui_palette_sepia_blue
                     Preferences.Main.UiPalette.MINIMAL_READER -> R.string.pref_summary_ui_palette_minimal_reader
+                    Preferences.Main.UiPalette.GREEN_CARE -> R.string.pref_value_ui_palette_green_care
+                    Preferences.Main.UiPalette.NORD -> R.string.pref_value_ui_palette_nord
+                    Preferences.Main.UiPalette.SOLARIZED -> R.string.pref_value_ui_palette_solarized
+                    Preferences.Main.UiPalette.GRUVBOX -> R.string.pref_value_ui_palette_gruvbox
+                    Preferences.Main.UiPalette.ROSE_PINE -> R.string.pref_value_ui_palette_rose_pine
+                    Preferences.Main.UiPalette.DRACULA -> R.string.pref_value_ui_palette_dracula
                     else -> R.string.pref_summary_ui_palette_system
                 }
         )

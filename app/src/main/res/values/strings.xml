@@ -735,6 +735,12 @@
     <string name="pref_value_ui_palette_sepia_reading">Sepia / Reading</string>
     <string name="pref_value_ui_palette_sepia_blue">Sepia Blue</string>
     <string name="pref_value_ui_palette_minimal_reader">Minimal Reader UI</string>
+    <string name="pref_value_ui_palette_green_care">Зелёная (для глаз)</string>
+    <string name="pref_value_ui_palette_nord">Nord</string>
+    <string name="pref_value_ui_palette_solarized">Solarized</string>
+    <string name="pref_value_ui_palette_gruvbox">Gruvbox</string>
+    <string name="pref_value_ui_palette_rose_pine">Rosé Pine</string>
+    <string name="pref_value_ui_palette_dracula">Dracula</string>
     <string name="pref_message_ui_palette_sepia_disabled">Сепия доступна для светлой, темной и системной темы</string>
 
     <string name="pref_title_show_bottom_arrow">Кнопка открытия нижнего меню</string>
