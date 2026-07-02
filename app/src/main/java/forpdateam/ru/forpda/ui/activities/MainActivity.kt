@@ -24,6 +24,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import forpdateam.ru.forpda.ui.FavoriteShortcuts
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import android.view.animation.BounceInterpolator
@@ -80,6 +82,7 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
     @Inject lateinit var userHolder: forpdateam.ru.forpda.entity.app.profile.IUserHolder
     @Inject lateinit var webViewChecker: WebViewChecker
     @Inject lateinit var permissionHelper: PermissionHelper
+    @Inject lateinit var favoritesCacheRoom: forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
 
     val removeTabListener: (View) -> Unit = { backHandler() }
 
@@ -205,6 +208,18 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         presenter.setIsRestored(savedInstanceState != null)
         intent?.data?.also {
             presenter.setStartLink(it.toString())
+        }
+
+        // Динамические App Shortcuts на топ-избранные темы — long-press по иконке →
+        // сразу в активную ветку. Сначала публикуем кэш из БД (чтобы ярлыки были и
+        // без открытия вкладки избранного), затем следим за изменениями.
+        lifecycleScope.launch {
+            runCatching { favoritesCacheRoom.ensureItemsPublished() }
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                // StateFlow сам дедупает — отдельный distinctUntilChanged не нужен.
+                favoritesCacheRoom.observeItems()
+                        .collect { FavoriteShortcuts.update(this@MainActivity, it) }
+            }
         }
         // Check initial intent (when app is launched from notification)
         if (intent != null && intent.data != null) {
