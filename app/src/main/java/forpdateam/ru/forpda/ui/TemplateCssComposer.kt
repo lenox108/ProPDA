@@ -145,7 +145,7 @@ class TemplateCssComposer(
                 getSepiaBlueOverrideCss(),
                 getMinimalReaderOverrideCss(),
                 getAmoledOverrideCss(),
-                getMaterialYouSurfaceOverrideCss(),
+                getForumSurfaceOverrideCss(),
                 getThemeLayoutSafetyCss(),
                 getTopicPostActionIconCss()
         ).filter { it.isNotBlank() }.joinToString(separator = "\n")
@@ -541,61 +541,52 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
     }
 
     /**
-     * Material You → тело форума (WebView, вариант A). DynamicColors красит только
-     * нативный хром (Android M3-роли), а WebView их не читает — у него свой CSS-слой,
-     * где базовые *_themes.css захардкожены. Здесь мостим системные нейтрали/акцент
-     * Material You (framework `system_*` ресурсы, API 31+) в фон/карточки/текст/ссылки
-     * форума, чтобы тело тем тоже тонировалось под обои — как нативная оболочка.
+     * Тонирование тела форума (WebView) под выбранный акцент / Material You — то же,
+     * что и нативный хром, но WebView не читает Android-M3-роли (у него свой CSS-слой
+     * с захардкоженными *_themes.css), поэтому мостим цвета в CSS вручную.
      *
-     * Строго: только системная палитра (Sepia/Minimal самодостаточны), только при
-     * включённом Material You и API 31+ (иначе `system_*` нет). AMOLED исключён —
-     * там поверхности намеренно чёрные (MaterialYouPolicy.ACCENT_ONLY). Границы
-     * постов (box-shadow) НЕ трогаем — они конфликтуют с кольцом подсветки
+     * Только для системной палитры (Sepia/SepiaBlue/Minimal самодостаточны, AMOLED —
+     * намеренно чёрный). Два режима повторяют поведение нативной оболочки:
+     *  - Material You (API 31+): DynamicColors тонирует ПОВЕРХНОСТИ обоями → в форуме
+     *    красим фон/карточки/текст системными нейтралями + ссылки системным акцентом.
+     *  - Курируемый/произвольный акцент (MY выкл): accent-оверлей НЕ трогает
+     *    поверхности (нейтральны) → в форуме поверхности НЕ трогаем, красим только
+     *    ссылки/кнопки акцентом (из seed через ту же схему, что resolveDynamicAccentHex).
+     *  - NEUTRAL без MY: resolveDynamicAccentHex()==null → ничего (ссылки дефолтные).
+     *
+     * Границы постов (box-shadow) НЕ трогаем — конфликт с кольцом подсветки
      * «где остановился» (см. CAUSE-2 в getThemeLayoutSafetyCss).
      */
-    private fun getMaterialYouSurfaceOverrideCss(): String {
+    private fun getForumSurfaceOverrideCss(): String {
         if (isSepiaReading() || isSepiaBlue() || isMinimalReader() || isAmoled()) return ""
-        if (!mainPreferencesHolder.getUseMaterialYou()) return ""
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return ""
+        val accentHex = resolveDynamicAccentHex() ?: return ""
         val isDark = dayNightHelper.isNight()
-        fun hex(resId: Int): String = "#%06X".format(context.getColor(resId) and 0xFFFFFF)
-        val bg: String; val card: String; val text: String
-        val text2: String; val divider: String; val accent: String
-        if (isDark) {
-            bg = hex(android.R.color.system_neutral1_900)
-            card = hex(android.R.color.system_neutral1_800)
-            text = hex(android.R.color.system_neutral1_50)
-            text2 = hex(android.R.color.system_neutral2_200)
-            divider = hex(android.R.color.system_neutral2_700)
-            accent = hex(android.R.color.system_accent1_200)
-        } else {
-            bg = hex(android.R.color.system_neutral1_50)
-            card = hex(android.R.color.system_neutral1_10)
-            text = hex(android.R.color.system_neutral1_900)
-            text2 = hex(android.R.color.system_neutral2_700)
-            divider = hex(android.R.color.system_neutral2_100)
-            accent = hex(android.R.color.system_accent1_600)
-        }
-        if (BuildConfig.DEBUG) {
-            Timber.tag("MYForum").d("dark=%s bg=%s card=%s text=%s text2=%s accent=%s",
-                    isDark, bg, card, text, text2, accent)
-        }
-        val css = """
-:root {
-    --my-bg: $bg;
-    --my-card: $card;
-    --my-text: $text;
-    --my-text2: $text2;
-    --my-divider: $divider;
-    --my-accent: $accent;
-    --surface-accent: $accent;
-}
+        val materialYou = mainPreferencesHolder.getUseMaterialYou() &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+        val root = StringBuilder("    --forum-accent: $accentHex;\n    --surface-accent: $accentHex;\n")
+        val rules = StringBuilder(
+                "a { color: var(--forum-accent) !important; }\n" +
+                "button, .btn { color: var(--forum-accent) !important; }\n")
+
+        if (materialYou) {
+            fun hex(resId: Int): String = "#%06X".format(context.getColor(resId) and 0xFFFFFF)
+            val bg: String; val card: String; val text: String
+            if (isDark) {
+                bg = hex(android.R.color.system_neutral1_900)
+                card = hex(android.R.color.system_neutral1_800)
+                text = hex(android.R.color.system_neutral1_50)
+            } else {
+                bg = hex(android.R.color.system_neutral1_50)
+                card = hex(android.R.color.system_neutral1_10)
+                text = hex(android.R.color.system_neutral1_900)
+            }
+            root.append("    --forum-bg: $bg;\n    --forum-card: $card;\n    --forum-text: $text;\n")
+            rules.append("""
 html, body {
-    background: var(--my-bg) !important;
-    color: var(--my-text) !important;
+    background: var(--forum-bg) !important;
+    color: var(--forum-text) !important;
 }
-a { color: var(--my-accent) !important; }
-button, .btn { color: var(--my-accent) !important; }
 .post_container,
 .post_container .hat_content,
 .post_container .post_header,
@@ -610,11 +601,15 @@ button, .btn { color: var(--my-accent) !important; }
 .news_container, .news_post, #news > .content, .content, .comments,
 .materials, .materials .material_item,
 .mess_list > .mess_container .mess {
-    background: var(--my-card) !important;
-    color: var(--my-text) !important;
+    background: var(--forum-card) !important;
+    color: var(--forum-text) !important;
 }
-""".trimIndent()
-        return "<style>\n$css</style>"
+""")
+        }
+        if (BuildConfig.DEBUG) {
+            Timber.tag("ForumAccent").d("materialYou=%s dark=%s accent=%s", materialYou, isDark, accentHex)
+        }
+        return "<style>\n:root {\n$root}\n$rules</style>"
     }
 
     private fun getSepiaReadingOverrideCss(): String {
