@@ -676,11 +676,14 @@ html, body {
     /** AMOLED-вариант новой палитры: чистый чёрный фон + акцент/текст из dark-спека. */
     private fun amoledColorsFromSpec(s: PaletteSpec): SepiaReadingCssColors =
             SepiaReadingCssColors(
-                    background = "#000000", card = "#000000", surface = "#0A0A0A",
-                    toolbar = "#000000", border = "#1A1A1A",
+                    // AMOLED: карточки постов остаются чистым чёрным, но граница и elevated-
+                    // поверхность (цитаты/вложения) заметно светлее — иначе посты сливались с
+                    // фоном (border #1A1A1A на #000 был невидим).
+                    background = "#000000", card = "#000000", surface = "#17171C",
+                    toolbar = "#000000", border = "#34343B",
                     primaryText = s.text, secondaryText = s.text2, link = s.link,
                     button = rgba(s.link, 0.14), buttonActive = rgba(s.link, 0.22),
-                    actionButtonBorder = "#242424", buttonShadow = "rgba(0, 0, 0, 0.00)",
+                    actionButtonBorder = "#34343B", buttonShadow = "rgba(0, 0, 0, 0.00)",
                     tapHighlight = rgba(s.link, 0.24))
 
     /** Разрешённые цвета активной новой читающей палитры (по режиму). */
@@ -705,36 +708,36 @@ html, body {
         val c = activeNewPaletteColors()
         val css = """
 :root {
-    --surface-background: ${'$'}{c.background};
-    --surface-card: ${'$'}{c.card};
-    --surface-elevated: ${'$'}{c.surface};
-    --surface-divider: ${'$'}{c.border};
-    --surface-text-primary: ${'$'}{c.primaryText};
-    --surface-text-secondary: ${'$'}{c.secondaryText};
-    --surface-icon: ${'$'}{c.secondaryText};
-    --surface-accent: ${'$'}{c.link};
-    --surface-control: ${'$'}{c.button};
-    --surface-control-active: ${'$'}{c.buttonActive};
+    --surface-background: ${c.background};
+    --surface-card: ${c.card};
+    --surface-elevated: ${c.surface};
+    --surface-divider: ${c.border};
+    --surface-text-primary: ${c.primaryText};
+    --surface-text-secondary: ${c.secondaryText};
+    --surface-icon: ${c.secondaryText};
+    --surface-accent: ${c.link};
+    --surface-control: ${c.button};
+    --surface-control-active: ${c.buttonActive};
     --topic-action-icon-color: var(--rp-link);
-    --topic-pagination-surface: ${'$'}{c.toolbar};
-    --topic-pagination-icon: ${'$'}{c.primaryText};
-    --topic-pagination-icon-disabled: ${'$'}{c.primaryText};
+    --topic-pagination-surface: ${c.toolbar};
+    --topic-pagination-icon: ${c.primaryText};
+    --topic-pagination-icon-disabled: ${c.primaryText};
     --surface-radius-small: 0.375rem;
     --surface-radius-medium: 0.75rem;
     --surface-radius-large: 0.875rem;
-    --rp-bg: ${'$'}{c.background};
-    --rp-card: ${'$'}{c.card};
-    --rp-surface: ${'$'}{c.surface};
-    --rp-text: ${'$'}{c.primaryText};
-    --rp-text-secondary: ${'$'}{c.secondaryText};
-    --rp-link: ${'$'}{c.link};
-    --rp-border: ${'$'}{c.border};
-    --rp-toolbar: ${'$'}{c.toolbar};
-    --rp-button: ${'$'}{c.button};
-    --rp-button-active: ${'$'}{c.buttonActive};
-    --rp-action-button-border: ${'$'}{c.actionButtonBorder};
-    --rp-button-shadow: ${'$'}{c.buttonShadow};
-    --rp-tap-highlight: ${'$'}{c.tapHighlight};
+    --rp-bg: ${c.background};
+    --rp-card: ${c.card};
+    --rp-surface: ${c.surface};
+    --rp-text: ${c.primaryText};
+    --rp-text-secondary: ${c.secondaryText};
+    --rp-link: ${c.link};
+    --rp-border: ${c.border};
+    --rp-toolbar: ${c.toolbar};
+    --rp-button: ${c.button};
+    --rp-button-active: ${c.buttonActive};
+    --rp-action-button-border: ${c.actionButtonBorder};
+    --rp-button-shadow: ${c.buttonShadow};
+    --rp-tap-highlight: ${c.tapHighlight};
 }
 html, body {
     background: var(--rp-bg) !important;
@@ -926,6 +929,23 @@ blockquote,
 #news > .content blockquote {
     background: var(--rp-surface) !important;
     border-color: var(--rp-border) !important;
+}
+.attach_block,
+.ipb-attach {
+    background: var(--rp-surface) !important;
+    border-color: var(--rp-border) !important;
+}
+.attach_block .title,
+.attach_block .title a,
+.ipb-attach .title {
+    color: var(--rp-text) !important;
+}
+.attach_block .desc,
+.ipb-attach .desc {
+    color: var(--rp-text-secondary) !important;
+}
+.attach_block .icon {
+    background: var(--rp-link) !important;
 }
 body#topic .post-block.spoil {
     border-top-color: transparent !important;
