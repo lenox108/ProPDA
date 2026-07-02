@@ -89,9 +89,12 @@ class TemplateCssComposer(
     }
 
     /**
-     * Cache key for the last [compose] result. The composed CSS depends only on
-     * the font mode plus the night/palette flags, so we memoize on exactly those
-     * inputs and reuse the same [String] instance until one of them changes.
+     * Cache key for the last [compose] result. The composed CSS depends on the
+     * font mode, night/palette flags И на акцент (--ppda-accent) + Material You
+     * (тонирование тела форума). Раньше акцент/стиль/MY НЕ входили в ключ — если
+     * их переключали в рамках одной сессии (recreate, без рестарта процесса),
+     * композер-синглтон отдавал устаревший CSS до перезапуска приложения. Теперь
+     * входят — CSS пересобирается сразу.
      */
     private data class CssConfig(
             val fontMode: Any?,
@@ -100,6 +103,10 @@ class TemplateCssComposer(
             val sepiaBlue: Boolean,
             val minimalReader: Boolean,
             val amoled: Boolean,
+            val materialYou: Boolean,
+            val accent: Any?,
+            val accentStyle: Any?,
+            val accentCustomColor: Int,
     )
 
     private var cachedConfig: CssConfig? = null
@@ -112,6 +119,10 @@ class TemplateCssComposer(
             sepiaBlue = isSepiaBlue(),
             minimalReader = isMinimalReader(),
             amoled = isAmoled(),
+            materialYou = mainPreferencesHolder.getUseMaterialYou(),
+            accent = mainPreferencesHolder.getAccentPalette(),
+            accentStyle = mainPreferencesHolder.getAccentStyle(),
+            accentCustomColor = mainPreferencesHolder.getAccentCustomColor(),
     )
 
     /**
