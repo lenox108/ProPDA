@@ -5,7 +5,6 @@ import forpdateam.ru.forpda.ui.fragments.favorites.FavoritesComposeFragment
 import forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment
 import forpdateam.ru.forpda.ui.fragments.news.main.NewsMainComposeFragment
 import forpdateam.ru.forpda.ui.fragments.news.main.NewsMainFragment
-import forpdateam.ru.forpda.ui.fragments.qms.QmsContactsComposeFragment
 import forpdateam.ru.forpda.ui.fragments.qms.QmsContactsFragment
 import org.junit.After
 import org.junit.Assert.assertSame
@@ -21,26 +20,18 @@ class TabHelperComposeFlagRoutingTest {
 
     @After
     fun resetFlags() {
-        TabHelper.useComposeQmsContacts = false
         TabHelper.useComposeArticleList = false
         TabHelper.useComposeFavorites = false
     }
 
     @Test
-    fun qmsContacts_defaultsToLegacy() {
-        TabHelper.useComposeQmsContacts = false
+    fun qmsContacts_routesToComposeHost() {
+        // QmsContactsFragment теперь сам Compose-хост (флаг/стаб удалены).
         val fragment = TabHelper.createTab(Screen.QmsContacts())
         assertTrue(
-            "default flag should route to legacy QmsContactsFragment, got ${fragment::class.java.simpleName}",
+            "QmsContacts should route to QmsContactsFragment (Compose host), got ${fragment::class.java.simpleName}",
             fragment is QmsContactsFragment
         )
-    }
-
-    @Test
-    fun qmsContacts_flagTrueRoutesToCompose() {
-        TabHelper.useComposeQmsContacts = true
-        val fragment = TabHelper.createTab(Screen.QmsContacts())
-        assertSame(QmsContactsComposeFragment::class.java, fragment::class.java)
     }
 
     @Test
