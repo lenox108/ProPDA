@@ -390,6 +390,7 @@ class NotificationsService : Service() {
         builder.setContentIntent(notifyPendingIntent)
 
         configureNotification(builder)
+        NotificationActions.apply(this, builder, event)
 
         getNotificationManager().cancel(event.notifyId())
         notifySafe(event.notifyId(), builder.build(), event, channelId)

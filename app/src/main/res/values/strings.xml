@@ -623,6 +623,9 @@
     <string name="notification_title_qms_fallback">Сообщения 4PDA</string>
     <string name="notification_title_mention_Nick">%1$s ответил/упомянул вас</string>
     <string name="notification_title_mention_fallback">Вас упомянули</string>
+    <string name="notification_action_reply">Ответить</string>
+    <string name="notification_action_reply_hint">Сообщение…</string>
+    <string name="notification_action_mark_read">Прочитано</string>
     <string name="notification_title_favorite">Новые сообщения в избранной теме</string>
     <string name="notification_content_mention_fallback">Откройте тему, чтобы посмотреть ответ</string>
     <string name="notification_content_theme_fallback">Откройте избранное, чтобы посмотреть новые сообщения</string>
