@@ -185,6 +185,7 @@ class EventsCheckWorker @AssistedInject constructor(
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+        NotificationActions.apply(appContext, builder, event)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (appContext.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)

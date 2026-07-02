@@ -161,6 +161,11 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Действия из шторки уведомлений: «Ответить» (QMS) / «Прочитано». -->
+        <receiver
+            android:name=".notifications.NotificationActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

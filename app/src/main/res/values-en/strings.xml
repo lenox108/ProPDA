@@ -509,6 +509,9 @@
     <string name="notification_title_qms_fallback">4PDA messages</string>
     <string name="notification_title_mention_Nick">%1$s replied to/mentioned you</string>
     <string name="notification_title_mention_fallback">You were mentioned</string>
+    <string name="notification_action_reply">Reply</string>
+    <string name="notification_action_reply_hint">Message…</string>
+    <string name="notification_action_mark_read">Mark read</string>
     <string name="notification_title_favorite">New posts in a favorite topic</string>
     <string name="notification_content_mention_fallback">Open the topic to view the reply</string>
     <string name="notification_content_theme_fallback">Open favorites to view new posts</string>
