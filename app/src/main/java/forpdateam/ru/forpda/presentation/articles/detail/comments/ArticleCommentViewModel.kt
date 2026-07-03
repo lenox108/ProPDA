@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import forpdateam.ru.forpda.entity.remote.news.Comment
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.interactors.news.ArticleInteractor
+import forpdateam.ru.forpda.model.data.remote.api.news.stripNewsCommentEditedMarker
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.articles.detail.comments.ArticleCommentsPagination
@@ -49,6 +50,12 @@ class ArticleCommentViewModel(
     private var commentsPrefetchStarted = false
 
     private var firstShow: Boolean = true
+    private var deepLinkReloadTried: Boolean = false
+    private var deepLinkScrollArmed: Boolean = false
+    private var deepLinkPaginateCount: Int = 0
+    // «Потолок» догрузки: сервер повторяет ту же партию и больше не отдаёт новых комментов, хотя
+    // expectedCount>rendered (фантомный «Показать ещё (N)»). Ставится, когда loadMore не дал прироста.
+    private var loadMoreCeilingReached: Boolean = false
     private var allComments = ArrayList<Comment>()
     private var serverHasMore: Boolean = false
     private var loadingMoreComments: Boolean = false
@@ -80,6 +87,10 @@ class ArticleCommentViewModel(
         serverHasMore = false
         loadingMoreComments = false
         firstShow = true
+        deepLinkReloadTried = false
+        deepLinkScrollArmed = false
+        deepLinkPaginateCount = 0
+        loadMoreCeilingReached = false
         _commentsState.value = ArticleCommentsState.NotLoaded
         FpdaDebugLog.log(
                 FpdaDebugLog.TAG_COMMENTS_SECTION,
@@ -131,7 +142,13 @@ class ArticleCommentViewModel(
                                 }
                             }
                             is ArticleCommentsState.Loaded -> {
-                                val spuriousBulkReplay = !loadingMoreComments &&
+                                // A reply/comment posted while comments are already Loaded arrives here
+                                // (not in the Loading branch). Consume the pending scroll target first: a
+                                // post is never a "spurious replay", so it must not be suppressed by the
+                                // bulk-replay guard, and the freshly posted comment must be published.
+                                val scrollTargetId = articleInteractor.takePendingScrollCommentId()
+                                val postedByUser = scrollTargetId > 0
+                                val spuriousBulkReplay = !loadingMoreComments && !postedByUser &&
                                         list.size > previousAllCount + InlineCommentsBatchConfig.BATCH_SIZE
                                 if (spuriousBulkReplay) {
                                     FpdaDebugLog.log(
@@ -149,6 +166,15 @@ class ArticleCommentViewModel(
                                         current.canLoadMore != serverHasMore
                                 ) {
                                     publishVisibleComments(appendFromIndex = 0)
+                                }
+                                if (scrollTargetId > 0) {
+                                    // Emit even when the id is not in this list snapshot yet — the
+                                    // fragment arms the target by comment id and re-asserts the scroll on
+                                    // every subsequent render until the node exists in the DOM.
+                                    val index = list.indexOfFirst { it.id == scrollTargetId }
+                                    _uiEvents.emit(
+                                            ArticleCommentUiEvent.ScrollToComment(index, scrollTargetId)
+                                    )
                                 }
                             }
                             else -> {
@@ -180,13 +206,127 @@ class ArticleCommentViewModel(
                                 }
                             }
                         }
+                        maybeArmDeepLinkCommentScroll(list)
+                        ensureDeepLinkCommentLoaded(list)
                     }
+        }
+
+        // Двигаем последовательную догрузку deep-link комментов по завершении каждой загрузки: emit из
+        // observeComments может прийти, пока идёт загрузка (_refreshing=true) и шаг пропустится — а этот
+        // коллектор ловит переход refreshing→false и запускает следующий шаг (форс-релоад → пагинация).
+        scope.launch {
+            _refreshing.collect { isRefreshing ->
+                if (!isRefreshing) {
+                    (_commentsState.value as? ArticleCommentsState.Loaded)?.let { loaded ->
+                        ensureDeepLinkCommentLoaded(loaded.comments)
+                    }
+                }
+            }
         }
 
         scope.launch {
             authHolder.observe().collect {
                 _messageFieldVisible.value = it.isAuth()
             }
+        }
+    }
+
+    /**
+     * Opening a news article from a mention/deep-link can hit a stale cached comment tree whose
+     * count already looks "complete", so the underfetch guard won't refetch and the freshly posted
+     * comment that mentioned the user is simply missing. If the deep-link target comment isn't in
+     * the loaded list, force one fresh load and arm the scroll so it lands once it renders. One-shot
+     * per article (see [deepLinkReloadTried]) to avoid loops when the comment is genuinely gone.
+     */
+    /**
+     * Center the deep-link/mention target comment the first time it actually appears in the loaded
+     * list — regardless of which batch or collect emit surfaced it. The `Loading`+`firstShow` path
+     * only fires when the target is already in the very first snapshot, and
+     * the old force-reload path armed a scroll only when the target was *missing*; a
+     * target that loads in a later batch (or was present all along after a slow load) was therefore
+     * never scrolled to, leaving the reader parked at the top of the comments section instead of on
+     * the comment that mentioned them. Emitting [ArticleCommentUiEvent.ScrollToComment] here (once,
+     * guarded by [deepLinkScrollArmed]) lets the fragment arm + re-assert the scroll until the node
+     * renders. No-op when there is no deep-link target.
+     */
+    private fun maybeArmDeepLinkCommentScroll(list: List<Comment>) {
+        if (deepLinkScrollArmed) return
+        val targetCommentId = articleInteractor.initData.commentId
+        if (targetCommentId <= 0) return
+        val index = list.indexOfFirst { it.id == targetCommentId }
+        if (index < 0) return
+        deepLinkScrollArmed = true
+        FpdaDebugLog.log(
+                FpdaDebugLog.TAG_COMMENTS_SECTION,
+                "deeplink_comment_scroll_armed",
+                mapOf(
+                        "articleId" to boundArticleId,
+                        "targetCommentId" to targetCommentId,
+                        "index" to index,
+                )
+        )
+        scope.launch { _uiEvents.emit(ArticleCommentUiEvent.ScrollToComment(index, targetCommentId)) }
+    }
+
+    /**
+     * Единый последовательный загрузчик комментов при заходе из УПОМИНАНИЯ (deep-link commentId > 0).
+     *
+     * Раньше это делали два конкурирующих метода (форс-релоад + пагинация «до цели»), и они не работали:
+     * ⓐ форс-релоад и пагинация стартовали в ОДНОМ emit и мешали друг другу (форс-релоад ресетил
+     *    пагинацию, которую тут же дёргала пагинация);
+     * ⓑ пагинация останавливалась, как только «цель» найдена — а якорь news-упоминания часто указывает
+     *    на РОДИТЕЛЬСКИЙ коммент (он уже на первой странице), НЕ на сам ответ. Ответ же — самый новый,
+     *    лежит в непрогруженном хвосте (грузится 20 из 31), поэтому «цель найдена» → стоп → ответа нет.
+     *
+     * Теперь строго по шагам (по одному действию за emit, гейт по флагам загрузки, чтобы не наслаивать):
+     *  1) один раз — форс-релоад свежей первой страницы (ответ новый, кэш мог быть устаревшим);
+     *  2) затем — догружаем ВЕСЬ тред (`loadMoreComments`, пока `canLoadMore`), НЕ останавливаясь на
+     *     «цели», до [MAX_DEEPLINK_PAGINATE] страниц. Так ответ гарантированно попадёт в список,
+     *     где бы он ни был, а [maybeArmDeepLinkCommentScroll] прокрутит к нему, когда он появится.
+     */
+    private fun ensureDeepLinkCommentLoaded(list: List<Comment>) {
+        val targetCommentId = articleInteractor.initData.commentId
+        if (targetCommentId <= 0) return
+        val current = _commentsState.value as? ArticleCommentsState.Loaded ?: return
+        if (loadingMoreComments || _refreshing.value) return
+        if (!deepLinkReloadTried) {
+            deepLinkReloadTried = true
+            // Цель-ответ УЖЕ в загруженном дереве (кэш/первая страница его содержат) — НЕ делаем
+            // force-reload. Раньше он срабатывал безусловно: сбрасывал только что показанные
+            // комменты обратно в Loading и перезагружал ВСЁ заново. На медленной сети это
+            // десятки секунд «пустой новости без ответа» — из-за чего казалось, что ответ
+            // «не показывается». Скролл к цели армит maybeArmDeepLinkCommentScroll.
+            if (list.any { it.id == targetCommentId }) {
+                FpdaDebugLog.log(
+                        FpdaDebugLog.TAG_COMMENTS_SECTION,
+                        "deeplink_comment_already_present",
+                        mapOf("articleId" to boundArticleId, "targetCommentId" to targetCommentId, "loadedCount" to list.size)
+                )
+                return
+            }
+            FpdaDebugLog.log(
+                    FpdaDebugLog.TAG_COMMENTS_SECTION,
+                    "deeplink_comment_force_reload",
+                    mapOf("articleId" to boundArticleId, "targetCommentId" to targetCommentId, "loadedCount" to list.size)
+            )
+            scope.launch { _uiEvents.emit(ArticleCommentUiEvent.ScrollToComment(-1, targetCommentId)) }
+            loadCommentsIfNeeded(forceReload = true)
+            return
+        }
+        if (current.canLoadMore && deepLinkPaginateCount < MAX_DEEPLINK_PAGINATE) {
+            deepLinkPaginateCount++
+            FpdaDebugLog.log(
+                    FpdaDebugLog.TAG_COMMENTS_SECTION,
+                    "deeplink_comment_paginate",
+                    mapOf(
+                            "articleId" to boundArticleId,
+                            "targetCommentId" to targetCommentId,
+                            "loadedCount" to list.size,
+                            "attempt" to deepLinkPaginateCount,
+                            "hasTarget" to list.any { it.id == targetCommentId },
+                    )
+            )
+            loadMoreComments()
         }
     }
 
@@ -259,8 +399,8 @@ class ArticleCommentViewModel(
         cancelLoadingTimeout()
         val visibleCount = allComments.size
         val expectedTotal = articleInteractor.expectedCommentsCount().coerceAtLeast(visibleCount)
-        val canLoadMore = serverHasMore ||
-                ArticleCommentsPagination.hasMore(visibleCount, expectedTotal)
+        val canLoadMore = !loadMoreCeilingReached &&
+                (serverHasMore || ArticleCommentsPagination.hasMore(visibleCount, expectedTotal))
         _commentsState.value = ArticleCommentsState.Loaded(
                 comments = ArrayList(allComments),
                 canLoadMore = canLoadMore,
@@ -459,6 +599,22 @@ class ArticleCommentViewModel(
                 val previousSize = allComments.size
                 val list = commentsToList(result.tree)
                 serverHasMore = result.hasMore
+                // Догрузка не дала прироста (сервер вернул ту же партию) → потолок: больше комментов
+                // не достать, expectedCount оказался завышен (напр. учитывает удалённый коммент).
+                // Гасим «Показать ещё», иначе кнопка и автопагинация зацикливаются на фантоме.
+                if (loadingMoreComments && list.size <= previousSize) {
+                    loadMoreCeilingReached = true
+                    FpdaDebugLog.log(
+                            FpdaDebugLog.TAG_COMMENTS_SECTION,
+                            "load_more_ceiling_reached",
+                            mapOf(
+                                    "articleId" to boundArticleId,
+                                    "renderedCount" to list.size,
+                                    "expectedCount" to articleInteractor.expectedCommentsCount(),
+                                    "page" to result.page,
+                            )
+                    )
+                }
                 if (list.isEmpty()) {
                     setCommentsState(ArticleCommentsState.Empty, "parse_empty")
                 } else {
@@ -628,18 +784,23 @@ class ArticleCommentViewModel(
     }
 
     private fun setCommentLikeState(commentId: Int, likedByMe: Boolean, count: Int? = null, pending: Boolean) {
-        val comments = ArrayList(allComments.map { source ->
-            Comment(source).also { copy ->
-                if (copy.id == commentId) {
-                    copy.likedByMe = likedByMe
-                    copy.likeCount = count ?: nextLikeCount(source.likeCount, source.likedByMe, likedByMe)
-                    copy.isLikePending = pending
-                    val karma = copy.karma ?: Comment.Karma().also { copy.karma = it }
-                    karma.status = if (likedByMe) Comment.Karma.LIKED else Comment.Karma.NOT_LIKED
-                    karma.count = copy.likeCount
-                }
-            }
-        })
+        val index = allComments.indexOfFirst { it.id == commentId }
+        if (index < 0) return
+        // Copy only the target comment (not the whole list): DiffUtil still detects the change on
+        // this one item because it becomes a fresh instance, while the untouched comments keep their
+        // identity between snapshots and are correctly diffed as unchanged. Avoids deep-copying
+        // every comment on each like toggle (noticeable on threads with hundreds of comments).
+        val source = allComments[index]
+        val updated = Comment(source).also { copy ->
+            copy.likedByMe = likedByMe
+            copy.likeCount = count ?: nextLikeCount(source.likeCount, source.likedByMe, likedByMe)
+            copy.isLikePending = pending
+            val karma = copy.karma ?: Comment.Karma().also { copy.karma = it }
+            karma.status = if (likedByMe) Comment.Karma.LIKED else Comment.Karma.NOT_LIKED
+            karma.count = copy.likeCount
+        }
+        val comments = ArrayList(allComments)
+        comments[index] = updated
         allComments = comments
         publishVisibleComments()
     }
@@ -717,9 +878,17 @@ class ArticleCommentViewModel(
                 } else {
                     articleInteractor.loadEditCommentForm(action)
                 }
-                val text = inlineEditable
-                        ?: formAction.fields.entries.firstOrNull { isCommentTextField(it.key) }?.value
+                // Поле правки открывалось ПУСТЫМ, если серверная форма отдавала пустое (но непустое как
+                // ключ) текстовое поле: `?:` падал только на null, не на blank, и `current.content` не
+                // подставлялся. takeIf { isNotBlank() } на каждом шаге чинит подстановку текущего текста.
+                val rawText = inlineEditable
+                        ?: formAction.fields.entries.firstOrNull { isCommentTextField(it.key) }?.value?.takeIf { it.isNotBlank() }
+                        ?: current.content?.takeIf { it.isNotBlank() }
                         ?: current.content.orEmpty()
+                // Источник текста для редактора (editableHtml / поле серверной формы) содержит хвост
+                // «(отредактирован)», хотя в отображении он срезан (карандаш ✎). Без среза он подставлялся
+                // в форму и при повторной правке повторно уходил на сервер — маркер копился в контенте.
+                val text = stripNewsCommentEditedMarker(rawText)
                 _uiEvents.emit(ArticleCommentUiEvent.ShowEditComment(current, formAction, text))
             } catch (e: Throwable) {
                 errorHandler.handle(e)
@@ -741,6 +910,11 @@ class ArticleCommentViewModel(
         })
         allComments = updated
         publishVisibleComments()
+        // A same-id re-render is skipped by the idempotent append path, so the edited text never
+        // reaches the WebView. Patch the single node directly to refresh it in place.
+        updated.firstOrNull { it.id == commentId }?.let { edited ->
+            _uiEvents.emit(ArticleCommentUiEvent.PatchComment(edited))
+        }
     }
 
     private fun applyLocalDeletedComment(commentId: Int) {
@@ -837,6 +1011,8 @@ class ArticleCommentViewModel(
 
     private companion object {
         const val COMMENTS_LOAD_TIMEOUT_MS = 15_000L
+        // Предохранитель от бесконечной автодогрузки к deep-link комменту (см. ensureDeepLinkCommentLoaded).
+        const val MAX_DEEPLINK_PAGINATE = 12
     }
 
     class Factory(
@@ -889,6 +1065,9 @@ sealed class ArticleCommentUiEvent {
             val pending: Boolean,
     ) : ArticleCommentUiEvent()
     object OnReplyComment : ArticleCommentUiEvent()
+    /** Replaces a single already-rendered comment node in place (used after an edit — the
+     *  idempotent append path skips existing ids, so editing must patch the node directly). */
+    data class PatchComment(val comment: Comment) : ArticleCommentUiEvent()
     /** Clears JS `loading_more` and re-syncs footer attrs after paginated fetch ends. */
     object RefreshLoadMoreUi : ArticleCommentUiEvent()
 }

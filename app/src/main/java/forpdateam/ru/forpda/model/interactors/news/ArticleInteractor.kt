@@ -975,11 +975,16 @@ class ArticleInteractor(
         val requestId = commentsRequestId.incrementAndGet()
         preserveCommentsForSameArticle(article)
         _data.value = article
+        // Set the scroll target from the authoritative POST redirect (#commentNNN) BEFORE parsing:
+        // parseComments emits the tree, and the collector consumes pendingScrollCommentId while
+        // processing that emission — setting it afterwards was a race that dropped the scroll.
+        scheduleScrollToNewComment(null, knownIds, article.url, comment)
+        val resolvedFromRedirect = pendingScrollCommentId > 0
         val parseResult = parseComments(article, generation, requestId, forceReload = true)
-        if (parseResult is CommentLoadResult.Loaded) {
-            scheduleScrollToNewComment(parseResult.tree, knownIds, article.url, comment)
-        } else {
-            scheduleScrollToNewComment(cachedCommentTree, knownIds, article.url, comment)
+        if (!resolvedFromRedirect) {
+            // Redirect lacked the id — fall back to diffing the freshly parsed tree against knownIds.
+            val tree = (parseResult as? CommentLoadResult.Loaded)?.tree ?: cachedCommentTree
+            scheduleScrollToNewComment(tree, knownIds, article.url, comment)
         }
         return article
     }
@@ -1022,7 +1027,15 @@ class ArticleInteractor(
         commentsPrefetchJob = null
         commentsPrefetchArticleId = -1
         commentsMemoryCache.invalidate(articleId)
-        _data.value?.takeIf { it.id == articleId }?.commentTree = null
+        _data.value?.takeIf { it.id == articleId }?.let { article ->
+            article.commentTree = null
+            // Также сбрасываем закэшированный HTML комментов: без этого parseComments(forceReload=true)
+            // ПЕРЕПАРСИВАЛ старый article.commentsSource (со старым текстом), и правка/удаление/новые
+            // данные не подтягивались — правка отражалась только оптимистичным патчем и терялась при
+            // reload. Обнуление заставляет ensureCommentsSource дотянуть свежий HTML с сервера.
+            article.commentsSource = null
+            article.desktopCommentsSource = null
+        }
         cachedCommentsArticleId = -1
         cachedCommentTree = null
         FpdaDebugLog.log(
@@ -1175,7 +1188,15 @@ class ArticleInteractor(
     suspend fun loadComments(forceReload: Boolean = false): CommentLoadResult {
         if (forceReload) {
             resetCommentsPagination()
-            _data.value?.commentTree = null
+            _data.value?.let { article ->
+                article.commentTree = null
+                // КРИТИЧНО: сбрасываем и закэшированный HTML комментов. Без этого
+                // parseComments(forceReload=true) ПЕРЕПАРСИВАЛ старый article.commentsSource (без
+                // свежего ответа), и force-reload из упоминания «обновлял», но новый коммент-ответ так
+                // и не появлялся. Обнуление заставляет ensureCommentsSource дотянуть свежий HTML.
+                article.commentsSource = null
+                article.desktopCommentsSource = null
+            }
             cachedCommentTree = null
             cachedCommentsArticleId = -1
             commentsMemoryCache.invalidate(_data.value?.id ?: initData.newsId)

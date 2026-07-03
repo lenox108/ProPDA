@@ -102,4 +102,31 @@ class Cp1251CodecTest {
         val decoded = Cp1251Codec.decode(encoded)
         assertEquals(original, decoded)
     }
+
+    @Test
+    fun encodeFormValueWithEntities_emoji_becomesNumericEntity_not0x1A() {
+        // 👍 = U+1F44D (128077), 😀 = U+1F600 (128512). Должны стать &#128077; / &#128512;
+        // (percent-encoded), а НЕ 0x1A (SUB), который убивал смайлы. `&` кодируется как %26.
+        val encoded = Cp1251Codec.encodeFormValueWithEntities("hi👍😀")
+        assertEquals("hi%26%23128077%3B%26%23128512%3B", encoded)
+        // никакого SUB (0x1A) и никакого '?' (0x3F, %3F) как замены непредставимого символа
+        assertFalse(encoded.contains("%1A"))
+        assertFalse(encoded.contains(""))
+    }
+
+    @Test
+    fun encodeFormValueWithEntities_cyrillicAndAscii_unchangedFromCp1251Encode() {
+        // Представимые в cp1251 символы кодируются как обычно (без мнемоник).
+        assertEquals(Cp1251Codec.encode("Привет, мир 123!"),
+                Cp1251Codec.encodeFormValueWithEntities("Привет, мир 123!"))
+    }
+
+    @Test
+    fun encodeFormValueWithEntities_mixedCyrillicAndEmoji() {
+        // Кириллица остаётся cp1251-percent, эмодзи → &#NNNN;. Проверяем, что мнемоника присутствует
+        // и нет символа-замены SUB.
+        val encoded = Cp1251Codec.encodeFormValueWithEntities("тест 👍")
+        assertTrue(encoded.contains("%26%23128077%3B"))
+        assertFalse(encoded.contains(""))
+    }
 }

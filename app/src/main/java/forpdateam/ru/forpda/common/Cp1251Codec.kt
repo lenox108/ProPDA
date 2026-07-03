@@ -71,6 +71,36 @@ object Cp1251Codec {
         return decode(value)
     }
 
+    /**
+     * Кодирует значение form-поля (тело комментария) для отправки на 4pda: символы, непредставимые
+     * в windows-1251 (эмодзи и прочий Unicode вне cp1251), заменяются на HTML numeric character
+     * reference `&#NNNN;` — ровно так, как это делает БРАУЗЕР при сабмите формы с
+     * `accept-charset=windows-1251`. 4pda хранит и рендерит эмодзи именно как `&#NNNN;` (проверено:
+     * в исходнике страницы эмодзи-комменты = numeric entities, НЕ сырой UTF-8).
+     *
+     * Без этого обычный [encode] (URLEncoder в cp1251) подставлял для эмодзи `0x1A` (SUB) — невидимый
+     * управляющий символ, и смайлы в комментах пропадали при отправке.
+     */
+    @JvmStatic
+    fun encodeFormValueWithEntities(value: String?): String {
+        if (value.isNullOrEmpty()) return ""
+        val encoder = charset.newEncoder()
+        val sb = StringBuilder(value.length)
+        var i = 0
+        while (i < value.length) {
+            val cp = value.codePointAt(i)
+            val count = Character.charCount(cp)
+            val piece = value.substring(i, i + count)
+            if (encoder.canEncode(piece)) {
+                sb.append(piece)
+            } else {
+                sb.append("&#").append(cp).append(';')
+            }
+            i += count
+        }
+        return encode(sb.toString())
+    }
+
     private fun isRepresentableInCp1251(s: String): Boolean =
         charset.newEncoder().canEncode(s)
 }

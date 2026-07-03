@@ -914,7 +914,9 @@ class NewsApi(
                 .url(url)
                 .addHeader("Referer", referer)
                 .formHeaders(fields)
-                .formHeader(textField, Cp1251Codec.encode(text), true)
+                // Эмодзи/Unicode вне cp1251 → HTML-мнемоники `&#NNNN;` (как браузер), иначе cp1251
+                // подставлял 0x1A (SUB) и смайлы в правке коммента пропадали.
+                .formHeader(textField, Cp1251Codec.encodeFormValueWithEntities(text), true)
         return if (url.contains("admin-ajax.php", ignoreCase = true)) {
             builder.xhrHeader().build()
         } else {
@@ -1375,7 +1377,9 @@ class NewsApi(
             children.flatMap { listOf(it) + it.flattenComments() }
 
     suspend fun replyComment(articleId: Int, commentId: Int, text: String): DetailsPage {
-        val comment = Cp1251Codec.encode(text)
+        // Эмодзи/Unicode вне cp1251 → HTML-мнемоники `&#NNNN;` (как браузер), иначе смайлы в ответе
+        // теряются (cp1251-кодировщик ставит 0x1A/SUB).
+        val comment = Cp1251Codec.encodeFormValueWithEntities(text)
         val articleUrl = "https://4pda.to/index.php?p=$articleId"
 
         val builder = NetworkRequest.Builder()

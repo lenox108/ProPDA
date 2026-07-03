@@ -9,6 +9,7 @@ import forpdateam.ru.forpda.entity.remote.news.*
 import android.os.SystemClock
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
+import forpdateam.ru.forpda.model.data.remote.api.decodeNickIfBase64
 import forpdateam.ru.forpda.model.data.remote.api.regex.parser.Document
 import forpdateam.ru.forpda.model.data.remote.api.regex.parser.Node
 import forpdateam.ru.forpda.model.data.remote.api.regex.parser.Parser
@@ -34,12 +35,9 @@ class ArticleParser(
         private val patternProvider: IPatternProvider
 ) : BaseParser() {
 
-    @Volatile
-    private var pollVoteCookies: Map<String, Set<String>> = emptyMap()
-
     /** Mirrors 4PDA site JS: voted state for news polls is stored in poll-{id} cookies. */
     fun syncPollVoteCookies(clientCookies: Map<String, Cookie>) {
-        pollVoteCookies = extractPollVoteCookies(clientCookies)
+        pollParser.syncVoteCookies(clientCookies)
     }
 
     private data class CommentProbeCacheEntry(
@@ -112,20 +110,6 @@ class ArticleParser(
         val pollFrameOptionsFormRegex = Regex("""(?is)<form\b[^>]*\bclass\s*=\s*["'][^"']*\bpoll-frame-options\b[^"']*["'][^>]*>[\s\S]*?</form>""")
         val pollVoteCookieNameRegex = Regex("""(?i)^poll-(\d+)$""")
 
-        fun extractPollVoteCookies(clientCookies: Map<String, Cookie>): Map<String, Set<String>> {
-            val result = LinkedHashMap<String, MutableSet<String>>()
-            clientCookies.values.forEach { cookie ->
-                val pollId = pollVoteCookieNameRegex.find(cookie.name)?.groupValues?.getOrNull(1)
-                        ?: return@forEach
-                val answers = runCatching { URLDecoder.decode(cookie.value, "UTF-8") }
-                        .getOrElse { cookie.value }
-                        .split(',')
-                        .mapNotNull { part -> part.trim().toLongOrNull()?.takeIf { it > 0 }?.toString() }
-                if (answers.isEmpty()) return@forEach
-                result.getOrPut(pollId) { linkedSetOf() }.addAll(answers)
-            }
-            return result
-        }
         val divOpenTagRegex = Regex("""(?is)<div\b""")
         val divCloseTagRegex = Regex("""(?is)</div\s*>""")
         val rawPollTemplateTokens = listOf(
@@ -881,7 +865,14 @@ class ArticleParser(
                     }
                     navId = matcher.group(12)
 
-                    karmaMap = if (phase == ArticleParsePhase.FULL) parseKarma(pageContext.response) else SparseArray()
+                    // Parse the ModKarma JSON in EVERY phase, not just FULL. Comments are parsed
+                    // against `article.karmaMap`, but they can load (user expands the section, or a
+                    // mention/deep-link auto-loads them) long before the deferred FULL parse runs.
+                    // With an empty karmaMap every comment resolved to likedByMe=false / count=0, so
+                    // real likes — including the current user's own vote — never showed on reload and
+                    // looked like liking was broken. Unlike walking the comment UL, extracting the
+                    // karma JSON is a single cheap regex, so it is safe to do at first render too.
+                    karmaMap = parseKarma(pageContext.response)
 
                     commentsSource = resolveCommentsSource(pageContext, phase, matcher.group(13))
 
@@ -932,7 +923,14 @@ class ArticleParser(
                     }
                     navId = matcher.group(9)
 
-                    karmaMap = if (phase == ArticleParsePhase.FULL) parseKarma(pageContext.response) else SparseArray()
+                    // Parse the ModKarma JSON in EVERY phase, not just FULL. Comments are parsed
+                    // against `article.karmaMap`, but they can load (user expands the section, or a
+                    // mention/deep-link auto-loads them) long before the deferred FULL parse runs.
+                    // With an empty karmaMap every comment resolved to likedByMe=false / count=0, so
+                    // real likes — including the current user's own vote — never showed on reload and
+                    // looked like liking was broken. Unlike walking the comment UL, extracting the
+                    // karma JSON is a single cheap regex, so it is safe to do at first render too.
+                    karmaMap = parseKarma(pageContext.response)
 
                     commentsSource = resolveCommentsSource(pageContext, phase, matcher.group(10))
 
@@ -1510,40 +1508,10 @@ class ArticleParser(
                     ?.takeIf { it.isNotBlank() }
                     ?: "poll-ajax-frame-news"
 
-    private fun isNewsPollBlock(block: String): Boolean {
-        if (containsRawPollTemplate(block) && !isNormalizedNewsPollBlock(block) && !isFallbackNewsPollBlock(block)) {
-            return false
-        }
-        val hasPollMarker = hasNewsPollMarkersInternal(block)
-        return hasPollMarker && hasRealNewsPollMarkupInternal(block)
-    }
-
-    private fun hasRealNewsPollMarkupInternal(block: String): Boolean {
-        val hasVoteForm = formTagRegex.findAll(block).any { match ->
-            val form = match.value
-            val formAttrs = match.groupValues.getOrNull(1).orEmpty()
-            val hasPollTarget = pollActionRegex.containsMatchIn(formAttrs) ||
-                    pollIdInputRegex.containsMatchIn(form) ||
-                    form.contains("pages/poll", ignoreCase = true) ||
-                    form.contains("poll_id", ignoreCase = true)
-            hasPollTarget && answerInputRegex.containsMatchIn(form)
-        }
-        return hasVoteForm ||
-                dataSitePollAttrRegex.containsMatchIn(block) ||
-                pollResultRegex.containsMatchIn(block) ||
-                isPollFrameMarkup(block) ||
-                isFallbackNewsPollBlock(block)
-    }
+    private fun isNewsPollBlock(block: String): Boolean = pollParser.isNewsPollBlock(block)
 
     private fun hasNewsPollMarkersInternal(block: String): Boolean =
-            block.contains("poll", ignoreCase = true) ||
-                    block.contains("vote", ignoreCase = true) ||
-                    block.contains("answer[]", ignoreCase = true) ||
-                    block.contains("poll_id", ignoreCase = true) ||
-                    block.contains("pages/poll", ignoreCase = true) ||
-                    block.contains("data-site-poll", ignoreCase = true) ||
-                    block.contains("опрос", ignoreCase = true) ||
-                    block.contains("голос", ignoreCase = true)
+            pollParser.hasNewsPollMarkersInternal(block)
 
     private fun extractDataSitePollBlock(source: String, response: String = source): String? =
             buildDataSitePollBlocks(source, response)
@@ -1579,6 +1547,28 @@ class ArticleParser(
                 .toList()
     }
 
+
+    private val pollParser = ArticlePollParser(
+            rawPollTemplateTokens = rawPollTemplateTokens,
+            formTagRegex = formTagRegex,
+            pollActionRegex = pollActionRegex,
+            pollIdInputRegex = pollIdInputRegex,
+            answerInputRegex = answerInputRegex,
+            dataSitePollAttrRegex = dataSitePollAttrRegex,
+            pollResultRegex = pollResultRegex,
+            pollFrameMarkerRegex = pollFrameMarkerRegex,
+            pollFrameTitleRegex = pollFrameTitleRegex,
+            pollFrameButtonRegex = pollFrameButtonRegex,
+            pollVoteCookieNameRegex = pollVoteCookieNameRegex,
+            pollTitleRegex = pollTitleRegex,
+            rawPollTemplateScriptRegex = rawPollTemplateScriptRegex,
+            rawPollContainerRegex = rawPollContainerRegex,
+            newsPollFallbackBlockRegex = newsPollFallbackBlockRegex,
+            articleFromHtml = { input -> input.articleFromHtml() },
+            articleUrlFromResponse = { response -> articleUrlFromResponse(response) },
+            articleHtmlEncode = ::articleHtmlEncode,
+            articleIdFromResponse = { response -> articleIdFromResponse(response) },
+    )
 
     private val dataSitePollParser = ArticleDataSitePollParser(
             isUsablePollText = ::isUsablePollText,
@@ -1627,7 +1617,7 @@ class ArticleParser(
             dataSitePollParser.parse(encodedPayload)
 
     private fun pollVoteCookieAnswers(pollId: String): Set<String> =
-            pollVoteCookies[pollId].orEmpty()
+            pollParser.voteCookieAnswers(pollId)
 
 
     private fun normalizedVotePollBlock(block: String, response: String): String? {
@@ -1755,10 +1745,6 @@ class ArticleParser(
                     ?: Regex("""(?i)[?&]poll_id=(\d+)""").find(block.articleFromHtml().orEmpty())
                             ?.groupValues?.getOrNull(1))
                     ?.takeIf { it.isNotBlank() }
-
-    private fun isPollFrameMarkup(block: String): Boolean =
-            pollFrameMarkerRegex.containsMatchIn(block) &&
-                    (pollFrameTitleRegex.containsMatchIn(block) || pollFrameButtonRegex.containsMatchIn(block))
 
     /**
      * Removes server-rendered poll markup (poll-frame container and poll-ajax-frame wrapper) from the
@@ -2077,101 +2063,32 @@ class ArticleParser(
     }
 
     private fun isNormalizedNewsPollBlock(block: String): Boolean =
-            block.contains("news-poll-normalized", ignoreCase = true) ||
-                    block.contains("data-normalized-poll", ignoreCase = true)
+            pollParser.isNormalizedNewsPollBlock(block)
 
     private fun isFallbackNewsPollBlock(block: String): Boolean =
-            block.contains("news-poll-fallback", ignoreCase = true) ||
-                    block.contains("data-poll-fallback", ignoreCase = true)
+            pollParser.isFallbackNewsPollBlock(block)
 
-    private fun isRawTemplatePollBlock(block: String): Boolean =
-            block.contains("data-raw-template-poll", ignoreCase = true) ||
-                    containsRawPollTemplate(block)
+    private fun containsRawPollTemplate(block: String?): Boolean =
+            pollParser.containsRawPollTemplate(block)
 
-    private fun containsRawPollTemplate(block: String?): Boolean {
-        val source = block.orEmpty()
-        return rawPollTemplateTokens.any { source.contains(it, ignoreCase = true) }
-    }
+    private fun cleanPollText(source: String): String = pollParser.cleanPollText(source)
 
-    private fun cleanPollText(source: String): String =
-            source
-                    .replace(Regex("""(?is)<script\b[\s\S]*?</script>"""), " ")
-                    .replace(Regex("""(?is)<style\b[\s\S]*?</style>"""), " ")
-                    .replace(Regex("""(?is)<input\b[^>]*>"""), " ")
-                    .replace(Regex("""(?is)<[^>]+>"""), " ")
-                    .articleFromHtml()
-                    ?.replace(Regex("""\s+"""), " ")
-                    ?.trim()
-                    .orEmpty()
+    private fun isUsablePollText(text: String): Boolean = pollParser.isUsablePollText(text)
 
-    private fun isUsablePollText(text: String): Boolean =
-            text.isNotBlank() && !containsRawPollTemplate(text)
+    private fun stripRawPollTemplates(html: String?): String? = pollParser.stripRawPollTemplates(html)
 
-    private fun stripRawPollTemplates(html: String?): String? {
-        val source = html ?: return null
-        if (!containsRawPollTemplate(source)) return source
-        return source
-                .replace(rawPollTemplateScriptRegex, "")
-                .replace(rawPollContainerRegex, "")
-                .takeIf { it.isNotBlank() }
-    }
-
-    private fun fallbackNewsPollBlock(response: String): String {
-        val sourceUrl = articleUrlFromResponse(response)
-        val title = pollTitleFromResponse(response).ifBlank { "Опрос" }
-        return buildString {
-            append("""<div id="poll-ajax-frame-news" class="poll-ajax-frame news-poll news-poll-normalized news-poll-fallback" data-poll-fallback="true">""")
-            append("""<span data-raw-template-poll="true" style="display:none"></span>""")
-            append("""<h2>""")
-            append(articleHtmlEncode(title))
-            append("""</h2><p class="poll_status">Опрос доступен на сайте</p>""")
-            sourceUrl?.let {
-                append("""<button type="button" class="btn news-poll-browser-button" data-open-external-browser="true" data-href="""")
-                append(articleHtmlEncode(it))
-                append("""">Открыть статью в браузере</button>""")
-            }
-            append("""</div>""")
-        }
-    }
+    private fun fallbackNewsPollBlock(response: String): String =
+            pollParser.fallbackNewsPollBlock(response)
 
     private fun forcedFallbackNewsPollBlock(
             response: String,
             articleId: Int,
             articleTitle: String?,
             currentHtml: String?
-    ): String? {
-        // Lazy data-site-poll placeholders are not renderable; do not treat them as a real poll block.
-        if (hasRenderableNewsPollMarkup(currentHtml)) return null
-        val effectiveArticleId = articleId.takeIf { it > 0 } ?: articleIdFromResponse(response)
-        val effectiveTitle = articleTitle.orEmpty().ifBlank { pollTitleFromResponse(response) }
-        val shouldForceFallback = effectiveArticleId == 456521 || isPollTitle(effectiveTitle)
-        return if (shouldForceFallback) fallbackNewsPollBlock(response, effectiveTitle) else null
-    }
-
-    private fun fallbackNewsPollBlock(response: String, titleOverride: String): String {
-        val sourceUrl = articleUrlFromResponse(response)
-        val title = titleOverride.takeIf { isUsablePollText(it) } ?: "Опрос доступен на сайте"
-        return buildString {
-            append("""<div id="poll-ajax-frame-news" class="poll-ajax-frame news-poll news-poll-normalized news-poll-fallback" data-poll-fallback="true" data-forced-fallback-poll="true">""")
-            append("""<h2>""")
-            append(articleHtmlEncode(title))
-            append("""</h2><p class="poll_status">Опрос доступен на сайте</p>""")
-            sourceUrl?.let {
-                append("""<button type="button" class="btn news-poll-browser-button" data-open-external-browser="true" data-href="""")
-                append(articleHtmlEncode(it))
-                append("""">Открыть статью в браузере</button>""")
-            }
-            append("""</div>""")
-        }
-    }
+    ): String? = pollParser.forcedFallbackNewsPollBlock(response, articleId, articleTitle, currentHtml)
 
     private fun appendOrReplaceFallbackPollBlock(currentHtml: String?, fallbackBlock: String): String =
-            listOf(currentHtml.orEmpty().replace(newsPollFallbackBlockRegex, ""), fallbackBlock)
-                    .filter { it.isNotBlank() }
-                    .joinToString("\n")
-
-    private fun isPollTitle(title: String): Boolean =
-            pollTitleRegex.containsMatchIn(title.articleFromHtml()?.trim().orEmpty())
+            pollParser.appendOrReplaceFallbackPollBlock(currentHtml, fallbackBlock)
 
     private fun articleIdFromResponse(response: String): Int? {
         articleIdMetaRegex.find(response)
@@ -2198,36 +2115,13 @@ class ArticleParser(
         return null
     }
 
-    private fun pollIdFromText(source: String): String? =
-            Regex("""(?i)(?:poll_id|poll)\D{0,24}(\d+)""")
-                    .find(source.articleFromHtml().orEmpty())
-                    ?.groupValues
-                    ?.getOrNull(1)
+    private fun pollIdFromText(source: String): String? = pollParser.pollIdFromText(source)
 
     private fun articlePathFromResponse(response: String): String =
             articleUrlFromResponse(response)
                     ?.substringAfter("https://4pda.to", "")
                     ?.takeIf { it.isNotBlank() }
                     ?: ""
-
-    private fun pollTitleFromResponse(response: String): String {
-        Regex("""(?is)<meta\b(?=[^>]*(?:property|name)\s*=\s*["']og:title["'])(?=[^>]*content\s*=\s*["']([^"']+)["'])[^>]*>""")
-                .find(response)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.articleFromHtml()
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-                ?.let { return it }
-        Regex("""(?is)<h1\b[^>]*>([\s\S]*?)</h1>""")
-                .find(response)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.let { cleanPollText(it) }
-                ?.takeIf { it.isNotBlank() }
-                ?.let { return it }
-        return ""
-    }
 
     private fun articleUrlFromResponse(response: String): String? {
         Regex("""(?is)<meta\b(?=[^>]*(?:property|name)\s*=\s*["']og:url["'])(?=[^>]*content\s*=\s*["']([^"']+)["'])[^>]*>""")
@@ -2540,8 +2434,9 @@ class ArticleParser(
                 userId = commentShowUserRegex.find(block)?.groupValues?.getOrNull(1)?.toIntOrNull()
                         ?: commentUserDataIdRegex.find(block)?.groupValues?.getOrNull(1)?.toIntOrNull()
                         ?: 0
-                userNick = commentFallbackNickRegex
-                        .find(block)?.groupValues?.getOrNull(1).orEmpty().articleFromHtml()
+                userNick = decodeNickIfBase64(
+                        commentFallbackNickRegex
+                                .find(block)?.groupValues?.getOrNull(1).orEmpty().articleFromHtml())
                 date = commentFallbackDateRegex
                         .find(block)?.groupValues?.getOrNull(1).orEmpty().articleFromHtml()?.trim()
                 val rawContent = commentFallbackContentRegex
@@ -2936,7 +2831,7 @@ class ArticleParser(
                 }
 
                 userNick = nickNode?.let { Parser.getHtml(it, true) }
-                comment.userNick = userNick.orEmpty().articleFromHtml()
+                comment.userNick = decodeNickIfBase64(userNick.orEmpty().articleFromHtml())
 
                 date = metaNode?.let { Parser.ownText(metaNode).trim() }
                 comment.date = date

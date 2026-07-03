@@ -133,6 +133,10 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     // the deadline, so it stops fighting the user once comments settle.
     private var pendingCommentScrollId: Int = 0
     private var pendingCommentScrollDeadline: Long = 0L
+    // Self-heal of broken article styles: at most STYLE_HEAL_MAX full re-renders per article open
+    // (keyed by id so a same-article heal re-render does NOT reset the budget → no infinite loop).
+    private var styleHealArticleId: Int = 0
+    private var styleHealCount: Int = 0
     private var commentsFooterMountAttempted: Boolean = false
     private var commentsFooterInDom: Boolean = false
     private var commentsJsReady: Boolean = false
@@ -1512,6 +1516,9 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 )
         )
         webView.postDelayed({ verifyRenderedContentOrRetry() }, BLANK_RENDER_VERIFY_DELAY_MS)
+        // Проверяем применение _news.css/_main.css после рендера ТЕЛА статьи (не только комментов) —
+        // чтобы срыв вёрстки лечился, даже когда комменты не загрузились. Небольшая задержка на укладку.
+        webView.postDelayed({ probeArticleStyleState("render_confirmed") }, 250L)
         readingProgressController.restoreFor(articleId)
         FpdaDebugLog.log(
                 FpdaDebugLog.TAG_ARTICLE_WEBVIEW,
@@ -2114,30 +2121,38 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     }
 
     /**
-     * DIAGNOSTIC (debug only): captures the WebView stylesheet load-state at render time to pin the
-     * intermittent «сломалась вёрстка» bug — where the whole `${'$'}{style_type}_news.css`/`_main.css`
-     * stops applying (video card, blockquote, comment cards render native/unstyled) while the base
-     * dark theme from md_colors + inline overrides survives, and it self-heals only on app restart.
-     * CDP is unavailable in the repro env, so this logs, per <link>: href, whether cssRules is
-     * accessible (loaded=true) or threw (loaded=false → the sheet failed/never fetched), plus the
-     * computed background of the first `.news-inline-comment` (transparent ⇒ _news.css not applied).
-     * When it next breaks, the log names exactly which sheet didn't load.
+     * Fixes the intermittent «сломалась вёрстка» bug: sometimes the whole `${'$'}{style_type}_news.css`
+     * / `_main.css` stops applying (video card, blockquote, comment cards render native/unstyled) while
+     * the base theme from md_colors + inline overrides survives, and it used to heal only on app restart.
+     * Root signal: `.news-comments-section .news-inline-comment` gets `border-radius: .75rem` ONLY from
+     * `_news.css`; if the computed radius is ~0 the external stylesheets did not apply. When detected
+     * (once per render dispatch, [styleHealAttempted]), re-apply ALL `<link>` stylesheets by cloning +
+     * replacing each node, which forces the WebView to re-fetch and re-apply them — no restart needed.
+     * NB: `s.cssRules` is cross-origin-blocked for file:// asset sheets under the https base, so it is
+     * NOT a reliable "loaded" signal (always throws) — the computed radius is.
      */
     private fun probeArticleStyleState(reason: String) {
-        if (!forpdateam.ru.forpda.BuildConfig.DEBUG || !isWebViewReady()) return
+        if (!isWebViewReady()) return
         val script = """(function(){
             try {
-                var out = [];
-                var sheets = document.styleSheets || [];
-                for (var i=0;i<sheets.length;i++){
-                    var s = sheets[i]; var href = (s && s.href) || 'inline'; var loaded;
-                    try { loaded = !!(s.cssRules); } catch(e){ loaded = false; }
-                    out.push((href.split('/').slice(-2).join('/'))+':'+(loaded?'1':'0'));
+                // Обе метки получают border-radius .75rem ТОЛЬКО из _news.css. Тоггл присутствует
+                // всегда (даже когда комменты свёрнуты/грузятся/таймаутнули), поэтому ловим срыв стилей
+                // и БЕЗ загруженных комментов — иначе тело статьи оставалось нестилизованным без лечения.
+                var c = document.querySelector('.news-comments-section .news-inline-comment')
+                     || document.querySelector('.news-comments-section .news-comments-toggle');
+                if (!c) return JSON.stringify({applied: null});
+                var cs = getComputedStyle(c);
+                var radius = parseFloat(cs.borderTopLeftRadius) || 0;
+                // _news.css задаёт .75rem (~9-12px). ~0 => правила не применились.
+                var applied = radius >= 4;
+                var hrefs = [];
+                if (!applied) {
+                    var links = document.querySelectorAll("link[rel='stylesheet'],link[rel=stylesheet]");
+                    for (var i = 0; i < links.length; i++) {
+                        hrefs.push((links[i].getAttribute('href')||'').split('/').slice(-2).join('/'));
+                    }
                 }
-                var c = document.querySelector('.news-inline-comment');
-                var bg = c ? getComputedStyle(c).backgroundColor : 'no-node';
-                var sec = document.querySelectorAll('.news-comments-section').length;
-                return JSON.stringify({sheets: out, commentBg: bg, sections: sec});
+                return JSON.stringify({applied: applied, radius: radius, bg: cs.backgroundColor, hrefs: hrefs});
             } catch(e){ return 'probe_error:'+e; }
         })();"""
         webView.evaluateJavascript(script) { raw ->
@@ -2145,15 +2160,44 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             // → hostFragment() (parentFragment as ...) ронял NPE. Гейт как у прочих.
             if (!isWebViewReady()) return@evaluateJavascript
             val payload = raw?.trim()?.removeSurrounding("\"")?.replace("\\\"", "\"").orEmpty()
-            FpdaDebugLog.log(
-                    FpdaDebugLog.TAG_ARTICLE_WEBVIEW,
-                    "style_state_probe",
-                    mapOf(
-                            "reason" to reason,
-                            "articleId" to hostFragment().currentArticleId(),
-                            "state" to payload,
-                    )
-            )
+            val brokenStyles = payload.contains("\"applied\":false")
+            val articleId = hostFragment().currentArticleId()
+            if (styleHealArticleId != articleId) {
+                styleHealArticleId = articleId
+                styleHealCount = 0
+            }
+            if (brokenStyles && styleHealCount < STYLE_HEAL_MAX) {
+                // Первопричина — гонка общего MiniTemplator: в HTML запёкся ПУСТОЙ ${'$'}{style_type},
+                // ссылки стали `.../styles//_main.css` (нет папки light/dark) и не загрузились. Ре-рендер
+                // не лечит (пути уже запечены). Чиним прямо в DOM: подставляем тип в сломанный href —
+                // `/styles//` → `/styles/<type>/<type>`, WebView до-фетчивает валидный CSS и применяет.
+                styleHealCount++
+                val styleType = viewModel.uiState.value.styleType.takeIf { it == "light" || it == "dark" } ?: "light"
+                FpdaDebugLog.warn(
+                        FpdaDebugLog.TAG_ARTICLE_WEBVIEW,
+                        "style_state_heal_href",
+                        mapOf("reason" to reason, "articleId" to articleId, "attempt" to styleHealCount, "type" to styleType, "state" to payload)
+                )
+                val healScript = """(function(){
+                    var links = document.querySelectorAll("link[rel='stylesheet'],link[rel=stylesheet]");
+                    var fixed = 0;
+                    for (var i = 0; i < links.length; i++) {
+                        var h = links[i].getAttribute('href') || '';
+                        if (h.indexOf('/styles//') !== -1) {
+                            links[i].setAttribute('href', h.replace('/styles//', '/styles/$styleType/$styleType'));
+                            fixed++;
+                        }
+                    }
+                    return fixed;
+                })();"""
+                webView.evaluateJavascript(healScript, null)
+            } else if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                FpdaDebugLog.log(
+                        FpdaDebugLog.TAG_ARTICLE_WEBVIEW,
+                        "style_state_probe",
+                        mapOf("reason" to reason, "articleId" to hostFragment().currentArticleId(), "state" to payload)
+                )
+            }
         }
     }
 
@@ -3492,6 +3536,8 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         private const val MAX_UNPAINTED_RECOVERY_ATTEMPTS = 10
         private const val UNPAINTED_RECOVERY_BASE_DELAY_MS = 120L
         private const val UNPAINTED_WEBVIEW_RESET_ATTEMPT = 5
+        // Max full re-renders to recover from broken article CSS (see probeArticleStyleState).
+        private const val STYLE_HEAL_MAX = 2
         private const val COMMENTS_BIND_RETRY_MS = 120L
         private const val COMMENTS_INJECT_RETRY_MS = 150L
         private const val MAX_COMMENTS_BIND_RETRIES = 12
