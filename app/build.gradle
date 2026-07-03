@@ -4,10 +4,11 @@ import java.text.SimpleDateFormat
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.21'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '2.2.0'
     alias libs.plugins.ksp
     alias libs.plugins.kotlin.compose
     alias libs.plugins.hilt.android
+    alias libs.plugins.androidx.baselineprofile
     id 'io.gitlab.arturbosch.detekt' version '1.23.4'
 }
 
@@ -147,59 +148,25 @@ android {
     productFlavors {
         stable {
             dimension "channel"
-            // Только stable: всегда ключ ForPDA 2 (parallel). Без keystore.parallel.properties
-            // сборка stable APK/AAB блокируется (см. taskGraph.whenReady ниже).
+            // stable: ForPDA 2, ru.forpdateam.forpda.parallel (applicationId из defaultConfig).
+            // Всегда ключ ForPDA 2 (parallel). Без keystore.parallel.properties сборка stable
+            // блокируется (см. taskGraph.whenReady ниже; для смоука -Pforpda.allowDebugSignedStable=true).
             if (parallelKeystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.parallel
             } else {
                 signingConfig signingConfigs.debug
             }
         }
-        store {
-            dimension "channel"
-            applicationId 'ru.forpdateam.forpda'
-            versionName "${versionMajor}.${versionMinor}.${versionPatch}"
-            // AppMetrica public API key is gated to the store flavor only.
-            // Empty for dev/beta/parallel/stable to make accidental leaks obvious in logs.
-            buildConfigField "String", 'APPMETRICA_API_KEY', '"a94d9236-cdf3-4a5e-af30-d6dbffaea362"'
-            // Оригинальный пакет Play — тот же keystore.properties (debug/release как в проекте).
-            if (hasUpstreamReleaseKeystore) {
-                signingConfig signingConfigs.upstreamRelease
-            } else {
-                signingConfig signingConfigs.debug
-            }
-        }
-        beta {
-            dimension "channel"
-            applicationId 'ru.forpdateam.forpda.beta'
-            versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild}) beta"
-            if (hasUpstreamReleaseKeystore) {
-                signingConfig signingConfigs.upstreamRelease
-            } else {
-                signingConfig signingConfigs.debug
-            }
-        }
-        dev {
-            dimension "channel"
-            applicationId 'ru.forpdateam.forpda.debug'
-            versionName "${versionMajor}.${versionMinor}.${versionPatch} (${versionBuild}) dev"
-            if (hasUpstreamReleaseKeystore) {
-                signingConfig signingConfigs.upstreamRelease
-            } else {
-                signingConfig signingConfigs.debug
-            }
-        }
         legacy {
             dimension "channel"
-            // Параллельная сборка с поддержкой Android 7 (API 24). Отдельный
-            // applicationId — ставится рядом с основной .parallel-версией.
-            // ВНИМАНИЕ: minSdk 24 разрешает установку на Android 7, но не делает
-            // безопасными вызовы API 26+ — возможны падения, нужен тест на «семёрке».
+            // Параллельная сборка с поддержкой Android 7 (API 24). Отдельный applicationId —
+            // ставится РЯДОМ с основной .parallel-версией (это другое приложение, не апдейт).
+            // ВНИМАНИЕ: minSdk 24 разрешает установку на Android 7, но не делает безопасными
+            // вызовы API 26+ — возможны падения, нужен тест на «семёрке».
             applicationId "ru.forpdateam.forpda.legacy"
             minSdk 24
             versionNameSuffix " (a7)"
-            // Та же подпись, что и stable (ForPDA 2). Без keystore.parallel.properties —
-            // падает по гейту ниже (или -Pforpda.allowDebugSignedStable=true для смоука).
+            // Та же подпись, что и stable (ForPDA 2, parallel-ключ).
             if (parallelKeystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.parallel
             } else {
@@ -292,15 +259,6 @@ gradle.taskGraph.whenReady { graph ->
                         "(подпись ru.forpdateam.forpda.parallel). См. keystore.parallel.properties.example. " +
                         "Для CI/смоук-сборки с debug-подписью: -Pforpda.allowDebugSignedStable=true")
     }
-    def needsOfficialStoreRelease = graph.allTasks.any { task ->
-        def n = task.name
-        return n.contains("StoreRelease") && (n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package") || n.startsWith("publish"))
-    }
-    if (needsOfficialStoreRelease && !hasUpstreamReleaseKeystore) {
-        throw new GradleException(
-                "Сборка официального store-варианта требует RELEASE_* ключи в keystore.properties; " +
-                        "debug-подпись для storeRelease запрещена.")
-    }
 }
 
 configurations.all {
@@ -334,6 +292,8 @@ dependencies {
     implementation libs.androidx.viewpager
     implementation libs.androidx.viewpager2
     implementation libs.androidx.profileinstaller
+    // Bundled Baseline Profile generated by the :baselineprofile module (applied by ART on first run).
+    baselineProfile project(':baselineprofile')
     implementation libs.androidx.work.runtime
     // FIXME: Using alpha due to API changes in 1.0.x stable. Consider migrating to Tink directly.
     implementation libs.androidx.security.crypto
