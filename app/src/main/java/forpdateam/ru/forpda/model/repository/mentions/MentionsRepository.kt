@@ -57,15 +57,37 @@ class MentionsRepository(
 
     suspend fun refreshMentions(page: Int): MentionsData = withContext(Dispatchers.IO) {
         val startedAt = SystemClock.uptimeMillis()
-        mentionsApi.getMentions(page).also { data ->
-            val syncStartedAt = SystemClock.uptimeMillis()
-            synchronized(stateLock) {
+        val data = try {
+            mentionsApi.getMentions(page)
+        } catch (e: Exception) {
+            // Транзиентный сбой запроса (напр. Cloudflare-404 на act=mentions). Держим последний
+            // хороший список, если он есть; ошибку пробрасываем только когда показывать нечего.
+            val cached = synchronized(stateLock) { cachedPages[page] }
+            if (cached != null && cached.items.isNotEmpty()) {
+                logPerf("refresh failed (kept cached)", startedAt, "page=$page cached=${cached.items.size} err=${e.message}")
+                return@withContext cached.copyMentionsData()
+            }
+            throw e
+        }
+        val syncStartedAt = SystemClock.uptimeMillis()
+        val result = synchronized(stateLock) {
+            val previous = cachedPages[page]
+            if (data.items.isEmpty() && previous != null && previous.items.isNotEmpty()) {
+                // A non-empty list turning empty on refresh is virtually always a transient fetch or
+                // parse glitch (flaky network, a rate-limit/redirect page parsed as 0 rows) — 4pda
+                // keeps read mentions listed, they don't disappear. Keep the previous list instead of
+                // flashing "Нет упоминаний" and clobbering the cache. A genuinely emptied list still
+                // clears on the next non-empty/real load; the badge is computed separately.
+                previous.copyMentionsData()
+            } else {
                 restoreLocalUnreadStateLocked(data)
                 cachedPages[page] = data.copyMentionsData()
+                data
             }
-            logPerf("read-state sync", syncStartedAt, "page=$page items=${data.items.size}")
-            logPerf("network refresh", startedAt, "page=$page items=${data.items.size}")
         }
+        logPerf("read-state sync", syncStartedAt, "page=$page items=${result.items.size}")
+        logPerf("network refresh", startedAt, "page=$page netItems=${data.items.size} shown=${result.items.size}")
+        result
     }
 
     suspend fun markPostsRead(topicId: Int, postIds: Collection<Int>): Boolean = withContext(Dispatchers.IO) {

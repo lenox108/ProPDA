@@ -37,12 +37,27 @@ private fun absolutizeForumHref(t: String): String {
  * В строке списка «Ответы» первый href часто ведёт только на тему; для прокрутки к сообщению
  * нужна ссылка с findpost / view=findpost или showtopic…&p= / &pid=.
  */
+/**
+ * News-comment mention rows on 4pda sometimes carry the author field base64-encoded (e.g.
+ * `0JfQsNGHPw==` → `Зач?`), so it was shown as raw base64 in the «Ответы» list. Delegates to the
+ * shared [decodeNickIfBase64] — the same encoding also appears in inline news comments.
+ */
+internal fun decodeMentionNickIfBase64(raw: String?): String? =
+        forpdateam.ru.forpda.model.data.remote.api.decodeNickIfBase64(raw)
+
+/** Findpost/showtopic anchors are only useful when they carry a real numeric post id — 4pda
+ *  emits a degenerate `index.php?showtopic=&view=findpost&p=` placeholder in news-comment mention
+ *  rows, and returning it verbatim sent taps to a forum 404 instead of the news comment. */
+private fun hasRealForumPostId(url: String): Boolean =
+        Regex("""(?i)[?&](?:p|pid)=\d+""").containsMatchIn(url)
+
 internal fun preferMentionPostUrl(rowHtml: String, primaryHref: String): String {
     val normRow = rowHtml.replace("&amp;", "&")
     val normPrimary = primaryHref.replace("&amp;", "&")
 
-    // Если primaryHref уже содержит findpost, возвращаем её сразу
-    if (Regex("(?i)findpost|view=findpost").containsMatchIn(normPrimary)) {
+    // Если primaryHref уже содержит findpost с реальным p=<id>, возвращаем её сразу.
+    // Пустой placeholder (view=findpost&p=) игнорируем — иначе тап уходит в 404.
+    if (Regex("(?i)findpost|view=findpost").containsMatchIn(normPrimary) && hasRealForumPostId(normPrimary)) {
         return normPrimary
     }
 
@@ -58,7 +73,7 @@ internal fun preferMentionPostUrl(rowHtml: String, primaryHref: String): String 
         return null
     }
 
-    firstMatchingHref { u -> Regex("(?i)findpost|view=findpost").containsMatchIn(u) }
+    firstMatchingHref { u -> Regex("(?i)findpost|view=findpost").containsMatchIn(u) && hasRealForumPostId(u) }
             ?.let {
                 val result = absolutizeForumHref(it)
                 return result
@@ -75,6 +90,7 @@ internal fun preferMentionPostUrl(rowHtml: String, primaryHref: String): String 
     Regex("""(?i)https?://[^\s"'<>]+(?:findpost|view=findpost)[^\s"'<>]*""")
             .find(normRow)
             ?.value
+            ?.takeIf { hasRealForumPostId(it) }
             ?.let {
                 return it
             }
@@ -125,7 +141,7 @@ class MentionsParser(
                         this.title = title
                         desc = matcher.group(5).fromHtml()
                         date = matcher.group(6)
-                        nick = matcher.group(7).fromHtml()
+                        nick = decodeMentionNickIfBase64(matcher.group(7).fromHtml())
                     })
                 }
         data.pagination = Pagination.parseForum(response)
@@ -137,7 +153,7 @@ class MentionsParser(
  * Если в строке есть id поста (data-атрибут, якорь, findpost в onclick), а в ссылке только showtopic.
  */
 internal fun patchMentionLinkIfTopicOnly(link: String, rowHtml: String): String {
-    if (Regex("(?i)findpost|view=findpost").containsMatchIn(link)) {
+    if (Regex("(?i)findpost|view=findpost").containsMatchIn(link) && hasRealForumPostId(link)) {
         return link
     }
     if (Regex("(?i)(?:[?&])p=\\d+").containsMatchIn(link) || Regex("(?i)(?:[?&])pid=\\d+").containsMatchIn(link)) {
