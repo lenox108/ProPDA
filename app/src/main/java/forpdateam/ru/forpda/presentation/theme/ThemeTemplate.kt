@@ -636,6 +636,20 @@ class ThemeTemplate(
         val topicHeader = resolveTopicHatPost(page)
         val shouldRenderInlineTopicHeader = topicHeader != null &&
                 TopicInlineHatOpenPolicy.shouldRenderInlineBlock(page)
+        // DIAGNOSTIC (debug): «шапка темы отсутствует после перехода на 1 страницу из глубокого
+        // открытия (link→link), до полной перезагрузки». На page 1 логируем ПОЧЕМУ инлайн-шапка
+        // рендерится/нет: current, url (влияет на isFirstPageTopicUrl), есть ли topicHatPost и
+        // проходит ли гейт политики. Repro-лог назовёт точный провалившийся вход.
+        if (BuildConfig.DEBUG && pageNumber == 1) {
+            Log.i(
+                    THEME_HISTORY_TAG,
+                    "inline_hat_render_diag topic=${page.id} current=${page.pagination.current} " +
+                            "topicHatPostId=${page.topicHatPost?.id ?: 0} " +
+                            "shouldRenderInline=$shouldRenderInlineTopicHeader " +
+                            "isFirstPageUrl=${TopicInlineHatOpenPolicy.isFirstPageTopicUrl(page.url.orEmpty())} " +
+                            "isHatOpen=${page.isHatOpen} url=${page.url}"
+            )
+        }
         val posts = dedupePostsById(
                 TopicPrependedHatPolicy.filterPostsForPageList(
                         page = page,
