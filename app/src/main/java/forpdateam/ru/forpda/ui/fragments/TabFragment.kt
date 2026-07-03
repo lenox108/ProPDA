@@ -374,7 +374,9 @@ open class TabFragment : Fragment() {
             }
         }
 
-        view.post { ViewCompat.requestApplyInsets(fragmentContainer) }
+        // view.post: к моменту выполнения фрагмент мог быть уничтожен (_binding=null
+        // в onDestroyView) → доступ к fragmentContainer (binding!!) ронял NPE.
+        view.post { _binding?.fragmentContainer?.let { ViewCompat.requestApplyInsets(it) } }
         syncToolbarSpinnerEndSpacer()
     }
 
