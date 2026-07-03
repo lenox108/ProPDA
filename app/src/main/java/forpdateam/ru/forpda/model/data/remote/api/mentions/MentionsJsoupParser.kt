@@ -71,7 +71,7 @@ class MentionsJsoupParser : BaseParser() {
 
         // 5) Nick: the anchor whose href contains `showuser=`.
         val nickAnchor = row.selectFirst("a[href*=showuser=]")
-        val nick = nickAnchor?.text()?.fromHtml()
+        val nick = decodeMentionNickIfBase64(nickAnchor?.text()?.fromHtml())
 
         val item = MentionItem().apply {
             this.state = state

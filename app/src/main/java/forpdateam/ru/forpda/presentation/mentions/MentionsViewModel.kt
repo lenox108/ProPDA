@@ -120,6 +120,20 @@ class MentionsViewModel @Inject constructor(
     }
 
     fun onItemClick(item: MentionItem) {
+        // Ответ на КОММЕНТАРИЙ К НОВОСТИ помечаем прочитанным при открытии из списка: у новостных
+        // упоминаний нет механизма «отметить по видимому посту», как у форумных тем (ThemeViewModel
+        // гасит форумные ответы по факту рендера страницы). Без этого строка и бейдж «Ответы» висят
+        // вечно — даже после перехода в новость. Форумные упоминания не трогаем (у них своя логика).
+        if (item.type == MentionItem.TYPE_NEWS) {
+            scope.launch {
+                val (changed, snapshot) = mentionsRepository.markMentionItemRead(item)
+                if (changed) {
+                    item.state = MentionItem.STATE_READ
+                    countersHolder.setMentions(snapshot.unreadCount, source = "mention_opened_news")
+                    _uiEvents.emit(MentionsUiEvent.MentionMarkedRead(item))
+                }
+            }
+        }
         linkHandler.handle(item.link, router, mapOf(
                 Screen.ARG_TITLE to item.title.orEmpty(),
                 Screen.Theme.ARG_TOPIC_OPEN_SOURCE to "mentions"

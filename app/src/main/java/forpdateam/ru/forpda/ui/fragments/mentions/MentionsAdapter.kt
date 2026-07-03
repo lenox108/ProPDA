@@ -127,16 +127,20 @@ class MentionsAdapter : BaseAdapter<MentionItem, MentionsAdapter.MentionHolder>(
         }
 
         override fun onClick(view: View) {
-            // layoutPosition = -1 (NO_POSITION), пока item удаляется/анимируется →
-            // getItem(-1) роняло IndexOutOfBoundsException. Гейтим по границам.
-            val position = layoutPosition
-            if (position < 0 || position >= getItemCount()) return
+            // ВАЖНО: bindingAdapterPosition, а НЕ layoutPosition. layoutPosition отражает позицию в
+            // текущем лэйауте и остаётся СТАРОЙ после обновления списка (DiffUtil submit на каждом
+            // показе вкладки/refresh «Ответы»), поэтому тап по строке резолвил getItem() против
+            // нового списка со старым индексом → открывалась соседняя (не та) тема ниже — например,
+            // тап по упоминанию-новости открывал форумную тему из строки под ней. bindingAdapterPosition
+            // маппится на актуальный items и возвращает NO_POSITION(-1) во время обновления (гейт ниже).
+            val position = bindingAdapterPosition
+            if (position < 0 || position >= items.size) return
             itemClickListener?.onItemClick(getItem(position))
         }
 
         override fun onLongClick(view: View): Boolean {
-            val position = layoutPosition
-            if (position < 0 || position >= getItemCount()) return false
+            val position = bindingAdapterPosition
+            if (position < 0 || position >= items.size) return false
             return itemClickListener?.let {
                 it.onItemLongClick(getItem(position))
                 true

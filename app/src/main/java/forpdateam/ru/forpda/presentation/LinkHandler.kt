@@ -34,7 +34,11 @@ class LinkHandler(
 
     private val baseFourPdaPattern by lazy { Pattern.compile("(?:http?s?:)?\\/\\/[\\s\\S]*?(?:4pda\\.to|4pda\\.ru)[\\s\\S]*") }
 
-    private val sitePattern by lazy { Pattern.compile("https?:\\/\\/4pda\\.to\\/(?:.+?p=|\\d+\\/\\d+\\/\\d+\\/|[\\w\\/]*?\\/?(newer|older)\\/)(\\d+)(?:\\/#comment(\\d+))?") }
+    // `[^#\s]*` перед `#comment` — потому что реальная ссылка news-упоминания несёт СЛАГ статьи между
+    // id и якорем: `…/458379/onlajn_watch_dogs…/#comment10653747`. Старый `(?:/#comment(\d+))?` требовал
+    // `#comment` СРАЗУ после id (`458379/#comment…`), поэтому commentId не парсился и переход к коммент-
+    // ответу открывал новость без якоря. Слаг/квери-хвост поглощаем до первого `#`, затем ловим #comment.
+    private val sitePattern by lazy { Pattern.compile("https?:\\/\\/4pda\\.to\\/(?:.+?p=|\\d+\\/\\d+\\/\\d+\\/|[\\w\\/]*?\\/?(newer|older)\\/)(\\d+)[^#\\s]*(?:#comment(\\d+))?") }
 
 
     private fun handleDownload(url: String, name: String? = null) {

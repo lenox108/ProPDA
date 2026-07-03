@@ -97,6 +97,52 @@ class MentionsRepositoryTest {
     }
 
     @Test
+    fun refreshMentions_keepsPreviousListWhenRefreshReturnsEmpty() = runTest {
+        // Симптом бага: список «Ответы» опустошается после захода. Причина — транзиентный
+        // пустой/битый ответ (0 распарсенных строк) перетирал непустой список и кэш. 4pda
+        // прочитанные упоминания из списка не убирает, так что 0 после N — почти всегда сбой.
+        every { mentionsApi.getMentions(0) } returnsMany listOf(
+                MentionsData().apply {
+                    items.add(MentionItem().apply {
+                        state = MentionItem.STATE_UNREAD
+                        type = MentionItem.TYPE_NEWS
+                        link = "https://4pda.to/2026/07/02/458351/#comment10652404"
+                    })
+                },
+                MentionsData(), // транзиентный пустой рефреш
+        )
+
+        val first = repository.refreshMentions(0)
+        assertEquals(1, first.items.size)
+
+        val second = repository.refreshMentions(0)
+        // Не должен «мигнуть» пустым — сохраняем ранее загруженное упоминание.
+        assertEquals(1, second.items.size)
+    }
+
+    @Test
+    fun refreshMentions_showsEmptyWhenNoPreviousList() = runTest {
+        // Настоящий пустой список (упоминаний не было) отдаём как есть — гард только про N→0.
+        every { mentionsApi.getMentions(0) } returns MentionsData()
+        assertEquals(0, repository.refreshMentions(0).items.size)
+    }
+
+    @Test
+    fun refreshMentions_keepsPreviousListWhenFetchThrows() = runTest {
+        // act=mentions отдал HTTP 404 (Cloudflare) → MentionsApi бросает; не опустошаем список.
+        every { mentionsApi.getMentions(0) } returns MentionsData().apply {
+            items.add(MentionItem().apply {
+                state = MentionItem.STATE_UNREAD
+                type = MentionItem.TYPE_NEWS
+                link = "https://4pda.to/2026/07/02/458351/#comment10652404"
+            })
+        } andThenThrows forpdateam.ru.forpda.client.OkHttpResponseException(404, "Not Found", "url")
+
+        assertEquals(1, repository.refreshMentions(0).items.size)
+        assertEquals(1, repository.refreshMentions(0).items.size) // 404 — держим прошлый список
+    }
+
+    @Test
     fun markPostsRead_readsOnlyExactTopicPostKey() = runTest {
         every { mentionsApi.getMentions(0) } returnsMany listOf(
                 MentionsData().apply {

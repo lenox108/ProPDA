@@ -112,6 +112,42 @@ class MentionsViewModelTest {
     }
 
     @Test
+    fun `onItemClick marks news mention read and clears badge`() = runTest {
+        countersHolder.update { it.mentions = 1 }
+        val newsItem = MentionItem().apply {
+            state = MentionItem.STATE_UNREAD
+            type = MentionItem.TYPE_NEWS
+            link = "https://4pda.to/2026/07/02/458379/#comment10652404"
+        }
+        coEvery { mentionsRepository.markMentionItemRead(newsItem) } returns
+                (true to MentionsRepository.UnreadMentionsSnapshot(0, emptyList()))
+
+        createViewModel().onItemClick(newsItem)
+        advanceUntilIdle()
+
+        coVerify { mentionsRepository.markMentionItemRead(newsItem) }
+        assertEquals(0, countersHolder.get().mentions)
+        assertEquals(MentionItem.STATE_READ, newsItem.state)
+        verify { linkHandler.handle(newsItem.link, any(), any()) }
+    }
+
+    @Test
+    fun `onItemClick does not mark forum mention read`() = runTest {
+        val forumItem = MentionItem().apply {
+            state = MentionItem.STATE_UNREAD
+            type = MentionItem.TYPE_TOPIC
+            link = "https://4pda.to/forum/index.php?showtopic=1&view=findpost&p=42"
+        }
+
+        createViewModel().onItemClick(forumItem)
+        advanceUntilIdle()
+
+        // Форумные упоминания гасятся по видимому посту в ThemeViewModel, не на тапе.
+        coVerify(exactly = 0) { mentionsRepository.markMentionItemRead(any()) }
+        verify { linkHandler.handle(forumItem.link, any(), any()) }
+    }
+
+    @Test
     fun `loading mentions emits cached data before background refresh`() = runTest {
         val cached = MentionsData().apply {
             items.add(MentionItem().apply {
