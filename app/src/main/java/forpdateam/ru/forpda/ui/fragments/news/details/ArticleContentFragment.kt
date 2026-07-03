@@ -127,6 +127,12 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     private var commentsBindEpoch: Int = 0
     private var commentsInjectRetryCount: Int = 0
     private var commentsVerifyPass: Int = 0
+    // Target comment to scroll into view after a post/reply/deep-link, kept live across the render
+    // pipeline: a late full re-inject or a slow batch reload would otherwise reset scroll to the top
+    // before the freshly rendered comment is reachable. Re-asserted on each render-complete until
+    // the deadline, so it stops fighting the user once comments settle.
+    private var pendingCommentScrollId: Int = 0
+    private var pendingCommentScrollDeadline: Long = 0L
     private var commentsFooterMountAttempted: Boolean = false
     private var commentsFooterInDom: Boolean = false
     private var commentsJsReady: Boolean = false
@@ -2107,6 +2113,50 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         }, COMMENTS_INJECT_RETRY_MS)
     }
 
+    /**
+     * DIAGNOSTIC (debug only): captures the WebView stylesheet load-state at render time to pin the
+     * intermittent «сломалась вёрстка» bug — where the whole `${'$'}{style_type}_news.css`/`_main.css`
+     * stops applying (video card, blockquote, comment cards render native/unstyled) while the base
+     * dark theme from md_colors + inline overrides survives, and it self-heals only on app restart.
+     * CDP is unavailable in the repro env, so this logs, per <link>: href, whether cssRules is
+     * accessible (loaded=true) or threw (loaded=false → the sheet failed/never fetched), plus the
+     * computed background of the first `.news-inline-comment` (transparent ⇒ _news.css not applied).
+     * When it next breaks, the log names exactly which sheet didn't load.
+     */
+    private fun probeArticleStyleState(reason: String) {
+        if (!forpdateam.ru.forpda.BuildConfig.DEBUG || !isWebViewReady()) return
+        val script = """(function(){
+            try {
+                var out = [];
+                var sheets = document.styleSheets || [];
+                for (var i=0;i<sheets.length;i++){
+                    var s = sheets[i]; var href = (s && s.href) || 'inline'; var loaded;
+                    try { loaded = !!(s.cssRules); } catch(e){ loaded = false; }
+                    out.push((href.split('/').slice(-2).join('/'))+':'+(loaded?'1':'0'));
+                }
+                var c = document.querySelector('.news-inline-comment');
+                var bg = c ? getComputedStyle(c).backgroundColor : 'no-node';
+                var sec = document.querySelectorAll('.news-comments-section').length;
+                return JSON.stringify({sheets: out, commentBg: bg, sections: sec});
+            } catch(e){ return 'probe_error:'+e; }
+        })();"""
+        webView.evaluateJavascript(script) { raw ->
+            // Асинхронный колбэк: фрагмент мог отсоединиться от NewsDetailsFragment
+            // → hostFragment() (parentFragment as ...) ронял NPE. Гейт как у прочих.
+            if (!isWebViewReady()) return@evaluateJavascript
+            val payload = raw?.trim()?.removeSurrounding("\"")?.replace("\\\"", "\"").orEmpty()
+            FpdaDebugLog.log(
+                    FpdaDebugLog.TAG_ARTICLE_WEBVIEW,
+                    "style_state_probe",
+                    mapOf(
+                            "reason" to reason,
+                            "articleId" to hostFragment().currentArticleId(),
+                            "state" to payload,
+                    )
+            )
+        }
+    }
+
     private fun injectCommentsHtml(
             state: ArticleCommentsState.Loaded,
             generation: Int,
@@ -2154,6 +2204,9 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             return newsInlineCommentsInjectHtml(${JSONObject.quote(html)}, ${generation}, ${scrollToCommentId}, ${state.canLoadMore}, ${state.totalCount}, ${state.comments.size});
         })();"""
         webView.evaluateJavascript(script) { raw ->
+            // Асинхронный колбэк: фрагмент мог отсоединиться от NewsDetailsFragment
+            // → hostFragment() в commentsBridgeFields ронял NPE. Гейт как у прочих.
+            if (!isWebViewReady()) return@evaluateJavascript
             val result = raw?.trim()?.removeSurrounding("\"").orEmpty()
             if (result == "ok") {
                 commentsInjectRetryCount = 0
@@ -2168,6 +2221,8 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                                 )
                         )
                 )
+                reassertPendingCommentScroll()
+                probeArticleStyleState("render_success")
             } else {
                 logCommentsSection(
                         "render_error",
@@ -2221,6 +2276,9 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             return newsInlineCommentsAppendHtml(${JSONObject.quote(html)}, ${generation}, ${state.canLoadMore}, ${state.totalCount}, ${state.comments.size});
         })();"""
         webView.evaluateJavascript(script) { raw ->
+            // Асинхронный колбэк: фрагмент мог отсоединиться от NewsDetailsFragment
+            // → hostFragment() в commentsBridgeFields ронял NPE. Гейт как у прочих.
+            if (!isWebViewReady()) return@evaluateJavascript
             val result = raw?.trim()?.removeSurrounding("\"").orEmpty()
             if (result == "ok") {
                 updateCommentsLoadMoreVisibility(state.canLoadMore, state.totalCount, state.comments.size)
@@ -2245,6 +2303,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                                 )
                         )
                 )
+                reassertPendingCommentScroll()
             } else {
                 logCommentsSection(
                         "render_append_error",
@@ -2422,7 +2481,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                     webView.postDelayed({ scrollInlineCommentIntoView(scrollId) }, 480L)
                 }
             }
-            is ArticleCommentUiEvent.ScrollToComment -> scrollInlineCommentIntoView(event.commentId, event.index)
+            is ArticleCommentUiEvent.ScrollToComment -> armPendingCommentScroll(event.commentId, event.index)
             is ArticleCommentUiEvent.ShowEditComment -> showEditCommentDialog(event.action, event.text)
             is ArticleCommentUiEvent.UpdateCommentLike -> {
                 patchInlineCommentLike(
@@ -2436,6 +2495,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 hostFragment().showInlineComments()
                 requestCommentsExpand("reply_comment")
             }
+            is ArticleCommentUiEvent.PatchComment -> patchInlineCommentNode(event.comment)
             ArticleCommentUiEvent.RefreshLoadMoreUi -> {
                 val loaded = commentsViewModel.commentsState.value
                 if (loaded is ArticleCommentsState.Loaded) {
@@ -2568,6 +2628,33 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 }
             })();"""
 
+    /**
+     * Arms a durable scroll-to-comment target and scrolls now. The target is re-asserted by
+     * [reassertPendingCommentScroll] after every subsequent comment render, so a late re-inject or a
+     * slow batched reload can't strand the fresh comment at the top. Also used for deep-link/mention
+     * navigation to a specific comment.
+     */
+    private fun armPendingCommentScroll(commentId: Int, index: Int = -1) {
+        val targetId = commentId.takeIf { it > 0 }
+                ?: inlineComments.getOrNull(index)?.id
+                ?: return
+        pendingCommentScrollId = targetId
+        pendingCommentScrollDeadline = SystemClock.uptimeMillis() + PENDING_COMMENT_SCROLL_WINDOW_MS
+        scrollInlineCommentIntoView(targetId, index)
+    }
+
+    /** Re-fires the pending scroll after a render completes, until the comment is reached or the
+     *  short window expires. Tied to render events (not a timer), so it stops once comments settle. */
+    private fun reassertPendingCommentScroll() {
+        val id = pendingCommentScrollId
+        if (id <= 0) return
+        if (SystemClock.uptimeMillis() > pendingCommentScrollDeadline) {
+            pendingCommentScrollId = 0
+            return
+        }
+        scrollInlineCommentIntoView(id)
+    }
+
     private fun scrollInlineCommentIntoView(commentId: Int, index: Int = -1) {
         val targetId = commentId.takeIf { it > 0 }
                 ?: inlineComments.getOrNull(index)?.id
@@ -2576,8 +2663,12 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         val script = "newsInlineCommentScrollIntoView(" + targetId + ");"
         webView.post {
             webView.evalJs(script)
-            webView.postDelayed({ webView.evalJs(script) }, 120L)
-            webView.postDelayed({ webView.evalJs(script) }, 320L)
+            // Re-assert across a wider window: after posting a reply a full list re-inject can fire
+            // a few hundred ms later and reset scroll to the top, so a single early scroll would be
+            // overridden and the fresh comment appears "lost" at the top.
+            longArrayOf(120L, 320L, 600L, 900L).forEach { delay ->
+                webView.postDelayed({ webView.evalJs(script) }, delay)
+            }
         }
     }
 
@@ -2655,6 +2746,17 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             );
         })();"""
         webView.evalJs(script)
+    }
+
+    private fun patchInlineCommentNode(comment: Comment) {
+        if (!isWebViewReady()) return
+        val html = buildInlineCommentHtml(comment)
+        val script = """(function(){
+            if (typeof newsInlineCommentReplaceNode !== 'function') return;
+            newsInlineCommentReplaceNode(${JSONObject.quote(comment.id.toString())}, ${JSONObject.quote(html)});
+        })();"""
+        webView.evalJs(script)
+        inlineComments = inlineComments.map { if (it.id == comment.id) comment else it }
     }
 
     private fun showInlineCommentMenu(comment: Comment) {
@@ -3402,6 +3504,10 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 "no_list",
         )
         private const val COMMENTS_VERIFY_DELAY_MS = 180L
+        // How long a scroll-to-new-comment target stays live across re-renders after a post/reply.
+        // Long enough to survive a slow batched reload + late re-inject, short enough to stop fighting
+        // the user once comments settle.
+        private const val PENDING_COMMENT_SCROLL_WINDOW_MS = 4_000L
         private const val MAX_COMMENTS_VERIFY_PASSES = 5
         private const val PENDING_EXPAND_WATCHDOG_MS = 2_500L
         private const val WEBVIEW_RENDER_SOFT_TIMEOUT_MS = 6_000L
