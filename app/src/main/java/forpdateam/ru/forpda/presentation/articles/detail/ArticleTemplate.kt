@@ -41,6 +41,13 @@ class ArticleTemplate(
     fun mapString(page: DetailsPage): String {
         val template = templateManager.getTemplate(TemplateManager.TEMPLATE_NEWS)
 
+        // Кэшированный экземпляр MiniTemplator ОБЩИЙ и НЕ потокобезопасен: конкурентный маппинг
+        // (префетч статьи в фоне + открытие другой) переплетал setVariable/reset разных потоков, и в
+        // шаблон подставлялся ПУСТОЙ ${style_type} → ссылки ломались (styles//_main.css,
+        // styles//_news.css не грузились) → перемежающийся срыв вёрстки, лечился лишь рестартом
+        // (см. style_state_probe: hrefs=[…,"/_main.css","/_news.css"]). Сериализуем на экземпляре.
+        return synchronized(template) {
+        template.reset()
         template.apply {
             templateManager.fillStaticStrings(this)
             setVariableOpt("style_type", templateManager.getThemeType())
@@ -114,7 +121,8 @@ class ArticleTemplate(
 
         val result = template.generateOutput()
         template.reset()
-        return result
+        result
+        }
     }
 
     /**

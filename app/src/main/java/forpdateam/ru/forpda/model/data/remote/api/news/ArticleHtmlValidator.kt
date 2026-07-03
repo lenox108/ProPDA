@@ -44,11 +44,16 @@ object ArticleHtmlValidator {
         return PageKind.UNKNOWN
     }
 
-    fun looksLikeLoginPage(html: String): Boolean =
-            html.contains("wp-login.php", ignoreCase = true) ||
-                    html.contains("loginform", ignoreCase = true) ||
-                    (html.contains("act=auth", ignoreCase = true) &&
-                            html.contains("password", ignoreCase = true))
+    fun looksLikeLoginPage(html: String): Boolean {
+        // Настоящая стена логина ЗАМЕНЯЕТ контент. Если в ответе есть тело статьи — это сама статья
+        // (напр. новость ПРО пароли/PIN-коды): `act=auth` из шапки сайта + слово "password" в тексте
+        // не должны ложно классифицировать её как страницу входа. Тот же гард, что в looksLikeErrorPage.
+        if (html.length >= 8_000 && looksLikeArticlePage(html)) return false
+        return html.contains("wp-login.php", ignoreCase = true) ||
+                html.contains("loginform", ignoreCase = true) ||
+                (html.contains("act=auth", ignoreCase = true) &&
+                        html.contains("password", ignoreCase = true))
+    }
 
     fun looksLikeCaptcha(html: String): Boolean =
             html.contains("captcha", ignoreCase = true) &&

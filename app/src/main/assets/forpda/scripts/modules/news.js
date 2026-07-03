@@ -1068,10 +1068,27 @@ function newsInlineCommentScrollIntoView(commentId) {
         return false;
     }
     var item = document.querySelector("[data-news-comment-id='" + commentId + "']");
-    if (!item) {
+    if (!item || typeof item.getBoundingClientRect !== "function") {
         return false;
     }
-    item.scrollIntoView({ block: "center", behavior: "smooth" });
+    // element.scrollIntoView()/window.scrollTo() are animated by this WebView even with
+    // behavior:"auto" (see theme.js themeInstantScrollToY). The scroll is re-asserted on every
+    // comment render while the section is still expanding and later batches keep appending, so a
+    // smooth animation never settles on the target — you land somewhere above it. Compute the
+    // absolute centered Y and assign scrollTop directly: instant and idempotent, so the final
+    // re-assert pins the comment exactly into view regardless of intervening layout shifts.
+    var rect = item.getBoundingClientRect();
+    var se = document.scrollingElement || document.documentElement || null;
+    var pageY = window.pageYOffset || (se ? se.scrollTop : 0) || 0;
+    var viewport = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 0) || 0;
+    var top = rect.top + pageY - Math.max(0, (viewport - rect.height) / 2);
+    if (!isFinite(top) || top < 0) top = 0;
+    if (se) {
+        try { se.scrollTop = top; } catch (ex) {}
+    }
+    if (document.body && document.body !== se) {
+        try { document.body.scrollTop = top; } catch (ex) {}
+    }
     return true;
 }
 
@@ -1467,6 +1484,32 @@ function newsInlineCommentUpdateLike(commentId, liked, count, pending) {
     like.classList.toggle("not-liked", !liked);
     var safeCount = typeof count === "number" && count > 0 ? count : 0;
     like.textContent = safeCount > 0 ? String(safeCount) : "";
+}
+
+// Replace a single comment node in place with freshly built HTML. Used after editing a
+// comment: the idempotent append path skips nodes whose id is already in the DOM, so an edit
+// would otherwise never refresh the rendered text. Replacing just the one node keeps scroll
+// position and avoids a full list re-render.
+function newsInlineCommentReplaceNode(commentId, html) {
+    if (!commentId || !html) {
+        return "no_args";
+    }
+    var item = document.querySelector("[data-news-comment-id='" + commentId + "']");
+    if (!item) {
+        return "no_node";
+    }
+    var temp = document.createElement("div");
+    temp.innerHTML = html;
+    var fresh = temp.firstElementChild;
+    if (!fresh) {
+        return "no_html";
+    }
+    item.replaceWith(fresh);
+    bindNewsInlineCommentActions();
+    if (typeof jsEmoticons !== "undefined") {
+        jsEmoticons.parseAll("file:///android_asset/smiles/");
+    }
+    return "ok";
 }
 //nativeEvents.addEventListener(nativeEvents.DOM, fixImagesSizeWithDensity, true);
 nativeEvents.addEventListener(nativeEvents.DOM, transformImages, true);

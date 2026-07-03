@@ -1,7 +1,9 @@
 package forpdateam.ru.forpda.model.interactors.news
 
 import android.content.Context
+import android.util.SparseArray
 import forpdateam.ru.forpda.diagnostic.ArticleCacheTrace
+import forpdateam.ru.forpda.entity.remote.news.Comment
 import forpdateam.ru.forpda.entity.remote.news.DetailsPage
 import forpdateam.ru.forpda.model.data.remote.api.news.ARTICLE_PARSER_VERSION
 import forpdateam.ru.forpda.model.data.remote.api.news.ArticleHtmlValidator
@@ -257,8 +259,40 @@ class ArticleDiskCache(
                     .put("imgUrl", page.imgUrl.orEmpty())
                     .put("author", page.author.orEmpty())
                     .put("date", page.date.orEmpty())
+                    .put("karma", serializeKarma(page.karmaMap))
                     .put("deferredExtrasPending", entry.deferredExtrasPending)
         }.getOrNull()
+    }
+
+    // Persist per-comment like state (status + count) so an article restored from disk shows the
+    // right hearts/counts immediately. Without this, a disk-served open resolved every comment to
+    // likedByMe=false / count=0 (karmaMap was rebuilt empty), so real likes — including the current
+    // user's own vote — vanished on reopen until a network refresh reparsed the ModKarma JSON.
+    private fun serializeKarma(map: SparseArray<Comment.Karma>?): JSONObject {
+        val obj = JSONObject()
+        if (map != null) {
+            for (index in 0 until map.size()) {
+                val karma = map.valueAt(index) ?: continue
+                obj.put(map.keyAt(index).toString(), "${karma.status},${karma.count}")
+            }
+        }
+        return obj
+    }
+
+    private fun deserializeKarma(obj: JSONObject?): SparseArray<Comment.Karma> {
+        val map = SparseArray<Comment.Karma>()
+        if (obj == null) return map
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val id = key.toIntOrNull() ?: continue
+            val parts = obj.optString(key).split(',')
+            map.put(id, Comment.Karma().also {
+                it.status = parts.getOrNull(0)?.trim()?.toIntOrNull() ?: 0
+                it.count = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: 0
+            })
+        }
+        return map
     }
 
     private fun deserializeEntry(item: JSONObject): Entry? {
@@ -277,6 +311,7 @@ class ArticleDiskCache(
             imgUrl = item.optString("imgUrl").takeIf { it.isNotBlank() }
             author = item.optString("author").takeIf { it.isNotBlank() }
             date = item.optString("date").takeIf { it.isNotBlank() }
+            karmaMap = deserializeKarma(item.optJSONObject("karma"))
         }
         return Entry(
                 page = page,

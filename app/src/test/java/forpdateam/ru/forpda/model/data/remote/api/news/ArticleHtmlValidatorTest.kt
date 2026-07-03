@@ -15,6 +15,18 @@ class ArticleHtmlValidatorTest {
     }
 
     @Test
+    fun `classifyRawHtml does not misflag article about passwords as login`() {
+        // Реальный кейс (458375): новость ПРО проверку PIN/паролей. В шапке сайта есть act=auth,
+        // а в теле — слово "password". Раньше это ложно давало LOGIN → «Не удалось загрузить новость».
+        val body = "PIN password проверка ".repeat(500)
+        val html = """<html><body><div class="article-body"><p>$body</p></div>
+            <a href="/forum/index.php?act=auth">Вход</a></body></html>"""
+        assertTrue(html.length >= 8_000)
+        assertFalse(ArticleHtmlValidator.looksLikeLoginPage(html))
+        assertEquals(ArticleHtmlValidator.PageKind.ARTICLE, ArticleHtmlValidator.classifyRawHtml(html))
+    }
+
+    @Test
     fun `hasNonEmptyParsedBody rejects empty article`() {
         val page = DetailsPage().apply {
             id = 1
