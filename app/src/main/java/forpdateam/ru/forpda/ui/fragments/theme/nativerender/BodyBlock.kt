@@ -40,6 +40,20 @@ sealed interface BodyBlock {
     ) : BodyBlock
 
     /**
+     * A native quote block (`.post-block.quote`), peeled out of the fallback in Фаза 2.
+     * Server structure (confirmed live via logged-in capture): `.block-title` holds
+     * "author @ date" text plus a snapback `<a href=findpost>` to the source post; `.block-body`
+     * holds the quoted content, which itself may contain nested quotes / images / etc. — hence
+     * [inner] is a recursively-rendered block list.
+     */
+    data class Quote(
+        val author: String?,
+        val date: String?,
+        val sourceUrl: String?,
+        val inner: List<BodyBlock>,
+    ) : BodyBlock
+
+    /**
      * A complex block rendered via the Фаза-1 inline-WebView fallback. [html] is the
      * block's outer HTML (verbatim server markup); [kind] classifies it so later phases
      * can route specific kinds to native views.

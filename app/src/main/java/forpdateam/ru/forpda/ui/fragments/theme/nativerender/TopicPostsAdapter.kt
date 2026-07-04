@@ -82,14 +82,53 @@ class TopicPostsAdapter(
 
         private fun renderBody(blocks: List<BodyBlock>) {
             body.removeAllViews()
+            renderBlocksInto(body, blocks)
+        }
+
+        /** Renders [blocks] as children of [container]. Reused recursively by quotes for their inner content. */
+        private fun renderBlocksInto(container: LinearLayout, blocks: List<BodyBlock>) {
             for (block in blocks) {
                 val child = when (block) {
                     is BodyBlock.Text -> textView(spanned(block.html))
                     is BodyBlock.Image -> imageView(block)
+                    is BodyBlock.Quote -> quoteView(block)
                     is BodyBlock.WebFallback -> bindFallback(block)
                 }
-                body.addView(child)
+                container.addView(child)
             }
+        }
+
+        /**
+         * Native quote: an accent-bordered card with a tappable "author · date" header (jumps to the
+         * source post via the app) and the recursively-rendered quoted content — nested quotes included.
+         */
+        private fun quoteView(block: BodyBlock.Quote): View {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            val card = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding((10 * dm.density).toInt())
+                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (6 * dm.density).toInt() }
+            }
+            val headerText = listOfNotNull(
+                    block.author?.takeIf { it.isNotBlank() },
+                    block.date?.takeIf { it.isNotBlank() },
+            ).joinToString(" · ").ifBlank { "Цитата" }
+            val header = TextView(ctx).apply {
+                text = headerText
+                textSize = 13f
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                val src = block.sourceUrl?.takeIf { it.isNotBlank() }
+                if (src != null) setOnClickListener { linkHandler.handle(src, null) }
+            }
+            card.addView(header)
+            renderBlocksInto(card, block.inner)
+            return card
         }
 
         /**

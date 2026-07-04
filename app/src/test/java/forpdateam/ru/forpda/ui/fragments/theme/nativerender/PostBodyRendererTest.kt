@@ -35,17 +35,19 @@ class PostBodyRendererTest {
     }
 
     @Test
-    fun nestedQuote_isOneQuoteFallback() {
+    fun nestedQuote_isNativeQuote_withAuthorDateAndNestedInner() {
         val blocks = renderer.render(fixture("quote_nested.html"))
-        // "Согласен…" (text) + [quote] + "Мой ответ…" (text) = 3 blocks.
+        // "Согласен…" (text) + native quote + "Мой ответ…" (text) = 3 blocks.
         assertEquals(3, blocks.size)
         assertTrue(blocks[0] is BodyBlock.Text)
-        assertFallback(blocks[1], Kind.QUOTE)
         assertTrue(blocks[2] is BodyBlock.Text)
-        // The nested inner quote travels INSIDE the outer fallback, not as its own block.
-        val quoteHtml = (blocks[1] as BodyBlock.WebFallback).html
-        assertTrue(quoteHtml.contains("InnerNick"))
-        assertTrue(quoteHtml.contains("OuterNick"))
+        val quote = blocks[1] as BodyBlock.Quote
+        assertEquals("OuterNick", quote.author)
+        assertEquals("21.05.2026, 14:30", quote.date)
+        // The inner content is recursively rendered: some text + the NESTED quote (native, not fallback).
+        val nested = quote.inner.filterIsInstance<BodyBlock.Quote>().single()
+        assertEquals("InnerNick", nested.author)
+        assertTrue(nested.inner.any { it is BodyBlock.Text && it.html.contains("Вложенная цитата") })
     }
 
     @Test
@@ -122,6 +124,7 @@ class PostBodyRendererTest {
                 is BodyBlock.Text -> it.html
                 is BodyBlock.WebFallback -> it.html
                 is BodyBlock.Image -> it.imageUrl
+                is BodyBlock.Quote -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
             }
         }
         assertTrue("recognisable text survives", recombined.contains("Незакрытый жирный текст"))
