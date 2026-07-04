@@ -55,14 +55,12 @@ class NativePostMapperTest {
                     "<div class=\"block-title\">t</div><div class=\"block-body\">s</div></div>",
         )
         val item = mapper.map(post)
-        // one leading Text block + one spoiler fallback
+        // one leading Text block + one native spoiler (title "t", inner text "s")
         assertEquals(2, item.blocks.size)
         assertTrue(item.blocks[0] is BodyBlock.Text)
-        assertTrue(item.blocks[1] is BodyBlock.WebFallback)
-        assertEquals(
-            BodyBlock.WebFallback.Kind.SPOILER,
-            (item.blocks[1] as BodyBlock.WebFallback).kind,
-        )
+        val spoiler = item.blocks[1] as BodyBlock.Spoiler
+        assertEquals("t", spoiler.title)
+        assertTrue(spoiler.inner.any { it is BodyBlock.Text && it.html.contains("s") })
     }
 
     @Test

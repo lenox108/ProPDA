@@ -85,8 +85,26 @@ class PostBodyRenderer {
                 extractSingleAttachmentImage(element)
             BodyBlock.WebFallback.Kind.QUOTE ->
                 if (element.hasClass("quote")) extractQuote(element) else null
+            BodyBlock.WebFallback.Kind.SPOILER ->
+                if (element.hasClass("spoil")) extractSpoiler(element) else null
             else -> null
         } ?: BodyBlock.WebFallback(element.outerHtml(), kind)
+    }
+
+    /**
+     * Builds a native [BodyBlock.Spoiler] from a `.post-block.spoil`: `.block-title` text as the
+     * toggle label, `open`/`close` class as the initial state, and the recursively-rendered
+     * `.block-body` as [BodyBlock.Spoiler.inner].
+     */
+    private fun extractSpoiler(element: Element): BodyBlock.Spoiler {
+        val title = element.selectFirst("> .block-title")?.text()?.trim()?.ifBlank { null }
+        val body = element.selectFirst("> .block-body")
+        val inner = if (body != null) renderNodes(body.childNodes()) else emptyList()
+        return BodyBlock.Spoiler(
+            title = title,
+            initiallyOpen = element.hasClass("open"),
+            inner = inner,
+        )
     }
 
     /**

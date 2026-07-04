@@ -51,13 +51,16 @@ class PostBodyRendererTest {
     }
 
     @Test
-    fun spoiler_isOneSpoilerFallback() {
+    fun spoiler_isNativeSpoiler_collapsedByDefault_withTitleAndInner() {
         val blocks = renderer.render(fixture("spoiler_basic.html"))
-        assertTrue("expected at least one spoiler fallback", blocks.any {
-            it is BodyBlock.WebFallback && it.kind == Kind.SPOILER
-        })
         // The leading "<span>Шаблоны…</span>" text renders natively.
         assertTrue(blocks.first() is BodyBlock.Text)
+        val spoiler = blocks.filterIsInstance<BodyBlock.Spoiler>().single()
+        assertEquals("Копируем содержимое в свое сообщение и заполняем", spoiler.title)
+        // Fixture class is "spoil close" → collapsed initially.
+        assertTrue(!spoiler.initiallyOpen)
+        // Inner content is rendered (the "Шаблон для модификаций:" text).
+        assertTrue(spoiler.inner.any { it is BodyBlock.Text && it.html.contains("Шаблон для модификаций") })
     }
 
     @Test
@@ -80,14 +83,14 @@ class PostBodyRendererTest {
     }
 
     @Test
-    fun attachmentImageLinked_staysSpoilerFallback_forNow() {
-        // img.linked-image lives inside a .post-block.spoil "Прикрепленные файлы": the top-level
-        // node is a SPOILER, so Фаза-2 single-image extraction (ATTACHMENT-kind only) does not
-        // apply — it stays a fallback. Gallery-in-spoiler is a later, separate step; here we only
-        // guarantee content is never dropped.
+    fun attachmentImageLinked_isNativeSpoiler_containingTheImage() {
+        // img.linked-image lives inside a .post-block.spoil "Прикрепленные файлы": the spoiler is now
+        // native; the linked image rides as inline HTML in the spoiler's inner content (gallery-in-
+        // spoiler as native images is a later step). Here we only guarantee content is never dropped.
         val blocks = renderer.render(fixture("attachment_image_linked.html"))
         assertFalse("content must never be dropped", blocks.isEmpty())
-        assertTrue(blocks.any { it is BodyBlock.WebFallback && it.kind == Kind.SPOILER })
+        val spoiler = blocks.filterIsInstance<BodyBlock.Spoiler>().single()
+        assertEquals("Прикрепленные файлы", spoiler.title)
     }
 
     @Test
@@ -107,11 +110,13 @@ class PostBodyRendererTest {
         val blocks = renderer.render(fixture("topic_hat.html"))
         // The hat has native intro text plus multiple complex blocks (attach table, spoilers/code).
         assertTrue("hat should have native text runs", blocks.any { it is BodyBlock.Text })
-        assertTrue("hat should have fallback blocks", blocks.any { it is BodyBlock.WebFallback })
         assertTrue("hat's attach image is a native Image block", blocks.any { it is BodyBlock.Image })
-        assertTrue("hat has spoilers", blocks.any {
-            it is BodyBlock.WebFallback && it.kind == Kind.SPOILER
-        })
+        assertTrue("hat's spoilers are native", blocks.any { it is BodyBlock.Spoiler })
+        // Code blocks are still WebFallback, but nested INSIDE the spoilers now (not top-level).
+        val codeNestedInSpoiler = blocks.filterIsInstance<BodyBlock.Spoiler>()
+                .flatMap { it.inner }
+                .any { it is BodyBlock.WebFallback && it.kind == Kind.CODE }
+        assertTrue("hat has a code block nested in a spoiler", codeNestedInSpoiler)
     }
 
     @Test
@@ -125,6 +130,7 @@ class PostBodyRendererTest {
                 is BodyBlock.WebFallback -> it.html
                 is BodyBlock.Image -> it.imageUrl
                 is BodyBlock.Quote -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
+                is BodyBlock.Spoiler -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
             }
         }
         assertTrue("recognisable text survives", recombined.contains("Незакрытый жирный текст"))

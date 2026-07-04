@@ -45,19 +45,32 @@ class TopicPostsAdapter(
 
     override fun getItemId(position: Int): Long = getItem(position).stableId
 
+    /**
+     * Spoiler expand/collapse state, keyed by "postId:spoilerIndex", surviving view recycling so a
+     * spoiler the user opened stays open after scrolling away and back. Absent key → the block's own
+     * initial (`open`/`close`) state.
+     */
+    private val spoilerStates = HashMap<String, Boolean>()
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PostViewHolder {
         val view = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_native_post, parent, false)
-        return PostViewHolder(view, linkHandler)
+        return PostViewHolder(view, linkHandler, spoilerStates)
     }
 
     override fun onBindViewHolder(holder: PostViewHolder, position: Int) {
         holder.bind(getItem(position))
     }
 
+    /** Per-post render pass state threaded through the recursive block rendering. */
+    private class RenderScope(val postId: Int) {
+        var spoilerSeq: Int = 0
+    }
+
     class PostViewHolder(
             itemView: View,
             private val linkHandler: ILinkHandler,
+            private val spoilerStates: MutableMap<String, Boolean>,
     ) : RecyclerView.ViewHolder(itemView) {
         private val avatar: ImageView = itemView.findViewById(R.id.native_post_avatar)
         private val nick: TextView = itemView.findViewById(R.id.native_post_nick)
@@ -77,21 +90,22 @@ class TopicPostsAdapter(
             footer.text = if (rating != null) "Рейтинг: $rating" else ""
             footer.visibility = if (rating != null) View.VISIBLE else View.GONE
 
-            renderBody(item.blocks)
+            renderBody(item)
         }
 
-        private fun renderBody(blocks: List<BodyBlock>) {
+        private fun renderBody(item: NativePostItem) {
             body.removeAllViews()
-            renderBlocksInto(body, blocks)
+            renderBlocksInto(body, item.blocks, RenderScope(item.postId))
         }
 
-        /** Renders [blocks] as children of [container]. Reused recursively by quotes for their inner content. */
-        private fun renderBlocksInto(container: LinearLayout, blocks: List<BodyBlock>) {
+        /** Renders [blocks] as children of [container]. Reused recursively by quotes/spoilers. */
+        private fun renderBlocksInto(container: LinearLayout, blocks: List<BodyBlock>, scope: RenderScope) {
             for (block in blocks) {
                 val child = when (block) {
                     is BodyBlock.Text -> textView(spanned(block.html))
                     is BodyBlock.Image -> imageView(block)
-                    is BodyBlock.Quote -> quoteView(block)
+                    is BodyBlock.Quote -> quoteView(block, scope)
+                    is BodyBlock.Spoiler -> spoilerView(block, scope)
                     is BodyBlock.WebFallback -> bindFallback(block)
                 }
                 container.addView(child)
@@ -99,10 +113,54 @@ class TopicPostsAdapter(
         }
 
         /**
+         * Native spoiler: a tappable "▸/▾ title" header toggling a collapsible body of the recursively
+         * rendered inner blocks. Open/collapsed state persists across recycling via [spoilerStates].
+         */
+        private fun spoilerView(block: BodyBlock.Spoiler, scope: RenderScope): View {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            val key = "${scope.postId}:${scope.spoilerSeq++}"
+            var open = spoilerStates[key] ?: block.initiallyOpen
+
+            val card = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding((8 * dm.density).toInt())
+                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (6 * dm.density).toInt() }
+            }
+            val label = block.title?.takeIf { it.isNotBlank() } ?: "Спойлер"
+            val header = TextView(ctx).apply {
+                setTypeface(typeface, Typeface.BOLD)
+                textSize = 14f
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+            }
+            val bodyContainer = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            fun applyState() {
+                header.text = (if (open) "▾ " else "▸ ") + label
+                bodyContainer.visibility = if (open) View.VISIBLE else View.GONE
+            }
+            renderBlocksInto(bodyContainer, block.inner, scope)
+            applyState()
+            header.setOnClickListener {
+                open = !open
+                spoilerStates[key] = open
+                applyState()
+            }
+            card.addView(header)
+            card.addView(bodyContainer)
+            return card
+        }
+
+        /**
          * Native quote: an accent-bordered card with a tappable "author · date" header (jumps to the
          * source post via the app) and the recursively-rendered quoted content — nested quotes included.
          */
-        private fun quoteView(block: BodyBlock.Quote): View {
+        private fun quoteView(block: BodyBlock.Quote, scope: RenderScope): View {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val card = LinearLayout(ctx).apply {
@@ -127,7 +185,7 @@ class TopicPostsAdapter(
                 if (src != null) setOnClickListener { linkHandler.handle(src, null) }
             }
             card.addView(header)
-            renderBlocksInto(card, block.inner)
+            renderBlocksInto(card, block.inner, scope)
             return card
         }
 
