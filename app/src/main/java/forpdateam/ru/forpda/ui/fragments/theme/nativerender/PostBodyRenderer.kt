@@ -41,7 +41,14 @@ class PostBodyRenderer {
         // parseBodyFragment keeps the input as a body fragment (no <html>/<head> synthesis
         // beyond the wrapping <body>) and tolerates malformed markup gracefully.
         val body = Jsoup.parseBodyFragment(bodyHtml).body()
+        return renderNodes(body.childNodes())
+    }
 
+    /**
+     * Segments a run of sibling nodes into blocks. Reusable so complex blocks that render natively
+     * (quotes) can recursively render their inner content the same way.
+     */
+    private fun renderNodes(nodes: List<Node>): List<BodyBlock> {
         val blocks = ArrayList<BodyBlock>()
         val inlineBuffer = StringBuilder()
 
@@ -54,20 +61,12 @@ class PostBodyRenderer {
             }
         }
 
-        for (node in body.childNodes()) {
+        for (node in nodes) {
             val complexKind = complexKindOf(node)
             if (complexKind != null) {
                 flushInline()
                 val element = node as Element
-                // Фаза 2: peel single-image attachments out of the fallback into a native Image
-                // block. Anything else (galleries, files, quotes, spoilers, code, tables, polls)
-                // still falls back verbatim.
-                val image = if (complexKind == BodyBlock.WebFallback.Kind.ATTACHMENT) {
-                    extractSingleAttachmentImage(element)
-                } else {
-                    null
-                }
-                blocks.add(image ?: BodyBlock.WebFallback(element.outerHtml(), complexKind))
+                blocks.add(nativeOrFallback(element, complexKind))
             } else {
                 inlineBuffer.append(node.outerHtml())
             }
@@ -75,6 +74,43 @@ class PostBodyRenderer {
         flushInline()
 
         return blocks
+    }
+
+    /** Maps a complex [element] to its native block where implemented, else the WebView fallback. */
+    private fun nativeOrFallback(element: Element, kind: BodyBlock.WebFallback.Kind): BodyBlock {
+        // A top-level node classified complex because of a DESCENDANT (e.g. a wrapper div holding an
+        // attach table or quote) is not itself the block — only peel when the element IS the block.
+        return when (kind) {
+            BodyBlock.WebFallback.Kind.ATTACHMENT ->
+                extractSingleAttachmentImage(element)
+            BodyBlock.WebFallback.Kind.QUOTE ->
+                if (element.hasClass("quote")) extractQuote(element) else null
+            else -> null
+        } ?: BodyBlock.WebFallback(element.outerHtml(), kind)
+    }
+
+    /**
+     * Builds a native [BodyBlock.Quote] from a `.post-block.quote`: author/date from `.block-title`
+     * text ("author @ date"), the snapback href as the source link, and the recursively-rendered
+     * `.block-body` as [BodyBlock.Quote.inner] (so nested quotes render natively too).
+     */
+    private fun extractQuote(element: Element): BodyBlock.Quote {
+        val title = element.selectFirst("> .block-title")
+        val titleText = title?.ownText()?.trim().orEmpty()
+        val author: String?
+        val date: String?
+        val atIdx = titleText.indexOf(" @ ")
+        if (atIdx >= 0) {
+            author = titleText.substring(0, atIdx).trim().ifBlank { null }
+            date = titleText.substring(atIdx + 3).trim().ifBlank { null }
+        } else {
+            author = titleText.ifBlank { null }
+            date = null
+        }
+        val sourceUrl = title?.selectFirst("a[href]")?.attr("href")?.takeIf { it.isNotBlank() }
+        val body = element.selectFirst("> .block-body")
+        val inner = if (body != null) renderNodes(body.childNodes()) else emptyList()
+        return BodyBlock.Quote(author = author, date = date, sourceUrl = sourceUrl, inner = inner)
     }
 
     /**
