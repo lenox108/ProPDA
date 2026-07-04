@@ -54,6 +54,18 @@ sealed interface BodyBlock {
     ) : BodyBlock
 
     /**
+     * A native collapsible spoiler (`.post-block.spoil`), peeled out of the fallback in Фаза 2.
+     * Server structure (confirmed live): `.block-title` is the toggle header, `.block-body` the
+     * collapsible content (may contain nested code/spoilers → [inner] is recursive). The class is
+     * `spoil close` (collapsed) or `spoil open` (expanded) → [initiallyOpen].
+     */
+    data class Spoiler(
+        val title: String?,
+        val initiallyOpen: Boolean,
+        val inner: List<BodyBlock>,
+    ) : BodyBlock
+
+    /**
      * A complex block rendered via the Фаза-1 inline-WebView fallback. [html] is the
      * block's outer HTML (verbatim server markup); [kind] classifies it so later phases
      * can route specific kinds to native views.
