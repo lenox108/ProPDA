@@ -15,7 +15,9 @@ import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.Html
+import forpdateam.ru.forpda.common.LinkMovementMethod
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.presentation.ILinkHandler
 
 /**
  * RecyclerView adapter for the native topic renderer (roadmap `native-topic-renderer.md`,
@@ -31,7 +33,9 @@ import forpdateam.ru.forpda.common.getColorFromAttr
  * we are validating (§5 Фаза 1 warns Phase-1 perf is unrepresentative). The real pooled
  * WebView fallback is the next deliberate step; [bindFallback] is the single swap point.
  */
-class TopicPostsAdapter : ListAdapter<NativePostItem, TopicPostsAdapter.PostViewHolder>(DIFF) {
+class TopicPostsAdapter(
+        private val linkHandler: ILinkHandler,
+) : ListAdapter<NativePostItem, TopicPostsAdapter.PostViewHolder>(DIFF) {
 
     init {
         setHasStableIds(true)
@@ -42,14 +46,17 @@ class TopicPostsAdapter : ListAdapter<NativePostItem, TopicPostsAdapter.PostView
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PostViewHolder {
         val view = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_native_post, parent, false)
-        return PostViewHolder(view)
+        return PostViewHolder(view, linkHandler)
     }
 
     override fun onBindViewHolder(holder: PostViewHolder, position: Int) {
         holder.bind(getItem(position))
     }
 
-    class PostViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    class PostViewHolder(
+            itemView: View,
+            private val linkHandler: ILinkHandler,
+    ) : RecyclerView.ViewHolder(itemView) {
         private val avatar: ImageView = itemView.findViewById(R.id.native_post_avatar)
         private val nick: TextView = itemView.findViewById(R.id.native_post_nick)
         private val meta: TextView = itemView.findViewById(R.id.native_post_meta)
@@ -114,6 +121,15 @@ class TopicPostsAdapter : ListAdapter<NativePostItem, TopicPostsAdapter.PostView
                 textSize = 15f
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 setLineSpacing(0f, 1.1f)
+                // Only attach the link movement method when the block actually has links — this
+                // both avoids the ScrollingMovementMethod interfering with RecyclerView drags on
+                // plain-text posts and routes taps through the app's in-app navigation.
+                if (text is android.text.Spanned &&
+                        text.getSpans(0, text.length, android.text.style.URLSpan::class.java).isNotEmpty()) {
+                    movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
+                        override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
+                    })
+                }
             }
         }
 

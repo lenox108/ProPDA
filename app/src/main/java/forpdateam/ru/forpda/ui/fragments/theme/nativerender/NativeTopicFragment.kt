@@ -7,6 +7,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
+import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import kotlinx.coroutines.Dispatchers
@@ -32,9 +33,12 @@ class NativeTopicFragment : RecyclerFragment() {
     @Inject
     lateinit var themeApi: ThemeApi
 
+    @Inject
+    lateinit var linkHandler: ILinkHandler
+
     private val mapper = NativePostMapper()
     private val anchorResolver = NativeAnchorResolver()
-    private val postsAdapter = TopicPostsAdapter()
+    private val postsAdapter by lazy { TopicPostsAdapter(linkHandler) }
 
     private val topicUrl: String
         get() = arguments?.getString(TabFragment.ARG_TAB).orEmpty()
