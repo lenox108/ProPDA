@@ -80,17 +80,79 @@ class TopicPostsAdapter(
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
 
         fun bind(item: NativePostItem) {
-            nick.text = item.nick.orEmpty()
-            meta.text = listOfNotNull(item.group?.takeIf { it.isNotBlank() }, item.date?.takeIf { it.isNotBlank() })
-                    .joinToString(" · ")
+            bindNick(item)
+            bindMeta(item)
             number.text = if (item.number > 0) "#${item.number}" else ""
             ForPdaCoil.loadInto(avatar, item.avatarUrl)
+            bindFooter(item)
+            renderBody(item)
+        }
 
+        /** Nick + curator star (★) + online dot (●, green) — matching the WebView header. */
+        private fun bindNick(item: NativePostItem) {
+            val ctx = itemView.context
+            val sb = SpannableStringBuilder(item.nick.orEmpty())
+            if (item.isCurator) {
+                val star = " ★"
+                val start = sb.length
+                sb.append(star)
+                sb.setSpan(
+                        android.text.style.ForegroundColorSpan(
+                                ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)),
+                        start, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+            }
+            if (item.isOnline) {
+                val dot = " ●"
+                val start = sb.length
+                sb.append(dot)
+                sb.setSpan(
+                        android.text.style.ForegroundColorSpan(ONLINE_DOT_COLOR),
+                        start, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+            }
+            nick.text = sb
+        }
+
+        /** Meta line "group · date · Рег: N", with the group name tinted by its server groupColor. */
+        private fun bindMeta(item: NativePostItem) {
+            val sb = SpannableStringBuilder()
+            val group = item.group?.takeIf { it.isNotBlank() }
+            if (group != null) {
+                val start = sb.length
+                sb.append(group)
+                parseColor(item.groupColor)?.let { c ->
+                    sb.setSpan(
+                            android.text.style.ForegroundColorSpan(c),
+                            start, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                    )
+                }
+            }
+            item.date?.takeIf { it.isNotBlank() }?.let {
+                if (sb.isNotEmpty()) sb.append(" · ")
+                sb.append(it)
+            }
+            item.reputation?.takeIf { it.isNotBlank() }?.let {
+                if (sb.isNotEmpty()) sb.append(" · ")
+                sb.append("Реп: $it")
+            }
+            meta.text = sb
+        }
+
+        private fun bindFooter(item: NativePostItem) {
             val rating = item.postRating?.takeIf { it.isNotBlank() }
             footer.text = if (rating != null) "Рейтинг: $rating" else ""
             footer.visibility = if (rating != null) View.VISIBLE else View.GONE
+        }
 
-            renderBody(item)
+        // groupColor is "#RRGGBB" or a CSS name; "black" is the default → leave untinted.
+        private fun parseColor(raw: String?): Int? {
+            val v = raw?.trim()?.takeIf { it.isNotBlank() && !it.equals("black", ignoreCase = true) } ?: return null
+            return try {
+                android.graphics.Color.parseColor(v)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
         }
 
         private fun renderBody(item: NativePostItem) {
@@ -327,6 +389,7 @@ class TopicPostsAdapter(
 
     private companion object {
         const val DEFAULT_IMAGE_RATIO = 0.66f
+        val ONLINE_DOT_COLOR = android.graphics.Color.parseColor("#4CAF50")
 
         val DIFF = object : DiffUtil.ItemCallback<NativePostItem>() {
             override fun areItemsTheSame(a: NativePostItem, b: NativePostItem) = a.postId == b.postId
