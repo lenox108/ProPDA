@@ -25,6 +25,21 @@ sealed interface BodyBlock {
     data class Text(val html: String) : BodyBlock
 
     /**
+     * A native inline image (attachment picture), peeled out of the fallback in Фаза 2.
+     * [displayWidthPx]/[displayHeightPx] come from the server markup (img width/height attrs),
+     * so the view can reserve the correct aspect ratio BEFORE the bitmap loads — this is the
+     * anti-"async height slides the anchor" measure the roadmap calls for (§2/§6). A value ≤0
+     * means unknown (the view falls back to a default aspect).
+     * [linkUrl] is the attachment's full-size / download link (tap target).
+     */
+    data class Image(
+        val imageUrl: String,
+        val linkUrl: String?,
+        val displayWidthPx: Int,
+        val displayHeightPx: Int,
+    ) : BodyBlock
+
+    /**
      * A complex block rendered via the Фаза-1 inline-WebView fallback. [html] is the
      * block's outer HTML (verbatim server markup); [kind] classifies it so later phases
      * can route specific kinds to native views.
