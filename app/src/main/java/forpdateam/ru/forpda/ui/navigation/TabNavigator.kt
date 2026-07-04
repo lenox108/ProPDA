@@ -19,6 +19,7 @@ import forpdateam.ru.forpda.ui.fragments.search.SearchFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.qms.chat.QmsChatFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeFragmentWeb
+import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -284,7 +285,7 @@ class TabNavigator(
 
     /** После каждого hide/show стека — getnewpost для текущей темы (в т.ч. повторный тап по той же вкладке). */
     private fun notifyCurrentThemeTabJumpToUnread() {
-        (getCurrentFragment() as? ThemeFragmentWeb)?.onTabStackBecameCurrent()
+        (getCurrentFragment() as? ThemeTabHost)?.onTabStackBecameCurrent()
     }
 
     private fun getByTag(tag: String): TabFragment? {
@@ -455,7 +456,7 @@ class TabNavigator(
     private fun notifyThemeFragmentAfterChildRemoved() {
         val current = tabController.getCurrent() ?: return
         val fragment = getByTag(current.tag) ?: return
-        (fragment as? ThemeFragmentWeb)?.onRestoredAfterChildFragmentRemoved()
+        (fragment as? ThemeTabHost)?.onRestoredAfterChildFragmentRemoved()
     }
 
 
@@ -507,14 +508,15 @@ class TabNavigator(
         if (!themeUrlTargetsSpecificPost(url)) return false
 
         for (item in tabController.getList()) {
-            val themeFr = getByTag(item.tag) as? ThemeFragmentWeb ?: continue
+            val themeFr = getByTag(item.tag) ?: continue
+            val host = themeFr as? ThemeTabHost ?: continue
             val openTopicId = themeFr.arguments?.getString(TabFragment.ARG_TAB)?.let { extractShowTopicId(it) }
-                    ?: themeFr.getOpenTopicIdForReuse()
+                    ?: host.getOpenTopicIdForReuse()
                     ?: continue
             if (openTopicId != targetTopicId) continue
 
             applyThemeScreenToFragment(themeFr, screen)
-            themeFr.loadThemeUrlFromNavigator(
+            host.loadThemeUrlFromNavigator(
                     url = url,
                     sourceScreen = screen.topicOpenSource,
                     openIntent = screen.topicOpenIntent,
@@ -574,11 +576,12 @@ class TabNavigator(
         val aloneTab = current?.takeIf { it.screen?.key == Screen.Theme::class.java.simpleName }
                 ?: tabController.findThemeTab()
                 ?: return false
-        val themeFr = getByTag(aloneTab.tag) as? ThemeFragmentWeb ?: return false
+        val themeFr = getByTag(aloneTab.tag) ?: return false
+        val host = themeFr as? ThemeTabHost ?: return false
         val url = screen.themeUrl ?: return false
         val targetTopicId = extractShowTopicId(url)
         val openTopicId = themeFr.arguments?.getString(TabFragment.ARG_TAB)?.let { extractShowTopicId(it) }
-                ?: themeFr.getOpenTopicIdForReuse()
+                ?: host.getOpenTopicIdForReuse()
         // Cross-topic navigation (e.g. an in-topic link to a DIFFERENT topic) must NOT reuse the
         // existing alone Theme tab: it would corrupt in-tab history with mixed topics and break
         // system back. Fall through to createFragment so a new tab is opened instead.
@@ -612,7 +615,7 @@ class TabNavigator(
         }
         if (TabNavigatorThemeSwitchPolicy.mustReloadAloneThemeOnNavigation(screen.topicOpenIntent)) {
             applyThemeScreenToFragment(themeFr, screen)
-            themeFr.loadThemeUrlFromNavigator(
+            host.loadThemeUrlFromNavigator(
                     url = url,
                     sourceScreen = screen.topicOpenSource,
                     openIntent = screen.topicOpenIntent,
@@ -644,7 +647,7 @@ class TabNavigator(
         return true
     }
 
-    private fun applyThemeScreenToFragment(themeFr: ThemeFragmentWeb, screen: Screen.Theme) {
+    private fun applyThemeScreenToFragment(themeFr: TabFragment, screen: Screen.Theme) {
         val url = screen.themeUrl ?: return
         themeFr.arguments?.apply {
             putString(TabFragment.ARG_TAB, url)
@@ -672,14 +675,15 @@ class TabNavigator(
         val targetTopicId = extractShowTopicId(url) ?: return false
 
         for (item in tabController.getList()) {
-            val themeFr = getByTag(item.tag) as? ThemeFragmentWeb ?: continue
+            val themeFr = getByTag(item.tag) ?: continue
+            val host = themeFr as? ThemeTabHost ?: continue
             val openTopicId = themeFr.arguments?.getString(TabFragment.ARG_TAB)?.let { extractShowTopicId(it) }
-                    ?: themeFr.getOpenTopicIdForReuse()
+                    ?: host.getOpenTopicIdForReuse()
                     ?: continue
             if (openTopicId != targetTopicId) continue
 
             applyThemeScreenToFragment(themeFr, screen)
-            themeFr.loadThemeUrlFromNavigator(
+            host.loadThemeUrlFromNavigator(
                     url = url,
                     sourceScreen = screen.topicOpenSource,
                     openIntent = screen.topicOpenIntent,

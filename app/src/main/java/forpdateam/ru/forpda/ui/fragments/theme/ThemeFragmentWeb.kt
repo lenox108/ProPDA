@@ -152,7 +152,7 @@ private const val THEME_RENDER_WATCHDOG_HUGE_HTML_LEN = 400_000
  * - Профиль безопасности: TRUSTED_LOCAL_TEMPLATE (JS включён, базовый bridge разрешён)
  */
 @AndroidEntryPoint
-class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
+class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener, ThemeTabHost {
     @Inject lateinit var linkHandler: ILinkHandler
     @Inject lateinit var systemLinkHandler: ISystemLinkHandler
     @Inject lateinit var clipboardHelper: ClipboardHelper
@@ -269,11 +269,11 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
      * Та же тема уже открыта в другой вкладке — грузим новый URL (findpost и т.д.) без дубликата вкладки.
      * Вызывается из [forpdateam.ru.forpda.ui.navigation.TabNavigator] до [updateFragmentsState].
      */
-    fun loadThemeUrlFromNavigator(
+    override fun loadThemeUrlFromNavigator(
             url: String,
-            sourceScreen: String = "navigator",
-            openIntent: String = "fresh",
-            listHints: forpdateam.ru.forpda.common.TopicOpenListHints? = null
+            sourceScreen: String,
+            openIntent: String,
+            listHints: forpdateam.ru.forpda.common.TopicOpenListHints?
     ) {
         // Navigator reuse must always hit ViewModel even if WebView is not created yet (view destroyed).
         val incomingTopicId = forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi.extractTopicIdFromUrl(url)
@@ -289,7 +289,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
     }
 
     /** Для [TabNavigator]: после навигации внутри темы в [ARG_TAB] остаётся старый showtopic, topic id берём из модели. */
-    fun getOpenTopicIdForReuse(): Int? {
+    override fun getOpenTopicIdForReuse(): Int? {
         if (!presenter.isPageLoaded()) return null
         return webController.getOpenTopicIdForReuse()
     }
@@ -298,7 +298,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
      * Вызывается из [forpdateam.ru.forpda.ui.navigation.TabNavigator] после каждой смены текущей вкладки
      * (список «Открытые вкладки», [com.github.terrakok.cicerone.Forward] на уже открытый экран и т.д.).
      */
-    fun onTabStackBecameCurrent() {
+    override fun onTabStackBecameCurrent() {
         Timber.d("onTabStackBecameCurrent: isAdded=$isAdded pageLoaded=${presenter.isPageLoaded()}")
         presenter.reconcileStuckLoadOnFragmentVisible()
         renderPendingThemePageIfReady()
@@ -885,7 +885,7 @@ class ThemeFragmentWeb : ThemeFragment(), ExtendedWebView.JsLifeCycleListener {
      * Вызывается из [forpdateam.ru.forpda.ui.navigation.TabNavigator] после снятия верхнего фрагмента
      * (другая тема по ссылке). Восстанавливает страницу и позицию прокрутки вместо полной перезагрузки.
      */
-    fun onRestoredAfterChildFragmentRemoved() {
+    override fun onRestoredAfterChildFragmentRemoved() {
         Timber.d("onRestoredAfterChildFragmentRemoved")
         postOnActiveView {
             if (::webView.isInitialized) {
