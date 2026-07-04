@@ -57,6 +57,18 @@ object TabHelper {
     @Volatile
     var useComposeFavorites: Boolean = false
 
+    /**
+     * Roadmap `native-topic-renderer.md` flag: when true, [Screen.Theme] will
+     * route through the native RecyclerView-based topic renderer instead of
+     * the legacy [ThemeFragmentWeb]; when false (default, current state)
+     * [Screen.Theme] always uses [ThemeFragmentWeb].
+     * Sleeping for now — Phase 1 of the roadmap wires an actual
+     * NativeTopicFragment branch into the `is Screen.Theme ->` case below and
+     * starts consulting this flag. Flip this single line to roll back once wired.
+     */
+    @Volatile
+    var useNativeTopicRenderer: Boolean = false
+
     private fun createFragment(tabClass: Class<out TabFragment>, args: Bundle? = null): TabFragment {
         return tabClass.getDeclaredConstructor().newInstance().apply {
             args?.let { arguments = it }
