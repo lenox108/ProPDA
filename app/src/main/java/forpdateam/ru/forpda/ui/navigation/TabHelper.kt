@@ -204,7 +204,7 @@ object TabHelper {
             }
             is Screen.Downloads -> createFragment(DownloadsFragment::class.java, args)
             is Screen.Theme -> {
-                createFragment(ThemeFragmentWeb::class.java, args.apply {
+                val themeArgs = args.apply {
                     putString(TabFragment.ARG_TAB, screen.themeUrl)
                     putString(Screen.Theme.ARG_TOPIC_OPEN_SOURCE, screen.topicOpenSource)
                     putString(Screen.Theme.ARG_TOPIC_OPEN_INTENT, screen.topicOpenIntent)
@@ -213,7 +213,15 @@ object TabHelper {
                         putInt(Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST, screen.unreadPostIdFromList)
                     }
                     putBoolean(Screen.Theme.ARG_INSPECTOR_MARKED_UNREAD, screen.inspectorMarkedUnread)
-                })
+                }
+                if (useNativeTopicRenderer) {
+                    createFragment(
+                            forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment::class.java,
+                            themeArgs,
+                    )
+                } else {
+                    createFragment(ThemeFragmentWeb::class.java, themeArgs)
+                }
             }
             is Screen.Topics -> {
                 createFragment(TopicsFragment::class.java, args.apply {
