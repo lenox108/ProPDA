@@ -8,6 +8,8 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.text.Spanned
+import android.text.style.URLSpan
 import androidx.core.view.setPadding
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -83,9 +85,41 @@ class TopicPostsAdapter(
             for (block in blocks) {
                 val child = when (block) {
                     is BodyBlock.Text -> textView(spanned(block.html))
+                    is BodyBlock.Image -> imageView(block)
                     is BodyBlock.WebFallback -> bindFallback(block)
                 }
                 body.addView(child)
+            }
+        }
+
+        /**
+         * Native inline attachment image. Reserves height from the server-provided display
+         * dimensions BEFORE the bitmap loads, so a late-arriving image never slides the scroll
+         * anchor (§2/§6). Tapping routes the attachment link through the app (image viewer /
+         * download), same as the WebView path.
+         */
+        private fun imageView(block: BodyBlock.Image): View {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            val horizontalChromePx = (40 * dm.density).toInt() // card margins + paddings
+            val targetWidth = (dm.widthPixels - horizontalChromePx).coerceAtLeast(1)
+            val ratio = if (block.displayWidthPx > 0 && block.displayHeightPx > 0) {
+                block.displayHeightPx.toFloat() / block.displayWidthPx.toFloat()
+            } else {
+                DEFAULT_IMAGE_RATIO
+            }
+            val reservedHeight = (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels)
+            return ImageView(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        reservedHeight,
+                ).apply { topMargin = (6 * dm.density).toInt() }
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                adjustViewBounds = true
+                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                ForPdaCoil.loadInto(this, block.imageUrl)
+                val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
+                setOnClickListener { linkHandler.handle(tapUrl, null) }
             }
         }
 
@@ -124,8 +158,8 @@ class TopicPostsAdapter(
                 // Only attach the link movement method when the block actually has links — this
                 // both avoids the ScrollingMovementMethod interfering with RecyclerView drags on
                 // plain-text posts and routes taps through the app's in-app navigation.
-                if (text is android.text.Spanned &&
-                        text.getSpans(0, text.length, android.text.style.URLSpan::class.java).isNotEmpty()) {
+                if (text is Spanned &&
+                        text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()) {
                     movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
                         override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
                     })
@@ -149,6 +183,8 @@ class TopicPostsAdapter(
     }
 
     private companion object {
+        const val DEFAULT_IMAGE_RATIO = 0.66f
+
         val DIFF = object : DiffUtil.ItemCallback<NativePostItem>() {
             override fun areItemsTheSame(a: NativePostItem, b: NativePostItem) = a.postId == b.postId
             override fun areContentsTheSame(a: NativePostItem, b: NativePostItem) = a == b

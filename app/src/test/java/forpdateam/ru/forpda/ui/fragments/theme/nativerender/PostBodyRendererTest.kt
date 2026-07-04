@@ -65,19 +65,27 @@ class PostBodyRendererTest {
     }
 
     @Test
-    fun attachmentImageTable_isAttachmentFallback() {
+    fun attachmentImageTable_isNativeImageBlock_withDimensionsAndLink() {
         val blocks = renderer.render(fixture("attachment_image_table.html"))
-        // The <div align=center> wrapper contains the ipb-attach table → whole wrapper falls back.
-        assertTrue(blocks.any { it is BodyBlock.WebFallback && it.kind == Kind.ATTACHMENT })
+        // Фаза 2: a single-image attachment is peeled out to a native Image block (not fallback).
+        val image = blocks.filterIsInstance<BodyBlock.Image>().single()
+        assertTrue(image.imageUrl.startsWith("https://4pda.to/s/"))
+        // Dimensions come from the img width/height attrs (376x500) → aspect reserved before load.
+        assertEquals(376, image.displayWidthPx)
+        assertEquals(500, image.displayHeightPx)
+        // Tap target is the enclosing dl/post attachment link.
+        assertTrue(image.linkUrl?.contains("/forum/dl/post/") == true)
     }
 
     @Test
-    fun attachmentImageLinked_isAttachmentFallback() {
-        // img.linked-image lives inside a .post-block.spoil "Прикрепленные файлы" → spoiler fallback,
-        // and the spoiler wrapper is what we emit. Assert it is a single fallback (spoiler), not lost.
+    fun attachmentImageLinked_staysSpoilerFallback_forNow() {
+        // img.linked-image lives inside a .post-block.spoil "Прикрепленные файлы": the top-level
+        // node is a SPOILER, so Фаза-2 single-image extraction (ATTACHMENT-kind only) does not
+        // apply — it stays a fallback. Gallery-in-spoiler is a later, separate step; here we only
+        // guarantee content is never dropped.
         val blocks = renderer.render(fixture("attachment_image_linked.html"))
-        assertTrue(blocks.any { it is BodyBlock.WebFallback })
         assertFalse("content must never be dropped", blocks.isEmpty())
+        assertTrue(blocks.any { it is BodyBlock.WebFallback && it.kind == Kind.SPOILER })
     }
 
     @Test
@@ -98,9 +106,7 @@ class PostBodyRendererTest {
         // The hat has native intro text plus multiple complex blocks (attach table, spoilers/code).
         assertTrue("hat should have native text runs", blocks.any { it is BodyBlock.Text })
         assertTrue("hat should have fallback blocks", blocks.any { it is BodyBlock.WebFallback })
-        assertTrue("hat has an attachment", blocks.any {
-            it is BodyBlock.WebFallback && it.kind == Kind.ATTACHMENT
-        })
+        assertTrue("hat's attach image is a native Image block", blocks.any { it is BodyBlock.Image })
         assertTrue("hat has spoilers", blocks.any {
             it is BodyBlock.WebFallback && it.kind == Kind.SPOILER
         })
@@ -115,6 +121,7 @@ class PostBodyRendererTest {
             when (it) {
                 is BodyBlock.Text -> it.html
                 is BodyBlock.WebFallback -> it.html
+                is BodyBlock.Image -> it.imageUrl
             }
         }
         assertTrue("recognisable text survives", recombined.contains("Незакрытый жирный текст"))

@@ -58,7 +58,16 @@ class PostBodyRenderer {
             val complexKind = complexKindOf(node)
             if (complexKind != null) {
                 flushInline()
-                blocks.add(BodyBlock.WebFallback((node as Element).outerHtml(), complexKind))
+                val element = node as Element
+                // Фаза 2: peel single-image attachments out of the fallback into a native Image
+                // block. Anything else (galleries, files, quotes, spoilers, code, tables, polls)
+                // still falls back verbatim.
+                val image = if (complexKind == BodyBlock.WebFallback.Kind.ATTACHMENT) {
+                    extractSingleAttachmentImage(element)
+                } else {
+                    null
+                }
+                blocks.add(image ?: BodyBlock.WebFallback(element.outerHtml(), complexKind))
             } else {
                 inlineBuffer.append(node.outerHtml())
             }
@@ -67,6 +76,36 @@ class PostBodyRenderer {
 
         return blocks
     }
+
+    /**
+     * If [element] is an attachment block wrapping EXACTLY ONE picture, returns a native
+     * [BodyBlock.Image]; otherwise `null` (galleries / file attachments stay as fallback).
+     * Reads display dimensions from the img width/height attributes so the view can reserve
+     * space and not slide the scroll anchor when the bitmap arrives.
+     */
+    private fun extractSingleAttachmentImage(element: Element): BodyBlock.Image? {
+        val imgs = element.select("img.attach, img.linked-image")
+        if (imgs.size != 1) return null
+        val img = imgs.first() ?: return null
+        val src = firstNonBlank(
+            img.attr("src"),
+            img.attr("data-src"),
+            img.attr("data-preview"),
+        ) ?: return null
+        // Prefer the enclosing attachment <a href> (full-size / download link) as the tap target.
+        val linkUrl = element.selectFirst("a[href]")?.attr("href")?.takeIf { it.isNotBlank() }
+        return BodyBlock.Image(
+            imageUrl = src,
+            linkUrl = linkUrl,
+            displayWidthPx = img.attr("width").toIntOrZero(),
+            displayHeightPx = img.attr("height").toIntOrZero(),
+        )
+    }
+
+    private fun String.toIntOrZero(): Int = trim().toIntOrNull() ?: 0
+
+    private fun firstNonBlank(vararg values: String?): String? =
+        values.firstOrNull { !it.isNullOrBlank() }?.trim()
 
     /**
      * Returns the [BodyBlock.WebFallback.Kind] if [node] is, or contains, a complex block;
