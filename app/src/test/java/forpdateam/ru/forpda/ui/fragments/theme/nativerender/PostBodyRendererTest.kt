@@ -64,9 +64,13 @@ class PostBodyRendererTest {
     }
 
     @Test
-    fun code_isOneCodeFallback() {
+    fun code_isNativeCode_withDecodedTextAndLineBreaks() {
         val blocks = renderer.render(fixture("code_block.html"))
-        assertTrue(blocks.any { it is BodyBlock.WebFallback && it.kind == Kind.CODE })
+        val code = blocks.filterIsInstance<BodyBlock.Code>().single()
+        // HTML entities are decoded (&#91; → [) and <br> became newlines.
+        assertTrue("brackets decoded", code.text.contains("[CENTER]"))
+        assertTrue("not raw entity", !code.text.contains("&#91;"))
+        assertTrue("has line breaks", code.text.contains("\n"))
     }
 
     @Test
@@ -112,11 +116,11 @@ class PostBodyRendererTest {
         assertTrue("hat should have native text runs", blocks.any { it is BodyBlock.Text })
         assertTrue("hat's attach image is a native Image block", blocks.any { it is BodyBlock.Image })
         assertTrue("hat's spoilers are native", blocks.any { it is BodyBlock.Spoiler })
-        // Code blocks are still WebFallback, but nested INSIDE the spoilers now (not top-level).
+        // Native code blocks are nested INSIDE the spoilers now.
         val codeNestedInSpoiler = blocks.filterIsInstance<BodyBlock.Spoiler>()
                 .flatMap { it.inner }
-                .any { it is BodyBlock.WebFallback && it.kind == Kind.CODE }
-        assertTrue("hat has a code block nested in a spoiler", codeNestedInSpoiler)
+                .any { it is BodyBlock.Code }
+        assertTrue("hat has a native code block nested in a spoiler", codeNestedInSpoiler)
     }
 
     @Test
@@ -131,6 +135,7 @@ class PostBodyRendererTest {
                 is BodyBlock.Image -> it.imageUrl
                 is BodyBlock.Quote -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
                 is BodyBlock.Spoiler -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
+                is BodyBlock.Code -> it.text
             }
         }
         assertTrue("recognisable text survives", recombined.contains("Незакрытый жирный текст"))
