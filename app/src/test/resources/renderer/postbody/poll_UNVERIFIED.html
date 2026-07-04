@@ -1,0 +1,19 @@
+<!--
+  UNVERIFIED — см. PROVENANCE.md. Разметка НЕ подтверждена ни живым капчуром,
+  ни чтением клиентских скриптов (blocks.js/attach_transformer.js их не
+  касаются). Форма ниже смоделирована по синтетической фикстуре парсера
+  app/src/test/resources/parser/theme/topic_normal.html (form.topic_poll на
+  УРОВНЕ СТРАНИЦЫ, а не обязательно внутри .post_body конкретного поста —
+  это тоже не проверено). Перед реализацией PollBlock в Фазе 4 нужен живой
+  капчур страницы с реальным опросом.
+-->
+<form class="topic_poll" action="/forum/index.php?showtopic=1115315&amp;st=20" method="post">
+    <input name="addpoll" value="1" type="hidden">
+    <input name="auth_key" value="token" type="hidden">
+    <div class="poll_question">
+        <strong>Какой релиз лучше?</strong>
+        <label><input value="1" name="poll_vote[1]" type="radio"> Вариант А</label>
+        <label><input value="2" name="poll_vote[1]" type="radio"> Вариант Б</label>
+    </div>
+    <button type="submit">Голосовать</button>
+</form>
