@@ -100,7 +100,7 @@ class FavoritesParser(
                                 curatorNick = matcher.group(23)?.fromHtml()
                             }
 
-                            subType = matcher.group(24)?.trim()?.toLowerCase(Locale.ROOT) ?: ""
+                            subType = matcher.group(24)?.trim()?.lowercase(Locale.ROOT) ?: ""
 
                             unreadPostCount = when {
                                 readState == FavoriteReadState.UNREAD && plusDigitsUnread != null -> plusDigitsUnread ?: 0
