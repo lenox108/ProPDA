@@ -44,10 +44,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
 
     private val mapper = NativePostMapper()
     private val anchorResolver = NativeAnchorResolver()
+    private val pagination = TopicPaginationController()
     private val postsAdapter by lazy { TopicPostsAdapter(linkHandler) }
+
+    /** The accumulated posts across all loaded pages (source of truth for the adapter). */
+    private val loadedItems = ArrayList<NativePostItem>()
 
     /** The URL actually loaded into the list (may differ from ARG_TAB after a navigator switch). */
     private var loadedUrl: String? = null
+    private var isLoadingNextPage = false
 
     private val topicUrl: String
         get() = arguments?.getString(TabFragment.ARG_TAB).orEmpty()
@@ -57,8 +62,45 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = postsAdapter
+        recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                if (dy > 0) maybeLoadNextPage()
+            }
+        })
         refreshLayout.setOnRefreshListener { loadTopic(topicUrl) }
         loadTopic(topicUrl)
+    }
+
+    /** Downward infinite scroll: when within [NEXT_PAGE_PREFETCH_DISTANCE] items of the end. */
+    private fun maybeLoadNextPage() {
+        if (isLoadingNextPage || !pagination.hasNextPage()) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val lastVisible = lm.findLastVisibleItemPosition()
+        if (lastVisible >= loadedItems.size - NEXT_PAGE_PREFETCH_DISTANCE) {
+            loadNextPage()
+        }
+    }
+
+    private fun loadNextPage() {
+        val url = pagination.nextPageUrl() ?: return
+        isLoadingNextPage = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
+            }
+            if (view == null) return@launch
+            result.onSuccess { page ->
+                val newItems = pagination.registerAndFilterNew(mapper.map(page.posts))
+                pagination.onPageAppended(page.pagination.current, page.pagination)
+                if (newItems.isNotEmpty()) {
+                    loadedItems.addAll(newItems)
+                    postsAdapter.submitList(loadedItems.toList())
+                }
+            }
+            // On failure: silently stop; the user can pull-to-refresh. isLoadingNextPage resets so a
+            // later scroll retries.
+            isLoadingNextPage = false
+        }
     }
 
     // region ThemeTabHost — navigator-driven tab reuse / topic switch
@@ -102,6 +144,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
             return
         }
         refreshLayout.isRefreshing = true
+        isLoadingNextPage = false
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
@@ -111,7 +154,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
             result.onSuccess { page ->
                 loadedUrl = url
                 val items = mapper.map(page.posts)
-                postsAdapter.submitList(items) {
+                val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
+                pagination.reset(topicId, page.pagination, items)
+                loadedItems.clear()
+                loadedItems.addAll(items)
+                postsAdapter.submitList(loadedItems.toList()) {
                     if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
                 }
             }.onFailure { error ->
@@ -138,8 +185,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
             is AnchorResolution.Position ->
                 (recyclerView.layoutManager as? LinearLayoutManager)
                         ?.scrollToPositionWithOffset(resolution.index, 0)
-            // PostNotLoaded / Empty: nothing to do in this single-page slice (pagination is a later step).
+            // PostNotLoaded / Empty: nothing to do — downward pagination will bring later pages in.
             else -> Unit
         }
+    }
+
+    private companion object {
+        /** Start fetching the next page this many items before the current list end. */
+        const val NEXT_PAGE_PREFETCH_DISTANCE = 3
     }
 }
