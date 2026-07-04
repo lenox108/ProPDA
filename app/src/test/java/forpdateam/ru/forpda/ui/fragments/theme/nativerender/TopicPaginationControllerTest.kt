@@ -81,6 +81,45 @@ class TopicPaginationControllerTest {
     }
 
     @Test
+    fun openedAtPage1_hasNoPrevPage() {
+        val c = TopicPaginationController()
+        c.reset(topicId = 42, pagination = pagination(current = 1, all = 5), initialItems = items(1))
+        assertFalse(c.hasPrevPage())
+        assertNull(c.prevPageUrl())
+    }
+
+    @Test
+    fun openedMidTopic_hasPrevPage_withCorrectSt() {
+        val c = TopicPaginationController()
+        // Landed on page 3 (e.g. from unread): page above is 2 → st = (2-1)*20 = 20.
+        c.reset(topicId = 42, pagination = pagination(current = 3, all = 5), initialItems = items(41, 42))
+        assertTrue(c.hasPrevPage())
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=20", c.prevPageUrl())
+    }
+
+    @Test
+    fun prevPageUrl_advancesUpwardAfterPrepend() {
+        val c = TopicPaginationController()
+        c.reset(topicId = 42, pagination = pagination(current = 3, all = 5), initialItems = items(41))
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=20", c.prevPageUrl())
+        c.onPagePrepended(pageNumber = 2)
+        // Now the top is page 2 → page above is 1 → st = 0.
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=0", c.prevPageUrl())
+        c.onPagePrepended(pageNumber = 1)
+        assertFalse(c.hasPrevPage())
+        assertNull(c.prevPageUrl())
+    }
+
+    @Test
+    fun upwardAndDownwardEdges_areIndependent() {
+        val c = TopicPaginationController()
+        c.reset(topicId = 42, pagination = pagination(current = 3, all = 6), initialItems = items(41, 42))
+        // Down goes to page 4 (st=60), up goes to page 2 (st=20) — from the same middle start.
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=60", c.nextPageUrl())
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=20", c.prevPageUrl())
+    }
+
+    @Test
     fun totalPages_canGrowWhileReading() {
         val c = TopicPaginationController()
         c.reset(topicId = 42, pagination = pagination(current = 1, all = 2), initialItems = items(1))

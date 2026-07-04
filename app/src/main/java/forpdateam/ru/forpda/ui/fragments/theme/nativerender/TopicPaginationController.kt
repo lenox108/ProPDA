@@ -20,8 +20,12 @@ class TopicPaginationController {
     var totalPages: Int = 1
         private set
 
-    /** Highest 1-based page number appended so far. */
+    /** Highest 1-based page number appended so far (downward edge). */
     var loadedPage: Int = 1
+        private set
+
+    /** Lowest 1-based page number loaded so far (upward edge). */
+    var firstLoadedPage: Int = 1
         private set
 
     private val seenPostIds = HashSet<Int>()
@@ -39,6 +43,7 @@ class TopicPaginationController {
         this.perPage = pagination.perPage.coerceAtLeast(1)
         this.totalPages = pagination.all.coerceAtLeast(1)
         this.loadedPage = pagination.current.coerceAtLeast(1)
+        this.firstLoadedPage = this.loadedPage
         seenPostIds.clear()
         initialItems.forEach { seenPostIds.add(it.postId) }
         isInitialised = true
@@ -61,6 +66,21 @@ class TopicPaginationController {
     fun onPageAppended(pageNumber: Int, pagination: Pagination) {
         loadedPage = maxOf(loadedPage, pageNumber.coerceAtLeast(1))
         totalPages = maxOf(totalPages, pagination.all.coerceAtLeast(1))
+    }
+
+    fun hasPrevPage(): Boolean = isInitialised && topicId > 0 && firstLoadedPage > 1
+
+    /** URL of the page above the currently-loaded top, or null if we are already at page 1. */
+    fun prevPageUrl(): String? {
+        if (!hasPrevPage()) return null
+        // Page (firstLoadedPage - 1) → st = ((firstLoadedPage - 1) - 1) * perPage.
+        val st = (firstLoadedPage - 2).coerceAtLeast(0) * perPage
+        return "https://4pda.to/forum/index.php?showtopic=$topicId&st=$st"
+    }
+
+    /** Record that the page numbered [pageNumber] (1-based) has been PREPENDED, lowering the top edge. */
+    fun onPagePrepended(pageNumber: Int) {
+        firstLoadedPage = minOf(firstLoadedPage, pageNumber.coerceAtLeast(1))
     }
 
     /**

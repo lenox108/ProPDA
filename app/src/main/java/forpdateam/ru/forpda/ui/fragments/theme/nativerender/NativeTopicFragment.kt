@@ -53,6 +53,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
     /** The URL actually loaded into the list (may differ from ARG_TAB after a navigator switch). */
     private var loadedUrl: String? = null
     private var isLoadingNextPage = false
+    private var isLoadingPrevPage = false
 
     private val topicUrl: String
         get() = arguments?.getString(TabFragment.ARG_TAB).orEmpty()
@@ -65,6 +66,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) maybeLoadNextPage()
+                if (dy < 0) maybeLoadPrevPage()
             }
         })
         refreshLayout.setOnRefreshListener { loadTopic(topicUrl) }
@@ -100,6 +102,61 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
             // On failure: silently stop; the user can pull-to-refresh. isLoadingNextPage resets so a
             // later scroll retries.
             isLoadingNextPage = false
+        }
+    }
+
+    /** Upward infinite scroll: when the top of the list nears item 0 and a page above exists. */
+    private fun maybeLoadPrevPage() {
+        if (isLoadingPrevPage || !pagination.hasPrevPage()) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        if (lm.findFirstVisibleItemPosition() <= PREV_PAGE_PREFETCH_DISTANCE) {
+            loadPrevPage()
+        }
+    }
+
+    private fun loadPrevPage() {
+        val url = pagination.prevPageUrl() ?: return
+        isLoadingPrevPage = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
+            }
+            if (view == null) return@launch
+            var reArm = true
+            result.onSuccess { page ->
+                val newItems = pagination.registerAndFilterNew(mapper.map(page.posts))
+                pagination.onPagePrepended(page.pagination.current)
+                if (newItems.isNotEmpty()) {
+                    prependPreservingPosition(newItems)
+                    reArm = false // re-armed inside the submitList callback after the scroll is restored
+                }
+            }
+            if (reArm) isLoadingPrevPage = false
+        }
+    }
+
+    /**
+     * Insert [newItems] at the top and keep the currently-visible post fixed on screen. The anchor
+     * is the current first-visible post BY ID (not index) + its pixel offset, so the prepend never
+     * makes the content jump under the user's finger.
+     */
+    private fun prependPreservingPosition(newItems: List<NativePostItem>) {
+        val lm = recyclerView.layoutManager as? LinearLayoutManager
+        val anchorPos = lm?.findFirstVisibleItemPosition() ?: 0
+        val anchorOffset = lm?.findViewByPosition(anchorPos)?.top ?: 0
+        val anchorPostId = loadedItems.getOrNull(anchorPos)?.postId
+
+        loadedItems.addAll(0, newItems)
+        postsAdapter.submitList(loadedItems.toList()) {
+            if (view != null) {
+                val newIndex = anchorPostId
+                        ?.let { id -> loadedItems.indexOfFirst { it.postId == id } }
+                        ?.takeIf { it >= 0 }
+                        ?: newItems.size
+                (recyclerView.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(newIndex, anchorOffset)
+            }
+            isLoadingPrevPage = false
         }
     }
 
@@ -145,6 +202,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
         }
         refreshLayout.isRefreshing = true
         isLoadingNextPage = false
+        isLoadingPrevPage = false
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
@@ -193,5 +251,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
     private companion object {
         /** Start fetching the next page this many items before the current list end. */
         const val NEXT_PAGE_PREFETCH_DISTANCE = 3
+
+        /** Start fetching the previous page when the first-visible item is within this of the top. */
+        const val PREV_PAGE_PREFETCH_DISTANCE = 1
     }
 }
