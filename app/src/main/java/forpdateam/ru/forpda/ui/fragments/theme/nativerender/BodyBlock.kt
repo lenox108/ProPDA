@@ -66,6 +66,12 @@ sealed interface BodyBlock {
     ) : BodyBlock
 
     /**
+     * A native code block (`.post-block.code`), peeled out of the fallback in Фаза 2. [text] is the
+     * decoded code (server `&#91;`→`[`, `<br>`→newline), preserving line breaks for a monospace view.
+     */
+    data class Code(val title: String?, val text: String) : BodyBlock
+
+    /**
      * A complex block rendered via the Фаза-1 inline-WebView fallback. [html] is the
      * block's outer HTML (verbatim server markup); [kind] classifies it so later phases
      * can route specific kinds to native views.

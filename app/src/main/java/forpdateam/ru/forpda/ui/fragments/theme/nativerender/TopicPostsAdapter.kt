@@ -106,6 +106,7 @@ class TopicPostsAdapter(
                     is BodyBlock.Image -> imageView(block)
                     is BodyBlock.Quote -> quoteView(block, scope)
                     is BodyBlock.Spoiler -> spoilerView(block, scope)
+                    is BodyBlock.Code -> codeView(block)
                     is BodyBlock.WebFallback -> bindFallback(block)
                 }
                 container.addView(child)
@@ -218,6 +219,51 @@ class TopicPostsAdapter(
                 val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
                 setOnClickListener { linkHandler.handle(tapUrl, null) }
             }
+        }
+
+        /**
+         * Native code block: monospace text in a horizontal scroller (long lines don't wrap) on a
+         * distinct panel, with a "Копировать" action that puts the raw code on the clipboard.
+         */
+        private fun codeView(block: BodyBlock.Code): View {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            val pad = (8 * dm.density).toInt()
+            val card = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (6 * dm.density).toInt() }
+            }
+            val copyBtn = TextView(ctx).apply {
+                text = block.title?.takeIf { it.isNotBlank() }?.let { "$it · Копировать" } ?: "Копировать"
+                setTypeface(typeface, Typeface.BOLD)
+                textSize = 12f
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                setPadding(pad, pad, pad, pad / 2)
+                setOnClickListener {
+                    val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as? android.content.ClipboardManager
+                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("code", block.text))
+                }
+            }
+            val scroller = android.widget.HorizontalScrollView(ctx).apply {
+                isHorizontalScrollBarEnabled = false
+            }
+            val code = TextView(ctx).apply {
+                text = block.text
+                typeface = android.graphics.Typeface.MONOSPACE
+                textSize = 13f
+                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+                setPadding(pad, 0, pad, pad)
+                setHorizontallyScrolling(true)
+            }
+            scroller.addView(code)
+            card.addView(copyBtn)
+            card.addView(scroller)
+            return card
         }
 
         /** Фаза-1 degraded native preview for a complex block. Single swap point for the future WebView. */

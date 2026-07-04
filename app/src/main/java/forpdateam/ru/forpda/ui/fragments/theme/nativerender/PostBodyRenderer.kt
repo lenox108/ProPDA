@@ -87,8 +87,27 @@ class PostBodyRenderer {
                 if (element.hasClass("quote")) extractQuote(element) else null
             BodyBlock.WebFallback.Kind.SPOILER ->
                 if (element.hasClass("spoil")) extractSpoiler(element) else null
+            BodyBlock.WebFallback.Kind.CODE ->
+                if (element.hasClass("code")) extractCode(element) else null
             else -> null
         } ?: BodyBlock.WebFallback(element.outerHtml(), kind)
+    }
+
+    /**
+     * Builds a native [BodyBlock.Code] from a `.post-block.code`: `.block-title` label (often empty)
+     * and `.block-body` text with `<br>` turned into newlines and HTML entities decoded, so the
+     * monospace view shows the code verbatim.
+     */
+    private fun extractCode(element: Element): BodyBlock.Code {
+        val title = element.selectFirst("> .block-title")?.text()?.trim()?.ifBlank { null }
+        val bodyEl = element.selectFirst("> .block-body")?.clone()
+        val text = if (bodyEl != null) {
+            bodyEl.select("br").forEach { it.replaceWith(TextNode("\n")) }
+            bodyEl.wholeText().trim('\n')
+        } else {
+            ""
+        }
+        return BodyBlock.Code(title = title, text = text)
     }
 
     /**
