@@ -583,7 +583,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pageForumId = page.forumId
                 pageTopicId = page.id
                 pageSt = page.st
-                pollHeaderAdapter.setPoll(page.poll)
+                // The poll belongs to page 1 only — don't show it when jumping to a later page.
+                pollHeaderAdapter.setPoll(if (page.pagination.current <= 1) page.poll else null)
                 val items = mapper.map(page.posts)
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
