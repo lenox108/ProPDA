@@ -84,6 +84,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var navigationUseCase: forpdateam.ru.forpda.model.interactors.theme.ThemeNavigationUseCase
 
+    /** For the «Создать заметку» post-menu action (parity with the WebView createNote). */
+    @Inject
+    lateinit var notesRepository: forpdateam.ru.forpda.model.repository.note.NotesRepository
+
     // topicPreferencesHolder is provided by the TabFragment supertype.
 
     private val mapper = NativePostMapper()
@@ -789,6 +793,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         showThemePopup(title = null, content = rv)
     }
 
+    /** Long-press a spoiler header → copy its deep link to the clipboard (parity with copySpoilerLink). */
+    override fun onSpoilerCopyLink(item: NativePostItem, spoilNumber: Int) {
+        val url = "https://4pda.to/forum/index.php?showtopic=${item.topicId}&act=findpost&pid=${item.postId}" +
+                "&anchor=Spoil-${item.postId}-$spoilNumber"
+        val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                as? android.content.ClipboardManager
+        cm?.setPrimaryClip(android.content.ClipData.newPlainText("spoiler", url))
+        Toast.makeText(requireContext(), "Ссылка на спойлер скопирована", Toast.LENGTH_SHORT).show()
+    }
+
     /** Header tap on the hat post itself toggles its body (same session state as the toolbar «Инфо»). */
     override fun onToggleHat() {
         val hatId = topicHatPostId ?: return
@@ -899,6 +913,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (it.pageNumber == pageNumber) it else it.copy(pageNumber = pageNumber)
             }
 
+    /** Drop posts by forum-blacklisted authors (parity with the WebView, which hides their posts). Applied
+     *  at load time so all the index-based anchor/pagination logic keeps working on the visible list. */
+    private fun filterBlacklisted(items: List<NativePostItem>): List<NativePostItem> =
+            items.filterNot { it.userId > 0 && themeUseCase.isForumBlacklisted(it.userId, it.nick) }
+
     /**
      * Submit [loadedItems] to the adapter with the «Страница N» divider labels recomputed over the whole
      * list first, so the label lives IN the item (DiffUtil then rebinds a page-boundary post when a
@@ -950,7 +969,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             result.onSuccess { page ->
                 processHatForPage(page) // strip the repeated hat 4pda echoes onto this deeper page
                 val newItems = pagination.registerAndFilterNew(
-                        tagPage(mapper.map(page.posts), page.pagination.current))
+                        filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current)))
                 pagination.onPageAppended(page.pagination.current, page.pagination)
                 if (newItems.isNotEmpty()) {
                     loadedItems.addAll(newItems)
@@ -1009,7 +1028,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     postsAdapter.setTopicHat(hatId, hatCollapsed)
                 }
                 val newItems = pagination.registerAndFilterNew(
-                        tagPage(mapper.map(page.posts), page.pagination.current))
+                        filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current)))
                 pagination.onPagePrepended(page.pagination.current)
                 updateRefreshGesture() // reaching page 1 re-enables pull-to-refresh
                 if (newItems.isNotEmpty()) {
@@ -1245,6 +1264,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val actions = buildList<Pair<String, () -> Unit>> {
             add("Ответить" to { onReply(item) })
             add("Цитировать" to { onQuote(item) })
+            if (item.canQuote) add("Цитировать из буфера" to { quoteFromBuffer(item) })
             add("Копировать ссылку на сообщение" to {
                 val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as? android.content.ClipboardManager
@@ -1265,6 +1285,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (item.canReport) add("Пожаловаться" to {
                 linkHandler.handle("https://4pda.to/forum/index.php?act=report&p=${item.postId}", null)
             })
+            add("Создать заметку" to { createNoteForPost(item) })
             if (item.canEdit) add("Изменить" to { onEdit(item) })
             if (item.canDelete) add("Удалить" to { onDelete(item) })
         }
@@ -1272,21 +1293,73 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         showM3Menu(title = null, actions = actions)
     }
 
+    /** «Цитировать из буфера»: wrap the current clipboard text in a quote from [item] (parity with the
+     *  WebView quoteFromBuffer). */
+    private fun quoteFromBuffer(item: NativePostItem) {
+        val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                as? android.content.ClipboardManager
+        val text = cm?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(requireContext())
+                ?.toString().orEmpty()
+        if (text.isBlank()) {
+            Toast.makeText(requireContext(), "Буфер обмена пуст", Toast.LENGTH_SHORT).show()
+            return
+        }
+        onQuoteSelection(item, text)
+    }
+
+    /** «Создать заметку»: open the note-create dialog pre-filled with this post's title/link (parity with
+     *  the WebView createNote). */
+    private fun createNoteForPost(item: NativePostItem) {
+        val themeTitle = arguments?.getString(TabFragment.ARG_TITLE).orEmpty()
+        val title = "пост $themeTitle ${item.nick.orEmpty()} ${item.postId}"
+        val url = "https://4pda.to/forum/index.php?s=&showtopic=${item.topicId}&view=findpost&p=${item.postId}"
+        forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
+                .showAddNoteDialog(requireContext(), title, url, notesRepository)
+    }
+
     /** Avatar tap → user menu (parity with the WebView showUserMenu), rendered as a clean M3 popup. */
     override fun onAvatarClick(item: NativePostItem) {
         if (item.userId <= 0) return
         val nick = item.nick.orEmpty()
-        val actions = listOf<Pair<String, () -> Unit>>(
-                "Профиль" to { navigationUseCase.openProfile(item.userId) },
-                "Репутация" to { navigationUseCase.openReputationHistory(item.userId) },
-                "Личные сообщения QMS" to { navigationUseCase.openQms(item.userId) },
-                "Темы пользователя" to { navigationUseCase.openSearchUserTopics(nick, item.userId) },
-                "Сообщения в этой теме" to {
-                    navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick, item.userId)
-                },
-                "Сообщения пользователя" to { navigationUseCase.openSearchUserMessages(nick, item.userId) },
-        )
+        val actions = buildList<Pair<String, () -> Unit>> {
+            add("Профиль" to { navigationUseCase.openProfile(item.userId) })
+            add("Репутация" to { navigationUseCase.openReputationHistory(item.userId) })
+            add("Личные сообщения QMS" to { navigationUseCase.openQms(item.userId) })
+            add("Темы пользователя" to { navigationUseCase.openSearchUserTopics(nick, item.userId) })
+            add("Сообщения в этой теме" to {
+                navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick, item.userId)
+            })
+            add("Сообщения пользователя" to { navigationUseCase.openSearchUserMessages(nick, item.userId) })
+            // Own posts can't be blacklisted (parity with the WebView guard).
+            if (item.userId != authHolder.get().userId) {
+                val blacklisted = themeUseCase.isForumBlacklisted(item.userId, item.nick)
+                val label = if (blacklisted) "Убрать из чёрного списка форума" else "Добавить в чёрный список форума"
+                add(label to { toggleForumBlacklist(item, blacklisted) })
+            }
+        }
         showM3Menu(title = null, actions = actions)
+    }
+
+    /**
+     * Toggle a user in the forum blacklist (parity with the WebView toggleForumBlacklist). Adding hides
+     * their posts immediately from the loaded list; removing needs a reload to bring them back (they were
+     * filtered out on load), so we refresh the topic.
+     */
+    private fun toggleForumBlacklist(item: NativePostItem, wasBlacklisted: Boolean) {
+        val user = forpdateam.ru.forpda.model.preferences.ForumBlacklistedUser(item.userId, item.nick.orEmpty())
+        viewLifecycleOwner.lifecycleScope.launch {
+            if (wasBlacklisted) themeUseCase.removeForumBlacklistedUser(user)
+            else themeUseCase.addForumBlacklistedUser(user)
+            if (view == null) return@launch
+            if (wasBlacklisted) {
+                Toast.makeText(requireContext(), "Убран из чёрного списка форума", Toast.LENGTH_SHORT).show()
+                loadTopic(loadedUrl ?: topicUrl) // bring the un-blacklisted user's posts back
+            } else {
+                Toast.makeText(requireContext(), "Добавлен в чёрный список форума", Toast.LENGTH_SHORT).show()
+                val removed = loadedItems.removeAll { it.userId == item.userId }
+                if (removed) submitPosts()
+            }
+        }
     }
 
     /**
@@ -1788,7 +1861,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 topicHatPostId = processHatForPage(page)
                 pageHasHat = topicHatPostId != null
                 refreshToolbarState()
-                val items = tagPage(mapper.map(page.posts), page.pagination.current)
+                val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
                 updateRefreshGesture() // top pull feeds prev-page loading, not refresh, when pages are above

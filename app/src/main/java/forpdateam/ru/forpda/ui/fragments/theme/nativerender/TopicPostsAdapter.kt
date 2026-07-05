@@ -57,6 +57,8 @@ class TopicPostsAdapter(
         fun onPostMenu(item: NativePostItem)
         /** The user tapped the «Шапка темы» collapse header → toggle the hat body. */
         fun onToggleHat()
+        /** Long-press on a spoiler header → copy a deep link to that spoiler ([spoilNumber] is 1-based). */
+        fun onSpoilerCopyLink(item: NativePostItem, spoilNumber: Int)
     }
 
     /**
@@ -644,6 +646,7 @@ class TopicPostsAdapter(
         private fun spoilerView(block: BodyBlock.Spoiler, scope: RenderScope, item: NativePostItem): View {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
+            val spoilNumber = scope.spoilerSeq + 1 // 1-based index of this spoiler within the post
             val key = "${scope.postId}:${scope.spoilerSeq++}"
             var open = spoilerStates[key] ?: block.initiallyOpen
 
@@ -675,6 +678,11 @@ class TopicPostsAdapter(
                 open = !open
                 spoilerStates[key] = open
                 applyState()
+            }
+            // Long-press the spoiler title → copy a deep link to it (parity with the WebView copySpoilerLink).
+            header.setOnLongClickListener {
+                actionListener.onSpoilerCopyLink(item, spoilNumber)
+                true
             }
             card.addView(header)
             card.addView(bodyContainer)
