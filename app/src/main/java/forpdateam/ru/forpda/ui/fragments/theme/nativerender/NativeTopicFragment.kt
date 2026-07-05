@@ -1177,7 +1177,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // The bottom pagination bar belongs to CLASSIC reading mode only; HYBRID (default) uses
         // continuous infinite scroll with no bar. Also hidden while the reply editor is open.
         paginationBar?.let { bar ->
-            val show = isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE
+            // Honour «Панель страниц темы» (getTopicPaginationPanelEnabled) — user can hide the bar
+            // to rely on page swipes/FAB instead (parity with the WebView pagination panel toggle).
+            val show = isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE &&
+                    mainPreferencesHolder.getTopicPaginationPanelEnabled()
             bar.visibility = if (show) View.VISIBLE else View.GONE
             // Reserve bottom room for the bar only when it is shown (CLASSIC); HYBRID needs none.
             val bottomPad = if (show) (52 * resources.displayMetrics.density).toInt() else 0
@@ -1324,9 +1327,35 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 postsAdapter.submitList(loadedItems.toList()) {
                     if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
                 }
+                enrichLoadedPage(page)
             }.onFailure { error ->
                 Toast.makeText(requireContext(), "Ошибка загрузки темы: ${error.message}", Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    /**
+     * Deferred desktop/profile metadata merge (author post counts «💬 N» + real post-rating/rep
+     * metadata that mobile HTML omits) — parity with the WebView ViewModel's mergeDesktopRatingsIntoPage,
+     * which runs AFTER first paint. Re-maps the affected posts and patches them in [loadedItems] by
+     * post id (safe even if infinite scroll grew the list meanwhile).
+     */
+    private fun enrichLoadedPage(page: forpdateam.ru.forpda.entity.remote.theme.ThemePage) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { themeApi.enrichPageMetadata(page, page.url.orEmpty()) }
+            }
+            if (view == null) return@launch
+            val enrichedById = mapper.map(page.posts).associateBy { it.postId }
+            var changed = false
+            for (i in loadedItems.indices) {
+                val updated = enrichedById[loadedItems[i].postId] ?: continue
+                if (updated != loadedItems[i]) {
+                    loadedItems[i] = updated
+                    changed = true
+                }
+            }
+            if (changed) postsAdapter.submitList(loadedItems.toList())
         }
     }
 
