@@ -393,6 +393,7 @@ class TopicPostsAdapter(
                     is BodyBlock.Spoiler -> spoilerView(block, scope, item)
                     is BodyBlock.Code -> codeView(block)
                     is BodyBlock.FileAttachment -> fileAttachmentView(block)
+                    is BodyBlock.Table -> tableView(block)
                     is BodyBlock.WebFallback -> bindFallback(block)
                 }
                 container.addView(child)
@@ -569,6 +570,57 @@ class TopicPostsAdapter(
             card.addView(copyBtn)
             card.addView(scroller)
             return card
+        }
+
+        /**
+         * Native table (Фаза 6): a horizontally-scrollable grid of bordered cells, each cell a
+         * Spannable TextView. Ragged rows are left-aligned. Merged cells aren't modelled — text
+         * still shows in its origin cell.
+         */
+        private fun tableView(block: BodyBlock.Table): View {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            val cellPad = (8 * dm.density).toInt()
+            val borderColor = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant)
+            val grid = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundColor(borderColor) // shows through 1px gaps as cell borders
+            }
+            block.rows.forEachIndexed { rowIndex, row ->
+                val rowView = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    val topMargin = if (rowIndex == 0) 0 else (1 * dm.density).toInt()
+                    layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply { setMargins(0, topMargin, 0, 0) }
+                }
+                row.forEachIndexed { colIndex, cellHtml ->
+                    val cell = TextView(ctx).apply {
+                        setText(highlightSearchMatches(spanned(cellHtml)))
+                        textSize = scaledSp(14f)
+                        setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+                        setPadding(cellPad, cellPad, cellPad, cellPad)
+                        setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurface))
+                        minWidth = (64 * dm.density).toInt()
+                        val leftMargin = if (colIndex == 0) 0 else (1 * dm.density).toInt()
+                        layoutParams = LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.WRAP_CONTENT,
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                        ).apply { setMargins(leftMargin, 0, 0, 0) }
+                    }
+                    rowView.addView(cell)
+                }
+                grid.addView(rowView)
+            }
+            return android.widget.HorizontalScrollView(ctx).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(grid)
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (6 * dm.density).toInt() }
+            }
         }
 
         /** Фаза-1 degraded native preview for a complex block. Single swap point for the future WebView. */

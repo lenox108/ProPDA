@@ -79,6 +79,15 @@ sealed interface BodyBlock {
     data class Code(val title: String?, val text: String) : BodyBlock
 
     /**
+     * A native table (`<table>`), peeled out of the fallback in Фаза 6. [rows] is a row-major grid;
+     * each cell holds RAW inline HTML (rendered to a Spannable at view time, like [Text]). Rows may
+     * be ragged (different cell counts); the view left-aligns and horizontally scrolls. Merged cells
+     * (colspan/rowspan) are NOT modelled — rare, and the cell text is still shown in its origin
+     * position, so no content is lost.
+     */
+    data class Table(val rows: List<List<String>>) : BodyBlock
+
+    /**
      * A complex block rendered via the Фаза-1 inline-WebView fallback. [html] is the
      * block's outer HTML (verbatim server markup); [kind] classifies it so later phases
      * can route specific kinds to native views.

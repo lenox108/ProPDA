@@ -90,10 +90,26 @@ class PostBodyRenderer {
                 if (element.hasClass("spoil")) listOf(extractSpoiler(element)) else null
             BodyBlock.WebFallback.Kind.CODE ->
                 if (element.hasClass("code")) listOf(extractCode(element)) else null
+            BodyBlock.WebFallback.Kind.TABLE -> {
+                val tableEl = if (element.tagName() == "table") element else element.selectFirst("table")
+                tableEl?.let { extractTable(it) }?.let { listOf(it) }
+            }
             else -> null
         }
         return native?.takeIf { it.isNotEmpty() }
                 ?: listOf(BodyBlock.WebFallback(element.outerHtml(), kind))
+    }
+
+    /**
+     * Builds a native [BodyBlock.Table] from a `<table>`: each `<tr>` becomes a row, each `<td>`/`<th>`
+     * a cell holding its inner HTML (rendered as a Spannable in the view). Returns null for a table
+     * with no cells (so it falls back rather than showing an empty grid).
+     */
+    private fun extractTable(table: Element): BodyBlock.Table? {
+        val rows = table.select("tr").map { tr ->
+            tr.select("> td, > th").map { it.html().trim() }
+        }.filter { it.isNotEmpty() }
+        return if (rows.isEmpty()) null else BodyBlock.Table(rows)
     }
 
     /**
