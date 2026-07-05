@@ -162,6 +162,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Set for an explicit page-jump so [applyInitialAnchor] lands on the page top, not unread/find. */
     private var pendingJumpToTop: Boolean = false
 
+    /** Set for «В конец темы» so [applyInitialAnchor] lands on the last post of the last page. */
+    private var pendingJumpToBottom: Boolean = false
+
     /** «Умная кнопка темы» (FAB) state: enabled per pref; arrow follows the last scroll direction. */
     private var fabEnabled = false
     private var fabPointsDown = true
@@ -244,7 +247,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         fab.setOnClickListener { smartScrollTap() }
         fab.setOnLongClickListener {
             it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            showPagePicker()
+            showSmartNavMenu()
             true
         }
         fab.show()
@@ -1361,6 +1364,40 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         loadTopic(pagination.pageUrl(target))
     }
 
+    /**
+     * FAB long-press → smart navigation menu (parity with the WebView SmartNavigationMenu): jump to the
+     * start / end of the topic or a specific page. On a single-page topic it's meaningless, so nothing
+     * shows.
+     */
+    private fun showSmartNavMenu() {
+        if (!pagination.isInitialised || pagination.totalPages <= 1) return
+        val actions = listOf(
+                "В начало темы" to { jumpToPage(1) },
+                "В конец темы" to { jumpToLastPage() },
+                "Перейти на страницу…" to { showPagePicker() },
+        )
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Навигация по теме")
+                .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
+                .show()
+    }
+
+    /** «В конец темы»: load the last page (or just scroll down if already there) and land on the last post. */
+    private fun jumpToLastPage() {
+        if (!pagination.isInitialised) return
+        val last = pagination.totalPages
+        if (last == barCurrentPage && loadedItems.isNotEmpty()) {
+            val lastPos = (loadedItems.size - 1 + headerOffset()).coerceAtLeast(0)
+            recyclerView.post {
+                (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(lastPos, 0)
+            }
+            return
+        }
+        pendingJumpToBottom = true
+        barCurrentPage = last
+        loadTopic(pagination.pageUrl(last))
+    }
+
     private fun showPagePicker() {
         if (!pagination.isInitialised || pagination.totalPages <= 1) return
         val ctx = requireContext()
@@ -1511,6 +1548,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     ) {
         val ids = items.map { it.postId }
         val targetId = anchorPostId?.toIntOrNull()
+        // «В конец темы»: land on the very last post of the (last) page.
+        if (pendingJumpToBottom) {
+            pendingJumpToBottom = false
+            val lastPos = (ids.size - 1 + headerOffset()).coerceAtLeast(0)
+            (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(lastPos, 0)
+            recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
+            return
+        }
         // An explicit page-jump lands on the first post of the requested page, ignoring the server's
         // unread/find anchor (cf. «go to page N lands on last post» — we force the page top).
         val jumpToTop = pendingJumpToTop
