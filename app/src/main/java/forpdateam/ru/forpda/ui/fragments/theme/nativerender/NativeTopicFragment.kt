@@ -90,9 +90,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private val anchorResolver = NativeAnchorResolver()
     private val pagination = TopicPaginationController()
     private val postsAdapter by lazy { TopicPostsAdapter(linkHandler, this) }
-    private val pollHeaderAdapter = PollHeaderAdapter { action, method, encodedForm ->
-        submitPoll(action, method, encodedForm)
-    }
+    private val pollHeaderAdapter = PollHeaderAdapter(
+            voteListener = PollHeaderAdapter.PollVoteListener { action, method, encodedForm ->
+                submitPoll(action, method, encodedForm)
+            },
+    )
 
     /** Adapter positions are shifted by the poll header (0 or 1) — offset scroll targets by this. */
     private fun headerOffset(): Int = pollHeaderAdapter.itemCount
@@ -123,10 +125,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Loaded-page flags driving the toolbar poll / hat icon visibility (see [refreshToolbarState]). */
     private var pageHasPoll = false
     private var pageHasHat = false
-    /** Post id of the topic hat on the loaded page (the «Инфо» toolbar button scrolls to / toggles it). */
+    /** Post id of the topic hat on the loaded page (rendered as a collapsed inline block on page 1). */
     private var topicHatPostId: Int? = null
-    /** Session collapse state for the topic hat (default expanded — «шапка показана при открытии»). */
-    private var hatCollapsed: Boolean = false
+    /** Inline hat collapse state — collapsed by default (the «Инфо» toolbar opens a popup instead). */
+    private var hatCollapsed: Boolean = true
+    /** The loaded page's poll (page 1) — the «Опрос» toolbar button shows it in a popup. */
+    private var currentPoll: forpdateam.ru.forpda.entity.remote.theme.Poll? = null
 
     /** The full BBCode editor (formatting toolbar, smiles, attachments) — one-to-one with WebView. */
     private var messagePanel: MessagePanel? = null
@@ -467,10 +471,56 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         applyToolbarAutoHide() // restore auto-hide once the editor is closed
     }
 
-    /** Toolbar «Опрос»: bring the poll (page-1 header) into view. Voting itself lives in the header. */
+    /** Toolbar «Опрос»: show the poll in a popup over the theme (parity with the WebView poll overlay). */
     private fun onPollToolbarClick() {
-        if (!pageHasPoll) return
-        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(0, 0)
+        val poll = currentPoll ?: return
+        val ctx = requireContext()
+        val rv = androidx.recyclerview.widget.RecyclerView(ctx).apply {
+            layoutManager = LinearLayoutManager(ctx)
+            adapter = PollHeaderAdapter(
+                    voteListener = PollHeaderAdapter.PollVoteListener { action, method, form ->
+                        submitPoll(action, method, form)
+                    },
+                    collapsible = false, // popup poll is always fully expanded
+            ).also { it.setPoll(poll) }
+        }
+        showThemePopup("Опрос", rv)
+    }
+
+    /**
+     * A bottom-sheet popup showing [content] over the theme (used by the «Инфо»/«Опрос» toolbar
+     * buttons, mirroring the WebView hat/poll overlays). Capped to most of the screen height.
+     */
+    private fun showThemePopup(title: String, content: View) {
+        val ctx = requireContext()
+        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(ctx)
+        val root = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            val header = TextView(ctx).apply {
+                text = title
+                textSize = 16f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+                setPadding(pad, pad, pad, pad / 2)
+            }
+            addView(header)
+            addView(content, android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        sheet.setContentView(root)
+        // Let the sheet grow tall (hat/poll can be long) but never full-bleed under the status bar.
+        (root.parent as? View)?.let { bottomSheet ->
+            com.google.android.material.bottomsheet.BottomSheetBehavior.from(bottomSheet).apply {
+                peekHeight = (resources.displayMetrics.heightPixels * 0.7).toInt()
+                state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+            }
+            bottomSheet.layoutParams = bottomSheet.layoutParams.apply {
+                height = (resources.displayMetrics.heightPixels * 0.85).toInt()
+            }
+        }
+        sheet.show()
     }
 
     /**
@@ -498,16 +548,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
-    /** Toolbar «Инфо»: toggle the topic hat collapsed/expanded and bring it into view. */
+    /** Toolbar «Инфо»: show the topic hat in a popup over the theme (parity with the WebView overlay). */
     private fun onHatToolbarClick() {
         val hatId = topicHatPostId ?: return
-        hatCollapsed = !hatCollapsed
-        postsAdapter.setTopicHat(hatId, hatCollapsed)
-        val index = loadedItems.indexOfFirst { it.postId == hatId }
-        if (index >= 0) {
-            (recyclerView.layoutManager as? LinearLayoutManager)
-                    ?.scrollToPositionWithOffset(index + headerOffset(), 0)
+        val hatItem = loadedItems.firstOrNull { it.postId == hatId } ?: return
+        val ctx = requireContext()
+        // A throwaway adapter renders the hat post fully (no hat-collapse in the popup) with all its
+        // spoilers/links, reusing the exact post rendering.
+        val popupAdapter = TopicPostsAdapter(linkHandler, this)
+        popupAdapter.setDisplaySettings(currentDisplaySettings())
+        val auth = authHolder.get()
+        popupAdapter.setAuthContext(auth.isAuth(), auth.userId)
+        val rv = androidx.recyclerview.widget.RecyclerView(ctx).apply {
+            layoutManager = LinearLayoutManager(ctx)
+            adapter = popupAdapter
         }
+        popupAdapter.submitList(listOf(hatItem))
+        showThemePopup("Шапка темы", rv)
     }
 
     /** Header tap on the hat post itself toggles its body (same session state as the toolbar «Инфо»). */
@@ -731,16 +788,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * default look is unchanged.
      */
     private fun applyDisplaySettings() {
-        val fontSize = mainPreferencesHolder.getWebViewFontSize()
-        postsAdapter.setDisplaySettings(
-                TopicPostsAdapter.PostDisplaySettings(
-                        textScale = fontSize / REFERENCE_FONT_SIZE,
-                        showAvatars = topicPreferencesHolder.getShowAvatars(),
-                        circleAvatars = topicPreferencesHolder.getCircleAvatars(),
-                        density = mainPreferencesHolder.getTopicPostDensity(),
-                )
-        )
+        postsAdapter.setDisplaySettings(currentDisplaySettings())
     }
+
+    /** Current post display prefs (font/avatars/density) — shared by the list and the hat popup. */
+    private fun currentDisplaySettings() = TopicPostsAdapter.PostDisplaySettings(
+            textScale = mainPreferencesHolder.getWebViewFontSize() / REFERENCE_FONT_SIZE,
+            showAvatars = topicPreferencesHolder.getShowAvatars(),
+            circleAvatars = topicPreferencesHolder.getCircleAvatars(),
+            density = mainPreferencesHolder.getTopicPostDensity(),
+    )
 
     override fun onRestoredAfterChildFragmentRemoved() {
         // Native list keeps its state/scroll across a covering child fragment — nothing to restore.
@@ -1305,6 +1362,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val poll = if (page.pagination.current <= 1) page.poll else null
                 pollHeaderAdapter.setPoll(poll)
                 pageHasPoll = poll != null
+                currentPoll = poll
                 // Detect the topic hat synchronously with the SAME policy the WebView uses
                 // (promoteTopicHatForHybridPage → TopicPrependedHatPolicy): on page 1 it's the first
                 // post (4pda's «шапка» convention), on deep pages a server-prepended hat. No async
