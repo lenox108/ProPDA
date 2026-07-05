@@ -17,11 +17,12 @@
     android:paddingHorizontal="12dp"
     android:paddingVertical="10dp">
 
+    <!-- Header: [avatar+rep] [nick / group / 💬count]  [date, #N ⋮] — layout parity with WebView. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="top">
 
         <!-- Avatar with the reputation number overlaid as a badge (parity with WebView .reputation). -->
         <FrameLayout
@@ -30,8 +31,8 @@
 
             <ImageView
                 android:id="@+id/native_post_avatar"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:contentDescription="@null"
                 android:scaleType="centerCrop" />
 
@@ -47,7 +48,7 @@
                 android:paddingVertical="1dp"
                 android:textSize="10sp"
                 android:textStyle="bold"
-                android:textColor="?attr/colorOnPrimary"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:minWidth="16dp"
                 android:gravity="center"
                 tools:text="28" />
@@ -69,47 +70,73 @@
                 android:textColor="?attr/colorOnSurface"
                 tools:text="SnapshotUser" />
 
+            <!-- Author group (tinted by server groupColor) — parity with WebView .group_text. -->
             <TextView
                 android:id="@+id/native_post_meta"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
                 android:textSize="12sp"
                 android:textColor="?attr/colorOnSurfaceVariant"
-                tools:text="Постоянный · 20.05.2026" />
+                tools:text="Постоянный" />
+
+            <!-- Author's forum post count (💬 N) — parity with WebView user_post_count. -->
+            <TextView
+                android:id="@+id/native_post_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:drawablePadding="4dp"
+                android:gravity="center_vertical"
+                android:textSize="12sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone"
+                tools:text="2846"
+                tools:visibility="visible" />
         </LinearLayout>
 
-        <!-- Author's forum post count (💬 N) — parity with WebView user_post_count. -->
-        <TextView
-            android:id="@+id/native_post_count"
+        <!-- Right column: date on top, then post number + three-dots menu (parity with WebView). -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:drawablePadding="3dp"
-            android:gravity="center_vertical"
-            android:textSize="12sp"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:visibility="gone"
-            tools:text="2846"
-            tools:visibility="visible" />
+            android:orientation="vertical"
+            android:gravity="end">
 
-        <TextView
-            android:id="@+id/native_post_number"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            tools:text="#21" />
+            <TextView
+                android:id="@+id/native_post_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="20.05.2026, 14:55" />
 
-        <!-- Three-dots post menu (parity with WebView .btn.inf.menu → showPostMenu). -->
-        <ImageView
-            android:id="@+id/native_post_menu"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginStart="2dp"
-            android:padding="4dp"
-            android:contentDescription="@string/menu"
-            android:src="@drawable/ic_more_vert"
-            app:tint="?attr/colorOnSurfaceVariant" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/native_post_number"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    tools:text="#21" />
+
+                <!-- Three-dots post menu (parity with WebView .btn.inf.menu → showPostMenu). -->
+                <ImageView
+                    android:id="@+id/native_post_menu"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_marginStart="2dp"
+                    android:padding="4dp"
+                    android:contentDescription="@string/menu"
+                    android:src="@drawable/ic_more_vert"
+                    app:tint="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout

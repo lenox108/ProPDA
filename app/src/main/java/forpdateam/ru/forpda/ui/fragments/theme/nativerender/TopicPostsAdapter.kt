@@ -171,6 +171,7 @@ class TopicPostsAdapter(
         private val repBadge: TextView = itemView.findViewById(R.id.native_post_rep_badge)
         private val nick: TextView = itemView.findViewById(R.id.native_post_nick)
         private val meta: TextView = itemView.findViewById(R.id.native_post_meta)
+        private val date: TextView = itemView.findViewById(R.id.native_post_date)
         private val postCount: TextView = itemView.findViewById(R.id.native_post_count)
         private val number: TextView = itemView.findViewById(R.id.native_post_number)
         private val menu: ImageView = itemView.findViewById(R.id.native_post_menu)
@@ -362,26 +363,19 @@ class TopicPostsAdapter(
             nick.text = sb
         }
 
-        /** Meta line "group · date", with the group name tinted by its server groupColor. Reputation
-         * now lives as an avatar badge (see [bindRepBadge]), matching the WebView layout. */
+        /** Group line (tinted by server groupColor) + the date in the right column — WebView layout.
+         * Reputation is the avatar badge ([bindRepBadge]); post count is [bindPostCount]. */
         private fun bindMeta(item: NativePostItem) {
-            val sb = SpannableStringBuilder()
             val group = item.group?.takeIf { it.isNotBlank() }
-            if (group != null) {
-                val start = sb.length
-                sb.append(group)
-                parseColor(item.groupColor)?.let { c ->
-                    sb.setSpan(
-                            android.text.style.ForegroundColorSpan(c),
-                            start, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-                    )
-                }
+            if (group == null) {
+                meta.visibility = View.GONE
+            } else {
+                meta.visibility = View.VISIBLE
+                meta.text = group
+                meta.setTextColor(parseColor(item.groupColor)
+                        ?: itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
             }
-            item.date?.takeIf { it.isNotBlank() }?.let {
-                if (sb.isNotEmpty()) sb.append(" · ")
-                sb.append(it)
-            }
-            meta.text = sb
+            date.text = item.date?.takeIf { it.isNotBlank() }.orEmpty()
         }
 
         /** Reputation number overlaid on the avatar (parity with WebView .reputation). Tap → rep menu. */
