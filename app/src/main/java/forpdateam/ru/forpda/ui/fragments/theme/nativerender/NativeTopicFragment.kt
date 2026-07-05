@@ -150,6 +150,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Set for an explicit page-jump so [applyInitialAnchor] lands on the page top, not unread/find. */
     private var pendingJumpToTop: Boolean = false
 
+    /** «Умная кнопка темы» (FAB) state: enabled per pref; arrow follows the last scroll direction. */
+    private var fabEnabled = false
+    private var fabPointsDown = true
+    private val fabHideRunnable = Runnable { if (view != null) fab.hide() }
+
     override fun hasBackHandling(): Boolean =
             messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
 
@@ -187,13 +192,62 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 maybeMarkTopicReadAtEnd()
                 updateBarCurrentPageFromScroll()
                 applyBarHideOnScroll(dy)
+                updateFabOnScroll(dy)
             }
         })
         installPageSwipeDetector()
         refreshLayout.setOnRefreshListener { loadTopic(loadedUrl ?: topicUrl) }
         setupMessagePanel()
+        setupFab()
         setupToolbarMenu()
         loadTopic(topicUrl)
+    }
+
+    /**
+     * «Умная кнопка темы» (setting «Умная кнопка темы»): a mini FAB that appears while scrolling. A
+     * short tap scrolls ~a screen in the direction the user is already travelling (the arrow follows
+     * that direction); a long press opens the page-jump dialog. Mirrors the WebView's FAB intent
+     * without the WebView-coupled [ThemeFabCoordinator]. Hidden entirely when the pref is off.
+     */
+    private fun setupFab() {
+        fabEnabled = mainPreferencesHolder.getScrollButtonEnabled()
+        if (!fabEnabled) {
+            fab.hide()
+            return
+        }
+        fab.size = com.google.android.material.floatingactionbutton.FloatingActionButton.SIZE_MINI
+        fab.setImageResource(forpdateam.ru.forpda.R.drawable.ic_arrow_down)
+        fab.hide() // revealed on first scroll
+        fab.setOnClickListener { smartScrollTap() }
+        fab.setOnLongClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            showPagePicker()
+            true
+        }
+    }
+
+    /** Reveal the FAB pointing the current scroll direction and re-arm the auto-hide timer. */
+    private fun updateFabOnScroll(dy: Int) {
+        if (!fabEnabled) return
+        if (kotlin.math.abs(dy) < SCROLL_HIDE_THRESHOLD) return
+        val down = dy > 0
+        if (down != fabPointsDown) {
+            fabPointsDown = down
+            fab.setImageResource(
+                    if (down) forpdateam.ru.forpda.R.drawable.ic_arrow_down
+                    else forpdateam.ru.forpda.R.drawable.ic_arrow_up)
+        }
+        fab.show()
+        fab.removeCallbacks(fabHideRunnable)
+        fab.postDelayed(fabHideRunnable, FAB_AUTO_HIDE_MS)
+    }
+
+    /** Short tap: scroll ~a screen in the arrow's direction (parity with the WebView pageUp/Down). */
+    private fun smartScrollTap() {
+        val step = (recyclerView.height * 0.85f).toInt().coerceAtLeast(1)
+        recyclerView.smoothScrollBy(0, if (fabPointsDown) step else -step)
+        fab.removeCallbacks(fabHideRunnable)
+        fab.postDelayed(fabHideRunnable, FAB_AUTO_HIDE_MS)
     }
 
     /**
@@ -555,7 +609,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             loadTopic(topicUrl)
         }
         // The user may have changed font/avatar prefs while away — re-apply on return.
-        if (view != null) applyDisplaySettings()
+        if (view != null) {
+            applyDisplaySettings()
+            setupFab() // the «Умная кнопка темы» pref may have been toggled while away
+        }
     }
 
     override fun onResume() {
@@ -569,6 +626,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     override fun onDestroyView() {
+        fab.removeCallbacks(fabHideRunnable)
         messagePanel?.onDestroy()
         messagePanel = null
         attachmentsPopup = null
@@ -1237,6 +1295,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Per-frame scroll delta (px) beyond which the pagination bar hides/shows on scroll. */
         const val SCROLL_HIDE_THRESHOLD = 8
+
+        /** How long the smart-scroll FAB stays visible after the last scroll/tap. */
+        const val FAB_AUTO_HIDE_MS = 1500L
 
         private const val MENU_SEARCH = 0x4E01
         private const val MENU_GOTO_PAGE = 0x4E02
