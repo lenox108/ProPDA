@@ -413,13 +413,14 @@ class TopicPostsAdapter(
                     authorized = authorized,
                     memberId = memberId,
             )
-            // Left group: post-rating vote 👍 · rating · 👎 (outline icons, like WebView).
+            // Left group: post-rating vote 👍 · rating · 👎 (the WebView's rep-thumb-final outline
+            // thumbs, background stripped, tinted to the muted action-icon colour).
             if (canPlus) {
-                actions.addView(iconAction(R.drawable.ic_thumb_up_outline, null) { actionListener.onVote(item, up = true) })
+                actions.addView(iconAction(R.drawable.ic_post_thumb_up, null) { actionListener.onVote(item, up = true) })
             }
             item.postRating?.takeIf { it.isNotBlank() }?.let { actions.addView(ratingLabel(it)) }
             if (canMinus) {
-                actions.addView(iconAction(R.drawable.ic_thumb_down_outline, null) { actionListener.onVote(item, up = false) })
+                actions.addView(iconAction(R.drawable.ic_post_thumb_down, null) { actionListener.onVote(item, up = false) })
             }
             // Spacer pushes reply/quote to the right edge, matching the WebView footer layout.
             if (item.canQuote) {
