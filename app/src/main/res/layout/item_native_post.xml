@@ -19,6 +19,7 @@
 
     <!-- Header: [avatar+rep] [nick / group / 💬count]  [date, #N ⋮] — layout parity with WebView. -->
     <LinearLayout
+        android:id="@+id/native_post_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
