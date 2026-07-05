@@ -76,6 +76,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var editorUseCase: forpdateam.ru.forpda.model.interactors.theme.ThemeEditorUseCase
 
+    /** Logged-in context — drives the footer 👍/👎 visibility (parity with the WebView). */
+    @Inject
+    lateinit var authHolder: forpdateam.ru.forpda.model.AuthHolder
+
     // topicPreferencesHolder is provided by the TabFragment supertype.
 
     private val mapper = NativePostMapper()
@@ -197,6 +201,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 updateFabOnScroll(dy)
             }
         })
+        val auth = authHolder.get()
+        postsAdapter.setAuthContext(authorized = auth.isAuth(), memberId = auth.userId)
         installPageSwipeDetector()
         refreshLayout.setOnRefreshListener { loadTopic(loadedUrl ?: topicUrl) }
         setupMessagePanel()

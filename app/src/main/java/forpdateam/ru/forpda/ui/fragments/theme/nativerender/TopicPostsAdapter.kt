@@ -73,6 +73,18 @@ class TopicPostsAdapter(
     /** Current find-on-page query; matched substrings get a highlight background when non-blank. */
     private var searchQuery: String = ""
 
+    /** Auth context for resolving post-rating (👍/👎) visibility — parity with the WebView. */
+    private var authorized: Boolean = false
+    private var memberId: Int = 0
+
+    /** Set the logged-in context so the footer can decide 👍/👎 visibility like the WebView. */
+    fun setAuthContext(authorized: Boolean, memberId: Int) {
+        if (this.authorized == authorized && this.memberId == memberId) return
+        this.authorized = authorized
+        this.memberId = memberId
+        notifyDataSetChanged()
+    }
+
     /** The post that is the collapsible topic hat (server-marked, `prependedHatPostId`), if any. */
     private var topicHatPostId: Int? = null
     /** Whether the topic-hat post's body is currently collapsed (session state, driven by the host). */
@@ -139,7 +151,7 @@ class TopicPostsAdapter(
         val highlight = pendingHighlightPostId == item.postId
         if (highlight) pendingHighlightPostId = null
         val isHat = topicHatPostId != null && item.postId == topicHatPostId
-        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed)
+        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -170,6 +182,10 @@ class TopicPostsAdapter(
         /** Find-on-page query for the current bind pass; matched substrings get a highlight span. */
         private var searchQuery: String = ""
 
+        /** Auth context for the current bind pass, used to resolve 👍/👎 visibility (see bindActions). */
+        private var authorized: Boolean = false
+        private var memberId: Int = 0
+
         /** Scale a base sp size by the user's font-size preference. */
         private fun scaledSp(base: Float): Float = base * settings.textScale
 
@@ -180,9 +196,13 @@ class TopicPostsAdapter(
                 searchQuery: String = "",
                 isHat: Boolean = false,
                 hatCollapsed: Boolean = false,
+                authorized: Boolean = false,
+                memberId: Int = 0,
         ) {
             this.settings = settings
             this.searchQuery = searchQuery
+            this.authorized = authorized
+            this.memberId = memberId
             // Reset the card background on every (re)bind so a recycled holder never keeps a prior
             // post's mid-fade tint.
             highlightAnimator?.cancel()
@@ -382,30 +402,45 @@ class TopicPostsAdapter(
          */
         private fun bindActions(item: NativePostItem) {
             actions.removeAllViews()
-            // Left group: post-rating vote 👍 · rating · 👎 (icon-only, like WebView).
-            if (item.canPlusPostRating) {
-                actions.addView(iconAction(R.drawable.ic_thumb_up, null) { actionListener.onVote(item, up = true) })
+            // Resolve 👍/👎 visibility with the same fallback logic as the WebView (mobile HTML omits
+            // the rating metadata, so a quotable non-own post still gets the controls).
+            val (canPlus, canMinus) = NativePostRatingActions.resolve(
+                    canQuote = item.canQuote,
+                    postRating = item.postRating,
+                    parsedCanPlus = item.canPlusPostRating,
+                    parsedCanMinus = item.canMinusPostRating,
+                    postUserId = item.userId,
+                    authorized = authorized,
+                    memberId = memberId,
+            )
+            // Left group: post-rating vote 👍 · rating · 👎 (outline icons, like WebView).
+            if (canPlus) {
+                actions.addView(iconAction(R.drawable.ic_thumb_up_outline, null) { actionListener.onVote(item, up = true) })
             }
             item.postRating?.takeIf { it.isNotBlank() }?.let { actions.addView(ratingLabel(it)) }
-            if (item.canMinusPostRating) {
-                actions.addView(iconAction(R.drawable.ic_thumb_down, null) { actionListener.onVote(item, up = false) })
+            if (canMinus) {
+                actions.addView(iconAction(R.drawable.ic_thumb_down_outline, null) { actionListener.onVote(item, up = false) })
             }
             // Spacer pushes reply/quote to the right edge, matching the WebView footer layout.
             if (item.canQuote) {
                 actions.addView(View(itemView.context), LinearLayout.LayoutParams(0,
                         LinearLayout.LayoutParams.MATCH_PARENT, 1f))
-                // Right group: reply · quote — ICONS ONLY (no text), like WebView.
+                // Right group: reply (speech bubble) · quote (⇄) — ICONS ONLY, exact WebView icons.
                 actions.addView(iconAction(R.drawable.ic_post_reply, null) { actionListener.onReply(item) })
-                actions.addView(iconAction(R.drawable.ic_toolbar_quote_post, null) { actionListener.onQuote(item) })
+                actions.addView(iconAction(R.drawable.ic_post_quote, null) { actionListener.onQuote(item) })
             }
             actions.visibility = if (actions.childCount > 0) View.VISIBLE else View.GONE
         }
 
-        /** An accent-tinted icon button with an optional label to its right (footer action). */
+        /**
+         * A footer action icon tinted muted grey (`colorOnSurfaceVariant`) to match the WebView's
+         * `post-action-icon-color`; a text label (if any) uses the accent colour.
+         */
         private fun iconAction(iconRes: Int, label: String?, onClick: () -> Unit): TextView {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
+            val iconTint = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
             return TextView(ctx).apply {
                 text = label.orEmpty()
                 if (!label.isNullOrEmpty()) {
@@ -414,7 +449,7 @@ class TopicPostsAdapter(
                     setTextColor(accent)
                 }
                 val icon = androidx.core.content.ContextCompat.getDrawable(ctx, iconRes)?.mutate()?.apply {
-                    setTint(accent)
+                    setTint(iconTint)
                     val s = (18 * dm.density).toInt()
                     setBounds(0, 0, s, s)
                 }
