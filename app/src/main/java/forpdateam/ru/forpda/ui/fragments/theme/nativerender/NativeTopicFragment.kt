@@ -376,7 +376,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * on pages that carry neither). Mirrors the WebView's refreshToolbarMenuItems visibility gating.
      */
     private fun refreshToolbarState() {
+        // Poll and page-search share one toolbar slot (WebView parity): a poll takes it when present, and
+        // page-search then moves into the «⋮» overflow (see showOverflowMenu). No poll → show search.
         toolbar.menu.findItem(MENU_POLL)?.isVisible = pageHasPoll
+        toolbar.menu.findItem(MENU_SEARCH)?.isVisible = !pageHasPoll
         toolbar.menu.findItem(MENU_HAT)?.isVisible = pageHasHat
     }
 
@@ -499,10 +502,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val dialog = android.app.Dialog(requireContext())
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         dialog.setContentView(root)
-        // Drop the panel from the bottom edge of the toolbar (in screen coords) so the toolbar stays visible.
+        dialog.setCanceledOnTouchOutside(true) // tap the toolbar / the strip below the panel to dismiss
+        // Anchor at the TOP of the content area (the list), i.e. below the toolbar AND any top pagination
+        // bar, so the panel drops out from under the chrome — never covering it or clipping its own top.
         val loc = IntArray(2)
-        appBarLayout.getLocationOnScreen(loc)
-        val topY = (loc[1] + appBarLayout.height).coerceAtLeast(0)
+        recyclerView.getLocationOnScreen(loc)
+        val topY = loc[1].coerceAtLeast(0)
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             // No full-screen dim — the WebView overlay just covers the content below the toolbar.
@@ -517,9 +522,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
         }
         if (scrollTarget != null) {
-            // Cap the panel to the space between the toolbar and the screen bottom so it never runs off.
-            val maxH = (resources.displayMetrics.heightPixels - topY -
-                    (16 * resources.displayMetrics.density).toInt()).coerceAtLeast(0)
+            // Cap to ~82% of the content height so tall content scrolls inside AND a strip stays free at the
+            // bottom for tap-to-dismiss; content still starts from its top.
+            val maxH = ((resources.displayMetrics.heightPixels - topY) * 0.82).toInt().coerceAtLeast(0)
             scrollTarget.viewTreeObserver.addOnPreDrawListener(
                     object : android.view.ViewTreeObserver.OnPreDrawListener {
                         override fun onPreDraw(): Boolean {
@@ -539,28 +544,31 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * The toolbar «⋮» overflow — a compact top-sliding panel of actions (parity with the WebView toolbar
-     * dropdown). Uses [presentTopSheet] rather than the toolbar's built-in overflow popup so the panel has
-     * a solid, readable background on every palette.
+     * The toolbar «⋮» overflow — a compact dropdown anchored under the «⋮» button (right side), parity
+     * with the WebView toolbar menu. Uses a [ListPopupWindow] with an explicitly solid background so it
+     * never renders transparent (the toolbar's built-in overflow mis-resolves `?attr/colorSurface`), and
+     * drops out from under the toolbar without covering it.
      */
     private fun showOverflowMenu() {
         val ctx = requireContext()
         val actions = buildList<Pair<String, () -> Unit>> {
-            add("Перейти на страницу" to { showPagePicker() })
-            add("Поиск по теме" to {
-                if (pageTopicId > 0) navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick = "")
-            })
-            add("Мои сообщения в теме" to {
-                if (pageTopicId > 0) navigationUseCase.openSearchMyPosts(pageTopicId, pageForumId)
-            })
-            add("Копировать ссылку на тему" to {
+            add("Скопировать ссылку" to {
                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as? android.content.ClipboardManager
                 cm?.setPrimaryClip(android.content.ClipData.newPlainText("topic",
                         "https://4pda.to/forum/index.php?showtopic=$pageTopicId"))
                 Toast.makeText(ctx, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
             })
-            add("Открыть раздел форума" to { if (pageForumId > 0) navigationUseCase.openForum(pageForumId) })
+            // Page-search lives here whenever a poll has taken its toolbar slot (see refreshToolbarState).
+            if (pageHasPoll) add("Найти на странице" to { toggleSearchBar() })
+            add("Найти в теме" to {
+                if (pageTopicId > 0) navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick = "")
+            })
+            add("Найти мои посты" to {
+                if (pageTopicId > 0) navigationUseCase.openSearchMyPosts(pageTopicId, pageForumId)
+            })
+            add("Перейти на страницу" to { showPagePicker() })
+            add("Открыть форум темы" to { if (pageForumId > 0) navigationUseCase.openForum(pageForumId) })
             add("Открыть в браузере" to {
                 runCatching {
                     startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
@@ -569,32 +577,38 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             })
         }
         val dm = resources.displayMetrics
-        val vpad = (14 * dm.density).toInt()
-        val hpad = (20 * dm.density).toInt()
         val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
-        val rowBg = android.util.TypedValue().also {
-            ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
-        }.resourceId
-        val root = android.widget.LinearLayout(ctx).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            background = androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.bg_theme_top_sheet)
-            setPadding(0, (6 * dm.density).toInt(), 0, (8 * dm.density).toInt())
+        val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+        val bg = android.graphics.drawable.GradientDrawable().apply {
+            setColor(surface)
+            cornerRadius = 12 * dm.density
         }
-        var dialogRef: android.app.Dialog? = null
-        actions.forEach { (label, action) ->
-            root.addView(TextView(ctx).apply {
-                text = label
-                textSize = 15f
-                setTextColor(onSurface)
-                setPadding(hpad, vpad, hpad, vpad)
-                isClickable = true
-                if (rowBg != 0) setBackgroundResource(rowBg)
-                setOnClickListener { dialogRef?.dismiss(); action() }
-            }, android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+        val popup = androidx.appcompat.widget.ListPopupWindow(ctx)
+        popup.anchorView = toolbar.findViewById(MENU_OVERFLOW) ?: toolbar
+        popup.setBackgroundDrawable(bg)
+        popup.isModal = true
+        popup.width = (240 * dm.density).toInt()
+        popup.verticalOffset = (4 * dm.density).toInt()
+        val hpad = (20 * dm.density).toInt()
+        val vpad = (13 * dm.density).toInt()
+        val adapter = object : android.widget.ArrayAdapter<String>(
+                ctx, 0, actions.map { it.first }) {
+            override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
+                val tv = (convertView as? TextView) ?: TextView(ctx).apply {
+                    setPadding(hpad, vpad, hpad, vpad)
+                    textSize = 15f
+                    setTextColor(onSurface)
+                }
+                tv.text = getItem(position)
+                return tv
+            }
         }
-        dialogRef = presentTopSheet(root, scrollTarget = null)
+        popup.setAdapter(adapter)
+        popup.setOnItemClickListener { _, _, position, _ ->
+            popup.dismiss()
+            actions[position].second()
+        }
+        popup.show()
     }
 
     /**
