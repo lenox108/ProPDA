@@ -87,6 +87,18 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun gallery_twoImages_areTwoNativeImageBlocks() {
+        val blocks = renderer.render(fixture("gallery_two_images.html"))
+        val images = blocks.filterIsInstance<BodyBlock.Image>()
+        assertEquals(2, images.size)
+        assertTrue(images[0].imageUrl.endsWith("one_thumb.jpg"))
+        assertTrue(images[1].imageUrl.endsWith("two_thumb.jpg"))
+        // Each image's tap target is its own enclosing <a> (via img.closest), not a shared one.
+        assertTrue(images[0].linkUrl?.endsWith("/1/one.jpg") == true)
+        assertTrue(images[1].linkUrl?.endsWith("/2/two.jpg") == true)
+    }
+
+    @Test
     fun attachmentImageLinked_isNativeSpoiler_containingTheImage() {
         // img.linked-image lives inside a .post-block.spoil "Прикрепленные файлы": the spoiler is now
         // native; the linked image rides as inline HTML in the spoiler's inner content (gallery-in-
