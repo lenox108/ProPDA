@@ -53,6 +53,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var themeUseCase: forpdateam.ru.forpda.model.interactors.theme.ThemeUseCase
 
+    @Inject
+    lateinit var mainPreferencesHolder: forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
+
+    // topicPreferencesHolder is provided by the TabFragment supertype.
+
     private val mapper = NativePostMapper()
     private val anchorResolver = NativeAnchorResolver()
     private val pagination = TopicPaginationController()
@@ -111,6 +116,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(pollHeaderAdapter, postsAdapter)
+        applyDisplaySettings()
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) maybeLoadNextPage()
@@ -239,6 +245,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (loadedUrl == null && view != null) {
             loadTopic(topicUrl)
         }
+        // The user may have changed font/avatar prefs while away — re-apply on return.
+        if (view != null) applyDisplaySettings()
+    }
+
+    /**
+     * Read the user's font-size / avatar prefs and push them into the adapter (parity with the
+     * WebView path, which sets `defaultFontSize` + avatar CSS at load). Font size is an absolute
+     * base (default 16); [PostDisplaySettings.textScale] is relative to that reference so the
+     * default look is unchanged.
+     */
+    private fun applyDisplaySettings() {
+        val fontSize = mainPreferencesHolder.getWebViewFontSize()
+        postsAdapter.setDisplaySettings(
+                TopicPostsAdapter.PostDisplaySettings(
+                        textScale = fontSize / REFERENCE_FONT_SIZE,
+                        showAvatars = topicPreferencesHolder.getShowAvatars(),
+                        circleAvatars = topicPreferencesHolder.getCircleAvatars(),
+                )
+        )
     }
 
     override fun onRestoredAfterChildFragmentRemoved() {
@@ -547,5 +572,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Start fetching the previous page when the first-visible item is within this of the top. */
         const val PREV_PAGE_PREFETCH_DISTANCE = 1
+
+        /** Font-size pref value that maps to textScale 1.0 (matches the WebView default defaultFontSize). */
+        const val REFERENCE_FONT_SIZE = 16f
     }
 }
