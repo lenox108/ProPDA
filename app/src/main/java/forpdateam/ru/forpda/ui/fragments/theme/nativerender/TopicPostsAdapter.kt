@@ -363,6 +363,7 @@ class TopicPostsAdapter(
          */
         private fun bindActions(item: NativePostItem) {
             actions.removeAllViews()
+            // Left group: post-rating vote 👍 · rating · 👎 (icon-only, like WebView).
             if (item.canPlusPostRating) {
                 actions.addView(iconAction(R.drawable.ic_thumb_up, null) { actionListener.onVote(item, up = true) })
             }
@@ -370,9 +371,13 @@ class TopicPostsAdapter(
             if (item.canMinusPostRating) {
                 actions.addView(iconAction(R.drawable.ic_thumb_down, null) { actionListener.onVote(item, up = false) })
             }
+            // Spacer pushes reply/quote to the right edge, matching the WebView footer layout.
             if (item.canQuote) {
-                actions.addView(iconAction(R.drawable.ic_reply, "Ответить") { actionListener.onReply(item) })
-                actions.addView(iconAction(R.drawable.ic_toolbar_quote_post, "Цитировать") { actionListener.onQuote(item) })
+                actions.addView(View(itemView.context), LinearLayout.LayoutParams(0,
+                        LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+                // Right group: reply · quote — ICONS ONLY (no text), like WebView.
+                actions.addView(iconAction(R.drawable.ic_post_reply, null) { actionListener.onReply(item) })
+                actions.addView(iconAction(R.drawable.ic_toolbar_quote_post, null) { actionListener.onQuote(item) })
             }
             actions.visibility = if (actions.childCount > 0) View.VISIBLE else View.GONE
         }
