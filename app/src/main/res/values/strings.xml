@@ -810,9 +810,9 @@
     <string name="pref_summary_topic_back_behavior_origin">Back из цепочки связанных тем сразу возвращает к разделу, откуда была открыта первая тема.</string>
     <string name="pref_title_topic_open_target">При открытии темы</string>
     <string name="pref_value_topic_open_target_first_page">Первая страница</string>
-    <string name="pref_value_topic_open_target_last_unread">Последняя непрочитанная</string>
+    <string name="pref_value_topic_open_target_last_unread">Первое непрочитанное</string>
     <string name="pref_summary_topic_open_target_first_page">Обычные темы из списков открываются с первой страницы.</string>
-    <string name="pref_summary_topic_open_target_last_unread">Обычные темы из списков открываются с последней непрочитанной позиции.</string>
+    <string name="pref_summary_topic_open_target_last_unread">Обычные темы из списков открываются с первого непрочитанного сообщения.</string>
     <string name="pref_title_topic_header_initial_state">Шапка темы при открытии</string>
     <string name="pref_value_topic_header_initial_state_expanded">Открыта</string>
     <string name="pref_value_topic_header_initial_state_collapsed">Скрыта</string>

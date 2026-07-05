@@ -223,7 +223,33 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         setupFab()
         setupToolbarMenu()
         applyToolbarAutoHide()
-        loadTopic(topicUrl)
+        loadTopic(resolveInitialOpenUrl())
+    }
+
+    /**
+     * Apply the «При открытии темы» setting (Первая страница / Первое непрочитанное) to the initial URL,
+     * exactly as the WebView ViewModel does via [TopicOpenTargetResolver]: with «Первое непрочитанное» and
+     * an unread hint from the list, this yields a `view=getnewpost`/find-post URL so the topic opens on the
+     * first unread post instead of always page 1. Only used for the very first load.
+     */
+    private fun resolveInitialOpenUrl(): String {
+        val args = arguments ?: return topicUrl
+        val context = forpdateam.ru.forpda.presentation.theme.TopicOpenContext(
+                rawUrl = topicUrl,
+                setting = mainPreferencesHolder.getTopicOpenTarget(),
+                sourceScreen = args.getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_TOPIC_OPEN_SOURCE)
+                        ?: "unknown",
+                sourceUrl = topicUrl,
+                openIntentRaw = args.getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_TOPIC_OPEN_INTENT),
+                unreadUrlFromList = args.getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_UNREAD_URL_FROM_LIST),
+                unreadPostIdFromList = args.getInt(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST)
+                        .takeIf { it > 0 },
+                inspectorMarkedUnread = args.getBoolean(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_INSPECTOR_MARKED_UNREAD),
+                lastReadUrlFromList = args.getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_LAST_READ_URL_FROM_LIST),
+        )
+        return runCatching {
+            forpdateam.ru.forpda.presentation.theme.TopicOpenTargetResolver.resolve(context).url
+        }.getOrDefault(topicUrl)
     }
 
     /**
