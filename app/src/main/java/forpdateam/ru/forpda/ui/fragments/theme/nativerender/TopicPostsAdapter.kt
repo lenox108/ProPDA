@@ -413,8 +413,12 @@ class TopicPostsAdapter(
         }
 
         private fun spanned(html: String): CharSequence = try {
-            Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
+            val base = Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
                     .trimTrailingNewlines()
+            // Replace 4pda smile shortcodes (:thank_you: …) with inline images from bundled assets.
+            val ctx = itemView.context
+            val smileSize = (ctx.resources.displayMetrics.scaledDensity * SMILE_SIZE_SP).toInt().coerceAtLeast(1)
+            SmileProvider.applySmiles(base, ctx.assets, smileSize)
         } catch (t: Throwable) {
             // Graceful degradation (§6): never crash on a single post's markup.
             SpannableStringBuilder(html)
@@ -429,6 +433,7 @@ class TopicPostsAdapter(
 
     private companion object {
         const val DEFAULT_IMAGE_RATIO = 0.66f
+        const val SMILE_SIZE_SP = 18f
         val ONLINE_DOT_COLOR = android.graphics.Color.parseColor("#4CAF50")
 
         val DIFF = object : DiffUtil.ItemCallback<NativePostItem>() {
