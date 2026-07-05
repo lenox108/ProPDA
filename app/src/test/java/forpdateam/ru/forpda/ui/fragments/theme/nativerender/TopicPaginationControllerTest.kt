@@ -60,6 +60,18 @@ class TopicPaginationControllerTest {
     }
 
     @Test
+    fun pageUrl_buildsStFromPageNumber_andClampsToRange() {
+        val c = TopicPaginationController()
+        c.reset(topicId = 42, pagination = pagination(current = 1, all = 5), initialItems = items(1))
+        // Page 1 → st=0; page 3 → st=(3-1)*20=40.
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=0", c.pageUrl(1))
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=40", c.pageUrl(3))
+        // Out-of-range clamps: 0 → page 1 (st=0); 99 → last page 5 (st=80).
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=0", c.pageUrl(0))
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42&st=80", c.pageUrl(99))
+    }
+
+    @Test
     fun nextPageUrl_advancesAfterAppend() {
         val c = TopicPaginationController()
         c.reset(topicId = 42, pagination = pagination(current = 1, all = 4), initialItems = items(1, 2))

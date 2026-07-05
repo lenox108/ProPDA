@@ -95,6 +95,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Non-null when the editor is editing an existing post (else composing a new reply). */
     private var editingForm: forpdateam.ru.forpda.entity.remote.editpost.EditPostForm? = null
 
+    private var paginationBar: android.widget.LinearLayout? = null
+    private var paginationLabel: TextView? = null
+    /** The 1-based page shown in the pagination bar (best-effort as the user scrolls / jumps). */
+    private var barCurrentPage: Int = 1
+    /** Set for an explicit page-jump so [applyInitialAnchor] lands on the page top, not unread/find. */
+    private var pendingJumpToTop: Boolean = false
+
     override fun hasBackHandling(): Boolean = editorBar?.visibility == View.VISIBLE
 
     override fun onBackPressed(): Boolean {
@@ -103,6 +110,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             editorBar?.visibility = View.GONE
             editingForm = null
             hideKeyboard()
+            updatePaginationBar() // restore the bar the editor was covering
             return true
         }
         return super.onBackPressed()
@@ -116,6 +124,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(pollHeaderAdapter, postsAdapter)
+        // Reserve room so the bottom pagination bar (or reply editor) never hides the last post.
+        recyclerView.clipToPadding = false
+        recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
+                recyclerView.paddingRight, (52 * resources.displayMetrics.density).toInt())
         applyDisplaySettings()
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
@@ -123,6 +135,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (dy < 0) maybeLoadPrevPage()
                 markVisiblePostsRead()
                 maybeMarkTopicReadAtEnd()
+                updateBarCurrentPageFromScroll()
             }
         })
         refreshLayout.setOnRefreshListener { loadTopic(topicUrl) }
@@ -154,6 +167,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     loadedItems.addAll(newItems)
                     postsAdapter.submitList(loadedItems.toList())
                 }
+                updatePaginationBar() // totalPages may have grown
+
             }
             // On failure: silently stop; the user can pull-to-refresh. isLoadingNextPage resets so a
             // later scroll retries.
@@ -368,6 +383,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val input = ensureEditorBar()
         input.text?.insert(input.selectionStart.coerceAtLeast(0), text)
         editorBar?.visibility = View.VISIBLE
+        paginationBar?.visibility = View.GONE // editor and bar share the bottom
         input.requestFocus()
         showKeyboard(input)
     }
@@ -408,6 +424,109 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         editorBar = bar
         editorInput = input
         return input
+    }
+
+    /** Lazily builds the bottom pagination bar (⏮ ◀ «N / M» ▶ ⏭); tapping the label opens a page picker. */
+    private fun ensurePaginationBar() {
+        if (paginationBar != null) return
+        val ctx = requireContext()
+        val dm = ctx.resources.displayMetrics
+        val bar = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
+            val p = (4 * dm.density).toInt()
+            setPadding(p, p, p, p)
+            visibility = View.GONE
+        }
+        fun navButton(label: String, onClick: () -> Unit) = TextView(ctx).apply {
+            text = label
+            textSize = 18f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+            val ph = (12 * dm.density).toInt()
+            val pv = (6 * dm.density).toInt()
+            setPadding(ph, pv, ph, pv)
+            setOnClickListener { onClick() }
+        }
+        val label = TextView(ctx).apply {
+            textSize = 14f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener { showPagePicker() }
+        }
+        bar.addView(navButton("⏮") { jumpToPage(1) })
+        bar.addView(navButton("◀") { jumpToPage(barCurrentPage - 1) })
+        bar.addView(label)
+        bar.addView(navButton("▶") { jumpToPage(barCurrentPage + 1) })
+        bar.addView(navButton("⏭") { jumpToPage(pagination.totalPages) })
+        coordinatorLayout.addView(bar, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
+                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.MATCH_PARENT,
+                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { gravity = android.view.Gravity.BOTTOM })
+        paginationBar = bar
+        paginationLabel = label
+    }
+
+    /** Refresh the bar's «N / M» text and hide it entirely for single-page topics. */
+    private fun updatePaginationBar() {
+        if (!pagination.isInitialised) return
+        ensurePaginationBar()
+        val total = pagination.totalPages
+        paginationLabel?.text = "$barCurrentPage / $total"
+        // Keep the bar hidden while the reply editor is open (they share the bottom).
+        paginationBar?.visibility = if (total > 1 && editorBar?.visibility != View.VISIBLE) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+    }
+
+    /**
+     * Best-effort «current page» for the bar from the first-visible post's index: page =
+     * firstLoadedPage + floor(index / perPage). Server pages can overlap slightly so this is an
+     * indicator, not authoritative — good enough to show where you are while scrolling.
+     */
+    private fun updateBarCurrentPageFromScroll() {
+        if (!pagination.isInitialised || loadedItems.isEmpty()) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val firstVisible = lm.findFirstVisibleItemPosition() - headerOffset()
+        if (firstVisible < 0) return
+        val page = (pagination.firstLoadedPage + firstVisible / pagination.perPage)
+                .coerceIn(1, pagination.totalPages)
+        if (page != barCurrentPage) {
+            barCurrentPage = page
+            updatePaginationBar()
+        }
+    }
+
+    private fun jumpToPage(pageNumber: Int) {
+        if (!pagination.isInitialised) return
+        val target = pageNumber.coerceIn(1, pagination.totalPages)
+        if (target == barCurrentPage && loadedItems.isNotEmpty()) return
+        pendingJumpToTop = true
+        barCurrentPage = target
+        loadTopic(pagination.pageUrl(target))
+    }
+
+    private fun showPagePicker() {
+        if (!pagination.isInitialised || pagination.totalPages <= 1) return
+        val ctx = requireContext()
+        val input = android.widget.EditText(ctx).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            hint = "1 – ${pagination.totalPages}"
+            setText(barCurrentPage.toString())
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                .setTitle("Перейти на страницу")
+                .setView(input)
+                .setPositiveButton("OK") { _, _ ->
+                    input.text?.toString()?.trim()?.toIntOrNull()?.let { jumpToPage(it) }
+                }
+                .setNegativeButton("Отмена", null)
+                .show()
     }
 
     private fun sendReply() {
@@ -468,10 +587,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val items = mapper.map(page.posts)
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
+                barCurrentPage = pagination.loadedPage
                 loadedItems.clear()
                 loadedItems.addAll(items)
                 mentionScannedPostIds.clear()
                 markedTopicReadAtEnd = false
+                updatePaginationBar()
                 postsAdapter.submitList(loadedItems.toList()) {
                     if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
                 }
@@ -488,7 +609,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     ) {
         val ids = items.map { it.postId }
         val targetId = anchorPostId?.toIntOrNull()
+        // An explicit page-jump lands on the first post of the requested page, ignoring the server's
+        // unread/find anchor (cf. «go to page N lands on last post» — we force the page top).
+        val jumpToTop = pendingJumpToTop
+        pendingJumpToTop = false
         val request = when {
+            jumpToTop -> AnchorRequest.Top
             hasUnreadTarget && targetId != null ->
                 AnchorRequest.Post(targetId, AnchorRequest.Post.Reason.FIRST_UNREAD)
             targetId != null ->
