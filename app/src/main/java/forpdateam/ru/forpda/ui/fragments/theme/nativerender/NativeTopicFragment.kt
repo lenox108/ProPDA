@@ -300,7 +300,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             lp.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
             val m = (16 * dm.density).toInt()
             lp.rightMargin = m
-            lp.bottomMargin = ((if (isClassicMode()) 64 else 16) * dm.density).toInt()
+            // Lifted a bit higher off the bottom (WebView reference sits well above the tab bar); in
+            // CLASSIC it must also clear the pagination bar, so it sits higher still.
+            lp.bottomMargin = ((if (isClassicMode()) 120 else 72) * dm.density).toInt()
             fab.layoutParams = lp
         }
         androidx.core.view.ViewCompat.setElevation(fab, 12f * dm.density)
@@ -539,20 +541,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * the «Инфо»/«Опрос» toolbar buttons — parity with the WebView hat/poll overlays, which drop down
      * from under the toolbar). Capped to most of the screen height; the [content] scrolls if taller.
      */
-    private fun showThemePopup(title: String, content: View) {
+    private fun showThemePopup(title: String?, content: View) {
         val ctx = requireContext()
         val pad = (16 * resources.displayMetrics.density).toInt()
-        val header = TextView(ctx).apply {
-            text = title
-            textSize = 16f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
-            setPadding(pad, pad, pad, pad / 2)
-        }
         val root = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             background = androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.bg_theme_top_sheet)
-            addView(header)
+            // A title header only when explicitly asked — the hat overlay omits it (the content is
+            // self-evidently the topic hat, so «Шапка темы» just added a redundant strip).
+            if (!title.isNullOrBlank()) {
+                addView(TextView(ctx).apply {
+                    text = title
+                    textSize = 16f
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+                    setPadding(pad, pad, pad, pad / 2)
+                })
+            } else {
+                setPadding(0, pad / 2, 0, 0) // small top inset so content isn't glued to the toolbar
+            }
             addView(content, android.widget.LinearLayout.LayoutParams(
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -745,7 +752,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             adapter = popupAdapter
         }
         popupAdapter.submitList(listOf(hatItem))
-        showThemePopup("Шапка темы", rv)
+        // No «Шапка темы» title/strip — opening it from the toolbar already makes the context clear.
+        showThemePopup(title = null, content = rv)
     }
 
     /** Header tap on the hat post itself toggles its body (same session state as the toolbar «Инфо»). */
@@ -1114,16 +1122,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                             }, null))
                 }
             })
-            if (item.userId > 0) add("Профиль автора" to {
-                linkHandler.handle("https://4pda.to/forum/index.php?showuser=${item.userId}", null)
-            })
+            // «Профиль автора» intentionally omitted — that action is reached by tapping the avatar
+            // (onAvatarClick), so it would be a redundant row here.
             if (item.canReport) add("Пожаловаться" to {
                 linkHandler.handle("https://4pda.to/forum/index.php?act=report&p=${item.postId}", null)
             })
             if (item.canEdit) add("Изменить" to { onEdit(item) })
             if (item.canDelete) add("Удалить" to { onDelete(item) })
         }
-        showM3Menu(item.nick.orEmpty(), actions)
+        // No title header — the user asked for action rows only (the nick added visual noise).
+        showM3Menu(title = null, actions = actions)
     }
 
     /** Avatar tap → user menu (parity with the WebView showUserMenu), rendered as a clean M3 popup. */
