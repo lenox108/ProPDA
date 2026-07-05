@@ -8,12 +8,22 @@ import forpdateam.ru.forpda.common.getColorFromAttr
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
+import android.app.Activity
+import android.text.Editable
+import androidx.activity.result.contract.ActivityResultContracts
+import forpdateam.ru.forpda.common.FilePickHelper
 import forpdateam.ru.forpda.common.TopicOpenListHints
+import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
+import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
+import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
+import forpdateam.ru.forpda.model.interactors.theme.ThemeEditorUseCase
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
+import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
+import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,6 +69,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var mainPreferencesHolder: forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 
+    @Inject
+    lateinit var otherPreferencesHolder: forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
+
+    /** Reuses the WebView editor's send/upload/delete network logic (no ViewModel needed). */
+    @Inject
+    lateinit var editorUseCase: forpdateam.ru.forpda.model.interactors.theme.ThemeEditorUseCase
+
     // topicPreferencesHolder is provided by the TabFragment supertype.
 
     private val mapper = NativePostMapper()
@@ -99,10 +116,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Post id of the topic hat on the loaded page (the «Инфо» toolbar button scrolls to it). */
     private var topicHatPostId: Int? = null
 
-    private var editorBar: android.widget.LinearLayout? = null
-    private var editorInput: android.widget.EditText? = null
+    /** The full BBCode editor (formatting toolbar, smiles, attachments) — one-to-one with WebView. */
+    private var messagePanel: MessagePanel? = null
+    private var attachmentsPopup: AttachmentsPopup? = null
+    /** Mirror of the editor field text, so a draft survives IME-driven view churn (cf. WebView). */
+    private var messagePanelDraftMirror = ""
+    private val uploadQueue: ArrayDeque<Pair<List<RequestFile>, List<AttachmentItem>>> = ArrayDeque()
+    private var uploadInProgress = false
     /** Non-null when the editor is editing an existing post (else composing a new reply). */
     private var editingForm: forpdateam.ru.forpda.entity.remote.editpost.EditPostForm? = null
+
+    private val pickFileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        val data = result.data ?: return@registerForActivityResult
+        uploadFiles(FilePickHelper.onActivityResult(requireContext(), data))
+    }
 
     private var paginationBar: android.widget.LinearLayout? = null
     private var paginationLabel: TextView? = null
@@ -121,7 +149,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var pendingJumpToTop: Boolean = false
 
     override fun hasBackHandling(): Boolean =
-            editorBar?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
+            messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
 
     override fun onBackPressed(): Boolean {
         // Back closes the find-on-page bar / reply editor first, before leaving the topic.
@@ -129,11 +157,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             closeSearch()
             return true
         }
-        if (editorBar?.visibility == View.VISIBLE) {
-            editorBar?.visibility = View.GONE
-            editingForm = null
-            hideKeyboard()
-            updatePaginationBar() // restore the bar the editor was covering
+        // Let the panel dismiss its own BBCode/smiles popup before it hides entirely.
+        if (messagePanel?.onBackPressed() == true) return true
+        if (messagePanel?.visibility == View.VISIBLE) {
+            hideMessagePanel()
             return true
         }
         return super.onBackPressed()
@@ -162,8 +189,45 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         })
         installPageSwipeDetector()
         refreshLayout.setOnRefreshListener { loadTopic(loadedUrl ?: topicUrl) }
+        setupMessagePanel()
         setupToolbarMenu()
         loadTopic(topicUrl)
+    }
+
+    /**
+     * Embeds the full WebView editor component ([MessagePanel]) one-to-one: BBCode formatting
+     * toolbar, smiles, attachments and the send / clear / hide controls. Hidden until the user taps
+     * «Написать», reply or quote. Send / upload / delete reuse [ThemeEditorUseCase] (the same
+     * network logic the WebView editor drives through its ViewModel).
+     */
+    private fun setupMessagePanel() {
+        if (messagePanel != null) return
+        val panel = MessagePanel(
+                requireContext(), fragmentContainer, messagePanelHost, false,
+                mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder,
+        )
+        panel.hostBaseBottomMarginProvider = { messagePanelBaseBottomMargin() }
+        panel.visibility = View.GONE
+        // Behavior off: with IME adjustResize the AppBar translationY would push the panel under the
+        // keyboard (matches the WebView fragment's disableBehavior()).
+        panel.disableBehavior()
+        panel.messageField.addTextChangedListener(object : SimpleTextWatcher() {
+            override fun afterTextChanged(s: Editable) { messagePanelDraftMirror = s.toString() }
+        })
+        panel.addSendOnClickListener { sendMessage() }
+        panel.setClearMessageClickListener { messagePanel?.clearMessage(); messagePanelDraftMirror = "" }
+        panel.hideButton?.visibility = View.VISIBLE
+        panel.hideButton?.setOnClickListener { hideMessagePanel() }
+        panel.fullButton?.visibility = View.GONE // fullscreen editor is a separate WebView-era screen
+        attachmentsPopup = panel.attachmentsPopup
+        attachmentsPopup?.setAddOnClickListener { pickFileLauncher.launch(FilePickHelper.pickFile(false)) }
+        attachmentsPopup?.setDeleteOnClickListener { removeFiles() }
+        attachmentsPopup?.setRetryUploadListener(object : AttachmentsPopup.OnRetryUploadListener {
+            override fun onRetry(files: List<RequestFile>, pending: List<AttachmentItem>) {
+                enqueueUpload(files, pending)
+            }
+        })
+        messagePanel = panel
     }
 
     /**
@@ -238,19 +302,37 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Toolbar «Написать»: opens the empty compose editor (or closes it if already open). */
     private fun toggleComposeEditor() {
-        if (editorBar?.visibility == View.VISIBLE) {
-            editorBar?.visibility = View.GONE
+        if (messagePanel?.visibility == View.VISIBLE) {
+            hideMessagePanel()
+        } else {
             editingForm = null
-            hideKeyboard()
-            updatePaginationBar()
-            return
+            showMessagePanel(showKeyboard = true)
         }
-        val input = ensureEditorBar()
+    }
+
+    /** Reveal the editor panel (and hide the pagination bar they share the bottom edge with). */
+    private fun showMessagePanel(showKeyboard: Boolean) {
+        val panel = messagePanel ?: return
+        if (panel.visibility != View.VISIBLE) {
+            panel.visibility = View.VISIBLE
+            paginationBar?.visibility = View.GONE
+            if (showKeyboard) panel.show()
+        }
+        if (showKeyboard) {
+            panel.messageField.requestFocus()
+            showKeyboard(panel.messageField)
+        }
+    }
+
+    /** Hide the editor panel, dismiss the keyboard/popups, and restore the pagination bar. */
+    private fun hideMessagePanel() {
+        val panel = messagePanel ?: return
+        panel.hideImeFromEditor()
+        panel.visibility = View.GONE
+        panel.hidePopupWindows()
+        hideKeyboard()
         editingForm = null
-        editorBar?.visibility = View.VISIBLE
-        paginationBar?.visibility = View.GONE // editor and bar share the bottom
-        input.requestFocus()
-        showKeyboard(input)
+        updatePaginationBar()
     }
 
     /** Toolbar «Опрос»: bring the poll (page-1 header) into view. Voting itself lives in the header. */
@@ -449,6 +531,28 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (view != null) applyDisplaySettings()
     }
 
+    override fun onResume() {
+        super.onResume()
+        messagePanel?.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        messagePanel?.onPause()
+    }
+
+    override fun onDestroyView() {
+        messagePanel?.onDestroy()
+        messagePanel = null
+        attachmentsPopup = null
+        super.onDestroyView()
+    }
+
+    override fun hideKeyboard() {
+        super.hideKeyboard()
+        messagePanel?.hidePopupWindows()
+    }
+
     /**
      * Read the user's font-size / avatar prefs and push them into the adapter (parity with the
      * WebView path, which sets `defaultFontSize` + avatar CSS at load). Font size is an absolute
@@ -519,6 +623,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         insertIntoEditor("[quote name=\"${item.nick}\"$d post=${item.postId}]$selectedText[/quote]${'\n'}")
     }
 
+    /** Insert BBCode/text into the panel field at the caret and reveal the editor (like the WebView). */
+    private fun insertIntoEditor(text: String) {
+        editingForm = null
+        messagePanel?.insertText(text)
+        showMessagePanel(showKeyboard = true)
+    }
+
     override fun onEdit(item: NativePostItem) {
         viewLifecycleOwner.lifecycleScope.launch {
             val form = withContext(Dispatchers.IO) {
@@ -530,12 +641,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 return@launch
             }
             editingForm = form
-            val input = ensureEditorBar()
-            input.setText(form.message)
-            editorBar?.visibility = View.VISIBLE
-            input.requestFocus()
-            input.setSelection(input.text?.length ?: 0)
-            showKeyboard(input)
+            val panel = messagePanel ?: return@launch
+            panel.setText(form.message)
+            messagePanelDraftMirror = form.message.orEmpty()
+            form.attachments.takeIf { it.isNotEmpty() }?.let { attachmentsPopup?.setAttachments(it) }
+            showMessagePanel(showKeyboard = true)
         }
     }
 
@@ -603,52 +713,49 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
-    private fun insertIntoEditor(text: String) {
-        val input = ensureEditorBar()
-        input.text?.insert(input.selectionStart.coerceAtLeast(0), text)
-        editorBar?.visibility = View.VISIBLE
-        paginationBar?.visibility = View.GONE // editor and bar share the bottom
-        input.requestFocus()
-        showKeyboard(input)
+    // region attachments — reuse the WebView editor's upload/delete pipeline via ThemeEditorUseCase
+
+    /** Pre-shows placeholders for the picked files, then queues them for upload. */
+    private fun uploadFiles(files: List<RequestFile>) {
+        val pending = attachmentsPopup?.preUploadFiles(files) ?: emptyList()
+        attachmentsPopup?.revealDuringUploadPreview()
+        enqueueUpload(files, pending)
     }
 
-    /** Lazily builds the inline reply bar (EditText + «Отправить») pinned to the bottom. */
-    private fun ensureEditorBar(): android.widget.EditText {
-        editorInput?.let { return it }
-        val ctx = requireContext()
-        val dm = ctx.resources.displayMetrics
-        val bar = android.widget.LinearLayout(ctx).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
-            val p = (8 * dm.density).toInt()
-            setPadding(p, p, p, p)
-            visibility = View.GONE
-        }
-        val input = android.widget.EditText(ctx).apply {
-            hint = "Ответ…"
-            textSize = 15f
-            maxLines = 5
-            layoutParams = android.widget.LinearLayout.LayoutParams(0,
-                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        val send = TextView(ctx).apply {
-            text = "Отправить"
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
-            val ph = (12 * dm.density).toInt()
-            setPadding(ph, ph, ph, ph)
-            setOnClickListener { sendReply() }
-        }
-        bar.addView(input)
-        bar.addView(send)
-        coordinatorLayout.addView(bar, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
-                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.MATCH_PARENT,
-                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { gravity = android.view.Gravity.BOTTOM })
-        editorBar = bar
-        editorInput = input
-        return input
+    private fun enqueueUpload(files: List<RequestFile>, pending: List<AttachmentItem>) {
+        uploadQueue.addLast(files to pending)
+        pumpUploadQueue()
     }
+
+    /** Serialise uploads (the popup shows one batch at a time), matching the WebView fragment. */
+    private fun pumpUploadQueue() {
+        if (uploadInProgress) return
+        val next = uploadQueue.firstOrNull() ?: return
+        uploadInProgress = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = editorUseCase.uploadFiles(0, next.first, next.second)
+            if (view != null && result is ThemeEditorUseCase.UploadResult.Success) {
+                attachmentsPopup?.onUploadFiles(result.items)
+            }
+            uploadInProgress = false
+            if (uploadQueue.isNotEmpty()) uploadQueue.removeFirst()
+            pumpUploadQueue()
+        }
+    }
+
+    private fun removeFiles() {
+        attachmentsPopup?.preDeleteFiles()
+        val selected = attachmentsPopup?.getSelected() ?: emptyList()
+        if (selected.isEmpty()) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = editorUseCase.deleteFiles(0, selected)
+            if (view != null && result is ThemeEditorUseCase.DeleteResult.Success) {
+                attachmentsPopup?.onDeleteFiles(result.items)
+            }
+        }
+    }
+
+    // endregion
 
     /** Lazily builds the bottom pagination bar (⏮ ◀ «N / M» ▶ ⏭); tapping the label opens a page picker. */
     private fun ensurePaginationBar() {
@@ -835,7 +942,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // The bottom pagination bar belongs to CLASSIC reading mode only; HYBRID (default) uses
         // continuous infinite scroll with no bar. Also hidden while the reply editor is open.
         paginationBar?.let { bar ->
-            val show = isClassicMode() && total > 1 && editorBar?.visibility != View.VISIBLE
+            val show = isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE
             bar.visibility = if (show) View.VISIBLE else View.GONE
             // A (re)shown bar must sit at rest, undoing any hide-on-scroll offset.
             bar.translationY = 0f
@@ -905,16 +1012,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 .show()
     }
 
-    private fun sendReply() {
-        val input = editorInput ?: return
-        val message = input.text?.toString()?.trim().orEmpty()
-        if (message.isBlank() || isSending || pageTopicId <= 0) return
+    /** Resolve the field text, falling back to the mirror if the CodeEditor lost it to view churn. */
+    private fun resolveMessagePanelDraft(): String {
+        val field = messagePanel?.message.orEmpty()
+        return if (field.isNotEmpty()) field else messagePanelDraftMirror
+    }
+
+    private fun sendMessage() {
+        val panel = messagePanel ?: return
+        val message = resolveMessagePanelDraft().trim()
+        val attachments = panel.attachments.toMutableList()
+        if ((message.isBlank() && attachments.isEmpty()) || isSending || pageTopicId <= 0) return
         isSending = true
         hideKeyboard()
-        Toast.makeText(requireContext(), "Отправка…", Toast.LENGTH_SHORT).show()
+        panel.setProgressState(true)
         viewLifecycleOwner.lifecycleScope.launch {
             // Editing an existing post reuses its loaded form (type=EDIT, postId set); a new reply
-            // builds a fresh NEW_POST form from the current topic context.
+            // builds a fresh NEW_POST form from the current topic context. Attachments ride along.
             val form = editingForm?.apply { this.message = message }
                     ?: forpdateam.ru.forpda.entity.remote.editpost.EditPostForm().apply {
                         type = forpdateam.ru.forpda.entity.remote.editpost.EditPostForm.TYPE_NEW_POST
@@ -923,13 +1037,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         st = pageSt
                         this.message = message
                     }
+            form.attachments.clear()
+            form.attachments.addAll(attachments)
             val result = withContext(Dispatchers.IO) { runCatching { editPostApi.sendPost(form) } }
             isSending = false
             if (view == null) return@launch
+            panel.setProgressState(false)
             result.onSuccess {
-                input.setText("")
-                editorBar?.visibility = View.GONE
+                panel.clearMessage()
+                panel.clearAttachments()
+                messagePanelDraftMirror = ""
                 editingForm = null
+                hideMessagePanel()
                 Toast.makeText(requireContext(), "Отправлено", Toast.LENGTH_SHORT).show()
                 loadedUrl?.let { loadTopic(it) }
             }.onFailure { error ->
