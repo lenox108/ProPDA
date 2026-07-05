@@ -97,6 +97,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     private var paginationBar: android.widget.LinearLayout? = null
     private var paginationLabel: TextView? = null
+    /** True while the pagination bar is slid off-screen by a downward scroll (hide-on-scroll). */
+    private var barHiddenByScroll: Boolean = false
     /** The 1-based page shown in the pagination bar (best-effort as the user scrolls / jumps). */
     private var barCurrentPage: Int = 1
     /** Set for an explicit page-jump so [applyInitialAnchor] lands on the page top, not unread/find. */
@@ -136,6 +138,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 markVisiblePostsRead()
                 maybeMarkTopicReadAtEnd()
                 updateBarCurrentPageFromScroll()
+                applyBarHideOnScroll(dy)
             }
         })
         installPageSwipeDetector()
@@ -526,10 +529,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val total = pagination.totalPages
         paginationLabel?.text = "$barCurrentPage / $total"
         // Keep the bar hidden while the reply editor is open (they share the bottom).
-        paginationBar?.visibility = if (total > 1 && editorBar?.visibility != View.VISIBLE) {
-            View.VISIBLE
-        } else {
-            View.GONE
+        paginationBar?.let { bar ->
+            bar.visibility = if (total > 1 && editorBar?.visibility != View.VISIBLE) View.VISIBLE else View.GONE
+            // A (re)shown bar must sit at rest, undoing any hide-on-scroll offset.
+            bar.translationY = 0f
+            barHiddenByScroll = false
         }
     }
 
@@ -548,6 +552,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (page != barCurrentPage) {
             barCurrentPage = page
             updatePaginationBar()
+        }
+    }
+
+    /** Slide the pagination bar off on downward scroll and back on upward scroll (more reading room). */
+    private fun applyBarHideOnScroll(dy: Int) {
+        val bar = paginationBar ?: return
+        if (bar.visibility != View.VISIBLE) return
+        if (dy > SCROLL_HIDE_THRESHOLD && !barHiddenByScroll) {
+            barHiddenByScroll = true
+            bar.animate().translationY(bar.height.toFloat()).setDuration(150).start()
+        } else if (dy < -SCROLL_HIDE_THRESHOLD && barHiddenByScroll) {
+            barHiddenByScroll = false
+            bar.animate().translationY(0f).setDuration(150).start()
         }
     }
 
@@ -755,5 +772,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Minimum horizontal travel (dp) for a page-swipe drag to register on release. */
         const val SWIPE_MIN_DISTANCE_DP = 80f
+
+        /** Per-frame scroll delta (px) beyond which the pagination bar hides/shows on scroll. */
+        const val SCROLL_HIDE_THRESHOLD = 8
     }
 }
