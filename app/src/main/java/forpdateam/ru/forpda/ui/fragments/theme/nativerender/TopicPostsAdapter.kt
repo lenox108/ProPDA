@@ -85,8 +85,48 @@ class TopicPostsAdapter(
             number.text = if (item.number > 0) "#${item.number}" else ""
             ForPdaCoil.loadInto(avatar, item.avatarUrl)
             bindFooter(item)
+            bindAuthorActions(item)
             renderBody(item)
         }
+
+        /** Tap avatar/nick → user profile; long-press the post → an actions menu. Navigation-only (no writes). */
+        private fun bindAuthorActions(item: NativePostItem) {
+            val openProfile = View.OnClickListener {
+                if (item.userId > 0) linkHandler.handle(profileUrl(item.userId), null)
+            }
+            avatar.setOnClickListener(openProfile)
+            nick.setOnClickListener(openProfile)
+            itemView.setOnLongClickListener {
+                showPostMenu(item)
+                true
+            }
+        }
+
+        private fun showPostMenu(item: NativePostItem) {
+            val ctx = itemView.context
+            val popup = android.widget.PopupMenu(ctx, nick)
+            val idProfile = 1
+            val idCopyLink = 2
+            if (item.userId > 0) popup.menu.add(0, idProfile, 0, "Профиль")
+            popup.menu.add(0, idCopyLink, 1, "Копировать ссылку на пост")
+            popup.setOnMenuItemClickListener { mi ->
+                when (mi.itemId) {
+                    idProfile -> linkHandler.handle(profileUrl(item.userId), null)
+                    idCopyLink -> {
+                        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as? android.content.ClipboardManager
+                        cm?.setPrimaryClip(android.content.ClipData.newPlainText("post", postUrl(item)))
+                    }
+                }
+                true
+            }
+            popup.show()
+        }
+
+        private fun profileUrl(userId: Int) = "https://4pda.to/forum/index.php?showuser=$userId"
+
+        private fun postUrl(item: NativePostItem) =
+                "https://4pda.to/forum/index.php?showtopic=${item.topicId}&view=findpost&p=${item.postId}"
 
         /** Nick + curator star (★) + online dot (●, green) — matching the WebView header. */
         private fun bindNick(item: NativePostItem) {

@@ -13,6 +13,7 @@ package forpdateam.ru.forpda.ui.fragments.theme.nativerender
  */
 data class NativePostItem(
     val postId: Int,
+    val topicId: Int,
     val number: Int,
     val userId: Int,
     val nick: String?,
