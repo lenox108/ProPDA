@@ -47,6 +47,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var linkHandler: ILinkHandler
 
+    @Inject
+    lateinit var eventsRepository: forpdateam.ru.forpda.model.repository.events.EventsRepository
+
     private val mapper = NativePostMapper()
     private val anchorResolver = NativeAnchorResolver()
     private val pagination = TopicPaginationController()
@@ -58,6 +61,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** The accumulated posts across all loaded pages (source of truth for the adapter). */
     private val loadedItems = ArrayList<NativePostItem>()
+
+    /**
+     * Post ids already scanned for mention-clearing this topic session, so a post scrolled past
+     * (or re-bound during infinite scroll) is not re-fed to [EventsRepository]. Reset per topic load.
+     */
+    private val mentionScannedPostIds = HashSet<Int>()
 
     /** The URL actually loaded into the list (may differ from ARG_TAB after a navigator switch). */
     private var loadedUrl: String? = null
@@ -100,6 +109,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) maybeLoadNextPage()
                 if (dy < 0) maybeLoadPrevPage()
+                markVisiblePostsRead()
             }
         })
         refreshLayout.setOnRefreshListener { loadTopic(topicUrl) }
@@ -427,6 +437,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pagination.reset(topicId, page.pagination, items)
                 loadedItems.clear()
                 loadedItems.addAll(items)
+                mentionScannedPostIds.clear()
                 postsAdapter.submitList(loadedItems.toList()) {
                     if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
                 }
@@ -463,6 +474,38 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             // PostNotLoaded / Empty: nothing to do — downward pagination will bring later pages in.
             else -> Unit
+        }
+        // Mentions on the initially-visible posts must clear even without a scroll gesture.
+        recyclerView.post { markVisiblePostsRead() }
+    }
+
+    /**
+     * Clear «Ответы»/mentions for posts currently on screen — mirrors the WebView path's
+     * [forpdateam.ru.forpda.presentation.theme.ThemeViewModel.onVisiblePageChanged] →
+     * `onRenderedTopicPosts`. [EventsRepository.onTopicPostsRead] itself filters to this topic's
+     * real mentions, so feeding it the visible post ids is safe and idempotent; the local
+     * [mentionScannedPostIds] guard just avoids re-feeding posts already scanned this session.
+     */
+    private fun markVisiblePostsRead() {
+        if (pageTopicId <= 0) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val first = lm.findFirstVisibleItemPosition()
+        val last = lm.findLastVisibleItemPosition()
+        if (first == androidx.recyclerview.widget.RecyclerView.NO_POSITION ||
+                last == androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
+            return
+        }
+        val header = headerOffset()
+        val visibleIds = ArrayList<Int>()
+        var hasNew = false
+        for (pos in first..last) {
+            val item = loadedItems.getOrNull(pos - header) ?: continue
+            if (item.postId <= 0) continue
+            visibleIds.add(item.postId)
+            if (mentionScannedPostIds.add(item.postId)) hasNew = true
+        }
+        if (hasNew && visibleIds.isNotEmpty()) {
+            eventsRepository.onTopicPostsRead(pageTopicId, visibleIds)
         }
     }
 
