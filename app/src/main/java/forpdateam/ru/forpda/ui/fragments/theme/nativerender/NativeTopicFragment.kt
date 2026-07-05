@@ -50,6 +50,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var eventsRepository: forpdateam.ru.forpda.model.repository.events.EventsRepository
 
+    @Inject
+    lateinit var themeUseCase: forpdateam.ru.forpda.model.interactors.theme.ThemeUseCase
+
     private val mapper = NativePostMapper()
     private val anchorResolver = NativeAnchorResolver()
     private val pagination = TopicPaginationController()
@@ -67,6 +70,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * (or re-bound during infinite scroll) is not re-fed to [EventsRepository]. Reset per topic load.
      */
     private val mentionScannedPostIds = HashSet<Int>()
+
+    /** Fire the end-of-topic mark-read exactly once per topic load (reset on a fresh load). */
+    private var markedTopicReadAtEnd = false
 
     /** The URL actually loaded into the list (may differ from ARG_TAB after a navigator switch). */
     private var loadedUrl: String? = null
@@ -110,6 +116,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (dy > 0) maybeLoadNextPage()
                 if (dy < 0) maybeLoadPrevPage()
                 markVisiblePostsRead()
+                maybeMarkTopicReadAtEnd()
             }
         })
         refreshLayout.setOnRefreshListener { loadTopic(topicUrl) }
@@ -438,6 +445,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 loadedItems.clear()
                 loadedItems.addAll(items)
                 mentionScannedPostIds.clear()
+                markedTopicReadAtEnd = false
                 postsAdapter.submitList(loadedItems.toList()) {
                     if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
                 }
@@ -475,8 +483,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // PostNotLoaded / Empty: nothing to do — downward pagination will bring later pages in.
             else -> Unit
         }
-        // Mentions on the initially-visible posts must clear even without a scroll gesture.
-        recyclerView.post { markVisiblePostsRead() }
+        // Mentions on the initially-visible posts must clear even without a scroll gesture; and a
+        // short topic that fully fits on screen (no scroll) still counts as read-to-end.
+        recyclerView.post {
+            markVisiblePostsRead()
+            maybeMarkTopicReadAtEnd()
+        }
     }
 
     /**
@@ -507,6 +519,26 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (hasNew && visibleIds.isNotEmpty()) {
             eventsRepository.onTopicPostsRead(pageTopicId, visibleIds)
         }
+    }
+
+    /**
+     * When the user scrolls to the very bottom of the LAST page, mark the whole topic read —
+     * mirrors the WebView path's [forpdateam.ru.forpda.presentation.theme.ThemeViewModel]
+     * `markTopicReadIfEndReached`. Fires once per topic load. The single chokepoint
+     * [ThemeUseCase.markTopicRead] clears shade notifications, updates cross-screen state and
+     * fires the server mark-read, so «прочитал до конца» reliably un-bolds the topic in favorites.
+     */
+    private fun maybeMarkTopicReadAtEnd() {
+        if (markedTopicReadAtEnd || pageTopicId <= 0) return
+        if (pagination.hasNextPage()) return // more pages below → not the end yet
+        if (loadedItems.isEmpty()) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val lastVisible = lm.findLastVisibleItemPosition()
+        if (lastVisible == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return
+        val lastItemPosition = headerOffset() + loadedItems.size - 1
+        if (lastVisible < lastItemPosition) return // bottom post not on screen yet
+        markedTopicReadAtEnd = true
+        themeUseCase.markTopicRead(pageTopicId, reason = "last_page_bottom_reached", source = "native")
     }
 
     private companion object {
