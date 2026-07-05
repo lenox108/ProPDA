@@ -22,7 +22,7 @@ class TopicPaginationControllerTest {
     private fun items(vararg ids: Int) = ids.map { id ->
         NativePostItem(
             postId = id, topicId = 42, number = 0, userId = 0, nick = null, avatarUrl = null, group = null,
-            groupColor = null, date = null, reputation = null, postRating = null, isCurator = false,
+            groupColor = null, date = null, reputation = null, userPostCount = null, postRating = null, isCurator = false,
             isOnline = false, blocks = emptyList(), canEdit = false, canDelete = false,
             canQuote = false, canReport = false, canPlusRep = false, canMinusRep = false,
             canPlusPostRating = false, canMinusPostRating = false,
