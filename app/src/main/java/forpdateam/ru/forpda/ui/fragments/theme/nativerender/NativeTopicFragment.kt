@@ -46,6 +46,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
     private val anchorResolver = NativeAnchorResolver()
     private val pagination = TopicPaginationController()
     private val postsAdapter by lazy { TopicPostsAdapter(linkHandler) }
+    private val pollHeaderAdapter = PollHeaderAdapter()
+
+    /** Adapter positions are shifted by the poll header (0 or 1) — offset scroll targets by this. */
+    private fun headerOffset(): Int = pollHeaderAdapter.itemCount
 
     /** The accumulated posts across all loaded pages (source of truth for the adapter). */
     private val loadedItems = ArrayList<NativePostItem>()
@@ -62,7 +66,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
         super.onViewCreated(view, savedInstanceState)
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        recyclerView.adapter = postsAdapter
+        recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(pollHeaderAdapter, postsAdapter)
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) maybeLoadNextPage()
@@ -142,9 +146,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
      */
     private fun prependPreservingPosition(newItems: List<NativePostItem>) {
         val lm = recyclerView.layoutManager as? LinearLayoutManager
-        val anchorPos = lm?.findFirstVisibleItemPosition() ?: 0
-        val anchorOffset = lm?.findViewByPosition(anchorPos)?.top ?: 0
-        val anchorPostId = loadedItems.getOrNull(anchorPos)?.postId
+        val header = headerOffset()
+        val anchorConcatPos = lm?.findFirstVisibleItemPosition() ?: header
+        val anchorOffset = lm?.findViewByPosition(anchorConcatPos)?.top ?: 0
+        // Concat position → post index (subtract the poll header, if any).
+        val anchorPostId = loadedItems.getOrNull(anchorConcatPos - header)?.postId
 
         loadedItems.addAll(0, newItems)
         postsAdapter.submitList(loadedItems.toList()) {
@@ -154,7 +160,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
                         ?.takeIf { it >= 0 }
                         ?: newItems.size
                 (recyclerView.layoutManager as? LinearLayoutManager)
-                        ?.scrollToPositionWithOffset(newIndex, anchorOffset)
+                        ?.scrollToPositionWithOffset(newIndex + header, anchorOffset)
             }
             isLoadingPrevPage = false
         }
@@ -211,6 +217,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
             refreshLayout.isRefreshing = false
             result.onSuccess { page ->
                 loadedUrl = url
+                pollHeaderAdapter.setPoll(page.poll)
                 val items = mapper.map(page.posts)
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
@@ -240,9 +247,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
             else -> AnchorRequest.Top
         }
         when (val resolution = anchorResolver.resolve(ids, request)) {
-            is AnchorResolution.Position ->
+            is AnchorResolution.Position -> {
+                // For a fresh "to top" open, land on the very top (the poll header, if any, then #1),
+                // matching the WebView which shows the poll first. For post targets, offset past the
+                // poll header (adapter position 0) to the resolved POST.
+                val target = if (request is AnchorRequest.Top) 0 else resolution.index + headerOffset()
                 (recyclerView.layoutManager as? LinearLayoutManager)
-                        ?.scrollToPositionWithOffset(resolution.index, 0)
+                        ?.scrollToPositionWithOffset(target, 0)
+            }
             // PostNotLoaded / Empty: nothing to do — downward pagination will bring later pages in.
             else -> Unit
         }
