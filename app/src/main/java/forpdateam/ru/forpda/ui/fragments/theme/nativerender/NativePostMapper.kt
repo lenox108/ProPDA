@@ -16,6 +16,7 @@ class NativePostMapper(
 
     fun map(post: IThemePost): NativePostItem = NativePostItem(
         postId = post.id,
+        topicId = post.topicId,
         number = post.number,
         userId = post.userId,
         nick = post.nick,
