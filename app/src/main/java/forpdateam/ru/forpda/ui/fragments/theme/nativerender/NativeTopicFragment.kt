@@ -977,6 +977,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (recyclerView.computeVerticalScrollOffset() <= prefetchThresholdPx()) loadPrevPage()
     }
 
+    /**
+     * In HYBRID the TOP pull must feed upward infinite scroll, not pull-to-refresh: a hard fling to the top
+     * otherwise fires SwipeRefreshLayout, which reloads the topic and yanks the reader to a different page
+     * (the «прыжок» on scroll-up). So disable the swipe-refresh gesture whenever a previous page can still
+     * load above; it re-enables at the topic's first page and in CLASSIC. Manual reload stays on the
+     * toolbar refresh button regardless.
+     */
+    private fun updateRefreshGesture() {
+        refreshLayout.isEnabled = isClassicMode() || !pagination.hasPrevPage()
+    }
+
     private fun loadPrevPage() {
         val url = pagination.prevPageUrl() ?: return
         isLoadingPrevPage = true
@@ -1000,6 +1011,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val newItems = pagination.registerAndFilterNew(
                         tagPage(mapper.map(page.posts), page.pagination.current))
                 pagination.onPagePrepended(page.pagination.current)
+                updateRefreshGesture() // reaching page 1 re-enables pull-to-refresh
                 if (newItems.isNotEmpty()) {
                     prependPreservingPosition(newItems)
                     reArm = false // re-armed inside the submitList callback after the scroll is restored
@@ -1080,6 +1092,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             applyDisplaySettings()
             setupFab() // the «Умная кнопка темы» pref may have been toggled while away
             applyToolbarAutoHide() // the «Поведение тулбара» pref may have been toggled while away
+            updateRefreshGesture() // the «Режим чтения тем» pref may have been toggled while away
         }
     }
 
@@ -1778,6 +1791,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val items = tagPage(mapper.map(page.posts), page.pagination.current)
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
+                updateRefreshGesture() // top pull feeds prev-page loading, not refresh, when pages are above
                 barCurrentPage = pagination.loadedPage
                 loadedItems.clear()
                 loadedItems.addAll(items)
