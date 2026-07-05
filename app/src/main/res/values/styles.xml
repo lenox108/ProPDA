@@ -502,6 +502,12 @@
         <item name="actionOverflowMenuStyle">@style/Widget.ForPDA.PopupMenu.Overflow</item>
     </style>
 
+    <!-- Slide-down-from-top window animation for the native topic hat/poll overlays (WebView parity). -->
+    <style name="ThemeTopSheetAnimation">
+        <item name="android:windowEnterAnimation">@anim/theme_top_sheet_enter</item>
+        <item name="android:windowExitAnimation">@anim/theme_top_sheet_exit</item>
+    </style>
+
     <!--
         Inherits from the Material variant so it keeps the same row metrics
         (paddings, icon space, etc.) as the rest of the preference list.
