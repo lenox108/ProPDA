@@ -45,6 +45,8 @@ class TopicPostsAdapter(
         fun onVote(item: NativePostItem, up: Boolean)
         fun onReply(item: NativePostItem)
         fun onQuote(item: NativePostItem)
+        /** The user selected [selectedText] inside [item]'s body and chose «Цитировать». */
+        fun onQuoteSelection(item: NativePostItem, selectedText: String)
     }
 
     init {
@@ -106,10 +108,14 @@ class TopicPostsAdapter(
             }
             avatar.setOnClickListener(openProfile)
             nick.setOnClickListener(openProfile)
-            itemView.setOnLongClickListener {
+            // Post menu on long-press of the HEADER (avatar/nick) — the body is reserved for text
+            // selection (long-press there starts selection + «Цитировать»), so no gesture conflict.
+            val openMenu = View.OnLongClickListener {
                 showPostMenu(item)
                 true
             }
+            avatar.setOnLongClickListener(openMenu)
+            nick.setOnLongClickListener(openMenu)
         }
 
         private fun showPostMenu(item: NativePostItem) {
@@ -231,17 +237,17 @@ class TopicPostsAdapter(
 
         private fun renderBody(item: NativePostItem) {
             body.removeAllViews()
-            renderBlocksInto(body, item.blocks, RenderScope(item.postId))
+            renderBlocksInto(body, item.blocks, RenderScope(item.postId), item)
         }
 
         /** Renders [blocks] as children of [container]. Reused recursively by quotes/spoilers. */
-        private fun renderBlocksInto(container: LinearLayout, blocks: List<BodyBlock>, scope: RenderScope) {
+        private fun renderBlocksInto(container: LinearLayout, blocks: List<BodyBlock>, scope: RenderScope, item: NativePostItem) {
             for (block in blocks) {
                 val child = when (block) {
-                    is BodyBlock.Text -> textView(spanned(block.html))
+                    is BodyBlock.Text -> textView(spanned(block.html), item)
                     is BodyBlock.Image -> imageView(block)
-                    is BodyBlock.Quote -> quoteView(block, scope)
-                    is BodyBlock.Spoiler -> spoilerView(block, scope)
+                    is BodyBlock.Quote -> quoteView(block, scope, item)
+                    is BodyBlock.Spoiler -> spoilerView(block, scope, item)
                     is BodyBlock.Code -> codeView(block)
                     is BodyBlock.FileAttachment -> fileAttachmentView(block)
                     is BodyBlock.WebFallback -> bindFallback(block)
@@ -254,7 +260,7 @@ class TopicPostsAdapter(
          * Native spoiler: a tappable "▸/▾ title" header toggling a collapsible body of the recursively
          * rendered inner blocks. Open/collapsed state persists across recycling via [spoilerStates].
          */
-        private fun spoilerView(block: BodyBlock.Spoiler, scope: RenderScope): View {
+        private fun spoilerView(block: BodyBlock.Spoiler, scope: RenderScope, item: NativePostItem): View {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val key = "${scope.postId}:${scope.spoilerSeq++}"
@@ -282,7 +288,7 @@ class TopicPostsAdapter(
                 header.text = (if (open) "▾ " else "▸ ") + label
                 bodyContainer.visibility = if (open) View.VISIBLE else View.GONE
             }
-            renderBlocksInto(bodyContainer, block.inner, scope)
+            renderBlocksInto(bodyContainer, block.inner, scope, item)
             applyState()
             header.setOnClickListener {
                 open = !open
@@ -298,7 +304,7 @@ class TopicPostsAdapter(
          * Native quote: an accent-bordered card with a tappable "author · date" header (jumps to the
          * source post via the app) and the recursively-rendered quoted content — nested quotes included.
          */
-        private fun quoteView(block: BodyBlock.Quote, scope: RenderScope): View {
+        private fun quoteView(block: BodyBlock.Quote, scope: RenderScope, item: NativePostItem): View {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val card = LinearLayout(ctx).apply {
@@ -323,7 +329,7 @@ class TopicPostsAdapter(
                 if (src != null) setOnClickListener { linkHandler.handle(src, null) }
             }
             card.addView(header)
-            renderBlocksInto(card, block.inner, scope)
+            renderBlocksInto(card, block.inner, scope, item)
             return card
         }
 
@@ -436,7 +442,12 @@ class TopicPostsAdapter(
                 textSize = 11f
                 setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
             }
-            val content = textView(spanned(block.html))
+            val content = TextView(ctx).apply {
+                setText(spanned(block.html))
+                textSize = 15f
+                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+                setLineSpacing(0f, 1.1f)
+            }
             panel.addView(label)
             panel.addView(content)
             val lp = LinearLayout.LayoutParams(
@@ -447,7 +458,7 @@ class TopicPostsAdapter(
             return panel
         }
 
-        private fun textView(text: CharSequence): TextView {
+        private fun textView(text: CharSequence, item: NativePostItem): TextView {
             val ctx = itemView.context
             return TextView(ctx).apply {
                 setText(text)
@@ -463,12 +474,34 @@ class TopicPostsAdapter(
                         override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
                     })
                 } else {
-                    // No links → make the text selectable so the user can copy/share a fragment
-                    // (§4 "выделение текста → копировать/поделиться"). Selection and a custom link
-                    // movement method can't coexist on one TextView, so link paragraphs stay
-                    // tap-to-navigate and plain paragraphs stay select-to-copy.
+                    // No links → selectable text: native Copy/Share plus a custom «Цитировать» that
+                    // wraps the selection in a [quote …] for the reply editor (§4 selection→quote).
                     setTextIsSelectable(true)
+                    installQuoteSelectionAction(this, item)
                 }
+            }
+        }
+
+        /** Adds a «Цитировать» item to the text-selection action bar → quotes the selection into the editor. */
+        private fun installQuoteSelectionAction(tv: TextView, item: NativePostItem) {
+            if (!item.canQuote) return
+            tv.customSelectionActionModeCallback = object : android.view.ActionMode.Callback {
+                override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
+                    menu.add(0, QUOTE_MENU_ID, 0, "Цитировать")
+                    return true
+                }
+                override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) = false
+                override fun onActionItemClicked(mode: android.view.ActionMode, menuItem: android.view.MenuItem): Boolean {
+                    if (menuItem.itemId == QUOTE_MENU_ID) {
+                        val s = tv.selectionStart.coerceAtLeast(0)
+                        val e = tv.selectionEnd.coerceAtLeast(0)
+                        if (e > s) actionListener.onQuoteSelection(item, tv.text.subSequence(s, e).toString())
+                        mode.finish()
+                        return true
+                    }
+                    return false
+                }
+                override fun onDestroyActionMode(mode: android.view.ActionMode) {}
             }
         }
 
@@ -494,6 +527,7 @@ class TopicPostsAdapter(
     private companion object {
         const val DEFAULT_IMAGE_RATIO = 0.66f
         const val SMILE_SIZE_SP = 18f
+        const val QUOTE_MENU_ID = 0x71_0716
         val ONLINE_DOT_COLOR = android.graphics.Color.parseColor("#4CAF50")
 
         val DIFF = object : DiffUtil.ItemCallback<NativePostItem>() {

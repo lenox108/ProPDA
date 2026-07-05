@@ -2,7 +2,9 @@ package forpdateam.ru.forpda.ui.fragments.theme.nativerender
 
 import android.os.Bundle
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
+import forpdateam.ru.forpda.common.getColorFromAttr
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -40,6 +42,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     lateinit var themeApi: ThemeApi
 
     @Inject
+    lateinit var editPostApi: forpdateam.ru.forpda.model.data.remote.api.editpost.EditPostApi
+
+    @Inject
     lateinit var linkHandler: ILinkHandler
 
     private val mapper = NativePostMapper()
@@ -58,6 +63,27 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var loadedUrl: String? = null
     private var isLoadingNextPage = false
     private var isLoadingPrevPage = false
+
+    /** Topic context for posting a reply (from the loaded page). */
+    private var pageForumId = 0
+    private var pageTopicId = 0
+    private var pageSt = 0
+    private var isSending = false
+
+    private var editorBar: android.widget.LinearLayout? = null
+    private var editorInput: android.widget.EditText? = null
+
+    override fun hasBackHandling(): Boolean = editorBar?.visibility == View.VISIBLE
+
+    override fun onBackPressed(): Boolean {
+        // Back closes the reply editor first, before leaving the topic.
+        if (editorBar?.visibility == View.VISIBLE) {
+            editorBar?.visibility = View.GONE
+            hideKeyboard()
+            return true
+        }
+        return super.onBackPressed()
+    }
 
     private val topicUrl: String
         get() = arguments?.getString(TabFragment.ARG_TAB).orEmpty()
@@ -234,21 +260,93 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     override fun onReply(item: NativePostItem) {
-        // Editor integration is the next step; the reply BBCode is put on the clipboard for now.
         insertIntoEditor("[snapback]${item.postId}[/snapback] [b]${item.nick},[/b] \n")
     }
 
     override fun onQuote(item: NativePostItem) {
-        // Full-post quote (selection→quote comes via the text ActionMode).
-        insertIntoEditor("[quote name=\"${item.nick}\" date=\"${item.date.orEmpty()}\" post=${item.postId}]\n")
+        val date = item.date?.takeIf { it.isNotBlank() }?.let { " date=\"$it\"" } ?: ""
+        insertIntoEditor("[quote name=\"${item.nick}\"$date post=${item.postId}]${'\n'}[/quote]${'\n'}")
     }
 
-    /** Placeholder until the inline editor lands: copy the reply/quote form to the clipboard. */
+    override fun onQuoteSelection(item: NativePostItem, selectedText: String) {
+        val d = item.date?.takeIf { it.isNotBlank() }?.let { " date=\"$it\"" } ?: ""
+        insertIntoEditor("[quote name=\"${item.nick}\"$d post=${item.postId}]$selectedText[/quote]${'\n'}")
+    }
+
     private fun insertIntoEditor(text: String) {
-        val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                as? android.content.ClipboardManager
-        cm?.setPrimaryClip(android.content.ClipData.newPlainText("quote", text))
-        Toast.makeText(requireContext(), "Форма скопирована в буфер", Toast.LENGTH_SHORT).show()
+        val input = ensureEditorBar()
+        input.text?.insert(input.selectionStart.coerceAtLeast(0), text)
+        editorBar?.visibility = View.VISIBLE
+        input.requestFocus()
+        showKeyboard(input)
+    }
+
+    /** Lazily builds the inline reply bar (EditText + «Отправить») pinned to the bottom. */
+    private fun ensureEditorBar(): android.widget.EditText {
+        editorInput?.let { return it }
+        val ctx = requireContext()
+        val dm = ctx.resources.displayMetrics
+        val bar = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
+            val p = (8 * dm.density).toInt()
+            setPadding(p, p, p, p)
+            visibility = View.GONE
+        }
+        val input = android.widget.EditText(ctx).apply {
+            hint = "Ответ…"
+            textSize = 15f
+            maxLines = 5
+            layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val send = TextView(ctx).apply {
+            text = "Отправить"
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+            val ph = (12 * dm.density).toInt()
+            setPadding(ph, ph, ph, ph)
+            setOnClickListener { sendReply() }
+        }
+        bar.addView(input)
+        bar.addView(send)
+        coordinatorLayout.addView(bar, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
+                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.MATCH_PARENT,
+                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { gravity = android.view.Gravity.BOTTOM })
+        editorBar = bar
+        editorInput = input
+        return input
+    }
+
+    private fun sendReply() {
+        val input = editorInput ?: return
+        val message = input.text?.toString()?.trim().orEmpty()
+        if (message.isBlank() || isSending || pageTopicId <= 0) return
+        isSending = true
+        hideKeyboard()
+        Toast.makeText(requireContext(), "Отправка…", Toast.LENGTH_SHORT).show()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val form = forpdateam.ru.forpda.entity.remote.editpost.EditPostForm().apply {
+                type = forpdateam.ru.forpda.entity.remote.editpost.EditPostForm.TYPE_NEW_POST
+                forumId = pageForumId
+                topicId = pageTopicId
+                st = pageSt
+                this.message = message
+            }
+            val result = withContext(Dispatchers.IO) { runCatching { editPostApi.sendPost(form) } }
+            isSending = false
+            if (view == null) return@launch
+            result.onSuccess {
+                input.setText("")
+                editorBar?.visibility = View.GONE
+                Toast.makeText(requireContext(), "Отправлено", Toast.LENGTH_SHORT).show()
+                // Reload to the end so the freshly posted reply is visible.
+                loadedUrl?.let { loadTopic(it) }
+            }.onFailure { error ->
+                Toast.makeText(requireContext(), "Ошибка отправки: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     // endregion
@@ -269,6 +367,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             refreshLayout.isRefreshing = false
             result.onSuccess { page ->
                 loadedUrl = url
+                pageForumId = page.forumId
+                pageTopicId = page.id
+                pageSt = page.st
                 pollHeaderAdapter.setPoll(page.poll)
                 val items = mapper.map(page.posts)
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
