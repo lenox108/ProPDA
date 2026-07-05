@@ -179,6 +179,7 @@ class TopicPostsAdapter(
         private val body: LinearLayout = itemView.findViewById(R.id.native_post_body)
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
+        private val divider: View = itemView.findViewById(R.id.native_post_divider)
 
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
         private var highlightAnimator: android.animation.ValueAnimator? = null
@@ -226,13 +227,17 @@ class TopicPostsAdapter(
             bindFooter(item)
             bindAuthorActions(item)
             renderBody(item, isHat, hatCollapsed)
-            // Collapsed topic hat: WebView hides the WHOLE post (author header + footer + actions),
-            // leaving only the «Шапка темы ▸» toggle bar rendered inside the body. Expanded → full post.
+            // Collapsed topic hat: WebView hides the WHOLE post (author header + footer + actions + the
+            // bottom divider), leaving only a compact «Шапка темы ▸» bar — same footprint as the poll
+            // block. Expanded → full post with divider restored.
             val hatFolded = isHat && hatCollapsed
             header.visibility = if (hatFolded) View.GONE else View.VISIBLE
-            if (hatFolded) {
-                footer.visibility = View.GONE
-                actions.visibility = View.GONE
+            footer.visibility = if (hatFolded) View.GONE else footer.visibility
+            actions.visibility = if (hatFolded) View.GONE else actions.visibility
+            divider.visibility = if (hatFolded) View.GONE else View.VISIBLE
+            (body.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                val top = if (hatFolded) 0 else (8 * itemView.resources.displayMetrics.density).toInt()
+                if (lp.topMargin != top) { lp.topMargin = top; body.layoutParams = lp }
             }
             if (highlight) playHighlight()
         }
@@ -531,18 +536,33 @@ class TopicPostsAdapter(
             renderBlocksInto(body, item.blocks, RenderScope(item.postId), item)
         }
 
-        /** A tappable «▾/▸ Шапка темы» row that toggles the hat body via [actionListener]. */
+        /** A tappable «ШАПКА ТЕМЫ  ▾/▴» row that toggles the hat body (WebView parity: uppercase title +
+         *  right-aligned chevron, identical to the collapsed poll bar). */
         private fun hatHeader(collapsed: Boolean): View {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
-            return TextView(ctx).apply {
-                text = if (collapsed) "▸ Шапка темы" else "▾ Шапка темы"
-                textSize = scaledSp(13f)
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
-                val vPad = (6 * dm.density).toInt()
-                setPadding(0, vPad, 0, vPad)
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
+            return LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                isClickable = true
+                // The card already supplies ~10dp vertical padding; add a little only when expanded so the
+                // toggle isn't glued to the hat body below it.
+                val vPad = if (collapsed) 0 else (4 * dm.density).toInt()
+                setPadding(0, 0, 0, vPad)
                 setOnClickListener { actionListener.onToggleHat() }
+                addView(TextView(ctx).apply {
+                    text = "ШАПКА ТЕМЫ"
+                    textSize = scaledSp(15f)
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setTextColor(accent)
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(TextView(ctx).apply {
+                    text = if (collapsed) "▾" else "▴"
+                    textSize = scaledSp(15f)
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setTextColor(accent)
+                })
             }
         }
 

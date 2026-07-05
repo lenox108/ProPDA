@@ -283,6 +283,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder,
         )
         panel.hostBaseBottomMarginProvider = { messagePanelBaseBottomMargin() }
+        // The message-panel host sits over the fragment root, whose background is ?colorPrimary (blue).
+        // The compact panel floats with margins, so that blue leaks around it as an unwanted border.
+        // Paint the host with the list surface so the panel floats seamlessly (parity with WebView).
+        messagePanelHost.setBackgroundColor(
+                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         panel.visibility = View.GONE
         // Behavior off: with IME adjustResize the AppBar translationY would push the panel under the
         // keyboard (matches the WebView fragment's disableBehavior()).
@@ -483,27 +488,38 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * Present [root] as a top-anchored panel sliding DOWN from the top of the screen with a dim scrim
-     * (parity with the WebView hat/poll/menu overlays). Built in the fragment's own themed context so
-     * `?attr/colorSurface` resolves to the active palette — unlike the toolbar's built-in overflow popup,
-     * whose nested theme mis-resolves it to a transparent background. When [scrollTarget] is set and the
-     * panel would exceed ~85% of the screen, that view is clamped so it scrolls inside the panel instead.
+     * Present [root] as an overlay panel that drops down from directly under the toolbar (parity with the
+     * WebView hat/poll/menu overlays, which sit at the top of the content area — the toolbar stays visible
+     * and un-dimmed). Built in the fragment's own themed context so `?attr/colorSurface` resolves to the
+     * active palette — unlike the toolbar's built-in overflow popup, whose nested theme mis-resolves it to
+     * a transparent background. When [scrollTarget] is set and the panel would exceed the available height,
+     * that view is clamped so it scrolls inside the panel instead. Returns the shown [Dialog].
      */
-    private fun presentTopSheet(root: android.widget.LinearLayout, scrollTarget: View?) {
+    private fun presentTopSheet(root: android.widget.LinearLayout, scrollTarget: View?): android.app.Dialog {
         val dialog = android.app.Dialog(requireContext())
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         dialog.setContentView(root)
+        // Drop the panel from the bottom edge of the toolbar (in screen coords) so the toolbar stays visible.
+        val loc = IntArray(2)
+        appBarLayout.getLocationOnScreen(loc)
+        val topY = (loc[1] + appBarLayout.height).coerceAtLeast(0)
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-            setGravity(android.view.Gravity.TOP)
+            // No full-screen dim — the WebView overlay just covers the content below the toolbar.
+            clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
             setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                     android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
             attributes = attributes.apply {
+                gravity = android.view.Gravity.TOP
+                y = topY
                 windowAnimations = forpdateam.ru.forpda.R.style.ThemeTopSheetAnimation
             }
         }
         if (scrollTarget != null) {
-            val maxH = (resources.displayMetrics.heightPixels * 0.85).toInt()
+            // Cap the panel to the space between the toolbar and the screen bottom so it never runs off.
+            val maxH = (resources.displayMetrics.heightPixels - topY -
+                    (16 * resources.displayMetrics.density).toInt()).coerceAtLeast(0)
             scrollTarget.viewTreeObserver.addOnPreDrawListener(
                     object : android.view.ViewTreeObserver.OnPreDrawListener {
                         override fun onPreDraw(): Boolean {
@@ -519,6 +535,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     })
         }
         dialog.show()
+        return dialog
     }
 
     /**
@@ -563,7 +580,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             background = androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.bg_theme_top_sheet)
             setPadding(0, (6 * dm.density).toInt(), 0, (8 * dm.density).toInt())
         }
-        lateinit var dismiss: () -> Unit
+        var dialogRef: android.app.Dialog? = null
         actions.forEach { (label, action) ->
             root.addView(TextView(ctx).apply {
                 text = label
@@ -572,25 +589,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 setPadding(hpad, vpad, hpad, vpad)
                 isClickable = true
                 if (rowBg != 0) setBackgroundResource(rowBg)
-                setOnClickListener { dismiss(); action() }
+                setOnClickListener { dialogRef?.dismiss(); action() }
             }, android.widget.LinearLayout.LayoutParams(
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-        val dialog = android.app.Dialog(ctx)
-        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        dialog.setContentView(root)
-        dialog.window?.apply {
-            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-            setGravity(android.view.Gravity.TOP)
-            setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
-            attributes = attributes.apply {
-                windowAnimations = forpdateam.ru.forpda.R.style.ThemeTopSheetAnimation
-            }
-        }
-        dismiss = { dialog.dismiss() }
-        dialog.show()
+        dialogRef = presentTopSheet(root, scrollTarget = null)
     }
 
     /**

@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Top overlay panel sliding IN downward from above the screen (hat/poll overlays, WebView parity). -->
+<!-- Top overlay panel emerging downward from under the toolbar (hat/poll/menu overlays, WebView parity):
+     a short drop + fade rather than a full-height slide, so it looks like it drops out of the toolbar. -->
 <set xmlns:android="http://schemas.android.com/apk/res/android"
     android:interpolator="@android:interpolator/decelerate_cubic">
     <translate
-        android:fromYDelta="-100%"
-        android:toYDelta="0%"
-        android:duration="240" />
+        android:fromYDelta="-72"
+        android:toYDelta="0"
+        android:duration="220" />
     <alpha
-        android:fromAlpha="0.4"
+        android:fromAlpha="0.0"
         android:toAlpha="1.0"
-        android:duration="240" />
+        android:duration="220" />
 </set>
