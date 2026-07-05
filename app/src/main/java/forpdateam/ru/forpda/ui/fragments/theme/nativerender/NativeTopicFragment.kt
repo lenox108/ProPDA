@@ -93,6 +93,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var pageSt = 0
     private var isSending = false
 
+    /** Loaded-page flags driving the toolbar poll / hat icon visibility (see [refreshToolbarState]). */
+    private var pageHasPoll = false
+    private var pageHasHat = false
+    /** Post id of the topic hat on the loaded page (the «Инфо» toolbar button scrolls to it). */
+    private var topicHatPostId: Int? = null
+
     private var editorBar: android.widget.LinearLayout? = null
     private var editorInput: android.widget.EditText? = null
     /** Non-null when the editor is editing an existing post (else composing a new reply). */
@@ -161,26 +167,48 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * Native top-toolbar menu (parity with the WebView theme toolbar): a search icon + an overflow
-     * with page-jump / refresh / copy-link / open-forum. Wired to the native equivalents already
-     * built in this fragment. The tab's [toolbar] is provided by [TabFragment].
+     * Native top-toolbar (parity with the WebView theme toolbar): dedicated icon BUTTONS shown
+     * always — «Написать» (pencil, opens the editor), «Опрос» (visible only with a poll), search,
+     * «Обновить» and «Инфо» (topic hat, visible only when a hat exists) — plus an overflow with
+     * page-jump / copy-link / open-forum. Icons match the WebView (ic_toolbar_create / ic_poll_box /
+     * ic_toolbar_search / ic_toolbar_refresh / ic_info). The tab's [toolbar] comes from [TabFragment].
      */
     private fun setupToolbarMenu() {
         val menu = toolbar.menu
         menu.clear()
-        menu.add(0, MENU_SEARCH, 0, "Найти на странице").apply {
+        menu.add(0, MENU_CREATE, 0, "Написать").apply {
+            setIcon(forpdateam.ru.forpda.R.drawable.ic_toolbar_create)
+            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+        }
+        menu.add(0, MENU_POLL, 1, "Опрос").apply {
+            setIcon(forpdateam.ru.forpda.R.drawable.ic_poll_box)
+            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+            isVisible = false
+        }
+        menu.add(0, MENU_SEARCH, 2, "Найти на странице").apply {
             setIcon(forpdateam.ru.forpda.R.drawable.ic_toolbar_search)
             setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
         }
-        menu.add(0, MENU_GOTO_PAGE, 1, "Перейти на страницу")
-        menu.add(0, MENU_REFRESH, 2, "Обновить")
-        menu.add(0, MENU_COPY_LINK, 3, "Копировать ссылку на тему")
-        menu.add(0, MENU_OPEN_FORUM, 4, "Открыть раздел форума")
+        menu.add(0, MENU_REFRESH, 3, "Обновить").apply {
+            setIcon(forpdateam.ru.forpda.R.drawable.ic_toolbar_refresh)
+            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+        }
+        menu.add(0, MENU_HAT, 4, "Шапка темы").apply {
+            setIcon(forpdateam.ru.forpda.R.drawable.ic_info)
+            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+            isVisible = false
+        }
+        menu.add(0, MENU_GOTO_PAGE, 5, "Перейти на страницу")
+        menu.add(0, MENU_COPY_LINK, 6, "Копировать ссылку на тему")
+        menu.add(0, MENU_OPEN_FORUM, 7, "Открыть раздел форума")
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                MENU_CREATE -> { toggleComposeEditor(); true }
+                MENU_POLL -> { onPollToolbarClick(); true }
                 MENU_SEARCH -> { toggleSearchBar(); true }
-                MENU_GOTO_PAGE -> { showPagePicker(); true }
                 MENU_REFRESH -> { loadTopic(loadedUrl ?: topicUrl); true }
+                MENU_HAT -> { onHatToolbarClick(); true }
+                MENU_GOTO_PAGE -> { showPagePicker(); true }
                 MENU_COPY_LINK -> {
                     val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                             as? android.content.ClipboardManager
@@ -196,6 +224,48 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 else -> false
             }
         }
+        refreshToolbarState()
+    }
+
+    /**
+     * Toggle the poll / hat toolbar-icon visibility to match the loaded page (they are meaningless
+     * on pages that carry neither). Mirrors the WebView's refreshToolbarMenuItems visibility gating.
+     */
+    private fun refreshToolbarState() {
+        toolbar.menu.findItem(MENU_POLL)?.isVisible = pageHasPoll
+        toolbar.menu.findItem(MENU_HAT)?.isVisible = pageHasHat
+    }
+
+    /** Toolbar «Написать»: opens the empty compose editor (or closes it if already open). */
+    private fun toggleComposeEditor() {
+        if (editorBar?.visibility == View.VISIBLE) {
+            editorBar?.visibility = View.GONE
+            editingForm = null
+            hideKeyboard()
+            updatePaginationBar()
+            return
+        }
+        val input = ensureEditorBar()
+        editingForm = null
+        editorBar?.visibility = View.VISIBLE
+        paginationBar?.visibility = View.GONE // editor and bar share the bottom
+        input.requestFocus()
+        showKeyboard(input)
+    }
+
+    /** Toolbar «Опрос»: bring the poll (page-1 header) into view. Voting itself lives in the header. */
+    private fun onPollToolbarClick() {
+        if (!pageHasPoll) return
+        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(0, 0)
+    }
+
+    /** Toolbar «Инфо»: scroll to the topic hat post (its collapsible rendering is handled separately). */
+    private fun onHatToolbarClick() {
+        val hatId = topicHatPostId ?: return
+        val index = loadedItems.indexOfFirst { it.postId == hatId }
+        if (index < 0) return
+        (recyclerView.layoutManager as? LinearLayoutManager)
+                ?.scrollToPositionWithOffset(index + headerOffset(), 0)
     }
 
     /**
@@ -890,7 +960,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pageTopicId = page.id
                 pageSt = page.st
                 // The poll belongs to page 1 only — don't show it when jumping to a later page.
-                pollHeaderAdapter.setPoll(if (page.pagination.current <= 1) page.poll else null)
+                val poll = if (page.pagination.current <= 1) page.poll else null
+                pollHeaderAdapter.setPoll(poll)
+                pageHasPoll = poll != null
+                pageHasHat = page.topicHatPost != null
+                topicHatPostId = page.topicHatPost?.id
+                refreshToolbarState()
                 val items = mapper.map(page.posts)
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
@@ -1022,5 +1097,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         private const val MENU_REFRESH = 0x4E03
         private const val MENU_COPY_LINK = 0x4E04
         private const val MENU_OPEN_FORUM = 0x4E05
+        private const val MENU_CREATE = 0x4E06
+        private const val MENU_POLL = 0x4E07
+        private const val MENU_HAT = 0x4E08
     }
 }
