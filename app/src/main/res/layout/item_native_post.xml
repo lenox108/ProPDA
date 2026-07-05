@@ -164,10 +164,4 @@
         android:gravity="center_vertical"
         android:layout_marginTop="6dp" />
 
-    <View
-        android:id="@+id/native_post_divider"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="8dp"
-        android:background="?attr/colorOutlineVariant" />
 </LinearLayout>

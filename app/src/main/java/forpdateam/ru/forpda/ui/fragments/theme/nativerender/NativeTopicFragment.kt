@@ -1056,26 +1056,56 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (item.canEdit) add("Изменить" to { onEdit(item) })
             if (item.canDelete) add("Удалить" to { onDelete(item) })
         }
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-                .setTitle(item.nick.orEmpty())
-                .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
-                .show()
+        showM3Menu(item.nick.orEmpty(), actions)
+    }
+
+    /** Avatar tap → user menu (parity with the WebView showUserMenu), rendered as a clean M3 popup. */
+    override fun onAvatarClick(item: NativePostItem) {
+        if (item.userId <= 0) return
+        val nick = item.nick.orEmpty()
+        val actions = listOf<Pair<String, () -> Unit>>(
+                "Профиль" to { navigationUseCase.openProfile(item.userId) },
+                "Репутация" to { navigationUseCase.openReputationHistory(item.userId) },
+                "Личные сообщения QMS" to { navigationUseCase.openQms(item.userId) },
+                "Темы пользователя" to { navigationUseCase.openSearchUserTopics(nick, item.userId) },
+                "Сообщения в этой теме" to {
+                    navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick, item.userId)
+                },
+                "Сообщения пользователя" to { navigationUseCase.openSearchUserMessages(nick, item.userId) },
+        )
+        showM3Menu(title = null, actions = actions)
+    }
+
+    /**
+     * Clean Material-3 popup menu — reuses the same [DynamicDialogMenu] the WebView dialogs use, so the
+     * post «⋮» menu and the avatar user menu look identical and polished (rounded surface, ripple rows,
+     * M3 typography). [title] shows a TitleLarge header when non-null.
+     */
+    private fun showM3Menu(title: String?, actions: List<Pair<String, () -> Unit>>) {
+        if (actions.isEmpty()) return
+        val menu = forpdateam.ru.forpda.ui.views.DynamicDialogMenu<Unit, Unit>()
+        actions.forEach { (label, action) -> menu.addItem(label) { _, _ -> action() } }
+        menu.allowAll()
+        val style = forpdateam.ru.forpda.ui.views.DynamicDialogMenu.Style(
+                titleTextSizeSp = 18f,
+                itemTextSizeSp = 16f,
+                itemMinHeightDp = 52,
+                contentVerticalPaddingDp = 8,
+                itemVerticalPaddingDp = 12,
+                titleBottomPaddingDp = 4,
+        )
+        menu.show(requireContext(), Unit, Unit, title, style)
     }
 
     override fun onReputation(item: NativePostItem) {
         if (item.userId <= 0) return
-        val ctx = requireContext()
         val options = ArrayList<Pair<String, () -> Unit>>()
         if (item.canPlusRep) options.add("Увеличить" to { showReputationChangeDialog(item, increase = true) })
         options.add("Посмотреть" to {
             linkHandler.handle("https://4pda.to/forum/index.php?showuser=${item.userId}&tab=reputation", null)
         })
         if (item.canMinusRep) options.add("Уменьшить" to { showReputationChangeDialog(item, increase = false) })
-        val labels = options.map { it.first }.toTypedArray()
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
-                .setTitle("Репутация ${item.nick.orEmpty()}")
-                .setItems(labels) { _, which -> options[which].second() }
-                .show()
+        showM3Menu("Репутация ${item.nick.orEmpty()}", options)
     }
 
     private fun showReputationChangeDialog(item: NativePostItem, increase: Boolean) {
