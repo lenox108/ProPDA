@@ -1203,7 +1203,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         applyToolbarAutoHide() // restore auto-hide once search is closed
     }
 
-    /** Lazily builds the find-on-page bar: [query] «k/N» ↑ ↓ ✕, pinned above the pagination bar. */
+    /** Lazily builds the find-on-page bar: [query] «k/N» ↑ ↓ ✕, pinned just below the toolbar (top). */
     private fun ensureSearchBar(): android.widget.LinearLayout {
         searchBar?.let { return it }
         val ctx = requireContext()
@@ -1249,14 +1249,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         bar.addView(iconBtn("↑") { stepMatch(-1) })
         bar.addView(iconBtn("↓") { stepMatch(1) })
         bar.addView(iconBtn("✕") { closeSearch() })
-        // Sit above the pagination bar (which is ~52dp tall).
-        coordinatorLayout.addView(bar, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
-                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.MATCH_PARENT,
-                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            gravity = android.view.Gravity.BOTTOM
-            bottomMargin = (52 * dm.density).toInt()
-        })
+        // Add the bar to the app bar, right below the toolbar, pinned (no scroll flags) — parity with the
+        // WebView find-on-page bar, which sits at the top. Hidden (GONE) it takes no space.
+        appBarLayout.addView(bar, com.google.android.material.appbar.AppBarLayout.LayoutParams(
+                com.google.android.material.appbar.AppBarLayout.LayoutParams.MATCH_PARENT,
+                com.google.android.material.appbar.AppBarLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { scrollFlags = 0 })
         searchBar = bar
         searchInput = input
         searchCountLabel = count
