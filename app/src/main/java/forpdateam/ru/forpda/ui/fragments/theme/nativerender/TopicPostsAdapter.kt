@@ -167,6 +167,7 @@ class TopicPostsAdapter(
             private val spoilerStates: MutableMap<String, Boolean>,
             private val actionListener: PostActionListener,
     ) : RecyclerView.ViewHolder(itemView) {
+        private val header: View = itemView.findViewById(R.id.native_post_header)
         private val avatar: ImageView = itemView.findViewById(R.id.native_post_avatar)
         private val repBadge: TextView = itemView.findViewById(R.id.native_post_rep_badge)
         private val nick: TextView = itemView.findViewById(R.id.native_post_nick)
@@ -225,6 +226,14 @@ class TopicPostsAdapter(
             bindFooter(item)
             bindAuthorActions(item)
             renderBody(item, isHat, hatCollapsed)
+            // Collapsed topic hat: WebView hides the WHOLE post (author header + footer + actions),
+            // leaving only the «Шапка темы ▸» toggle bar rendered inside the body. Expanded → full post.
+            val hatFolded = isHat && hatCollapsed
+            header.visibility = if (hatFolded) View.GONE else View.VISIBLE
+            if (hatFolded) {
+                footer.visibility = View.GONE
+                actions.visibility = View.GONE
+            }
             if (highlight) playHighlight()
         }
 
