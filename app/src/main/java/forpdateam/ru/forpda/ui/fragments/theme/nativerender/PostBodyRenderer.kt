@@ -82,7 +82,7 @@ class PostBodyRenderer {
         // attach table or quote) is not itself the block — only peel when the element IS the block.
         return when (kind) {
             BodyBlock.WebFallback.Kind.ATTACHMENT ->
-                extractSingleAttachmentImage(element)
+                extractSingleAttachmentImage(element) ?: extractFileAttachment(element)
             BodyBlock.WebFallback.Kind.QUOTE ->
                 if (element.hasClass("quote")) extractQuote(element) else null
             BodyBlock.WebFallback.Kind.SPOILER ->
@@ -173,6 +173,21 @@ class PostBodyRenderer {
             displayWidthPx = img.attr("width").toIntOrZero(),
             displayHeightPx = img.attr("height").toIntOrZero(),
         )
+    }
+
+    /**
+     * If [element] is (or wraps) a downloadable file link `a.ipb-attach.attach-file`, returns a
+     * native [BodyBlock.FileAttachment]; `null` otherwise. Filename = link text, url = href.
+     */
+    private fun extractFileAttachment(element: Element): BodyBlock.FileAttachment? {
+        val link = if (element.normalName() == "a" && element.hasClass("ipb-attach")) {
+            element
+        } else {
+            element.selectFirst("a.ipb-attach")
+        } ?: return null
+        val url = link.attr("href").takeIf { it.isNotBlank() } ?: return null
+        val name = link.text().trim().ifBlank { "Файл" }
+        return BodyBlock.FileAttachment(name = name, url = url)
     }
 
     private fun String.toIntOrZero(): Int = trim().toIntOrNull() ?: 0

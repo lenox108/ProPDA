@@ -209,6 +209,7 @@ class TopicPostsAdapter(
                     is BodyBlock.Quote -> quoteView(block, scope)
                     is BodyBlock.Spoiler -> spoilerView(block, scope)
                     is BodyBlock.Code -> codeView(block)
+                    is BodyBlock.FileAttachment -> fileAttachmentView(block)
                     is BodyBlock.WebFallback -> bindFallback(block)
                 }
                 container.addView(child)
@@ -320,6 +321,25 @@ class TopicPostsAdapter(
                 ForPdaCoil.loadInto(this, block.imageUrl)
                 val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
                 setOnClickListener { linkHandler.handle(tapUrl, null) }
+            }
+        }
+
+        /** Native file attachment chip: "📎 filename" on a panel, tap → download via the app. */
+        private fun fileAttachmentView(block: BodyBlock.FileAttachment): View {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            val pad = (10 * dm.density).toInt()
+            return TextView(ctx).apply {
+                text = "📎 ${block.name}"
+                textSize = 14f
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                setPadding(pad, pad, pad, pad)
+                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (6 * dm.density).toInt() }
+                setOnClickListener { linkHandler.handle(block.url, null) }
             }
         }
 
