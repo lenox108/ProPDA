@@ -64,6 +64,20 @@ class TopicPostsAdapter(
      */
     private val spoilerStates = HashMap<String, Boolean>()
 
+    /**
+     * The post to flash once when it next binds (target of a link/find/unread open). Consumed on the
+     * first matching bind so scrolling away and back — or an infinite-scroll rebind — does NOT re-flash
+     * it (cf. the WebView "double-flash"/"stuck-lit" fixes: exactly one highlight per open).
+     */
+    private var pendingHighlightPostId: Int? = null
+
+    /** Arm a one-shot highlight for [postId]; fires when that post binds (now if already visible). */
+    fun requestHighlight(postId: Int) {
+        pendingHighlightPostId = postId
+        val pos = currentList.indexOfFirst { it.postId == postId }
+        if (pos >= 0) notifyItemChanged(pos)
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PostViewHolder {
         val view = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_native_post, parent, false)
@@ -71,7 +85,10 @@ class TopicPostsAdapter(
     }
 
     override fun onBindViewHolder(holder: PostViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        val item = getItem(position)
+        val highlight = pendingHighlightPostId == item.postId
+        if (highlight) pendingHighlightPostId = null
+        holder.bind(item, highlight)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -93,7 +110,15 @@ class TopicPostsAdapter(
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
 
-        fun bind(item: NativePostItem) {
+        /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
+        private var highlightAnimator: android.animation.ValueAnimator? = null
+
+        fun bind(item: NativePostItem, highlight: Boolean = false) {
+            // Reset the card background on every (re)bind so a recycled holder never keeps a prior
+            // post's mid-fade tint.
+            highlightAnimator?.cancel()
+            highlightAnimator = null
+            itemView.setBackgroundColor(cardBaseColor())
             bindNick(item)
             bindMeta(item)
             number.text = if (item.number > 0) "#${item.number}" else ""
@@ -101,6 +126,25 @@ class TopicPostsAdapter(
             bindFooter(item)
             bindAuthorActions(item)
             renderBody(item)
+            if (highlight) playHighlight()
+        }
+
+        private fun cardBaseColor(): Int = com.google.android.material.color.MaterialColors.getColor(
+                itemView, com.google.android.material.R.attr.colorSurfaceContainer)
+
+        /** Flash the card with an accent-tinted background that fades back to the surface colour. */
+        private fun playHighlight() {
+            val base = cardBaseColor()
+            val accent = com.google.android.material.color.MaterialColors.getColor(
+                    itemView, androidx.appcompat.R.attr.colorPrimary)
+            val start = com.google.android.material.color.MaterialColors.layer(base, accent, 0.22f)
+            highlightAnimator = android.animation.ValueAnimator
+                    .ofObject(android.animation.ArgbEvaluator(), start, base).apply {
+                        duration = 1600L
+                        startDelay = 250L
+                        addUpdateListener { itemView.setBackgroundColor(it.animatedValue as Int) }
+                        start()
+                    }
         }
 
         /** Tap avatar/nick → user profile; long-press the post → an actions menu. Navigation-only (no writes). */
