@@ -262,6 +262,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         textScale = fontSize / REFERENCE_FONT_SIZE,
                         showAvatars = topicPreferencesHolder.getShowAvatars(),
                         circleAvatars = topicPreferencesHolder.getCircleAvatars(),
+                        density = mainPreferencesHolder.getTopicPostDensity(),
                 )
         )
     }
