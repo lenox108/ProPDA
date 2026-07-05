@@ -99,15 +99,27 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var paginationLabel: TextView? = null
     /** True while the pagination bar is slid off-screen by a downward scroll (hide-on-scroll). */
     private var barHiddenByScroll: Boolean = false
+
+    private var searchBar: android.widget.LinearLayout? = null
+    private var searchInput: android.widget.EditText? = null
+    private var searchCountLabel: TextView? = null
+    /** Adapter positions (poll-header-offset applied) of posts matching the current query, in order. */
+    private val searchMatchPositions = ArrayList<Int>()
+    private var currentMatchIndex = -1
     /** The 1-based page shown in the pagination bar (best-effort as the user scrolls / jumps). */
     private var barCurrentPage: Int = 1
     /** Set for an explicit page-jump so [applyInitialAnchor] lands on the page top, not unread/find. */
     private var pendingJumpToTop: Boolean = false
 
-    override fun hasBackHandling(): Boolean = editorBar?.visibility == View.VISIBLE
+    override fun hasBackHandling(): Boolean =
+            editorBar?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
 
     override fun onBackPressed(): Boolean {
-        // Back closes the reply editor first, before leaving the topic.
+        // Back closes the find-on-page bar / reply editor first, before leaving the topic.
+        if (searchBar?.visibility == View.VISIBLE) {
+            closeSearch()
+            return true
+        }
         if (editorBar?.visibility == View.VISIBLE) {
             editorBar?.visibility = View.GONE
             editingForm = null
@@ -509,6 +521,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { showPagePicker() }
         }
+        bar.addView(navButton("🔍") { toggleSearchBar() })
         bar.addView(navButton("⏮") { jumpToPage(1) })
         bar.addView(navButton("◀") { jumpToPage(barCurrentPage - 1) })
         bar.addView(label)
@@ -520,6 +533,132 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         ).apply { gravity = android.view.Gravity.BOTTOM })
         paginationBar = bar
         paginationLabel = label
+    }
+
+    /** Show/hide the find-on-page bar; hiding clears the query and match highlights. */
+    private fun toggleSearchBar() {
+        val bar = ensureSearchBar()
+        if (bar.visibility == View.VISIBLE) {
+            closeSearch()
+        } else {
+            bar.visibility = View.VISIBLE
+            searchInput?.requestFocus()
+            searchInput?.let { showKeyboard(it) }
+        }
+    }
+
+    private fun closeSearch() {
+        searchBar?.visibility = View.GONE
+        searchInput?.setText("")
+        postsAdapter.setSearchQuery("")
+        searchMatchPositions.clear()
+        currentMatchIndex = -1
+        hideKeyboard()
+    }
+
+    /** Lazily builds the find-on-page bar: [query] «k/N» ↑ ↓ ✕, pinned above the pagination bar. */
+    private fun ensureSearchBar(): android.widget.LinearLayout {
+        searchBar?.let { return it }
+        val ctx = requireContext()
+        val dm = ctx.resources.displayMetrics
+        val bar = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
+            val p = (4 * dm.density).toInt()
+            setPadding(p, p, p, p)
+            visibility = View.GONE
+        }
+        val input = android.widget.EditText(ctx).apply {
+            hint = "Поиск по теме"
+            textSize = 15f
+            maxLines = 1
+            isSingleLine = true
+            layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) = onSearchQueryChanged(s?.toString().orEmpty())
+            })
+        }
+        val count = TextView(ctx).apply {
+            textSize = 13f
+            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            val ph = (8 * dm.density).toInt()
+            setPadding(ph, 0, ph, 0)
+        }
+        fun iconBtn(label: String, onClick: () -> Unit) = TextView(ctx).apply {
+            text = label
+            textSize = 18f
+            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+            val ph = (10 * dm.density).toInt()
+            val pv = (6 * dm.density).toInt()
+            setPadding(ph, pv, ph, pv)
+            setOnClickListener { onClick() }
+        }
+        bar.addView(input)
+        bar.addView(count)
+        bar.addView(iconBtn("↑") { stepMatch(-1) })
+        bar.addView(iconBtn("↓") { stepMatch(1) })
+        bar.addView(iconBtn("✕") { closeSearch() })
+        // Sit above the pagination bar (which is ~52dp tall).
+        coordinatorLayout.addView(bar, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
+                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.MATCH_PARENT,
+                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            gravity = android.view.Gravity.BOTTOM
+            bottomMargin = (52 * dm.density).toInt()
+        })
+        searchBar = bar
+        searchInput = input
+        searchCountLabel = count
+        return bar
+    }
+
+    private fun onSearchQueryChanged(query: String) {
+        postsAdapter.setSearchQuery(query)
+        searchMatchPositions.clear()
+        currentMatchIndex = -1
+        val q = query.trim()
+        if (q.isNotBlank()) {
+            val header = headerOffset()
+            loadedItems.forEachIndexed { index, item ->
+                if (postMatchesQuery(item, q)) searchMatchPositions.add(index + header)
+            }
+        }
+        searchCountLabel?.text = if (q.isBlank()) "" else "${if (searchMatchPositions.isEmpty()) 0 else 1}/${searchMatchPositions.size}"
+        if (searchMatchPositions.isNotEmpty()) {
+            currentMatchIndex = 0
+            scrollToMatch(0)
+        }
+    }
+
+    /** Cycle to the previous (-1) / next (+1) matching post and scroll there. */
+    private fun stepMatch(dir: Int) {
+        if (searchMatchPositions.isEmpty()) return
+        currentMatchIndex = (currentMatchIndex + dir + searchMatchPositions.size) % searchMatchPositions.size
+        searchCountLabel?.text = "${currentMatchIndex + 1}/${searchMatchPositions.size}"
+        scrollToMatch(currentMatchIndex)
+    }
+
+    private fun scrollToMatch(matchIndex: Int) {
+        val pos = searchMatchPositions.getOrNull(matchIndex) ?: return
+        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(pos, 0)
+    }
+
+    /** Does any of [item]'s text (body, nested quotes/spoilers, code, attachments) contain [q]? */
+    private fun postMatchesQuery(item: NativePostItem, q: String): Boolean =
+            item.blocks.any { blockPlainText(it).contains(q, ignoreCase = true) }
+
+    private fun blockPlainText(block: BodyBlock): String = when (block) {
+        is BodyBlock.Text -> android.text.Html.fromHtml(block.html, android.text.Html.FROM_HTML_MODE_COMPACT).toString()
+        is BodyBlock.Code -> block.text
+        is BodyBlock.Quote -> block.inner.joinToString(" ") { blockPlainText(it) }
+        is BodyBlock.Spoiler -> block.inner.joinToString(" ") { blockPlainText(it) }
+        is BodyBlock.FileAttachment -> block.name
+        is BodyBlock.WebFallback -> android.text.Html.fromHtml(block.html, android.text.Html.FROM_HTML_MODE_COMPACT).toString()
+        is BodyBlock.Image -> ""
     }
 
     /** Refresh the bar's «N / M» text and hide it entirely for single-page topics. */
@@ -659,6 +798,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 loadedItems.addAll(items)
                 mentionScannedPostIds.clear()
                 markedTopicReadAtEnd = false
+                closeSearch() // matches from a previous page are stale after a reload
                 updatePaginationBar()
                 postsAdapter.submitList(loadedItems.toList()) {
                     if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)

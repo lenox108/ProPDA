@@ -66,10 +66,20 @@ class TopicPostsAdapter(
 
     private var displaySettings = PostDisplaySettings()
 
+    /** Current find-on-page query; matched substrings get a highlight background when non-blank. */
+    private var searchQuery: String = ""
+
     /** Apply new display prefs; rebinds visible posts so text sizes / avatars update in place. */
     fun setDisplaySettings(settings: PostDisplaySettings) {
         if (settings == displaySettings) return
         displaySettings = settings
+        notifyDataSetChanged()
+    }
+
+    /** Set the find-on-page query (case-insensitive); rebinds so match highlights update. */
+    fun setSearchQuery(query: String) {
+        if (query == searchQuery) return
+        searchQuery = query
         notifyDataSetChanged()
     }
 
@@ -110,7 +120,7 @@ class TopicPostsAdapter(
         val item = getItem(position)
         val highlight = pendingHighlightPostId == item.postId
         if (highlight) pendingHighlightPostId = null
-        holder.bind(item, highlight, displaySettings)
+        holder.bind(item, highlight, displaySettings, searchQuery)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -138,11 +148,20 @@ class TopicPostsAdapter(
         /** Display prefs for the current bind pass, read by the body-render helpers below. */
         private var settings = PostDisplaySettings()
 
+        /** Find-on-page query for the current bind pass; matched substrings get a highlight span. */
+        private var searchQuery: String = ""
+
         /** Scale a base sp size by the user's font-size preference. */
         private fun scaledSp(base: Float): Float = base * settings.textScale
 
-        fun bind(item: NativePostItem, highlight: Boolean = false, settings: PostDisplaySettings = PostDisplaySettings()) {
+        fun bind(
+                item: NativePostItem,
+                highlight: Boolean = false,
+                settings: PostDisplaySettings = PostDisplaySettings(),
+                searchQuery: String = "",
+        ) {
             this.settings = settings
+            this.searchQuery = searchQuery
             // Reset the card background on every (re)bind so a recycled holder never keeps a prior
             // post's mid-fade tint.
             highlightAnimator?.cancel()
@@ -585,7 +604,7 @@ class TopicPostsAdapter(
         private fun textView(text: CharSequence, item: NativePostItem): TextView {
             val ctx = itemView.context
             return TextView(ctx).apply {
-                setText(text)
+                setText(highlightSearchMatches(text))
                 textSize = scaledSp(15f)
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 setLineSpacing(0f, 1.1f)
@@ -627,6 +646,27 @@ class TopicPostsAdapter(
                 }
                 override fun onDestroyActionMode(mode: android.view.ActionMode) {}
             }
+        }
+
+        /** Wrap each case-insensitive [searchQuery] match in [text] with a highlight background span. */
+        private fun highlightSearchMatches(text: CharSequence): CharSequence {
+            val q = searchQuery
+            if (q.isBlank()) return text
+            val out = android.text.SpannableStringBuilder(text)
+            val hay = out.toString()
+            val color = com.google.android.material.color.MaterialColors.getColor(
+                    itemView, androidx.appcompat.R.attr.colorPrimary)
+            var i = hay.indexOf(q, ignoreCase = true)
+            while (i >= 0) {
+                out.setSpan(android.text.style.BackgroundColorSpan(color), i, i + q.length,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                out.setSpan(android.text.style.ForegroundColorSpan(
+                        com.google.android.material.color.MaterialColors.getColor(
+                                itemView, com.google.android.material.R.attr.colorOnPrimary)),
+                        i, i + q.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                i = hay.indexOf(q, i + q.length, ignoreCase = true)
+            }
+            return out
         }
 
         private fun spanned(html: String): CharSequence = try {
