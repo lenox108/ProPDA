@@ -80,6 +80,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var authHolder: forpdateam.ru.forpda.model.AuthHolder
 
+    /** Reuses the WebView toolbar navigation actions (open forum / search in topic / my posts). */
+    @Inject
+    lateinit var navigationUseCase: forpdateam.ru.forpda.model.interactors.theme.ThemeNavigationUseCase
+
     // topicPreferencesHolder is provided by the TabFragment supertype.
 
     private val mapper = NativePostMapper()
@@ -142,8 +146,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     private var paginationBar: android.widget.LinearLayout? = null
     private var paginationLabel: TextView? = null
-    /** True while the pagination bar is slid off-screen by a downward scroll (hide-on-scroll). */
-    private var barHiddenByScroll: Boolean = false
 
     private var searchBar: android.widget.LinearLayout? = null
     private var searchInput: android.widget.EditText? = null
@@ -159,7 +161,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** «Умная кнопка темы» (FAB) state: enabled per pref; arrow follows the last scroll direction. */
     private var fabEnabled = false
     private var fabPointsDown = true
-    private val fabHideRunnable = Runnable { if (view != null) fab.hide() }
 
     override fun hasBackHandling(): Boolean =
             messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
@@ -197,7 +198,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 markVisiblePostsRead()
                 maybeMarkTopicReadAtEnd()
                 updateBarCurrentPageFromScroll()
-                applyBarHideOnScroll(dy)
                 updateFabOnScroll(dy)
             }
         })
@@ -208,33 +208,45 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         setupMessagePanel()
         setupFab()
         setupToolbarMenu()
+        applyToolbarAutoHide()
         loadTopic(topicUrl)
     }
 
     /**
-     * «Умная кнопка темы» (setting «Умная кнопка темы»): a mini FAB that appears while scrolling. A
-     * short tap scrolls ~a screen in the direction the user is already travelling (the arrow follows
-     * that direction); a long press opens the page-jump dialog. Mirrors the WebView's FAB intent
-     * without the WebView-coupled [ThemeFabCoordinator]. Hidden entirely when the pref is off.
+     * «Умная кнопка темы» (setting «Умная кнопка темы»): a persistent mini FAB (parity with the
+     * WebView, which keeps it on screen). A short tap scrolls ~a screen in the direction the user is
+     * travelling (the arrow follows that direction); a LONG press opens the page-jump dialog. It
+     * stays visible so the long press is always reachable. Hidden entirely when the pref is off.
      */
     private fun setupFab() {
         fabEnabled = mainPreferencesHolder.getScrollButtonEnabled()
+        val dm = resources.displayMetrics
+        // Bottom-end, lifted above the CLASSIC pagination bar so it never sits on top of it.
+        (fab.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)?.let { lp ->
+            lp.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
+            val m = (16 * dm.density).toInt()
+            lp.rightMargin = m
+            lp.bottomMargin = ((if (isClassicMode()) 64 else 16) * dm.density).toInt()
+            fab.layoutParams = lp
+        }
+        androidx.core.view.ViewCompat.setElevation(fab, 12f * dm.density)
         if (!fabEnabled) {
             fab.hide()
             return
         }
         fab.size = com.google.android.material.floatingactionbutton.FloatingActionButton.SIZE_MINI
         fab.setImageResource(forpdateam.ru.forpda.R.drawable.ic_arrow_down)
-        fab.hide() // revealed on first scroll
+        fab.isLongClickable = true
         fab.setOnClickListener { smartScrollTap() }
         fab.setOnLongClickListener {
             it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             showPagePicker()
             true
         }
+        fab.show()
     }
 
-    /** Reveal the FAB pointing the current scroll direction and re-arm the auto-hide timer. */
+    /** Point the FAB arrow along the current scroll direction (it stays visible, unlike a timed FAB). */
     private fun updateFabOnScroll(dy: Int) {
         if (!fabEnabled) return
         if (kotlin.math.abs(dy) < SCROLL_HIDE_THRESHOLD) return
@@ -245,17 +257,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     if (down) forpdateam.ru.forpda.R.drawable.ic_arrow_down
                     else forpdateam.ru.forpda.R.drawable.ic_arrow_up)
         }
-        fab.show()
-        fab.removeCallbacks(fabHideRunnable)
-        fab.postDelayed(fabHideRunnable, FAB_AUTO_HIDE_MS)
+        if (!fab.isShown) fab.show()
     }
 
     /** Short tap: scroll ~a screen in the arrow's direction (parity with the WebView pageUp/Down). */
     private fun smartScrollTap() {
         val step = (recyclerView.height * 0.85f).toInt().coerceAtLeast(1)
         recyclerView.smoothScrollBy(0, if (fabPointsDown) step else -step)
-        fab.removeCallbacks(fabHideRunnable)
-        fab.postDelayed(fabHideRunnable, FAB_AUTO_HIDE_MS)
     }
 
     /**
@@ -302,6 +310,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * ic_toolbar_search / ic_toolbar_refresh / ic_info). The tab's [toolbar] comes from [TabFragment].
      */
     private fun setupToolbarMenu() {
+        // Back navigation to leave the topic (parity with the WebView; system back is reused).
+        toolbar.setNavigationIcon(forpdateam.ru.forpda.R.drawable.ic_toolbar_arrow_back)
+        toolbar.navigationContentDescription = getString(forpdateam.ru.forpda.R.string.close_tab)
+        toolbar.setNavigationOnClickListener {
+            requireActivity().onBackPressedDispatcher.onBackPressed()
+        }
+        // Ensure the overflow popup has a solid, readable background (fixes the transparent menu).
+        toolbar.popupTheme = forpdateam.ru.forpda.R.style.DayNightAppTheme_PopupOverlay
         val menu = toolbar.menu
         menu.clear()
         menu.add(0, MENU_CREATE, 0, "Написать").apply {
@@ -326,9 +342,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
             isVisible = false
         }
-        menu.add(0, MENU_GOTO_PAGE, 5, "Перейти на страницу")
-        menu.add(0, MENU_COPY_LINK, 6, "Копировать ссылку на тему")
-        menu.add(0, MENU_OPEN_FORUM, 7, "Открыть раздел форума")
+        // A single «⋮» action opening a MaterialAlertDialog list — the toolbar's built-in overflow
+        // popup renders with a transparent background on this theme (unresolved ?attr/colorSurface),
+        // so a dialog guarantees a solid, readable surface.
+        menu.add(0, MENU_OVERFLOW, 20, "Ещё").apply {
+            setIcon(forpdateam.ru.forpda.R.drawable.ic_more_vert)
+            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+        }
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 MENU_CREATE -> { toggleComposeEditor(); true }
@@ -336,23 +356,41 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 MENU_SEARCH -> { toggleSearchBar(); true }
                 MENU_REFRESH -> { loadTopic(loadedUrl ?: topicUrl); true }
                 MENU_HAT -> { onHatToolbarClick(); true }
-                MENU_GOTO_PAGE -> { showPagePicker(); true }
-                MENU_COPY_LINK -> {
-                    val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                            as? android.content.ClipboardManager
-                    val url = "https://4pda.to/forum/index.php?showtopic=$pageTopicId"
-                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("topic", url))
-                    Toast.makeText(requireContext(), "Ссылка скопирована", Toast.LENGTH_SHORT).show()
-                    true
-                }
-                MENU_OPEN_FORUM -> {
-                    if (pageForumId > 0) linkHandler.handle("https://4pda.to/forum/index.php?showforum=$pageForumId", null)
-                    true
-                }
+                MENU_OVERFLOW -> { showOverflowMenu(); true }
                 else -> false
             }
         }
         refreshToolbarState()
+    }
+
+    /** The toolbar overflow, shown as a solid MaterialAlertDialog list (parity with WebView actions). */
+    private fun showOverflowMenu() {
+        val actions = buildList<Pair<String, () -> Unit>> {
+            add("Перейти на страницу" to { showPagePicker() })
+            add("Поиск по теме" to {
+                if (pageTopicId > 0) navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick = "")
+            })
+            add("Мои сообщения в теме" to {
+                if (pageTopicId > 0) navigationUseCase.openSearchMyPosts(pageTopicId, pageForumId)
+            })
+            add("Копировать ссылку на тему" to {
+                val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as? android.content.ClipboardManager
+                cm?.setPrimaryClip(android.content.ClipData.newPlainText("topic",
+                        "https://4pda.to/forum/index.php?showtopic=$pageTopicId"))
+                Toast.makeText(requireContext(), "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+            })
+            add("Открыть раздел форума" to { if (pageForumId > 0) navigationUseCase.openForum(pageForumId) })
+            add("Открыть в браузере" to {
+                runCatching {
+                    startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://4pda.to/forum/index.php?showtopic=$pageTopicId")))
+                }
+            })
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
+                .show()
     }
 
     /**
@@ -362,6 +400,33 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun refreshToolbarState() {
         toolbar.menu.findItem(MENU_POLL)?.isVisible = pageHasPoll
         toolbar.menu.findItem(MENU_HAT)?.isVisible = pageHasHat
+    }
+
+    /**
+     * «Поведение тулбара» = HIDE_ON_SCROLL: let the AppBar scroll off with the list (standard
+     * AppBarLayout scroll flags; the RecyclerView container already carries ScrollingViewBehavior).
+     * Kept PINNED while the editor/search is open so those don't fight the collapsing bar. Re-read
+     * on return since the pref may have changed.
+     */
+    private fun applyToolbarAutoHide() {
+        val enabled = mainPreferencesHolder.getTopicToolbarBehavior() ==
+                forpdateam.ru.forpda.common.Preferences.Main.TopicToolbarBehavior.HIDE_ON_SCROLL &&
+                messagePanel?.visibility != View.VISIBLE &&
+                searchBar?.visibility != View.VISIBLE
+        val lp = toolbarLayout.layoutParams as? com.google.android.material.appbar.AppBarLayout.LayoutParams
+                ?: return
+        val flags = if (enabled) {
+            com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL or
+                    com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_ENTER_ALWAYS or
+                    com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_SNAP
+        } else {
+            0
+        }
+        if (lp.scrollFlags != flags) {
+            lp.scrollFlags = flags
+            toolbarLayout.layoutParams = lp
+            if (!enabled) appBarLayout.setExpanded(true, false)
+        }
     }
 
     /** Toolbar «Написать»: opens the empty compose editor (or closes it if already open). */
@@ -380,6 +445,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (panel.visibility != View.VISIBLE) {
             panel.visibility = View.VISIBLE
             paginationBar?.visibility = View.GONE
+            appBarLayout.setExpanded(true, true) // reveal toolbar for editing
+            applyToolbarAutoHide() // pin the toolbar while composing
             if (showKeyboard) panel.show()
         }
         if (showKeyboard) {
@@ -397,6 +464,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         hideKeyboard()
         editingForm = null
         updatePaginationBar()
+        applyToolbarAutoHide() // restore auto-hide once the editor is closed
     }
 
     /** Toolbar «Опрос»: bring the poll (page-1 header) into view. Voting itself lives in the header. */
@@ -630,6 +698,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (view != null) {
             applyDisplaySettings()
             setupFab() // the «Умная кнопка темы» pref may have been toggled while away
+            applyToolbarAutoHide() // the «Поведение тулбара» pref may have been toggled while away
         }
     }
 
@@ -644,7 +713,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     override fun onDestroyView() {
-        fab.removeCallbacks(fabHideRunnable)
         messagePanel?.onDestroy()
         messagePanel = null
         attachmentsPopup = null
@@ -683,6 +751,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     // region PostActionListener — write actions (authorised by the user)
 
     override fun onVote(item: NativePostItem, up: Boolean) {
+        // Rating a post is a one-shot irreversible action → confirm first (per user request).
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle(if (up) "Повысить репутацию поста?" else "Понизить репутацию поста?")
+                .setMessage("Автор: ${item.nick.orEmpty()}")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton(if (up) "Повысить" else "Понизить") { _, _ -> performVote(item, up) }
+                .show()
+    }
+
+    private fun performVote(item: NativePostItem, up: Boolean) {
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.votePost(item.postId, up) }
@@ -860,43 +938,55 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     // endregion
 
-    /** Lazily builds the bottom pagination bar (⏮ ◀ «N / M» ▶ ⏭); tapping the label opens a page picker. */
+    /**
+     * Lazily builds the bottom pagination bar «  ‹  N / M  ›  » — styled to match the WebView
+     * `theme_bottom_pagination`: flat surface, bold `colorOnSurface` chevrons (NOT accent-blue),
+     * no heavy divider. Tapping the label opens a page picker. CLASSIC mode only.
+     */
     private fun ensurePaginationBar() {
         if (paginationBar != null) return
         val ctx = requireContext()
         val dm = ctx.resources.displayMetrics
+        val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val bar = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
-            val p = (4 * dm.density).toInt()
-            setPadding(p, p, p, p)
+            // Match the POST-CARD colour (colorSurfaceContainer) so the bar blends seamlessly with the
+            // content above — no visible seam/line — like the WebView's on-page bottom pagination.
+            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer))
+            elevation = 0f
             visibility = View.GONE
         }
         fun navButton(label: String, onClick: () -> Unit) = TextView(ctx).apply {
             text = label
-            textSize = 18f
+            textSize = 20f
             gravity = android.view.Gravity.CENTER
-            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
-            val ph = (12 * dm.density).toInt()
-            val pv = (6 * dm.density).toInt()
-            setPadding(ph, pv, ph, pv)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(onSurface)
+            val pv = (8 * dm.density).toInt()
+            setPadding(0, pv, 0, pv)
+            layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            background = ctx.obtainStyledAttributes(intArrayOf(
+                    android.R.attr.selectableItemBackgroundBorderless)).use { it.getDrawable(0) }
             setOnClickListener { onClick() }
         }
         val label = TextView(ctx).apply {
             textSize = 14f
             gravity = android.view.Gravity.CENTER
-            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(onSurface)
+            val pv = (8 * dm.density).toInt()
+            setPadding(0, pv, 0, pv)
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
-                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1.45f)
             setOnClickListener { showPagePicker() }
         }
-        bar.addView(navButton("🔍") { toggleSearchBar() })
-        bar.addView(navButton("⏮") { jumpToPage(1) })
-        bar.addView(navButton("◀") { jumpToPage(barCurrentPage - 1) })
+        bar.addView(navButton("«") { jumpToPage(1) })
+        bar.addView(navButton("‹") { jumpToPage(barCurrentPage - 1) })
         bar.addView(label)
-        bar.addView(navButton("▶") { jumpToPage(barCurrentPage + 1) })
-        bar.addView(navButton("⏭") { jumpToPage(pagination.totalPages) })
+        bar.addView(navButton("›") { jumpToPage(barCurrentPage + 1) })
+        bar.addView(navButton("»") { jumpToPage(pagination.totalPages) })
         coordinatorLayout.addView(bar, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
                 androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.MATCH_PARENT,
                 androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
@@ -912,6 +1002,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             closeSearch()
         } else {
             bar.visibility = View.VISIBLE
+            appBarLayout.setExpanded(true, true)
+            applyToolbarAutoHide() // pin the toolbar while searching
             searchInput?.requestFocus()
             searchInput?.let { showKeyboard(it) }
         }
@@ -924,6 +1016,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         searchMatchPositions.clear()
         currentMatchIndex = -1
         hideKeyboard()
+        applyToolbarAutoHide() // restore auto-hide once search is closed
     }
 
     /** Lazily builds the find-on-page bar: [query] «k/N» ↑ ↓ ✕, pinned above the pagination bar. */
@@ -1047,9 +1140,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         paginationBar?.let { bar ->
             val show = isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE
             bar.visibility = if (show) View.VISIBLE else View.GONE
-            // A (re)shown bar must sit at rest, undoing any hide-on-scroll offset.
-            bar.translationY = 0f
-            barHiddenByScroll = false
             // Reserve bottom room for the bar only when it is shown (CLASSIC); HYBRID needs none.
             val bottomPad = if (show) (52 * resources.displayMetrics.density).toInt() else 0
             recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
@@ -1075,18 +1165,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
-    /** Slide the pagination bar off on downward scroll and back on upward scroll (more reading room). */
-    private fun applyBarHideOnScroll(dy: Int) {
-        val bar = paginationBar ?: return
-        if (bar.visibility != View.VISIBLE) return
-        if (dy > SCROLL_HIDE_THRESHOLD && !barHiddenByScroll) {
-            barHiddenByScroll = true
-            bar.animate().translationY(bar.height.toFloat()).setDuration(150).start()
-        } else if (dy < -SCROLL_HIDE_THRESHOLD && barHiddenByScroll) {
-            barHiddenByScroll = false
-            bar.animate().translationY(0f).setDuration(150).start()
-        }
-    }
 
     private fun jumpToPage(pageNumber: Int) {
         if (!pagination.isInitialised) return
@@ -1317,19 +1395,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         /** Minimum horizontal travel (dp) for a page-swipe drag to register on release. */
         const val SWIPE_MIN_DISTANCE_DP = 80f
 
-        /** Per-frame scroll delta (px) beyond which the pagination bar hides/shows on scroll. */
+        /** Per-frame scroll delta (px) beyond which the FAB direction arrow flips. */
         const val SCROLL_HIDE_THRESHOLD = 8
 
-        /** How long the smart-scroll FAB stays visible after the last scroll/tap. */
-        const val FAB_AUTO_HIDE_MS = 1500L
-
         private const val MENU_SEARCH = 0x4E01
-        private const val MENU_GOTO_PAGE = 0x4E02
         private const val MENU_REFRESH = 0x4E03
-        private const val MENU_COPY_LINK = 0x4E04
-        private const val MENU_OPEN_FORUM = 0x4E05
         private const val MENU_CREATE = 0x4E06
         private const val MENU_POLL = 0x4E07
         private const val MENU_HAT = 0x4E08
+        private const val MENU_OVERFLOW = 0x4E0C
     }
 }
