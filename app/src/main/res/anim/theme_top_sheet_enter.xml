@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Top overlay panel sliding IN downward from above the screen (hat/poll overlays, WebView parity). -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:interpolator="@android:interpolator/decelerate_cubic">
+    <translate
+        android:fromYDelta="-100%"
+        android:toYDelta="0%"
+        android:duration="240" />
+    <alpha
+        android:fromAlpha="0.4"
+        android:toAlpha="1.0"
+        android:duration="240" />
+</set>

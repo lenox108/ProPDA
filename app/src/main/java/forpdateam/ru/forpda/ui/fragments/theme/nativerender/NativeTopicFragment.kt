@@ -320,8 +320,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         toolbar.setNavigationOnClickListener {
             requireActivity().onBackPressedDispatcher.onBackPressed()
         }
-        // Ensure the overflow popup has a solid, readable background (fixes the transparent menu).
-        toolbar.popupTheme = forpdateam.ru.forpda.R.style.DayNightAppTheme_PopupOverlay
+        // Overflow popup theme comes from the toolbar's app:popupTheme="?attr/popup_overlay" (fragment_base),
+        // which resolves to a readable per-palette dropdown — no manual override needed.
         val menu = toolbar.menu
         menu.clear()
         menu.add(0, MENU_CREATE, 0, "Написать").apply {
@@ -346,9 +346,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
             isVisible = false
         }
-        // A single «⋮» action opening a MaterialAlertDialog list — the toolbar's built-in overflow
-        // popup renders with a transparent background on this theme (unresolved ?attr/colorSurface),
-        // so a dialog guarantees a solid, readable surface.
+        // «⋮» opens a compact top-sliding panel of extra actions (see showOverflowMenu) rather than the
+        // toolbar's built-in overflow popup, which mis-renders with a transparent background on this theme.
         menu.add(0, MENU_OVERFLOW, 20, "Ещё").apply {
             setIcon(forpdateam.ru.forpda.R.drawable.ic_more_vert)
             setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
@@ -365,36 +364,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
         }
         refreshToolbarState()
-    }
-
-    /** The toolbar overflow, shown as a solid MaterialAlertDialog list (parity with WebView actions). */
-    private fun showOverflowMenu() {
-        val actions = buildList<Pair<String, () -> Unit>> {
-            add("Перейти на страницу" to { showPagePicker() })
-            add("Поиск по теме" to {
-                if (pageTopicId > 0) navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick = "")
-            })
-            add("Мои сообщения в теме" to {
-                if (pageTopicId > 0) navigationUseCase.openSearchMyPosts(pageTopicId, pageForumId)
-            })
-            add("Копировать ссылку на тему" to {
-                val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                        as? android.content.ClipboardManager
-                cm?.setPrimaryClip(android.content.ClipData.newPlainText("topic",
-                        "https://4pda.to/forum/index.php?showtopic=$pageTopicId"))
-                Toast.makeText(requireContext(), "Ссылка скопирована", Toast.LENGTH_SHORT).show()
-            })
-            add("Открыть раздел форума" to { if (pageForumId > 0) navigationUseCase.openForum(pageForumId) })
-            add("Открыть в браузере" to {
-                runCatching {
-                    startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://4pda.to/forum/index.php?showtopic=$pageTopicId")))
-                }
-            })
-        }
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-                .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
-                .show()
     }
 
     /**
@@ -488,39 +457,140 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * A bottom-sheet popup showing [content] over the theme (used by the «Инфо»/«Опрос» toolbar
-     * buttons, mirroring the WebView hat/poll overlays). Capped to most of the screen height.
+     * A top-anchored overlay panel showing [content], sliding DOWN from the top over the theme (used by
+     * the «Инфо»/«Опрос» toolbar buttons — parity with the WebView hat/poll overlays, which drop down
+     * from under the toolbar). Capped to most of the screen height; the [content] scrolls if taller.
      */
     private fun showThemePopup(title: String, content: View) {
         val ctx = requireContext()
-        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(ctx)
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val header = TextView(ctx).apply {
+            text = title
+            textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            setPadding(pad, pad, pad, pad / 2)
+        }
         val root = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            val pad = (16 * resources.displayMetrics.density).toInt()
-            val header = TextView(ctx).apply {
-                text = title
-                textSize = 16f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
-                setPadding(pad, pad, pad, pad / 2)
-            }
+            background = androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.bg_theme_top_sheet)
             addView(header)
             addView(content, android.widget.LinearLayout.LayoutParams(
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-        sheet.setContentView(root)
-        // Let the sheet grow tall (hat/poll can be long) but never full-bleed under the status bar.
-        (root.parent as? View)?.let { bottomSheet ->
-            com.google.android.material.bottomsheet.BottomSheetBehavior.from(bottomSheet).apply {
-                peekHeight = (resources.displayMetrics.heightPixels * 0.7).toInt()
-                state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
-            }
-            bottomSheet.layoutParams = bottomSheet.layoutParams.apply {
-                height = (resources.displayMetrics.heightPixels * 0.85).toInt()
+        presentTopSheet(root, scrollTarget = content)
+    }
+
+    /**
+     * Present [root] as a top-anchored panel sliding DOWN from the top of the screen with a dim scrim
+     * (parity with the WebView hat/poll/menu overlays). Built in the fragment's own themed context so
+     * `?attr/colorSurface` resolves to the active palette — unlike the toolbar's built-in overflow popup,
+     * whose nested theme mis-resolves it to a transparent background. When [scrollTarget] is set and the
+     * panel would exceed ~85% of the screen, that view is clamped so it scrolls inside the panel instead.
+     */
+    private fun presentTopSheet(root: android.widget.LinearLayout, scrollTarget: View?) {
+        val dialog = android.app.Dialog(requireContext())
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.setContentView(root)
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            setGravity(android.view.Gravity.TOP)
+            setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            attributes = attributes.apply {
+                windowAnimations = forpdateam.ru.forpda.R.style.ThemeTopSheetAnimation
             }
         }
-        sheet.show()
+        if (scrollTarget != null) {
+            val maxH = (resources.displayMetrics.heightPixels * 0.85).toInt()
+            scrollTarget.viewTreeObserver.addOnPreDrawListener(
+                    object : android.view.ViewTreeObserver.OnPreDrawListener {
+                        override fun onPreDraw(): Boolean {
+                            scrollTarget.viewTreeObserver.removeOnPreDrawListener(this)
+                            val overflow = root.height - maxH
+                            if (overflow > 0) {
+                                scrollTarget.layoutParams = scrollTarget.layoutParams
+                                        .apply { height = scrollTarget.height - overflow }
+                                scrollTarget.requestLayout()
+                            }
+                            return true
+                        }
+                    })
+        }
+        dialog.show()
+    }
+
+    /**
+     * The toolbar «⋮» overflow — a compact top-sliding panel of actions (parity with the WebView toolbar
+     * dropdown). Uses [presentTopSheet] rather than the toolbar's built-in overflow popup so the panel has
+     * a solid, readable background on every palette.
+     */
+    private fun showOverflowMenu() {
+        val ctx = requireContext()
+        val actions = buildList<Pair<String, () -> Unit>> {
+            add("Перейти на страницу" to { showPagePicker() })
+            add("Поиск по теме" to {
+                if (pageTopicId > 0) navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick = "")
+            })
+            add("Мои сообщения в теме" to {
+                if (pageTopicId > 0) navigationUseCase.openSearchMyPosts(pageTopicId, pageForumId)
+            })
+            add("Копировать ссылку на тему" to {
+                val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as? android.content.ClipboardManager
+                cm?.setPrimaryClip(android.content.ClipData.newPlainText("topic",
+                        "https://4pda.to/forum/index.php?showtopic=$pageTopicId"))
+                Toast.makeText(ctx, "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+            })
+            add("Открыть раздел форума" to { if (pageForumId > 0) navigationUseCase.openForum(pageForumId) })
+            add("Открыть в браузере" to {
+                runCatching {
+                    startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://4pda.to/forum/index.php?showtopic=$pageTopicId")))
+                }
+            })
+        }
+        val dm = resources.displayMetrics
+        val vpad = (14 * dm.density).toInt()
+        val hpad = (20 * dm.density).toInt()
+        val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+        val rowBg = android.util.TypedValue().also {
+            ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
+        }.resourceId
+        val root = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            background = androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.bg_theme_top_sheet)
+            setPadding(0, (6 * dm.density).toInt(), 0, (8 * dm.density).toInt())
+        }
+        lateinit var dismiss: () -> Unit
+        actions.forEach { (label, action) ->
+            root.addView(TextView(ctx).apply {
+                text = label
+                textSize = 15f
+                setTextColor(onSurface)
+                setPadding(hpad, vpad, hpad, vpad)
+                isClickable = true
+                if (rowBg != 0) setBackgroundResource(rowBg)
+                setOnClickListener { dismiss(); action() }
+            }, android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        val dialog = android.app.Dialog(ctx)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        dialog.setContentView(root)
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            setGravity(android.view.Gravity.TOP)
+            setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            attributes = attributes.apply {
+                windowAnimations = forpdateam.ru.forpda.R.style.ThemeTopSheetAnimation
+            }
+        }
+        dismiss = { dialog.dismiss() }
+        dialog.show()
     }
 
     /**
