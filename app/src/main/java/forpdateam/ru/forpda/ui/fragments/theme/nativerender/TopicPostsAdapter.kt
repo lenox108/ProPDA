@@ -51,6 +51,26 @@ class TopicPostsAdapter(
         fun onDelete(item: NativePostItem)
     }
 
+    /**
+     * User display preferences honoured by the renderer (parity with the WebView path's
+     * font-size / avatar settings). [textScale] scales all body-content text (default 1.0 =
+     * the reference 16-px body); [showAvatars]/[circleAvatars] mirror the topic prefs.
+     */
+    data class PostDisplaySettings(
+            val textScale: Float = 1f,
+            val showAvatars: Boolean = true,
+            val circleAvatars: Boolean = false,
+    )
+
+    private var displaySettings = PostDisplaySettings()
+
+    /** Apply new display prefs; rebinds visible posts so text sizes / avatars update in place. */
+    fun setDisplaySettings(settings: PostDisplaySettings) {
+        if (settings == displaySettings) return
+        displaySettings = settings
+        notifyDataSetChanged()
+    }
+
     init {
         setHasStableIds(true)
     }
@@ -88,7 +108,7 @@ class TopicPostsAdapter(
         val item = getItem(position)
         val highlight = pendingHighlightPostId == item.postId
         if (highlight) pendingHighlightPostId = null
-        holder.bind(item, highlight)
+        holder.bind(item, highlight, displaySettings)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -113,7 +133,14 @@ class TopicPostsAdapter(
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
         private var highlightAnimator: android.animation.ValueAnimator? = null
 
-        fun bind(item: NativePostItem, highlight: Boolean = false) {
+        /** Display prefs for the current bind pass, read by the body-render helpers below. */
+        private var settings = PostDisplaySettings()
+
+        /** Scale a base sp size by the user's font-size preference. */
+        private fun scaledSp(base: Float): Float = base * settings.textScale
+
+        fun bind(item: NativePostItem, highlight: Boolean = false, settings: PostDisplaySettings = PostDisplaySettings()) {
+            this.settings = settings
             // Reset the card background on every (re)bind so a recycled holder never keeps a prior
             // post's mid-fade tint.
             highlightAnimator?.cancel()
@@ -122,11 +149,32 @@ class TopicPostsAdapter(
             bindNick(item)
             bindMeta(item)
             number.text = if (item.number > 0) "#${item.number}" else ""
-            ForPdaCoil.loadInto(avatar, item.avatarUrl)
+            bindAvatar(item)
             bindFooter(item)
             bindAuthorActions(item)
             renderBody(item)
             if (highlight) playHighlight()
+        }
+
+        /** Honour the show-avatars / circle-avatars prefs (parity with the WebView topic settings). */
+        private fun bindAvatar(item: NativePostItem) {
+            if (!settings.showAvatars) {
+                avatar.visibility = View.GONE
+                return
+            }
+            avatar.visibility = View.VISIBLE
+            if (settings.circleAvatars) {
+                avatar.clipToOutline = true
+                avatar.outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: android.graphics.Outline) {
+                        outline.setOval(0, 0, view.width, view.height)
+                    }
+                }
+            } else {
+                avatar.clipToOutline = false
+                avatar.outlineProvider = null
+            }
+            ForPdaCoil.loadInto(avatar, item.avatarUrl)
         }
 
         private fun cardBaseColor(): Int = com.google.android.material.color.MaterialColors.getColor(
@@ -328,7 +376,7 @@ class TopicPostsAdapter(
             val label = block.title?.takeIf { it.isNotBlank() } ?: "Спойлер"
             val header = TextView(ctx).apply {
                 setTypeface(typeface, Typeface.BOLD)
-                textSize = 14f
+                textSize = scaledSp(14f)
                 setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
             }
             val bodyContainer = LinearLayout(ctx).apply {
@@ -372,7 +420,7 @@ class TopicPostsAdapter(
             ).joinToString(" · ").ifBlank { "Цитата" }
             val header = TextView(ctx).apply {
                 text = headerText
-                textSize = 13f
+                textSize = scaledSp(13f)
                 setTypeface(typeface, Typeface.BOLD)
                 setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
                 val src = block.sourceUrl?.takeIf { it.isNotBlank() }
@@ -421,7 +469,7 @@ class TopicPostsAdapter(
             val pad = (10 * dm.density).toInt()
             return TextView(ctx).apply {
                 text = "📎 ${block.name}"
-                textSize = 14f
+                textSize = scaledSp(14f)
                 setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
                 setPadding(pad, pad, pad, pad)
                 setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
@@ -452,7 +500,7 @@ class TopicPostsAdapter(
             val copyBtn = TextView(ctx).apply {
                 text = block.title?.takeIf { it.isNotBlank() }?.let { "$it · Копировать" } ?: "Копировать"
                 setTypeface(typeface, Typeface.BOLD)
-                textSize = 12f
+                textSize = scaledSp(12f)
                 setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
                 setPadding(pad, pad, pad, pad / 2)
                 setOnClickListener {
@@ -467,7 +515,7 @@ class TopicPostsAdapter(
             val code = TextView(ctx).apply {
                 text = block.text
                 typeface = android.graphics.Typeface.MONOSPACE
-                textSize = 13f
+                textSize = scaledSp(13f)
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 setPadding(pad, 0, pad, pad)
                 setHorizontallyScrolling(true)
@@ -489,12 +537,12 @@ class TopicPostsAdapter(
             val label = TextView(ctx).apply {
                 text = "[${block.kind}]"
                 setTypeface(typeface, Typeface.BOLD)
-                textSize = 11f
+                textSize = scaledSp(11f)
                 setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
             }
             val content = TextView(ctx).apply {
                 setText(spanned(block.html))
-                textSize = 15f
+                textSize = scaledSp(15f)
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 setLineSpacing(0f, 1.1f)
             }
@@ -512,7 +560,7 @@ class TopicPostsAdapter(
             val ctx = itemView.context
             return TextView(ctx).apply {
                 setText(text)
-                textSize = 15f
+                textSize = scaledSp(15f)
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 setLineSpacing(0f, 1.1f)
                 val hasLinks = text is Spanned &&
@@ -560,7 +608,7 @@ class TopicPostsAdapter(
                     .trimTrailingNewlines()
             // Replace 4pda smile shortcodes (:thank_you: …) with inline images from bundled assets.
             val ctx = itemView.context
-            val smileSize = (ctx.resources.displayMetrics.scaledDensity * SMILE_SIZE_SP).toInt().coerceAtLeast(1)
+            val smileSize = (ctx.resources.displayMetrics.scaledDensity * scaledSp(SMILE_SIZE_SP)).toInt().coerceAtLeast(1)
             SmileProvider.applySmiles(base, ctx.assets, smileSize)
         } catch (t: Throwable) {
             // Graceful degradation (§6): never crash on a single post's markup.
