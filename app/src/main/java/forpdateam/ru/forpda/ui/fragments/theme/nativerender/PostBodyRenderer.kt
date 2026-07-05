@@ -65,8 +65,7 @@ class PostBodyRenderer {
             val complexKind = complexKindOf(node)
             if (complexKind != null) {
                 flushInline()
-                val element = node as Element
-                blocks.add(nativeOrFallback(element, complexKind))
+                blocks.addAll(nativeOrFallback(node as Element, complexKind))
             } else {
                 inlineBuffer.append(node.outerHtml())
             }
@@ -76,21 +75,25 @@ class PostBodyRenderer {
         return blocks
     }
 
-    /** Maps a complex [element] to its native block where implemented, else the WebView fallback. */
-    private fun nativeOrFallback(element: Element, kind: BodyBlock.WebFallback.Kind): BodyBlock {
+    /** Maps a complex [element] to its native block(s) where implemented, else the WebView fallback. */
+    private fun nativeOrFallback(element: Element, kind: BodyBlock.WebFallback.Kind): List<BodyBlock> {
         // A top-level node classified complex because of a DESCENDANT (e.g. a wrapper div holding an
         // attach table or quote) is not itself the block — only peel when the element IS the block.
-        return when (kind) {
-            BodyBlock.WebFallback.Kind.ATTACHMENT ->
-                extractSingleAttachmentImage(element) ?: extractFileAttachment(element)
+        val native: List<BodyBlock>? = when (kind) {
+            BodyBlock.WebFallback.Kind.ATTACHMENT -> {
+                // A gallery attaches MANY pictures → one Image block each; else a single file link.
+                extractAttachmentImages(element).ifEmpty { extractFileAttachment(element)?.let { listOf(it) } }
+            }
             BodyBlock.WebFallback.Kind.QUOTE ->
-                if (element.hasClass("quote")) extractQuote(element) else null
+                if (element.hasClass("quote")) listOf(extractQuote(element)) else null
             BodyBlock.WebFallback.Kind.SPOILER ->
-                if (element.hasClass("spoil")) extractSpoiler(element) else null
+                if (element.hasClass("spoil")) listOf(extractSpoiler(element)) else null
             BodyBlock.WebFallback.Kind.CODE ->
-                if (element.hasClass("code")) extractCode(element) else null
+                if (element.hasClass("code")) listOf(extractCode(element)) else null
             else -> null
-        } ?: BodyBlock.WebFallback(element.outerHtml(), kind)
+        }
+        return native?.takeIf { it.isNotEmpty() }
+                ?: listOf(BodyBlock.WebFallback(element.outerHtml(), kind))
     }
 
     /**
@@ -151,28 +154,28 @@ class PostBodyRenderer {
     }
 
     /**
-     * If [element] is an attachment block wrapping EXACTLY ONE picture, returns a native
-     * [BodyBlock.Image]; otherwise `null` (galleries / file attachments stay as fallback).
-     * Reads display dimensions from the img width/height attributes so the view can reserve
-     * space and not slide the scroll anchor when the bitmap arrives.
+     * Extracts EVERY attachment picture in [element] as a native [BodyBlock.Image] (a gallery attach
+     * has many). Empty if there are no images (e.g. a file link). Reads display dimensions from the
+     * img width/height so the view reserves space and a late bitmap never slides the scroll anchor.
      */
-    private fun extractSingleAttachmentImage(element: Element): BodyBlock.Image? {
+    private fun extractAttachmentImages(element: Element): List<BodyBlock.Image> {
         val imgs = element.select("img.attach, img.linked-image")
-        if (imgs.size != 1) return null
-        val img = imgs.first() ?: return null
-        val src = firstNonBlank(
-            img.attr("src"),
-            img.attr("data-src"),
-            img.attr("data-preview"),
-        ) ?: return null
-        // Prefer the enclosing attachment <a href> (full-size / download link) as the tap target.
-        val linkUrl = element.selectFirst("a[href]")?.attr("href")?.takeIf { it.isNotBlank() }
-        return BodyBlock.Image(
-            imageUrl = src,
-            linkUrl = linkUrl,
-            displayWidthPx = img.attr("width").toIntOrZero(),
-            displayHeightPx = img.attr("height").toIntOrZero(),
-        )
+        return imgs.mapNotNull { img ->
+            val src = firstNonBlank(
+                img.attr("src"),
+                img.attr("data-src"),
+                img.attr("data-preview"),
+            ) ?: return@mapNotNull null
+            // The full-size / download link is the enclosing <a> nearest to this image.
+            val linkUrl = (img.closest("a[href]") ?: element.selectFirst("a[href]"))
+                    ?.attr("href")?.takeIf { it.isNotBlank() }
+            BodyBlock.Image(
+                imageUrl = src,
+                linkUrl = linkUrl,
+                displayWidthPx = img.attr("width").toIntOrZero(),
+                displayHeightPx = img.attr("height").toIntOrZero(),
+            )
+        }
     }
 
     /**
