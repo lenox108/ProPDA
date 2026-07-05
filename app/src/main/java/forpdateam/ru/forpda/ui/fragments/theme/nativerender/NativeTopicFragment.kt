@@ -157,8 +157,47 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
         })
         installPageSwipeDetector()
-        refreshLayout.setOnRefreshListener { loadTopic(topicUrl) }
+        refreshLayout.setOnRefreshListener { loadTopic(loadedUrl ?: topicUrl) }
+        setupToolbarMenu()
         loadTopic(topicUrl)
+    }
+
+    /**
+     * Native top-toolbar menu (parity with the WebView theme toolbar): a search icon + an overflow
+     * with page-jump / refresh / copy-link / open-forum. Wired to the native equivalents already
+     * built in this fragment. The tab's [toolbar] is provided by [TabFragment].
+     */
+    private fun setupToolbarMenu() {
+        val menu = toolbar.menu
+        menu.clear()
+        menu.add(0, MENU_SEARCH, 0, "Найти на странице").apply {
+            setIcon(forpdateam.ru.forpda.R.drawable.ic_toolbar_search)
+            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+        }
+        menu.add(0, MENU_GOTO_PAGE, 1, "Перейти на страницу")
+        menu.add(0, MENU_REFRESH, 2, "Обновить")
+        menu.add(0, MENU_COPY_LINK, 3, "Копировать ссылку на тему")
+        menu.add(0, MENU_OPEN_FORUM, 4, "Открыть раздел форума")
+        toolbar.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MENU_SEARCH -> { toggleSearchBar(); true }
+                MENU_GOTO_PAGE -> { showPagePicker(); true }
+                MENU_REFRESH -> { loadTopic(loadedUrl ?: topicUrl); true }
+                MENU_COPY_LINK -> {
+                    val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                            as? android.content.ClipboardManager
+                    val url = "https://4pda.to/forum/index.php?showtopic=$pageTopicId"
+                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("topic", url))
+                    Toast.makeText(requireContext(), "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+                    true
+                }
+                MENU_OPEN_FORUM -> {
+                    if (pageForumId > 0) linkHandler.handle("https://4pda.to/forum/index.php?showforum=$pageForumId", null)
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     /**
@@ -712,6 +751,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         ensurePaginationBar()
         val total = pagination.totalPages
         paginationLabel?.text = "$barCurrentPage / $total"
+        // Top-toolbar subtitle mirrors the page position (parity with the WebView toolbar).
+        setSubtitle(if (total > 1) "Страница $barCurrentPage из $total" else null)
         // Keep the bar hidden while the reply editor is open (they share the bottom).
         paginationBar?.let { bar ->
             bar.visibility = if (total > 1 && editorBar?.visibility != View.VISIBLE) View.VISIBLE else View.GONE
@@ -960,5 +1001,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Per-frame scroll delta (px) beyond which the pagination bar hides/shows on scroll. */
         const val SCROLL_HIDE_THRESHOLD = 8
+
+        private const val MENU_SEARCH = 0x4E01
+        private const val MENU_GOTO_PAGE = 0x4E02
+        private const val MENU_REFRESH = 0x4E03
+        private const val MENU_COPY_LINK = 0x4E04
+        private const val MENU_OPEN_FORUM = 0x4E05
     }
 }
