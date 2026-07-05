@@ -131,6 +131,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var pageHasHat = false
     /** Post id of the topic hat on the loaded page (rendered as a collapsed inline block on page 1). */
     private var topicHatPostId: Int? = null
+    /** The hat post id once learned from page 1 — used to strip the server-repeated copy off deep pages. */
+    private var knownHatPostId: Int? = null
     /** Inline hat collapse state — collapsed by default (the «Инфо» toolbar opens a popup instead). */
     private var hatCollapsed: Boolean = true
     /** The loaded page's poll (page 1) — the «Опрос» toolbar button shows it in a popup. */
@@ -522,6 +524,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Toolbar «Опрос»: show the poll in a popup over the theme (parity with the WebView poll overlay). */
     private fun onPollToolbarClick() {
+        if (dismissThemeOverlay()) return // toggle: second tap closes the poll overlay
         val poll = currentPoll ?: return
         val ctx = requireContext()
         val rv = androidx.recyclerview.widget.RecyclerView(ctx).apply {
@@ -766,6 +769,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Toolbar «Инфо»: show the topic hat in a popup over the theme (parity with the WebView overlay). */
     private fun onHatToolbarClick() {
+        // Toggle: a second tap on the ⓘ button closes the overlay instead of reopening it.
+        if (dismissThemeOverlay()) return
         val hatId = topicHatPostId ?: return
         val hatItem = loadedItems.firstOrNull { it.postId == hatId } ?: return
         val ctx = requireContext()
@@ -849,6 +854,50 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     forpdateam.ru.forpda.common.Preferences.Main.TopicScrollMode.CLASSIC
 
     /**
+     * Handle the topic «шапка» (4pda echoes the topic's first post at the top of EVERY page):
+     *  - real first page → detect the hat, remember its id, and RETURN it (rendered as a collapsible
+     *    block on page 1 only);
+     *  - deeper page → strip the repeated copy from [page].posts in place (so it never shows again) and
+     *    return null. Mirrors the WebView's TopicPrependedHatPolicy.stripFromNonFirstPage.
+     */
+    private fun processHatForPage(page: forpdateam.ru.forpda.entity.remote.theme.ThemePage): Int? {
+        val policy = forpdateam.ru.forpda.presentation.theme.TopicPrependedHatPolicy
+        if (page.pagination.current <= 1) {
+            val hatId = policy.detectPrependedHat(page)?.id?.takeIf { it > 0 }
+            if (hatId != null) knownHatPostId = hatId
+            return hatId
+        }
+        policy.stripFromNonFirstPage(page, page.pagination.current, knownHatPostId)
+        return null
+    }
+
+    /** Tag [items] with the 1-based [pageNumber] they were loaded from (drives the «Страница N» dividers). */
+    private fun tagPage(items: List<NativePostItem>, pageNumber: Int): List<NativePostItem> =
+            if (pageNumber <= 0) items else items.map {
+                if (it.pageNumber == pageNumber) it else it.copy(pageNumber = pageNumber)
+            }
+
+    /**
+     * Submit [loadedItems] to the adapter with the «Страница N» divider labels recomputed over the whole
+     * list first, so the label lives IN the item (DiffUtil then rebinds a page-boundary post when a
+     * prepended page shifts it — a purely positional divider would go stale). The hat never gets one.
+     */
+    private fun submitPosts(commit: (() -> Unit)? = null) {
+        var prevPage = 0
+        val list = loadedItems.map { item ->
+            val label = if (prevPage != 0 && item.pageNumber > 0 && item.pageNumber != prevPage &&
+                    item.postId != topicHatPostId) {
+                "Страница ${item.pageNumber}"
+            } else {
+                null
+            }
+            prevPage = item.pageNumber
+            if (item.pageDividerLabel == label) item else item.copy(pageDividerLabel = label)
+        }
+        if (commit != null) postsAdapter.submitList(list, commit) else postsAdapter.submitList(list)
+    }
+
+    /**
      * Prefetch distance for hybrid infinite scroll: ~one viewport from the edge, mirroring the WebView's
      * pixel threshold (`height - (scrollTop + viewport) <= threshold`). Pixel-based (not item-count) so a
      * single very tall post can't leave the loader un-armed near the boundary.
@@ -877,11 +926,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             if (view == null) return@launch
             result.onSuccess { page ->
-                val newItems = pagination.registerAndFilterNew(mapper.map(page.posts))
+                processHatForPage(page) // strip the repeated hat 4pda echoes onto this deeper page
+                val newItems = pagination.registerAndFilterNew(
+                        tagPage(mapper.map(page.posts), page.pagination.current))
                 pagination.onPageAppended(page.pagination.current, page.pagination)
                 if (newItems.isNotEmpty()) {
                     loadedItems.addAll(newItems)
-                    postsAdapter.submitList(loadedItems.toList()) {
+                    submitPosts {
                         // Chain another prefetch if the appended page still leaves the bottom underfilled
                         // (short pages / tall viewport), so reading forward never stalls at a page seam.
                         if (view != null) recyclerView.post { maybeLoadNextPage() }
@@ -915,7 +966,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (view == null) return@launch
             var reArm = true
             result.onSuccess { page ->
-                val newItems = pagination.registerAndFilterNew(mapper.map(page.posts))
+                // Prepending page 1 brings the real hat into view — keep it and light the toolbar ⓘ; a
+                // deeper page's repeated hat is stripped instead.
+                val hatId = processHatForPage(page)
+                if (hatId != null) {
+                    topicHatPostId = hatId
+                    pageHasHat = true
+                    refreshToolbarState()
+                    postsAdapter.setTopicHat(hatId, hatCollapsed)
+                }
+                val newItems = pagination.registerAndFilterNew(
+                        tagPage(mapper.map(page.posts), page.pagination.current))
                 pagination.onPagePrepended(page.pagination.current)
                 if (newItems.isNotEmpty()) {
                     prependPreservingPosition(newItems)
@@ -941,7 +1002,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val anchorPostId = loadedItems.getOrNull(anchorConcatPos - header)?.postId
 
         loadedItems.addAll(0, newItems)
-        postsAdapter.submitList(loadedItems.toList()) {
+        submitPosts {
             if (view != null) {
                 val newIndex = anchorPostId
                         ?.let { id -> loadedItems.indexOfFirst { it.postId == id } }
@@ -1087,7 +1148,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 canPlusPostRating = false,
                 canMinusPostRating = false,
         )
-        postsAdapter.submitList(loadedItems.toList())
+        submitPosts()
     }
 
     override fun onReply(item: NativePostItem) {
@@ -1683,15 +1744,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pollHeaderAdapter.setPoll(poll)
                 pageHasPoll = poll != null
                 currentPoll = poll
-                // Detect the topic hat synchronously with the SAME policy the WebView uses
-                // (promoteTopicHatForHybridPage → TopicPrependedHatPolicy): on page 1 it's the first
-                // post (4pda's «шапка» convention), on deep pages a server-prepended hat. No async
-                // metadata subsystem needed.
-                topicHatPostId = forpdateam.ru.forpda.presentation.theme.TopicPrependedHatPolicy
-                        .detectPrependedHat(page)?.id?.takeIf { it > 0 }
+                // Topic hat (SAME policy as the WebView): 4pda echoes the topic's first post as a «шапка»
+                // at the top of EVERY page. Keep it only on the real first page (as a collapsible block);
+                // on deep pages strip the repeated copy so it doesn't show again (parity with the full
+                // site behaviour the user asked for). processHatForPage does both and returns the hat id
+                // only for the first page.
+                knownHatPostId = null // fresh (re)load of the topic — forget the previous session's hat id
+                topicHatPostId = processHatForPage(page)
                 pageHasHat = topicHatPostId != null
                 refreshToolbarState()
-                val items = mapper.map(page.posts)
+                val items = tagPage(mapper.map(page.posts), page.pagination.current)
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
                 barCurrentPage = pagination.loadedPage
@@ -1703,7 +1765,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 closeSearch() // matches from a previous page are stale after a reload
                 updatePaginationBar()
                 postsAdapter.setTopicHat(topicHatPostId, hatCollapsed)
-                postsAdapter.submitList(loadedItems.toList()) {
+                submitPosts {
                     if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
                 }
                 enrichLoadedPage(page)
@@ -1728,13 +1790,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             val enrichedById = mapper.map(page.posts).associateBy { it.postId }
             var changed = false
             for (i in loadedItems.indices) {
-                val updated = enrichedById[loadedItems[i].postId] ?: continue
-                if (updated != loadedItems[i]) {
+                val existing = loadedItems[i]
+                val enriched = enrichedById[existing.postId] ?: continue
+                // Freshly-mapped items carry pageNumber=0 (the mapper has no page context) — preserve the
+                // existing page tag so the «Страница N» dividers survive the deferred metadata merge.
+                val updated = enriched.copy(pageNumber = existing.pageNumber)
+                if (updated != existing) {
                     loadedItems[i] = updated
                     changed = true
                 }
             }
-            if (changed) postsAdapter.submitList(loadedItems.toList())
+            if (changed) submitPosts()
         }
     }
 

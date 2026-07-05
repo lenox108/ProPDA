@@ -36,6 +36,11 @@ data class NativePostItem(
     val canMinusRep: Boolean,
     val canPlusPostRating: Boolean,
     val canMinusPostRating: Boolean,
+    /** 1-based topic page this post was loaded from — drives the «Страница N» dividers between pages. */
+    val pageNumber: Int = 0,
+    /** Non-null → render a «Страница N» divider above this post (computed at list assembly so DiffUtil
+     *  rebinds the boundary post when a prepended page shifts it — see the adapter). */
+    val pageDividerLabel: String? = null,
 ) {
     /** Stable RecyclerView item id. Post ids are positive; pseudo-items (hat/spacer) reserve negatives. */
     val stableId: Long get() = postId.toLong()

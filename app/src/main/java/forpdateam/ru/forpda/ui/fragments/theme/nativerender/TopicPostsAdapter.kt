@@ -155,7 +155,10 @@ class TopicPostsAdapter(
         val highlight = pendingHighlightPostId == item.postId
         if (highlight) pendingHighlightPostId = null
         val isHat = topicHatPostId != null && item.postId == topicHatPostId
-        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId)
+        // The «Страница N» divider label is baked into the item at list assembly (see the fragment), so
+        // DiffUtil rebinds the boundary post when a prepended page shifts it. Never on the hat.
+        val pageDivider = item.pageDividerLabel?.takeIf { !isHat }
+        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -182,6 +185,7 @@ class TopicPostsAdapter(
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
         private val hatToggle: LinearLayout = itemView.findViewById(R.id.native_post_hat_toggle)
+        private val pageDivider: TextView = itemView.findViewById(R.id.native_post_page_divider)
 
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
         private var highlightAnimator: android.animation.ValueAnimator? = null
@@ -208,7 +212,10 @@ class TopicPostsAdapter(
                 hatCollapsed: Boolean = false,
                 authorized: Boolean = false,
                 memberId: Int = 0,
+                pageDividerLabel: String? = null,
         ) {
+            pageDivider.text = pageDividerLabel.orEmpty()
+            pageDivider.visibility = if (pageDividerLabel != null) View.VISIBLE else View.GONE
             this.settings = settings
             this.searchQuery = searchQuery
             this.authorized = authorized
