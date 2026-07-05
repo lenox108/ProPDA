@@ -1317,8 +1317,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         ensurePaginationBar()
         val total = pagination.totalPages
         paginationLabel?.text = "$barCurrentPage / $total"
-        // Top-toolbar subtitle mirrors the page position (parity with the WebView toolbar).
-        setSubtitle(if (total > 1) "Страница $barCurrentPage из $total" else null)
+        // Top-toolbar subtitle mirrors the page position — digits only, no «Страница … из …» text
+        // (parity with the WebView toolbar: «1348 / 1349»).
+        setSubtitle(if (total > 1) "$barCurrentPage / $total" else null)
         // The bottom pagination bar belongs to CLASSIC reading mode only; HYBRID (default) uses
         // continuous infinite scroll with no bar. Also hidden while the reply editor is open.
         paginationBar?.let { bar ->
