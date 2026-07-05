@@ -570,6 +570,34 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** The live hat/poll overlay panel (an in-layout view, not a Dialog), or null when none is shown. */
     private var themeOverlay: View? = null
 
+    /** Indeterminate spinner shown while a hybrid neighbour page is loading (top for prev, bottom for next). */
+    private var hybridLoadingBar: android.widget.ProgressBar? = null
+
+    /** Show the hybrid page-load spinner at the top (prev page) or bottom (next page) of the content area. */
+    private fun showHybridLoading(atTop: Boolean) {
+        if (view == null) return
+        val bar = hybridLoadingBar ?: android.widget.ProgressBar(requireContext()).apply {
+            isIndeterminate = true
+            val size = (30 * resources.displayMetrics.density).toInt()
+            layoutParams = androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(size, size)
+            coordinatorLayout.addView(this)
+        }.also { hybridLoadingBar = it }
+        val dm = resources.displayMetrics
+        (bar.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)?.let { lp ->
+            lp.gravity = android.view.Gravity.CENTER_HORIZONTAL or
+                    (if (atTop) android.view.Gravity.TOP else android.view.Gravity.BOTTOM)
+            lp.topMargin = if (atTop) (appBarLayout.height + 12 * dm.density).toInt() else 0
+            lp.bottomMargin = if (atTop) 0 else (24 * dm.density).toInt()
+            bar.layoutParams = lp
+        }
+        bar.bringToFront()
+        bar.visibility = View.VISIBLE
+    }
+
+    private fun hideHybridLoading() {
+        if (!isLoadingNextPage && !isLoadingPrevPage) hybridLoadingBar?.visibility = View.GONE
+    }
+
     /**
      * Present [root] as an overlay panel that slides down from directly under the toolbar (parity with the
      * WebView hat/poll/menu overlays, which are DOM elements at the top of the content area). Implemented
@@ -820,20 +848,29 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             mainPreferencesHolder.getTopicScrollMode() ==
                     forpdateam.ru.forpda.common.Preferences.Main.TopicScrollMode.CLASSIC
 
-    /** Downward infinite scroll: when within [NEXT_PAGE_PREFETCH_DISTANCE] items of the end. */
+    /**
+     * Prefetch distance for hybrid infinite scroll: ~one viewport from the edge, mirroring the WebView's
+     * pixel threshold (`height - (scrollTop + viewport) <= threshold`). Pixel-based (not item-count) so a
+     * single very tall post can't leave the loader un-armed near the boundary.
+     */
+    private fun prefetchThresholdPx(): Int =
+            (recyclerView.height.coerceAtLeast(1) * HYBRID_PREFETCH_VIEWPORT_FRACTION).toInt()
+
+    /** Downward infinite scroll: when the content scrolled to within ~a viewport of the bottom. */
     private fun maybeLoadNextPage() {
         if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
         if (isLoadingNextPage || !pagination.hasNextPage()) return
-        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        val lastVisible = lm.findLastVisibleItemPosition()
-        if (lastVisible >= loadedItems.size - NEXT_PAGE_PREFETCH_DISTANCE) {
-            loadNextPage()
-        }
+        val range = recyclerView.computeVerticalScrollRange()
+        val offset = recyclerView.computeVerticalScrollOffset()
+        val extent = recyclerView.computeVerticalScrollExtent()
+        val distanceToBottom = range - (offset + extent)
+        if (distanceToBottom <= prefetchThresholdPx()) loadNextPage()
     }
 
     private fun loadNextPage() {
         val url = pagination.nextPageUrl() ?: return
         isLoadingNextPage = true
+        showHybridLoading(atTop = false)
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
@@ -844,7 +881,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pagination.onPageAppended(page.pagination.current, page.pagination)
                 if (newItems.isNotEmpty()) {
                     loadedItems.addAll(newItems)
-                    postsAdapter.submitList(loadedItems.toList())
+                    postsAdapter.submitList(loadedItems.toList()) {
+                        // Chain another prefetch if the appended page still leaves the bottom underfilled
+                        // (short pages / tall viewport), so reading forward never stalls at a page seam.
+                        if (view != null) recyclerView.post { maybeLoadNextPage() }
+                    }
                 }
                 updatePaginationBar() // totalPages may have grown
 
@@ -852,22 +893,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // On failure: silently stop; the user can pull-to-refresh. isLoadingNextPage resets so a
             // later scroll retries.
             isLoadingNextPage = false
+            hideHybridLoading()
         }
     }
 
-    /** Upward infinite scroll: when the top of the list nears item 0 and a page above exists. */
+    /** Upward infinite scroll: when the content scrolled to within ~a viewport of the top. */
     private fun maybeLoadPrevPage() {
         if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
         if (isLoadingPrevPage || !pagination.hasPrevPage()) return
-        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        if (lm.findFirstVisibleItemPosition() <= PREV_PAGE_PREFETCH_DISTANCE) {
-            loadPrevPage()
-        }
+        if (recyclerView.computeVerticalScrollOffset() <= prefetchThresholdPx()) loadPrevPage()
     }
 
     private fun loadPrevPage() {
         val url = pagination.prevPageUrl() ?: return
         isLoadingPrevPage = true
+        showHybridLoading(atTop = true)
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
@@ -883,6 +923,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 }
             }
             if (reArm) isLoadingPrevPage = false
+            hideHybridLoading()
         }
     }
 
@@ -910,6 +951,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         ?.scrollToPositionWithOffset(newIndex + header, anchorOffset)
             }
             isLoadingPrevPage = false
+            hideHybridLoading()
         }
     }
 
@@ -1796,11 +1838,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     private companion object {
-        /** Start fetching the next page this many items before the current list end. */
-        const val NEXT_PAGE_PREFETCH_DISTANCE = 3
-
-        /** Start fetching the previous page when the first-visible item is within this of the top. */
-        const val PREV_PAGE_PREFETCH_DISTANCE = 1
+        /** Arm hybrid page prefetch when scrolled within this fraction of a viewport from an edge
+         *  (WebView parity: an ~800px pixel threshold rather than an item count). */
+        const val HYBRID_PREFETCH_VIEWPORT_FRACTION = 0.75f
 
         /** Font-size pref value that maps to textScale 1.0 (matches the WebView default defaultFontSize). */
         const val REFERENCE_FONT_SIZE = 16f
