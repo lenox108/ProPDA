@@ -45,6 +45,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     lateinit var editPostApi: forpdateam.ru.forpda.model.data.remote.api.editpost.EditPostApi
 
     @Inject
+    lateinit var reputationApi: forpdateam.ru.forpda.model.data.remote.api.reputation.ReputationApi
+
+    @Inject
     lateinit var linkHandler: ILinkHandler
 
     @Inject
@@ -426,6 +429,45 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton("Удалить") { _, _ -> performDelete(item) }
                 .show()
+    }
+
+    override fun onReputation(item: NativePostItem) {
+        if (item.userId <= 0) return
+        val ctx = requireContext()
+        val options = ArrayList<Pair<String, () -> Unit>>()
+        if (item.canPlusRep) options.add("Увеличить" to { showReputationChangeDialog(item, increase = true) })
+        options.add("Посмотреть" to {
+            linkHandler.handle("https://4pda.to/forum/index.php?showuser=${item.userId}&tab=reputation", null)
+        })
+        if (item.canMinusRep) options.add("Уменьшить" to { showReputationChangeDialog(item, increase = false) })
+        val labels = options.map { it.first }.toTypedArray()
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                .setTitle("Репутация ${item.nick.orEmpty()}")
+                .setItems(labels) { _, which -> options[which].second() }
+                .show()
+    }
+
+    private fun showReputationChangeDialog(item: NativePostItem, increase: Boolean) {
+        val ctx = requireContext()
+        val input = android.widget.EditText(ctx).apply { hint = "Комментарий (необязательно)" }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                .setTitle("${if (increase) "Увеличить" else "Уменьшить"} репутацию ${item.nick.orEmpty()}")
+                .setView(input)
+                .setPositiveButton("OK") { _, _ -> performReputationChange(item, increase, input.text?.toString().orEmpty()) }
+                .setNegativeButton("Отмена", null)
+                .show()
+    }
+
+    private fun performReputationChange(item: NativePostItem, increase: Boolean, message: String) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { reputationApi.editReputation(item.postId, item.userId, increase, message) }.getOrDefault(false)
+            }
+            if (view == null) return@launch
+            Toast.makeText(requireContext(),
+                    if (ok) "Репутация изменена" else "Не удалось изменить репутацию",
+                    Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun performDelete(item: NativePostItem) {

@@ -49,6 +49,8 @@ class TopicPostsAdapter(
         fun onQuoteSelection(item: NativePostItem, selectedText: String)
         fun onEdit(item: NativePostItem)
         fun onDelete(item: NativePostItem)
+        /** The user tapped the «Реп: N» number → open the reputation menu (increase/look/decrease). */
+        fun onReputation(item: NativePostItem)
     }
 
     /**
@@ -333,39 +335,87 @@ class TopicPostsAdapter(
             }
             item.reputation?.takeIf { it.isNotBlank() }?.let {
                 if (sb.isNotEmpty()) sb.append(" · ")
+                val start = sb.length
                 sb.append("Реп: $it")
+                // Tap the reputation number → reputation menu (increase / look / decrease), as WebView.
+                sb.setSpan(object : android.text.style.ClickableSpan() {
+                    override fun onClick(widget: View) = actionListener.onReputation(item)
+                    override fun updateDrawState(ds: android.text.TextPaint) {
+                        ds.color = meta.context.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
+                        ds.isUnderlineText = false
+                    }
+                }, start, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                meta.movementMethod = android.text.method.LinkMovementMethod.getInstance()
             }
             meta.text = sb
         }
 
         private fun bindFooter(item: NativePostItem) {
-            val rating = item.postRating?.takeIf { it.isNotBlank() }
-            footer.text = if (rating != null) "Рейтинг: $rating" else ""
-            footer.visibility = if (rating != null) View.VISIBLE else View.GONE
+            // The post rating now lives inline in the action row (between 👍/👎), matching WebView,
+            // so the separate footer text is unused.
+            footer.visibility = View.GONE
             bindActions(item)
         }
 
-        /** Post action row: 👍 / 👎 (rating vote), Ответить, Цитата — handled by the fragment. */
+        /**
+         * Post action row matching the WebView footer: 👍-icon · rating · 👎-icon · ↩-icon «Ответить» ·
+         * ❝-icon «Цитировать». Icons are tinted with the accent colour; taps route to the fragment.
+         */
         private fun bindActions(item: NativePostItem) {
             actions.removeAllViews()
-            val ctx = itemView.context
-            fun actionButton(label: String, onClick: () -> Unit) = TextView(ctx).apply {
-                text = label
-                textSize = 13f
-                setTypeface(typeface, Typeface.BOLD)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
-                val padH = (10 * ctx.resources.displayMetrics.density).toInt()
-                val padV = (4 * ctx.resources.displayMetrics.density).toInt()
-                setPadding(padH, padV, padH, padV)
-                setOnClickListener { onClick() }
+            if (item.canPlusPostRating) {
+                actions.addView(iconAction(R.drawable.ic_thumb_up, null) { actionListener.onVote(item, up = true) })
             }
-            if (item.canPlusPostRating) actions.addView(actionButton("👍") { actionListener.onVote(item, up = true) })
-            if (item.canMinusPostRating) actions.addView(actionButton("👎") { actionListener.onVote(item, up = false) })
+            item.postRating?.takeIf { it.isNotBlank() }?.let { actions.addView(ratingLabel(it)) }
+            if (item.canMinusPostRating) {
+                actions.addView(iconAction(R.drawable.ic_thumb_down, null) { actionListener.onVote(item, up = false) })
+            }
             if (item.canQuote) {
-                actions.addView(actionButton("Ответить") { actionListener.onReply(item) })
-                actions.addView(actionButton("Цитата") { actionListener.onQuote(item) })
+                actions.addView(iconAction(R.drawable.ic_reply, "Ответить") { actionListener.onReply(item) })
+                actions.addView(iconAction(R.drawable.ic_toolbar_quote_post, "Цитировать") { actionListener.onQuote(item) })
             }
             actions.visibility = if (actions.childCount > 0) View.VISIBLE else View.GONE
+        }
+
+        /** An accent-tinted icon button with an optional label to its right (footer action). */
+        private fun iconAction(iconRes: Int, label: String?, onClick: () -> Unit): TextView {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
+            return TextView(ctx).apply {
+                text = label.orEmpty()
+                if (!label.isNullOrEmpty()) {
+                    textSize = scaledSp(13f)
+                    setTypeface(typeface, Typeface.BOLD)
+                    setTextColor(accent)
+                }
+                val icon = androidx.core.content.ContextCompat.getDrawable(ctx, iconRes)?.mutate()?.apply {
+                    setTint(accent)
+                    val s = (18 * dm.density).toInt()
+                    setBounds(0, 0, s, s)
+                }
+                setCompoundDrawables(icon, null, null, null)
+                compoundDrawablePadding = (4 * dm.density).toInt()
+                val padH = (8 * dm.density).toInt()
+                val padV = (5 * dm.density).toInt()
+                setPadding(padH, padV, padH, padV)
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setOnClickListener { onClick() }
+            }
+        }
+
+        /** The post-rating number shown between the 👍/👎 vote icons. */
+        private fun ratingLabel(rating: String): TextView {
+            val ctx = itemView.context
+            return TextView(ctx).apply {
+                text = rating
+                textSize = scaledSp(13f)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+                val padH = (4 * ctx.resources.displayMetrics.density).toInt()
+                setPadding(padH, 0, padH, 0)
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
         }
 
         // groupColor is "#RRGGBB" or a CSS name; "black" is the default → leave untinted.
