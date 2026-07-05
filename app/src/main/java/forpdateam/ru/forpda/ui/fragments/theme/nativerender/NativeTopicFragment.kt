@@ -141,10 +141,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(pollHeaderAdapter, postsAdapter)
-        // Reserve room so the bottom pagination bar (or reply editor) never hides the last post.
+        // Bottom room for the CLASSIC-mode pagination bar is managed in updatePaginationBar().
         recyclerView.clipToPadding = false
-        recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
-                recyclerView.paddingRight, (52 * resources.displayMetrics.density).toInt())
         applyDisplaySettings()
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
@@ -248,8 +246,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         })
     }
 
+    /**
+     * CLASSIC reading mode shows one page at a time with the bottom pagination bar (no infinite
+     * scroll); HYBRID (default) is continuous infinite scroll with no bar. Mirrors the WebView
+     * «Режим чтения тем» setting.
+     */
+    private fun isClassicMode(): Boolean =
+            mainPreferencesHolder.getTopicScrollMode() ==
+                    forpdateam.ru.forpda.common.Preferences.Main.TopicScrollMode.CLASSIC
+
     /** Downward infinite scroll: when within [NEXT_PAGE_PREFETCH_DISTANCE] items of the end. */
     private fun maybeLoadNextPage() {
+        if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
         if (isLoadingNextPage || !pagination.hasNextPage()) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         val lastVisible = lm.findLastVisibleItemPosition()
@@ -284,6 +292,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Upward infinite scroll: when the top of the list nears item 0 and a page above exists. */
     private fun maybeLoadPrevPage() {
+        if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
         if (isLoadingPrevPage || !pagination.hasPrevPage()) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         if (lm.findFirstVisibleItemPosition() <= PREV_PAGE_PREFETCH_DISTANCE) {
@@ -753,12 +762,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         paginationLabel?.text = "$barCurrentPage / $total"
         // Top-toolbar subtitle mirrors the page position (parity with the WebView toolbar).
         setSubtitle(if (total > 1) "Страница $barCurrentPage из $total" else null)
-        // Keep the bar hidden while the reply editor is open (they share the bottom).
+        // The bottom pagination bar belongs to CLASSIC reading mode only; HYBRID (default) uses
+        // continuous infinite scroll with no bar. Also hidden while the reply editor is open.
         paginationBar?.let { bar ->
-            bar.visibility = if (total > 1 && editorBar?.visibility != View.VISIBLE) View.VISIBLE else View.GONE
+            val show = isClassicMode() && total > 1 && editorBar?.visibility != View.VISIBLE
+            bar.visibility = if (show) View.VISIBLE else View.GONE
             // A (re)shown bar must sit at rest, undoing any hide-on-scroll offset.
             bar.translationY = 0f
             barHiddenByScroll = false
+            // Reserve bottom room for the bar only when it is shown (CLASSIC); HYBRID needs none.
+            val bottomPad = if (show) (52 * resources.displayMetrics.density).toInt() else 0
+            recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
+                    recyclerView.paddingRight, bottomPad)
         }
     }
 
