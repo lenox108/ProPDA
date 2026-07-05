@@ -118,6 +118,21 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun table_isNativeTable_withRowsAndCells() {
+        val blocks = renderer.render(fixture("table_basic.html"))
+        // Leading + trailing text run natively; the table is a native Table block (not fallback).
+        assertTrue(blocks.first() is BodyBlock.Text)
+        val table = blocks.filterIsInstance<BodyBlock.Table>().single()
+        // 3 rows (header + 2 data), 2 cells each.
+        assertEquals(3, table.rows.size)
+        assertTrue(table.rows.all { it.size == 2 })
+        assertEquals("Модель", table.rows[0][0])
+        assertEquals("7300 мА·ч", table.rows[1][1])
+        // No content is dropped: no TABLE fallback remains.
+        assertFalse(blocks.any { it is BodyBlock.WebFallback && it.kind == Kind.TABLE })
+    }
+
+    @Test
     fun poll_isPollFallback() {
         val blocks = renderer.render(fixture("poll_UNVERIFIED.html"))
         assertTrue(blocks.any { it is BodyBlock.WebFallback && it.kind == Kind.POLL })
@@ -151,6 +166,7 @@ class PostBodyRendererTest {
                 is BodyBlock.Spoiler -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
                 is BodyBlock.Code -> it.text
                 is BodyBlock.FileAttachment -> it.name
+                is BodyBlock.Table -> it.rows.joinToString(" ") { row -> row.joinToString(" ") }
             }
         }
         assertTrue("recognisable text survives", recombined.contains("Незакрытый жирный текст"))

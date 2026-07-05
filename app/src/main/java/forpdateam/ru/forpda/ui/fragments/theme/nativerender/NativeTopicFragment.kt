@@ -657,6 +657,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         is BodyBlock.Quote -> block.inner.joinToString(" ") { blockPlainText(it) }
         is BodyBlock.Spoiler -> block.inner.joinToString(" ") { blockPlainText(it) }
         is BodyBlock.FileAttachment -> block.name
+        is BodyBlock.Table -> block.rows.joinToString(" ") { row ->
+            row.joinToString(" ") { android.text.Html.fromHtml(it, android.text.Html.FROM_HTML_MODE_COMPACT).toString() }
+        }
         is BodyBlock.WebFallback -> android.text.Html.fromHtml(block.html, android.text.Html.FROM_HTML_MODE_COMPACT).toString()
         is BodyBlock.Image -> ""
     }
