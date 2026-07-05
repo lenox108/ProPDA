@@ -113,6 +113,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** The URL actually loaded into the list (may differ from ARG_TAB after a navigator switch). */
     private var loadedUrl: String? = null
+
+    /** The last URL handed to [loadTopic] (set even before the load completes) — dedupes the navigator's
+     *  redundant echo of the initial open against [onViewCreated]'s resolved load. */
+    private var lastRequestedUrl: String? = null
     private var isLoadingNextPage = false
     private var isLoadingPrevPage = false
 
@@ -176,10 +180,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var fabPointsDown = true
 
     override fun hasBackHandling(): Boolean =
-            messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
+            themeOverlay != null || messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
 
     override fun onBackPressed(): Boolean {
-        // Back closes the find-on-page bar / reply editor first, before leaving the topic.
+        // Back closes the hat/poll overlay first, then the find-on-page bar / reply editor, before leaving.
+        if (dismissThemeOverlay()) return true
         if (searchBar?.visibility == View.VISIBLE) {
             closeSearch()
             return true
@@ -250,6 +255,35 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         return runCatching {
             forpdateam.ru.forpda.presentation.theme.TopicOpenTargetResolver.resolve(context).url
         }.getOrDefault(topicUrl)
+    }
+
+    /**
+     * Resolve the open target for a navigator-driven open/switch (parity with [resolveInitialOpenUrl], but
+     * fed from the navigator's explicit [listHints] rather than fragment arguments). Mirrors the WebView
+     * presenter's loadUrl → the same getnewpost/findpost/page-1 decision, so the navigator never loads the
+     * bare page-1 url.
+     */
+    private fun resolveNavigatorOpenUrl(
+            rawUrl: String,
+            sourceScreen: String,
+            openIntent: String,
+            listHints: TopicOpenListHints?,
+    ): String {
+        val context = forpdateam.ru.forpda.presentation.theme.TopicOpenContext(
+                rawUrl = rawUrl,
+                setting = mainPreferencesHolder.getTopicOpenTarget(),
+                sourceScreen = sourceScreen,
+                sourceUrl = rawUrl,
+                openIntentRaw = openIntent,
+                unreadUrlFromList = listHints?.unreadUrlFromList,
+                unreadPostIdFromList = listHints?.unreadPostIdFromList?.takeIf { it > 0 },
+                listTopicMarkedUnread = listHints?.topicMarkedUnread ?: false,
+                inspectorMarkedUnread = listHints?.inspectorMarkedUnread ?: false,
+                lastReadUrlFromList = listHints?.lastReadUrlFromList,
+        )
+        return runCatching {
+            forpdateam.ru.forpda.presentation.theme.TopicOpenTargetResolver.resolve(context).url
+        }.getOrDefault(rawUrl)
     }
 
     /**
@@ -526,57 +560,80 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         presentTopSheet(root, scrollTarget = content)
     }
 
+    /** The live hat/poll overlay panel (an in-layout view, not a Dialog), or null when none is shown. */
+    private var themeOverlay: View? = null
+
     /**
-     * Present [root] as an overlay panel that drops down from directly under the toolbar (parity with the
-     * WebView hat/poll/menu overlays, which sit at the top of the content area — the toolbar stays visible
-     * and un-dimmed). Built in the fragment's own themed context so `?attr/colorSurface` resolves to the
-     * active palette — unlike the toolbar's built-in overflow popup, whose nested theme mis-resolves it to
-     * a transparent background. When [scrollTarget] is set and the panel would exceed the available height,
-     * that view is clamped so it scrolls inside the panel instead. Returns the shown [Dialog].
+     * Present [root] as an overlay panel that slides down from directly under the toolbar (parity with the
+     * WebView hat/poll/menu overlays, which are DOM elements at the top of the content area). Implemented
+     * as a real child of the [coordinatorLayout] — positioned below the [appBarLayout] via
+     * [AppBarLayout.ScrollingViewBehavior] and clipping its child — so the panel genuinely emerges from
+     * *under* the toolbar with one smooth animation (the old Dialog approach flashed at the screen top
+     * before repositioning). A tap on the free strip below the panel, or Back, dismisses it. When
+     * [scrollTarget] is set and the panel would exceed the available height, that view is clamped so it
+     * scrolls inside the panel instead.
      */
-    private fun presentTopSheet(root: android.widget.LinearLayout, scrollTarget: View?): android.app.Dialog {
-        val dialog = android.app.Dialog(requireContext())
-        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
-        dialog.setContentView(root)
-        dialog.setCanceledOnTouchOutside(true) // tap the toolbar / the strip below the panel to dismiss
-        // Anchor at the TOP of the content area (the list), i.e. below the toolbar AND any top pagination
-        // bar, so the panel drops out from under the chrome — never covering it or clipping its own top.
-        val loc = IntArray(2)
-        recyclerView.getLocationOnScreen(loc)
-        val topY = loc[1].coerceAtLeast(0)
-        dialog.window?.apply {
-            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-            // No full-screen dim — the WebView overlay just covers the content below the toolbar.
-            clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
-            setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
-            attributes = attributes.apply {
-                gravity = android.view.Gravity.TOP
-                y = topY
-                windowAnimations = forpdateam.ru.forpda.R.style.ThemeTopSheetAnimation
+    private fun presentTopSheet(root: android.widget.LinearLayout, scrollTarget: View?) {
+        dismissThemeOverlay()
+        val ctx = requireContext()
+        // Fills the content area (ScrollingViewBehavior offsets it under the toolbar) and clips its child,
+        // so a child translated up by its own height is hidden behind the toolbar until it slides down.
+        val container = android.widget.FrameLayout(ctx).apply {
+            layoutParams = androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                behavior = com.google.android.material.appbar.AppBarLayout.ScrollingViewBehavior()
             }
+            clipChildren = true
+            isClickable = true // tap the free strip below the panel to dismiss
+            setOnClickListener { dismissThemeOverlay() }
         }
-        if (scrollTarget != null) {
-            // Cap to ~82% of the content height so tall content scrolls inside AND a strip stays free at the
-            // bottom for tap-to-dismiss; content still starts from its top.
-            val maxH = ((resources.displayMetrics.heightPixels - topY) * 0.82).toInt().coerceAtLeast(0)
-            scrollTarget.viewTreeObserver.addOnPreDrawListener(
-                    object : android.view.ViewTreeObserver.OnPreDrawListener {
-                        override fun onPreDraw(): Boolean {
-                            scrollTarget.viewTreeObserver.removeOnPreDrawListener(this)
+        root.isClickable = true // swallow taps on the panel itself so they don't dismiss
+        container.addView(root, android.widget.FrameLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.TOP))
+        coordinatorLayout.addView(container)
+        themeOverlay = container
+        appBarLayout.setExpanded(true, true) // ensure the toolbar is down so the panel drops from under it
+        container.viewTreeObserver.addOnPreDrawListener(
+                object : android.view.ViewTreeObserver.OnPreDrawListener {
+                    override fun onPreDraw(): Boolean {
+                        container.viewTreeObserver.removeOnPreDrawListener(this)
+                        // Cap to ~90% of the content height so tall content scrolls inside and a strip
+                        // stays free below for tap-to-dismiss.
+                        if (scrollTarget != null) {
+                            val maxH = (container.height * 0.9f).toInt()
                             val overflow = root.height - maxH
                             if (overflow > 0) {
                                 scrollTarget.layoutParams = scrollTarget.layoutParams
                                         .apply { height = scrollTarget.height - overflow }
                                 scrollTarget.requestLayout()
                             }
-                            return true
                         }
-                    })
+                        root.translationY = -root.height.toFloat()
+                        root.alpha = 0f
+                        root.animate().translationY(0f).alpha(1f).setDuration(220)
+                                .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                        return true
+                    }
+                })
+    }
+
+    /** Slide the hat/poll overlay back up under the toolbar and remove it. Returns true if one was open. */
+    private fun dismissThemeOverlay(): Boolean {
+        val overlay = themeOverlay ?: return false
+        themeOverlay = null
+        val panel = (overlay as? android.view.ViewGroup)?.getChildAt(0)
+        val remove = { (overlay.parent as? android.view.ViewGroup)?.removeView(overlay) }
+        if (panel != null && panel.height > 0) {
+            panel.animate().translationY(-panel.height.toFloat()).alpha(0f).setDuration(160)
+                    .setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { remove() }.start()
+        } else {
+            remove()
         }
-        dialog.show()
-        return dialog
+        return true
     }
 
     /**
@@ -865,15 +922,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // and reload the list for the new topic (or the new findpost within the same topic).
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
         if (view != null) {
-            loadTopic(url)
+            // Resolve the open target with the SAME policy the WebView presenter uses (getnewpost for an
+            // unread open, findpost for an explicit post, page 1 otherwise) — the navigator hands us the
+            // bare topic url, so loading it raw always landed on page 1 first. Deduped against the load
+            // onViewCreated already issued: the navigator echoes the initial open right after onViewCreated,
+            // and loading page 1 there is exactly what caused the visible «page 1 → jump to unread» flash.
+            val resolved = resolveNavigatorOpenUrl(url, sourceScreen, openIntent, listHints)
+            if (resolved != lastRequestedUrl) loadTopic(resolved)
         }
         // If the view is not created yet, onViewCreated will load from the (already updated) args.
     }
 
     override fun onTabStackBecameCurrent() {
-        // Load lazily if this tab became visible before it ever loaded (e.g. created hidden).
-        if (loadedUrl == null && view != null) {
-            loadTopic(topicUrl)
+        // Load lazily if this tab became visible before a load was ever REQUESTED (e.g. created hidden).
+        // Guard on lastRequestedUrl, not loadedUrl: the navigator makes the tab current right after
+        // onViewCreated issues its resolved (getnewpost) load, while loadedUrl is still null — checking
+        // loadedUrl here fired a redundant bare page-1 load in parallel (the «page 1 → jump» flash). Also
+        // resolve the open target so this safety-net path never lands on page 1 either.
+        if (lastRequestedUrl == null && view != null) {
+            loadTopic(resolveInitialOpenUrl())
         }
         // The user may have changed font/avatar prefs while away — re-apply on return.
         if (view != null) {
@@ -1544,6 +1611,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             refreshLayout.isRefreshing = false
             return
         }
+        // Remember the requested target so the navigator's redundant echo of the initial open (see
+        // loadThemeUrlFromNavigator) doesn't fire a second, page-1 load in parallel.
+        lastRequestedUrl = url
         refreshLayout.isRefreshing = true
         isLoadingNextPage = false
         isLoadingPrevPage = false

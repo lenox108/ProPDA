@@ -181,6 +181,7 @@ class TopicPostsAdapter(
         private val body: LinearLayout = itemView.findViewById(R.id.native_post_body)
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
+        private val hatToggle: LinearLayout = itemView.findViewById(R.id.native_post_hat_toggle)
 
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
         private var highlightAnimator: android.animation.ValueAnimator? = null
@@ -229,18 +230,32 @@ class TopicPostsAdapter(
             bindFooter(item)
             bindAuthorActions(item)
             renderBody(item, isHat, hatCollapsed)
-            // Collapsed topic hat: WebView hides the WHOLE post (author header + footer + actions + the
-            // bottom divider), leaving only a compact «Шапка темы ▸» bar — same footprint as the poll
-            // block. Expanded → full post with divider restored.
+            bindHatToggle(isHat, hatCollapsed)
+            // Topic hat (WebView parity): the «ШАПКА ТЕМЫ» toggle bar is rendered ABOVE the author header
+            // as a standalone block, and the whole post below it (author header + body + footer + actions)
+            // is the collapsible hat_content. Collapsed → only the toggle bar shows; expanded → toggle bar
+            // followed by the full post.
             val hatFolded = isHat && hatCollapsed
             header.visibility = if (hatFolded) View.GONE else View.VISIBLE
             footer.visibility = if (hatFolded) View.GONE else footer.visibility
             actions.visibility = if (hatFolded) View.GONE else actions.visibility
+            body.visibility = if (hatFolded) View.GONE else View.VISIBLE
             (body.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
                 val top = if (hatFolded) 0 else (8 * itemView.resources.displayMetrics.density).toInt()
                 if (lp.topMargin != top) { lp.topMargin = top; body.layoutParams = lp }
             }
             if (highlight) playHighlight()
+        }
+
+        /** Populate/toggle the standalone «ШАПКА ТЕМЫ ▾/▴» bar shown above the hat post (GONE otherwise). */
+        private fun bindHatToggle(isHat: Boolean, collapsed: Boolean) {
+            hatToggle.removeAllViews()
+            if (!isHat) {
+                hatToggle.visibility = View.GONE
+                return
+            }
+            hatToggle.visibility = View.VISIBLE
+            fillHatToggle(hatToggle, collapsed)
         }
 
         /** Honour the show-avatars / circle-avatars prefs (parity with the WebView topic settings). */
@@ -566,42 +581,36 @@ class TopicPostsAdapter(
 
         private fun renderBody(item: NativePostItem, isHat: Boolean = false, hatCollapsed: Boolean = false) {
             body.removeAllViews()
-            if (isHat) {
-                // The topic hat gets a collapse header (parity with the WebView «Показать/Скрыть шапку»).
-                body.addView(hatHeader(hatCollapsed))
-                if (hatCollapsed) return // collapsed: header only, hide the (often huge) hat content
-            }
+            // The «ШАПКА ТЕМЫ» toggle is no longer rendered inside the body — it sits above the whole post
+            // (see bindHatToggle). A collapsed hat hides the body entirely, so skip rendering its (often
+            // huge) content until it's expanded.
+            if (isHat && hatCollapsed) return
             renderBlocksInto(body, item.blocks, RenderScope(item.postId), item)
         }
 
-        /** A tappable «ШАПКА ТЕМЫ  ▾/▴» row that toggles the hat body (WebView parity: uppercase title +
-         *  right-aligned chevron, identical to the collapsed poll bar). */
-        private fun hatHeader(collapsed: Boolean): View {
+        /** Fill [container] with a tappable «ШАПКА ТЕМЫ  ▾/▴» row that toggles the hat (WebView parity:
+         *  uppercase title + right-aligned chevron, identical to the collapsed poll bar). */
+        private fun fillHatToggle(container: LinearLayout, collapsed: Boolean) {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
-            return LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-                isClickable = true
-                // The card already supplies ~10dp vertical padding; add a little only when expanded so the
-                // toggle isn't glued to the hat body below it.
-                val vPad = if (collapsed) 0 else (4 * dm.density).toInt()
-                setPadding(0, 0, 0, vPad)
-                setOnClickListener { actionListener.onToggleHat() }
-                addView(TextView(ctx).apply {
-                    text = "ШАПКА ТЕМЫ"
-                    textSize = scaledSp(15f)
-                    setTypeface(typeface, android.graphics.Typeface.BOLD)
-                    setTextColor(accent)
-                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-                addView(TextView(ctx).apply {
-                    text = if (collapsed) "▾" else "▴"
-                    textSize = scaledSp(15f)
-                    setTypeface(typeface, android.graphics.Typeface.BOLD)
-                    setTextColor(accent)
-                })
-            }
+            container.isClickable = true
+            // Add a little bottom padding only when expanded so the toggle isn't glued to the post below it.
+            val vPad = if (collapsed) 0 else (6 * dm.density).toInt()
+            container.setPadding(0, 0, 0, vPad)
+            container.setOnClickListener { actionListener.onToggleHat() }
+            container.addView(TextView(ctx).apply {
+                text = "ШАПКА ТЕМЫ"
+                textSize = scaledSp(15f)
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(accent)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            container.addView(TextView(ctx).apply {
+                text = if (collapsed) "▾" else "▴"
+                textSize = scaledSp(15f)
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(accent)
+            })
         }
 
         /** Renders [blocks] as children of [container]. Reused recursively by quotes/spoilers. */
