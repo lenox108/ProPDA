@@ -112,6 +112,29 @@ object ForPdaCoil {
         imageLoader.enqueue(req)
     }
 
+    /**
+     * Load an avatar with a guaranteed [fallback] drawable (a letter avatar): shown when the url is empty
+     * and left in place if the load fails — so a user without/with a broken avatar never renders blank
+     * (parity with the WebView `.avatar .letter`).
+     */
+    @JvmStatic
+    fun loadAvatar(imageView: ImageView, url: String?, fallback: android.graphics.drawable.Drawable) {
+        if (url.isNullOrBlank()) {
+            imageView.setImageDrawable(fallback)
+            return
+        }
+        val req = ImageRequest.Builder(imageView.context.applicationContext)
+                .data(normalizeData(url))
+                .precision(Precision.INEXACT)
+                .crossfade(false)
+                .placeholder(fallback)
+                .error(fallback)
+                .fallback(fallback)
+                .target(imageView)
+                .build()
+        imageLoader.enqueue(req)
+    }
+
     @JvmStatic
     fun loadIntoWithProgress(imageView: ImageView, url: String?, progress: ProgressBar?) {
         if (url.isNullOrBlank()) {
