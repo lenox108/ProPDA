@@ -82,7 +82,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private val anchorResolver = NativeAnchorResolver()
     private val pagination = TopicPaginationController()
     private val postsAdapter by lazy { TopicPostsAdapter(linkHandler, this) }
-    private val pollHeaderAdapter = PollHeaderAdapter()
+    private val pollHeaderAdapter = PollHeaderAdapter { action, method, encodedForm ->
+        submitPoll(action, method, encodedForm)
+    }
 
     /** Adapter positions are shifted by the poll header (0 or 1) — offset scroll targets by this. */
     private fun headerOffset(): Int = pollHeaderAdapter.itemCount
@@ -339,6 +341,31 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun onPollToolbarClick() {
         if (!pageHasPoll) return
         (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(0, 0)
+    }
+
+    /**
+     * Submit a poll vote (from [PollHeaderAdapter]) via [ThemeApi.submitPoll] — the same server write
+     * the WebView JS `submitThemePoll` performs. On success the page is reloaded so the poll re-renders
+     * with results; we keep the view pinned to the top so the freshly-voted poll stays in sight.
+     */
+    private fun submitPoll(action: String, method: String, encodedForm: String) {
+        if (isSending) return
+        isSending = true
+        Toast.makeText(requireContext(), "Отправка голоса…", Toast.LENGTH_SHORT).show()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { themeApi.submitPoll(action, method, encodedForm) }
+            }
+            isSending = false
+            if (view == null) return@launch
+            result.onSuccess {
+                Toast.makeText(requireContext(), "Голос учтён", Toast.LENGTH_SHORT).show()
+                pendingJumpToTop = true // land on the poll (now showing results), not the unread anchor
+                loadTopic(loadedUrl ?: topicUrl)
+            }.onFailure { error ->
+                Toast.makeText(requireContext(), "Не удалось проголосовать: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     /** Toolbar «Инфо»: scroll to the topic hat post (its collapsible rendering is handled separately). */
