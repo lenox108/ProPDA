@@ -138,8 +138,57 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 updateBarCurrentPageFromScroll()
             }
         })
+        installPageSwipeDetector()
         refreshLayout.setOnRefreshListener { loadTopic(topicUrl) }
         loadTopic(topicUrl)
+    }
+
+    /**
+     * Optional horizontal-swipe page navigation (setting «Свайпы страниц», default OFF): a deliberate
+     * left drag jumps to the next page, right to the previous. Intercepts the gesture only once
+     * HORIZONTAL travel clearly dominates (so vertical scroll is never stolen); intercepting hands the
+     * child view an ACTION_CANCEL, which is what prevents a link tap firing mid-swipe over hat/quote
+     * links. Being opt-in, it can't regress the default reading experience.
+     */
+    private fun installPageSwipeDetector() {
+        val touchSlop = android.view.ViewConfiguration.get(requireContext()).scaledTouchSlop
+        val minDist = SWIPE_MIN_DISTANCE_DP * resources.displayMetrics.density
+        recyclerView.addOnItemTouchListener(object : androidx.recyclerview.widget.RecyclerView.OnItemTouchListener {
+            private var downX = 0f
+            private var downY = 0f
+            private var claimed = false
+
+            override fun onInterceptTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent): Boolean {
+                if (!mainPreferencesHolder.getTopicPageSwipeEnabled()) return false
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        downX = e.x; downY = e.y; claimed = false
+                    }
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        val dx = e.x - downX
+                        val dy = e.y - downY
+                        if (!claimed && kotlin.math.abs(dx) > touchSlop * 2 &&
+                                kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f) {
+                            claimed = true
+                            return true // steal the gesture → child gets CANCEL (no link tap / scroll)
+                        }
+                    }
+                }
+                return false
+            }
+
+            override fun onTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent) {
+                if (e.actionMasked == android.view.MotionEvent.ACTION_UP) {
+                    val dx = e.x - downX
+                    if (kotlin.math.abs(dx) > minDist) {
+                        if (dx < 0) jumpToPage(barCurrentPage + 1) else jumpToPage(barCurrentPage - 1)
+                    }
+                    claimed = false
+                }
+            }
+
+            override fun onRequestDisallowInterceptTouchEvent(disallow: Boolean) {}
+        })
     }
 
     /** Downward infinite scroll: when within [NEXT_PAGE_PREFETCH_DISTANCE] items of the end. */
@@ -703,5 +752,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Font-size pref value that maps to textScale 1.0 (matches the WebView default defaultFontSize). */
         const val REFERENCE_FONT_SIZE = 16f
+
+        /** Minimum horizontal travel (dp) for a page-swipe drag to register on release. */
+        const val SWIPE_MIN_DISTANCE_DP = 80f
     }
 }
