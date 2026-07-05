@@ -165,6 +165,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Set for «В конец темы» so [applyInitialAnchor] lands on the last post of the last page. */
     private var pendingJumpToBottom: Boolean = false
 
+    /** Whether the loaded content still has an unread anchor — drives the «К непрочитанному» menu item. */
+    private var topicHasUnread: Boolean = false
+
+    /** Reused WebView smart-navigation popup (page wheel + start/unread/end/enter-number). */
+    private var smartNavMenu: forpdateam.ru.forpda.ui.views.SmartNavigationMenu? = null
+
     /** «Умная кнопка темы» (FAB) state: enabled per pref; arrow follows the last scroll direction. */
     private var fabEnabled = false
     private var fabPointsDown = true
@@ -206,6 +212,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 maybeMarkTopicReadAtEnd()
                 updateBarCurrentPageFromScroll()
                 updateFabOnScroll(dy)
+                if (smartNavMenu?.isShowing() == true) smartNavMenu?.dismiss()
             }
         })
         val auth = authHolder.get()
@@ -864,6 +871,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         messagePanel?.onDestroy()
         messagePanel = null
         attachmentsPopup = null
+        smartNavMenu?.dispose()
+        smartNavMenu = null
         super.onDestroyView()
     }
 
@@ -1365,22 +1374,33 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * FAB long-press → smart navigation menu (parity with the WebView SmartNavigationMenu): jump to the
-     * start / end of the topic or a specific page. On a single-page topic it's meaningless, so nothing
-     * shows.
+     * FAB long-press → the exact WebView smart-navigation popup ([SmartNavigationMenu]) anchored to the
+     * FAB: a page wheel («Текущая» highlighted) plus «В начало темы» / «К непрочитанному» / «В конец темы»
+     * / «Ввести номер». On a single-page topic it's meaningless, so nothing shows.
      */
     private fun showSmartNavMenu() {
         if (!pagination.isInitialised || pagination.totalPages <= 1) return
-        val actions = listOf(
-                "В начало темы" to { jumpToPage(1) },
-                "В конец темы" to { jumpToLastPage() },
-                "Перейти на страницу…" to { showPagePicker() },
-        )
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Навигация по теме")
-                .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
-                .show()
+        val menu = smartNavMenu ?: forpdateam.ru.forpda.ui.views.SmartNavigationMenu(
+                requireContext(), fab, coordinatorLayout).also {
+            it.setListener(object : forpdateam.ru.forpda.ui.views.SmartNavigationMenu.Listener {
+                override fun onGoToPage(page: Int) = jumpToPage(page)
+                override fun onGoToStart() = jumpToPage(1)
+                override fun onGoToEnd() = jumpToLastPage()
+                override fun onGoToUnread() {
+                    pendingJumpToTop = false
+                    loadTopic(unreadUrl())
+                }
+                override fun onDismiss() {}
+            })
+            smartNavMenu = it
+        }
+        menu.show(barCurrentPage, pagination.totalPages, hasUnread = topicHasUnread)
     }
+
+    /** «К непрочитанному»: 4pda's `view=getnewpost` redirect lands on the first unread post. */
+    private fun unreadUrl(): String =
+            if (pageTopicId > 0) "https://4pda.to/forum/index.php?showtopic=$pageTopicId&view=getnewpost"
+            else (loadedUrl ?: topicUrl)
 
     /** «В конец темы»: load the last page (or just scroll down if already there) and land on the last post. */
     private fun jumpToLastPage() {
@@ -1503,6 +1523,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 loadedItems.addAll(items)
                 mentionScannedPostIds.clear()
                 markedTopicReadAtEnd = false
+                topicHasUnread = page.hasUnreadTarget // drives «К непрочитанному» in the smart-nav menu
                 closeSearch() // matches from a previous page are stale after a reload
                 updatePaginationBar()
                 postsAdapter.setTopicHat(topicHatPostId, hatCollapsed)
