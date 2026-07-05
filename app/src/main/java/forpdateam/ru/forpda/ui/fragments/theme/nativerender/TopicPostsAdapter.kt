@@ -51,6 +51,8 @@ class TopicPostsAdapter(
         fun onDelete(item: NativePostItem)
         /** The user tapped the reputation avatar badge → open the reputation menu. */
         fun onReputation(item: NativePostItem)
+        /** The user tapped the author avatar → open the user menu (profile/rep/QMS/messages…). */
+        fun onAvatarClick(item: NativePostItem)
         /** The user tapped the «⋮» post menu → reply/quote/copy-link/share/report/edit/delete/note. */
         fun onPostMenu(item: NativePostItem)
         /** The user tapped the «Шапка темы» collapse header → toggle the hat body. */
@@ -179,7 +181,6 @@ class TopicPostsAdapter(
         private val body: LinearLayout = itemView.findViewById(R.id.native_post_body)
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
-        private val divider: View = itemView.findViewById(R.id.native_post_divider)
 
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
         private var highlightAnimator: android.animation.ValueAnimator? = null
@@ -235,7 +236,6 @@ class TopicPostsAdapter(
             header.visibility = if (hatFolded) View.GONE else View.VISIBLE
             footer.visibility = if (hatFolded) View.GONE else footer.visibility
             actions.visibility = if (hatFolded) View.GONE else actions.visibility
-            divider.visibility = if (hatFolded) View.GONE else View.VISIBLE
             (body.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
                 val top = if (hatFolded) 0 else (8 * itemView.resources.displayMetrics.density).toInt()
                 if (lp.topMargin != top) { lp.topMargin = top; body.layoutParams = lp }
@@ -263,6 +263,8 @@ class TopicPostsAdapter(
             }
             // A letter-avatar fallback so users with an empty or broken avatar never render blank.
             ForPdaCoil.loadAvatar(avatar, item.avatarUrl, letterAvatar(avatar.context, item.nick))
+            avatar.isClickable = true
+            avatar.setOnClickListener { if (item.userId > 0) actionListener.onAvatarClick(item) }
         }
 
         /** Colored circle + first letter of the nick — WebView-style fallback avatar. */
@@ -337,12 +339,15 @@ class TopicPostsAdapter(
                     }
         }
 
-        /** Tap avatar/nick → user profile; long-press the post → an actions menu. Navigation-only (no writes). */
+        /**
+         * Tap nick → user profile; long-press the header → an actions menu. The AVATAR tap is wired
+         * separately in bindAvatar() to open the M3 user menu (Профиль/Репутация/QMS/…), so it must
+         * NOT be overridden here. Navigation-only (no writes).
+         */
         private fun bindAuthorActions(item: NativePostItem) {
             val openProfile = View.OnClickListener {
                 if (item.userId > 0) linkHandler.handle(profileUrl(item.userId), null)
             }
-            avatar.setOnClickListener(openProfile)
             nick.setOnClickListener(openProfile)
             // Post menu on long-press of the HEADER (avatar/nick) — the body is reserved for text
             // selection (long-press there starts selection + «Цитировать»), so no gesture conflict.
