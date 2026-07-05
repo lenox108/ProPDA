@@ -420,14 +420,20 @@ class TopicPostsAdapter(
                 textSize = 15f
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 setLineSpacing(0f, 1.1f)
-                // Only attach the link movement method when the block actually has links — this
-                // both avoids the ScrollingMovementMethod interfering with RecyclerView drags on
-                // plain-text posts and routes taps through the app's in-app navigation.
-                if (text is Spanned &&
-                        text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()) {
+                val hasLinks = text is Spanned &&
+                        text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
+                if (hasLinks) {
+                    // Attach the link movement method only when there ARE links — avoids the
+                    // ScrollingMovementMethod fighting RecyclerView drags and routes taps in-app.
                     movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
                         override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
                     })
+                } else {
+                    // No links → make the text selectable so the user can copy/share a fragment
+                    // (§4 "выделение текста → копировать/поделиться"). Selection and a custom link
+                    // movement method can't coexist on one TextView, so link paragraphs stay
+                    // tap-to-navigate and plain paragraphs stay select-to-copy.
+                    setTextIsSelectable(true)
                 }
             }
         }
