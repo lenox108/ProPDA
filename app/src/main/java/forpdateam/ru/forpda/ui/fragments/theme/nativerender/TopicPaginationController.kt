@@ -49,6 +49,13 @@ class TopicPaginationController {
         isInitialised = true
     }
 
+    /** URL of an arbitrary 1-based [pageNumber] (clamped to 1..totalPages) for a page-jump. */
+    fun pageUrl(pageNumber: Int): String {
+        val n = pageNumber.coerceIn(1, totalPages.coerceAtLeast(1))
+        val st = (n - 1) * perPage
+        return "https://4pda.to/forum/index.php?showtopic=$topicId&st=$st"
+    }
+
     fun hasNextPage(): Boolean = isInitialised && topicId > 0 && loadedPage < totalPages
 
     /** URL of the next page down, or null if there is none. */
