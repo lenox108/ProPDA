@@ -37,7 +37,15 @@ import forpdateam.ru.forpda.presentation.ILinkHandler
  */
 class TopicPostsAdapter(
         private val linkHandler: ILinkHandler,
+        private val actionListener: PostActionListener,
 ) : ListAdapter<NativePostItem, TopicPostsAdapter.PostViewHolder>(DIFF) {
+
+    /** Post write-actions, handled by the fragment (which holds the API + coroutine scope + editor). */
+    interface PostActionListener {
+        fun onVote(item: NativePostItem, up: Boolean)
+        fun onReply(item: NativePostItem)
+        fun onQuote(item: NativePostItem)
+    }
 
     init {
         setHasStableIds(true)
@@ -55,7 +63,7 @@ class TopicPostsAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PostViewHolder {
         val view = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_native_post, parent, false)
-        return PostViewHolder(view, linkHandler, spoilerStates)
+        return PostViewHolder(view, linkHandler, spoilerStates, actionListener)
     }
 
     override fun onBindViewHolder(holder: PostViewHolder, position: Int) {
@@ -71,6 +79,7 @@ class TopicPostsAdapter(
             itemView: View,
             private val linkHandler: ILinkHandler,
             private val spoilerStates: MutableMap<String, Boolean>,
+            private val actionListener: PostActionListener,
     ) : RecyclerView.ViewHolder(itemView) {
         private val avatar: ImageView = itemView.findViewById(R.id.native_post_avatar)
         private val nick: TextView = itemView.findViewById(R.id.native_post_nick)
@@ -78,6 +87,7 @@ class TopicPostsAdapter(
         private val number: TextView = itemView.findViewById(R.id.native_post_number)
         private val body: LinearLayout = itemView.findViewById(R.id.native_post_body)
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
+        private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
 
         fun bind(item: NativePostItem) {
             bindNick(item)
@@ -183,6 +193,30 @@ class TopicPostsAdapter(
             val rating = item.postRating?.takeIf { it.isNotBlank() }
             footer.text = if (rating != null) "Рейтинг: $rating" else ""
             footer.visibility = if (rating != null) View.VISIBLE else View.GONE
+            bindActions(item)
+        }
+
+        /** Post action row: 👍 / 👎 (rating vote), Ответить, Цитата — handled by the fragment. */
+        private fun bindActions(item: NativePostItem) {
+            actions.removeAllViews()
+            val ctx = itemView.context
+            fun actionButton(label: String, onClick: () -> Unit) = TextView(ctx).apply {
+                text = label
+                textSize = 13f
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                val padH = (10 * ctx.resources.displayMetrics.density).toInt()
+                val padV = (4 * ctx.resources.displayMetrics.density).toInt()
+                setPadding(padH, padV, padH, padV)
+                setOnClickListener { onClick() }
+            }
+            if (item.canPlusPostRating) actions.addView(actionButton("👍") { actionListener.onVote(item, up = true) })
+            if (item.canMinusPostRating) actions.addView(actionButton("👎") { actionListener.onVote(item, up = false) })
+            if (item.canQuote) {
+                actions.addView(actionButton("Ответить") { actionListener.onReply(item) })
+                actions.addView(actionButton("Цитата") { actionListener.onQuote(item) })
+            }
+            actions.visibility = if (actions.childCount > 0) View.VISIBLE else View.GONE
         }
 
         // groupColor is "#RRGGBB" or a CSS name; "black" is the default → leave untinted.
