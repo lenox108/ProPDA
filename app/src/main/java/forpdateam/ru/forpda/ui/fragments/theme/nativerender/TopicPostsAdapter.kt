@@ -60,6 +60,8 @@ class TopicPostsAdapter(
             val textScale: Float = 1f,
             val showAvatars: Boolean = true,
             val circleAvatars: Boolean = false,
+            val density: forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity =
+                    forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMFORTABLE,
     )
 
     private var displaySettings = PostDisplaySettings()
@@ -146,6 +148,7 @@ class TopicPostsAdapter(
             highlightAnimator?.cancel()
             highlightAnimator = null
             itemView.setBackgroundColor(cardBaseColor())
+            applyDensity()
             bindNick(item)
             bindMeta(item)
             number.text = if (item.number > 0) "#${item.number}" else ""
@@ -179,6 +182,29 @@ class TopicPostsAdapter(
 
         private fun cardBaseColor(): Int = com.google.android.material.color.MaterialColors.getColor(
                 itemView, com.google.android.material.R.attr.colorSurfaceContainer)
+
+        /**
+         * Post density (Комфортная/Компактная/Сверхкомпактная) — tightens the card's inner vertical
+         * padding and the gap between cards, mirroring the WebView density setting. Horizontal
+         * padding stays constant so text width doesn't jump.
+         */
+        private fun applyDensity() {
+            val dm = itemView.resources.displayMetrics
+            val (vPadDp, gapDp) = when (settings.density) {
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT -> 3f to 1f
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMPACT -> 6f to 2f
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMFORTABLE -> 10f to 4f
+            }
+            val hPad = (12 * dm.density).toInt()
+            val vPad = (vPadDp * dm.density).toInt()
+            itemView.setPadding(hPad, vPad, hPad, vPad)
+            (itemView.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                val gap = (gapDp * dm.density).toInt()
+                lp.topMargin = gap
+                lp.bottomMargin = gap
+                itemView.layoutParams = lp
+            }
+        }
 
         /** Flash the card with an accent-tinted background that fades back to the surface colour. */
         private fun playHighlight() {
