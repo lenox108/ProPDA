@@ -34,7 +34,7 @@ import javax.inject.Inject
  * does for the WebView engine.
  */
 @AndroidEntryPoint
-class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
+class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.PostActionListener {
 
     @Inject
     lateinit var themeApi: ThemeApi
@@ -45,7 +45,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
     private val mapper = NativePostMapper()
     private val anchorResolver = NativeAnchorResolver()
     private val pagination = TopicPaginationController()
-    private val postsAdapter by lazy { TopicPostsAdapter(linkHandler) }
+    private val postsAdapter by lazy { TopicPostsAdapter(linkHandler, this) }
     private val pollHeaderAdapter = PollHeaderAdapter()
 
     /** Adapter positions are shifted by the poll header (0 or 1) — offset scroll targets by this. */
@@ -197,6 +197,58 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost {
 
     override fun onRestoredAfterChildFragmentRemoved() {
         // Native list keeps its state/scroll across a covering child fragment — nothing to restore.
+    }
+
+    // endregion
+
+    // region PostActionListener — write actions (authorised by the user)
+
+    override fun onVote(item: NativePostItem, up: Boolean) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { themeApi.votePost(item.postId, up) }
+            }
+            if (view == null) return@launch
+            result.onSuccess { message ->
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+                // Optimistically nudge the visible rating so the change is reflected immediately.
+                updateRatingOptimistically(item.postId, if (up) +1 else -1)
+            }.onFailure { error ->
+                Toast.makeText(requireContext(), error.message ?: "Ошибка голосования", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun updateRatingOptimistically(postId: Int, delta: Int) {
+        val idx = loadedItems.indexOfFirst { it.postId == postId }
+        if (idx < 0) return
+        val cur = loadedItems[idx]
+        val newRating = ((cur.postRating?.replace("+", "")?.trim()?.toIntOrNull() ?: 0) + delta)
+        // Voted once → can't vote again on that direction; drop both to avoid a second attempt.
+        loadedItems[idx] = cur.copy(
+                postRating = newRating.toString(),
+                canPlusPostRating = false,
+                canMinusPostRating = false,
+        )
+        postsAdapter.submitList(loadedItems.toList())
+    }
+
+    override fun onReply(item: NativePostItem) {
+        // Editor integration is the next step; the reply BBCode is put on the clipboard for now.
+        insertIntoEditor("[snapback]${item.postId}[/snapback] [b]${item.nick},[/b] \n")
+    }
+
+    override fun onQuote(item: NativePostItem) {
+        // Full-post quote (selection→quote comes via the text ActionMode).
+        insertIntoEditor("[quote name=\"${item.nick}\" date=\"${item.date.orEmpty()}\" post=${item.postId}]\n")
+    }
+
+    /** Placeholder until the inline editor lands: copy the reply/quote form to the clipboard. */
+    private fun insertIntoEditor(text: String) {
+        val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                as? android.content.ClipboardManager
+        cm?.setPrimaryClip(android.content.ClipData.newPlainText("quote", text))
+        Toast.makeText(requireContext(), "Форма скопирована в буфер", Toast.LENGTH_SHORT).show()
     }
 
     // endregion

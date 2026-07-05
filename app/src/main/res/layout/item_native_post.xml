@@ -79,6 +79,14 @@
         android:textColor="?attr/colorOnSurfaceVariant"
         tools:text="Рейтинг: 5" />
 
+    <LinearLayout
+        android:id="@+id/native_post_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="6dp" />
+
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
