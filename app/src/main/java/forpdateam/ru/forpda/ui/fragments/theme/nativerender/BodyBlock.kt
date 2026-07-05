@@ -66,6 +66,13 @@ sealed interface BodyBlock {
     ) : BodyBlock
 
     /**
+     * A native file attachment (`a.ipb-attach.attach-file`) — a downloadable file link (apk/zip/…).
+     * [name] is the filename, [url] the dl/post download link. Фаза 2. (The size "( N МБ )" stays as
+     * the adjacent text run — 4pda emits it as a sibling text node, not part of the link.)
+     */
+    data class FileAttachment(val name: String, val url: String) : BodyBlock
+
+    /**
      * A native code block (`.post-block.code`), peeled out of the fallback in Фаза 2. [text] is the
      * decoded code (server `&#91;`→`[`, `<br>`→newline), preserving line breaks for a monospace view.
      */

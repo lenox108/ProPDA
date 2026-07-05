@@ -98,9 +98,11 @@ class PostBodyRendererTest {
     }
 
     @Test
-    fun attachmentFilePlain_isAttachmentFallback() {
+    fun attachmentFilePlain_isNativeFileAttachment() {
         val blocks = renderer.render(fixture("attachment_file_plain.html"))
-        assertTrue(blocks.any { it is BodyBlock.WebFallback && it.kind == Kind.ATTACHMENT })
+        val file = blocks.filterIsInstance<BodyBlock.FileAttachment>().single()
+        assertEquals("firmware.zip", file.name)
+        assertTrue(file.url.contains("/forum/dl/post/"))
     }
 
     @Test
@@ -136,6 +138,7 @@ class PostBodyRendererTest {
                 is BodyBlock.Quote -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
                 is BodyBlock.Spoiler -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
                 is BodyBlock.Code -> it.text
+                is BodyBlock.FileAttachment -> it.name
             }
         }
         assertTrue("recognisable text survives", recombined.contains("Незакрытый жирный текст"))
