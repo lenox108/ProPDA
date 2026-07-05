@@ -72,6 +72,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     private var editorBar: android.widget.LinearLayout? = null
     private var editorInput: android.widget.EditText? = null
+    /** Non-null when the editor is editing an existing post (else composing a new reply). */
+    private var editingForm: forpdateam.ru.forpda.entity.remote.editpost.EditPostForm? = null
 
     override fun hasBackHandling(): Boolean = editorBar?.visibility == View.VISIBLE
 
@@ -79,6 +81,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Back closes the reply editor first, before leaving the topic.
         if (editorBar?.visibility == View.VISIBLE) {
             editorBar?.visibility = View.GONE
+            editingForm = null
             hideKeyboard()
             return true
         }
@@ -273,6 +276,51 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         insertIntoEditor("[quote name=\"${item.nick}\"$d post=${item.postId}]$selectedText[/quote]${'\n'}")
     }
 
+    override fun onEdit(item: NativePostItem) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val form = withContext(Dispatchers.IO) {
+                runCatching { editPostApi.loadForm(item.postId) }
+            }.getOrNull()
+            if (view == null) return@launch
+            if (form == null) {
+                Toast.makeText(requireContext(), "Не удалось открыть пост для правки", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            editingForm = form
+            val input = ensureEditorBar()
+            input.setText(form.message)
+            editorBar?.visibility = View.VISIBLE
+            input.requestFocus()
+            input.setSelection(input.text?.length ?: 0)
+            showKeyboard(input)
+        }
+    }
+
+    override fun onDelete(item: NativePostItem) {
+        // Destructive → confirm first (authorised, but irreversible).
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Удалить сообщение?")
+                .setMessage("Это действие необратимо.")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Удалить") { _, _ -> performDelete(item) }
+                .show()
+    }
+
+    private fun performDelete(item: NativePostItem) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching { themeApi.deletePost(item.postId) }.getOrDefault(false)
+            }
+            if (view == null) return@launch
+            if (ok) {
+                Toast.makeText(requireContext(), "Удалено", Toast.LENGTH_SHORT).show()
+                loadedUrl?.let { loadTopic(it) }
+            } else {
+                Toast.makeText(requireContext(), "Не удалось удалить", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun insertIntoEditor(text: String) {
         val input = ensureEditorBar()
         input.text?.insert(input.selectionStart.coerceAtLeast(0), text)
@@ -327,21 +375,24 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         hideKeyboard()
         Toast.makeText(requireContext(), "Отправка…", Toast.LENGTH_SHORT).show()
         viewLifecycleOwner.lifecycleScope.launch {
-            val form = forpdateam.ru.forpda.entity.remote.editpost.EditPostForm().apply {
-                type = forpdateam.ru.forpda.entity.remote.editpost.EditPostForm.TYPE_NEW_POST
-                forumId = pageForumId
-                topicId = pageTopicId
-                st = pageSt
-                this.message = message
-            }
+            // Editing an existing post reuses its loaded form (type=EDIT, postId set); a new reply
+            // builds a fresh NEW_POST form from the current topic context.
+            val form = editingForm?.apply { this.message = message }
+                    ?: forpdateam.ru.forpda.entity.remote.editpost.EditPostForm().apply {
+                        type = forpdateam.ru.forpda.entity.remote.editpost.EditPostForm.TYPE_NEW_POST
+                        forumId = pageForumId
+                        topicId = pageTopicId
+                        st = pageSt
+                        this.message = message
+                    }
             val result = withContext(Dispatchers.IO) { runCatching { editPostApi.sendPost(form) } }
             isSending = false
             if (view == null) return@launch
             result.onSuccess {
                 input.setText("")
                 editorBar?.visibility = View.GONE
+                editingForm = null
                 Toast.makeText(requireContext(), "Отправлено", Toast.LENGTH_SHORT).show()
-                // Reload to the end so the freshly posted reply is visible.
                 loadedUrl?.let { loadTopic(it) }
             }.onFailure { error ->
                 Toast.makeText(requireContext(), "Ошибка отправки: ${error.message}", Toast.LENGTH_LONG).show()

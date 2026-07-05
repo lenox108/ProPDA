@@ -47,6 +47,8 @@ class TopicPostsAdapter(
         fun onQuote(item: NativePostItem)
         /** The user selected [selectedText] inside [item]'s body and chose «Цитировать». */
         fun onQuoteSelection(item: NativePostItem, selectedText: String)
+        fun onEdit(item: NativePostItem)
+        fun onDelete(item: NativePostItem)
     }
 
     init {
@@ -121,10 +123,12 @@ class TopicPostsAdapter(
         private fun showPostMenu(item: NativePostItem) {
             val ctx = itemView.context
             val popup = android.widget.PopupMenu(ctx, nick)
-            val idProfile = 1
-            val idCopyLink = 2
-            if (item.userId > 0) popup.menu.add(0, idProfile, 0, "Профиль")
-            popup.menu.add(0, idCopyLink, 1, "Копировать ссылку на пост")
+            val idProfile = 1; val idCopyLink = 2; val idEdit = 3; val idDelete = 4
+            var order = 0
+            if (item.userId > 0) popup.menu.add(0, idProfile, order++, "Профиль")
+            popup.menu.add(0, idCopyLink, order++, "Копировать ссылку на пост")
+            if (item.canEdit) popup.menu.add(0, idEdit, order++, "Редактировать")
+            if (item.canDelete) popup.menu.add(0, idDelete, order++, "Удалить")
             popup.setOnMenuItemClickListener { mi ->
                 when (mi.itemId) {
                     idProfile -> linkHandler.handle(profileUrl(item.userId), null)
@@ -133,6 +137,8 @@ class TopicPostsAdapter(
                                 as? android.content.ClipboardManager
                         cm?.setPrimaryClip(android.content.ClipData.newPlainText("post", postUrl(item)))
                     }
+                    idEdit -> actionListener.onEdit(item)
+                    idDelete -> actionListener.onDelete(item)
                 }
                 true
             }
