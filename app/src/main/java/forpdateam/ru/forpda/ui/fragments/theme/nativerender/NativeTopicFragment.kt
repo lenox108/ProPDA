@@ -840,6 +840,45 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 .show()
     }
 
+    /**
+     * The «⋮» post menu (parity with the WebView showPostMenu): reply / quote / copy-link / share /
+     * author profile / report / edit / delete. Rendered as a solid MaterialAlertDialog list.
+     */
+    override fun onPostMenu(item: NativePostItem) {
+        val postUrl = "https://4pda.to/forum/index.php?showtopic=$pageTopicId&view=findpost&p=${item.postId}"
+        val actions = buildList<Pair<String, () -> Unit>> {
+            add("Ответить" to { onReply(item) })
+            add("Цитировать" to { onQuote(item) })
+            add("Копировать ссылку на сообщение" to {
+                val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as? android.content.ClipboardManager
+                cm?.setPrimaryClip(android.content.ClipData.newPlainText("post", postUrl))
+                Toast.makeText(requireContext(), "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+            })
+            add("Поделиться ссылкой на сообщение" to {
+                runCatching {
+                    startActivity(android.content.Intent.createChooser(
+                            android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, postUrl)
+                            }, null))
+                }
+            })
+            if (item.userId > 0) add("Профиль автора" to {
+                linkHandler.handle("https://4pda.to/forum/index.php?showuser=${item.userId}", null)
+            })
+            if (item.canReport) add("Пожаловаться" to {
+                linkHandler.handle("https://4pda.to/forum/index.php?act=report&p=${item.postId}", null)
+            })
+            if (item.canEdit) add("Изменить" to { onEdit(item) })
+            if (item.canDelete) add("Удалить" to { onDelete(item) })
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle(item.nick.orEmpty())
+                .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
+                .show()
+    }
+
     override fun onReputation(item: NativePostItem) {
         if (item.userId <= 0) return
         val ctx = requireContext()

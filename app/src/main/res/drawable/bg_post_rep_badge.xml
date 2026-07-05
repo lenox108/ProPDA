@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small pill behind the reputation number overlaid on the avatar (parity with WebView .reputation). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="?attr/colorPrimary" />
+    <corners android:radius="8dp" />
+    <stroke android:width="1.5dp" android:color="?attr/colorSurfaceContainer" />
+</shape>

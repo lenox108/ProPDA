@@ -49,8 +49,10 @@ class TopicPostsAdapter(
         fun onQuoteSelection(item: NativePostItem, selectedText: String)
         fun onEdit(item: NativePostItem)
         fun onDelete(item: NativePostItem)
-        /** The user tapped the «Реп: N» number → open the reputation menu (increase/look/decrease). */
+        /** The user tapped the reputation avatar badge → open the reputation menu. */
         fun onReputation(item: NativePostItem)
+        /** The user tapped the «⋮» post menu → reply/quote/copy-link/share/report/edit/delete/note. */
+        fun onPostMenu(item: NativePostItem)
         /** The user tapped the «Шапка темы» collapse header → toggle the hat body. */
         fun onToggleHat()
     }
@@ -166,9 +168,12 @@ class TopicPostsAdapter(
             private val actionListener: PostActionListener,
     ) : RecyclerView.ViewHolder(itemView) {
         private val avatar: ImageView = itemView.findViewById(R.id.native_post_avatar)
+        private val repBadge: TextView = itemView.findViewById(R.id.native_post_rep_badge)
         private val nick: TextView = itemView.findViewById(R.id.native_post_nick)
         private val meta: TextView = itemView.findViewById(R.id.native_post_meta)
+        private val postCount: TextView = itemView.findViewById(R.id.native_post_count)
         private val number: TextView = itemView.findViewById(R.id.native_post_number)
+        private val menu: ImageView = itemView.findViewById(R.id.native_post_menu)
         private val body: LinearLayout = itemView.findViewById(R.id.native_post_body)
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
@@ -213,6 +218,9 @@ class TopicPostsAdapter(
             bindMeta(item)
             number.text = if (item.number > 0) "#${item.number}" else ""
             bindAvatar(item)
+            bindRepBadge(item)
+            bindPostCount(item)
+            bindPostMenu(item)
             bindFooter(item)
             bindAuthorActions(item)
             renderBody(item, isHat, hatCollapsed)
@@ -354,7 +362,8 @@ class TopicPostsAdapter(
             nick.text = sb
         }
 
-        /** Meta line "group · date · Рег: N", with the group name tinted by its server groupColor. */
+        /** Meta line "group · date", with the group name tinted by its server groupColor. Reputation
+         * now lives as an avatar badge (see [bindRepBadge]), matching the WebView layout. */
         private fun bindMeta(item: NativePostItem) {
             val sb = SpannableStringBuilder()
             val group = item.group?.takeIf { it.isNotBlank() }
@@ -372,21 +381,42 @@ class TopicPostsAdapter(
                 if (sb.isNotEmpty()) sb.append(" · ")
                 sb.append(it)
             }
-            item.reputation?.takeIf { it.isNotBlank() }?.let {
-                if (sb.isNotEmpty()) sb.append(" · ")
-                val start = sb.length
-                sb.append("Реп: $it")
-                // Tap the reputation number → reputation menu (increase / look / decrease), as WebView.
-                sb.setSpan(object : android.text.style.ClickableSpan() {
-                    override fun onClick(widget: View) = actionListener.onReputation(item)
-                    override fun updateDrawState(ds: android.text.TextPaint) {
-                        ds.color = meta.context.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
-                        ds.isUnderlineText = false
-                    }
-                }, start, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                meta.movementMethod = android.text.method.LinkMovementMethod.getInstance()
-            }
             meta.text = sb
+        }
+
+        /** Reputation number overlaid on the avatar (parity with WebView .reputation). Tap → rep menu. */
+        private fun bindRepBadge(item: NativePostItem) {
+            val rep = item.reputation?.takeIf { it.isNotBlank() }
+            if (rep == null || !settings.showAvatars) {
+                repBadge.visibility = View.GONE
+                return
+            }
+            repBadge.visibility = View.VISIBLE
+            repBadge.text = rep
+            repBadge.setOnClickListener { actionListener.onReputation(item) }
+        }
+
+        /** Author's forum post count as a 💬 N badge (parity with WebView user_post_count). */
+        private fun bindPostCount(item: NativePostItem) {
+            val count = item.userPostCount?.takeIf { it > 0 }
+            if (count == null) {
+                postCount.visibility = View.GONE
+                return
+            }
+            postCount.visibility = View.VISIBLE
+            postCount.text = count.toString()
+            val icon = androidx.core.content.ContextCompat.getDrawable(
+                    itemView.context, R.drawable.ic_comment_outline)?.mutate()?.apply {
+                setTint(itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+                val s = (14 * itemView.resources.displayMetrics.density).toInt()
+                setBounds(0, 0, s, s)
+            }
+            postCount.setCompoundDrawables(icon, null, null, null)
+        }
+
+        /** Three-dots post menu (parity with WebView showPostMenu). */
+        private fun bindPostMenu(item: NativePostItem) {
+            menu.setOnClickListener { actionListener.onPostMenu(item) }
         }
 
         private fun bindFooter(item: NativePostItem) {

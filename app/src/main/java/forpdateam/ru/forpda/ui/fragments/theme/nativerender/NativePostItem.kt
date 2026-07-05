@@ -22,6 +22,8 @@ data class NativePostItem(
     val groupColor: String?,
     val date: String?,
     val reputation: String?,
+    /** Author's total forum post count (from the page / merged profile fetch) — the 💬 header badge. */
+    val userPostCount: Int?,
     val postRating: String?,
     val isCurator: Boolean,
     val isOnline: Boolean,
