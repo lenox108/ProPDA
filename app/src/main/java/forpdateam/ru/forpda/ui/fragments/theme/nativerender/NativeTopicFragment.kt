@@ -115,8 +115,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Loaded-page flags driving the toolbar poll / hat icon visibility (see [refreshToolbarState]). */
     private var pageHasPoll = false
     private var pageHasHat = false
-    /** Post id of the topic hat on the loaded page (the «Инфо» toolbar button scrolls to it). */
+    /** Post id of the topic hat on the loaded page (the «Инфо» toolbar button scrolls to / toggles it). */
     private var topicHatPostId: Int? = null
+    /** Session collapse state for the topic hat (default expanded — «шапка показана при открытии»). */
+    private var hatCollapsed: Boolean = false
 
     /** The full BBCode editor (formatting toolbar, smiles, attachments) — one-to-one with WebView. */
     private var messagePanel: MessagePanel? = null
@@ -422,13 +424,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
-    /** Toolbar «Инфо»: scroll to the topic hat post (its collapsible rendering is handled separately). */
+    /** Toolbar «Инфо»: toggle the topic hat collapsed/expanded and bring it into view. */
     private fun onHatToolbarClick() {
         val hatId = topicHatPostId ?: return
+        hatCollapsed = !hatCollapsed
+        postsAdapter.setTopicHat(hatId, hatCollapsed)
         val index = loadedItems.indexOfFirst { it.postId == hatId }
-        if (index < 0) return
-        (recyclerView.layoutManager as? LinearLayoutManager)
-                ?.scrollToPositionWithOffset(index + headerOffset(), 0)
+        if (index >= 0) {
+            (recyclerView.layoutManager as? LinearLayoutManager)
+                    ?.scrollToPositionWithOffset(index + headerOffset(), 0)
+        }
+    }
+
+    /** Header tap on the hat post itself toggles its body (same session state as the toolbar «Инфо»). */
+    override fun onToggleHat() {
+        val hatId = topicHatPostId ?: return
+        hatCollapsed = !hatCollapsed
+        postsAdapter.setTopicHat(hatId, hatCollapsed)
     }
 
     /**
@@ -1167,8 +1179,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val poll = if (page.pagination.current <= 1) page.poll else null
                 pollHeaderAdapter.setPoll(poll)
                 pageHasPoll = poll != null
-                pageHasHat = page.topicHatPost != null
-                topicHatPostId = page.topicHatPost?.id
+                // Detect the topic hat synchronously with the SAME policy the WebView uses
+                // (promoteTopicHatForHybridPage → TopicPrependedHatPolicy): on page 1 it's the first
+                // post (4pda's «шапка» convention), on deep pages a server-prepended hat. No async
+                // metadata subsystem needed.
+                topicHatPostId = forpdateam.ru.forpda.presentation.theme.TopicPrependedHatPolicy
+                        .detectPrependedHat(page)?.id?.takeIf { it > 0 }
+                pageHasHat = topicHatPostId != null
                 refreshToolbarState()
                 val items = mapper.map(page.posts)
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
@@ -1180,6 +1197,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 markedTopicReadAtEnd = false
                 closeSearch() // matches from a previous page are stale after a reload
                 updatePaginationBar()
+                postsAdapter.setTopicHat(topicHatPostId, hatCollapsed)
                 postsAdapter.submitList(loadedItems.toList()) {
                     if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
                 }

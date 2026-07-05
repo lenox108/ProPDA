@@ -51,6 +51,8 @@ class TopicPostsAdapter(
         fun onDelete(item: NativePostItem)
         /** The user tapped the «Реп: N» number → open the reputation menu (increase/look/decrease). */
         fun onReputation(item: NativePostItem)
+        /** The user tapped the «Шапка темы» collapse header → toggle the hat body. */
+        fun onToggleHat()
     }
 
     /**
@@ -70,6 +72,20 @@ class TopicPostsAdapter(
 
     /** Current find-on-page query; matched substrings get a highlight background when non-blank. */
     private var searchQuery: String = ""
+
+    /** The post that is the collapsible topic hat (server-marked, `prependedHatPostId`), if any. */
+    private var topicHatPostId: Int? = null
+    /** Whether the topic-hat post's body is currently collapsed (session state, driven by the host). */
+    private var hatCollapsed: Boolean = false
+
+    /** Point the adapter at the hat post and its collapsed state; rebinds it when either changes. */
+    fun setTopicHat(postId: Int?, collapsed: Boolean) {
+        if (topicHatPostId == postId && hatCollapsed == collapsed) return
+        topicHatPostId = postId
+        hatCollapsed = collapsed
+        val idx = currentList.indexOfFirst { it.postId == postId }
+        if (idx >= 0) notifyItemChanged(idx)
+    }
 
     /** Apply new display prefs; rebinds visible posts so text sizes / avatars update in place. */
     fun setDisplaySettings(settings: PostDisplaySettings) {
@@ -122,7 +138,8 @@ class TopicPostsAdapter(
         val item = getItem(position)
         val highlight = pendingHighlightPostId == item.postId
         if (highlight) pendingHighlightPostId = null
-        holder.bind(item, highlight, displaySettings, searchQuery)
+        val isHat = topicHatPostId != null && item.postId == topicHatPostId
+        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -161,6 +178,8 @@ class TopicPostsAdapter(
                 highlight: Boolean = false,
                 settings: PostDisplaySettings = PostDisplaySettings(),
                 searchQuery: String = "",
+                isHat: Boolean = false,
+                hatCollapsed: Boolean = false,
         ) {
             this.settings = settings
             this.searchQuery = searchQuery
@@ -176,7 +195,7 @@ class TopicPostsAdapter(
             bindAvatar(item)
             bindFooter(item)
             bindAuthorActions(item)
-            renderBody(item)
+            renderBody(item, isHat, hatCollapsed)
             if (highlight) playHighlight()
         }
 
@@ -433,9 +452,29 @@ class TopicPostsAdapter(
             }
         }
 
-        private fun renderBody(item: NativePostItem) {
+        private fun renderBody(item: NativePostItem, isHat: Boolean = false, hatCollapsed: Boolean = false) {
             body.removeAllViews()
+            if (isHat) {
+                // The topic hat gets a collapse header (parity with the WebView «Показать/Скрыть шапку»).
+                body.addView(hatHeader(hatCollapsed))
+                if (hatCollapsed) return // collapsed: header only, hide the (often huge) hat content
+            }
             renderBlocksInto(body, item.blocks, RenderScope(item.postId), item)
+        }
+
+        /** A tappable «▾/▸ Шапка темы» row that toggles the hat body via [actionListener]. */
+        private fun hatHeader(collapsed: Boolean): View {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            return TextView(ctx).apply {
+                text = if (collapsed) "▸ Шапка темы" else "▾ Шапка темы"
+                textSize = scaledSp(13f)
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                val vPad = (6 * dm.density).toInt()
+                setPadding(0, vPad, 0, vPad)
+                setOnClickListener { actionListener.onToggleHat() }
+            }
         }
 
         /** Renders [blocks] as children of [container]. Reused recursively by quotes/spoilers. */
