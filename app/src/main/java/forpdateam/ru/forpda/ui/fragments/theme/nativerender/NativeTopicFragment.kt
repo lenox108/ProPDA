@@ -458,6 +458,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val target = if (request is AnchorRequest.Top) 0 else resolution.index + headerOffset()
                 (recyclerView.layoutManager as? LinearLayoutManager)
                         ?.scrollToPositionWithOffset(target, 0)
+                // Flash the resolved post once so the user sees where a link/find/unread open landed.
+                if (request is AnchorRequest.Post) postsAdapter.requestHighlight(request.postId)
             }
             // PostNotLoaded / Empty: nothing to do — downward pagination will bring later pages in.
             else -> Unit
