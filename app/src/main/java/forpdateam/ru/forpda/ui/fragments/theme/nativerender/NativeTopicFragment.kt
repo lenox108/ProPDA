@@ -867,7 +867,29 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (hatId != null) knownHatPostId = hatId
             return hatId
         }
-        policy.stripFromNonFirstPage(page, page.pagination.current, knownHatPostId)
+        // Deep page: 4pda echoes the topic's FIRST post (the hat) at the very top of every page. Only ever
+        // strip that LEADING post — never a middle one (the WebView policy's number/anchor heuristics can
+        // mis-resolve here and delete the open's anchor target while the real hat, whose number the parser
+        // leaves at the page's start index, survives — device log topic 1103268 p1350). Identify the
+        // leading hat by, in order: the id learned from page 1, the server marker, or a structural signal —
+        // the leading post is far OLDER (much smaller id) than the page's own posts.
+        val posts = page.posts
+        val first = posts.firstOrNull()?.takeIf { it.id > 0 } ?: return null
+        val second = posts.getOrNull(1)?.takeIf { it.id > 0 }
+        val leadGap = if (second != null) second.id.toLong() - first.id.toLong() else 0L
+        // A typical intra-page gap between consecutive posts — the leading hat's gap must dwarf it, so a
+        // merely-slow topic (large but uniform gaps) isn't mistaken for a hat.
+        val typicalGap = posts.getOrNull(2)?.takeIf { it.id > 0 }
+                ?.let { it.id.toLong() - (second?.id?.toLong() ?: it.id.toLong()) }
+                ?.coerceAtLeast(1L) ?: 1L
+        val structuralHat = leadGap > HAT_LEADING_ID_GAP && leadGap > typicalGap * HAT_LEADING_GAP_RATIO
+        val isLeadingHat = knownHatPostId == first.id ||
+                (page.prependedHatPostId > 0 && page.prependedHatPostId == first.id) ||
+                structuralHat
+        if (isLeadingHat) {
+            if (knownHatPostId == null) knownHatPostId = first.id
+            posts.removeAt(0)
+        }
         return null
     }
 
@@ -1907,6 +1929,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         /** Arm hybrid page prefetch when scrolled within this fraction of a viewport from an edge
          *  (WebView parity: an ~800px pixel threshold rather than an item count). */
         const val HYBRID_PREFETCH_VIEWPORT_FRACTION = 0.75f
+
+        /** A deep page's leading post is the prepended topic hat when its id is at least this much OLDER
+         *  (smaller) than the page's next post — the hat is the topic's ancient first post, the page's own
+         *  posts are recent and clustered. Large enough to never trip on normal consecutive posts. */
+        const val HAT_LEADING_ID_GAP = 1_000_000L
+
+        /** …and the leading gap must also be at least this many times the page's typical intra-post gap,
+         *  so a merely-slow topic with large but uniform gaps isn't mistaken for a prepended hat. */
+        const val HAT_LEADING_GAP_RATIO = 20L
 
         /** Font-size pref value that maps to textScale 1.0 (matches the WebView default defaultFontSize). */
         const val REFERENCE_FONT_SIZE = 16f
