@@ -17,6 +17,17 @@
     android:paddingHorizontal="12dp"
     android:paddingVertical="10dp">
 
+    <!-- Topic-hat toggle bar («ШАПКА ТЕМЫ ▾/▴»). For the hat post the adapter shows this ABOVE the
+         author header (WebView parity: the hat_button sits outside/above the collapsible hat_content),
+         so the whole post below is the collapsible region. GONE for ordinary posts. -->
+    <LinearLayout
+        android:id="@+id/native_post_hat_toggle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone" />
+
     <!-- Header: [avatar+rep] [nick / group / 💬count]  [date, #N ⋮] — layout parity with WebView. -->
     <LinearLayout
         android:id="@+id/native_post_header"
