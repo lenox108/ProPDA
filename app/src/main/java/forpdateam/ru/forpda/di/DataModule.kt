@@ -27,6 +27,8 @@ import forpdateam.ru.forpda.entity.db.ForumUserDao
 import forpdateam.ru.forpda.entity.db.qms.QmsContactDao
 import forpdateam.ru.forpda.entity.db.qms.QmsThemeDao
 import forpdateam.ru.forpda.entity.db.qms.QmsThemesDao
+import forpdateam.ru.forpda.entity.db.readboundary.TopicReadBoundaryDao
+import forpdateam.ru.forpda.entity.db.readboundary.TopicReadBoundaryDatabase
 import androidx.room.Room
 import forpdateam.ru.forpda.model.data.providers.UserSourceProvider
 import forpdateam.ru.forpda.model.data.remote.IWebClient
@@ -105,6 +107,19 @@ object DataModule {
         )
             .build()
     }
+
+    @Provides @Singleton
+    fun provideTopicReadBoundaryDatabase(@ApplicationContext context: Context): TopicReadBoundaryDatabase {
+        return Room.databaseBuilder(
+            context,
+            TopicReadBoundaryDatabase::class.java,
+            "topic_read_boundary_database"
+        ).build()
+    }
+
+    @Provides @Singleton
+    fun provideTopicReadBoundaryDao(database: TopicReadBoundaryDatabase): TopicReadBoundaryDao =
+        database.topicReadBoundaryDao()
 
     @Provides @Singleton
     fun provideNoteItemDao(database: AppDatabase): NoteItemDao = database.noteItemDao()
