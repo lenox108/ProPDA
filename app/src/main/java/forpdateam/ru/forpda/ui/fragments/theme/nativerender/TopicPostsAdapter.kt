@@ -944,9 +944,12 @@ class TopicPostsAdapter(
         private fun textView(text: CharSequence, item: NativePostItem): TextView {
             val ctx = itemView.context
             return TextView(ctx).apply {
-                setText(highlightSearchMatches(text))
+                setText(highlightSearchMatches(neutralizeLowContrastColors(text)))
                 textSize = scaledSp(15f)
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+                // Force in-text links (profile nicks in the hat / «отредактировал N» footer) to the readable
+                // accent — their server-side inline colour is picked for a white bg and vanishes on Sepia.
+                setLinkTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
                 setLineSpacing(0f, 1.1f)
                 val hasLinks = text is Spanned &&
                         text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
@@ -963,6 +966,34 @@ class TopicPostsAdapter(
                     installQuoteSelectionAction(this, item)
                 }
             }
+        }
+
+        /**
+         * Drop inline server text colours that are near-invisible on the current reading surface. The 4pda
+         * topic hat is full of colours picked for a WHITE background (white/pale nicks, headers), which the
+         * WebView neutralises via CSS but [Html.fromHtml] with FROM_HTML_OPTION_USE_CSS_COLORS applies
+         * verbatim → on Sepia/Nord/… half the hat text (and the «отредактировал»/«Куратор темы» nicks) turns
+         * invisible, leaving big empty gaps. We remove only the low-contrast spans so that text falls back to
+         * the high-contrast colorOnSurface, while readable colours (green curator note, links) stay.
+         */
+        private fun neutralizeLowContrastColors(text: CharSequence): CharSequence {
+            if (text !is Spanned) return text
+            if (text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).isEmpty()) return text
+            val surface = itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer)
+            val bg = android.graphics.Color.rgb(
+                    android.graphics.Color.red(surface),
+                    android.graphics.Color.green(surface),
+                    android.graphics.Color.blue(surface))
+            val out = SpannableStringBuilder(text)
+            for (span in out.getSpans(0, out.length, android.text.style.ForegroundColorSpan::class.java)) {
+                val fg = span.foregroundColor
+                val opaqueFg = android.graphics.Color.rgb(
+                        android.graphics.Color.red(fg), android.graphics.Color.green(fg), android.graphics.Color.blue(fg))
+                if (androidx.core.graphics.ColorUtils.calculateContrast(opaqueFg, bg) < LOW_CONTRAST_THRESHOLD) {
+                    out.removeSpan(span)
+                }
+            }
+            return out
         }
 
         /** Adds a «Цитировать» item to the text-selection action bar → quotes the selection into the editor. */
@@ -1032,6 +1063,11 @@ class TopicPostsAdapter(
         const val DEFAULT_IMAGE_RATIO = 0.66f
         const val SMILE_SIZE_SP = 18f
         const val QUOTE_MENU_ID = 0x71_0716
+        // Below this WCAG contrast ratio against the reading surface, an inline server text colour is
+        // treated as invisible and dropped so the text falls back to colorOnSurface. ~2.5 keeps readable
+        // colours (green curator note ≈4.5, medium greys ≈3.5) but strips white/pale-on-Sepia (≈1.2–2.0).
+        const val LOW_CONTRAST_THRESHOLD = 2.5
+
         val ONLINE_DOT_COLOR = android.graphics.Color.parseColor("#4CAF50")
 
         val DIFF = object : DiffUtil.ItemCallback<NativePostItem>() {
