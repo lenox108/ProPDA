@@ -265,11 +265,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         installBottomRefreshDetector()
         refreshLayout.setOnRefreshListener { loadTopic(loadedUrl ?: topicUrl) }
         setupMessagePanel()
-        // Re-lift the reply panel above the IME on every window-inset change (parity with the WebView's
-        // ThemeImeInsetsController). Without an explicit inset listener the host-margin sync relied only
-        // on DimensionHelper, which lags on some OEM builds → the keyboard covered the editor.
+        // Lift the reply panel above the keyboard by reading the REAL ime inset on every window-inset pass
+        // and setting the host's bottom margin directly. The shared DimensionHelper path lags/sticks on
+        // some OEM builds (keyboard covered the editor; and a stale inset left an empty strip after the
+        // keyboard closed) — reading Type.ime() here is exact for both show and dismiss. This fragment
+        // opts out of the base DimensionHelper host-margin path (shouldApplyMessagePanelImeInsets=false).
         ViewCompat.setOnApplyWindowInsetsListener(fragmentContainer) { _, insets ->
-            syncMessagePanelImeWithDimensions()
+            applyMessagePanelImeMargin(insets)
             insets
         }
         setupFab()
@@ -663,10 +665,26 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             panel.messageField.requestFocus()
             showKeyboard(panel.messageField)
         }
-        // Force an inset pass so the host lifts above the keyboard right after the panel appears
-        // (OEM builds can otherwise leave stale IME insets → editor hidden behind the keyboard).
+        // Force an inset pass so the host lifts above the keyboard right after the panel appears.
         ViewCompat.requestApplyInsets(fragmentContainer)
-        fragmentContainer.post { syncMessagePanelImeWithDimensions() }
+    }
+
+    /** This fragment manages the reply-panel IME margin itself (see the fragmentContainer inset listener),
+     *  so opt out of the base DimensionHelper-driven host margin which lags/sticks on some OEM keyboards. */
+    override fun shouldApplyMessagePanelImeInsets(): Boolean = false
+
+    /** Lift [messagePanelHost] to sit exactly above the keyboard from the REAL ime inset (0 when the
+     *  keyboard is hidden or the panel is closed) — device-robust, unlike the lagging DimensionHelper. */
+    private fun applyMessagePanelImeMargin(insets: androidx.core.view.WindowInsetsCompat) {
+        val imeVisible = insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())
+        val imeBottom = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom
+        val panelShown = messagePanel?.visibility == View.VISIBLE
+        val target = if (panelShown && imeVisible) imeBottom else 0
+        val lp = messagePanelHost.layoutParams as? android.view.ViewGroup.MarginLayoutParams ?: return
+        if (lp.bottomMargin != target) {
+            lp.bottomMargin = target
+            messagePanelHost.layoutParams = lp
+        }
     }
 
     /** Hide the editor panel, dismiss the keyboard/popups, and restore the pagination bar. */
