@@ -137,10 +137,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var topicHatPostId: Int? = null
     /** The hat post id once learned from page 1 — used to strip the server-repeated copy off deep pages. */
     private var knownHatPostId: Int? = null
+    /**
+     * The hat post content for the toolbar «Инфо» popup — captured whenever the hat is seen on ANY page
+     * (page 1 keeps it inline; deep pages strip the echoed copy but we still hold it here). Persisted for
+     * the whole topic so the ⓘ button works on every page, matching the WebView (topic-level hat state).
+     */
+    private var toolbarHatItem: NativePostItem? = null
     /** Inline hat collapse state — collapsed by default (the «Инфо» toolbar opens a popup instead). */
     private var hatCollapsed: Boolean = true
-    /** The loaded page's poll (page 1) — the «Опрос» toolbar button shows it in a popup. */
+    /** The topic's poll (parsed on page 1) — the «Опрос» toolbar button shows it in a popup. Cached at
+     *  topic level so the button persists across pages once the poll page has been seen (WebView parity). */
     private var currentPoll: forpdateam.ru.forpda.entity.remote.theme.Poll? = null
+    /** Topic id [currentPoll] belongs to — scopes the cached poll to the current topic. */
+    private var cachedPollTopicId: Int? = null
+
+    /** Popup showing the full topic title when the toolbar title is tapped (WebView parity). */
+    private var topicTitlePopup: android.widget.PopupWindow? = null
 
     /** The full BBCode editor (formatting toolbar, smiles, attachments) — one-to-one with WebView. */
     private var messagePanel: MessagePanel? = null
@@ -233,6 +245,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         setupMessagePanel()
         setupFab()
         setupToolbarMenu()
+        setupTitleTap()
         applyToolbarAutoHide()
         loadTopic(resolveInitialOpenUrl())
     }
@@ -459,6 +472,56 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         toolbar.menu.findItem(MENU_POLL)?.isVisible = pageHasPoll
         toolbar.menu.findItem(MENU_SEARCH)?.isVisible = !pageHasPoll
         toolbar.menu.findItem(MENU_HAT)?.isVisible = pageHasHat
+    }
+
+    /**
+     * A tap on the toolbar title must show the FULL topic name in a popup (WebView parity) — not toggle
+     * scroll-to-top/bottom. [TabFragment] wires the title strip to [TabTopScroller.toggleScrollTop] for
+     * every tab; here we consume that touch on the wrapper and route the title's own click to the popup,
+     * exactly as [ThemeFragmentWeb.consumeHeaderTouchGaps] does.
+     */
+    private fun setupTitleTap() {
+        titlesWrapper.isClickable = true
+        titlesWrapper.setOnTouchListener { _, _ -> true } // swallow the scroll-toggle click on the strip
+        toolbarTitleView.apply {
+            isClickable = true
+            setOnClickListener { showFullTopicTitle() }
+        }
+    }
+
+    /** Popup with the full (untruncated) topic title, anchored under the toolbar title (WebView parity). */
+    private fun showFullTopicTitle() {
+        val topicTitle = getTitle().trim()
+        if (topicTitle.isEmpty()) return
+        if (topicTitlePopup?.isShowing == true) return
+        val ctx = requireContext()
+        val dm = ctx.resources.displayMetrics
+        val dp8 = (8 * dm.density).toInt()
+        val dp16 = (16 * dm.density).toInt()
+        val contentView = androidx.appcompat.widget.AppCompatTextView(ctx).apply {
+            text = topicTitle
+            setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
+            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            gravity = android.view.Gravity.START
+            maxLines = 4
+            maxWidth = dm.widthPixels - dp16 * 2
+            setPadding(dp16, dp8, dp16, dp8)
+        }
+        topicTitlePopup = android.widget.PopupWindow(
+                contentView,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                true,
+        ).apply {
+            isOutsideTouchable = true
+            elevation = 4 * dm.density
+            setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
+                setColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurface))
+                cornerRadius = dp8.toFloat()
+            })
+            setOnDismissListener { if (topicTitlePopup === this) topicTitlePopup = null }
+            showAsDropDown(toolbarTitleView, 0, dp8)
+        }
     }
 
     /**
@@ -775,8 +838,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun onHatToolbarClick() {
         // Toggle: a second tap on the ⓘ button closes the overlay instead of reopening it.
         if (dismissThemeOverlay()) return
-        val hatId = topicHatPostId ?: return
-        val hatItem = loadedItems.firstOrNull { it.postId == hatId } ?: return
+        // Prefer the live inline hat post (page 1); fall back to the captured topic-level hat so the popup
+        // still works on deep pages where the echoed hat was stripped from the list.
+        val hatItem = topicHatPostId?.let { id -> loadedItems.firstOrNull { it.postId == id } }
+                ?: toolbarHatItem
+                ?: return
         val ctx = requireContext()
         // A throwaway adapter renders the hat post fully (no hat-collapse in the popup) with all its
         // spoilers/links, reusing the exact post rendering.
@@ -877,8 +943,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun processHatForPage(page: forpdateam.ru.forpda.entity.remote.theme.ThemePage): Int? {
         val policy = forpdateam.ru.forpda.presentation.theme.TopicPrependedHatPolicy
         if (page.pagination.current <= 1) {
-            val hatId = policy.detectPrependedHat(page)?.id?.takeIf { it > 0 }
-            if (hatId != null) knownHatPostId = hatId
+            val hatPost = policy.detectPrependedHat(page)?.takeIf { it.id > 0 }
+            val hatId = hatPost?.id
+            if (hatId != null) {
+                knownHatPostId = hatId
+                toolbarHatItem = mapper.map(hatPost) // hold the hat for the toolbar ⓘ popup on every page
+            }
             return hatId
         }
         // Deep page: 4pda echoes the topic's FIRST post (the hat) at the very top of every page. Only ever
@@ -902,6 +972,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 structuralHat
         if (isLeadingHat) {
             if (knownHatPostId == null) knownHatPostId = first.id
+            // Capture the echoed hat for the toolbar ⓘ popup BEFORE stripping it from the deep page, so the
+            // button works even when the topic is opened directly on a deep page (never showing page 1).
+            if (toolbarHatItem == null) toolbarHatItem = mapper.map(first)
             posts.removeAt(0)
         }
         return null
@@ -1023,10 +1096,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val hatId = processHatForPage(page)
                 if (hatId != null) {
                     topicHatPostId = hatId
-                    pageHasHat = true
-                    refreshToolbarState()
                     postsAdapter.setTopicHat(hatId, hatCollapsed)
                 }
+                // Prepending page 1 also brings the poll into view — cache it so the toolbar «Опрос» button
+                // lights up (and the inline poll header appears). The hat button follows toolbarHatItem.
+                if (page.pagination.current <= 1 && page.poll != null && currentPoll == null) {
+                    currentPoll = page.poll
+                    cachedPollTopicId = page.id
+                    pollHeaderAdapter.setPoll(page.poll)
+                }
+                if (hatId != null || toolbarHatItem != null) pageHasHat = true
+                if (currentPoll != null) pageHasPoll = true
+                if (pageHasHat || pageHasPoll) refreshToolbarState()
                 val newItems = pagination.registerAndFilterNew(
                         filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current)))
                 pagination.onPagePrepended(page.pagination.current)
@@ -1847,19 +1928,28 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pageForumId = page.forumId
                 pageTopicId = page.id
                 pageSt = page.st
-                // The poll belongs to page 1 only — don't show it when jumping to a later page.
-                val poll = if (page.pagination.current <= 1) page.poll else null
-                pollHeaderAdapter.setPoll(poll)
-                pageHasPoll = poll != null
-                currentPoll = poll
+                // Fresh (re)load of the topic — forget the previous session's topic-level hat/poll state.
+                knownHatPostId = null
+                toolbarHatItem = null
+                currentPoll = null
+                cachedPollTopicId = null
+                // The poll's HTML lives on page 1 only. Show it inline only there, but CACHE it at topic
+                // level (currentPoll) so the «Опрос» toolbar button persists across pages once page 1 has
+                // been seen — matching the WebView, where the poll button is a topic-level toggle.
+                val inlinePoll = if (page.pagination.current <= 1) page.poll else null
+                pollHeaderAdapter.setPoll(inlinePoll)
+                if (page.poll != null) {
+                    currentPoll = page.poll
+                    cachedPollTopicId = page.id
+                }
+                pageHasPoll = currentPoll != null
                 // Topic hat (SAME policy as the WebView): 4pda echoes the topic's first post as a «шапка»
                 // at the top of EVERY page. Keep it only on the real first page (as a collapsible block);
-                // on deep pages strip the repeated copy so it doesn't show again (parity with the full
-                // site behaviour the user asked for). processHatForPage does both and returns the hat id
-                // only for the first page.
-                knownHatPostId = null // fresh (re)load of the topic — forget the previous session's hat id
+                // on deep pages strip the repeated copy so it doesn't show again. processHatForPage returns
+                // the hat id only for page 1 (inline), but also captures [toolbarHatItem] on ANY page so the
+                // ⓘ toolbar button (and its popup) work even when the topic opens directly on a deep page.
                 topicHatPostId = processHatForPage(page)
-                pageHasHat = topicHatPostId != null
+                pageHasHat = toolbarHatItem != null
                 refreshToolbarState()
                 val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id

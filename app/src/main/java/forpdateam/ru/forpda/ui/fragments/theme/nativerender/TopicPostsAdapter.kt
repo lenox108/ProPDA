@@ -732,16 +732,21 @@ class TopicPostsAdapter(
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val horizontalChromePx = (40 * dm.density).toInt() // card margins + paddings
-            val targetWidth = (dm.widthPixels - horizontalChromePx).coerceAtLeast(1)
+            val maxWidth = (dm.widthPixels - horizontalChromePx).coerceAtLeast(1)
             val ratio = if (block.displayWidthPx > 0 && block.displayHeightPx > 0) {
                 block.displayHeightPx.toFloat() / block.displayWidthPx.toFloat()
             } else {
                 DEFAULT_IMAGE_RATIO
             }
+            // Attachments on 4pda are THUMBNAILS carrying their own width/height — show them at that natural
+            // size (left-aligned), only shrinking to fit the card, NOT stretched to full width. This matches
+            // the WebView, where a small thumbnail stays small and only a wide image is capped to the column.
+            val naturalWidth = (block.displayWidthPx * dm.density).toInt()
+            val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, maxWidth) else maxWidth
             val reservedHeight = (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels)
             return ImageView(ctx).apply {
                 layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        targetWidth,
                         reservedHeight,
                 ).apply { topMargin = (6 * dm.density).toInt() }
                 scaleType = ImageView.ScaleType.FIT_CENTER
