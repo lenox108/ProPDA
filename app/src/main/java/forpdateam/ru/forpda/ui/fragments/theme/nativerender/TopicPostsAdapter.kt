@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ForPdaCoil
+import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.Html
 import forpdateam.ru.forpda.common.LinkMovementMethod
 import forpdateam.ru.forpda.common.getColorFromAttr
@@ -59,6 +60,9 @@ class TopicPostsAdapter(
         fun onToggleHat()
         /** Long-press on a spoiler header → copy a deep link to that spoiler ([spoilNumber] is 1-based). */
         fun onSpoilerCopyLink(item: NativePostItem, spoilNumber: Int)
+        /** Tap on an attachment image → open the swipeable image viewer over [galleryUrls] at [index]
+         *  (parity with the WebView, which groups all of a post's images into one gallery). */
+        fun onImageClick(galleryUrls: List<String>, index: Int)
     }
 
     /**
@@ -166,6 +170,10 @@ class TopicPostsAdapter(
     /** Per-post render pass state threaded through the recursive block rendering. */
     private class RenderScope(val postId: Int) {
         var spoilerSeq: Int = 0
+        /** Viewer-resolved URLs of this post's attachment images, in document order (incl. nested in
+         *  quotes/spoilers). Built as images are rendered; each image view captures its own index so a
+         *  tap opens the whole post as one swipeable gallery (WebView parity). */
+        val galleryUrls = ArrayList<String>()
     }
 
     class PostViewHolder(
@@ -646,7 +654,7 @@ class TopicPostsAdapter(
             for (block in blocks) {
                 val child = when (block) {
                     is BodyBlock.Text -> textView(spanned(block.html), item)
-                    is BodyBlock.Image -> imageView(block)
+                    is BodyBlock.Image -> imageView(block, scope)
                     is BodyBlock.Quote -> quoteView(block, scope, item)
                     is BodyBlock.Spoiler -> spoilerView(block, scope, item)
                     is BodyBlock.Code -> codeView(block)
@@ -747,7 +755,7 @@ class TopicPostsAdapter(
          * anchor (§2/§6). Tapping routes the attachment link through the app (image viewer /
          * download), same as the WebView path.
          */
-        private fun imageView(block: BodyBlock.Image): View {
+        private fun imageView(block: BodyBlock.Image, scope: RenderScope): View {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val horizontalChromePx = (40 * dm.density).toInt() // card margins + paddings
@@ -774,7 +782,17 @@ class TopicPostsAdapter(
                 setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
                 ForPdaCoil.loadInto(this, block.imageUrl)
                 val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
-                setOnClickListener { linkHandler.handle(tapUrl, null) }
+                val viewerUrl = FourPdaImageUrls.resolveViewerUrl(tapUrl)
+                if (FourPdaImageUrls.isViewableInViewer(viewerUrl)) {
+                    // Add to the post's running gallery and remember our slot; a tap opens the whole post
+                    // as one swipeable gallery starting on this image (WebView parity).
+                    val index = scope.galleryUrls.size
+                    scope.galleryUrls.add(viewerUrl)
+                    setOnClickListener { actionListener.onImageClick(scope.galleryUrls, index) }
+                } else {
+                    // Non-viewable (e.g. an off-site link) → hand off to the link handler as before.
+                    setOnClickListener { linkHandler.handle(tapUrl, null) }
+                }
             }
         }
 

@@ -944,6 +944,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         Toast.makeText(requireContext(), "Ссылка на спойлер скопирована", Toast.LENGTH_SHORT).show()
     }
 
+    /** Tap an attachment image → open the swipeable image viewer over the post's whole gallery, starting
+     *  on the tapped image (parity with the WebView's handleImageNavigation). */
+    override fun onImageClick(galleryUrls: List<String>, index: Int) {
+        if (galleryUrls.isEmpty()) return
+        val start = index.coerceIn(0, galleryUrls.size - 1)
+        forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
+                .startActivity(requireContext(), ArrayList(galleryUrls), start)
+    }
+
     /** Header tap on the hat post itself toggles its body (same session state as the toolbar «Инфо»). */
     override fun onToggleHat() {
         val hatId = topicHatPostId ?: return
