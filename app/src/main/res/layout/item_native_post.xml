@@ -202,4 +202,15 @@
 
     </LinearLayout>
 
+    <!-- Inter-post separator: on the continuous reading surface the cards share the page tone, so a thin
+         divider line marks the boundary between posts (parity with the WebView's per-post borders). Hidden
+         on the last loaded post so it never floats above the trailing empty surface. -->
+    <View
+        android:id="@+id/native_post_separator"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="4dp"
+        android:background="?attr/colorOutlineVariant" />
+
 </LinearLayout>

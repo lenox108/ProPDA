@@ -160,7 +160,10 @@ class TopicPostsAdapter(
         // The «Страница N» divider label is baked into the item at list assembly (see the fragment), so
         // DiffUtil rebinds the boundary post when a prepended page shifts it. Never on the hat.
         val pageDivider = item.pageDividerLabel?.takeIf { !isHat }
-        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider)
+        // Draw the inter-post separator for every post except the very last loaded one (so no divider
+        // floats above the trailing empty surface).
+        val showSeparator = position < itemCount - 1
+        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider, showSeparator)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -188,6 +191,7 @@ class TopicPostsAdapter(
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
         private val hatToggle: LinearLayout = itemView.findViewById(R.id.native_post_hat_toggle)
         private val pageDivider: TextView = itemView.findViewById(R.id.native_post_page_divider)
+        private val separator: View = itemView.findViewById(R.id.native_post_separator)
         /** The surface card inside the transparent wrapper — bg/highlight/density apply HERE, so the
          *  «Страница N» divider (a sibling above it) stays on the neutral list background. */
         private val card: View = itemView.findViewById(R.id.native_post_card)
@@ -218,9 +222,12 @@ class TopicPostsAdapter(
                 authorized: Boolean = false,
                 memberId: Int = 0,
                 pageDividerLabel: String? = null,
+                showSeparator: Boolean = true,
         ) {
             pageDivider.text = pageDividerLabel.orEmpty()
             pageDivider.visibility = if (pageDividerLabel != null) View.VISIBLE else View.GONE
+            // Hidden on a folded hat (only the toggle bar shows) and on the last post (handled by the adapter).
+            separator.visibility = if (showSeparator && !(isHat && hatCollapsed)) View.VISIBLE else View.GONE
             this.settings = settings
             this.searchQuery = searchQuery
             this.authorized = authorized
@@ -745,11 +752,12 @@ class TopicPostsAdapter(
             } else {
                 DEFAULT_IMAGE_RATIO
             }
-            // Attachments on 4pda are THUMBNAILS carrying their own width/height — show them at that natural
-            // size (left-aligned), only shrinking to fit the card, NOT stretched to full width. This matches
-            // the WebView, where a small thumbnail stays small and only a wide image is capped to the column.
+            // Attached images render as a compact THUMBNAIL (left-aligned), not stretched across the column;
+            // a tap opens the full-size image in the viewer (tapUrl below). Cap to a thumbnail box so a big
+            // (or width-less) attachment never fills the whole post — parity with the WebView attach preview.
+            val thumbMaxPx = (150 * dm.density).toInt().coerceAtMost(maxWidth)
             val naturalWidth = (block.displayWidthPx * dm.density).toInt()
-            val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, maxWidth) else maxWidth
+            val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, thumbMaxPx) else thumbMaxPx
             val reservedHeight = (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels)
             return ImageView(ctx).apply {
                 layoutParams = LinearLayout.LayoutParams(
