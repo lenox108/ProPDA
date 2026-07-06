@@ -188,6 +188,9 @@ class TopicPostsAdapter(
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
         private val hatToggle: LinearLayout = itemView.findViewById(R.id.native_post_hat_toggle)
         private val pageDivider: TextView = itemView.findViewById(R.id.native_post_page_divider)
+        /** The surface card inside the transparent wrapper — bg/highlight/density apply HERE, so the
+         *  «Страница N» divider (a sibling above it) stays on the neutral list background. */
+        private val card: View = itemView.findViewById(R.id.native_post_card)
 
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
         private var highlightAnimator: android.animation.ValueAnimator? = null
@@ -226,7 +229,7 @@ class TopicPostsAdapter(
             // post's mid-fade tint.
             highlightAnimator?.cancel()
             highlightAnimator = null
-            itemView.setBackgroundColor(cardBaseColor())
+            card.setBackgroundColor(cardBaseColor())
             applyDensity()
             bindNick(item)
             bindMeta(item)
@@ -339,12 +342,12 @@ class TopicPostsAdapter(
             }
             val hPad = (12 * dm.density).toInt()
             val vPad = (vPadDp * dm.density).toInt()
-            itemView.setPadding(hPad, vPad, hPad, vPad)
-            (itemView.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            card.setPadding(hPad, vPad, hPad, vPad)
+            (card.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
                 val gap = (gapDp * dm.density).toInt()
                 lp.topMargin = gap
                 lp.bottomMargin = gap
-                itemView.layoutParams = lp
+                card.layoutParams = lp
             }
         }
 
@@ -358,7 +361,7 @@ class TopicPostsAdapter(
                     .ofObject(android.animation.ArgbEvaluator(), start, base).apply {
                         duration = 1600L
                         startDelay = 250L
-                        addUpdateListener { itemView.setBackgroundColor(it.animatedValue as Int) }
+                        addUpdateListener { card.setBackgroundColor(it.animatedValue as Int) }
                         start()
                     }
         }
