@@ -241,6 +241,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val auth = authHolder.get()
         postsAdapter.setAuthContext(authorized = auth.isAuth(), memberId = auth.userId)
         installPageSwipeDetector()
+        installBottomRefreshDetector()
         refreshLayout.setOnRefreshListener { loadTopic(loadedUrl ?: topicUrl) }
         setupMessagePanel()
         setupFab()
@@ -935,6 +936,85 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
 
             override fun onRequestDisallowInterceptTouchEvent(disallow: Boolean) {}
+        })
+    }
+
+    /**
+     * Bottom-edge pull-up refresh («Обновление свайпом снизу», default ON) — parity with the WebView's
+     * BottomRefreshGestureController. Arms only at the TRUE bottom of the list (nothing more to scroll,
+     * so it never fights hybrid next-page loading), captures after a clear controlled UPWARD drag (not a
+     * fling, not a horizontal swipe), and on release past the threshold reloads the current page.
+     */
+    private fun installBottomRefreshDetector() {
+        val vc = android.view.ViewConfiguration.get(requireContext())
+        val touchSlop = vc.scaledTouchSlop
+        val density = resources.displayMetrics.density
+        val captureDist = kotlin.math.max(touchSlop * 3f, 48f * density)
+        val triggerDist = 160f * density
+        val maxReleaseVelocity = 1450f * density
+        val minDurationMs = 240L
+        recyclerView.addOnItemTouchListener(object : androidx.recyclerview.widget.RecyclerView.OnItemTouchListener {
+            private var downX = 0f
+            private var downY = 0f
+            private var downAt = 0L
+            private var captured = false
+            private var blocked = false
+            private var vt: android.view.VelocityTracker? = null
+
+            override fun onInterceptTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent): Boolean {
+                if (!mainPreferencesHolder.getTopicBottomRefreshGestureEnabled()) return false
+                if (messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE) return false
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        downX = e.x; downY = e.y; downAt = android.os.SystemClock.uptimeMillis()
+                        captured = false
+                        // Arm only when already at the very bottom (no more content below) and not mid-reload.
+                        blocked = rv.canScrollVertically(1) || refreshLayout.isRefreshing || e.pointerCount > 1
+                        vt = android.view.VelocityTracker.obtain().also { it.addMovement(e) }
+                    }
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        vt?.addMovement(e)
+                        if (blocked || e.pointerCount != 1) return false
+                        val up = downY - e.y
+                        val horiz = kotlin.math.abs(e.x - downX)
+                        if (up <= 0f) return false
+                        if (up < captureDist) return false
+                        if (up < horiz * 1.5f) { blocked = true; return false } // horizontal → not ours
+                        if (rv.canScrollVertically(1)) { blocked = true; return false } // left the bottom
+                        captured = true
+                        rv.parent?.requestDisallowInterceptTouchEvent(true)
+                        return true
+                    }
+                }
+                return false
+            }
+
+            override fun onTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent) {
+                vt?.addMovement(e)
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_UP -> {
+                        val up = downY - e.y
+                        vt?.computeCurrentVelocity(1000)
+                        val vel = kotlin.math.abs(vt?.yVelocity ?: 0f)
+                        val dur = android.os.SystemClock.uptimeMillis() - downAt
+                        if (captured && up >= triggerDist && vel <= maxReleaseVelocity && dur >= minDurationMs &&
+                                !refreshLayout.isRefreshing) {
+                            Toast.makeText(requireContext(), "Обновление…", Toast.LENGTH_SHORT).show()
+                            loadTopic(loadedUrl ?: topicUrl)
+                        }
+                        reset(rv)
+                    }
+                    android.view.MotionEvent.ACTION_CANCEL -> reset(rv)
+                }
+            }
+
+            override fun onRequestDisallowInterceptTouchEvent(disallow: Boolean) {}
+
+            private fun reset(rv: androidx.recyclerview.widget.RecyclerView) {
+                rv.parent?.requestDisallowInterceptTouchEvent(false)
+                vt?.recycle(); vt = null
+                captured = false; blocked = false
+            }
         })
     }
 
