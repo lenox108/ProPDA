@@ -355,9 +355,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (!fab.isShown) fab.show()
     }
 
-    /** Short tap: scroll ~a screen in the arrow's direction (parity with the WebView pageUp/Down). */
+    /**
+     * Short tap: scroll ~one full screen in the arrow's direction — parity with the WebView's
+     * pageUp/pageDown, which move by the viewport minus a small overlap (theme.js uses ~6% of the
+     * viewport, capped at 48dp). Uses the real visible extent (not the raw view height) so the jump
+     * is a genuine page turn, not the weaker ~0.85 step it was before.
+     */
     private fun smartScrollTap() {
-        val step = (recyclerView.height * 0.85f).toInt().coerceAtLeast(1)
+        // Use the real laid-out view height (reliable pixels) — NOT computeVerticalScrollExtent(), whose
+        // RecyclerView value is a scaled scrollbar metric, not pixels, and yields a too-small jump. Keep a
+        // small overlap (≈8%, capped 64dp) so a line of context carries over, like the WebView pageUp/Down.
+        val viewport = recyclerView.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+        val overlap = (64 * resources.displayMetrics.density).toInt()
+                .coerceAtMost((viewport * 0.08f).toInt())
+        val step = (viewport - overlap).coerceAtLeast(1)
         recyclerView.smoothScrollBy(0, if (fabPointsDown) step else -step)
     }
 
