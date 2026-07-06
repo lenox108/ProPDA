@@ -1202,21 +1202,32 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (!pagination.hasPrevPage()) return
         if (recyclerView.computeVerticalScrollRange() > recyclerView.height) return // already fills the screen
         fillingLastPage = true
+        // Hide the list while filling so the user never sees the transient «few posts at the top + empty
+        // block below → jump to the bottom» — only the final, filled state (posts at the bottom) is revealed.
+        recyclerView.alpha = 0f
         loadPrevPage()
     }
 
-    /** After a fill-prepend: pull another previous page if still short, else anchor the newest post to the bottom. */
+    /** After a fill-prepend: pull another previous page if still short, else reveal anchored at the bottom. */
     private fun continueFillingLastPage() {
         recyclerView.post {
-            if (view == null) { fillingLastPage = false; return@post }
+            if (view == null) { finishLastPageFill(scrollToBottom = false); return@post }
             if (pagination.hasPrevPage() && recyclerView.computeVerticalScrollRange() <= recyclerView.height) {
                 loadPrevPage() // still under-filled → pull one more previous page
             } else {
-                fillingLastPage = false
-                val last = (recyclerView.adapter?.itemCount ?: 0) - 1
-                if (last >= 0) (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(last)
+                finishLastPageFill(scrollToBottom = true)
             }
         }
+    }
+
+    /** End a last-page fill: optionally anchor the newest post to the bottom, then reveal the list. */
+    private fun finishLastPageFill(scrollToBottom: Boolean) {
+        fillingLastPage = false
+        if (scrollToBottom) {
+            val last = (recyclerView.adapter?.itemCount ?: 0) - 1
+            if (last >= 0) (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(last)
+        }
+        recyclerView.alpha = 1f
     }
 
     /**
@@ -1272,8 +1283,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (reArm) {
                 isLoadingPrevPage = false
                 // A prev page that yielded no NEW posts (all duplicates) never calls the prepend callback,
-                // so stop the fill loop here or fillingLastPage would stay stuck true.
-                fillingLastPage = false
+                // so end the fill here (and reveal the list) or fillingLastPage would stay stuck true.
+                if (fillingLastPage) finishLastPageFill(scrollToBottom = true)
             }
             hideHybridLoading()
         }
@@ -2075,6 +2086,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         refreshLayout.isRefreshing = true
         isLoadingNextPage = false
         isLoadingPrevPage = false
+        // Defensive: never leave the list hidden if a previous last-page fill was interrupted mid-flight.
+        fillingLastPage = false
+        recyclerView.alpha = 1f
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
