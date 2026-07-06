@@ -1062,6 +1062,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         // (short pages / tall viewport), so reading forward never stalls at a page seam.
                         if (view != null) recyclerView.post { maybeLoadNextPage() }
                     }
+                    // Enrich the appended page too (post ratings «ka_p» + 💬 counts live only in desktop
+                    // HTML) — WebView parity: it defers a merge for every hybrid-appended page, not just the
+                    // first. Without this, ratings/counts appeared only on the initially opened page.
+                    enrichLoadedPage(page)
                 }
                 updatePaginationBar() // totalPages may have grown
 
@@ -1126,6 +1130,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (newItems.isNotEmpty()) {
                     prependPreservingPosition(newItems)
                     reArm = false // re-armed inside the submitList callback after the scroll is restored
+                    // Enrich the prepended page too (ratings/💬 counts), same as the initial + next-page
+                    // paths — otherwise scrolling UP into earlier pages would show them without ratings.
+                    enrichLoadedPage(page)
                 }
             }
             if (reArm) isLoadingPrevPage = false

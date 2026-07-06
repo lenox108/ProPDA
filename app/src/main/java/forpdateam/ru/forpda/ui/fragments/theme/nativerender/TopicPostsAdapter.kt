@@ -521,7 +521,11 @@ class TopicPostsAdapter(
             if (canPlus) {
                 actions.addView(iconAction(R.drawable.ic_post_thumb_up, null) { actionListener.onVote(item, up = true) })
             }
-            item.postRating?.takeIf { it.isNotBlank() }?.let { actions.addView(ratingLabel(it)) }
+            // Show the rating NUMBER only when it's non-zero — the WebView hides a «0» rating
+            // (post_rating_hidden), otherwise every post would carry a meaningless «0» between the thumbs.
+            item.postRating
+                    ?.takeIf { it.isNotBlank() && it.replace("+", "").trim().toIntOrNull() != 0 }
+                    ?.let { actions.addView(ratingLabel(it)) }
             if (canMinus) {
                 actions.addView(iconAction(R.drawable.ic_post_thumb_down, null) { actionListener.onVote(item, up = false) })
             }
