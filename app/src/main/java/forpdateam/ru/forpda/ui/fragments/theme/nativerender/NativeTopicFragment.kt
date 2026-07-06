@@ -2212,6 +2212,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Remember the requested target so the navigator's redundant echo of the initial open (see
         // loadThemeUrlFromNavigator) doesn't fire a second, page-1 load in parallel.
         lastRequestedUrl = url
+        // «view=getlastpost» = «открыть в конец темы» (read topic, «Первое непрочитанное» setting). Its
+        // server redirect anchors on the last-READ post, which on an already-read topic with newer posts
+        // is a MIDDLE post — felt like landing on a random post. Force the landing to the true bottom of
+        // the loaded last page instead (same as «В конец темы»).
+        if (url.contains("getlastpost", ignoreCase = true)) pendingJumpToBottom = true
         refreshLayout.isRefreshing = true
         isLoadingNextPage = false
         isLoadingPrevPage = false
