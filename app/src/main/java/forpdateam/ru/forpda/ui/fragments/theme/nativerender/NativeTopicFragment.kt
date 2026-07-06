@@ -1176,14 +1176,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * In HYBRID the TOP pull must feed upward infinite scroll, not pull-to-refresh: a hard fling to the top
-     * otherwise fires SwipeRefreshLayout, which reloads the topic and yanks the reader to a different page
-     * (the «прыжок» on scroll-up). So disable the swipe-refresh gesture whenever a previous page can still
-     * load above; it re-enables at the topic's first page and in CLASSIC. Manual reload stays on the
-     * toolbar refresh button regardless.
+     * The TOP swipe-down pull-to-refresh belongs to CLASSIC mode only. In HYBRID (infinite scroll) the top
+     * pull must feed upward pagination, never reload — a swipe-refresh there yanks the reader to a different
+     * page (the «прыжок» on scroll-up). HYBRID refreshes exclusively via the bottom-up gesture
+     * (installBottomRefreshDetector); manual reload stays on the toolbar refresh button in both modes.
      */
     private fun updateRefreshGesture() {
-        refreshLayout.isEnabled = isClassicMode() || !pagination.hasPrevPage()
+        refreshLayout.isEnabled = isClassicMode()
     }
 
     private fun loadPrevPage() {
