@@ -365,20 +365,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * Short tap: scroll ~one full screen in the arrow's direction — parity with the WebView's
-     * pageUp/pageDown, which move by the viewport minus a small overlap (theme.js uses ~6% of the
-     * viewport, capped at 48dp). Uses the real visible extent (not the raw view height) so the jump
-     * is a genuine page turn, not the weaker ~0.85 step it was before.
+     * Short tap: flip exactly ONE FORUM page (perPage posts) forward/back in the arrow's direction — the
+     * user wants a whole-page jump («перекинуть на 1 страницу»), not a one-screen nudge. Position-based so
+     * it lands on the page boundary regardless of variable post heights; on reaching the loaded edge the
+     * infinite scroll pulls the adjacent page in. Falls back to a one-viewport scroll if positions aren't
+     * resolvable yet.
      */
     private fun smartScrollTap() {
-        // Use the real laid-out view height (reliable pixels) — NOT computeVerticalScrollExtent(), whose
-        // RecyclerView value is a scaled scrollbar metric, not pixels, and yields a too-small jump. Keep a
-        // small overlap (≈8%, capped 64dp) so a line of context carries over, like the WebView pageUp/Down.
-        val viewport = recyclerView.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-        val overlap = (64 * resources.displayMetrics.density).toInt()
-                .coerceAtMost((viewport * 0.08f).toInt())
-        val step = (viewport - overlap).coerceAtLeast(1)
-        recyclerView.smoothScrollBy(0, if (fabPointsDown) step else -step)
+        val lm = recyclerView.layoutManager as? LinearLayoutManager
+        val total = recyclerView.adapter?.itemCount ?: 0
+        val first = lm?.findFirstVisibleItemPosition() ?: androidx.recyclerview.widget.RecyclerView.NO_POSITION
+        if (lm == null || total <= 0 || first == androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
+            val viewport = recyclerView.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+            recyclerView.smoothScrollBy(0, if (fabPointsDown) viewport else -viewport)
+            return
+        }
+        val perPage = pagination.perPage.takeIf { it > 0 } ?: 20
+        val target = (if (fabPointsDown) first + perPage else first - perPage).coerceIn(0, total - 1)
+        lm.scrollToPositionWithOffset(target, 0)
+        recyclerView.post { if (fabPointsDown) maybeLoadNextPage() else maybeLoadPrevPage() }
     }
 
     /**
@@ -453,10 +458,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             setIcon(forpdateam.ru.forpda.R.drawable.ic_toolbar_search)
             setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
         }
-        menu.add(0, MENU_REFRESH, 3, "Обновить").apply {
-            setIcon(forpdateam.ru.forpda.R.drawable.ic_toolbar_refresh)
-            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-        }
+        // «Обновить» moved into the «Ещё» overflow (see showOverflowMenu): one fewer always-icon frees
+        // toolbar width so the «N / M» page counter subtitle shows in full instead of truncating to «N / …».
+        // Refresh is still reachable via the overflow, pull-to-refresh (CLASSIC) and the bottom-up gesture.
         menu.add(0, MENU_HAT, 4, "Шапка темы").apply {
             setIcon(forpdateam.ru.forpda.R.drawable.ic_info)
             setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
@@ -473,7 +477,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 MENU_CREATE -> { toggleComposeEditor(); true }
                 MENU_POLL -> { onPollToolbarClick(); true }
                 MENU_SEARCH -> { toggleSearchBar(); true }
-                MENU_REFRESH -> { loadTopic(loadedUrl ?: topicUrl); true }
                 MENU_HAT -> { onHatToolbarClick(); true }
                 MENU_OVERFLOW -> { showOverflowMenu(); true }
                 else -> false
@@ -775,6 +778,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun showOverflowMenu() {
         val ctx = requireContext()
         val actions = buildList<Pair<String, () -> Unit>> {
+            add("Обновить" to { loadTopic(loadedUrl ?: topicUrl) })
             add("Скопировать ссылку" to {
                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as? android.content.ClipboardManager
