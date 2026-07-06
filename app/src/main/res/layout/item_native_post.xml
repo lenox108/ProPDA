@@ -1,28 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Native topic renderer post card (roadmap native-topic-renderer.md, Фаза 1).
-  Header (avatar + nick/group/date) + a vertical container the adapter fills with
-  one child view per BodyBlock + a minimal footer (post number / rating).
+  Transparent OUTER wrapper so the «Страница N» divider renders in the neutral gap BETWEEN cards
+  (on the list background, WebView parity) — NOT inside the post card's surface. The inner
+  native_post_card carries the surface background, margins, padding and all the post content.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/native_post_card"
+    android:id="@+id/native_post_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:layout_marginHorizontal="8dp"
-    android:layout_marginVertical="4dp"
-    android:background="?attr/colorSurfaceContainer"
-    android:paddingHorizontal="12dp"
-    android:paddingVertical="10dp">
+    android:orientation="vertical">
 
     <!-- «Страница N» divider — shown above the first post of each newly loaded page (hybrid infinite
-         scroll), matching the WebView page separators. GONE for posts in the middle of a page. -->
+         scroll), matching the WebView page separators. Lives on the TRANSPARENT wrapper so it sits in
+         the neutral gap between cards, not on a card's surface. GONE for posts mid-page. -->
     <TextView
         android:id="@+id/native_post_page_divider"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
         android:gravity="center"
@@ -32,162 +30,176 @@
         android:visibility="gone"
         tools:text="Страница 3" />
 
-    <!-- Topic-hat toggle bar («ШАПКА ТЕМЫ ▾/▴»). For the hat post the adapter shows this ABOVE the
-         author header (WebView parity: the hat_button sits outside/above the collapsible hat_content),
-         so the whole post below is the collapsible region. GONE for ordinary posts. -->
+    <!-- The post card itself: surface background + margins + inner padding. -->
     <LinearLayout
-        android:id="@+id/native_post_hat_toggle"
+        android:id="@+id/native_post_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:visibility="gone" />
+        android:orientation="vertical"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginVertical="4dp"
+        android:background="?attr/colorSurfaceContainer"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp">
 
-    <!-- Header: [avatar+rep] [nick / group / 💬count]  [date, #N ⋮] — layout parity with WebView. -->
-    <LinearLayout
-        android:id="@+id/native_post_header"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="top">
-
-        <!-- Avatar with the reputation number overlaid as a badge (parity with WebView .reputation). -->
-        <FrameLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
-
-            <ImageView
-                android:id="@+id/native_post_avatar"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:contentDescription="@null"
-                android:scaleType="centerCrop" />
-
-            <TextView
-                android:id="@+id/native_post_rep_badge"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|end"
-                android:layout_marginBottom="-3dp"
-                android:layout_marginEnd="-3dp"
-                android:background="@drawable/bg_post_rep_badge"
-                android:paddingHorizontal="4dp"
-                android:paddingVertical="1dp"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:minWidth="16dp"
-                android:gravity="center"
-                tools:text="28" />
-        </FrameLayout>
-
+        <!-- Topic-hat toggle bar («ШАПКА ТЕМЫ ▾/▴»). For the hat post the adapter shows this ABOVE the
+             author header (WebView parity: the hat_button sits outside/above the collapsible hat_content),
+             so the whole post below is the collapsible region. GONE for ordinary posts. -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:id="@+id/native_post_hat_toggle"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="10dp"
-            android:orientation="vertical">
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/native_post_nick"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textStyle="bold"
-                android:textSize="15sp"
-                android:textColor="?attr/colorOnSurface"
-                tools:text="SnapshotUser" />
-
-            <!-- Author group (tinted by server groupColor) — parity with WebView .group_text. -->
-            <TextView
-                android:id="@+id/native_post_meta"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
-                android:textSize="12sp"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                tools:text="Постоянный" />
-
-            <!-- Author's forum post count (💬 N) — parity with WebView user_post_count. -->
-            <TextView
-                android:id="@+id/native_post_count"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:drawablePadding="4dp"
-                android:gravity="center_vertical"
-                android:textSize="12sp"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:visibility="gone"
-                tools:text="2846"
-                tools:visibility="visible" />
-        </LinearLayout>
-
-        <!-- Right column: date on top, then post number + three-dots menu (parity with WebView). -->
+        <!-- Header: [avatar+rep] [nick / group / 💬count]  [date, #N ⋮] — layout parity with WebView. -->
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:id="@+id/native_post_header"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="end">
+            android:orientation="horizontal"
+            android:gravity="top">
 
-            <TextView
-                android:id="@+id/native_post_date"
+            <!-- Avatar with the reputation number overlaid as a badge (parity with WebView .reputation). -->
+            <FrameLayout
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                tools:text="20.05.2026, 14:55" />
+                android:layout_height="wrap_content">
 
+                <ImageView
+                    android:id="@+id/native_post_avatar"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:contentDescription="@null"
+                    android:scaleType="centerCrop" />
+
+                <TextView
+                    android:id="@+id/native_post_rep_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:layout_marginBottom="-3dp"
+                    android:layout_marginEnd="-3dp"
+                    android:background="@drawable/bg_post_rep_badge"
+                    android:paddingHorizontal="4dp"
+                    android:paddingVertical="1dp"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:minWidth="16dp"
+                    android:gravity="center"
+                    tools:text="28" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/native_post_nick"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textStyle="bold"
+                    android:textSize="15sp"
+                    android:textColor="?attr/colorOnSurface"
+                    tools:text="SnapshotUser" />
+
+                <!-- Author group (tinted by server groupColor) — parity with WebView .group_text. -->
+                <TextView
+                    android:id="@+id/native_post_meta"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    tools:text="Постоянный" />
+
+                <!-- Author's forum post count (💬 N) — parity with WebView user_post_count. -->
+                <TextView
+                    android:id="@+id/native_post_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:drawablePadding="4dp"
+                    android:gravity="center_vertical"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:visibility="gone"
+                    tools:text="2846"
+                    tools:visibility="visible" />
+            </LinearLayout>
+
+            <!-- Right column: date on top, then post number + three-dots menu (parity with WebView). -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:orientation="vertical"
+                android:gravity="end">
 
                 <TextView
-                    android:id="@+id/native_post_number"
+                    android:id="@+id/native_post_date"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="12sp"
                     android:textColor="?attr/colorOnSurfaceVariant"
-                    tools:text="#21" />
+                    tools:text="20.05.2026, 14:55" />
 
-                <!-- Three-dots post menu (parity with WebView .btn.inf.menu → showPostMenu). -->
-                <ImageView
-                    android:id="@+id/native_post_menu"
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
-                    android:layout_marginStart="2dp"
-                    android:padding="4dp"
-                    android:contentDescription="@string/menu"
-                    android:src="@drawable/ic_more_vert"
-                    app:tint="?attr/colorOnSurfaceVariant" />
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/native_post_number"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="12sp"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        tools:text="#21" />
+
+                    <!-- Three-dots post menu (parity with WebView .btn.inf.menu → showPostMenu). -->
+                    <ImageView
+                        android:id="@+id/native_post_menu"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:layout_marginStart="2dp"
+                        android:padding="4dp"
+                        android:contentDescription="@string/menu"
+                        android:src="@drawable/ic_more_vert"
+                        app:tint="?attr/colorOnSurfaceVariant" />
+                </LinearLayout>
             </LinearLayout>
         </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/native_post_body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/native_post_footer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            tools:text="Рейтинг: 5" />
+
+        <LinearLayout
+            android:id="@+id/native_post_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="6dp" />
+
     </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/native_post_body"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_marginTop="8dp" />
-
-    <TextView
-        android:id="@+id/native_post_footer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:textSize="12sp"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        tools:text="Рейтинг: 5" />
-
-    <LinearLayout
-        android:id="@+id/native_post_actions"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="6dp" />
 
 </LinearLayout>
