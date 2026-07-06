@@ -289,7 +289,11 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
             }
 
             reload.setOnClickListener {
-                val item = (items[layoutPosition] as AttachmentListItem).item
+                // bindingAdapterPosition + getOrNull + as?: при сдвиге позиций
+                // (удалили вложение) layoutPosition попадал на селектор-элемент →
+                // ClassCastException; NO_POSITION(-1) → IndexOutOfBounds.
+                val item = (items.getOrNull(bindingAdapterPosition) as? AttachmentListItem)?.item
+                        ?: return@setOnClickListener
                 reloadOnClickListener?.onReloadClick(item)
             }
         }
@@ -350,7 +354,8 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
         }
 
         override fun onClick(v: View) {
-            val item = (items[layoutPosition] as AttachmentListItem).item
+            // См. reload-клик выше: селектор-элемент / NO_POSITION по индексу.
+            val item = (items.getOrNull(bindingAdapterPosition) as? AttachmentListItem)?.item ?: return
             itemClickListener?.onItemClick(item)
         }
 
