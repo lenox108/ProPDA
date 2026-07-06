@@ -15,10 +15,12 @@ import forpdateam.ru.forpda.common.FilePickHelper
 import forpdateam.ru.forpda.common.TopicOpenListHints
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
+import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.interactors.theme.ThemeEditorUseCase
 import forpdateam.ru.forpda.presentation.ILinkHandler
+import forpdateam.ru.forpda.presentation.theme.ThemeToolbarTitlePolicy
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
@@ -1967,6 +1969,27 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         is BodyBlock.Image -> ""
     }
 
+    /**
+     * Apply the topic title to the toolbar from the freshly loaded [page] (parity with the WebView, which
+     * resolves the title from [ThemePage.title] on every load). Without this the title comes ONLY from
+     * ARG_TITLE, so a topic opened without a title argument (deep link / mention / history / a deep page)
+     * shows an empty title over the «N / M» counter. [ThemeToolbarTitlePolicy.resolveForToolbar] never
+     * clears an already-visible label when deep-pagination HTML omits the title.
+     */
+    private fun applyToolbarTitleFromPage(page: ThemePage) {
+        val current = getTitle().takeIf { it.isNotBlank() }
+        val resolved = ThemeToolbarTitlePolicy.resolveForToolbar(
+                page = page,
+                sessionTitle = current,
+                argTitle = arguments?.getString(TabFragment.ARG_TITLE),
+                currentTitle = current,
+        )
+        if (resolved.isNotEmpty() && resolved != getTitle()) {
+            setTitle(resolved)
+            setTabTitle(String.format(getString(forpdateam.ru.forpda.R.string.fragment_tab_title_theme), resolved))
+        }
+    }
+
     /** Refresh the bar's «N / M» text and hide it entirely for single-page topics. */
     private fun updatePaginationBar() {
         if (!pagination.isInitialised) return
@@ -2177,6 +2200,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 topicHatPostId = processHatForPage(page)
                 pageHasHat = toolbarHatItem != null
                 refreshToolbarState()
+                applyToolbarTitleFromPage(page) // fill the title from the loaded page (deep-link/deep-page opens)
                 val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
