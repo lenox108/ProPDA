@@ -2314,6 +2314,30 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
+    /**
+     * Scroll [concatPos] so its TOP sits at the list's top edge — the anchor post (first-unread on open, or
+     * the last post of a read topic) is shown from its start, fully readable. RecyclerView clamps the scroll
+     * at the natural bottom, so for a post near the end (nothing below to fill the screen) it would otherwise
+     * stay stuck at the bottom, cut off. We add just-enough transient bottom room so the post can reach the
+     * top; the reserve is cleared on the first user scroll (updatePaginationBar resets the bottom padding),
+     * so it never leaves a permanent empty block.
+     */
+    private fun settleAnchorAtTop(concatPos: Int) {
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        lm.scrollToPositionWithOffset(concatPos, 0)
+        recyclerView.post {
+            if (view == null) return@post
+            val itemTop = recyclerView.findViewHolderForLayoutPosition(concatPos)?.itemView?.top ?: 0
+            if (itemTop > 1) {
+                recyclerView.clipToPadding = false
+                recyclerView.setPadding(
+                        recyclerView.paddingLeft, recyclerView.paddingTop, recyclerView.paddingRight,
+                        recyclerView.paddingBottom + itemTop)
+                lm.scrollToPositionWithOffset(concatPos, 0)
+            }
+        }
+    }
+
     private fun applyInitialAnchor(
             anchorPostId: String?,
             hasUnreadTarget: Boolean,
@@ -2325,7 +2349,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (pendingJumpToBottom) {
             pendingJumpToBottom = false
             val lastPos = (ids.size - 1 + headerOffset()).coerceAtLeast(0)
-            (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(lastPos, 0)
+            settleAnchorAtTop(lastPos)
+            // Highlight the last post (2s border) — parity with the first-unread open; the read-topic open
+            // lands on the last post, so flash it too.
+            ids.lastOrNull()?.let { postsAdapter.requestHighlight(it) }
             recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
             return
         }
@@ -2347,8 +2374,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // matching the WebView which shows the poll first. For post targets, offset past the
                 // poll header (adapter position 0) to the resolved POST.
                 val target = if (request is AnchorRequest.Top) 0 else resolution.index + headerOffset()
-                (recyclerView.layoutManager as? LinearLayoutManager)
-                        ?.scrollToPositionWithOffset(target, 0)
+                if (request is AnchorRequest.Top) {
+                    (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(target, 0)
+                } else {
+                    settleAnchorAtTop(target)
+                }
                 // Flash the resolved post once so the user sees where a link/find/unread open landed.
                 if (request is AnchorRequest.Post) postsAdapter.requestHighlight(request.postId)
             }
