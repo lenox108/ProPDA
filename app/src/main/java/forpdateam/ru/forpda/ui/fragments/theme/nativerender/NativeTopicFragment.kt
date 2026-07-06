@@ -416,7 +416,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         panel.setClearMessageClickListener { messagePanel?.clearMessage(); messagePanelDraftMirror = "" }
         panel.hideButton?.visibility = View.VISIBLE
         panel.hideButton?.setOnClickListener { hideMessagePanel() }
-        panel.fullButton?.visibility = View.GONE // fullscreen editor is a separate WebView-era screen
+        panel.fullButton?.visibility = View.VISIBLE // «полноэкранный редактор» (parity with the WebView)
+        panel.fullButton?.setOnClickListener { openFullscreenEditor() }
         attachmentsPopup = panel.attachmentsPopup
         attachmentsPopup?.setAddOnClickListener { pickFileLauncher.launch(FilePickHelper.pickFile(false)) }
         attachmentsPopup?.setDeleteOnClickListener { removeFiles() }
@@ -583,6 +584,50 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             editingForm = null
             showMessagePanel(showKeyboard = true)
         }
+    }
+
+    /**
+     * Editor «полноэкранный редактор» button: hand the current inline draft off to the standalone
+     * fullscreen editor screen (parity with the WebView). On close-without-post the draft is restored into
+     * the inline panel; on a successful post the topic reloads to show the new message.
+     */
+    private fun openFullscreenEditor() {
+        val panel = messagePanel ?: return
+        val draft = panel.message.ifEmpty { messagePanelDraftMirror }
+        val selection = panel.selectionRange
+        navigationUseCase.openFullscreenEditor(
+                forumId = pageForumId,
+                topicId = pageTopicId,
+                st = pageSt,
+                themeName = arguments?.getString(TabFragment.ARG_TITLE),
+                message = draft,
+                attachments = panel.attachments.toList(),
+                selectionStart = selection.getOrNull(0),
+                selectionEnd = selection.getOrNull(1),
+                onSync = { data ->
+                    if (view == null) return@openFullscreenEditor
+                    messagePanelDraftMirror = data.message.orEmpty()
+                    showMessagePanel(showKeyboard = false)
+                    messagePanel?.setText(data.message)
+                    data.attachments?.let { attachmentsPopup?.setAttachments(it) }
+                    messagePanel?.messageField?.let { field ->
+                        val len = field.text?.length ?: 0
+                        runCatching {
+                            field.setSelection(
+                                    data.selectionStart.coerceIn(0, len),
+                                    data.selectionEnd.coerceIn(0, len))
+                        }
+                    }
+                },
+                onPosted = {
+                    if (view == null) return@openFullscreenEditor
+                    messagePanel?.clearMessage()
+                    messagePanel?.clearAttachments()
+                    messagePanelDraftMirror = ""
+                    hideMessagePanel()
+                    loadTopic(loadedUrl ?: topicUrl)
+                },
+        )
     }
 
     /** Reveal the editor panel (and hide the pagination bar they share the bottom edge with). */
