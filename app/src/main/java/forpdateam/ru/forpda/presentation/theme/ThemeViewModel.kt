@@ -119,7 +119,8 @@ class ThemeViewModel @Inject constructor(
         private val navigationUseCase: ThemeNavigationUseCase,
         private val router: TabRouter,
         private val readPositionRepository: ThemeReadPositionRepository,
-        private val returnPositionStore: TopicReturnPositionStore
+        private val returnPositionStore: TopicReturnPositionStore,
+        private val readBoundaryStore: forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
 ) : BaseViewModel(), ThemeWebCallbacks {
 
     // SharedFlow для MVVM (замена callback-методов ThemeView)
@@ -1747,6 +1748,39 @@ class ThemeViewModel @Inject constructor(
                             TopicUnreadFindPostReloadPolicy.LOG_TAG,
                             "next_page_first_unread_anchor topic=${page.id} st=${page.st} page=${page.pagination.current} firstUnread=$firstUnreadPostId trace=$openTrace.id"
                     )
+                }
+            }
+        }
+        // Клиентская граница прочитанного (модель Discourse). Проверяем на ПЕРВОЙ загрузке открытия
+        // (getnewpost ИЛИ read→getlastpost/plain), ДО внутреннего findpost-апгрейда HYBRID. 4PDA
+        // неизбежно метит загруженную страницу прочитанной, поэтому серверный якорь уполз вниз мимо
+        // реально непрочитанных. Если сервер сел бы НИЖЕ самого дальнего реально-виденного поста —
+        // резюмим findpost'ом на границу, чтобы не проскочить непрочитанное. Только свежие Normal-
+        // открытия (не back/refresh/end и не явный findpost-дип-линк), один раз за trace.
+        if (_loadAction == ThemeLoadAction.Normal &&
+                !openedViaFindPostLink &&
+                page.id > 0 &&
+                unreadFindPostUpgradeTraceId != openTrace.id
+        ) {
+            val readBoundaryId = readBoundaryStore.lastSeenPostId(page.id)
+            if (readBoundaryId > 0) {
+                val serverAnchorId = page.anchorPostId?.removePrefix("entry")?.trim()?.toIntOrNull()
+                        ?: page.anchor?.removePrefix("entry")?.trim()?.toIntOrNull()
+                val lastLoadedId = page.posts.lastOrNull { it.id > 0 }?.id
+                val resumeId = TopicReadBoundaryPolicy.resumeAnchorPostId(
+                        boundaryPostId = readBoundaryId,
+                        serverAnchorPostId = serverAnchorId,
+                        lastLoadedPostId = lastLoadedId,
+                )
+                if (resumeId != null) {
+                    unreadFindPostUpgradeTraceId = openTrace.id
+                    val findPostUrl = TopicUnreadFindPostReloadPolicy.buildFindPostUrl(page.id, resumeId.toString())
+                    Log.i(
+                            TopicUnreadFindPostReloadPolicy.LOG_TAG,
+                            "reload_findpost_read_boundary topic=${page.id} boundary=$resumeId serverAnchor=$serverAnchorId lastLoaded=$lastLoadedId action=$_loadAction trace=$openTrace.id"
+                    )
+                    loadData(findPostUrl, ThemeLoadAction.Normal, preserveOpenTrace = true)
+                    return
                 }
             }
         }
@@ -3957,6 +3991,14 @@ class ThemeViewModel @Inject constructor(
                     scrollY = effectiveScrollY
             )
         }
+        // Клиентская граница прочитанного (модель Discourse): двигаем её на РЕАЛЬНО просматриваемый
+        // сейчас пост (raw anchorPostId от WebView, НЕ authoritative-якорь — тот на findpost/explicit-
+        // открытии подменяется дип-линк-постом). Монотонно (recordSeen сам игнорит откат) = «самый
+        // дальний пост, который юзер реально видел». Персистентно — используется при открытии, чтобы
+        // не сесть ниже непрочитанных, когда серверный getnewpost уполз вниз (walk-down 4PDA/IPB).
+        anchorPostId?.removePrefix("entry")?.trim()?.toIntOrNull()?.takeIf { it > 0 }?.let { seenPostId ->
+            readBoundaryStore.recordSeen(target.id, seenPostId, target.pagination.current)
+        }
         if (keepAuthoritativeAnchor) {
             Log.i(
                     THEME_HISTORY_TAG,
@@ -4224,6 +4266,12 @@ class ThemeViewModel @Inject constructor(
         val effectiveAnchorOffsetTop = pendingSource?.offsetTop ?: anchorOffsetTop
         val effectiveScrollRatio = pendingSource?.ratio ?: scrollRatio
         val effectiveWasNearBottom = if (pendingSource != null) false else wasNearBottom
+        // Клиентская граница прочитанного (модель Discourse): непрерывный скролл-снапшот сообщает
+        // РЕАЛЬНО просматриваемый пост (raw anchorPostId, не authoritative) — двигаем границу
+        // (монотонно, recordSeen сам игнорит откат).
+        anchorPostId?.removePrefix("entry")?.trim()?.toIntOrNull()?.takeIf { it > 0 }?.let { seenPostId ->
+            readBoundaryStore.recordSeen(target.id, seenPostId, target.pagination.current)
+        }
         // Geometry-consistency guard (device log 25_06-22-18-38, cross-topic / in-tab BACK lands on
         // the wrong post 143860995 instead of source 143876380). When this is a source-anchor capture
         // (NO matching refresh request) for a page whose authoritative explicit-open anchor DIFFERS
