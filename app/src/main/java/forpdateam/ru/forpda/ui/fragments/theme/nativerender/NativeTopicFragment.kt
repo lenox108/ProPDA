@@ -123,6 +123,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var lastRequestedUrl: String? = null
     private var isLoadingNextPage = false
     private var isLoadingPrevPage = false
+    /** True while auto-pulling previous pages to fill an under-filled last page (see maybeFillLastPage). */
+    private var fillingLastPage = false
 
     /** Topic context for posting a reply (from the loaded page). */
     private var pageForumId = 0
@@ -1126,13 +1128,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * pixel threshold (`height - (scrollTop + viewport) <= threshold`). Pixel-based (not item-count) so a
      * single very tall post can't leave the loader un-armed near the boundary.
      */
-    private fun prefetchThresholdPx(): Int =
-            (recyclerView.height.coerceAtLeast(1) * HYBRID_PREFETCH_VIEWPORT_FRACTION).toInt()
+    private fun prefetchThresholdPx(): Int {
+        // «Умная предзагрузка страниц» OFF → load only AT the edge (threshold 0), not a viewport ahead.
+        if (!mainPreferencesHolder.getSmartPreload()) return 0
+        return (recyclerView.height.coerceAtLeast(1) * HYBRID_PREFETCH_VIEWPORT_FRACTION).toInt()
+    }
 
     /** Downward infinite scroll: when the content scrolled to within ~a viewport of the bottom. */
     private fun maybeLoadNextPage() {
         if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
-        if (isLoadingNextPage || !pagination.hasNextPage()) return
+        // Never run a next- and prev-page load at once — serialised so only ONE loading spinner shows.
+        if (isLoadingNextPage || isLoadingPrevPage || !pagination.hasNextPage()) return
         val range = recyclerView.computeVerticalScrollRange()
         val offset = recyclerView.computeVerticalScrollOffset()
         val extent = recyclerView.computeVerticalScrollExtent()
@@ -1179,8 +1185,38 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Upward infinite scroll: when the content scrolled to within ~a viewport of the top. */
     private fun maybeLoadPrevPage() {
         if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
-        if (isLoadingPrevPage || !pagination.hasPrevPage()) return
+        if (isLoadingPrevPage || isLoadingNextPage || !pagination.hasPrevPage()) return
         if (recyclerView.computeVerticalScrollOffset() <= prefetchThresholdPx()) loadPrevPage()
+    }
+
+    /**
+     * When the topic opens on its LAST page and the few posts there don't fill the screen, pull previous
+     * pages in and anchor the newest posts to the bottom. Without this: the empty area below the last post
+     * (issue «пустой блок в конце темы»), AND scrolling back is impossible — a short page produces no scroll
+     * events, so the upward infinite scroll (maybeLoadPrevPage) would never fire and previous pages stay
+     * unreachable. Chained in [continueFillingLastPage] until the viewport is full or page 1 is reached.
+     */
+    private fun maybeFillLastPage() {
+        if (isClassicMode() || fillingLastPage || isLoadingPrevPage || isLoadingNextPage) return
+        if (pagination.loadedPage < pagination.totalPages) return // only at the very end of the topic
+        if (!pagination.hasPrevPage()) return
+        if (recyclerView.computeVerticalScrollRange() > recyclerView.height) return // already fills the screen
+        fillingLastPage = true
+        loadPrevPage()
+    }
+
+    /** After a fill-prepend: pull another previous page if still short, else anchor the newest post to the bottom. */
+    private fun continueFillingLastPage() {
+        recyclerView.post {
+            if (view == null) { fillingLastPage = false; return@post }
+            if (pagination.hasPrevPage() && recyclerView.computeVerticalScrollRange() <= recyclerView.height) {
+                loadPrevPage() // still under-filled → pull one more previous page
+            } else {
+                fillingLastPage = false
+                val last = (recyclerView.adapter?.itemCount ?: 0) - 1
+                if (last >= 0) (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(last)
+            }
+        }
     }
 
     /**
@@ -1233,7 +1269,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     enrichLoadedPage(page)
                 }
             }
-            if (reArm) isLoadingPrevPage = false
+            if (reArm) {
+                isLoadingPrevPage = false
+                // A prev page that yielded no NEW posts (all duplicates) never calls the prepend callback,
+                // so stop the fill loop here or fillingLastPage would stay stuck true.
+                fillingLastPage = false
+            }
             hideHybridLoading()
         }
     }
@@ -1263,6 +1304,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             isLoadingPrevPage = false
             hideHybridLoading()
+            if (fillingLastPage) continueFillingLastPage()
         }
     }
 
@@ -2081,7 +2123,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 updatePaginationBar()
                 postsAdapter.setTopicHat(topicHatPostId, hatCollapsed)
                 submitPosts {
-                    if (view != null) applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
+                    if (view != null) {
+                        applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
+                        // Fill an under-filled last page from previous pages (no empty area + scroll-back works).
+                        recyclerView.post { maybeFillLastPage() }
+                    }
                 }
                 enrichLoadedPage(page)
             }.onFailure { error ->
