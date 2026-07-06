@@ -160,10 +160,7 @@ class TopicPostsAdapter(
         // The «Страница N» divider label is baked into the item at list assembly (see the fragment), so
         // DiffUtil rebinds the boundary post when a prepended page shifts it. Never on the hat.
         val pageDivider = item.pageDividerLabel?.takeIf { !isHat }
-        // Draw the inter-post separator for every post except the very last loaded one (so no divider
-        // floats above the trailing empty surface).
-        val showSeparator = position < itemCount - 1
-        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider, showSeparator)
+        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -191,10 +188,21 @@ class TopicPostsAdapter(
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
         private val hatToggle: LinearLayout = itemView.findViewById(R.id.native_post_hat_toggle)
         private val pageDivider: TextView = itemView.findViewById(R.id.native_post_page_divider)
-        private val separator: View = itemView.findViewById(R.id.native_post_separator)
         /** The surface card inside the transparent wrapper — bg/highlight/density apply HERE, so the
          *  «Страница N» divider (a sibling above it) stays on the neutral list background. */
         private val card: View = itemView.findViewById(R.id.native_post_card)
+
+        /** Rounded Material 3 card background — colour is set per-bind (and animated on highlight) via
+         *  [android.graphics.drawable.GradientDrawable.setColor], which keeps the rounded corners. */
+        private val cardBg = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16f * itemView.resources.displayMetrics.density
+        }
+
+        init {
+            card.background = cardBg
+            card.clipToOutline = true
+            androidx.core.view.ViewCompat.setElevation(card, 2f * itemView.resources.displayMetrics.density)
+        }
 
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
         private var highlightAnimator: android.animation.ValueAnimator? = null
@@ -222,12 +230,9 @@ class TopicPostsAdapter(
                 authorized: Boolean = false,
                 memberId: Int = 0,
                 pageDividerLabel: String? = null,
-                showSeparator: Boolean = true,
         ) {
             pageDivider.text = pageDividerLabel.orEmpty()
             pageDivider.visibility = if (pageDividerLabel != null) View.VISIBLE else View.GONE
-            // Hidden on a folded hat (only the toggle bar shows) and on the last post (handled by the adapter).
-            separator.visibility = if (showSeparator && !(isHat && hatCollapsed)) View.VISIBLE else View.GONE
             this.settings = settings
             this.searchQuery = searchQuery
             this.authorized = authorized
@@ -236,7 +241,7 @@ class TopicPostsAdapter(
             // post's mid-fade tint.
             highlightAnimator?.cancel()
             highlightAnimator = null
-            card.setBackgroundColor(cardBaseColor())
+            cardBg.setColor(cardBaseColor())
             applyDensity()
             bindNick(item)
             bindMeta(item)
@@ -368,7 +373,7 @@ class TopicPostsAdapter(
                     .ofObject(android.animation.ArgbEvaluator(), start, base).apply {
                         duration = 1600L
                         startDelay = 250L
-                        addUpdateListener { card.setBackgroundColor(it.animatedValue as Int) }
+                        addUpdateListener { cardBg.setColor(it.animatedValue as Int) }
                         start()
                     }
         }

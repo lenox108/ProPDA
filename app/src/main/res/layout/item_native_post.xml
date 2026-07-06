@@ -30,7 +30,9 @@
         android:visibility="gone"
         tools:text="Страница 3" />
 
-    <!-- The post card itself: surface background + margins + inner padding. -->
+    <!-- The post card itself: a rounded, slightly elevated Material 3 card. Background (rounded
+         GradientDrawable), corner radius and elevation are applied in the ViewHolder so the highlight
+         fade can animate the card colour while keeping the rounded corners. -->
     <LinearLayout
         android:id="@+id/native_post_card"
         android:layout_width="match_parent"
@@ -38,7 +40,6 @@
         android:orientation="vertical"
         android:layout_marginHorizontal="8dp"
         android:layout_marginVertical="4dp"
-        android:background="?attr/colorSurfaceContainer"
         android:paddingHorizontal="12dp"
         android:paddingVertical="10dp">
 
@@ -201,16 +202,5 @@
             android:layout_marginTop="6dp" />
 
     </LinearLayout>
-
-    <!-- Inter-post separator: on the continuous reading surface the cards share the page tone, so a thin
-         divider line marks the boundary between posts (parity with the WebView's per-post borders). Hidden
-         on the last loaded post so it never floats above the trailing empty surface. -->
-    <View
-        android:id="@+id/native_post_separator"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="4dp"
-        android:background="?attr/colorOutlineVariant" />
 
 </LinearLayout>

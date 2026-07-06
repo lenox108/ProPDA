@@ -226,13 +226,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(pollHeaderAdapter, postsAdapter)
         // Bottom room for the CLASSIC-mode pagination bar is managed in updatePaginationBar().
         recyclerView.clipToPadding = false
-        // Continuous reading surface: paint the list (and its refresh parent) with the SAME tone as the
-        // post cards, so a short last page shows no contrasting empty «block» below the last post — the
-        // surface just continues to the bottom (parity with the WebView's single continuous document).
-        // Posts stay separated by their inter-card spacing, not by a background colour contrast.
-        requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer).let { surface ->
-            recyclerView.setBackgroundColor(surface)
-            refreshLayout.setBackgroundColor(surface)
+        // Page tone UNDER the post cards: the lowest surface container, so each post (colorSurfaceContainer,
+        // rounded, slightly elevated) reads as a distinct Material 3 card floating on the page — inter-card
+        // gaps and the area below the last card share this one page tone.
+        requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest).let { page ->
+            recyclerView.setBackgroundColor(page)
+            refreshLayout.setBackgroundColor(page)
         }
         applyDisplaySettings()
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
