@@ -250,6 +250,7 @@ class TopicPostsAdapter(
             highlightAnimator?.cancel()
             highlightAnimator = null
             cardBg.setColor(cardBaseColor())
+            cardBg.setStroke(0, android.graphics.Color.TRANSPARENT) // clear any mid-fade highlight border
             applyDensity()
             bindNick(item)
             bindMeta(item)
@@ -373,15 +374,21 @@ class TopicPostsAdapter(
 
         /** Flash the card with an accent-tinted background that fades back to the surface colour. */
         private fun playHighlight() {
-            val base = cardBaseColor()
+            // Highlight only the card BORDER (not a full-block fill): a 2dp accent stroke that fades out
+            // over 2s. The card fill stays at its base colour throughout.
             val accent = com.google.android.material.color.MaterialColors.getColor(
                     itemView, androidx.appcompat.R.attr.colorAccent)
-            val start = com.google.android.material.color.MaterialColors.layer(base, accent, 0.22f)
+            val strokeWidth = (2f * itemView.resources.displayMetrics.density).toInt().coerceAtLeast(1)
             highlightAnimator = android.animation.ValueAnimator
-                    .ofObject(android.animation.ArgbEvaluator(), start, base).apply {
-                        duration = 1600L
+                    .ofObject(android.animation.ArgbEvaluator(), accent, android.graphics.Color.TRANSPARENT).apply {
+                        duration = 2000L
                         startDelay = 250L
-                        addUpdateListener { cardBg.setColor(it.animatedValue as Int) }
+                        addUpdateListener { cardBg.setStroke(strokeWidth, it.animatedValue as Int) }
+                        addListener(object : android.animation.AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: android.animation.Animator) {
+                                cardBg.setStroke(0, android.graphics.Color.TRANSPARENT)
+                            }
+                        })
                         start()
                     }
         }
