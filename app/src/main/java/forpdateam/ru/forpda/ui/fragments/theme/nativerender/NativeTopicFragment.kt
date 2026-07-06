@@ -903,7 +903,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             private var claimed = false
 
             override fun onInterceptTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent): Boolean {
-                if (!mainPreferencesHolder.getTopicPageSwipeEnabled()) return false
+                // Page swipes are a CLASSIC-only navigation (the setting itself says «доступно только в
+                // классическом режиме»); in HYBRID you scroll, so never steal horizontal gestures there —
+                // even if the stored flag is still true from a previous CLASSIC session.
+                if (!isClassicMode() || !mainPreferencesHolder.getTopicPageSwipeEnabled()) return false
                 when (e.actionMasked) {
                     android.view.MotionEvent.ACTION_DOWN -> {
                         downX = e.x; downY = e.y; claimed = false
