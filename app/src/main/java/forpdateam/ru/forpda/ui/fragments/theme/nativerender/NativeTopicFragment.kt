@@ -223,6 +223,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private val topicUrl: String
         get() = arguments?.getString(TabFragment.ARG_TAB).orEmpty()
 
+    /**
+     * Flat, edge-to-edge top-bar chrome like the WebView theme screen ([ThemeFragment] does the same
+     * override). Without it the topic toolbar defaults to [R.attr.chrome_plane_background] → non-flat
+     * chrome, which draws a 1dp app-bar stroke that reads as an extra divider line under the toolbar
+     * (very visible on the reading palettes, e.g. Sepia Blue's blue-grey stroke).
+     */
+    override fun topBarSurfaceColorAttr(): Int =
+            forpdateam.ru.forpda.R.attr.main_toolbar_accent_surface
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
@@ -1911,7 +1920,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         fun iconBtn(label: String, onClick: () -> Unit) = TextView(ctx).apply {
             text = label
             textSize = 18f
-            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
             val ph = (10 * dm.density).toInt()
             val pv = (6 * dm.density).toInt()
             setPadding(ph, pv, ph, pv)
