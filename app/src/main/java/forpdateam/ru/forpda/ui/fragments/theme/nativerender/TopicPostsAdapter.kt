@@ -375,7 +375,7 @@ class TopicPostsAdapter(
         private fun playHighlight() {
             val base = cardBaseColor()
             val accent = com.google.android.material.color.MaterialColors.getColor(
-                    itemView, androidx.appcompat.R.attr.colorPrimary)
+                    itemView, androidx.appcompat.R.attr.colorAccent)
             val start = com.google.android.material.color.MaterialColors.layer(base, accent, 0.22f)
             highlightAnimator = android.animation.ValueAnimator
                     .ofObject(android.animation.ArgbEvaluator(), start, base).apply {
@@ -446,7 +446,7 @@ class TopicPostsAdapter(
                 sb.append(star)
                 sb.setSpan(
                         android.text.style.ForegroundColorSpan(
-                                ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)),
+                                ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)),
                         start, sb.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
                 )
             }
@@ -567,7 +567,7 @@ class TopicPostsAdapter(
         private fun iconAction(iconRes: Int, label: String?, onClick: () -> Unit): TextView {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
-            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
             val iconTint = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
             return TextView(ctx).apply {
                 text = label.orEmpty()
@@ -629,7 +629,7 @@ class TopicPostsAdapter(
         private fun fillHatToggle(container: LinearLayout, collapsed: Boolean) {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
-            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
             container.isClickable = true
             // Add a little bottom padding only when expanded so the toggle isn't glued to the post below it.
             val vPad = if (collapsed) 0 else (6 * dm.density).toInt()
@@ -690,7 +690,7 @@ class TopicPostsAdapter(
             val header = TextView(ctx).apply {
                 setTypeface(typeface, Typeface.BOLD)
                 textSize = scaledSp(14f)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
             }
             val bodyContainer = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
@@ -740,7 +740,7 @@ class TopicPostsAdapter(
                 text = headerText
                 textSize = scaledSp(13f)
                 setTypeface(typeface, Typeface.BOLD)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
                 val src = block.sourceUrl?.takeIf { it.isNotBlank() }
                 if (src != null) setOnClickListener { linkHandler.handle(src, null) }
             }
@@ -804,7 +804,7 @@ class TopicPostsAdapter(
             return TextView(ctx).apply {
                 text = "📎 ${block.name}"
                 textSize = scaledSp(14f)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
                 setPadding(pad, pad, pad, pad)
                 setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
                 layoutParams = LinearLayout.LayoutParams(
@@ -835,7 +835,7 @@ class TopicPostsAdapter(
                 text = block.title?.takeIf { it.isNotBlank() }?.let { "$it · Копировать" } ?: "Копировать"
                 setTypeface(typeface, Typeface.BOLD)
                 textSize = scaledSp(12f)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
                 setPadding(pad, pad, pad, pad / 2)
                 setOnClickListener {
                     val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
@@ -923,7 +923,7 @@ class TopicPostsAdapter(
                 text = "[${block.kind}]"
                 setTypeface(typeface, Typeface.BOLD)
                 textSize = scaledSp(11f)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary))
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
             }
             val content = TextView(ctx).apply {
                 setText(spanned(block.html))
@@ -995,7 +995,7 @@ class TopicPostsAdapter(
             val out = android.text.SpannableStringBuilder(text)
             val hay = out.toString()
             val color = com.google.android.material.color.MaterialColors.getColor(
-                    itemView, androidx.appcompat.R.attr.colorPrimary)
+                    itemView, androidx.appcompat.R.attr.colorAccent)
             var i = hay.indexOf(q, ignoreCase = true)
             while (i >= 0) {
                 out.setSpan(android.text.style.BackgroundColorSpan(color), i, i + q.length,
