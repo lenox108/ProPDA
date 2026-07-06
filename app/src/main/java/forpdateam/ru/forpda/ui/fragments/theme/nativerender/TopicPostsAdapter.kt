@@ -214,6 +214,9 @@ class TopicPostsAdapter(
 
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
         private var highlightAnimator: android.animation.ValueAnimator? = null
+        /** Post id the running highlight belongs to, so a re-bind of the SAME post (e.g. the async
+         *  userPostCount/rating enrichment) doesn't cancel a mid-fade highlight. */
+        private var highlightingPostId: Int = 0
 
         /** Display prefs for the current bind pass, read by the body-render helpers below. */
         private var settings = PostDisplaySettings()
@@ -247,10 +250,16 @@ class TopicPostsAdapter(
             this.memberId = memberId
             // Reset the card background on every (re)bind so a recycled holder never keeps a prior
             // post's mid-fade tint.
-            highlightAnimator?.cancel()
-            highlightAnimator = null
+            // Keep a running highlight alive across a re-bind of the SAME post (enrichment/diff updates
+            // rebind the post ~1–2s after open and would otherwise cancel the fade). Only reset the border
+            // when this holder is reused for a DIFFERENT post (recycling).
+            val keepHighlight = highlightAnimator?.isRunning == true && highlightingPostId == item.postId
+            if (!keepHighlight) {
+                highlightAnimator?.cancel()
+                highlightAnimator = null
+                cardBg.setStroke(0, android.graphics.Color.TRANSPARENT) // clear any mid-fade highlight border
+            }
             cardBg.setColor(cardBaseColor())
-            cardBg.setStroke(0, android.graphics.Color.TRANSPARENT) // clear any mid-fade highlight border
             applyDensity()
             bindNick(item)
             bindMeta(item)
@@ -277,7 +286,7 @@ class TopicPostsAdapter(
                 val top = if (hatFolded) 0 else (8 * itemView.resources.displayMetrics.density).toInt()
                 if (lp.topMargin != top) { lp.topMargin = top; body.layoutParams = lp }
             }
-            if (highlight) playHighlight()
+            if (highlight && !keepHighlight) { highlightingPostId = item.postId; playHighlight() }
         }
 
         /** Populate/toggle the standalone «ШАПКА ТЕМЫ ▾/▴» bar shown above the hat post (GONE otherwise). */
