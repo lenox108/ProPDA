@@ -661,15 +661,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var themeOverlay: View? = null
 
     /** Indeterminate spinner shown while a hybrid neighbour page is loading (top for prev, bottom for next). */
-    private var hybridLoadingBar: android.widget.ProgressBar? = null
+    private var hybridLoadingBar: com.google.android.material.progressindicator.CircularProgressIndicator? = null
 
     /** Show the hybrid page-load spinner at the top (prev page) or bottom (next page) of the content area. */
     private fun showHybridLoading(atTop: Boolean) {
         if (view == null) return
-        val bar = hybridLoadingBar ?: android.widget.ProgressBar(requireContext()).apply {
+        val bar = hybridLoadingBar ?: com.google.android.material.progressindicator.CircularProgressIndicator(requireContext()).apply {
+            // Material 3 indeterminate spinner (parity with the rest of the app — Favorites/Profile/Auth),
+            // themed with the accent; replaces the plain android.widget.ProgressBar.
             isIndeterminate = true
-            val size = (30 * resources.displayMetrics.density).toInt()
-            layoutParams = androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(size, size)
+            indicatorSize = (30 * resources.displayMetrics.density).toInt()
+            trackThickness = (3 * resources.displayMetrics.density).toInt()
+            layoutParams = androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
+                    androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
+                    androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT)
             coordinatorLayout.addView(this)
         }.also { hybridLoadingBar = it }
         val dm = resources.displayMetrics
