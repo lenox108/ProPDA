@@ -1074,7 +1074,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         if (captured && up >= triggerDist && vel <= maxReleaseVelocity && dur >= minDurationMs &&
                                 !refreshLayout.isRefreshing) {
                             Toast.makeText(requireContext(), "Обновление…", Toast.LENGTH_SHORT).show()
-                            loadTopic(loadedUrl ?: topicUrl)
+                            refreshFromBottom()
                         }
                         reset(rv)
                     }
@@ -1090,6 +1090,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 captured = false; blocked = false
             }
         })
+    }
+
+    /**
+     * Bottom-up «обновление» gesture: the user is at the TRUE bottom of the topic (the gesture only
+     * arms there), so reload the LAST loaded page — not [loadedUrl], which stays pinned to the entry
+     * page even after infinite-scrolling down — and land back at the bottom. Without the
+     * [pendingJumpToBottom] flag the fresh load's [applyInitialAnchor] falls to the page TOP, which is
+     * the reported «после обновления кидает на первый пост последней страницы» bug.
+     */
+    private fun refreshFromBottom() {
+        val url = if (pagination.isInitialised) pagination.pageUrl(pagination.loadedPage) else (loadedUrl ?: topicUrl)
+        pendingJumpToBottom = true
+        loadTopic(url)
     }
 
     /**
