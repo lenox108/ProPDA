@@ -91,6 +91,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var notesRepository: forpdateam.ru.forpda.model.repository.note.NotesRepository
 
+    /**
+     * Клиентская граница прочитанного (модель Discourse) — общая с WebView-движком. Ведём самый
+     * дальний реально-виденный пост локально, чтобы при переоткрытии не сесть НИЖЕ непрочитанных,
+     * когда серверный getnewpost/getlastpost уполз вниз (walk-down 4PDA/IPB). См.
+     * [forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore].
+     */
+    @Inject
+    lateinit var readBoundaryStore: forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
+
     // topicPreferencesHolder is provided by the TabFragment supertype.
 
     private val mapper = NativePostMapper()
@@ -192,6 +201,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Set for «В конец темы» so [applyInitialAnchor] lands on the last post of the last page. */
     private var pendingJumpToBottom: Boolean = false
 
+    /**
+     * Клиентская граница прочитанного: разрешить резюм-на-границу только один раз за открытие темы —
+     * на ПЕРВОЙ успешной загрузке. Взводится в [onViewCreated] перед первым [loadTopic], гасится сразу
+     * после проверки, чтобы последующие загрузки (пагинация, переходы по страницам, findpost-резюм)
+     * не запускали override повторно и не зациклили.
+     */
+    private var boundaryResumeArmed: Boolean = false
+
+    /**
+     * Restore-scroll «где остановился» / устойчивость состояния: пост и его пиксельный offset, на который
+     * надо вернуться после пересоздания фрагмента (смерть процесса, восстановление FragmentManager,
+     * пересоздание вью). Пишутся в [onSaveInstanceState], читаются в [onViewCreated], применяются один
+     * раз в [applyInitialAnchor] вместо серверного якоря. 0 = восстанавливать нечего (свежее открытие).
+     */
+    private var pendingRestorePostId: Int = 0
+    private var pendingRestoreOffset: Int = 0
+
     /** Whether the loaded content still has an unread anchor — drives the «К непрочитанному» menu item. */
     private var topicHasUnread: Boolean = false
 
@@ -278,7 +304,42 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         setupToolbarMenu()
         setupTitleTap()
         applyToolbarAutoHide()
-        loadTopic(resolveInitialOpenUrl())
+        // Устойчивость состояния / restore-scroll: если фрагмент пересоздан (смерть процесса / восстановление
+        // FragmentManager / пересоздание вью), в savedInstanceState лежит пост+offset, где стоял пользователь —
+        // грузим ИМЕННО ту страницу (findpost) и садимся туда, а не на серверный якорь.
+        val restorePostId = savedInstanceState?.getInt(STATE_RESTORE_POST_ID, 0) ?: 0
+        if (restorePostId > 0) {
+            pendingRestorePostId = restorePostId
+            pendingRestoreOffset = savedInstanceState?.getInt(STATE_RESTORE_OFFSET, 0) ?: 0
+            barCurrentPage = (savedInstanceState?.getInt(STATE_RESTORE_BAR_PAGE, 1) ?: 1).coerceAtLeast(1)
+        }
+        // Arm the client read-boundary resume only for a genuinely fresh open (nothing to restore).
+        boundaryResumeArmed = restorePostId <= 0
+        loadTopic(if (restorePostId > 0) buildRestoreUrl(restorePostId) else resolveInitialOpenUrl())
+    }
+
+    /** URL, ведущий на конкретный пост (findpost) для restore-scroll; фолбэк — обычное открытие. */
+    private fun buildRestoreUrl(postId: Int): String {
+        val topicId = ThemeApi.extractTopicIdFromUrl(topicUrl) ?: return resolveInitialOpenUrl()
+        return forpdateam.ru.forpda.presentation.theme.TopicUnreadFindPostReloadPolicy
+                .buildFindPostUrl(topicId, postId.toString())
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Сохраняем первый видимый пост и его пиксельный offset — точную точку «где остановился», чтобы
+        // пережить пересоздание фрагмента (смерть процесса / restore FragmentManager). Пустой список / нет
+        // вью — сохранять нечего.
+        if (view == null || pageTopicId <= 0 || loadedItems.isEmpty()) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val firstPos = lm.findFirstVisibleItemPosition()
+        if (firstPos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return
+        val item = loadedItems.getOrNull(firstPos - headerOffset()) ?: return
+        if (item.postId <= 0) return
+        val top = lm.findViewByPosition(firstPos)?.top ?: 0
+        outState.putInt(STATE_RESTORE_POST_ID, item.postId)
+        outState.putInt(STATE_RESTORE_OFFSET, top)
+        outState.putInt(STATE_RESTORE_BAR_PAGE, barCurrentPage)
     }
 
     /**
@@ -2234,6 +2295,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pageForumId = page.forumId
                 pageTopicId = page.id
                 pageSt = page.st
+                // Клиентская граница прочитанного: на ПЕРВОМ открытии, если серверный якорь сел бы НИЖЕ
+                // самого дальнего реально-виденного поста, перезагрузиться findpost'ом на границу (иначе
+                // проскочим непрочитанное — walk-down 4PDA). Фаер один раз за открытие; findpost-резюм не
+                // рендерим здесь — return, дальше отработает вложенная загрузка.
+                if (maybeResumeToReadBoundary(url, page)) return@onSuccess
                 // Fresh (re)load of the topic — forget the previous session's topic-level hat/poll state.
                 knownHatPostId = null
                 toolbarHatItem = null
@@ -2315,6 +2381,53 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
+     * Клиентская граница прочитанного (модель Discourse) — общая с WebView-движком. На ПЕРВОМ открытии
+     * темы сверяем, куда сел бы сервер, с самым дальним реально-виденным постом ([TopicReadBoundaryStore]).
+     * Если сервер увёл бы СТРОГО НИЖЕ (новее) границы — между границей и серверным таргетом есть
+     * непрочитанное, которое иначе проскочим (4PDA/IPB метит страницу прочитанной по факту загрузки, из-за
+     * чего getnewpost/getlastpost уезжают вниз). Тогда перезагружаемся findpost'ом на границу.
+     *
+     * Фаер строго один раз за открытие ([boundaryResumeArmed] гасится сразу), явные findpost-дип-линки и
+     * переходы по страницам не переопределяем. При отсутствии границы (cold-miss) — фолбэк на текущее
+     * серверное поведение (безопасно).
+     *
+     * @return true, если запущен findpost-резюм (эту загрузку рендерить не нужно — return у вызывающего).
+     */
+    private fun maybeResumeToReadBoundary(
+            url: String,
+            page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
+    ): Boolean {
+        if (!boundaryResumeArmed) return false
+        boundaryResumeArmed = false // один раз за открытие, что бы дальше ни решили
+        if (page.id <= 0) return false
+        // Явный findpost-дип-линк (упоминание/закладка на конкретный пост) или наш собственный резюм —
+        // не переопределяем; переход по страницам тоже.
+        if (url.contains("view=findpost", ignoreCase = true) ||
+                url.contains("act=findpost", ignoreCase = true)) return false
+        if (pendingJumpToTop) return false
+        val boundaryId = readBoundaryStore.lastSeenPostId(page.id)
+        if (boundaryId <= 0) return false
+        val serverAnchorId = page.anchorPostId?.removePrefix("entry")?.trim()?.toIntOrNull()
+                ?: page.anchor?.removePrefix("entry")?.trim()?.toIntOrNull()
+        val lastLoadedId = page.posts.lastOrNull { it.id > 0 }?.id
+        val resumeId = forpdateam.ru.forpda.presentation.theme.TopicReadBoundaryPolicy.resumeAnchorPostId(
+                boundaryPostId = boundaryId,
+                serverAnchorPostId = serverAnchorId,
+                lastLoadedPostId = lastLoadedId,
+        ) ?: return false
+        // Резюм — findpost на границу. Гасим «в конец/на верх», чтобы вложенная загрузка села на границу.
+        pendingJumpToBottom = false
+        pendingJumpToTop = false
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_READ_BOUNDARY",
+                    "native resume_findpost topic=${page.id} boundary=$resumeId serverAnchor=$serverAnchorId lastLoaded=$lastLoadedId")
+        }
+        loadTopic(forpdateam.ru.forpda.presentation.theme.TopicUnreadFindPostReloadPolicy
+                .buildFindPostUrl(page.id, resumeId.toString()))
+        return true
+    }
+
+    /**
      * Scroll [concatPos] so its TOP sits at the list's top edge — the anchor post (first-unread on open, or
      * the last post of a read topic) is shown from its start, fully readable. RecyclerView clamps the scroll
      * at the natural bottom, so for a post near the end (nothing below to fill the screen) it would otherwise
@@ -2345,6 +2458,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     ) {
         val ids = items.map { it.postId }
         val targetId = anchorPostId?.toIntOrNull()
+        // Restore-scroll «где остановился»: вернуться на сохранённый пост и его точный offset (после
+        // пересоздания фрагмента). Приоритетнее серверного якоря и границы прочитанного — это ровно то
+        // место, где стоял пользователь.
+        if (pendingRestorePostId > 0) {
+            val restoreId = pendingRestorePostId
+            val restoreOffset = pendingRestoreOffset
+            pendingRestorePostId = 0
+            pendingRestoreOffset = 0
+            pendingJumpToBottom = false
+            pendingJumpToTop = false
+            val idx = ids.indexOf(restoreId)
+            if (idx >= 0) {
+                (recyclerView.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(idx + headerOffset(), restoreOffset)
+                recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
+                return
+            }
+            // Пост не в загруженном окне (findpost вернул другую страницу) — падаем в обычный якорь ниже.
+        }
         // «В конец темы»: land on the very last post of the (last) page.
         if (pendingJumpToBottom) {
             pendingJumpToBottom = false
@@ -2421,6 +2553,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (hasNew && visibleIds.isNotEmpty()) {
             eventsRepository.onTopicPostsRead(pageTopicId, visibleIds)
         }
+        // Клиентская граница прочитанного: двигаем её на самый дальний реально-виденный сейчас пост
+        // (recordSeen монотонно игнорит откат). Это тот же фид, что WebView-движок делает в
+        // updatePageHistoryHtml/RefreshScrollSnapshot — при переоткрытии не сядем ниже непрочитанных.
+        visibleIds.maxOrNull()?.let { deepestSeen ->
+            readBoundaryStore.recordSeen(pageTopicId, deepestSeen, barCurrentPage)
+        }
     }
 
     /**
@@ -2441,6 +2579,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (lastVisible < lastItemPosition) return // bottom post not on screen yet
         markedTopicReadAtEnd = true
         themeUseCase.markTopicRead(pageTopicId, reason = "last_page_bottom_reached", source = "native")
+        // Тема реально дочитана до конца — клиентская граница больше не нужна: следующее открытие пусть
+        // идёт по серверу (getnewpost → первый непрочитанный, если появятся новые посты). Иначе стухшая
+        // граница удерживала бы якорь на старом посте.
+        readBoundaryStore.clear(pageTopicId)
     }
 
     private companion object {
@@ -2465,6 +2607,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Per-frame scroll delta (px) beyond which the FAB direction arrow flips. */
         const val SCROLL_HIDE_THRESHOLD = 8
+
+        /** onSaveInstanceState keys for restore-scroll «где остановился» / устойчивость состояния. */
+        private const val STATE_RESTORE_POST_ID = "native_topic_restore_post_id"
+        private const val STATE_RESTORE_OFFSET = "native_topic_restore_offset"
+        private const val STATE_RESTORE_BAR_PAGE = "native_topic_restore_bar_page"
 
         private const val MENU_SEARCH = 0x4E01
         private const val MENU_REFRESH = 0x4E03
