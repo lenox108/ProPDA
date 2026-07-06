@@ -19,6 +19,7 @@ import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.interactors.theme.ThemeEditorUseCase
+import androidx.core.view.ViewCompat
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.theme.ThemeToolbarTitlePolicy
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
@@ -264,6 +265,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         installBottomRefreshDetector()
         refreshLayout.setOnRefreshListener { loadTopic(loadedUrl ?: topicUrl) }
         setupMessagePanel()
+        // Re-lift the reply panel above the IME on every window-inset change (parity with the WebView's
+        // ThemeImeInsetsController). Without an explicit inset listener the host-margin sync relied only
+        // on DimensionHelper, which lags on some OEM builds → the keyboard covered the editor.
+        ViewCompat.setOnApplyWindowInsetsListener(fragmentContainer) { _, insets ->
+            syncMessagePanelImeWithDimensions()
+            insets
+        }
         setupFab()
         setupToolbarMenu()
         setupTitleTap()
@@ -655,6 +663,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             panel.messageField.requestFocus()
             showKeyboard(panel.messageField)
         }
+        // Force an inset pass so the host lifts above the keyboard right after the panel appears
+        // (OEM builds can otherwise leave stale IME insets → editor hidden behind the keyboard).
+        ViewCompat.requestApplyInsets(fragmentContainer)
+        fragmentContainer.post { syncMessagePanelImeWithDimensions() }
     }
 
     /** Hide the editor panel, dismiss the keyboard/popups, and restore the pagination bar. */
