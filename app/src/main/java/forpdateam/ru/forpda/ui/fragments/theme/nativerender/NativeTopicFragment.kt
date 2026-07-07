@@ -2317,7 +2317,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             setPadding(0, pv, 0, pv)
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1.45f)
+            background = ctx.obtainStyledAttributes(intArrayOf(
+                    android.R.attr.selectableItemBackgroundBorderless)).use { it.getDrawable(0) }
+            // Tap on «N / M» → manual page entry; long-press → a scrollable list of all pages to jump between.
             setOnClickListener { showPagePicker() }
+            setOnLongClickListener {
+                performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                showPageList()
+                true
+            }
         }
         bar.addView(navButton("«") { jumpToPage(1) })
         bar.addView(navButton("‹") { jumpToPage(barCurrentPage - 1) })
@@ -2628,6 +2636,27 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         pendingJumpToBottom = true
         barCurrentPage = last
         loadTopic(pagination.pageUrl(last))
+    }
+
+    /**
+     * Long-press on the «N / M» pagination counter → a scrollable radio list of every page, current one
+     * pre-selected and scrolled into view. Picking a page jumps to it. Complements [showPagePicker] (the
+     * single-tap manual number entry).
+     */
+    private fun showPageList() {
+        if (!pagination.isInitialised || pagination.totalPages <= 1) return
+        val ctx = requireContext()
+        val total = pagination.totalPages
+        val items = Array(total) { "Страница ${it + 1}" }
+        val current = (barCurrentPage - 1).coerceIn(0, total - 1)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                .setTitle("Страницы")
+                .setSingleChoiceItems(items, current) { dialog, which ->
+                    dialog.dismiss()
+                    jumpToPage(which + 1)
+                }
+                .setNegativeButton("Отмена", null)
+                .showWithStyledButtons()
     }
 
     private fun showPagePicker() {
