@@ -2567,7 +2567,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     private fun loadTopic(url: String) {
         if (url.isBlank()) {
-            refreshLayout.isRefreshing = false
+            setRefreshing(false)
             return
         }
         // Remember the requested target so the navigator's redundant echo of the initial open (see
@@ -2578,7 +2578,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // is a MIDDLE post — felt like landing on a random post. Force the landing to the true bottom of
         // the loaded last page instead (same as «В конец темы»).
         if (url.contains("getlastpost", ignoreCase = true)) pendingJumpToBottom = true
-        refreshLayout.isRefreshing = true
+        // Loading indicator (parity with the WebView engine): the FIRST open shows the centered Material 3
+        // LoadingIndicator BELOW the toolbar (via ContentController → content_progress), NOT the swipe
+        // spinner that overlapped the toolbar. Subsequent reloads/refreshes fall back to the swipe spinner.
+        setRefreshing(true)
         isLoadingNextPage = false
         isLoadingPrevPage = false
         // Defensive: never leave the list hidden if a previous last-page fill was interrupted mid-flight.
@@ -2589,7 +2592,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
             }
             if (view == null) return@launch
-            refreshLayout.isRefreshing = false
             result.onSuccess { page ->
                 loadedUrl = url
                 pageForumId = page.forumId
@@ -2599,7 +2601,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // самого дальнего реально-виденного поста, перезагрузиться findpost'ом на границу (иначе
                 // проскочим непрочитанное — walk-down 4PDA). Фаер один раз за открытие; findpost-резюм не
                 // рендерим здесь — return, дальше отработает вложенная загрузка.
-                if (maybeResumeToReadBoundary(url, page)) return@onSuccess
+                if (maybeResumeToReadBoundary(url, page)) return@onSuccess // keep the indicator; the nested findpost reload owns it
+                setRefreshing(false)
                 // Fresh (re)load of the topic — forget the previous session's topic-level hat/poll state.
                 knownHatPostId = null
                 toolbarHatItem = null
@@ -2646,6 +2649,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 }
                 enrichLoadedPage(page)
             }.onFailure { error ->
+                setRefreshing(false)
                 Toast.makeText(requireContext(), "Ошибка загрузки темы: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
