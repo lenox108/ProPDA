@@ -2763,18 +2763,31 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
-    private fun settleAnchorAtTop(concatPos: Int) {
+    /**
+     * Anchor the opened target post ([concatPos]) by the rule the user expects:
+     *  • post FITS the viewport → show it FULLY — top-aligned when there is content below; for the LAST
+     *    post ([isLast]) bottom-clamped so there is no empty area below AND its action buttons clear the
+     *    tab-bar chrome;
+     *  • post is TALLER than the viewport → align its TOP to the top edge («выравнивать по верху»), so it is
+     *    NEVER cut on both sides — the user reads it from the beginning and scrolls down for the rest.
+     */
+    private fun anchorPost(concatPos: Int, isLast: Boolean) {
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        lm.scrollToPositionWithOffset(concatPos, 0)
+        lm.scrollToPositionWithOffset(concatPos, 0) // provisional top-align
         recyclerView.post {
             if (view == null) return@post
-            val itemView = recyclerView.findViewHolderForLayoutPosition(concatPos)?.itemView ?: return@post
-            // When the anchor is near the END of the loaded window, top-aligning clamps at the natural
-            // bottom and can leave the anchor CUT OFF below the viewport (user report «последний пост
-            // срезается по низу»). Bottom-align it instead so it is FULLY visible — no transient padding,
-            // so no empty block either. (A normal mid-list anchor has room above/below and never trips this.)
-            if (itemView.bottom > recyclerView.height) {
+            val itemView = recyclerView.findViewHolderForAdapterPosition(concatPos)?.itemView ?: return@post
+            val visible = recyclerView.height - recyclerView.paddingTop - recyclerView.paddingBottom
+            if (itemView.height > visible) return@post // taller than the screen → keep the TOP pinned
+            if (isLast) {
+                // Fitting last post: natural bottom clamp fills the space above (no empty block) and
+                // bottomAlignPost lifts its buttons above the tab bar.
                 lm.scrollToPosition(concatPos)
+                bottomAlignPost(concatPos)
+            } else {
+                // Fitting mid post: pull it fully in if its bottom is clipped by the tab-bar chrome.
+                val overflow = itemView.bottom - (recyclerView.height - recyclerView.paddingBottom)
+                if (overflow > 0) recyclerView.scrollBy(0, overflow)
             }
         }
     }
@@ -2805,16 +2818,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             // Пост не в загруженном окне (findpost вернул другую страницу) — падаем в обычный якорь ниже.
         }
-        // «В конец темы»: land on the very last post of the (last) page — fully visible at the BOTTOM,
-        // with the previous posts filling the space above. NOT top-aligned: top-aligning the last item
-        // needs a big transient bottom pad that leaves an ugly empty area below it (user report). A plain
-        // scrollToPosition shows the whole last post without any empty region or cut-off.
+        // «В конец темы» / открытие прочитанной темы (getlastpost): последний пост. Если он ВМЕЩАЕТСЯ —
+        // показываем целиком у нижнего края (кнопки над таббаром, без пустого блока); если он ВЫШЕ экрана —
+        // выравниваем по верху (не режем с обеих сторон) — см. [anchorPost].
         if (pendingJumpToBottom) {
             pendingJumpToBottom = false
             val lastPos = (ids.size - 1 + headerOffset()).coerceAtLeast(0)
             anchoredBottomPostId = ids.lastOrNull()
-            (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(lastPos)
-            bottomAlignPost(lastPos)
+            anchorPost(lastPos, isLast = true)
             // Highlight the last post (2s border) — parity with the first-unread open; the read-topic open
             // lands on the last post, so flash it too.
             ids.lastOrNull()?.let { postsAdapter.requestHighlight(it) }
@@ -2839,20 +2850,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // matching the WebView which shows the poll first. For post targets, offset past the
                 // poll header (adapter position 0) to the resolved POST.
                 val target = if (request is AnchorRequest.Top) 0 else resolution.index + headerOffset()
-                // The anchor is the very LAST loaded post (already-read topic opening on its final post):
-                // top-aligning clamps it CUT OFF at the bottom (action buttons off-screen). Bottom-align it
-                // so the whole post + its buttons are visible, and remember it so the async enrichment
-                // (which grows posts) re-anchors instead of pushing the buttons back below the fold.
+                // Height-aware anchoring (see [anchorPost]): a FITTING target is shown fully (last post
+                // bottom-clamped with its buttons above the tab bar; others top-aligned); a target TALLER
+                // than the screen is pinned by its TOP, never cut on both sides.
                 val isLastPost = request !is AnchorRequest.Top && resolution.index == ids.size - 1
                 when {
                     request is AnchorRequest.Top ->
                         (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(target, 0)
                     isLastPost -> {
                         anchoredBottomPostId = ids.last()
-                        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(target)
-                        bottomAlignPost(target)
+                        anchorPost(target, isLast = true)
                     }
-                    else -> settleAnchorAtTop(target)
+                    else -> anchorPost(target, isLast = false)
                 }
                 // Flash the resolved post once so the user sees where a link/find/unread open landed.
                 if (request is AnchorRequest.Post) postsAdapter.requestHighlight(request.postId)
