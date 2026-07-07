@@ -73,6 +73,11 @@ class PostBodyRenderer {
             if (complexKind != null) {
                 flushInline()
                 blocks.addAll(nativeOrFallback(node as Element, complexKind))
+            } else if (containsContentImage(node)) {
+                // The inline flow carries a CONTENT <img> (banner / preview / animated «UPDATE» gif). Html.fromHtml
+                // has no ImageGetter, so an inline image would be silently DROPPED — peel each one into its own
+                // Image block, splitting the surrounding text around it. (Smilies stay inline; see isSmiley.)
+                explodeInlineImages(node, blocks, inlineBuffer, ::flushInline)
             } else {
                 inlineBuffer.append(node.outerHtml())
             }
@@ -80,6 +85,63 @@ class PostBodyRenderer {
         flushInline()
 
         return blocks
+    }
+
+    /** True if [node]'s subtree holds a real content image (not a smiley, not an attachment picture). */
+    private fun containsContentImage(node: Node): Boolean {
+        if (node !is Element) return false
+        val imgs = if (node.normalName() == "img") listOf(node) else node.select("img")
+        return imgs.any { it.isContentImage() }
+    }
+
+    private fun Element.isContentImage(): Boolean =
+        normalName() == "img" && !hasClass("attach") && !hasClass("linked-image") && !isSmiley()
+
+    /**
+     * 4pda forum bodies deliver emoticons as text shortcodes (rendered by SmileProvider), but be defensive
+     * against `<img>`-form smilies (tiny, or a smiles/emoticon src) so they never balloon into block images.
+     */
+    private fun Element.isSmiley(): Boolean {
+        val src = (attr("src") + " " + attr("data-src")).lowercase()
+        if (src.contains("smile") || src.contains("emoticon") || src.contains("style_emoticons") || src.contains("/sm/")) return true
+        val w = attr("width").toIntOrNull(); val h = attr("height").toIntOrNull()
+        return w != null && h != null && w in 1..40 && h in 1..40
+    }
+
+    /**
+     * Walks [node] emitting a [BodyBlock.Image] for each content `<img>` and flushing the inline text buffer
+     * around it. Wrapper formatting on split text is intentionally dropped (same tradeoff as the complex→
+     * fallback boundary) — the priority is that the image renders. The enclosing `<a href>` becomes the tap link.
+     */
+    private fun explodeInlineImages(node: Node, blocks: MutableList<BodyBlock>, inline: StringBuilder, flush: () -> Unit) {
+        if (node is Element && node.normalName() == "img") {
+            val image = node.toContentImageOrNull()
+            if (image != null) {
+                flush()
+                blocks.add(image)
+            } else {
+                inline.append(node.outerHtml()) // smiley / srcless → leave inline (handled/ignored as before)
+            }
+            return
+        }
+        if (node is Element && node.selectFirst("img") != null) {
+            for (child in node.childNodes()) explodeInlineImages(child, blocks, inline, flush)
+            return
+        }
+        inline.append(node.outerHtml())
+    }
+
+    private fun Element.toContentImageOrNull(): BodyBlock.Image? {
+        if (!isContentImage()) return null
+        val src = firstNonBlank(attr("src"), attr("data-src"), attr("data-preview")) ?: return null
+        val link = closest("a[href]")?.attr("href")?.takeIf { it.isNotBlank() }
+        return BodyBlock.Image(
+            imageUrl = src,
+            linkUrl = link,
+            displayWidthPx = attr("width").toIntOrZero(),
+            displayHeightPx = attr("height").toIntOrZero(),
+            inline = true,
+        )
     }
 
     /** Maps a complex [element] to its native block(s) where implemented, else the WebView fallback. */

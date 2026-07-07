@@ -867,12 +867,12 @@ class TopicPostsAdapter(
             } else {
                 DEFAULT_IMAGE_RATIO
             }
-            // Attached images render as a compact THUMBNAIL (left-aligned), not stretched across the column;
-            // a tap opens the full-size image in the viewer (tapUrl below). Cap to a thumbnail box so a big
-            // (or width-less) attachment never fills the whole post — parity with the WebView attach preview.
-            val thumbMaxPx = (150 * dm.density).toInt().coerceAtMost(maxWidth)
+            // ATTACHMENT pictures render as a compact THUMBNAIL (a tap opens the viewer). INLINE content
+            // images (banners / previews / animated «UPDATE» gifs peeled from the post text) may span up to
+            // the full column width so they read like in the browser — parity with the WebView body.
+            val boxMaxPx = if (block.inline) maxWidth else (150 * dm.density).toInt().coerceAtMost(maxWidth)
             val naturalWidth = (block.displayWidthPx * dm.density).toInt()
-            val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, thumbMaxPx) else thumbMaxPx
+            val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, boxMaxPx) else boxMaxPx
             val reservedHeight = (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels)
             return ImageView(ctx).apply {
                 layoutParams = LinearLayout.LayoutParams(

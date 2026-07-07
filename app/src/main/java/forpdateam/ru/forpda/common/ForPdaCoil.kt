@@ -67,6 +67,15 @@ object ForPdaCoil {
         val okHttp = (webClient as Client).getHttpClient()
         imageLoader = ImageLoader.Builder(application)
                 .okHttpClient(okHttp)
+                .components {
+                    // Animated GIF / WebP (e.g. «UPDATE» баннеры в постах). ImageDecoder на API28+
+                    // тянет анимированные GIF/WebP/HEIF; на старых — coil GifDecoder только GIF.
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        add(coil.decode.ImageDecoderDecoder.Factory())
+                    } else {
+                        add(coil.decode.GifDecoder.Factory())
+                    }
+                }
                 .diskCachePolicy(CachePolicy.ENABLED)
                 .memoryCachePolicy(CachePolicy.ENABLED)
                 .respectCacheHeaders(true)

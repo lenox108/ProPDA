@@ -158,6 +158,7 @@ okhttp-brotli = { group = "com.squareup.okhttp3", name = "okhttp-brotli", versio
 
 # Image
 coil = { group = "io.coil-kt", name = "coil", version.ref = "coil" }
+coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coil" }
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
