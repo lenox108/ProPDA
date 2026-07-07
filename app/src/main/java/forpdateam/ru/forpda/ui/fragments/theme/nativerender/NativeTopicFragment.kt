@@ -307,6 +307,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     override fun topBarSurfaceColorAttr(): Int =
             forpdateam.ru.forpda.R.attr.main_toolbar_accent_surface
 
+    /**
+     * Rounded lower plaque corners like the WebView theme screen ([ThemeFragment] overrides this the same
+     * way). Flat accent chrome otherwise resolves to [TopAppBarShapeStyle.FULL_WIDTH_RECT] — a hard,
+     * straight, edge-to-edge bar that reads as non-M3 (user: «прямой прям идёт до конца»). With rounded
+     * corners the flat full-width bar becomes [TopAppBarShapeStyle.FULL_WIDTH_BOTTOM_ROUNDED] — the M3
+     * plaque that hangs from the status bar, matching the classic topic toolbar exactly.
+     */
+    override fun useTopBarRoundedCorners(): Boolean = true
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
