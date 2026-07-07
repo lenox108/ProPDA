@@ -87,11 +87,21 @@ class TabAdapter : BaseAdapter<TabFragment, TabAdapter.TabHolder>() {
 
             val ctx = binding.root.context
             val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
-            val accent = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
+            // Активная вкладка выделяется акцент-тонированной плашкой + акцентным текстом — одного цветного
+            // текста было мало, чтобы заметить «где я сейчас». Акцент с alpha читается в любой теме (в т.ч.
+            // AMOLED, где secondaryContainer почти чёрный). Неактивные — обычный ряд.
+            if (isActive) {
+                val accent = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
+                binding.root.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                        androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x33)) // ~20%
+                binding.drawerItemTitle.setTextColor(accent)
+            } else {
+                binding.root.backgroundTintList = null
+                binding.drawerItemTitle.setTextColor(onSurface)
+            }
 
             binding.drawerItemTitle.apply {
                 text = item.getTabTitle()
-                setTextColor(if (isActive) accent else onSurface)
                 typeface = Typeface.DEFAULT_BOLD
             }
         }

@@ -479,10 +479,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
         fab.size = com.google.android.material.floatingactionbutton.FloatingActionButton.SIZE_MINI
         fab.setImageResource(forpdateam.ru.forpda.R.drawable.ic_arrow_down)
+        // Follow the active palette / accent colour: resolve straight from the fragment's themed context so
+        // the FAB is the palette accent (not a stale default blue). Icon uses the accent's contrast colour.
+        val fabBg = requireContext().getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+        val fabIcon = requireContext().getColorFromAttr(forpdateam.ru.forpda.R.attr.smart_nav_fab_icon)
+        fab.backgroundTintList = android.content.res.ColorStateList.valueOf(fabBg)
+        fab.imageTintList = android.content.res.ColorStateList.valueOf(fabIcon)
         fab.isLongClickable = true
+        // Single, app-setting-aware haptic on long-press: disable the View's automatic long-press buzz
+        // (it fired a SECOND time on top of ours) and route through Haptic (honours «Тактильный отклик»).
+        fab.isHapticFeedbackEnabled = false
         fab.setOnClickListener { smartScrollTap() }
         fab.setOnLongClickListener {
-            it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            forpdateam.ru.forpda.ui.Haptic.longPress(it)
             showSmartNavMenu()
             true
         }
