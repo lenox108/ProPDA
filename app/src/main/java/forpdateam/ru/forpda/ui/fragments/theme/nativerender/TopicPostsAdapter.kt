@@ -1034,19 +1034,14 @@ class TopicPostsAdapter(
                 background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
                 clipToOutline = true
             }
-            val label = TextView(ctx).apply {
-                text = "[${block.kind}]"
-                setTypeface(typeface, Typeface.BOLD)
-                textSize = scaledSp(11f)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
-            }
+            // NOTE: no «[KIND]» debug label — it is a dev artifact and must never reach users
+            // (was surfacing e.g. «[UNKNOWN]» above a curator banner). Render only the content.
             val content = TextView(ctx).apply {
                 setText(spanned(block.html))
                 textSize = scaledSp(15f)
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 setLineSpacing(0f, 1.1f)
             }
-            panel.addView(label)
             panel.addView(content)
             val lp = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,

@@ -154,7 +154,7 @@ internal class HtmlToSpannedConverter(
         m = getFontFamilyPattern().matcher(style); if (m.find()) start(text, Font(m.group(1)))
     }
     private fun endCssStyle(text: Editable) {
-        val font = getLast(text, Font::class.java); if (font != null && font.mFace.equals("fontello", ignoreCase = true)) setSpanFromMark(text, font, AssetsTypefaceSpan(null, "fontello/fontello.ttf"))
+        val font = getLast(text, Font::class.java); if (font != null && font.mFace.equals("fontello", ignoreCase = true)) setSpanFromMark(text, font, AssetsTypefaceSpan(ContextImageLookup.context(), "fontello/fontello.ttf"))
         val s = getLast(text, Strikethrough::class.java); if (s != null) setSpanFromMark(text, s, StrikethroughSpan())
         val b = getLast(text, Background::class.java); if (b != null) setSpanFromMark(text, b, BackgroundColorSpan(b.mBackgroundColor))
         val f = getLast(text, Foreground::class.java); if (f != null) setSpanFromMark(text, f, ForegroundColorSpan(f.mForegroundColor))
