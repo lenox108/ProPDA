@@ -767,6 +767,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             toolbarLayout.layoutParams = lp
             if (!enabled) appBarLayout.setExpanded(true, false)
         }
+        // «Верхняя пагинация» rides the SAME flags as the toolbar so both hide/reveal as one block.
+        topPaginationBar?.let { bar ->
+            (bar.layoutParams as? com.google.android.material.appbar.AppBarLayout.LayoutParams)?.let { plp ->
+                if (plp.scrollFlags != flags) {
+                    plp.scrollFlags = flags
+                    bar.layoutParams = plp
+                }
+            }
+        }
     }
 
     /** Toolbar «Написать»: opens the empty compose editor (or closes it if already open). */
@@ -2242,17 +2251,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * «Верхняя пагинация» — the same row pinned in the AppBarLayout directly BELOW the toolbar. No scroll
-     * flags → it stays put while the collapsing toolbar (SCROLL|ENTER_ALWAYS|SNAP) hides/reveals above it,
-     * exactly like a pinned tab-strip. Gated by [Preferences.Main.TOPIC_PAGINATION_PANEL_ENABLE].
+     * «Верхняя пагинация» — the same row placed in the AppBarLayout directly BELOW the toolbar. It carries
+     * the SAME scroll flags as the toolbar (kept in sync by [applyToolbarAutoHide]) so the toolbar and the
+     * pagination hide / reveal together as ONE block. Gated by [Preferences.Main.TOPIC_PAGINATION_PANEL_ENABLE].
      */
     private fun ensureTopPaginationBar() {
         if (topPaginationBar != null) return
         val (bar, label) = buildPaginationRow()
+        val toolbarFlags = (toolbarLayout.layoutParams as? com.google.android.material.appbar.AppBarLayout.LayoutParams)
+                ?.scrollFlags ?: 0
         appBarLayout.addView(bar, com.google.android.material.appbar.AppBarLayout.LayoutParams(
                 com.google.android.material.appbar.AppBarLayout.LayoutParams.MATCH_PARENT,
                 com.google.android.material.appbar.AppBarLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { scrollFlags = 0 })
+        ).apply { scrollFlags = toolbarFlags })
         topPaginationBar = bar
         topPaginationLabel = label
     }
