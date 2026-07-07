@@ -62,6 +62,16 @@ class PostBodyRenderer {
         }
 
         for (node in nodes) {
+            // 4pda sometimes serves hat / spoiler content with its OWN <a>/<img>/<br> markup HTML-ESCAPED
+            // (it arrives as a text node whose text literally reads `<a title="Ссылка" href="…">…</a>` and
+            // shows raw). A normal link is an Element, never a TextNode — so a TextNode that contains an
+            // anchor/image tag can only be escaped source markup. Re-parse it as HTML so it renders like the
+            // sibling entries that arrived as real elements (links + inline images).
+            if (node is TextNode && looksLikeEscapedMarkup(node.wholeText)) {
+                flushInline()
+                blocks.addAll(renderNodes(Jsoup.parseBodyFragment(node.wholeText).body().childNodes()))
+                continue
+            }
             // The server edit note (`.edit` / `.post-edit-reason`) is a SYSTEM meta line — peel it into
             // its own block so the view can render it muted/smaller rather than as body text.
             if (node is Element && (node.hasClass("edit") || node.hasClass("post-edit-reason"))) {
@@ -282,6 +292,15 @@ class PostBodyRenderer {
 
     private fun firstNonBlank(vararg values: String?): String? =
         values.firstOrNull { !it.isNullOrBlank() }?.trim()
+
+    /**
+     * True if [text] (an already-decoded text node) literally reads as an HTML anchor/image tag — the
+     * signature of 4pda markup delivered HTML-escaped. Requires a STRUCTURED tag with href/src, so a stray
+     * "<br>" or "<3" in ordinary prose is never re-parsed. Safe because real links/images are Elements —
+     * only escaped source markup ever lands inside a text node.
+     */
+    private fun looksLikeEscapedMarkup(text: String): Boolean =
+        (text.contains("<a ") && text.contains("href=")) || (text.contains("<img ") && text.contains("src="))
 
     /**
      * Returns the [BodyBlock.WebFallback.Kind] if [node] is, or contains, a complex block;
