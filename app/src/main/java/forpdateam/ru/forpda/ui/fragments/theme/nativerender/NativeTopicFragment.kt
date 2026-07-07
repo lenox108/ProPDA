@@ -2766,8 +2766,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         recyclerView.post {
             if (view == null) return@post
             val itemView = recyclerView.findViewHolderForAdapterPosition(concatPos)?.itemView ?: return@post
+            // Breathing gap so the last card's bottom border / rounded corner clears the tab-bar chrome
+            // instead of sitting flush against it, where it reads as clipped (user: «последнее сообщение
+            // чуть срезано снизу, видно по границе поста»). Matches the inter-card vertical spacing.
+            val gap = (12 * resources.displayMetrics.density).toInt()
             val bottomLimit = recyclerView.height - recyclerView.paddingBottom
-            val overshoot = itemView.bottom - bottomLimit
+            val overshoot = itemView.bottom - bottomLimit + gap
             if (overshoot > 0) recyclerView.scrollBy(0, overshoot)
         }
     }
