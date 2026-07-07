@@ -688,17 +688,22 @@ class SettingsFragment : BaseSettingFragment() {
                     updateThemeModeSummary(mode)
                     // 1. Save to DataStore asynchronously (suspend, no runBlocking), then restart
                     lifecycleScope.launch {
+                        // Захватываем app-context ДО suspend/applyTheme: applyTheme →
+                        // setDefaultNightMode → recreate() отсоединяет фрагмент, после чего
+                        // Fragment.startActivity падал «not attached to Activity».
+                        val ctx = requireContext().applicationContext
                         mainPreferencesHolder.setThemeMode(mode)
                         Timber.d("[THEME] Saved to DataStore: $mode")
                         // 2. Apply night mode immediately
                         DayNightHelper.applyTheme(mode)
-                        // 3. Force restart entire app to pick up new theme styles
-                        val ctx = requireContext().applicationContext
+                        // 3. Force restart entire app to pick up new theme styles.
+                        // Context.startActivity (app-context + NEW_TASK) не требует
+                        // прикреплённого фрагмента — безопасно после recreate().
                         val intent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                         }
                         if (intent != null) {
-                            startActivity(intent)
+                            ctx.startActivity(intent)
                             activity?.finishAffinity()
                         }
                     }
