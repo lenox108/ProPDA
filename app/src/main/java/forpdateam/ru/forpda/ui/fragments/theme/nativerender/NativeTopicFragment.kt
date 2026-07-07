@@ -25,6 +25,7 @@ import forpdateam.ru.forpda.presentation.theme.ThemeToolbarTitlePolicy
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
 import kotlinx.coroutines.Dispatchers
@@ -1810,7 +1811,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 .setMessage("Автор: ${item.nick.orEmpty()}")
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton(if (up) "Повысить" else "Понизить") { _, _ -> performVote(item, up) }
-                .show()
+                .showWithStyledButtons()
     }
 
     private fun performVote(item: NativePostItem, up: Boolean) {
@@ -1849,7 +1850,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     override fun onQuote(item: NativePostItem) {
         val date = item.date?.takeIf { it.isNotBlank() }?.let { " date=\"$it\"" } ?: ""
-        insertIntoEditor("[quote name=\"${item.nick}\"$date post=${item.postId}]${'\n'}[/quote]${'\n'}")
+        // Full-post quote must carry the post's TEXT, not just the name/date header (mirrors the WebView
+        // openFullQuote): take the raw body HTML, drop nested quote blocks, normalize DOM→editor BBCode.
+        val body = item.rawBodyHtml?.let { raw ->
+            val withoutQuotes = forpdateam.ru.forpda.common.stripHtmlQuoteBlocks(raw)
+            val normalized = forpdateam.ru.forpda.common.normalizeEditPostBodyFromDomHtml(withoutQuotes)
+                    .ifEmpty { forpdateam.ru.forpda.common.normalizeEditPostBodyFromDomHtml(raw) }
+            forpdateam.ru.forpda.common.stripBbcodeQuotes(normalized).ifEmpty { normalized }
+        }.orEmpty()
+        insertIntoEditor("[quote name=\"${item.nick}\"$date post=${item.postId}]$body[/quote]${'\n'}")
     }
 
     override fun onQuoteSelection(item: NativePostItem, selectedText: String) {
@@ -1890,7 +1899,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 .setMessage("Это действие необратимо.")
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton("Удалить") { _, _ -> performDelete(item) }
-                .show()
+                .showWithStyledButtons()
     }
 
     /**
@@ -2040,7 +2049,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 .setView(input)
                 .setPositiveButton("OK") { _, _ -> performReputationChange(item, increase, input.text?.toString().orEmpty()) }
                 .setNegativeButton("Отмена", null)
-                .show()
+                .showWithStyledButtons()
     }
 
     private fun performReputationChange(item: NativePostItem, increase: Boolean, message: String) {
@@ -2453,7 +2462,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     input.text?.toString()?.trim()?.toIntOrNull()?.let { jumpToPage(it) }
                 }
                 .setNegativeButton("Отмена", null)
-                .show()
+                .showWithStyledButtons()
     }
 
     /** Resolve the field text, falling back to the mirror if the CodeEditor lost it to view churn. */
@@ -2479,7 +2488,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     messagePanelDraftMirror = ""
                 }
                 .setNegativeButton("Отмена", null)
-                .show()
+                .showWithStyledButtons()
     }
 
     private fun sendMessage() {

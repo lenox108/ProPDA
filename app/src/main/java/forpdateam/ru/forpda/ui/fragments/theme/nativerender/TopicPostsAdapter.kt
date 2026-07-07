@@ -571,9 +571,9 @@ class TopicPostsAdapter(
             postCount.visibility = if (count == null) View.INVISIBLE else View.VISIBLE
             postCount.text = count?.toString() ?: "0"
             val icon = androidx.core.content.ContextCompat.getDrawable(
-                    itemView.context, R.drawable.ic_comment_outline)?.mutate()?.apply {
+                    itemView.context, R.drawable.ic_post_count)?.mutate()?.apply {
                 setTint(itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
-                val s = (14 * itemView.resources.displayMetrics.density).toInt()
+                val s = (13 * itemView.resources.displayMetrics.density).toInt()
                 setBounds(0, 0, s, s)
             }
             postCount.setCompoundDrawables(icon, null, null, null)
@@ -815,15 +815,8 @@ class TopicPostsAdapter(
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-            // M3 quote: a rounded tonal card (surfaceContainerHigh + hairline outline) with a 3dp accent
-            // bar down the leading edge — the classic quote signifier, clipped to the rounded corners.
-            val accentBar = View(ctx).apply {
-                setBackgroundColor(accent)
-                layoutParams = LinearLayout.LayoutParams(
-                        (3 * dm.density).toInt(),
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                )
-            }
+            // M3 quote: a rounded tonal card (surfaceContainerHigh + hairline outline). The tonal fill and
+            // the accent-coloured author header are the quote signifiers — no extra leading colour bar.
             val content = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding((10 * dm.density).toInt())
@@ -847,14 +840,13 @@ class TopicPostsAdapter(
             content.addView(header)
             renderBlocksInto(content, block.inner, scope, item)
             return LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
+                orientation = LinearLayout.VERTICAL
                 background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
                 clipToOutline = true
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply { topMargin = (6 * dm.density).toInt() }
-                addView(accentBar)
                 addView(content)
             }
         }

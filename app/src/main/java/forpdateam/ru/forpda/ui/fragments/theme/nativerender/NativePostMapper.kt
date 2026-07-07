@@ -32,6 +32,7 @@ class NativePostMapper(
         isCurator = post.isCurator,
         isOnline = post.isOnline,
         blocks = bodyRenderer.render(post.body),
+        rawBodyHtml = post.body,
         canEdit = post.canEdit,
         canDelete = post.canDelete,
         canQuote = post.canQuote,

@@ -28,6 +28,9 @@ data class NativePostItem(
     val isCurator: Boolean,
     val isOnline: Boolean,
     val blocks: List<BodyBlock>,
+    /** Raw post body HTML (as parsed) — source for the full-post «Цитировать» body (mirrors the WebView
+     *  quote launcher, which normalizes the post HTML into editor BBCode). Not used for rendering. */
+    val rawBodyHtml: String?,
     val canEdit: Boolean,
     val canDelete: Boolean,
     val canQuote: Boolean,

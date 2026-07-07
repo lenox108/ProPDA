@@ -1,0 +1,11 @@
+<!-- Минималистичный «счётчик сообщений» автора: скруглённый чат-бабл (Material rounded),
+     тонируется в коде цветом colorOnSurfaceVariant. Лаконичнее прежнего ic_comment_outline. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="?icon_base"
+        android:pathData="M12,4C7.03,4 3,7.13 3,11c0,1.73 0.81,3.31 2.15,4.53 -0.06,1.02 -0.4,1.94 -0.87,2.72 -0.19,0.31 0.05,0.71 0.41,0.66 1.28,-0.17 2.45,-0.6 3.45,-1.24C9.13,17.89 10.53,18 12,18c4.97,0 9,-3.13 9,-7S16.97,4 12,4z" />
+</vector>
