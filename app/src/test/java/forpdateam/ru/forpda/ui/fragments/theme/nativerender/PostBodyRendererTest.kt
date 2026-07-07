@@ -219,6 +219,29 @@ class PostBodyRendererTest {
         assertTrue("attachment pictures render as thumbnails, not inline", imgs.none { it.inline })
     }
 
+    // --- 4pda hat/spoiler entries delivered HTML-escaped (arrive as literal "<a …>…</a>" text) ---
+
+    @Test
+    fun escapedAnchorAndImageMarkup_isReparsedIntoRealLinkAndImage() {
+        val html = "&lt;img src=\"https://4pda.to/s/x.gif\"&gt; " +
+                "&lt;a title=\"Ссылка\" href=\"https://4pda.to/forum/index.php?showtopic=1&amp;view=findpost&amp;p=2\"&gt;" +
+                "Большой Jailbreak&lt;/a&gt;&lt;br&gt;"
+        val blocks = renderer.render(html)
+        // The escaped <img> becomes an inline Image and the escaped <a> becomes a real link (Text w/ <a href>).
+        assertTrue(blocks.any { it is BodyBlock.Image && it.imageUrl.contains("x.gif") })
+        assertTrue(blocks.any { it is BodyBlock.Text && it.html.contains("<a") && it.html.contains("href") })
+        // Nothing leaks as raw escaped markup.
+        assertTrue(blocks.filterIsInstance<BodyBlock.Text>().none { it.html.contains("&lt;a") })
+    }
+
+    @Test
+    fun plainProseWithEscapedBrTag_isLeftLiteral_notReparsed() {
+        val blocks = renderer.render("тег &lt;br&gt; переносит строку")
+        val text = blocks.filterIsInstance<BodyBlock.Text>().single()
+        assertTrue(text.html.contains("&lt;br&gt;")) // stays escaped → shown literally, no phantom line break
+        assertTrue(blocks.none { it is BodyBlock.Image })
+    }
+
     private fun fixture(name: String): String {
         val path = "renderer/postbody/$name"
         return javaClass.classLoader?.getResource(path)?.readText()
