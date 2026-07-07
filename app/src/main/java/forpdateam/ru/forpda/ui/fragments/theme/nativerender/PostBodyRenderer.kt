@@ -164,7 +164,7 @@ class PostBodyRenderer {
                 // link (a post can list several — e.g. a spoiler `<ol>` of «Themes.rar / …zip» download
                 // buttons, each an <a class="ipb-attach attach-file"> wrapping an animated gif). Collect
                 // them all, not just the first, so none silently vanish.
-                (extractAttachmentImages(element) + extractFileAttachments(element)).takeIf { it.isNotEmpty() }
+                (extractAttachmentImages(element) + extractDownloadButtons(element)).takeIf { it.isNotEmpty() }
             }
             BodyBlock.WebFallback.Kind.QUOTE ->
                 if (element.hasClass("quote")) listOf(extractQuote(element)) else null
@@ -278,20 +278,38 @@ class PostBodyRenderer {
 
     /**
      * EVERY downloadable file link `a.ipb-attach.attach-file` in [element] (or [element] itself when it IS
-     * such a link) as a native [BodyBlock.FileAttachment]. A post can carry several — e.g. a spoiler list of
-     * «Themes.rar / Official_Themes.rar / …zip» download buttons — so we return ALL, not just the first
-     * (which previously dropped the rest). Filename = link text, url = href.
+     * such a link) as native blocks. On 4pda each of these is a DOWNLOAD BUTTON: an animated «UPDATE /
+     * СКАЧАТЬ» gif wrapped in the file link, followed by the filename text. We render BOTH so it matches the
+     * site — the gif as a tappable [BodyBlock.Image] (its [BodyBlock.Image.linkUrl] is the download href;
+     * since that href is a file, not a viewable image, the view layer routes the tap to the download
+     * handler) PLUS a filename [BodyBlock.FileAttachment] chip. A post can list several (e.g. a spoiler
+     * `<ol>` of «Themes.rar / …zip»), so we return ALL, not just the first (previously the rest, and the
+     * gif itself, silently vanished — «в приложении гифкнопки с ссылкой на загрузку нет»).
      */
-    private fun extractFileAttachments(element: Element): List<BodyBlock.FileAttachment> {
+    private fun extractDownloadButtons(element: Element): List<BodyBlock> {
         val links = if (element.normalName() == "a" && element.hasClass("ipb-attach")) {
             listOf(element)
         } else {
             element.select("a.ipb-attach.attach-file, a.ipb-attach:not(.attach-img):not(.attach-image)")
         }
-        return links.mapNotNull { link ->
-            val url = link.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val name = link.text().trim().ifBlank { "Файл" }
-            BodyBlock.FileAttachment(name = name, url = url)
+        return links.flatMap { link ->
+            val url = link.attr("href").takeIf { it.isNotBlank() } ?: return@flatMap emptyList<BodyBlock>()
+            val out = ArrayList<BodyBlock>(2)
+            val img = link.selectFirst("img")
+            val gif = img?.let { firstNonBlank(it.attr("data-src"), it.attr("src"), it.attr("data-preview")) }
+            if (gif != null) {
+                out.add(
+                    BodyBlock.Image(
+                        imageUrl = gif,
+                        linkUrl = url,
+                        displayWidthPx = img.attr("width").toIntOrZero(),
+                        displayHeightPx = img.attr("height").toIntOrZero(),
+                        inline = true,
+                    )
+                )
+            }
+            out.add(BodyBlock.FileAttachment(name = link.text().trim().ifBlank { "Файл" }, url = url))
+            out
         }
     }
 
