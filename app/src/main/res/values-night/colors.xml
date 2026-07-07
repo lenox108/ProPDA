@@ -29,7 +29,7 @@
     <color name="sepia_background_for_cards">#302318</color>
     <color name="sepia_background_for_lists">#241A11</color>
     <color name="sepia_card_background">#332619</color>
-    <color name="sepia_divider_line">#3B2A1C</color>
+    <color name="sepia_divider_line">#503C2A</color>
     <color name="sepia_divider_line_bottom_nav">#3B2A1C</color>
     <color name="sepia_selection">#33C9975B</color>
     <color name="sepia_attachment_overlay_bg">#21000000</color>
@@ -58,7 +58,7 @@
     <color name="sepia_blue_background_for_lists">#212932</color>
     <color name="sepia_blue_card_background">#303B44</color>
     <color name="sepia_blue_toolbar">#1D2327</color>
-    <color name="sepia_blue_divider_line">#354148</color>
+    <color name="sepia_blue_divider_line">#49555F</color>
     <color name="sepia_blue_accent_soft">#263B47</color>
     <color name="sepia_blue_selection">#3D8FB3C8</color>
     <color name="sepia_blue_msg_panel_tooltip_bg">#ee20282D</color>
@@ -83,7 +83,7 @@
     <color name="minimal_reader_background_for_lists">#282C30</color>
     <color name="minimal_reader_card_background">#2E3339</color>
     <color name="minimal_reader_toolbar">#181B1F</color>
-    <color name="minimal_reader_divider_line">#2A2E34</color>
+    <color name="minimal_reader_divider_line">#444B54</color>
     <color name="minimal_reader_accent_soft">#26313B</color>
     <color name="minimal_reader_selection">#2A3742</color>
     <color name="minimal_reader_error">#D08C7E</color>
