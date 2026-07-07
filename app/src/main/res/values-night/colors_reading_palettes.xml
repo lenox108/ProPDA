@@ -14,7 +14,7 @@
     <color name="green_care_background_for_cards">#26382A</color>
     <color name="green_care_background_for_lists">#19281C</color>
     <color name="green_care_card_background">#2C4130</color>
-    <color name="green_care_divider_line">#2A3B2D</color>
+    <color name="green_care_divider_line">#45604A</color>
     <color name="green_care_divider_line_bottom_nav">#2A3B2D</color>
     <color name="green_care_selection">#336FCF97</color>
     <color name="green_care_attachment_overlay_bg">#21000000</color>
@@ -126,7 +126,7 @@
     <color name="rose_pine_background_for_cards">#332F49</color>
     <color name="rose_pine_background_for_lists">#262336</color>
     <color name="rose_pine_card_background">#2D2A42</color>
-    <color name="rose_pine_divider_line">#2A2739</color>
+    <color name="rose_pine_divider_line">#474360</color>
     <color name="rose_pine_divider_line_bottom_nav">#2A2739</color>
     <color name="rose_pine_selection">#33C4A7E7</color>
     <color name="rose_pine_attachment_overlay_bg">#21000000</color>
