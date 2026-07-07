@@ -861,24 +861,34 @@ class TopicPostsAdapter(
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val horizontalChromePx = (40 * dm.density).toInt() // card margins + paddings
-            val maxWidth = (dm.widthPixels - horizontalChromePx).coerceAtLeast(1)
+            val columnWidthPx = (dm.widthPixels - horizontalChromePx).coerceAtLeast(1)
             val ratio = if (block.displayWidthPx > 0 && block.displayHeightPx > 0) {
                 block.displayHeightPx.toFloat() / block.displayWidthPx.toFloat()
             } else {
                 DEFAULT_IMAGE_RATIO
             }
-            // ATTACHMENT pictures render as a compact THUMBNAIL (a tap opens the viewer). INLINE content
-            // images (banners / previews / animated «UPDATE» gifs peeled from the post text) may span up to
-            // the full column width so they read like in the browser — parity with the WebView body.
-            val boxMaxPx = if (block.inline) maxWidth else (150 * dm.density).toInt().coerceAtMost(maxWidth)
-            val naturalWidth = (block.displayWidthPx * dm.density).toInt()
-            val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, boxMaxPx) else boxMaxPx
-            val reservedHeight = (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels)
+            val topInset = (6 * dm.density).toInt()
             return ImageView(ctx).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                        targetWidth,
-                        reservedHeight,
-                ).apply { topMargin = (6 * dm.density).toInt() }
+                if (block.inline) {
+                    // INLINE content image (banner / preview / animated gif peeled from post text): render at
+                    // its INTRINSIC size, downscaled to fit the column but NEVER upscaled — otherwise a small /
+                    // low-res icon balloons into a blurry full-width block (user report). Crisp, like the browser.
+                    layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply { topMargin = topInset }
+                    maxWidth = columnWidthPx
+                    maxHeight = dm.heightPixels
+                } else {
+                    // ATTACHMENT picture: compact reserved-box THUMBNAIL (a tap opens the viewer).
+                    val thumbMaxPx = (150 * dm.density).toInt().coerceAtMost(columnWidthPx)
+                    val naturalWidth = (block.displayWidthPx * dm.density).toInt()
+                    val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, thumbMaxPx) else thumbMaxPx
+                    layoutParams = LinearLayout.LayoutParams(
+                            targetWidth,
+                            (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels),
+                    ).apply { topMargin = topInset }
+                }
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 adjustViewBounds = true
                 setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
