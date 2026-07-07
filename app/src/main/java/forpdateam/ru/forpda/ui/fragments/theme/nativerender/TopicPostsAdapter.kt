@@ -1062,12 +1062,13 @@ class TopicPostsAdapter(
         private fun editNoteView(block: BodyBlock.EditNote): View {
             val ctx = itemView.context
             val muted = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
-            val text = spanned(block.html)
+            val text = stripLinkColors(spanned(block.html))
             return TextView(ctx).apply {
                 setText(text)
                 textSize = scaledSp(13f) // ~0.875 of the 15sp body
                 setTextColor(muted)
-                setLinkTextColor(muted)
+                // The editor nick inside stays a readable link (accent), not muted-into-invisibility.
+                setLinkTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
                 setLineSpacing(0f, 1.15f)
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1084,7 +1085,7 @@ class TopicPostsAdapter(
         private fun textView(text: CharSequence, item: NativePostItem): TextView {
             val ctx = itemView.context
             return TextView(ctx).apply {
-                setText(highlightSearchMatches(neutralizeLowContrastColors(text)))
+                setText(highlightSearchMatches(neutralizeLowContrastColors(stripLinkColors(text))))
                 textSize = scaledSp(15f)
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 // Force in-text links (profile nicks in the hat / «отредактировал N» footer) to the readable
@@ -1132,6 +1133,30 @@ class TopicPostsAdapter(
                 if (androidx.core.graphics.ColorUtils.calculateContrast(opaqueFg, bg) < LOW_CONTRAST_THRESHOLD) {
                     out.removeSpan(span)
                 }
+            }
+            return out
+        }
+
+        /**
+         * Force links to the theme's readable link colour. 4pda wraps hat nav links / edit-note nicks in
+         * inline greys (`<a style="color:#…">` or a coloured parent `<span>`) that in dark mode are almost
+         * invisible — and an inline [ForegroundColorSpan] overrides the TextView's linkTextColor. Removing
+         * any colour span overlapping a [URLSpan] lets [setLinkTextColor] win, so every link is readable
+         * (parity with the WebView, which colours all links with the link colour).
+         */
+        private fun stripLinkColors(text: CharSequence): CharSequence {
+            if (text !is Spanned) return text
+            val urls = text.getSpans(0, text.length, URLSpan::class.java)
+            if (urls.isEmpty()) return text
+            if (text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).isEmpty()) return text
+            val out = SpannableStringBuilder(text)
+            for (fg in out.getSpans(0, out.length, android.text.style.ForegroundColorSpan::class.java)) {
+                val fs = out.getSpanStart(fg); val fe = out.getSpanEnd(fg)
+                val overlapsLink = urls.any { u ->
+                    val us = text.getSpanStart(u); val ue = text.getSpanEnd(u)
+                    fs < ue && us < fe
+                }
+                if (overlapsLink) out.removeSpan(fg)
             }
             return out
         }

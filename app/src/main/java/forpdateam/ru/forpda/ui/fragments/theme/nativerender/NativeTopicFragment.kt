@@ -218,6 +218,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var pendingRestorePostId: Int = 0
     private var pendingRestoreOffset: Int = 0
 
+    /**
+     * In-tab navigation history for «Поведение кнопки Назад в темах» = HISTORY: each time the navigator
+     * reuses this tab for a NEW url (a link to another post/topic), we push where we were (url + scroll
+     * anchor) so Back returns there instead of closing the tab. Empty → Back leaves the tab as before.
+     */
+    private data class ThemeBackEntry(val url: String, val postId: Int, val offset: Int)
+    private val themeBackStack = ArrayDeque<ThemeBackEntry>()
+
     /** Whether the loaded content still has an unread anchor — drives the «К непрочитанному» menu item. */
     private var topicHasUnread: Boolean = false
 
@@ -232,7 +240,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private val fabHideRunnable = Runnable { if (fabEnabled && view != null) fab.hide() }
 
     override fun hasBackHandling(): Boolean =
-            themeOverlay != null || messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
+            themeOverlay != null || messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE ||
+                    // История переходов внутри вкладки (HISTORY): «назад» должен вернуть по истории,
+                    // а не выйти из приложения на корневой вкладке — иначе back-callback выключается.
+                    (mainPreferencesHolder.getTopicBackBehavior() ==
+                            forpdateam.ru.forpda.common.Preferences.Main.TopicBackBehavior.HISTORY &&
+                            themeBackStack.isNotEmpty())
 
     override fun onBackPressed(): Boolean {
         // Back closes the hat/poll overlay first, then the find-on-page bar / reply editor, before leaving.
@@ -245,6 +258,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (messagePanel?.onBackPressed() == true) return true
         if (messagePanel?.visibility == View.VISIBLE) {
             hideMessagePanel()
+            return true
+        }
+        // «Поведение кнопки Назад в темах» = HISTORY (по умолчанию): пройтись по истории переходов внутри
+        // вкладки (ссылки на посты/темы) прежде чем закрыть вкладку. ORIGIN — сразу закрыть (как раньше).
+        if (mainPreferencesHolder.getTopicBackBehavior() ==
+                forpdateam.ru.forpda.common.Preferences.Main.TopicBackBehavior.HISTORY &&
+                themeBackStack.isNotEmpty()) {
+            val entry = themeBackStack.removeLast()
+            if (entry.postId > 0) {
+                pendingRestorePostId = entry.postId
+                pendingRestoreOffset = entry.offset
+            }
+            boundaryResumeArmed = false // возврат в историю, не свежее открытие
+            loadTopic(entry.url)
             return true
         }
         return super.onBackPressed()
@@ -1655,9 +1682,26 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // onViewCreated already issued: the navigator echoes the initial open right after onViewCreated,
             // and loading page 1 there is exactly what caused the visible «page 1 → jump to unread» flash.
             val resolved = resolveNavigatorOpenUrl(url, sourceScreen, openIntent, listHints)
-            if (resolved != lastRequestedUrl) loadTopic(resolved)
+            if (resolved != lastRequestedUrl) {
+                // Remember where we were so «Назад» (HISTORY) can return to it — this navigator call is a
+                // link tap that replaces the current post/topic in this tab.
+                captureThemeBackEntry()?.let { themeBackStack.addLast(it) }
+                loadTopic(resolved)
+            }
         }
         // If the view is not created yet, onViewCreated will load from the (already updated) args.
+    }
+
+    /** Snapshot the current url + first-visible scroll anchor for the in-tab Back history. */
+    private fun captureThemeBackEntry(): ThemeBackEntry? {
+        val url = loadedUrl ?: return null
+        if (view == null) return ThemeBackEntry(url, 0, 0)
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return ThemeBackEntry(url, 0, 0)
+        val firstPos = lm.findFirstVisibleItemPosition()
+        if (firstPos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return ThemeBackEntry(url, 0, 0)
+        val item = loadedItems.getOrNull(firstPos - headerOffset())
+        val top = lm.findViewByPosition(firstPos)?.top ?: 0
+        return ThemeBackEntry(url, item?.postId ?: 0, top)
     }
 
     override fun onTabStackBecameCurrent() {
