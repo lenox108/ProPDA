@@ -227,6 +227,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** «Умная кнопка темы» (FAB) state: enabled per pref; arrow follows the last scroll direction. */
     private var fabEnabled = false
     private var fabPointsDown = true
+    /** Auto-hide: the smart button appears on scroll and hides after this idle delay (WebView parity). */
+    private val fabHideHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val fabHideRunnable = Runnable { if (fabEnabled && view != null) fab.hide() }
 
     override fun hasBackHandling(): Boolean =
             themeOverlay != null || messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE
@@ -430,12 +433,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             showSmartNavMenu()
             true
         }
-        fab.show()
+        // Hidden until the user scrolls (WebView parity): appears on any scroll, hides after idle.
+        fab.hide()
     }
 
-    /** Point the FAB arrow along the current scroll direction (it stays visible, unlike a timed FAB). */
+    /** Show the smart button and (re)arm its idle auto-hide. */
+    private fun showFabTemporarily() {
+        if (!fabEnabled) return
+        if (!fab.isShown) fab.show()
+        fabHideHandler.removeCallbacks(fabHideRunnable)
+        fabHideHandler.postDelayed(fabHideRunnable, FAB_AUTO_HIDE_MS)
+    }
+
+    /** Reveal the FAB on any scroll (auto-hiding after idle) and point its arrow along the scroll direction. */
     private fun updateFabOnScroll(dy: Int) {
         if (!fabEnabled) return
+        if (dy != 0) showFabTemporarily() // any scroll wakes the button and re-arms the 2.5s hide
         if (kotlin.math.abs(dy) < SCROLL_HIDE_THRESHOLD) return
         val down = dy > 0
         if (down != fabPointsDown) {
@@ -444,7 +457,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     if (down) forpdateam.ru.forpda.R.drawable.ic_arrow_down
                     else forpdateam.ru.forpda.R.drawable.ic_arrow_up)
         }
-        if (!fab.isShown) fab.show()
     }
 
     /**
@@ -495,7 +507,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             override fun afterTextChanged(s: Editable) { messagePanelDraftMirror = s.toString() }
         })
         panel.addSendOnClickListener { sendMessage() }
-        panel.setClearMessageClickListener { messagePanel?.clearMessage(); messagePanelDraftMirror = "" }
+        panel.setClearMessageClickListener { confirmClearMessage() }
         panel.hideButton?.visibility = View.VISIBLE
         panel.hideButton?.setOnClickListener { hideMessagePanel() }
         panel.fullButton?.visibility = View.VISIBLE // «полноэкранный редактор» (parity with the WebView)
@@ -1682,6 +1694,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         attachmentsPopup = null
         smartNavMenu?.dispose()
         smartNavMenu = null
+        fabHideHandler.removeCallbacks(fabHideRunnable)
         gestureOverlay = null
         gestureOverlayGlyph = null
         gestureOverlayLabel = null
@@ -2361,6 +2374,26 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         return if (field.isNotEmpty()) field else messagePanelDraftMirror
     }
 
+    /**
+     * The editor «крестик» (clear-all) wipes the whole draft — an easy accidental tap. Confirm first so a
+     * misfire doesn't lose a long message. Nothing to confirm on an empty field → just clear silently.
+     */
+    private fun confirmClearMessage() {
+        val panel = messagePanel ?: return
+        if (resolveMessagePanelDraft().isBlank() && panel.attachments.isEmpty()) {
+            panel.clearMessage(); messagePanelDraftMirror = ""
+            return
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setMessage("Очистить весь набранный текст?")
+                .setPositiveButton("Очистить") { _, _ ->
+                    messagePanel?.clearMessage()
+                    messagePanelDraftMirror = ""
+                }
+                .setNegativeButton("Отмена", null)
+                .show()
+    }
+
     private fun sendMessage() {
         val panel = messagePanel ?: return
         val message = resolveMessagePanelDraft().trim()
@@ -2582,7 +2615,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * A short last page is handled separately by [maybeFillLastPage], which pulls previous pages in.
      */
     private fun settleAnchorAtTop(concatPos: Int) {
-        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(concatPos, 0)
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        lm.scrollToPositionWithOffset(concatPos, 0)
+        recyclerView.post {
+            if (view == null) return@post
+            val itemView = recyclerView.findViewHolderForLayoutPosition(concatPos)?.itemView ?: return@post
+            // When the anchor is near the END of the loaded window, top-aligning clamps at the natural
+            // bottom and can leave the anchor CUT OFF below the viewport (user report «последний пост
+            // срезается по низу»). Bottom-align it instead so it is FULLY visible — no transient padding,
+            // so no empty block either. (A normal mid-list anchor has room above/below and never trips this.)
+            if (itemView.bottom > recyclerView.height) {
+                lm.scrollToPosition(concatPos)
+            }
+        }
     }
 
     private fun applyInitialAnchor(
@@ -2744,6 +2789,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Per-frame scroll delta (px) beyond which the FAB direction arrow flips. */
         const val SCROLL_HIDE_THRESHOLD = 8
+
+        /** Idle delay after which the smart button auto-hides (appears again on the next scroll). */
+        const val FAB_AUTO_HIDE_MS = 2500L
 
         /** onSaveInstanceState keys for restore-scroll «где остановился» / устойчивость состояния. */
         private const val STATE_RESTORE_POST_ID = "native_topic_restore_post_id"
