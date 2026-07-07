@@ -1054,24 +1054,31 @@ class TopicPostsAdapter(
         private fun editNoteView(block: BodyBlock.EditNote): View {
             val ctx = itemView.context
             val muted = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
-            val text = stripLinkColors(spanned(block.html))
+            // Системная строка «Сообщение отредактировал N» — это метка, а не действие: ник должен быть
+            // обычным muted-текстом, без гиперссылки и перехода в профиль. Убираем URLSpan целиком.
+            val text = stripLinks(spanned(block.html))
             return TextView(ctx).apply {
                 setText(text)
                 textSize = scaledSp(13f) // ~0.875 of the 15sp body
                 setTextColor(muted)
-                // The editor nick inside stays a readable link (accent), not muted-into-invisibility.
-                setLinkTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
                 setLineSpacing(0f, 1.15f)
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
-                if (text is Spanned && text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()) {
-                    movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
-                        override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
-                    })
-                }
             }
+        }
+
+        /** Remove URLSpans (and any colour spans overlapping them) so the text renders as plain, non-clickable
+         *  content — used for the «отредактировал N» system note where the nick must NOT be a link. */
+        private fun stripLinks(text: CharSequence): CharSequence {
+            if (text !is Spanned) return text
+            val urls = text.getSpans(0, text.length, URLSpan::class.java)
+            if (urls.isEmpty()) return text
+            val out = SpannableStringBuilder(text)
+            for (u in out.getSpans(0, out.length, URLSpan::class.java)) out.removeSpan(u)
+            for (fg in out.getSpans(0, out.length, android.text.style.ForegroundColorSpan::class.java)) out.removeSpan(fg)
+            return out
         }
 
         private fun textView(text: CharSequence, item: NativePostItem): TextView {
