@@ -257,7 +257,7 @@ class TopicPostsAdapter(
             if (!keepHighlight) {
                 highlightAnimator?.cancel()
                 highlightAnimator = null
-                cardBg.setStroke(0, android.graphics.Color.TRANSPARENT) // clear any mid-fade highlight border
+                applyRestingCardBorder() // hairline M3 outline so cards stay separated (esp. dark/AMOLED)
             }
             cardBg.setColor(cardBaseColor())
             applyDensity()
@@ -359,6 +359,41 @@ class TopicPostsAdapter(
                 itemView, com.google.android.material.R.attr.colorSurfaceContainer)
 
         /**
+         * Resting hairline border for the post card. Elevation shadows are invisible on dark/AMOLED
+         * surfaces, so without an outline every near-black card melts into the near-black page (user
+         * report). A 1dp [colorOutline] edge (M3 outlined-card tone) keeps cards delineated in every
+         * theme — subtle on light palettes, essential on dark.
+         */
+        private fun restingCardBorderColor(): Int = com.google.android.material.color.MaterialColors.getColor(
+                itemView, com.google.android.material.R.attr.colorOutline)
+
+        private fun cardBorderWidthPx(): Int =
+                (1f * itemView.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+
+        private fun applyRestingCardBorder() =
+                cardBg.setStroke(cardBorderWidthPx(), restingCardBorderColor())
+
+        /**
+         * Rounded Material 3 container for an inline block (quote / spoiler / …): a tonal fill plus a
+         * 1dp [colorOutlineVariant] hairline and rounded corners, so nested blocks read as distinct M3
+         * surfaces on every palette instead of flat rectangles.
+         */
+        private fun m3BlockBackground(
+                fillAttr: Int,
+                cornerDp: Float = 12f,
+        ): android.graphics.drawable.GradientDrawable {
+            val dm = itemView.resources.displayMetrics
+            return android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = cornerDp * dm.density
+                setColor(itemView.context.getColorFromAttr(fillAttr))
+                setStroke(
+                        (1f * dm.density).toInt().coerceAtLeast(1),
+                        itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant),
+                )
+            }
+        }
+
+        /**
          * Post density (Комфортная/Компактная/Сверхкомпактная) — tightens the card's inner vertical
          * padding and the gap between cards, mirroring the WebView density setting. Horizontal
          * padding stays constant so text width doesn't jump.
@@ -384,18 +419,20 @@ class TopicPostsAdapter(
         /** Flash the card with an accent-tinted background that fades back to the surface colour. */
         private fun playHighlight() {
             // Highlight only the card BORDER (not a full-block fill): a 2dp accent stroke that fades out
-            // over 2s. The card fill stays at its base colour throughout.
+            // over 2s, settling into the resting hairline outline (not transparent — the card keeps its
+            // permanent M3 border so it never briefly loses separation on dark themes).
             val accent = com.google.android.material.color.MaterialColors.getColor(
                     itemView, androidx.appcompat.R.attr.colorAccent)
+            val restingColor = restingCardBorderColor()
             val strokeWidth = (2f * itemView.resources.displayMetrics.density).toInt().coerceAtLeast(1)
             highlightAnimator = android.animation.ValueAnimator
-                    .ofObject(android.animation.ArgbEvaluator(), accent, android.graphics.Color.TRANSPARENT).apply {
+                    .ofObject(android.animation.ArgbEvaluator(), accent, restingColor).apply {
                         duration = 2000L
                         startDelay = 250L
                         addUpdateListener { cardBg.setStroke(strokeWidth, it.animatedValue as Int) }
                         addListener(object : android.animation.AnimatorListenerAdapter() {
                             override fun onAnimationEnd(animation: android.animation.Animator) {
-                                cardBg.setStroke(0, android.graphics.Color.TRANSPARENT)
+                                applyRestingCardBorder()
                             }
                         })
                         start()
@@ -695,24 +732,42 @@ class TopicPostsAdapter(
 
             val card = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding((8 * dm.density).toInt())
-                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                setPadding((10 * dm.density).toInt())
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                clipToOutline = true
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply { topMargin = (6 * dm.density).toInt() }
             }
             val label = block.title?.takeIf { it.isNotBlank() } ?: "Спойлер"
-            val header = TextView(ctx).apply {
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+            // Header row: a leading chevron that rotates open/closed + the bold accent title.
+            val chevron = TextView(ctx).apply {
+                text = "▸"
+                textSize = scaledSp(13f)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(accent)
+            }
+            val title = TextView(ctx).apply {
+                text = label
                 setTypeface(typeface, Typeface.BOLD)
                 textSize = scaledSp(14f)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
+                setTextColor(accent)
+                setPadding((6 * dm.density).toInt(), 0, 0, 0)
+            }
+            val header = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(chevron)
+                addView(title)
             }
             val bodyContainer = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
+                setPadding(0, (8 * dm.density).toInt(), 0, 0)
             }
             fun applyState() {
-                header.text = (if (open) "▾ " else "▸ ") + label
+                chevron.rotation = if (open) 90f else 0f
                 bodyContainer.visibility = if (open) View.VISIBLE else View.GONE
             }
             renderBlocksInto(bodyContainer, block.inner, scope, item)
@@ -739,14 +794,23 @@ class TopicPostsAdapter(
         private fun quoteView(block: BodyBlock.Quote, scope: RenderScope, item: NativePostItem): View {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
-            val card = LinearLayout(ctx).apply {
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+            // M3 quote: a rounded tonal card (surfaceContainerHigh + hairline outline) with a 3dp accent
+            // bar down the leading edge — the classic quote signifier, clipped to the rounded corners.
+            val accentBar = View(ctx).apply {
+                setBackgroundColor(accent)
+                layoutParams = LinearLayout.LayoutParams(
+                        (3 * dm.density).toInt(),
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                )
+            }
+            val content = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding((10 * dm.density).toInt())
-                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = (6 * dm.density).toInt() }
+                )
             }
             val headerText = listOfNotNull(
                     block.author?.takeIf { it.isNotBlank() },
@@ -756,13 +820,23 @@ class TopicPostsAdapter(
                 text = headerText
                 textSize = scaledSp(13f)
                 setTypeface(typeface, Typeface.BOLD)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
+                setTextColor(accent)
                 val src = block.sourceUrl?.takeIf { it.isNotBlank() }
                 if (src != null) setOnClickListener { linkHandler.handle(src, null) }
             }
-            card.addView(header)
-            renderBlocksInto(card, block.inner, scope, item)
-            return card
+            content.addView(header)
+            renderBlocksInto(content, block.inner, scope, item)
+            return LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                clipToOutline = true
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (6 * dm.density).toInt() }
+                addView(accentBar)
+                addView(content)
+            }
         }
 
         /**
@@ -822,7 +896,8 @@ class TopicPostsAdapter(
                 textSize = scaledSp(14f)
                 setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
                 setPadding(pad, pad, pad, pad)
-                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                clipToOutline = true
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -841,7 +916,8 @@ class TopicPostsAdapter(
             val pad = (8 * dm.density).toInt()
             val card = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                clipToOutline = true
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -932,8 +1008,9 @@ class TopicPostsAdapter(
             val ctx = itemView.context
             val panel = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding((8 * resources.displayMetrics.density).toInt())
-                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+                setPadding((10 * resources.displayMetrics.density).toInt())
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                clipToOutline = true
             }
             val label = TextView(ctx).apply {
                 text = "[${block.kind}]"
