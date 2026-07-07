@@ -726,6 +726,7 @@ class TopicPostsAdapter(
             for (block in blocks) {
                 val child = when (block) {
                     is BodyBlock.Text -> textView(spanned(block.html), item)
+                    is BodyBlock.EditNote -> editNoteView(block)
                     is BodyBlock.Image -> imageView(block, scope)
                     is BodyBlock.Quote -> quoteView(block, scope, item)
                     is BodyBlock.Spoiler -> spoilerView(block, scope, item)
@@ -1051,6 +1052,33 @@ class TopicPostsAdapter(
             ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
             panel.layoutParams = lp
             return panel
+        }
+
+        /**
+         * The server edit note («Сообщение отредактировал … — …», + «Причина редактирования: …») — a
+         * SYSTEM meta line. Rendered smaller and muted (mirrors the WebView `.edit`: 0.875em, #757575) so
+         * it visually separates from the user's own post text. The editor-nick link inside stays tappable.
+         */
+        private fun editNoteView(block: BodyBlock.EditNote): View {
+            val ctx = itemView.context
+            val muted = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+            val text = spanned(block.html)
+            return TextView(ctx).apply {
+                setText(text)
+                textSize = scaledSp(13f) // ~0.875 of the 15sp body
+                setTextColor(muted)
+                setLinkTextColor(muted)
+                setLineSpacing(0f, 1.15f)
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
+                if (text is Spanned && text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()) {
+                    movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
+                        override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
+                    })
+                }
+            }
         }
 
         private fun textView(text: CharSequence, item: NativePostItem): TextView {

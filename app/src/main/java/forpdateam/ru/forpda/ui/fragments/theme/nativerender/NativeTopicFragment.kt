@@ -2216,6 +2216,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
         is BodyBlock.WebFallback -> android.text.Html.fromHtml(block.html, android.text.Html.FROM_HTML_MODE_COMPACT).toString()
         is BodyBlock.Image -> ""
+        is BodyBlock.EditNote -> "" // system meta line — not searchable content
     }
 
     /**
