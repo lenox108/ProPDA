@@ -137,17 +137,29 @@ class TopicPostsAdapter(
     private val spoilerStates = HashMap<String, Boolean>()
 
     /**
-     * The post to flash once when it next binds (target of a link/find/unread open). Consumed on the
-     * first matching bind so scrolling away and back — or an infinite-scroll rebind — does NOT re-flash
-     * it (cf. the WebView "double-flash"/"stuck-lit" fixes: exactly one highlight per open).
+     * The post to flash on open (target of a link/find/unread open), plus the wall-clock DEADLINE until
+     * which the flash stays active. Tracking a deadline (not a one-shot boolean consumed on first bind)
+     * makes the highlight survive the re-binds that happen right after open — the deferred
+     * enrichment merge, the settle-at-top re-scroll, DiffUtil updates — which previously cancelled the
+     * fade within milliseconds (a bind during the animator's start-delay read isRunning=false). Any bind
+     * of this post before the deadline continues/re-attaches the flash for the REMAINING time; after the
+     * deadline it never re-flashes (one flash per open — cf. the WebView "double-flash"/"stuck-lit" fixes).
      */
-    private var pendingHighlightPostId: Int? = null
+    private var highlightTargetPostId: Int = 0
+    private var highlightDeadlineUptime: Long = 0L
 
-    /** Arm a one-shot highlight for [postId]; fires when that post binds (now if already visible). */
+    /** Arm the open-highlight for [postId]; fires when that post binds (now if already visible). */
     fun requestHighlight(postId: Int) {
-        pendingHighlightPostId = postId
+        highlightTargetPostId = postId
+        highlightDeadlineUptime = android.os.SystemClock.uptimeMillis() + HIGHLIGHT_TOTAL_MS
         val pos = currentList.indexOfFirst { it.postId == postId }
         if (pos >= 0) notifyItemChanged(pos)
+    }
+
+    /** Remaining flash time (ms) for [postId], or 0 when it is not the (still-active) highlight target. */
+    private fun highlightRemainingMsFor(postId: Int): Long {
+        if (postId <= 0 || postId != highlightTargetPostId) return 0L
+        return (highlightDeadlineUptime - android.os.SystemClock.uptimeMillis()).coerceAtLeast(0L)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PostViewHolder {
@@ -158,13 +170,12 @@ class TopicPostsAdapter(
 
     override fun onBindViewHolder(holder: PostViewHolder, position: Int) {
         val item = getItem(position)
-        val highlight = pendingHighlightPostId == item.postId
-        if (highlight) pendingHighlightPostId = null
+        val highlightRemainingMs = highlightRemainingMsFor(item.postId)
         val isHat = topicHatPostId != null && item.postId == topicHatPostId
         // The «Страница N» divider label is baked into the item at list assembly (see the fragment), so
         // DiffUtil rebinds the boundary post when a prepended page shifts it. Never on the hat.
         val pageDivider = item.pageDividerLabel?.takeIf { !isHat }
-        holder.bind(item, highlight, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider)
+        holder.bind(item, highlightRemainingMs, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider)
     }
 
     /** Per-post render pass state threaded through the recursive block rendering. */
@@ -233,7 +244,7 @@ class TopicPostsAdapter(
 
         fun bind(
                 item: NativePostItem,
-                highlight: Boolean = false,
+                highlightRemainingMs: Long = 0L,
                 settings: PostDisplaySettings = PostDisplaySettings(),
                 searchQuery: String = "",
                 isHat: Boolean = false,
@@ -248,12 +259,13 @@ class TopicPostsAdapter(
             this.searchQuery = searchQuery
             this.authorized = authorized
             this.memberId = memberId
-            // Reset the card background on every (re)bind so a recycled holder never keeps a prior
-            // post's mid-fade tint.
-            // Keep a running highlight alive across a re-bind of the SAME post (enrichment/diff updates
-            // rebind the post ~1–2s after open and would otherwise cancel the fade). Only reset the border
-            // when this holder is reused for a DIFFERENT post (recycling).
-            val keepHighlight = highlightAnimator?.isRunning == true && highlightingPostId == item.postId
+            // Keep a running highlight alive across a re-bind of the SAME post that is still within its
+            // flash window (enrichment/diff updates rebind the post right after open and previously
+            // cancelled the fade). Check the animator by presence — NOT isRunning — because during the
+            // brief start-delay isRunning is false and a re-bind would wrongly cancel it. Reset the border
+            // only when this holder is reused for a DIFFERENT post, or the flash window has elapsed.
+            val wantHighlight = highlightRemainingMs > 0L
+            val keepHighlight = highlightAnimator != null && highlightingPostId == item.postId && wantHighlight
             if (!keepHighlight) {
                 highlightAnimator?.cancel()
                 highlightAnimator = null
@@ -286,7 +298,10 @@ class TopicPostsAdapter(
                 val top = if (hatFolded) 0 else (8 * itemView.resources.displayMetrics.density).toInt()
                 if (lp.topMargin != top) { lp.topMargin = top; body.layoutParams = lp }
             }
-            if (highlight && !keepHighlight) { highlightingPostId = item.postId; playHighlight() }
+            if (wantHighlight && !keepHighlight) {
+                highlightingPostId = item.postId
+                playHighlight(highlightRemainingMs)
+            }
         }
 
         /** Populate/toggle the standalone «ШАПКА ТЕМЫ ▾/▴» bar shown above the hat post (GONE otherwise). */
@@ -416,22 +431,26 @@ class TopicPostsAdapter(
             }
         }
 
-        /** Flash the card with an accent-tinted background that fades back to the surface colour. */
-        private fun playHighlight() {
-            // Highlight only the card BORDER (not a full-block fill): a 2dp accent stroke that fades out
-            // over 2s, settling into the resting hairline outline (not transparent — the card keeps its
-            // permanent M3 border so it never briefly loses separation on dark themes).
+        /**
+         * Flash the card BORDER: a bold accent stroke that holds, then fades over [durationMs] into the
+         * resting hairline outline (not transparent — the card keeps its permanent M3 border, so it never
+         * loses separation on dark themes). No start-delay (a delay left isRunning=false during which a
+         * re-bind cancelled the flash). An AccelerateInterpolator keeps the accent near full for the first
+         * part of the window so the flash is clearly visible, then eases out.
+         */
+        private fun playHighlight(durationMs: Long) {
             val accent = com.google.android.material.color.MaterialColors.getColor(
                     itemView, androidx.appcompat.R.attr.colorAccent)
             val restingColor = restingCardBorderColor()
-            val strokeWidth = (2f * itemView.resources.displayMetrics.density).toInt().coerceAtLeast(1)
+            val strokeWidth = (3f * itemView.resources.displayMetrics.density).toInt().coerceAtLeast(2)
             highlightAnimator = android.animation.ValueAnimator
                     .ofObject(android.animation.ArgbEvaluator(), accent, restingColor).apply {
-                        duration = 2000L
-                        startDelay = 250L
+                        duration = durationMs.coerceIn(300L, HIGHLIGHT_TOTAL_MS)
+                        interpolator = android.view.animation.AccelerateInterpolator(1.6f)
                         addUpdateListener { cardBg.setStroke(strokeWidth, it.animatedValue as Int) }
                         addListener(object : android.animation.AnimatorListenerAdapter() {
                             override fun onAnimationEnd(animation: android.animation.Animator) {
+                                highlightAnimator = null
                                 applyRestingCardBorder()
                             }
                         })
@@ -1153,6 +1172,9 @@ class TopicPostsAdapter(
     }
 
     private companion object {
+        /** Total lifetime of the open-highlight flash (ms). Kept generously long so the accent border is
+         *  clearly noticeable even after the post-open enrichment re-binds the target post. */
+        const val HIGHLIGHT_TOTAL_MS = 2600L
         const val DEFAULT_IMAGE_RATIO = 0.66f
         const val SMILE_SIZE_SP = 18f
         const val QUOTE_MENU_ID = 0x71_0716
