@@ -1069,6 +1069,97 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * child view an ACTION_CANCEL, which is what prevents a link tap firing mid-swipe over hat/quote
      * links. Being opt-in, it can't regress the default reading experience.
      */
+    // ---- Gesture indicator overlay (parity with the WebView pull-to-refresh / page-swipe overlays) ----
+    // A centered rounded surface card with a big direction glyph, a label and a horizontal progress bar,
+    // shown WHILE the user performs the bottom-up refresh or the classic page-swipe gesture, so the gesture
+    // is visible before release (previously the native engine gave no feedback until after release).
+    private var gestureOverlay: android.widget.LinearLayout? = null
+    private var gestureOverlayGlyph: TextView? = null
+    private var gestureOverlayLabel: TextView? = null
+    private var gestureOverlayProgress: android.widget.ProgressBar? = null
+
+    private fun ensureGestureOverlay(): android.widget.LinearLayout {
+        gestureOverlay?.let { return it }
+        val ctx = requireContext()
+        val d = resources.displayMetrics.density
+        fun dp(v: Float) = (v * d).toInt()
+        val glyph = TextView(ctx).apply {
+            gravity = android.view.Gravity.CENTER
+            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            textSize = 22f
+            maxLines = 1
+        }
+        val label = TextView(ctx).apply {
+            gravity = android.view.Gravity.CENTER
+            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            textSize = 12f
+            maxLines = 1
+        }
+        val progress = android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progress = 0
+            isIndeterminate = false
+            progressTintList = android.content.res.ColorStateList.valueOf(
+                    ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(
+                    ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant))
+        }
+        val overlay = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            visibility = View.GONE
+            alpha = 0f
+            isClickable = false
+            setPadding(dp(16f), dp(10f), dp(16f), dp(10f))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurface))
+                cornerRadius = dp(16f).toFloat()
+                setStroke(dp(1f).coerceAtLeast(1),
+                        ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant))
+            }
+            androidx.core.view.ViewCompat.setElevation(this, dp(6f).toFloat())
+            val wrap = android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            addView(glyph, android.widget.LinearLayout.LayoutParams(wrap, wrap))
+            addView(label, android.widget.LinearLayout.LayoutParams(wrap, wrap).apply {
+                topMargin = dp(4f); bottomMargin = dp(6f)
+            })
+            addView(progress, android.widget.LinearLayout.LayoutParams(dp(120f), dp(4f)))
+        }
+        // Attach to the coordinator (the FAB's parent), NOT fragment_content: the RecyclerView there
+        // draws over a fragment_content sibling regardless of elevation, so the overlay stayed hidden.
+        coordinatorLayout.addView(overlay, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
+                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
+                androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT).apply {
+            gravity = android.view.Gravity.CENTER
+        })
+        gestureOverlay = overlay
+        gestureOverlayGlyph = glyph
+        gestureOverlayLabel = label
+        gestureOverlayProgress = progress
+        return overlay
+    }
+
+    /** Show/update the gesture indicator with a direction [glyph], a [label] and 0..1 [progress]. */
+    private fun showGestureIndicator(glyph: String, label: String, progress: Float) {
+        if (view == null) return
+        val overlay = ensureGestureOverlay()
+        val n = progress.coerceIn(0f, 1f)
+        gestureOverlayGlyph?.text = glyph
+        gestureOverlayLabel?.text = label
+        gestureOverlayProgress?.progress = (n * 100f).toInt()
+        overlay.visibility = View.VISIBLE
+        overlay.alpha = (0.4f + n * 0.6f).coerceAtMost(1f)
+        overlay.bringToFront()
+    }
+
+    private fun hideGestureIndicator() {
+        gestureOverlay?.let {
+            it.visibility = View.GONE
+            it.alpha = 0f
+            gestureOverlayProgress?.progress = 0
+        }
+    }
+
     private fun installPageSwipeDetector() {
         val touchSlop = android.view.ViewConfiguration.get(requireContext()).scaledTouchSlop
         val minDist = SWIPE_MIN_DISTANCE_DP * resources.displayMetrics.density
@@ -1100,12 +1191,34 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
 
             override fun onTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent) {
-                if (e.actionMasked == android.view.MotionEvent.ACTION_UP) {
-                    val dx = e.x - downX
-                    if (kotlin.math.abs(dx) > minDist) {
-                        if (dx < 0) jumpToPage(barCurrentPage + 1) else jumpToPage(barCurrentPage - 1)
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        val dx = e.x - downX
+                        val prog = (kotlin.math.abs(dx) / minDist).coerceIn(0f, 1f)
+                        val armed = kotlin.math.abs(dx) >= minDist
+                        // Finger left (dx<0) → NEXT page (→); finger right (dx>0) → PREVIOUS page (←).
+                        if (dx < 0) {
+                            showGestureIndicator("→", getString(if (armed)
+                                    forpdateam.ru.forpda.R.string.theme_page_swipe_release_next
+                                else forpdateam.ru.forpda.R.string.theme_page_swipe_pull_next), prog)
+                        } else {
+                            showGestureIndicator("←", getString(if (armed)
+                                    forpdateam.ru.forpda.R.string.theme_page_swipe_release_previous
+                                else forpdateam.ru.forpda.R.string.theme_page_swipe_pull_previous), prog)
+                        }
                     }
-                    claimed = false
+                    android.view.MotionEvent.ACTION_UP -> {
+                        val dx = e.x - downX
+                        if (kotlin.math.abs(dx) > minDist) {
+                            if (dx < 0) jumpToPage(barCurrentPage + 1) else jumpToPage(barCurrentPage - 1)
+                        }
+                        claimed = false
+                        hideGestureIndicator()
+                    }
+                    android.view.MotionEvent.ACTION_CANCEL -> {
+                        claimed = false
+                        hideGestureIndicator()
+                    }
                 }
             }
 
@@ -1166,6 +1279,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             override fun onTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent) {
                 vt?.addMovement(e)
                 when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_MOVE -> {
+                        if (!captured) return
+                        val up = downY - e.y
+                        val prog = (up / triggerDist).coerceIn(0f, 1f)
+                        showGestureIndicator("↑", getString(if (prog >= 1f)
+                                forpdateam.ru.forpda.R.string.theme_bottom_refresh_release
+                            else forpdateam.ru.forpda.R.string.theme_bottom_refresh_pull), prog)
+                    }
                     android.view.MotionEvent.ACTION_UP -> {
                         val up = downY - e.y
                         vt?.computeCurrentVelocity(1000)
@@ -1173,12 +1294,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         val dur = android.os.SystemClock.uptimeMillis() - downAt
                         if (captured && up >= triggerDist && vel <= maxReleaseVelocity && dur >= minDurationMs &&
                                 !refreshLayout.isRefreshing) {
-                            Toast.makeText(requireContext(), "Обновление…", Toast.LENGTH_SHORT).show()
                             refreshFromBottom()
                         }
+                        hideGestureIndicator()
                         reset(rv)
                     }
-                    android.view.MotionEvent.ACTION_CANCEL -> reset(rv)
+                    android.view.MotionEvent.ACTION_CANCEL -> {
+                        hideGestureIndicator()
+                        reset(rv)
+                    }
                 }
             }
 
@@ -1550,6 +1674,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         attachmentsPopup = null
         smartNavMenu?.dispose()
         smartNavMenu = null
+        gestureOverlay = null
+        gestureOverlayGlyph = null
+        gestureOverlayLabel = null
+        gestureOverlayProgress = null
         super.onDestroyView()
     }
 
