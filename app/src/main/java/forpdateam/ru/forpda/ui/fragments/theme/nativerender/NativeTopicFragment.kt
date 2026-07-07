@@ -486,15 +486,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         fab.backgroundTintList = android.content.res.ColorStateList.valueOf(fabBg)
         fab.imageTintList = android.content.res.ColorStateList.valueOf(fabIcon)
         fab.isLongClickable = true
-        // Single, app-setting-aware haptic on long-press: disable the View's automatic long-press buzz
-        // (it fired a SECOND time on top of ours) and route through Haptic (honours «Тактильный отклик»).
+        // Гасим АВТОМАТИЧЕСКИЙ haptic View (на long-press он давал второй, дублирующий buzz), а свой
+        // одиночный отклик шлём через Haptic.perform() с FLAG_IGNORE_VIEW_SETTING — он обходит выключенный
+        // флаг view, но уважает настройку «Тактильный отклик». Иначе после отключения флага вибрации не было.
         fab.isHapticFeedbackEnabled = false
         fab.setOnClickListener {
+            forpdateam.ru.forpda.ui.Haptic.perform(it, android.view.HapticFeedbackConstants.CONTEXT_CLICK)
             showFabTemporarily() // использование кнопки сбрасывает таймер авто-скрытия обратно на 2.5с
             smartScrollTap()
         }
         fab.setOnLongClickListener {
-            forpdateam.ru.forpda.ui.Haptic.longPress(it)
+            forpdateam.ru.forpda.ui.Haptic.perform(it, android.view.HapticFeedbackConstants.LONG_PRESS)
             showFabTemporarily() // long-press тоже продлевает видимость кнопки
             showSmartNavMenu()
             true

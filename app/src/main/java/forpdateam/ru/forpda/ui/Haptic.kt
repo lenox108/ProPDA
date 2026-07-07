@@ -55,6 +55,17 @@ object Haptic {
         view.performHapticFeedback(constant)
     }
 
+    /**
+     * Одиночный отклик на view, у которой автоматический haptic отключён
+     * ([View.setHapticFeedbackEnabled] == false) — например, чтобы погасить дублирующий
+     * авто-buzz долгого нажатия. Обходит флаг view через FLAG_IGNORE_VIEW_SETTING, но по-прежнему
+     * уважает настройку приложения [Preferences.Main.HAPTIC_FEEDBACK_ENABLE] и системную настройку.
+     */
+    fun perform(view: View, constant: Int) {
+        if (!isEnabled(view)) return
+        view.performHapticFeedback(constant, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
+    }
+
     private fun isEnabled(view: View): Boolean =
             PreferenceManager.getDefaultSharedPreferences(view.context)
                     .getBoolean(Preferences.Main.HAPTIC_FEEDBACK_ENABLE, true)
