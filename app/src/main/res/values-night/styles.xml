@@ -365,7 +365,12 @@
 
     <style name="DayNightAppTheme.PopupOverlay" parent="ThemeOverlay.Material3.Dark">
         <item name="elevation">0dp</item>
-        <item name="colorSurface">?attr/colorSurface</item>
+        <!--
+            Concrete colorSurface (was a self-referential ?attr/colorSurface no-op that
+            resolved to transparent). The overflow popup background @drawable/bg_popup_menu_m3
+            reads ?attr/colorSurface; a self-reference collapsed it to 0 → transparent popup.
+        -->
+        <item name="colorSurface">@color/dark_card_background</item>
         <item name="colorOnSurface">@color/dark_default_text_color</item>
         <item name="colorOnSurfaceVariant">@color/dark_second_text_color</item>
         <item name="android:textColorPrimary">@color/dark_default_text_color</item>
