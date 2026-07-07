@@ -489,9 +489,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Single, app-setting-aware haptic on long-press: disable the View's automatic long-press buzz
         // (it fired a SECOND time on top of ours) and route through Haptic (honours «Тактильный отклик»).
         fab.isHapticFeedbackEnabled = false
-        fab.setOnClickListener { smartScrollTap() }
+        fab.setOnClickListener {
+            showFabTemporarily() // использование кнопки сбрасывает таймер авто-скрытия обратно на 2.5с
+            smartScrollTap()
+        }
         fab.setOnLongClickListener {
             forpdateam.ru.forpda.ui.Haptic.longPress(it)
+            showFabTemporarily() // long-press тоже продлевает видимость кнопки
             showSmartNavMenu()
             true
         }
