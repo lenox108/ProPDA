@@ -118,6 +118,32 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun downloadButtonsInsideSpoilerOl_allSurviveAsFileAttachments() {
+        // EXACT live structure of post 239158/p144065357 «Паки Тем GO Ex»: a collapsed spoiler whose
+        // block-body holds an <ol> of <a class="ipb-attach attach-file"> download buttons (each wrapping an
+        // animated gif). The spoiler must render with ALL file chips inside.
+        val gif = "https://4pda.to/s/Zy0hRMDmDtR8z09yu8z22rW0oH7HPbiK40M5cDUEPz.gif"
+        val html = "<div class=\"post-block spoil close\"><div class=\"block-title\">Паки Тем GO Ex</div>" +
+                "<div class=\"block-body\"><ol>" +
+                "<li><a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/1634154/Themes.rar\"><img data-src=\"$gif\">Themes.rar</a></li>" +
+                "<li><a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/1634192/Official_Themes.rar\"><img data-src=\"$gif\">Official_Themes.rar</a></li>" +
+                "<li><a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/1634195/PREMIUM_Themes.zip\"><img data-src=\"$gif\">PREMIUM_Themes.zip</a></li>" +
+                "<li><a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/1634517/Theme.zip\"><img data-src=\"$gif\">Theme.zip</a></li>" +
+                "</ol></div></div>"
+        val blocks = renderer.render(html)
+        val spoiler = blocks.filterIsInstance<BodyBlock.Spoiler>().single()
+        val files = spoiler.inner.filterIsInstance<BodyBlock.FileAttachment>()
+        assertEquals("all 4 download buttons survive inside the spoiler", 4, files.size)
+        assertTrue(files.any { it.name.contains("Themes.rar") })
+        assertTrue(files.any { it.url.contains("Theme.zip") })
+        // Each button's animated gif is rendered as a tappable image whose tap-target is the download href.
+        val gifs = spoiler.inner.filterIsInstance<BodyBlock.Image>()
+        assertEquals("all 4 download gifs render as images", 4, gifs.size)
+        assertTrue("gif image points at the gif", gifs.all { it.imageUrl == gif })
+        assertTrue("gif tap downloads the file", gifs.all { it.linkUrl?.contains("/dl/post/") == true })
+    }
+
+    @Test
     fun multipleDownloadButtons_allBecomeFileAttachments_noneDropped() {
         // A container (e.g. a spoiler <ol>) with SEVERAL download buttons — each an
         // <a class="ipb-attach attach-file"> wrapping an animated gif — must yield ALL file links, not
