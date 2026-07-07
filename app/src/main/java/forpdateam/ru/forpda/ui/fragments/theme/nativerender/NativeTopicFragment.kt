@@ -226,6 +226,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private data class ThemeBackEntry(val url: String, val postId: Int, val offset: Int)
     private val themeBackStack = ArrayDeque<ThemeBackEntry>()
 
+    /**
+     * Post id the open anchored to the BOTTOM (last post of an already-read topic). The async metadata
+     * enrichment (post counts / reputation) grows posts AFTER the anchor is applied, which would push the
+     * last post's action buttons back below the fold — so [enrichLoadedPage] re-bottom-anchors while the
+     * user still sits at the bottom. Cleared once the user scrolls up off the last post.
+     */
+    private var anchoredBottomPostId: Int? = null
+
+    /**
+     * Bottom-nav «chrome» (tab bar + system navigation) height in px, pushed in by MainActivity via
+     * [onBottomChromePaddingChanged]. The list View measures full-height and overflows its clipped parent
+     * by exactly this much, so a plain bottom-anchor buries the last post's action buttons behind the tab
+     * bar. Reserved as the RecyclerView's bottom padding (clipToPadding=false → still scrolls edge-to-edge)
+     * so resting content — the last post especially — clears the tab bar. Parity with the WebView spacer.
+     */
+    private var bottomNavChromePad = 0
+
     /** Whether the loaded content still has an unread anchor — drives the «К непрочитанному» menu item. */
     private var topicHasUnread: Boolean = false
 
@@ -307,7 +324,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) maybeLoadNextPage()
-                if (dy < 0) maybeLoadPrevPage()
+                if (dy < 0) { maybeLoadPrevPage(); anchoredBottomPostId = null } // user scrolled up off the bottom anchor
                 markVisiblePostsRead()
                 maybeMarkTopicReadAtEnd()
                 updateBarCurrentPageFromScroll()
@@ -315,6 +332,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (smartNavMenu?.isShowing() == true) smartNavMenu?.dismiss()
             }
         })
+        // The bottom-nav container padding lands a beat AFTER the first anchor (async window-inset pass),
+        // shrinking the list. If we parked on the last post, that stale offset re-hides its action buttons
+        // below the new fold — re-pin to the bottom whenever the list height actually changes while anchored.
+        recyclerView.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, oldBottom ->
+            if (bottom != oldBottom && anchoredBottomPostId != null) {
+                recyclerView.post { reanchorBottomAfterGrowth() }
+            }
+        }
         val auth = authHolder.get()
         postsAdapter.setAuthContext(authorized = auth.isAuth(), memberId = auth.userId)
         installPageSwipeDetector()
@@ -1566,6 +1591,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (scrollToBottom) {
             val last = (recyclerView.adapter?.itemCount ?: 0) - 1
             if (last >= 0) (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(last)
+            anchoredBottomPostId = loadedItems.lastOrNull()?.postId // survive enrichment growth (see reanchorBottomAfterGrowth)
         }
         recyclerView.alpha = 1f
     }
@@ -2314,11 +2340,29 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             val show = isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE &&
                     mainPreferencesHolder.getTopicPaginationPanelEnabled()
             bar.visibility = if (show) View.VISIBLE else View.GONE
-            // Reserve bottom room for the bar only when it is shown (CLASSIC); HYBRID needs none.
-            val bottomPad = if (show) (52 * resources.displayMetrics.density).toInt() else 0
+            // Reserve bottom room: always the bottom-nav chrome (so the last post clears the tab bar), plus
+            // the pagination bar's own height when it is shown (CLASSIC). clipToPadding=false keeps the
+            // scroll edge-to-edge; this only affects the resting/bottom-aligned position.
+            val barPad = if (show) (52 * resources.displayMetrics.density).toInt() else 0
             recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
-                    recyclerView.paddingRight, bottomPad)
+                    recyclerView.paddingRight, bottomNavChromePad + barPad)
         }
+    }
+
+    /**
+     * MainActivity reports the bottom-nav chrome height (tab bar + system nav) here. Reserve it as the
+     * list's bottom padding so the last post's action buttons never hide behind the tab bar (see
+     * [bottomNavChromePad]); re-pin if we were parked on the last post when the reservation lands.
+     */
+    override fun onBottomChromePaddingChanged(padding: Int) {
+        if (bottomNavChromePad == padding) return
+        bottomNavChromePad = padding
+        if (view == null) return
+        if (pagination.isInitialised) updatePaginationBar() else {
+            recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
+                    recyclerView.paddingRight, bottomNavChromePad)
+        }
+        if (anchoredBottomPostId != null) recyclerView.post { reanchorBottomAfterGrowth() }
     }
 
     /**
@@ -2599,7 +2643,27 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     changed = true
                 }
             }
-            if (changed) submitPosts()
+            if (changed) submitPosts { reanchorBottomAfterGrowth() }
+        }
+    }
+
+    /**
+     * After the metadata enrichment re-lays out the list (taller posts), keep the already-read topic's last
+     * post pinned to the BOTTOM with its action buttons visible — but only while the user is still sitting on
+     * it (hasn't scrolled up). Otherwise it would yank them back down.
+     */
+    private fun reanchorBottomAfterGrowth() {
+        if (view == null) return
+        val anchorId = anchoredBottomPostId ?: return
+        if (anchorId != loadedItems.lastOrNull()?.postId) { anchoredBottomPostId = null; return }
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val itemCount = recyclerView.adapter?.itemCount ?: return
+        // Still parked at the end (last item at least partially visible) → re-pin it to the bottom.
+        if (lm.findLastVisibleItemPosition() >= itemCount - 1) {
+            lm.scrollToPosition(itemCount - 1)
+            bottomAlignPost(itemCount - 1)
+        } else {
+            anchoredBottomPostId = null // user scrolled away — stop re-pinning
         }
     }
 
@@ -2658,6 +2722,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * the very top — that left an ugly empty block below the anchor (user report «пустая область внизу»).
      * A short last page is handled separately by [maybeFillLastPage], which pulls previous pages in.
      */
+    /**
+     * Pull the post at [concatPos] fully into view at the BOTTOM: after a bottom-anchor [scrollToPosition]
+     * the layout manager can still leave a post TALLER than the remaining space cut off (its action buttons
+     * below the fold — user report «последнее сообщение обрезается по низу, не видно кнопок»). Measure the
+     * laid-out item and, if it overshoots the bottom edge, [scrollBy] exactly that much so its bottom (with
+     * the like/quote/reputation row) sits at the viewport bottom. No-op when the post already fits.
+     */
+    private fun bottomAlignPost(concatPos: Int) {
+        recyclerView.post {
+            if (view == null) return@post
+            val itemView = recyclerView.findViewHolderForAdapterPosition(concatPos)?.itemView ?: return@post
+            val bottomLimit = recyclerView.height - recyclerView.paddingBottom
+            val overshoot = itemView.bottom - bottomLimit
+            if (overshoot > 0) recyclerView.scrollBy(0, overshoot)
+        }
+    }
+
     private fun settleAnchorAtTop(concatPos: Int) {
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         lm.scrollToPositionWithOffset(concatPos, 0)
@@ -2707,7 +2788,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (pendingJumpToBottom) {
             pendingJumpToBottom = false
             val lastPos = (ids.size - 1 + headerOffset()).coerceAtLeast(0)
+            anchoredBottomPostId = ids.lastOrNull()
             (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(lastPos)
+            bottomAlignPost(lastPos)
             // Highlight the last post (2s border) — parity with the first-unread open; the read-topic open
             // lands on the last post, so flash it too.
             ids.lastOrNull()?.let { postsAdapter.requestHighlight(it) }
@@ -2732,10 +2815,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // matching the WebView which shows the poll first. For post targets, offset past the
                 // poll header (adapter position 0) to the resolved POST.
                 val target = if (request is AnchorRequest.Top) 0 else resolution.index + headerOffset()
-                if (request is AnchorRequest.Top) {
-                    (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(target, 0)
-                } else {
-                    settleAnchorAtTop(target)
+                // The anchor is the very LAST loaded post (already-read topic opening on its final post):
+                // top-aligning clamps it CUT OFF at the bottom (action buttons off-screen). Bottom-align it
+                // so the whole post + its buttons are visible, and remember it so the async enrichment
+                // (which grows posts) re-anchors instead of pushing the buttons back below the fold.
+                val isLastPost = request !is AnchorRequest.Top && resolution.index == ids.size - 1
+                when {
+                    request is AnchorRequest.Top ->
+                        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(target, 0)
+                    isLastPost -> {
+                        anchoredBottomPostId = ids.last()
+                        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(target)
+                        bottomAlignPost(target)
+                    }
+                    else -> settleAnchorAtTop(target)
                 }
                 // Flash the resolved post once so the user sees where a link/find/unread open landed.
                 if (request is AnchorRequest.Post) postsAdapter.requestHighlight(request.postId)
