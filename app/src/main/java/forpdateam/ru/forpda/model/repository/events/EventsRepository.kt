@@ -82,7 +82,12 @@ class EventsRepository(
         }
     }
 
-    private val eventsHistory = mutableMapOf<Int, NotificationEvent>()
+    // synchronizedMap: события обрабатываются на многопоточном Dispatchers.Default/IO,
+    // put/remove атомарны; итерации (checkOldEvents/onTopicRead/onTopicPostsRead) берут
+    // снапшот под synchronized(eventsHistory) — иначе ConcurrentModificationException.
+    // LinkedHashMap внутри сохраняет порядок вставки.
+    private val eventsHistory: MutableMap<Int, NotificationEvent> =
+            java.util.Collections.synchronizedMap(LinkedHashMap())
 
 
     private val notifyEventFlow = MutableSharedFlow<NotificationEvent>(
@@ -280,7 +285,8 @@ class EventsRepository(
     fun onTopicRead(topicId: Int) {
         if (topicId <= 0) return
         val toRemove = mutableListOf<Int>()
-        for ((key, event) in eventsHistory) {
+        val snapshot = synchronized(eventsHistory) { eventsHistory.entries.map { it.key to it.value } }
+        for ((key, event) in snapshot) {
             if (event.fromTheme() && !event.isMention && event.sourceId == topicId) {
                 cancelEventFlow.tryEmit(event)
                 toRemove.add(key)
@@ -313,7 +319,8 @@ class EventsRepository(
 
         var readMentions = 0
         val toRemove = mutableListOf<Int>()
-        for ((key, event) in eventsHistory) {
+        val snapshot = synchronized(eventsHistory) { eventsHistory.entries.map { it.key to it.value } }
+        for ((key, event) in snapshot) {
             if (event.fromTheme() && event.isMention && event.sourceId == topicId && event.messageId in visiblePostIds) {
                 cancelEventFlow.tryEmit(event)
                 toRemove.add(key)
@@ -575,7 +582,9 @@ class EventsRepository(
     }
 
     private fun checkOldEvents(loadedEvents: List<NotificationEvent>, source: NotificationEvent.Source) {
-        val oldEvents = eventsHistory.filter { it.value.source == source }.map { it.value }
+        val oldEvents = synchronized(eventsHistory) {
+            eventsHistory.values.filter { it.source == source }
+        }
 
         for (oldEvent in oldEvents) {
             var exist = false
