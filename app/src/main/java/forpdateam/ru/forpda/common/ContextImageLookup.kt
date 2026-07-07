@@ -38,4 +38,7 @@ object ContextImageLookup {
         val ctx = appContext ?: return null
         return ContextCompat.getDrawable(ctx, resId)
     }
+
+    /** The bound application [Context], or `null` before [bind] (cold-start receivers). */
+    fun context(): Context? = appContext
 }
