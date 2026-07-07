@@ -45,6 +45,12 @@ sealed interface BodyBlock {
         val linkUrl: String?,
         val displayWidthPx: Int,
         val displayHeightPx: Int,
+        /**
+         * true = a CONTENT image inlined in the post body (banner/preview/animated GIF), peeled out of
+         * the text flow — rendered at natural width (capped to the column). false = an ATTACHMENT gallery
+         * picture, rendered as a compact 150dp thumbnail. Governs sizing in the view layer.
+         */
+        val inline: Boolean = false,
     ) : BodyBlock
 
     /**

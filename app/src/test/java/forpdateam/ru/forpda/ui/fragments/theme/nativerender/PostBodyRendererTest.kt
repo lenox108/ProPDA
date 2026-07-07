@@ -178,6 +178,47 @@ class PostBodyRendererTest {
         assertEquals(kind, (block as BodyBlock.WebFallback).kind)
     }
 
+    // --- Inline content images (banners / previews / animated «UPDATE» gifs peeled from post text) ---
+
+    @Test
+    fun inlineLinkedImage_becomesInlineImageBlock_splittingSurroundingText() {
+        val html = "<div>Смотрите обновление: " +
+                "<a href=\"https://4pda.to/forum/topic\"><img src=\"https://i.imgur.com/update.gif\" width=\"320\" height=\"80\" /></a>" +
+                " уже вышло!</div>"
+        val blocks = renderer.render(html)
+        val image = blocks.filterIsInstance<BodyBlock.Image>().single()
+        assertEquals("https://i.imgur.com/update.gif", image.imageUrl)
+        assertEquals("https://4pda.to/forum/topic", image.linkUrl) // enclosing <a> is the tap link
+        assertTrue("inline flag drives full-width sizing", image.inline)
+        assertTrue(blocks.any { it is BodyBlock.Text && it.html.contains("Смотрите обновление") })
+        assertTrue(blocks.any { it is BodyBlock.Text && it.html.contains("уже вышло") })
+    }
+
+    @Test
+    fun topLevelBareImage_isInlineImageBlock() {
+        val blocks = renderer.render("<img alt=\"Изображение\" src=\"https://4pda.to/s/banner.png\" width=\"600\" height=\"200\" /> подпись")
+        val image = blocks.filterIsInstance<BodyBlock.Image>().single()
+        assertEquals("https://4pda.to/s/banner.png", image.imageUrl)
+        assertTrue(image.inline)
+        assertEquals(600, image.displayWidthPx)
+    }
+
+    @Test
+    fun smileyImage_isNotExploded_staysInlineText() {
+        val html = "Спасибо <img alt=\":)\" src=\"https://4pda.to/forum/style_emoticons/happy.gif\" width=\"18\" height=\"18\"> всем"
+        val blocks = renderer.render(html)
+        assertTrue("a smiley <img> must never become a block Image", blocks.none { it is BodyBlock.Image })
+        assertTrue(blocks.any { it is BodyBlock.Text })
+    }
+
+    @Test
+    fun attachmentImages_stayAttachmentPath_notInline() {
+        val blocks = renderer.render(fixture("attachment_image_table.html"))
+        val imgs = blocks.filterIsInstance<BodyBlock.Image>()
+        assertTrue(imgs.isNotEmpty())
+        assertTrue("attachment pictures render as thumbnails, not inline", imgs.none { it.inline })
+    }
+
     private fun fixture(name: String): String {
         val path = "renderer/postbody/$name"
         return javaClass.classLoader?.getResource(path)?.readText()
