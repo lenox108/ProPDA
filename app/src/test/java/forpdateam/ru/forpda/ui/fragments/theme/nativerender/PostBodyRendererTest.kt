@@ -118,6 +118,22 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun multipleDownloadButtons_allBecomeFileAttachments_noneDropped() {
+        // A container (e.g. a spoiler <ol>) with SEVERAL download buttons — each an
+        // <a class="ipb-attach attach-file"> wrapping an animated gif — must yield ALL file links, not
+        // just the first (regression: post 239158/p144035585 «Каталог украшательств», rest vanished).
+        val html = "<ol>" +
+                "<li><a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/1/Themes.rar\"><img src=\"\">Themes.rar</a></li>" +
+                "<li><a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/2/Official.rar\"><img src=\"\">Official.rar</a></li>" +
+                "<li><a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/3/Premium.zip\"><img src=\"\">Premium.zip</a></li>" +
+                "</ol>"
+        val files = renderer.render(html).filterIsInstance<BodyBlock.FileAttachment>()
+        assertEquals(3, files.size)
+        assertTrue(files.any { it.name.contains("Themes.rar") })
+        assertTrue(files.any { it.url.contains("Premium.zip") })
+    }
+
+    @Test
     fun table_isNativeTable_withRowsAndCells() {
         val blocks = renderer.render(fixture("table_basic.html"))
         // Leading + trailing text run natively; the table is a native Table block (not fallback).
