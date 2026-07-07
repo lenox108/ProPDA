@@ -1292,12 +1292,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     android.view.MotionEvent.ACTION_MOVE -> {
                         val dx = e.x - downX
                         val dy = e.y - downY
+                        // Horizontal intent detected EARLY (lower bar than the claim below): pre-empt the parent
+                        // SwipeRefreshLayout, whose dy>touchSlop threshold otherwise wins the race and steals a
+                        // left/right page swipe started near the TOP (where pull-to-refresh is armed). Restored on
+                        // UP/CANCEL. Fixes «свайп страницы вверху темы не срабатывает — ловит обновление сверху».
+                        if (!claimed && kotlin.math.abs(dx) > touchSlop &&
+                                kotlin.math.abs(dx) > kotlin.math.abs(dy) && refreshLayout.isEnabled) {
+                            refreshLayout.isEnabled = false
+                        }
                         if (!claimed && kotlin.math.abs(dx) > touchSlop * 2 &&
                                 kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f) {
                             claimed = true
                             return true // steal the gesture → child gets CANCEL (no link tap / scroll)
                         }
                     }
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                        updateRefreshGesture() // never claimed → restore pull-to-refresh
                 }
                 return false
             }
@@ -1326,10 +1336,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         }
                         claimed = false
                         hideGestureIndicator()
+                        updateRefreshGesture() // restore pull-to-refresh after the swipe
                     }
                     android.view.MotionEvent.ACTION_CANCEL -> {
                         claimed = false
                         hideGestureIndicator()
+                        updateRefreshGesture() // restore pull-to-refresh after the swipe
                     }
                 }
             }

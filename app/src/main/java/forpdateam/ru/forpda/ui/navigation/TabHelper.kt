@@ -306,6 +306,10 @@ object TabHelper {
             is SearchFragment -> Screen.Search::class.java
             is DownloadsFragment -> Screen.Downloads::class.java
             is ThemeFragmentWeb -> Screen.Theme::class.java
+            // Native topic engine must map to the SAME Screen.Theme as the WebView one — otherwise it hits
+            // the else-fallback (Screen.OtherMenu) and the bottom nav wrongly highlights «Меню» instead of
+            // keeping the parent tab (e.g. «Избранное») lit while a topic is open.
+            is forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment -> Screen.Theme::class.java
             is TopicsFragment -> Screen.Topics::class.java
             is OtherFragment -> Screen.OtherMenu::class.java
             else -> {
