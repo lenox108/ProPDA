@@ -2335,6 +2335,27 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         return bar to label
     }
 
+    /**
+     * Grey out (and disable) the «первая / предыдущая» arrows on page 1 and the «следующая / последняя»
+     * arrows on the last page, so it's visually clear which direction is a dead end. Children order is
+     * «(0) ‹(1) label(2) ›(3) »(4) — see [buildPaginationRow].
+     */
+    private fun applyPaginationArrowStates(bar: android.widget.LinearLayout?, total: Int) {
+        bar ?: return
+        val canGoBack = barCurrentPage > 1
+        val canGoForward = barCurrentPage < total
+        setPaginationArrowEnabled(bar.getChildAt(0), canGoBack)
+        setPaginationArrowEnabled(bar.getChildAt(1), canGoBack)
+        setPaginationArrowEnabled(bar.getChildAt(3), canGoForward)
+        setPaginationArrowEnabled(bar.getChildAt(4), canGoForward)
+    }
+
+    private fun setPaginationArrowEnabled(view: View?, enabled: Boolean) {
+        val arrow = view as? TextView ?: return
+        arrow.isEnabled = enabled
+        arrow.alpha = if (enabled) 1f else 0.3f
+    }
+
     private fun ensurePaginationBar() {
         if (paginationBar != null) return
         // Match the POST-CARD colour so the bottom bar blends with the content above — no visible seam,
@@ -2524,9 +2545,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         ensurePaginationBar()
         val total = pagination.totalPages
         paginationLabel?.text = "$barCurrentPage / $total"
+        applyPaginationArrowStates(paginationBar, total)
         // «Верхняя пагинация»: same row pinned under the toolbar, shown in ALL reading modes when enabled.
         ensureTopPaginationBar()
         topPaginationLabel?.text = "$barCurrentPage / $total"
+        applyPaginationArrowStates(topPaginationBar, total)
         topPaginationBar?.visibility = if (total > 1 && messagePanel?.visibility != View.VISIBLE &&
                 mainPreferencesHolder.getTopicPaginationPanelEnabled()) View.VISIBLE else View.GONE
         // Top-toolbar subtitle mirrors the page position — digits only, no «Страница … из …» text
