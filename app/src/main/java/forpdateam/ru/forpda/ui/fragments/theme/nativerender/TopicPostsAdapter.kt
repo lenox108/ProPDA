@@ -564,12 +564,12 @@ class TopicPostsAdapter(
         /** Author's forum post count as a 💬 N badge (parity with WebView user_post_count). */
         private fun bindPostCount(item: NativePostItem) {
             val count = item.userPostCount?.takeIf { it > 0 }
-            if (count == null) {
-                postCount.visibility = View.GONE
-                return
-            }
-            postCount.visibility = View.VISIBLE
-            postCount.text = count.toString()
+            // The count comes from the DEFERRED enrichment (~1s after open). Reserve its row height up
+            // front so the header doesn't grow a line — and shove/rescale the whole post — when the count
+            // arrives. INVISIBLE keeps the layout slot; the icon + placeholder give it the final height,
+            // so the only change on enrichment is the number fading in (no jump).
+            postCount.visibility = if (count == null) View.INVISIBLE else View.VISIBLE
+            postCount.text = count?.toString() ?: "0"
             val icon = androidx.core.content.ContextCompat.getDrawable(
                     itemView.context, R.drawable.ic_comment_outline)?.mutate()?.apply {
                 setTint(itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))

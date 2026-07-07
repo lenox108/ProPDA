@@ -556,6 +556,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             setIcon(forpdateam.ru.forpda.R.drawable.ic_more_vert)
             setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
         }
+        // The icon drawables bake in DIFFERENT colour attrs (icon_base / icon_toolbar / colorOnSurface),
+        // so the toolbar buttons rendered as visibly different colours. Force one uniform tint (matching
+        // the back arrow) on the nav icon and every menu icon.
+        val toolbarIconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+        toolbar.navigationIcon?.mutate()?.setTint(toolbarIconColor)
+        for (i in 0 until menu.size()) {
+            menu.getItem(i).icon?.mutate()?.setTint(toolbarIconColor)
+        }
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 MENU_CREATE -> { toggleComposeEditor(); true }
@@ -2358,6 +2366,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val attachments = panel.attachments.toMutableList()
         if ((message.isBlank() && attachments.isEmpty()) || isSending || pageTopicId <= 0) return
         isSending = true
+        // A brand-new reply lands at the END of the topic; an edit stays on the current page.
+        val isNewReply = editingForm == null
         hideKeyboard()
         panel.setProgressState(true)
         viewLifecycleOwner.lifecycleScope.launch {
@@ -2384,7 +2394,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 editingForm = null
                 hideMessagePanel()
                 Toast.makeText(requireContext(), "Отправлено", Toast.LENGTH_SHORT).show()
-                loadedUrl?.let { loadTopic(it) }
+                // Новый ответ уходит в конец темы — грузим последнюю страницу и садимся на свежий пост
+                // (getlastpost → pendingJumpToBottom → скролл на последний пост + подсветка). Правка —
+                // просто перезагружаем текущую страницу.
+                if (isNewReply && pageTopicId > 0) {
+                    loadTopic("https://4pda.to/forum/index.php?showtopic=$pageTopicId&view=getlastpost")
+                } else {
+                    loadedUrl?.let { loadTopic(it) }
+                }
             }.onFailure { error ->
                 Toast.makeText(requireContext(), "Ошибка отправки: ${error.message}", Toast.LENGTH_LONG).show()
             }
@@ -2556,27 +2573,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * Scroll [concatPos] so its TOP sits at the list's top edge — the anchor post (first-unread on open, or
-     * the last post of a read topic) is shown from its start, fully readable. RecyclerView clamps the scroll
-     * at the natural bottom, so for a post near the end (nothing below to fill the screen) it would otherwise
-     * stay stuck at the bottom, cut off. We add just-enough transient bottom room so the post can reach the
-     * top; the reserve is cleared on the first user scroll (updatePaginationBar resets the bottom padding),
-     * so it never leaves a permanent empty block.
+     * Top-align [concatPos] (first-unread / findpost / read-boundary target) so the user starts reading
+     * from it. When there is enough content below, its top sits at the list's top edge. When the anchor is
+     * near the END (little/no content below), the layout manager clamps at the natural bottom and the post
+     * ends up fully visible without any empty region. We do NOT add transient bottom padding to force it to
+     * the very top — that left an ugly empty block below the anchor (user report «пустая область внизу»).
+     * A short last page is handled separately by [maybeFillLastPage], which pulls previous pages in.
      */
     private fun settleAnchorAtTop(concatPos: Int) {
-        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        lm.scrollToPositionWithOffset(concatPos, 0)
-        recyclerView.post {
-            if (view == null) return@post
-            val itemTop = recyclerView.findViewHolderForLayoutPosition(concatPos)?.itemView?.top ?: 0
-            if (itemTop > 1) {
-                recyclerView.clipToPadding = false
-                recyclerView.setPadding(
-                        recyclerView.paddingLeft, recyclerView.paddingTop, recyclerView.paddingRight,
-                        recyclerView.paddingBottom + itemTop)
-                lm.scrollToPositionWithOffset(concatPos, 0)
-            }
-        }
+        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(concatPos, 0)
     }
 
     private fun applyInitialAnchor(
@@ -2605,11 +2610,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             // Пост не в загруженном окне (findpost вернул другую страницу) — падаем в обычный якорь ниже.
         }
-        // «В конец темы»: land on the very last post of the (last) page.
+        // «В конец темы»: land on the very last post of the (last) page — fully visible at the BOTTOM,
+        // with the previous posts filling the space above. NOT top-aligned: top-aligning the last item
+        // needs a big transient bottom pad that leaves an ugly empty area below it (user report). A plain
+        // scrollToPosition shows the whole last post without any empty region or cut-off.
         if (pendingJumpToBottom) {
             pendingJumpToBottom = false
             val lastPos = (ids.size - 1 + headerOffset()).coerceAtLeast(0)
-            settleAnchorAtTop(lastPos)
+            (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(lastPos)
             // Highlight the last post (2s border) — parity with the first-unread open; the read-topic open
             // lands on the last post, so flash it too.
             ids.lastOrNull()?.let { postsAdapter.requestHighlight(it) }
