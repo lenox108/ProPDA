@@ -188,6 +188,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var paginationBar: android.widget.LinearLayout? = null
     private var paginationLabel: TextView? = null
 
+    // «Верхняя пагинация» (pref TOPIC_PAGINATION_PANEL_ENABLE) — the same «  ‹  N / M  ›  » row, pinned in
+    // the AppBarLayout below the toolbar (parity with the WebView top pagination panel). Shown in ALL reading
+    // modes; the bottom [paginationBar] stays a CLASSIC-mode-only navigator.
+    private var topPaginationBar: android.widget.LinearLayout? = null
+    private var topPaginationLabel: TextView? = null
+
     private var searchBar: android.widget.LinearLayout? = null
     private var searchInput: android.widget.EditText? = null
     private var searchCountLabel: TextView? = null
@@ -381,6 +387,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Arm the client read-boundary resume only for a genuinely fresh open (nothing to restore).
         boundaryResumeArmed = restorePostId <= 0
         loadTopic(if (restorePostId > 0) buildRestoreUrl(restorePostId) else resolveInitialOpenUrl())
+
+        // Live-toggle «Верхняя пагинация»: re-evaluate the top bar when the setting flips while the topic
+        // tab stays alive in the background stack (the collector re-emits the current value immediately).
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainPreferencesHolder.observeTopicPaginationPanelEnabledFlow().collect {
+                if (view != null && pagination.isInitialised) updatePaginationBar()
+            }
+        }
     }
 
     /** URL, ведущий на конкретный пост (findpost) для restore-scroll; фолбэк — обычное открытие. */
@@ -815,6 +829,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (panel.visibility != View.VISIBLE) {
             panel.visibility = View.VISIBLE
             paginationBar?.visibility = View.GONE
+            topPaginationBar?.visibility = View.GONE
             appBarLayout.setExpanded(true, true) // reveal toolbar for editing
             applyToolbarAutoHide() // pin the toolbar while composing
             if (showKeyboard) panel.show()
@@ -2152,16 +2167,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * `theme_bottom_pagination`: flat surface, bold `colorOnSurface` chevrons (NOT accent-blue),
      * no heavy divider. Tapping the label opens a page picker. CLASSIC mode only.
      */
-    private fun ensurePaginationBar() {
-        if (paginationBar != null) return
+    /**
+     * Builds one «  ‹  N / M  ›  » pagination row (surface-container background, bold `colorOnSurface`
+     * chevrons, label opens the page picker). Shared by the bottom [ensurePaginationBar] and the top
+     * [ensureTopPaginationBar] so both stay pixel-identical. Returns the row and its centre label.
+     */
+    private fun buildPaginationRow(): Pair<android.widget.LinearLayout, TextView> {
         val ctx = requireContext()
         val dm = ctx.resources.displayMetrics
         val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val bar = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            // Match the POST-CARD colour (colorSurfaceContainer) so the bar blends seamlessly with the
-            // content above — no visible seam/line — like the WebView's on-page bottom pagination.
             setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer))
             elevation = 0f
             visibility = View.GONE
@@ -2196,12 +2213,36 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         bar.addView(label)
         bar.addView(navButton("›") { jumpToPage(barCurrentPage + 1) })
         bar.addView(navButton("»") { jumpToPage(pagination.totalPages) })
+        return bar to label
+    }
+
+    private fun ensurePaginationBar() {
+        if (paginationBar != null) return
+        // Match the POST-CARD colour so the bottom bar blends with the content above — no visible seam,
+        // like the WebView's on-page bottom pagination.
+        val (bar, label) = buildPaginationRow()
         coordinatorLayout.addView(bar, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
                 androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.MATCH_PARENT,
                 androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
         ).apply { gravity = android.view.Gravity.BOTTOM })
         paginationBar = bar
         paginationLabel = label
+    }
+
+    /**
+     * «Верхняя пагинация» — the same row pinned in the AppBarLayout directly BELOW the toolbar. No scroll
+     * flags → it stays put while the collapsing toolbar (SCROLL|ENTER_ALWAYS|SNAP) hides/reveals above it,
+     * exactly like a pinned tab-strip. Gated by [Preferences.Main.TOPIC_PAGINATION_PANEL_ENABLE].
+     */
+    private fun ensureTopPaginationBar() {
+        if (topPaginationBar != null) return
+        val (bar, label) = buildPaginationRow()
+        appBarLayout.addView(bar, com.google.android.material.appbar.AppBarLayout.LayoutParams(
+                com.google.android.material.appbar.AppBarLayout.LayoutParams.MATCH_PARENT,
+                com.google.android.material.appbar.AppBarLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { scrollFlags = 0 })
+        topPaginationBar = bar
+        topPaginationLabel = label
     }
 
     /** Show/hide the find-on-page bar; hiding clears the query and match highlights. */
@@ -2362,6 +2403,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         ensurePaginationBar()
         val total = pagination.totalPages
         paginationLabel?.text = "$barCurrentPage / $total"
+        // «Верхняя пагинация»: same row pinned under the toolbar, shown in ALL reading modes when enabled.
+        ensureTopPaginationBar()
+        topPaginationLabel?.text = "$barCurrentPage / $total"
+        topPaginationBar?.visibility = if (total > 1 && messagePanel?.visibility != View.VISIBLE &&
+                mainPreferencesHolder.getTopicPaginationPanelEnabled()) View.VISIBLE else View.GONE
         // Top-toolbar subtitle mirrors the page position — digits only, no «Страница … из …» text
         // (parity with the WebView toolbar: «1348 / 1349»).
         setSubtitle(if (total > 1) "$barCurrentPage / $total" else null)
