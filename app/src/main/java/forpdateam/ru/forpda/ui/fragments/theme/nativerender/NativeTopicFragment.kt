@@ -92,6 +92,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var notesRepository: forpdateam.ru.forpda.model.repository.note.NotesRepository
 
+    /** Add/remove-from-favorites from the toolbar overflow (parity with the WebView fav menu). */
+    @Inject
+    lateinit var interactionUseCase: forpdateam.ru.forpda.model.interactors.theme.ThemeInteractionUseCase
+
     /**
      * Клиентская граница прочитанного (модель Discourse) — общая с WebView-движком. Ведём самый
      * дальний реально-виденный пост локально, чтобы при переоткрытии не сесть НИЖЕ непрочитанных,
@@ -144,6 +148,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var pageTopicId = 0
     private var pageSt = 0
     private var isSending = false
+
+    /** Favorites state of the loaded topic, driving the overflow «Добавить/Убрать из избранного» item. */
+    private var pageIsInFavorite = false
+    private var pageFavId = 0
 
     /** Loaded-page flags driving the toolbar poll / hat icon visibility (see [refreshToolbarState]). */
     private var pageHasPoll = false
@@ -1048,6 +1056,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val ctx = requireContext()
         val actions = buildList<Pair<String, () -> Unit>> {
             add("Обновить" to { loadTopic(loadedUrl ?: topicUrl) })
+            // Add/remove from favorites (parity with the WebView fav menu). Visible once a topic id is known.
+            if (pageTopicId > 0) {
+                if (pageIsInFavorite) {
+                    add("Убрать из избранного" to { confirmRemoveFromFavorites() })
+                } else {
+                    add("Добавить в избранное" to { showAddToFavoritesDialog() })
+                }
+            }
             add("Скопировать ссылку" to {
                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as? android.content.ClipboardManager
@@ -1105,6 +1121,80 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             actions[position].second()
         }
         popup.show()
+    }
+
+    /**
+     * «Добавить в избранное» — pick a subscription type (parity with the WebView [showAddInFavDialog]),
+     * then add via [ThemeInteractionUseCase]. On success flip [pageIsInFavorite] so the overflow item
+     * toggles to «Убрать из избранного» without a reload.
+     */
+    private fun showAddToFavoritesDialog() {
+        if (pageTopicId <= 0) return
+        val topicId = pageTopicId
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle(forpdateam.ru.forpda.R.string.favorites_subscribe_email)
+                .setItems(forpdateam.ru.forpda.ui.fragments.favorites.FavoritesFragment
+                        .getSubNames(requireContext())) { _, which ->
+                    val subType = forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
+                            .SUB_TYPES.getOrElse(which) { "none" }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            interactionUseCase.addTopicToFavorite(topicId, subType)
+                        }
+                        if (view == null) return@launch
+                        when (result) {
+                            is forpdateam.ru.forpda.model.interactors.theme.ThemeInteractionUseCase.FavoriteResult.Add -> {
+                                if (result.success) {
+                                    pageIsInFavorite = true
+                                    Toast.makeText(requireContext(),
+                                            forpdateam.ru.forpda.R.string.favorites_added, Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(requireContext(),
+                                            forpdateam.ru.forpda.R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            else -> Toast.makeText(requireContext(),
+                                    forpdateam.ru.forpda.R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                .show()
+    }
+
+    /**
+     * «Убрать из избранного» — confirm, then delete by [pageFavId] via [ThemeInteractionUseCase]
+     * (parity with the WebView [showDeleteInFavDialog]). Flips [pageIsInFavorite] back on success.
+     */
+    private fun confirmRemoveFromFavorites() {
+        if (pageFavId <= 0) {
+            Toast.makeText(requireContext(),
+                    forpdateam.ru.forpda.R.string.fav_delete_error_id_not_found, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val favId = pageFavId
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setMessage(forpdateam.ru.forpda.R.string.fav_ask_delete)
+                .setNegativeButton(forpdateam.ru.forpda.R.string.cancel, null)
+                .setPositiveButton(forpdateam.ru.forpda.R.string.ok) { _, _ ->
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            interactionUseCase.deleteTopicFromFavorite(favId)
+                        }
+                        if (view == null) return@launch
+                        val ok = (result as? forpdateam.ru.forpda.model.interactors.theme
+                                .ThemeInteractionUseCase.FavoriteResult.Delete)?.success == true
+                        if (ok) {
+                            pageIsInFavorite = false
+                            pageFavId = 0
+                            Toast.makeText(requireContext(),
+                                    forpdateam.ru.forpda.R.string.favorite_theme_deleted, Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(requireContext(),
+                                    forpdateam.ru.forpda.R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                .show()
     }
 
     /**
@@ -2666,6 +2756,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pageForumId = page.forumId
                 pageTopicId = page.id
                 pageSt = page.st
+                pageIsInFavorite = page.isInFavorite
+                pageFavId = page.favId
                 // Клиентская граница прочитанного: на ПЕРВОМ открытии, если серверный якорь сел бы НИЖЕ
                 // самого дальнего реально-виденного поста, перезагрузиться findpost'ом на границу (иначе
                 // проскочим непрочитанное — walk-down 4PDA). Фаер один раз за открытие; findpost-резюм не
