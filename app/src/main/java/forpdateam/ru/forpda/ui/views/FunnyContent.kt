@@ -1,12 +1,12 @@
 package forpdateam.ru.forpda.ui.views
 
-import forpdateam.ru.forpda.common.getVecDrawable
 import android.content.Context
 import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.RelativeLayout
 import androidx.annotation.DrawableRes
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.annotation.StringRes
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.R as MaterialR
@@ -29,7 +29,11 @@ class FunnyContent(context: Context) : RelativeLayout(context) {
     }
 
     fun setImage(@DrawableRes resId: Int): FunnyContent = apply {
-        binding.funnyImage.setImageDrawable(context.getVecDrawable(resId))
+        // AppCompatResources грузит и vector, и bitmap. Раньше был getVecDrawable с
+        // require(vector) — падал IllegalArgumentException на растровых заглушках
+        // (напр. ic_notify_mention = PNG в состоянии «нет тем»). Тинт ниже работает
+        // и на растре, поэтому вектор здесь не обязателен.
+        binding.funnyImage.setImageDrawable(AppCompatResources.getDrawable(context, resId))
         // Muted M3 empty-state illustration: следует за палитрой/акцентом.
         binding.funnyImage.imageTintList = ColorStateList.valueOf(
                 context.getColorFromAttr(MaterialR.attr.colorOnSurfaceVariant)
