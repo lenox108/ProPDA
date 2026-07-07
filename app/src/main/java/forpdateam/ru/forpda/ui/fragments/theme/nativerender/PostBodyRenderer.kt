@@ -62,6 +62,13 @@ class PostBodyRenderer {
         }
 
         for (node in nodes) {
+            // The server edit note (`.edit` / `.post-edit-reason`) is a SYSTEM meta line — peel it into
+            // its own block so the view can render it muted/smaller rather than as body text.
+            if (node is Element && (node.hasClass("edit") || node.hasClass("post-edit-reason"))) {
+                flushInline()
+                blocks.add(BodyBlock.EditNote(node.outerHtml()))
+                continue
+            }
             val complexKind = complexKindOf(node)
             if (complexKind != null) {
                 flushInline()

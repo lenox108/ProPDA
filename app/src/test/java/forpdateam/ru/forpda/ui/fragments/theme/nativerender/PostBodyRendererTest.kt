@@ -160,6 +160,7 @@ class PostBodyRendererTest {
         val recombined = blocks.joinToString("") {
             when (it) {
                 is BodyBlock.Text -> it.html
+                is BodyBlock.EditNote -> it.html
                 is BodyBlock.WebFallback -> it.html
                 is BodyBlock.Image -> it.imageUrl
                 is BodyBlock.Quote -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }

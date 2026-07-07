@@ -25,6 +25,14 @@ sealed interface BodyBlock {
     data class Text(val html: String) : BodyBlock
 
     /**
+     * The server-appended edit note (`<span class="edit">Сообщение отредактировал … — …</span>` and its
+     * optional `.post-edit-reason`) — a SYSTEM meta line, not the user's text. Peeled out so the view can
+     * render it smaller and muted (WebView `.edit`: font-size 0.875em, colour #757575) instead of blending
+     * into the post body. Carries the raw span HTML (nick link preserved).
+     */
+    data class EditNote(val html: String) : BodyBlock
+
+    /**
      * A native inline image (attachment picture), peeled out of the fallback in Фаза 2.
      * [displayWidthPx]/[displayHeightPx] come from the server markup (img width/height attrs),
      * so the view can reserve the correct aspect ratio BEFORE the bitmap loads — this is the
