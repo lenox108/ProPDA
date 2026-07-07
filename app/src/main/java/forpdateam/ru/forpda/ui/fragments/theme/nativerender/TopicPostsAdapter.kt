@@ -1099,7 +1099,9 @@ class TopicPostsAdapter(
                 setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 // Force in-text links (profile nicks in the hat / «отредактировал N» footer) to the readable
                 // accent — their server-side inline colour is picked for a white bg and vanishes on Sepia.
-                setLinkTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
+                // Use a contrast-safe variant: the per-palette accent is tuned for that palette's LIGHT card,
+                // so on an AMOLED/dark surface it must be brightened or links «сливаются с фоном».
+                setLinkTextColor(contrastSafeLinkColor())
                 setLineSpacing(0f, 1.1f)
                 val hasLinks = text is Spanned &&
                         text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
@@ -1168,6 +1170,36 @@ class TopicPostsAdapter(
                 if (overlapsLink) out.removeSpan(fg)
             }
             return out
+        }
+
+        /**
+         * A link colour that stays readable on the current post surface. Some per-palette accents
+         * (e.g. Sepia Blue #4F7896) are tuned for that palette's LIGHT cream card and sit at only
+         * ~4.4:1 on BOTH the light card AND an AMOLED black surface — technically legible but
+         * perceptually dim on black, so links «сливаются с чёрным фоном». A single contrast threshold
+         * can't tell the two apart, so we gate on surface darkness: on a DARK surface we demand a
+         * comfortable link contrast (and brighten the accent toward [colorOnSurface] to reach it,
+         * mirroring the WebView, which uses a near-white link colour on dark); on a LIGHT surface we
+         * keep the accent untouched and only rescue a genuinely invisible one.
+         */
+        private fun contrastSafeLinkColor(): Int {
+            val ctx = itemView.context
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+            val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer)
+            val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+            val surfaceIsDark = androidx.core.graphics.ColorUtils.calculateLuminance(surface) < 0.5
+            val target = if (surfaceIsDark) DARK_SURFACE_LINK_CONTRAST else LOW_CONTRAST_THRESHOLD
+            if (androidx.core.graphics.ColorUtils.calculateContrast(accent, surface) >= target) {
+                return accent
+            }
+            var c = accent
+            repeat(10) {
+                c = androidx.core.graphics.ColorUtils.blendARGB(c, onSurface, 0.18f)
+                if (androidx.core.graphics.ColorUtils.calculateContrast(c, surface) >= target) {
+                    return c
+                }
+            }
+            return c
         }
 
         /** Adds a «Цитировать» item to the text-selection action bar → quotes the selection into the editor. */
@@ -1244,6 +1276,10 @@ class TopicPostsAdapter(
         // treated as invisible and dropped so the text falls back to colorOnSurface. ~2.5 keeps readable
         // colours (green curator note ≈4.5, medium greys ≈3.5) but strips white/pale-on-Sepia (≈1.2–2.0).
         const val LOW_CONTRAST_THRESHOLD = 2.5
+
+        /** Comfortable link contrast on a DARK/AMOLED post surface, where saturated mid-blue accents
+         *  read dim even above the bare-legibility floor. Above this we brighten the link. */
+        const val DARK_SURFACE_LINK_CONTRAST = 5.5
 
         val ONLINE_DOT_COLOR = android.graphics.Color.parseColor("#4CAF50")
 
