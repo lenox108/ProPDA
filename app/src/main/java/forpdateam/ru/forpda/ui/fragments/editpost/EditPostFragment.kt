@@ -388,7 +388,7 @@ class EditPostFragment : TabFragment() {
 
     private fun tryPickFile() {
         // ACTION_GET_CONTENT / Open Document не требует WRITE_EXTERNAL_STORAGE; на API 33+ это разрешение не выдаётся.
-        pickFileLauncher.launch(FilePickHelper.pickFile(false))
+        FilePickHelper.showAttachChooser(requireContext()) { intent -> pickFileLauncher.launch(intent) }
     }
 
     private fun observeViewModel() {

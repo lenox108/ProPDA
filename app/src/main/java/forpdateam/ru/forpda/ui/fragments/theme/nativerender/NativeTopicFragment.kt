@@ -34,8 +34,8 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * Native RecyclerView topic renderer (roadmap `native-topic-renderer.md`, Фаза 1), behind
- * the [forpdateam.ru.forpda.ui.navigation.TabHelper.useNativeTopicRenderer] flag.
+ * Native RecyclerView topic renderer (roadmap `native-topic-renderer.md`) — the sole engine for
+ * [forpdateam.ru.forpda.navigation.Screen.Theme] since Фаза 7 (the legacy WebView engine was removed).
  *
  * This first slice deliberately loads a single page directly through [ThemeApi] — the real
  * network + [forpdateam.ru.forpda.model.data.remote.api.theme.ThemeParser] layer the plan
@@ -612,7 +612,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         panel.fullButton?.visibility = View.VISIBLE // «полноэкранный редактор» (parity with the WebView)
         panel.fullButton?.setOnClickListener { openFullscreenEditor() }
         attachmentsPopup = panel.attachmentsPopup
-        attachmentsPopup?.setAddOnClickListener { pickFileLauncher.launch(FilePickHelper.pickFile(false)) }
+        attachmentsPopup?.setAddOnClickListener {
+            FilePickHelper.showAttachChooser(requireContext()) { intent -> pickFileLauncher.launch(intent) }
+        }
         attachmentsPopup?.setDeleteOnClickListener { removeFiles() }
         attachmentsPopup?.setRetryUploadListener(object : AttachmentsPopup.OnRetryUploadListener {
             override fun onRetry(files: List<RequestFile>, pending: List<AttachmentItem>) {
@@ -1860,14 +1862,30 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // and loading page 1 there is exactly what caused the visible «page 1 → jump to unread» flash.
             val resolved = resolveNavigatorOpenUrl(url, sourceScreen, openIntent, listHints)
             if (resolved != lastRequestedUrl) {
-                // Remember where we were so «Назад» (HISTORY) can return to it — this navigator call is a
-                // link tap that replaces the current post/topic in this tab.
-                captureThemeBackEntry()?.let { themeBackStack.addLast(it) }
+                // The in-tab Back history exists for IN-TOPIC link taps (source="link"): tapping a post
+                // link inside the tab replaces its content, and «Назад» (HISTORY) should return to where
+                // you were. But this same reuse path also fires when an EXTERNAL list (search / «Мои
+                // сообщения» / избранное / …) opens a post in an already-open topic tab — there the user
+                // entered the topic FROM the list, so «Назад» must EXIT the tab back to that list, not
+                // replay a prior post. So only record history for non-external-list sources; otherwise the
+                // captured entry would swallow the back press and keep the user stuck in the topic.
+                if (!isExternalListOpenSource(sourceScreen)) {
+                    captureThemeBackEntry()?.let { themeBackStack.addLast(it) }
+                }
                 loadTopic(resolved)
             }
         }
         // If the view is not created yet, onViewCreated will load from the (already updated) args.
     }
+
+    /**
+     * True when a navigator open originates from an EXTERNAL list screen (search, «Мои сообщения» / QMS,
+     * избранное, упоминания, трекер, лента, …) rather than from an in-topic link tap (`source="link"`).
+     * Such an open re-enters the topic tab from that list, so its Back must exit the tab, not build in-tab
+     * history. Kept as a denylist so a genuine in-topic link (source="link"/"unknown") still records history.
+     */
+    private fun isExternalListOpenSource(sourceScreen: String): Boolean =
+            sourceScreen.trim().lowercase() in EXTERNAL_LIST_OPEN_SOURCES
 
     /** Snapshot the current url + first-visible scroll anchor for the in-tab Back history. */
     private fun captureThemeBackEntry(): ThemeBackEntry? {
@@ -2029,10 +2047,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 runCatching { editPostApi.loadForm(item.postId) }
             }.getOrNull()
             if (view == null) return@launch
-            if (form == null) {
+            if (form == null || form.errorCode == forpdateam.ru.forpda.entity.remote.editpost.EditPostForm.ERROR_NO_PERMISSION) {
                 Toast.makeText(requireContext(), "Не удалось открыть пост для правки", Toast.LENGTH_SHORT).show()
                 return@launch
             }
+            // editPostApi.parseForm() fills ONLY message/editReason — it does NOT set the identity fields.
+            // Without type=EDIT + postId the submit goes out as CODE=03 with no `p`, so IPB creates a NEW
+            // post instead of editing (баг «вместо правки добавляется второе сообщение»). Populate them from
+            // the tapped post + current page context, exactly like the WebView editor's arguments do.
+            form.type = forpdateam.ru.forpda.entity.remote.editpost.EditPostForm.TYPE_EDIT_POST
+            form.postId = item.postId
+            form.forumId = pageForumId
+            form.topicId = pageTopicId
+            form.st = pageSt
             editingForm = form
             val panel = messagePanel ?: return@launch
             panel.setText(form.message)
@@ -2546,11 +2573,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val total = pagination.totalPages
         paginationLabel?.text = "$barCurrentPage / $total"
         applyPaginationArrowStates(paginationBar, total)
-        // «Верхняя пагинация»: same row pinned under the toolbar, shown in ALL reading modes when enabled.
+        // «Верхняя пагинация»: pinned under the toolbar. Like the bottom bar it is a CLASSIC-mode navigator
+        // only — in HYBRID (infinite scroll) the page arrows make no sense, so the panel is hidden there and
+        // the current page shows via the toolbar subtitle instead («N / M»).
         ensureTopPaginationBar()
         topPaginationLabel?.text = "$barCurrentPage / $total"
         applyPaginationArrowStates(topPaginationBar, total)
-        topPaginationBar?.visibility = if (total > 1 && messagePanel?.visibility != View.VISIBLE &&
+        topPaginationBar?.visibility = if (isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE &&
                 mainPreferencesHolder.getTopicPaginationPanelEnabled()) View.VISIBLE else View.GONE
         // Top-toolbar subtitle mirrors the page position — digits only, no «Страница … из …» text
         // (parity with the WebView toolbar: «1348 / 1349»).
@@ -2589,17 +2618,30 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * Best-effort «current page» for the bar from the first-visible post's index: page =
-     * firstLoadedPage + floor(index / perPage). Server pages can overlap slightly so this is an
-     * indicator, not authoritative — good enough to show where you are while scrolling.
+     * «Current page» for the bar = the page whose posts occupy the MOST pixels of the viewport right now.
+     * Each item carries its authoritative [NativePostItem.pageNumber] tag, so we sum visible height per page
+     * and pick the dominant one. This beats index arithmetic (`firstLoadedPage + index/perPage`), which drifts
+     * when a page has an odd post count (hat / «Добавлено» merges / deletions), and beats plain first-visible,
+     * which would keep showing page N while only the footer of its last post lingers at the very top even
+     * though page N+1 already fills the screen (the reported «71 / 72 но читаю 72» case).
      */
     private fun updateBarCurrentPageFromScroll() {
         if (!pagination.isInitialised || loadedItems.isEmpty()) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        val firstVisible = lm.findFirstVisibleItemPosition() - headerOffset()
-        if (firstVisible < 0) return
-        val page = (pagination.firstLoadedPage + firstVisible / pagination.perPage)
-                .coerceIn(1, pagination.totalPages)
+        val first = lm.findFirstVisibleItemPosition()
+        val last = lm.findLastVisibleItemPosition()
+        if (first == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return
+        val viewTop = recyclerView.paddingTop
+        val viewBottom = recyclerView.height - recyclerView.paddingBottom
+        val pagePixels = HashMap<Int, Int>()
+        for (pos in first..last) {
+            val v = lm.findViewByPosition(pos) ?: continue
+            val page = loadedItems.getOrNull(pos - headerOffset())?.pageNumber ?: continue
+            if (page <= 0) continue
+            val visible = (minOf(v.bottom, viewBottom) - maxOf(v.top, viewTop)).coerceAtLeast(0)
+            if (visible > 0) pagePixels[page] = (pagePixels[page] ?: 0) + visible
+        }
+        val page = (pagePixels.maxByOrNull { it.value }?.key ?: return).coerceIn(1, pagination.totalPages)
         if (page != barCurrentPage) {
             barCurrentPage = page
             updatePaginationBar()
@@ -2732,8 +2774,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val attachments = panel.attachments.toMutableList()
         if ((message.isBlank() && attachments.isEmpty()) || isSending || pageTopicId <= 0) return
         isSending = true
-        // A brand-new reply lands at the END of the topic; an edit stays on the current page.
+        // A brand-new reply lands at the END of the topic; an edit re-anchors on the edited post.
         val isNewReply = editingForm == null
+        val editedPostId = editingForm?.postId ?: 0
         hideKeyboard()
         panel.setProgressState(true)
         viewLifecycleOwner.lifecycleScope.launch {
@@ -2762,9 +2805,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 Toast.makeText(requireContext(), "Отправлено", Toast.LENGTH_SHORT).show()
                 // Новый ответ уходит в конец темы — грузим последнюю страницу и садимся на свежий пост
                 // (getlastpost → pendingJumpToBottom → скролл на последний пост + подсветка). Правка —
-                // просто перезагружаем текущую страницу.
+                // перезагружаемся findpost'ом НА отредактированный пост: обычный reload loadedUrl сел бы на
+                // серверный якорь = ПЕРВЫЙ пост страницы (баг «якорь слетает на 1 пост последней страницы»).
                 if (isNewReply && pageTopicId > 0) {
                     loadTopic("https://4pda.to/forum/index.php?showtopic=$pageTopicId&view=getlastpost")
+                } else if (editedPostId > 0) {
+                    loadTopic(buildRestoreUrl(editedPostId))
                 } else {
                     loadedUrl?.let { loadTopic(it) }
                 }
@@ -3168,6 +3214,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     private companion object {
+        /** `topicOpenSource` values that mean «opened from an external list», not an in-topic link tap.
+         *  Reusing the topic tab for one of these must NOT push in-tab Back history — Back should exit the
+         *  tab back to the list (search/«Мои сообщения»/избранное/…). Mirrors the source strings set by the
+         *  navigation entry points; an in-topic post link uses "link"/"unknown" and is intentionally absent. */
+        val EXTERNAL_LIST_OPEN_SOURCES = setOf(
+                "search", "search_result",
+                "qms", "my_messages", "mymessages",
+                "favorites", "favorite", "fav",
+                "mentions", "mention",
+                "tracker", "tracking",
+                "news", "article", "announce",
+                "profile", "topics", "forum", "forum_list",
+        )
+
         /** Arm hybrid page prefetch when scrolled within this fraction of a viewport from an edge
          *  (WebView parity: an ~800px pixel threshold rather than an item count). */
         const val HYBRID_PREFETCH_VIEWPORT_FRACTION = 0.75f

@@ -18,7 +18,7 @@ import forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
 import forpdateam.ru.forpda.ui.fragments.search.SearchFragment
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.qms.chat.QmsChatFragment
-import forpdateam.ru.forpda.ui.fragments.theme.ThemeFragmentWeb
+import forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -208,21 +208,21 @@ class TabNavigator(
      * ТОЛЬКО view контента (тулбар/нижний бар — вне контейнера, не затрагиваются),
      * поэтому семантика навигации (commitNow/show-hide) не меняется.
      *
-     * ThemeFragmentWeb — только alpha-кроссфейд, без масштаба: у WebView-темы
+     * NativeTopicFragment (экран темы) — только alpha-кроссфейд, без масштаба: у экрана темы
      * тонкая логика scroll/anchor/highlight ([[theme-bare-scrollto-animates]] и
      * др.), которую нельзя тревожить трансформами.
      */
     private fun animateFragmentEnter(fragment: TabFragment?, direction: Int) {
         val view: View = fragment?.view ?: return
         view.animate().cancel()
-        val fadeOnly = fragment is ThemeFragmentWeb || direction == ENTER_NEUTRAL
+        val fadeOnly = fragment is NativeTopicFragment || direction == ENTER_NEUTRAL
         view.alpha = 0f
         if (fadeOnly) {
             view.scaleX = 1f
             view.scaleY = 1f
             view.animate()
                     .alpha(1f)
-                    .setDuration(if (fragment is ThemeFragmentWeb) 160L else 200L)
+                    .setDuration(if (fragment is NativeTopicFragment) 160L else 200L)
                     .setInterpolator(FastOutSlowInInterpolator())
                     .withEndAction { view.alpha = 1f }
                     .start()

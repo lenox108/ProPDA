@@ -35,12 +35,27 @@ import org.jsoup.nodes.TextNode
  */
 class PostBodyRenderer {
 
+    /**
+     * Srcs of the service glyphs (`alt="*"`) found in the CURRENT body. 4pda's quote «snapback» arrow is
+     * emitted TWICE: once as `<a act=findpost><img alt="*" src=…snapback.gif></a>` (a real service icon,
+     * caught by [isServiceIcon]) and once as a bare `<img alt="Изображение" src=…snapback.gif>` in a plain
+     * div — the generic alt slips past the icon filter and the duplicate balloons into a big blurry arrow
+     * (user report). We can't blanket-drop `alt="Изображение"` (real screenshots use it too), so we treat
+     * any image whose src ALSO appears as an `alt="*"` icon as the same service sprite and strip it.
+     */
+    private var serviceIconSrcs: Set<String> = emptySet()
+
     fun render(bodyHtml: String?): List<BodyBlock> {
         if (bodyHtml.isNullOrBlank()) return emptyList()
 
         // parseBodyFragment keeps the input as a body fragment (no <html>/<head> synthesis
         // beyond the wrapping <body>) and tolerates malformed markup gracefully.
         val body = Jsoup.parseBodyFragment(bodyHtml).body()
+        serviceIconSrcs = body.select("img").asSequence()
+                .filter { it.attr("alt").trim() == "*" }
+                .map { it.attr("src").trim() }
+                .filter { it.isNotEmpty() }
+                .toSet()
         return renderNodes(body.childNodes())
     }
 
@@ -53,7 +68,10 @@ class PostBodyRenderer {
         val inlineBuffer = StringBuilder()
 
         fun flushInline() {
-            val html = inlineBuffer.toString()
+            // Content <img> were already peeled into Image blocks, so any <img> left in the inline flow is a
+            // decorative service/smiley glyph. Html.fromHtml has no ImageGetter → it would render an ugly
+            // placeholder box (the reported little green square). Drop them.
+            val html = SERVICE_IMG.replace(inlineBuffer.toString(), "")
             inlineBuffer.setLength(0)
             // Skip runs that are only whitespace / stray newlines between blocks.
             if (html.isNotBlank()) {
@@ -97,15 +115,39 @@ class PostBodyRenderer {
         return blocks
     }
 
-    /** True if [node]'s subtree holds a real content image (not a smiley, not an attachment picture). */
+    /** True if [node]'s subtree holds a real content image (banner / preview / attach thumbnail), not a smiley. */
     private fun containsContentImage(node: Node): Boolean {
         if (node !is Element) return false
         val imgs = if (node.normalName() == "img") listOf(node) else node.select("img")
         return imgs.any { it.isContentImage() }
     }
 
+    // Any non-smiley <img> that reaches the inline flow is peeled into an Image block. This INCLUDES the
+    // attach thumbnails 4pda drops loose into post text — <img class="linked-image"> / <img class="attach">
+    // (e.g. the icon-pack screenshots and the animated «СКАЧАТЬ» gif wrapped in a source-post link). Those
+    // are NOT inside an ipb-attach table/`.ipb-attach` wrapper (those are peeled as an ATTACHMENT block
+    // BEFORE this runs), so without peeling them here Html.fromHtml — which has no ImageGetter — would
+    // silently drop them and the post would show only its title + spoilers («в приложении картинок нет»).
     private fun Element.isContentImage(): Boolean =
-        normalName() == "img" && !hasClass("attach") && !hasClass("linked-image") && !isSmiley()
+        normalName() == "img" && !isSmiley() && !isServiceIcon()
+
+    /**
+     * 4pda decorates posts with tiny service glyphs: the quote / «reply-to» snapback arrow
+     * (`<img alt="*" title="Перейти к сообщению">`) and the «Прикрепленный файл» indicator gif shown inline
+     * before an attach block. They are decorations, not content — peeling one into a block Image blew a
+     * ~13px icon up into a big pixelated picture on every search-result post (user report). Match them by their
+     * distinctive `alt`; the inline flush then strips them so they don't leave an Html.fromHtml placeholder box
+     * (the little green square) either. NB: this is `alt="Прикрепленный файл"` (the indicator), NOT the real
+     * attach thumbnail `alt="Прикрепленное изображение"` (a `linked-image` on the same /s/ path) — that stays
+     * content, so we key on the exact alt, not the src path.
+     */
+    private fun Element.isServiceIcon(): Boolean {
+        val alt = attr("alt").trim()
+        // The `alt="Изображение"` twin of the snapback arrow shares its src with the `alt="*"` icon → strip it.
+        val src = attr("src").trim()
+        if (src.isNotEmpty() && src in serviceIconSrcs) return true
+        return alt == "*" || alt.equals("Прикрепленный файл", ignoreCase = true)
+    }
 
     /**
      * 4pda forum bodies deliver emoticons as text shortcodes (rendered by SmileProvider), but be defensive
@@ -378,5 +420,9 @@ class PostBodyRenderer {
          */
         const val COMPLEX_SELECTOR =
             "div.post-block, form.topic_poll, table, .ipb-attach, blockquote"
+
+        /** Any `<img …>` tag — used to strip decorative service/smiley glyphs from inline text (they can't
+         *  render via Html.fromHtml and would leave a placeholder box). Content images are peeled out first. */
+        val SERVICE_IMG = Regex("<img\\b[^>]*>", RegexOption.IGNORE_CASE)
     }
 }

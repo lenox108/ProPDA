@@ -13,7 +13,6 @@ import forpdateam.ru.forpda.presentation.announce.AnnounceTemplate
 import forpdateam.ru.forpda.presentation.articles.detail.ArticleTemplate
 import forpdateam.ru.forpda.presentation.forumrules.ForumRulesTemplate
 import forpdateam.ru.forpda.presentation.qms.chat.QmsChatTemplate
-import forpdateam.ru.forpda.presentation.search.SearchTemplate
 import forpdateam.ru.forpda.presentation.theme.ThemeTemplate
 import forpdateam.ru.forpda.ui.TemplateManager
 import javax.inject.Singleton
@@ -28,10 +27,6 @@ object PresentationModule {
 
     @Provides @Singleton
     fun provideArticleTemplate(tm: TemplateManager) = ArticleTemplate(tm)
-
-    @Provides @Singleton
-    fun provideSearchTemplate(tm: TemplateManager, ah: AuthHolder, tp: TopicPreferencesHolder) =
-            SearchTemplate(tm, ah, tp)
 
     @Provides @Singleton
     fun provideForumRulesTemplate(tm: TemplateManager) = ForumRulesTemplate(tm)

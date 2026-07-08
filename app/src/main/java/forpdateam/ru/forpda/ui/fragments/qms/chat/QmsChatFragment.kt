@@ -2515,7 +2515,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, E
     }
 
     private fun tryPickFile() {
-        pickFileLauncher.launch(FilePickHelper.pickFile(false))
+        FilePickHelper.showAttachChooser(requireContext()) { intent -> pickFileLauncher.launch(intent) }
     }
 
     override fun onBackPressed(): Boolean {

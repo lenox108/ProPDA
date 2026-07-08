@@ -21,8 +21,6 @@ import forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.TabRouter
-import forpdateam.ru.forpda.presentation.search.SearchTemplate
-import forpdateam.ru.forpda.ui.TemplateManager
 import forpdateam.ru.forpda.common.ClipboardHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,8 +50,6 @@ class SearchViewModelTest {
     private lateinit var topicPreferencesHolder: TopicPreferencesHolder
     private lateinit var mainPreferencesHolder: MainPreferencesHolder
     private lateinit var otherPreferencesHolder: OtherPreferencesHolder
-    private lateinit var searchTemplate: SearchTemplate
-    private lateinit var templateManager: TemplateManager
     private lateinit var router: TabRouter
     private lateinit var linkHandler: ILinkHandler
     private lateinit var errorHandler: IErrorHandler
@@ -71,8 +67,6 @@ class SearchViewModelTest {
         topicPreferencesHolder = mockk(relaxed = true)
         mainPreferencesHolder = mockk(relaxed = true)
         otherPreferencesHolder = mockk(relaxed = true)
-        searchTemplate = mockk(relaxed = true)
-        templateManager = mockk(relaxed = true)
         router = mockk(relaxed = true)
         linkHandler = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
@@ -94,8 +88,6 @@ class SearchViewModelTest {
         topicPreferencesHolder,
         mainPreferencesHolder,
         otherPreferencesHolder,
-        searchTemplate,
-        templateManager,
         router,
         linkHandler,
         errorHandler,
@@ -297,42 +289,4 @@ class SearchViewModelTest {
         assertEquals("https://4pda.to/forum/index.php?showtopic=12345&view=findpost&p=999", openedUrl.captured)
     }
 
-    @Test
-    fun `post content expanded state is kept by post id`() = runTest {
-        val routeUrl = SearchSettings().apply {
-            source = SearchSettings.SOURCE_CONTENT.first
-            query = "needle"
-            result = SearchSettings.RESULT_POSTS.first
-        }.toUrl()
-        val firstResult = SearchResult().apply {
-            settings = SearchSettings.parseSettings(routeUrl)
-            items.add(SearchItem().apply { id = 111 })
-            items.add(SearchItem().apply { id = 222 })
-        }
-        val secondResult = SearchResult().apply {
-            settings = SearchSettings.parseSettings(routeUrl)
-            items.add(SearchItem().apply { id = 111 })
-        }
-        coEvery { otherPreferencesHolder.getSearchSettings() } returns ""
-        coEvery { searchRepository.getSearch(any()) } returnsMany listOf(firstResult, secondResult)
-        every { searchTemplate.mapEntity(any(), any()) } answers { firstArg() }
-
-        val vm = createViewModel()
-        vm.initSearchSettings(routeUrl)
-        advanceUntilIdle()
-        vm.refreshData()
-        advanceUntilIdle()
-
-        vm.onPostContentToggle(111, true)
-
-        vm.refreshData()
-        advanceUntilIdle()
-        verify { searchTemplate.mapEntity(secondResult, match { it == setOf(111) }) }
-
-        vm.onPostContentToggle(111, false)
-
-        vm.refreshData()
-        advanceUntilIdle()
-        verify { searchTemplate.mapEntity(secondResult, match { it.isEmpty() }) }
-    }
 }

@@ -43,6 +43,55 @@ object FilePickHelper {
     }
 
     /**
+     * Понятный выбор источника вложения вместо системного чузера с невнятными пунктами
+     * («Инструмент выбора медиа», «Выполнить действие» на некоторых прошивках — жалоба
+     * пользователя). Показывает диалог «Прикрепить» с тремя ясными вариантами и запускает
+     * выбранный intent через [launch] (тот же launcher, что и раньше — результат
+     * обрабатывается [onActivityResult] единообразно для всех трёх источников).
+     */
+    @JvmStatic
+    fun showAttachChooser(context: Context, launch: (Intent) -> Unit) {
+        // «Медиа (фото и видео)» уже включает фото, поэтому отдельный пункт «Фото» избыточен
+        // (жалоба пользователя) — оставляем только «Медиа» и «Файлы».
+        val items = arrayOf("Медиа (фото и видео)", "Файлы")
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+                .setTitle("Прикрепить")
+                .setItems(items) { _, which ->
+                    launch(
+                            when (which) {
+                                0 -> mediaIntent()
+                                else -> filesIntent()
+                            }
+                    )
+                }
+                .show()
+    }
+
+    /** Фото и видео — Photo Picker (по умолчанию показывает и то, и другое) или GET_CONTENT с медиа-фильтром. */
+    @JvmStatic
+    fun mediaIntent(): Intent =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Intent(MediaStore.ACTION_PICK_IMAGES).apply {
+                    putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit())
+                }
+            } else {
+                Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                }
+            }
+
+    /** Любые файлы — системный «Файлы»/Документы напрямую (ACTION_OPEN_DOCUMENT). */
+    @JvmStatic
+    fun filesIntent(): Intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        type = "*/*"
+        addCategory(Intent.CATEGORY_OPENABLE)
+        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+    }
+
+    /**
      * Интенты для выбора медиа прямо из галереи. Результат (content://-Uri в
      * [Intent.getData] или [Intent.getClipData]) полностью совместим с [onActivityResult].
      */

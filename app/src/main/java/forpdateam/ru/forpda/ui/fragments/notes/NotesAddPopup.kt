@@ -4,6 +4,7 @@ import forpdateam.ru.forpda.common.getVecDrawable
 import forpdateam.ru.forpda.databinding.NotesPopupBinding
 import forpdateam.ru.forpda.model.repository.note.NotesRepository
 import android.content.Context
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.text.InputType
 import android.view.LayoutInflater
@@ -14,7 +15,6 @@ import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.ContextCompat
 import forpdateam.ru.forpda.common.showSnackbar
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -53,6 +53,12 @@ class NotesAddPopup(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     init {
+        // The popup background is ?attr/colorPrimary. The default caret tint (colorControlActivated)
+        // — and even ?attr/colorAccent on the low-saturation «reading» palettes — resolves close to
+        // that background, so the caret is present but invisible (user: «курсора вообще нет»). Tint
+        // the caret to the field's own text color, which is always contrast-checked against the bg.
+        listOf(titleField, linkField, contentField).forEach { applyReadableCursor(it) }
+
         val resizeMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         dialog.setOnShowListener {
             dialog.window?.setSoftInputMode(resizeMode)
@@ -312,9 +318,25 @@ class NotesAddPopup(
         }
 
         private fun TextInputEditText.applyBookmarkInputStyle(context: Context) {
-            isCursorVisible = true
+            applyReadableCursor(this)
+        }
+
+        /**
+         * Forces a caret that is guaranteed to be visible: a 2dp bar tinted with the field's own
+         * text color. The default caret tint (colorControlActivated), and ?attr/colorAccent on the
+         * muted «reading» palettes, can resolve close to the ?attr/colorPrimary dialog background and
+         * disappear. The text color is the one color we know contrasts with that background — it's
+         * the same color the user is already reading in the field.
+         */
+        private fun applyReadableCursor(field: EditText) {
+            field.isCursorVisible = true
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                textCursorDrawable = ContextCompat.getDrawable(context, R.drawable.text_cursor)
+                val widthPx = (2f * field.resources.displayMetrics.density).toInt().coerceAtLeast(2)
+                field.textCursorDrawable = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    setSize(widthPx, 0)
+                    setColor(field.currentTextColor)
+                }
             }
         }
     }

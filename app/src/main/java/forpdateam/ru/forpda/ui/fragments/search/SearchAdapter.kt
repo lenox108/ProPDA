@@ -9,6 +9,7 @@ import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.databinding.NewsItemBinding
 import forpdateam.ru.forpda.databinding.SearchItemBinding
+import forpdateam.ru.forpda.databinding.SearchPostItemBinding
 import forpdateam.ru.forpda.entity.remote.search.SearchItem
 import forpdateam.ru.forpda.ui.applyUiDensityPadding
 import forpdateam.ru.forpda.ui.currentUiDensityValues
@@ -21,15 +22,27 @@ class SearchAdapter : BaseAdapter<SearchItem, BaseViewHolder<SearchItem>>() {
     companion object {
         private const val TOPIC_LAYOUT = 1
         private const val NEWS_LAYOUT = 2
+        private const val POST_LAYOUT = 3
     }
 
     private var itemClickListener: BaseAdapter.OnItemClickListener<SearchItem>? = null
+
+    /**
+     * When true, results are «поиск по сообщениям форума» — each item is a full forum post whose [body] is
+     * rich HTML, rendered NATIVELY by [bodyRenderer] (replaces the legacy WebView; Фаза 7). Set by the
+     * fragment from the search settings (RESULT_POSTS + RESOURCE_FORUM).
+     */
+    var postMode: Boolean = false
+
+    /** Native post-body renderer (supplied by the fragment with a link handler + image-viewer callback). */
+    var bodyRenderer: SearchPostBodyRenderer? = null
 
     fun setOnItemClickListener(listener: BaseAdapter.OnItemClickListener<SearchItem>) {
         this.itemClickListener = listener
     }
 
     override fun getItemViewType(position: Int): Int {
+        if (postMode) return POST_LAYOUT
         val item = getItem(position)
         return if (item.imageUrl != null) NEWS_LAYOUT else TOPIC_LAYOUT
     }
@@ -41,6 +54,9 @@ class SearchAdapter : BaseAdapter<SearchItem, BaseViewHolder<SearchItem>>() {
             )
             NEWS_LAYOUT -> FullHolder(
                 NewsItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+            )
+            POST_LAYOUT -> PostHolder(
+                SearchPostItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
             )
             else -> throw IllegalArgumentException("Unknown view type: $viewType")
         }
@@ -128,6 +144,44 @@ class SearchAdapter : BaseAdapter<SearchItem, BaseViewHolder<SearchItem>>() {
             binding.newsFullItemDescription.text = item.body
             binding.newsFullItemDate.text = item.date
             ForPdaCoil.loadInto(binding.newsFullItemCover, item.imageUrl)
+        }
+
+        override fun onClick(view: View) {
+            val position = bindingAdapterPosition
+            if (position != RecyclerView.NO_POSITION) {
+                itemClickListener?.onItemClick(getItem(position))
+            }
+        }
+
+        override fun onLongClick(view: View): Boolean {
+            val position = bindingAdapterPosition
+            if (position == RecyclerView.NO_POSITION) return false
+            return itemClickListener?.let {
+                it.onItemLongClick(getItem(position))
+                true
+            } ?: false
+        }
+    }
+
+    /** Forum «поиск по сообщениям» result: full post rendered natively via [bodyRenderer] (no WebView). */
+    private inner class PostHolder(
+        private val binding: SearchPostItemBinding
+    ) : BaseViewHolder<SearchItem>(binding.root), View.OnClickListener, View.OnLongClickListener {
+
+        init {
+            binding.root.setOnClickListener(this)
+            binding.root.setOnLongClickListener(this)
+        }
+
+        override fun bind(item: SearchItem, position: Int) {
+            binding.searchPostTopicTitle.text = item.title
+            binding.searchPostTopicTitle.visibility = if (item.title.isNullOrBlank()) View.GONE else View.VISIBLE
+            binding.searchPostNick.text = item.nick
+            binding.searchPostDate.text =
+                Utils.formatForumDisplayDateTime(item.date, "search.post").orEmpty().ifEmpty { item.date.orEmpty() }
+            ForPdaCoil.loadInto(binding.searchPostAvatar, item.avatar)
+            bodyRenderer?.renderInto(binding.searchPostBody, item.body)
+                ?: run { binding.searchPostBody.removeAllViews() }
         }
 
         override fun onClick(view: View) {

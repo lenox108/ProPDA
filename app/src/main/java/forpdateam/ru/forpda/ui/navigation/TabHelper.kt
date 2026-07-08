@@ -29,7 +29,6 @@ import forpdateam.ru.forpda.ui.fragments.qms.chat.QmsChatFragment
 import forpdateam.ru.forpda.ui.fragments.reputation.ReputationFragment
 import forpdateam.ru.forpda.ui.fragments.search.SearchFragment
 import forpdateam.ru.forpda.ui.fragments.downloads.DownloadsFragment
-import forpdateam.ru.forpda.ui.fragments.theme.ThemeFragmentWeb
 import forpdateam.ru.forpda.ui.fragments.theme.blacklist.ForumBlackListFragment
 import forpdateam.ru.forpda.ui.fragments.topics.TopicsFragment
 
@@ -56,18 +55,6 @@ object TabHelper {
      */
     @Volatile
     var useComposeFavorites: Boolean = false
-
-    /**
-     * Roadmap `native-topic-renderer.md` flag: when true, [Screen.Theme] will
-     * route through the native RecyclerView-based topic renderer instead of
-     * the legacy [ThemeFragmentWeb]; when false (default, current state)
-     * [Screen.Theme] always uses [ThemeFragmentWeb].
-     * Sleeping for now — Phase 1 of the roadmap wires an actual
-     * NativeTopicFragment branch into the `is Screen.Theme ->` case below and
-     * starts consulting this flag. Flip this single line to roll back once wired.
-     */
-    @Volatile
-    var useNativeTopicRenderer: Boolean = false
 
     private fun createFragment(tabClass: Class<out TabFragment>, args: Bundle? = null): TabFragment {
         return tabClass.getDeclaredConstructor().newInstance().apply {
@@ -214,14 +201,10 @@ object TabHelper {
                     }
                     putBoolean(Screen.Theme.ARG_INSPECTOR_MARKED_UNREAD, screen.inspectorMarkedUnread)
                 }
-                if (useNativeTopicRenderer) {
-                    createFragment(
-                            forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment::class.java,
-                            themeArgs,
-                    )
-                } else {
-                    createFragment(ThemeFragmentWeb::class.java, themeArgs)
-                }
+                createFragment(
+                        forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment::class.java,
+                        themeArgs,
+                )
             }
             is Screen.Topics -> {
                 createFragment(TopicsFragment::class.java, args.apply {
@@ -268,7 +251,7 @@ object TabHelper {
             is Screen.Reputation -> ReputationFragment::class.java
             is Screen.Search -> SearchFragment::class.java
             is Screen.Downloads -> DownloadsFragment::class.java
-            is Screen.Theme -> ThemeFragmentWeb::class.java
+            is Screen.Theme -> forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment::class.java
             is Screen.Topics -> TopicsFragment::class.java
             is Screen.OtherMenu -> OtherFragment::class.java
             else -> {
@@ -305,10 +288,9 @@ object TabHelper {
             is ReputationFragment -> Screen.Reputation::class.java
             is SearchFragment -> Screen.Search::class.java
             is DownloadsFragment -> Screen.Downloads::class.java
-            is ThemeFragmentWeb -> Screen.Theme::class.java
-            // Native topic engine must map to the SAME Screen.Theme as the WebView one — otherwise it hits
-            // the else-fallback (Screen.OtherMenu) and the bottom nav wrongly highlights «Меню» instead of
-            // keeping the parent tab (e.g. «Избранное») lit while a topic is open.
+            // Native topic engine maps to Screen.Theme — otherwise it hits the else-fallback
+            // (Screen.OtherMenu) and the bottom nav wrongly highlights «Меню» instead of keeping the
+            // parent tab (e.g. «Избранное») lit while a topic is open.
             is forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment -> Screen.Theme::class.java
             is TopicsFragment -> Screen.Topics::class.java
             is OtherFragment -> Screen.OtherMenu::class.java

@@ -6,6 +6,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.LinkMovementMethod
+import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.databinding.ProfileItemAboutBinding
 import forpdateam.ru.forpda.databinding.ProfileItemListBinding
 import forpdateam.ru.forpda.databinding.ProfileItemNoteBinding
@@ -140,12 +141,57 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
         private val linkHandler: ILinkHandler = this@ProfileAdapter.linkHandler
 
         override fun bind(item: ProfileModel) {
-            binding.profileAboutText.text = item.about
+            val ctx = binding.profileAboutText.context
+            val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+            val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurface)
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
+            // «О себе» приходит с сервера с зашитым бледным цветом ссылки — почти невидим на светлой карточке
+            // (жалоба пользователя) и тускл на тёмной. Прошлые попытки (setLinkTextColor / ForegroundColorSpan
+            // поверх URLSpan) не срабатывали: у URLSpan свой updateDrawState красит текст в `linkColor` темы и
+            // перебивает наложенный цвет при отрисовке. Радикальный фикс — заменяем каждый URLSpan на подкласс
+            // [ColoredUrlSpan], который САМ в updateDrawState ставит гарантированно-контрастный цвет (ниже —
+            // clickable через тот же LinkMovementMethod, т.к. это по-прежнему URLSpan с `.url`). Тело — onSurface.
+            val linkColor = contrastSafeColor(accent, onSurface, surface)
+            val about = item.about
+            binding.profileAboutText.setTextColor(onSurface)
+            binding.profileAboutText.text = if (about is android.text.Spanned) {
+                android.text.SpannableStringBuilder(about).also { sb ->
+                    // Снимаем любые серверные цвета текста (бледные <font color> из LEGACY-парсинга).
+                    sb.getSpans(0, sb.length, android.text.style.ForegroundColorSpan::class.java)
+                            .forEach { sb.removeSpan(it) }
+                    // Заменяем URLSpan'ы на самокрасящиеся — цвет тогда контролирует span, а не тема.
+                    sb.getSpans(0, sb.length, android.text.style.URLSpan::class.java).forEach { u ->
+                        val s = sb.getSpanStart(u)
+                        val e = sb.getSpanEnd(u)
+                        val flags = sb.getSpanFlags(u)
+                        sb.removeSpan(u)
+                        if (s in 0 until e) {
+                            sb.setSpan(forpdateam.ru.forpda.common.ColoredUrlSpan(u.url, linkColor), s, e, flags)
+                        }
+                    }
+                }
+            } else {
+                about
+            }
+            binding.profileAboutText.setLinkTextColor(linkColor)
             binding.profileAboutText.movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
                 override fun onClick(url: String): Boolean {
                     return linkHandler.handle(url, null)
                 }
             })
+        }
+
+        /** Brighten/blend [base] toward [onSurface] until it reaches a comfortable contrast on [surface],
+         *  so the link is readable on every palette (some accents are dim on their own card). */
+        private fun contrastSafeColor(base: Int, onSurface: Int, surface: Int): Int {
+            val target = 4.5
+            if (androidx.core.graphics.ColorUtils.calculateContrast(base, surface) >= target) return base
+            var c = base
+            repeat(12) {
+                c = androidx.core.graphics.ColorUtils.blendARGB(c, onSurface, 0.18f)
+                if (androidx.core.graphics.ColorUtils.calculateContrast(c, surface) >= target) return c
+            }
+            return c
         }
     }
 

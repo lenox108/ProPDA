@@ -295,7 +295,10 @@ class TopicPostsAdapter(
             actions.visibility = if (hatFolded) View.GONE else actions.visibility
             body.visibility = if (hatFolded) View.GONE else View.VISIBLE
             (body.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
-                val top = if (hatFolded) 0 else (8 * itemView.resources.displayMetrics.density).toInt()
+                val superCompact =
+                        settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
+                val topDp = if (superCompact) 4f else 8f
+                val top = if (hatFolded) 0 else (topDp * itemView.resources.displayMetrics.density).toInt()
                 if (lp.topMargin != top) { lp.topMargin = top; body.layoutParams = lp }
             }
             if (wantHighlight && !keepHighlight) {
@@ -376,11 +379,20 @@ class TopicPostsAdapter(
         /**
          * Resting hairline border for the post card. Elevation shadows are invisible on dark/AMOLED
          * surfaces, so without an outline every near-black card melts into the near-black page (user
-         * report). A 1dp [colorOutline] edge (M3 outlined-card tone) keeps cards delineated in every
-         * theme — subtle on light palettes, essential on dark.
+         * report). A 1dp edge keeps cards delineated in every theme. On DARK/AMOLED palettes (esp. the
+         * dynamic «Системный стиль», where colorSurfaceContainer/…Lowest and colorOutline are all nearly
+         * the same near-black) the bare M3 colorOutline is still invisible, so we lift it toward
+         * colorOnSurface until the edge separates from the black card — a faint but visible hairline.
          */
-        private fun restingCardBorderColor(): Int = com.google.android.material.color.MaterialColors.getColor(
-                itemView, com.google.android.material.R.attr.colorOutline)
+        private fun restingCardBorderColor(): Int {
+            val outline = com.google.android.material.color.MaterialColors.getColor(
+                    itemView, com.google.android.material.R.attr.colorOutline)
+            val fill = cardBaseColor()
+            if (androidx.core.graphics.ColorUtils.calculateLuminance(fill) >= 0.5) return outline
+            val onSurface = com.google.android.material.color.MaterialColors.getColor(
+                    itemView, com.google.android.material.R.attr.colorOnSurface)
+            return androidx.core.graphics.ColorUtils.blendARGB(outline, onSurface, 0.30f)
+        }
 
         private fun cardBorderWidthPx(): Int =
                 (1f * itemView.resources.displayMetrics.density).toInt().coerceAtLeast(1)
@@ -415,10 +427,12 @@ class TopicPostsAdapter(
          */
         private fun applyDensity() {
             val dm = itemView.resources.displayMetrics
+            // Steps spread wide enough to be clearly distinguishable (user: «не вижу разницы между
+            // компактной и супер компактной»): SUPER packs cards flush (gap 0, minimal inner pad).
             val (vPadDp, gapDp) = when (settings.density) {
-                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT -> 3f to 1f
-                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMPACT -> 6f to 2f
-                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMFORTABLE -> 10f to 4f
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT -> 1f to 0f
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMPACT -> 6f to 3f
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMFORTABLE -> 12f to 5f
             }
             val hPad = (12 * dm.density).toInt()
             val vPad = (vPadDp * dm.density).toInt()
@@ -428,6 +442,39 @@ class TopicPostsAdapter(
                 lp.topMargin = gap
                 lp.bottomMargin = gap
                 card.layoutParams = lp
+            }
+            applyHeaderDensity(dm)
+        }
+
+        /**
+         * Super-compact header (user request «супер-компакт»): collapse the author header to a single
+         * tight row — a smaller avatar, vertically centred so it no longer «заезжает на верхнюю границу»,
+         * with the group line and post-count hidden ([bindMeta]/[bindPostCount]) and the date pulled up
+         * next to the ⋮ menu on the same line as the nick. Other densities restore the roomy stacked
+         * header. Runs every bind, so recycled holders reset both ways.
+         */
+        private fun applyHeaderDensity(dm: android.util.DisplayMetrics) {
+            val superCompact =
+                    settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
+            val avatarPx = ((if (superCompact) 32f else 44f) * dm.density).toInt()
+            avatar.layoutParams = avatar.layoutParams.apply { width = avatarPx; height = avatarPx }
+            (header as? LinearLayout)?.gravity =
+                    if (superCompact) android.view.Gravity.CENTER_VERTICAL else android.view.Gravity.TOP
+            // The date's parent is the right-hand column (date stacked over the ⋮ menu row). In
+            // super-compact lay it out horizontally so date + ⋮ share one line beside the nick.
+            (date.parent as? LinearLayout)?.let { right ->
+                right.orientation = if (superCompact) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+                right.gravity =
+                        if (superCompact) android.view.Gravity.CENTER_VERTICAL else android.view.Gravity.END
+            }
+            (date.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                val end = if (superCompact) (6 * dm.density).toInt() else 0
+                if (lp.marginEnd != end) { lp.marginEnd = end; date.layoutParams = lp }
+            }
+            // Pull the action row (👍/👎 · ответить · цитата) up against the body in super-compact.
+            (actions.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                val top = ((if (superCompact) 0 else 6) * dm.density).toInt()
+                if (lp.topMargin != top) { lp.topMargin = top; actions.layoutParams = lp }
             }
         }
 
@@ -537,8 +584,10 @@ class TopicPostsAdapter(
         /** Group line (tinted by server groupColor) + the date in the right column — WebView layout.
          * Reputation is the avatar badge ([bindRepBadge]); post count is [bindPostCount]. */
         private fun bindMeta(item: NativePostItem) {
+            val superCompact =
+                    settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
             val group = item.group?.takeIf { it.isNotBlank() }
-            if (group == null) {
+            if (superCompact || group == null) {
                 meta.visibility = View.GONE
             } else {
                 meta.visibility = View.VISIBLE
@@ -563,6 +612,12 @@ class TopicPostsAdapter(
 
         /** Author's forum post count as a 💬 N badge (parity with WebView user_post_count). */
         private fun bindPostCount(item: NativePostItem) {
+            // Super-compact hides the post-count row entirely (user request) — no reserved slot either,
+            // so the header collapses to a single line.
+            if (settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT) {
+                postCount.visibility = View.GONE
+                return
+            }
             val count = item.userPostCount?.takeIf { it > 0 }
             // The count comes from the DEFERRED enrichment (~1s after open). Reserve its row height up
             // front so the header doesn't grow a line — and shove/rescale the whole post — when the count
@@ -641,6 +696,11 @@ class TopicPostsAdapter(
             val dm = ctx.resources.displayMetrics
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
             val iconTint = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+            // Super-compact shrinks the action row: smaller icons and much tighter vertical padding so
+            // each post loses height (user request «сжать нижнюю панель действий»). Tap targets stay
+            // usable via the horizontal padding.
+            val superCompact =
+                    settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
             return TextView(ctx).apply {
                 text = label.orEmpty()
                 if (!label.isNullOrEmpty()) {
@@ -650,13 +710,13 @@ class TopicPostsAdapter(
                 }
                 val icon = androidx.core.content.ContextCompat.getDrawable(ctx, iconRes)?.mutate()?.apply {
                     setTint(iconTint)
-                    val s = (18 * dm.density).toInt()
+                    val s = ((if (superCompact) 16 else 18) * dm.density).toInt()
                     setBounds(0, 0, s, s)
                 }
                 setCompoundDrawables(icon, null, null, null)
                 compoundDrawablePadding = (4 * dm.density).toInt()
                 val padH = (8 * dm.density).toInt()
-                val padV = (5 * dm.density).toInt()
+                val padV = ((if (superCompact) 2 else 5) * dm.density).toInt()
                 setPadding(padH, padV, padH, padV)
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setOnClickListener { onClick() }
@@ -868,11 +928,20 @@ class TopicPostsAdapter(
                 DEFAULT_IMAGE_RATIO
             }
             val topInset = (6 * dm.density).toInt()
+            // The tap target: the enclosing <a> if any, else the image itself.
+            val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
+            val viewerUrl = FourPdaImageUrls.resolveViewerUrl(tapUrl)
+            val viewable = FourPdaImageUrls.isViewableInViewer(viewerUrl)
+            // A candidate «UPDATE / СКАЧАТЬ» button: an inline gif wrapped in a link that opens a source
+            // post / download (NOT the image viewer). Whether to ENLARGE it is decided AFTER load from the
+            // real aspect ratio — a tiny square service icon (snapback arrow, file-type icon) must stay small.
+            val isButtonGif = block.inline && !block.linkUrl.isNullOrBlank() && !viewable &&
+                    block.imageUrl.substringBefore('?').endsWith(".gif", ignoreCase = true)
             return ImageView(ctx).apply {
                 if (block.inline) {
                     // INLINE content image (banner / preview / animated gif peeled from post text): render at
-                    // its INTRINSIC size, downscaled to fit the column but NEVER upscaled — otherwise a small /
-                    // low-res icon balloons into a blurry full-width block (user report). Crisp, like the browser.
+                    // its INTRINSIC size, downscaled to fit the column but NEVER blindly upscaled — otherwise a
+                    // small icon / low-res arrow balloons into a blurry block (user report). Crisp, like the browser.
                     layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -892,10 +961,23 @@ class TopicPostsAdapter(
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 adjustViewBounds = true
                 setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
-                ForPdaCoil.loadInto(this, block.imageUrl)
-                val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
-                val viewerUrl = FourPdaImageUrls.resolveViewerUrl(tapUrl)
-                if (FourPdaImageUrls.isViewableInViewer(viewerUrl)) {
+                if (isButtonGif) {
+                    ForPdaCoil.loadInto(this, block.imageUrl) { w, h ->
+                        // Bump to a comfortable tap height ONLY for a genuinely WIDE, SHORT button graphic
+                        // («UPDATE» ≈ 5:1); leave tiny square icons (arrows, file-type glyphs) at intrinsic size.
+                        val targetH = (BUTTON_GIF_HEIGHT_DP * dm.density).toInt()
+                        if (w > 0 && h in 1 until targetH && w.toFloat() / h >= 2.5f) {
+                            (layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                                lp.height = targetH
+                                lp.width = LinearLayout.LayoutParams.WRAP_CONTENT
+                                layoutParams = lp
+                            }
+                        }
+                    }
+                } else {
+                    ForPdaCoil.loadInto(this, block.imageUrl)
+                }
+                if (viewable) {
                     // Add to the post's running gallery and remember our slot; a tap opens the whole post
                     // as one swipeable gallery starting on this image (WebView parity).
                     val index = scope.galleryUrls.size
@@ -1265,6 +1347,10 @@ class TopicPostsAdapter(
          *  clearly noticeable even after the post-open enrichment re-binds the target post. */
         const val HIGHLIGHT_TOTAL_MS = 2600L
         const val DEFAULT_IMAGE_RATIO = 0.66f
+
+        /** Comfortable rendered height (dp) for a small linked «UPDATE / СКАЧАТЬ» button gif: at its
+         *  intrinsic size it is only a few dp tall — too small to read or reliably tap. */
+        const val BUTTON_GIF_HEIGHT_DP = 40f
         const val SMILE_SIZE_SP = 18f
         const val QUOTE_MENU_ID = 0x71_0716
         // Below this WCAG contrast ratio against the reading surface, an inline server text colour is
