@@ -338,6 +338,9 @@
     <string name="note_sort_created">По дате создания</string>
     <string name="note_sort_updated">По дате изменения</string>
     <string name="note_sort_title">По алфавиту</string>
+    <string name="note_sort_manual">Вручную</string>
+    <string name="note_move_up">Переместить вверх</string>
+    <string name="note_move_down">Переместить вниз</string>
 
     <!-- News list-->
     <string name="news_category_title">Категория новостей</string>

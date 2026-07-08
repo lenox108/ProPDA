@@ -47,8 +47,23 @@ interface NoteItemDao {
     )
     suspend fun getNotesByFolderTitleAsc(folderId: Long?): List<NoteItemRoom>
 
+    @Query("SELECT * FROM notes ORDER BY sortOrder ASC, id DESC")
+    suspend fun getAllNotesManual(): List<NoteItemRoom>
+
+    @Query(
+        """
+        SELECT * FROM notes
+        WHERE (:folderId IS NULL AND folderId IS NULL) OR folderId = :folderId
+        ORDER BY sortOrder ASC, id DESC
+        """
+    )
+    suspend fun getNotesByFolderManual(folderId: Long?): List<NoteItemRoom>
+
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getNoteById(id: Long): NoteItemRoom?
+
+    @Query("UPDATE notes SET sortOrder = :sortOrder WHERE id = :id")
+    suspend fun updateSortOrder(id: Long, sortOrder: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNote(note: NoteItemRoom)

@@ -38,12 +38,14 @@ class NotesCacheRoom(
                 NoteSortMode.CREATED_DESC -> noteItemDao.getAllNotesCreatedDesc()
                 NoteSortMode.UPDATED_DESC -> noteItemDao.getAllNotesUpdatedDesc()
                 NoteSortMode.TITLE_ASC -> noteItemDao.getAllNotesTitleAsc()
+                NoteSortMode.MANUAL -> noteItemDao.getAllNotesManual()
             }
         } else {
             when (sortMode) {
                 NoteSortMode.CREATED_DESC -> noteItemDao.getNotesByFolderCreatedDesc(folderFilter.folderId)
                 NoteSortMode.UPDATED_DESC -> noteItemDao.getNotesByFolderUpdatedDesc(folderFilter.folderId)
                 NoteSortMode.TITLE_ASC -> noteItemDao.getNotesByFolderTitleAsc(folderFilter.folderId)
+                NoteSortMode.MANUAL -> noteItemDao.getNotesByFolderManual(folderFilter.folderId)
             }
         }
         val noteItems = items.map { it.toAppItem() }
@@ -131,6 +133,33 @@ class NotesCacheRoom(
 
     suspend fun moveNoteToFolder(noteId: Long, folderId: Long?) {
         noteItemDao.moveNoteToFolder(noteId, folderId, System.currentTimeMillis())
+        getItems()
+    }
+
+    /**
+     * Двигает заметку [noteId] на одну позицию вверх (или вниз) в ручном порядке
+     * ([NoteSortMode.MANUAL]) внутри её собственной папки. Соседи считаются только среди
+     * заметок с тем же folderId, поэтому перестановка корректна и в древовидном виде, и
+     * при фильтре по одной папке.
+     *
+     * Порядок хранится в поле sortOrder. Так как исторически у всех заметок sortOrder == 0,
+     * после перестановки нормализуем весь диапазон папки в монотонный 0..n-1 — это делает
+     * последующие перемещения детерминированными. updatedAt намеренно не трогаем, чтобы
+     * ручная сортировка не засоряла режим «по дате изменения».
+     */
+    suspend fun moveNote(noteId: Long, up: Boolean) {
+        val note = noteItemDao.getNoteById(noteId) ?: return
+        val ordered = noteItemDao.getNotesByFolderManual(note.folderId).toMutableList()
+        val index = ordered.indexOfFirst { it.id == noteId }
+        if (index < 0) return
+        val target = if (up) index - 1 else index + 1
+        if (target < 0 || target >= ordered.size) return
+        ordered[index] = ordered[target].also { ordered[target] = ordered[index] }
+        ordered.forEachIndexed { position, item ->
+            if (item.sortOrder != position.toLong()) {
+                noteItemDao.updateSortOrder(item.id, position.toLong())
+            }
+        }
         getItems()
     }
 

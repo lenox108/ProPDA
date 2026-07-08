@@ -84,6 +84,10 @@ class NotesRepository(
         notesCacheRoom.moveNotesToFolder(noteIds, folderId)
     }
 
+    suspend fun moveNote(noteId: Long, up: Boolean) = withContext(ioDispatcher) {
+        notesCacheRoom.moveNote(noteId, up)
+    }
+
     suspend fun importNotes(file: RequestFile) = withContext(ioDispatcher) {
         val text = if (file.fileName.matches("[\\s\\S]*?\\.json$".toRegex())) {
             externalStorage.getText(file.fileStream)

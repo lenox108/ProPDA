@@ -56,11 +56,17 @@ class NotesDialogs(
 
     fun showSortDialog(currentMode: NoteSortMode) {
         clearSelection()
-        val modes = arrayOf(NoteSortMode.CREATED_DESC, NoteSortMode.UPDATED_DESC, NoteSortMode.TITLE_ASC)
+        val modes = arrayOf(
+                NoteSortMode.CREATED_DESC,
+                NoteSortMode.UPDATED_DESC,
+                NoteSortMode.TITLE_ASC,
+                NoteSortMode.MANUAL
+        )
         val titles = arrayOf(
                 context.getString(R.string.note_sort_created),
                 context.getString(R.string.note_sort_updated),
-                context.getString(R.string.note_sort_title)
+                context.getString(R.string.note_sort_title),
+                context.getString(R.string.note_sort_manual)
         )
         val checkedIndex = modes.indexOf(currentMode).takeIf { it >= 0 } ?: 0
         MaterialAlertDialogBuilder(context)
