@@ -298,8 +298,9 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         setTitle(data.nick)
         nick.text = data.nick
         group.text = data.group
-        if (data.sign != null) {
-            sign.text = data.sign
+        val signContent = data.sign
+        if (signContent != null) {
+            sign.text = makeSignLinksReadable(signContent)
             sign.visibility = View.VISIBLE
             sign.movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
                 override fun onClick(url: String): Boolean {
@@ -312,6 +313,41 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
             val isMe = data.id == authHolder.get().userId
             writeMenuItem.isVisible = !isMe
         }
+    }
+
+    /**
+     * The header signature holds links. Some carry a SATURATED server colour (readable purple/orange «звания»)
+     * — keep those. Others carry a dim GREY server colour (e.g. «Всякая хрень») or none, which is near-invisible
+     * on the banner — recolour those to the theme's readable `link_color_contrast` (the same colour the header
+     * nick uses). We tell them apart by saturation, so colourful custom links stay, dull ones become legible.
+     * Same colour-forcing mechanism as the «О себе» fix ([forpdateam.ru.forpda.common.ColoredUrlSpan]).
+     */
+    private fun makeSignLinksReadable(content: CharSequence): CharSequence {
+        if (content !is android.text.Spanned) return content
+        val urls = content.getSpans(0, content.length, android.text.style.URLSpan::class.java)
+        if (urls.isEmpty()) return content
+        // The signature sits on the darkened, blurred-avatar banner (a dark scrim + the style's dark text
+        // shadow), so a light colour is what reads there. We can't trust theme attrs — on some palettes
+        // `link_color_contrast` resolves dark (e.g. #282a36 on Dracula), which is exactly why the server's
+        // dark-green «Всякая хрень» link was invisible. White + the existing shadow stays crisp on the banner.
+        val readable = android.graphics.Color.WHITE
+        val out = android.text.SpannableStringBuilder(content)
+        // Only the links are the problem (e.g. «Всякая хрень» painted a dark green #008000, invisible on the
+        // banner). Non-link coloured «звания» (purple/orange device names) are left as the server set them.
+        for (u in urls) {
+            val s = out.getSpanStart(u)
+            val e = out.getSpanEnd(u)
+            if (s !in 0 until e) continue
+            // Drop the server's dim link colour so it can't repaint over our readable one, then force the
+            // colour via a self-painting URLSpan (beats the theme linkColor regardless of span order).
+            out.getSpans(s, e, android.text.style.ForegroundColorSpan::class.java).forEach {
+                if (out.getSpanStart(it) >= s && out.getSpanEnd(it) <= e) out.removeSpan(it)
+            }
+            val fl = out.getSpanFlags(u)
+            out.removeSpan(u)
+            out.setSpan(forpdateam.ru.forpda.common.ColoredUrlSpan(u.url, readable), s, e, fl)
+        }
+        return out
     }
 
     private fun showAvatar(bitmap: Bitmap) {

@@ -160,6 +160,54 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun looseLinkedImageThumbnails_renderAsInlineImages_notDropped() {
+        // EXACT live RAW-HTML structure of post 239158/p144065357 «[Themes] One UI HD - Icon Pack» (the
+        // server markup the app fetches, BEFORE 4pda's blocks.js runs): the icon-pack preview screenshot
+        // and the animated «СКАЧАТЬ» gif button are BARE <img class="linked-image"> dropped loose in the
+        // post text (the gif wrapped in a source-post link), followed by a «что нового» spoiler. They are
+        // NOT inside an ipb-attach table, so they never hit the ATTACHMENT path. Regression: isContentImage
+        // excluded .linked-image, so both landed in an inline Text run and Html.fromHtml (no ImageGetter)
+        // silently DROPPED them — the post showed only its title + spoiler («в приложении картинок нет»).
+        val png = "https://4pda.to/s/YJ9SaPhXN4sHtxam83HPECKS.png"
+        val gif = "https://4pda.to/s/4Cv4OVavhY9HtxaGOhLJV76n.gif"
+        val srcPost = "https://4pda.to/forum/index.php?showtopic=239158&view=findpost&p=119890221"
+        val html = "<img loading=\"lazy\" src=\"$png\" class=\"linked-image\" alt=\"Прикрепленное изображение\" /> " +
+                "<span style=\"color:darkblue\"><b>[Themes] One UI HD - Icon Pack</b></span> " +
+                "<a title=\"Ссылка\" href=\"$srcPost\" target=\"_blank\"><img loading=\"lazy\" src=\"$gif\" class=\"linked-image\" /></a>" +
+                "<br /><div class=\"post-block spoil close\"><div class=\"block-title\">что нового</div><div class=\"block-body\">- 45 New Icons</div></div>"
+        val blocks = renderer.render(html)
+        val images = blocks.filterIsInstance<BodyBlock.Image>()
+        assertEquals("screenshot + gif button both peeled as inline images", 2, images.size)
+        val screenshot = images.single { it.imageUrl == png }
+        assertEquals("bare screenshot thumbnail has no tap link", null, screenshot.linkUrl)
+        assertTrue(screenshot.inline)
+        val button = images.single { it.imageUrl == gif }
+        assertEquals("gif button links to its source post", srcPost, button.linkUrl)
+        // The «что нового» spoiler still renders as its own native block alongside the images.
+        assertEquals(1, blocks.filterIsInstance<BodyBlock.Spoiler>().size)
+    }
+
+    @Test
+    fun quoteSnapbackArrowTwin_isNotRenderedAsImage() {
+        // EXACT live structure (message-search body, Lenox30 quoting VIkToRSaNe): 4pda emits its quote
+        // «snapback» arrow TWICE — once as a real service icon `<a act=findpost><img alt="*" src=snap.gif>`
+        // and once as a BARE `<img alt="Изображение" src=snap.gif>` in a plain div. The generic alt slips
+        // past isServiceIcon and the duplicate ballooned into a big blurry red arrow. It shares its src with
+        // the alt="*" icon, so it must be recognised as service and NOT peeled into an Image block — while a
+        // genuine screenshot (a UNIQUE src, also alt="Изображение") survives.
+        val snap = "https://4pda.to/s/Zy0h09PCbOrY2EKEHjYrvR8HNEq0UKeqZkUWbRHrPA3qVomOYM.gif"
+        val real = "https://4pda.to/s/Zy0hUivpz0GB6fWRe3mRUJIhUyeEhYyBsSwqVMatbEHr.png"
+        val html = "<div class=\"post-block quote\"><div class=\"block-title\">VIkToRSaNe " +
+                "<a href=\"/forum/index.php?act=findpost&pid=144165802\"><img alt=\"*\" src=\"$snap\"></a></div>" +
+                "<div class=\"block-body\"><div><img alt=\"Изображение\" src=\"$snap\"></div> " +
+                "v.wasko, что сделал <div><img alt=\"Изображение\" src=\"$real\"></div></div></div>"
+        val quote = renderer.render(html).filterIsInstance<BodyBlock.Quote>().single()
+        val images = quote.inner.filterIsInstance<BodyBlock.Image>()
+        assertTrue("the snapback-arrow twin is not an image block", images.none { it.imageUrl == snap })
+        assertTrue("the genuine screenshot still renders", images.any { it.imageUrl == real })
+    }
+
+    @Test
     fun table_isNativeTable_withRowsAndCells() {
         val blocks = renderer.render(fixture("table_basic.html"))
         // Leading + trailing text run natively; the table is a native Table block (not fallback).
@@ -243,6 +291,43 @@ class PostBodyRendererTest {
         assertEquals("https://4pda.to/s/banner.png", image.imageUrl)
         assertTrue(image.inline)
         assertEquals(600, image.displayWidthPx)
+    }
+
+    @Test
+    fun quoteSnapbackArrow_isNotExploded_staysInlineText() {
+        // 4pda prefixes a «reply-to» header with a tiny <img alt="*"> snapback arrow linking to the quoted
+        // post. It is a service glyph, not content — peeling it into a block Image blew a ~13px arrow up into
+        // a big pixelated icon (user report). It must stay inline (not become an Image block).
+        val html = "<a href=\"https://4pda.to/forum/index.php?act=findpost&pid=143179849\" title=\"Перейти к сообщению\">" +
+                "<img src=\"https://4pda.to/s/Zy0h09PCbOrY2EKEHjYrvR8HNEq0UKeqZkUWbRHrPA3qVomOYM.gif\" alt=\"*\" border=\"0\" /></a>" +
+                "<b>Lenox30,</b> текст ответа"
+        val blocks = renderer.render(html)
+        assertTrue("snapback arrow must NOT become a block Image", blocks.none { it is BodyBlock.Image })
+        assertTrue(blocks.any { it is BodyBlock.Text && it.html.contains("Lenox30") })
+    }
+
+    @Test
+    fun attachFileIndicatorGif_isNotExploded_andLeavesNoPlaceholderBox() {
+        // 4pda drops a tiny «Прикрепленный файл» indicator gif inline before an attach block. It shares the
+        // /s/ path with real content thumbnails, so it must be told apart by its alt (NOT the path) — else it
+        // ballooned into a big pixelated arrow on every search-result post (user report). It must not become a
+        // block Image, and must be stripped from the inline text so Html.fromHtml leaves no placeholder box.
+        val html = "текст <img src=\"https://4pda.to/s/Zy0hRMDmDtR8z09.gif\" alt=\"Прикрепленный файл\" style=\"margin-right:3px;\"/> ещё"
+        val blocks = renderer.render(html)
+        assertTrue("attach-file indicator must NOT become a block Image", blocks.none { it is BodyBlock.Image })
+        assertTrue("indicator <img> must be stripped from inline text",
+                blocks.filterIsInstance<BodyBlock.Text>().none { it.html.contains("<img", ignoreCase = true) })
+        assertTrue(blocks.any { it is BodyBlock.Text && it.html.contains("текст") && it.html.contains("ещё") })
+    }
+
+    @Test
+    fun linkedImageThumbnailOnSPath_staysContentImage() {
+        // The real attach thumbnail lives on the SAME /s/ path but carries alt="Прикрепленное изображение" —
+        // it must stay a content Image (guard against over-eager service-icon matching).
+        val html = "<img src=\"https://4pda.to/s/YJ9SaPhXN4.png\" class=\"linked-image\" alt=\"Прикрепленное изображение\" />"
+        val blocks = renderer.render(html)
+        assertTrue("content thumbnail must remain an Image block",
+                blocks.any { it is BodyBlock.Image && it.imageUrl.contains("YJ9SaPhXN4.png") })
     }
 
     @Test

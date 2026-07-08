@@ -40,6 +40,14 @@ class FabOnScroll : FloatingActionButton.Behavior {
     private var isMenuOpen = false
     private var currentFabDirection: Boolean? = null
 
+    /**
+     * When true (topic «smart button»), the icon flips ↓/↑ to mirror the scroll direction. The search
+     * FAB sets this false: its only action is «scroll to the first result», so a scroll-driven ↓ arrow
+     * would contradict the always-scroll-to-top behaviour (user: «стрелка вниз, а кидает вверх»). With
+     * flipping off the fragment's own icon (ic_arrow_up) is kept.
+     */
+    var flipIconOnScroll: Boolean = true
+
     @JvmOverloads
     constructor(context: Context, attrs: AttributeSet? = null) : super(context, attrs)
 
@@ -124,7 +132,9 @@ class FabOnScroll : FloatingActionButton.Behavior {
         currentFabDirection = isScrollingDown
 
         if (child.alpha == 0.0f) {
-            child.setImageDrawable(child.context.getVecDrawable(if (isScrollingDown) R.drawable.ic_arrow_down else R.drawable.ic_arrow_up))
+            if (flipIconOnScroll) {
+                child.setImageDrawable(child.context.getVecDrawable(if (isScrollingDown) R.drawable.ic_arrow_down else R.drawable.ic_arrow_up))
+            }
             child.clearAnimation()
             child.animate()
                 .scaleX(1.0f)

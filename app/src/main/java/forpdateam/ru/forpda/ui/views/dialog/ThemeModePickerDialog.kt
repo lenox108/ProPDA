@@ -41,6 +41,11 @@ object ThemeModePickerDialog {
             @StringRes val title: Int,
             @StringRes val subtitle: Int,
             val panes: List<Pane>,
+            // Absolute card background/text for a SINGLE-mode entry, so the whole «Светлая» card is light,
+            // «Тёмная» dark, AMOLED black — a mini-mockup of the mode, independent of the CURRENT app theme
+            // (fixes «светлая тема выглядит тёмной»). null → the neutral themed surface (the SYSTEM entries,
+            // which show two panes light|dark and shouldn't commit to one background).
+            val card: Pane?,
     )
 
     private val light = Pane(LIGHT_BG, LIGHT_TX)
@@ -49,15 +54,15 @@ object ThemeModePickerDialog {
 
     private val entries = listOf(
             Entry(ThemeMode.SYSTEM, R.string.pref_value_theme_mode_system,
-                    R.string.pref_summary_theme_mode_system, listOf(light, dark)),
+                    R.string.pref_summary_theme_mode_system, listOf(light, dark), card = null),
             Entry(ThemeMode.LIGHT, R.string.pref_value_theme_mode_light,
-                    R.string.pref_summary_theme_mode_light, listOf(light)),
+                    R.string.pref_summary_theme_mode_light, listOf(light), card = light),
             Entry(ThemeMode.DARK, R.string.pref_value_theme_mode_dark,
-                    R.string.pref_summary_theme_mode_dark, listOf(dark)),
+                    R.string.pref_summary_theme_mode_dark, listOf(dark), card = dark),
             Entry(ThemeMode.AMOLED, R.string.pref_value_theme_mode_amoled,
-                    R.string.pref_summary_theme_mode_amoled, listOf(amoled)),
+                    R.string.pref_summary_theme_mode_amoled, listOf(amoled), card = amoled),
             Entry(ThemeMode.SYSTEM_AMOLED, R.string.pref_value_theme_mode_system_amoled,
-                    R.string.pref_summary_theme_mode_system_amoled, listOf(light, amoled)),
+                    R.string.pref_summary_theme_mode_system_amoled, listOf(light, amoled), card = null),
     )
 
     fun show(context: Context, current: ThemeMode, onPick: (ThemeMode) -> Unit) {
@@ -73,7 +78,12 @@ object ThemeModePickerDialog {
         lateinit var dialog: androidx.appcompat.app.AlertDialog
 
         fun makePane(p: Pane): View = FrameLayout(context).apply {
-            background = GradientDrawable().apply { cornerRadius = px(10).toFloat(); setColor(p.bg) }
+            background = GradientDrawable().apply {
+                cornerRadius = px(10).toFloat(); setColor(p.bg)
+                // Subtle outline so the preview panel stays delineated even when the card behind it is the
+                // same colour (single-mode cards below paint their own background with the pane's colour).
+                setStroke(px(1), androidx.core.graphics.ColorUtils.setAlphaComponent(p.tx, 38))
+            }
             addView(TextView(context).apply {
                 text = "Aa"
                 setTextColor(p.tx)
@@ -105,16 +115,27 @@ object ThemeModePickerDialog {
                     addView(makePane(p), LinearLayout.LayoutParams(0, px(56), 1f))
                 }
             }
+            // Single-mode entries paint the whole card in their OWN background/text; SYSTEM entries stay on
+            // the neutral themed surface (they show two panes, so committing to one background would mislead).
+            val cardBg = e.card?.bg ?: context.getColorFromAttr(
+                    com.google.android.material.R.attr.colorSurfaceContainerLow)
+            val cardTitleColor = e.card?.tx ?: onSurface
+            val cardSubtitleColor = e.card?.let {
+                androidx.core.graphics.ColorUtils.setAlphaComponent(it.tx, 0xB3)
+            } ?: onSurfaceVar
+            val cardOutline = e.card?.let {
+                androidx.core.graphics.ColorUtils.setAlphaComponent(it.tx, 40)
+            } ?: outline
             val title = TextView(context).apply {
                 text = context.getString(e.title)
-                setTextColor(onSurface)
+                setTextColor(cardTitleColor)
                 textSize = 15f
                 setTypeface(typeface, Typeface.BOLD)
                 setPadding(0, px(10), 0, 0)
             }
             val subtitle = TextView(context).apply {
                 text = context.getString(e.subtitle)
-                setTextColor(onSurfaceVar)
+                setTextColor(cardSubtitleColor)
                 textSize = 12f
                 setPadding(0, px(2), 0, 0)
             }
@@ -123,9 +144,8 @@ object ThemeModePickerDialog {
                 setPadding(px(14), px(14), px(14), px(14))
                 background = GradientDrawable().apply {
                     cornerRadius = px(16).toFloat()
-                    setColor(context.getColorFromAttr(
-                            com.google.android.material.R.attr.colorSurfaceContainerLow))
-                    setStroke(if (selected) px(3) else px(1), if (selected) selectedRing else outline)
+                    setColor(cardBg)
+                    setStroke(if (selected) px(3) else px(1), if (selected) selectedRing else cardOutline)
                 }
                 addView(paneRow)
                 addView(title)

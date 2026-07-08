@@ -10,6 +10,7 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.webkit.MimeTypeMap
 import coil.ImageLoader
+import coil.dispose
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
@@ -122,14 +123,39 @@ object ForPdaCoil {
     }
 
     /**
+     * Same as [loadInto] but reports the decoded image's intrinsic pixel size on success, so callers can
+     * size the view by the real aspect ratio (e.g. enlarge only wide «UPDATE» button gifs, never tiny icons).
+     */
+    fun loadInto(imageView: ImageView, url: String?, onSize: (width: Int, height: Int) -> Unit) {
+        if (url.isNullOrBlank()) return
+        val req = ImageRequest.Builder(imageView.context.applicationContext)
+                .data(normalizeData(url))
+                .precision(Precision.INEXACT)
+                .crossfade(false)
+                .target(imageView)
+                .listener(onSuccess = { _, result ->
+                    onSize(result.drawable.intrinsicWidth, result.drawable.intrinsicHeight)
+                })
+                .build()
+        imageLoader.enqueue(req)
+    }
+
+    /**
      * Load an avatar with a guaranteed [fallback] drawable (a letter avatar): shown when the url is empty
      * and left in place if the load fails — so a user without/with a broken avatar never renders blank
      * (parity with the WebView `.avatar .letter`).
      */
     @JvmStatic
     fun loadAvatar(imageView: ImageView, url: String?, fallback: android.graphics.drawable.Drawable) {
+        // Reset the ImageView to the fallback SYNCHRONOUSLY on every bind — before enqueueing — and cancel
+        // any request still in flight on it. In a RecyclerView a ViewHolder is reused across authors; Coil's
+        // `.placeholder()` only clears the old bitmap in the async `onStart`, which never fires if the request
+        // is cancelled mid-flight during a fast fling. Without this reset the recycled view keeps the PREVIOUS
+        // author's decoded avatar → «у моего аккаунта чужой аватар» (an avatar-less/other user showing someone
+        // else's face). Clearing here guarantees a cancelled/racing load can never leave a stale face.
+        imageView.dispose()
+        imageView.setImageDrawable(fallback)
         if (url.isNullOrBlank()) {
-            imageView.setImageDrawable(fallback)
             return
         }
         val req = ImageRequest.Builder(imageView.context.applicationContext)
