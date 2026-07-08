@@ -84,8 +84,8 @@ class NotesRepository(
         notesCacheRoom.moveNotesToFolder(noteIds, folderId)
     }
 
-    suspend fun moveNote(noteId: Long, up: Boolean) = withContext(ioDispatcher) {
-        notesCacheRoom.moveNote(noteId, up)
+    suspend fun reorderNotes(orderedIds: List<Long>) = withContext(ioDispatcher) {
+        notesCacheRoom.reorderNotes(orderedIds)
     }
 
     suspend fun importNotes(file: RequestFile) = withContext(ioDispatcher) {

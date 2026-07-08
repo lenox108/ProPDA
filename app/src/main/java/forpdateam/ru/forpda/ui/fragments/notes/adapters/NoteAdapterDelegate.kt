@@ -17,13 +17,15 @@ import forpdateam.ru.forpda.ui.views.drawers.adapters.NoteListItem
 import forpdateam.ru.forpda.databinding.ItemNoteBinding
 
 class NoteAdapterDelegate(
-        private val clickListener: BaseAdapter.OnItemClickListener<NoteItem>
+        private val clickListener: BaseAdapter.OnItemClickListener<NoteItem>,
+        private val manualModeProvider: () -> Boolean = { false },
+        private val onStartDrag: (RecyclerView.ViewHolder) -> Unit = {}
 ) : AdapterDelegate<MutableList<ListItem>>() {
     override fun isForViewType(items: MutableList<ListItem>, position: Int): Boolean = items[position] is NoteListItem
 
     override fun onCreateViewHolder(parent: ViewGroup): RecyclerView.ViewHolder {
         val binding = ItemNoteBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return NoteHolder(binding, clickListener)
+        return NoteHolder(binding, clickListener, manualModeProvider, onStartDrag)
     }
 
     override fun onBindViewHolder(items: MutableList<ListItem>, position: Int, holder: RecyclerView.ViewHolder, payloads: MutableList<Any>) {
@@ -33,7 +35,9 @@ class NoteAdapterDelegate(
 
     class NoteHolder(
             private val binding: ItemNoteBinding,
-            private val clickListener: BaseAdapter.OnItemClickListener<NoteItem>
+            private val clickListener: BaseAdapter.OnItemClickListener<NoteItem>,
+            private val manualModeProvider: () -> Boolean,
+            private val onStartDrag: (RecyclerView.ViewHolder) -> Unit
     ) : BaseViewHolder<NoteItem>(binding.root) {
 
         private lateinit var currentItem: NoteItem
@@ -43,7 +47,13 @@ class NoteAdapterDelegate(
                 clickListener.onItemClick(currentItem)
             }
             binding.root.setOnLongClickListener {
-                clickListener.onItemLongClick(currentItem)
+                // В ручном режиме долгий тап «берёт» заметку для перетаскивания
+                // (drag-and-drop), в остальных — обычный вход в режим выделения.
+                if (manualModeProvider()) {
+                    onStartDrag(this)
+                } else {
+                    clickListener.onItemLongClick(currentItem)
+                }
                 true
             }
         }

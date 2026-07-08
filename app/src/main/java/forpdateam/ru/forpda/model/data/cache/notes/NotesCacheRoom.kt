@@ -137,28 +137,17 @@ class NotesCacheRoom(
     }
 
     /**
-     * Двигает заметку [noteId] на одну позицию вверх (или вниз) в ручном порядке
-     * ([NoteSortMode.MANUAL]) внутри её собственной папки. Соседи считаются только среди
-     * заметок с тем же folderId, поэтому перестановка корректна и в древовидном виде, и
-     * при фильтре по одной папке.
-     *
-     * Порядок хранится в поле sortOrder. Так как исторически у всех заметок sortOrder == 0,
-     * после перестановки нормализуем весь диапазон папки в монотонный 0..n-1 — это делает
-     * последующие перемещения детерминированными. updatedAt намеренно не трогаем, чтобы
-     * ручная сортировка не засоряла режим «по дате изменения».
+     * Сохраняет ручной порядок ([NoteSortMode.MANUAL]) для заметок drag-and-drop.
+     * [orderedIds] — id заметок ОДНОЙ папки в нужном визуальном порядке; каждой
+     * присваивается sortOrder = её индекс (0..n-1). Заметки других папок не трогаются
+     * (у них свой независимый диапазон), поэтому перетаскивание всегда идёт внутри
+     * своей папки. updatedAt намеренно не трогаем, чтобы ручная сортировка не засоряла
+     * режим «по дате изменения».
      */
-    suspend fun moveNote(noteId: Long, up: Boolean) {
-        val note = noteItemDao.getNoteById(noteId) ?: return
-        val ordered = noteItemDao.getNotesByFolderManual(note.folderId).toMutableList()
-        val index = ordered.indexOfFirst { it.id == noteId }
-        if (index < 0) return
-        val target = if (up) index - 1 else index + 1
-        if (target < 0 || target >= ordered.size) return
-        ordered[index] = ordered[target].also { ordered[target] = ordered[index] }
-        ordered.forEachIndexed { position, item ->
-            if (item.sortOrder != position.toLong()) {
-                noteItemDao.updateSortOrder(item.id, position.toLong())
-            }
+    suspend fun reorderNotes(orderedIds: List<Long>) {
+        if (orderedIds.isEmpty()) return
+        orderedIds.forEachIndexed { index, id ->
+            noteItemDao.updateSortOrder(id, index.toLong())
         }
         getItems()
     }
