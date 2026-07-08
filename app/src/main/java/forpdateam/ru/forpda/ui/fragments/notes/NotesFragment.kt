@@ -84,9 +84,8 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
     private var selectionEditMenuItem: MenuItem? = null
     private var selectionSelectAllMenuItem: MenuItem? = null
     private var selectionMoveMenuItem: MenuItem? = null
-    private var selectionMoveUpMenuItem: MenuItem? = null
-    private var selectionMoveDownMenuItem: MenuItem? = null
     private var selectionDeleteMenuItem: MenuItem? = null
+    private lateinit var itemTouchHelper: androidx.recyclerview.widget.ItemTouchHelper
     private var sortMenuItem: MenuItem? = null
     private var createFolderMenuItem: MenuItem? = null
     private var manageFoldersMenuItem: MenuItem? = null
@@ -112,9 +111,27 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
         notesDialogs = NotesDialogs(requireContext(), viewModel, ::clearSelection)
         setCardsBackground()
         clearToolbarScrollFlags()
-        adapter = NotesAdapter(this, this, viewModel::onInfoClick)
+        adapter = NotesAdapter(
+                this,
+                this,
+                viewModel::onInfoClick,
+                manualModeProvider = {
+                    latestState.sortMode == NoteSortMode.MANUAL && !isSelectionMode && searchField == null
+                },
+                onStartDrag = { holder -> itemTouchHelper.startDrag(holder) }
+        )
         recyclerView.adapter = adapter
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+        // Смена выделения — это change, а не remove/insert (см. DiffUtil в NotesAdapter);
+        // гасим cross-fade change-анимацию, чтобы карточки не «мигали» при выделении.
+        (recyclerView.itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)
+                ?.supportsChangeAnimations = false
+        itemTouchHelper = androidx.recyclerview.widget.ItemTouchHelper(
+                forpdateam.ru.forpda.ui.fragments.notes.adapters.NotesReorderCallback(adapter) { orderedIds ->
+                    viewModel.reorderNotes(orderedIds)
+                }
+        )
+        itemTouchHelper.attachToRecyclerView(recyclerView)
         refreshLayout.setOnRefreshListener { viewModel.loadNotes() }
         recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(dp8, false))
         titlesWrapper.isClickable = false
@@ -227,24 +244,6 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
                 .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_folder))
                 .setOnMenuItemClickListener {
                     showMoveSelectedToFolderDialog()
-                    true
-                }
-                .setVisible(false)
-                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        selectionMoveUpMenuItem = menu
-                .add(R.string.note_move_up)
-                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_arrow_up))
-                .setOnMenuItemClickListener {
-                    selectedNoteIds.firstOrNull()?.let { viewModel.moveNoteUp(it) }
-                    true
-                }
-                .setVisible(false)
-                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        selectionMoveDownMenuItem = menu
-                .add(R.string.note_move_down)
-                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_arrow_down))
-                .setOnMenuItemClickListener {
-                    selectedNoteIds.firstOrNull()?.let { viewModel.moveNoteDown(it) }
                     true
                 }
                 .setVisible(false)
@@ -532,10 +531,6 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
         selectionDeleteMenuItem?.isVisible = inSelectionMode
         selectionCopyMenuItem?.isVisible = inSelectionMode && selectedCount == 1
         selectionEditMenuItem?.isVisible = inSelectionMode && selectedCount == 1
-        val manualReorder = inSelectionMode && selectedCount == 1 &&
-                latestState.sortMode == NoteSortMode.MANUAL
-        selectionMoveUpMenuItem?.isVisible = manualReorder
-        selectionMoveDownMenuItem?.isVisible = manualReorder
         selectionSelectAllMenuItem?.isEnabled = visibleNoteIds.isNotEmpty()
         selectionSelectAllMenuItem?.setTitle(
                 if (allVisibleNotesSelected) {

@@ -229,14 +229,15 @@ class NotesViewModel @Inject constructor(
         }
     }
 
-    fun moveNoteUp(noteId: Long) = moveNote(noteId, up = true)
-
-    fun moveNoteDown(noteId: Long) = moveNote(noteId, up = false)
-
-    private fun moveNote(noteId: Long, up: Boolean) {
+    /**
+     * Сохраняет ручной порядок после drag-and-drop. [orderedIds] — заметки одной папки
+     * в новом визуальном порядке. Работает только в режиме [NoteSortMode.MANUAL].
+     */
+    fun reorderNotes(orderedIds: List<Long>) {
         if (_uiState.value.sortMode != NoteSortMode.MANUAL) return
+        if (orderedIds.isEmpty()) return
         scope.launch {
-            runCatching { notesRepository.moveNote(noteId, up) }
+            runCatching { notesRepository.reorderNotes(orderedIds) }
                     .onFailure { e -> errorHandler.handle(e) }
         }
     }
