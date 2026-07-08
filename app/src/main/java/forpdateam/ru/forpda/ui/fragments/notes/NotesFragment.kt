@@ -84,6 +84,8 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
     private var selectionEditMenuItem: MenuItem? = null
     private var selectionSelectAllMenuItem: MenuItem? = null
     private var selectionMoveMenuItem: MenuItem? = null
+    private var selectionMoveUpMenuItem: MenuItem? = null
+    private var selectionMoveDownMenuItem: MenuItem? = null
     private var selectionDeleteMenuItem: MenuItem? = null
     private var sortMenuItem: MenuItem? = null
     private var createFolderMenuItem: MenuItem? = null
@@ -225,6 +227,24 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
                 .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_folder))
                 .setOnMenuItemClickListener {
                     showMoveSelectedToFolderDialog()
+                    true
+                }
+                .setVisible(false)
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        selectionMoveUpMenuItem = menu
+                .add(R.string.note_move_up)
+                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_arrow_up))
+                .setOnMenuItemClickListener {
+                    selectedNoteIds.firstOrNull()?.let { viewModel.moveNoteUp(it) }
+                    true
+                }
+                .setVisible(false)
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        selectionMoveDownMenuItem = menu
+                .add(R.string.note_move_down)
+                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_arrow_down))
+                .setOnMenuItemClickListener {
+                    selectedNoteIds.firstOrNull()?.let { viewModel.moveNoteDown(it) }
                     true
                 }
                 .setVisible(false)
@@ -512,6 +532,10 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
         selectionDeleteMenuItem?.isVisible = inSelectionMode
         selectionCopyMenuItem?.isVisible = inSelectionMode && selectedCount == 1
         selectionEditMenuItem?.isVisible = inSelectionMode && selectedCount == 1
+        val manualReorder = inSelectionMode && selectedCount == 1 &&
+                latestState.sortMode == NoteSortMode.MANUAL
+        selectionMoveUpMenuItem?.isVisible = manualReorder
+        selectionMoveDownMenuItem?.isVisible = manualReorder
         selectionSelectAllMenuItem?.isEnabled = visibleNoteIds.isNotEmpty()
         selectionSelectAllMenuItem?.setTitle(
                 if (allVisibleNotesSelected) {

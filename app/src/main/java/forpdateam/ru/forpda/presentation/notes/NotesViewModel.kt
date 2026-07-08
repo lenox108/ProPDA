@@ -229,6 +229,18 @@ class NotesViewModel @Inject constructor(
         }
     }
 
+    fun moveNoteUp(noteId: Long) = moveNote(noteId, up = true)
+
+    fun moveNoteDown(noteId: Long) = moveNote(noteId, up = false)
+
+    private fun moveNote(noteId: Long, up: Boolean) {
+        if (_uiState.value.sortMode != NoteSortMode.MANUAL) return
+        scope.launch {
+            runCatching { notesRepository.moveNote(noteId, up) }
+                    .onFailure { e -> errorHandler.handle(e) }
+        }
+    }
+
     fun importNotes(file: RequestFile) {
         scope.launch {
             runCatching { notesRepository.importNotes(file) }
