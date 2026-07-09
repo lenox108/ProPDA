@@ -764,6 +764,7 @@
     <string name="pref_summary_app_font_inter">Inter; полностью применится после перезапуска</string>
     <string name="pref_summary_app_font_source_sans_3">Source Sans 3; полностью применится после перезапуска</string>
     <string name="pref_summary_app_font_open_sans">Open Sans; полностью применится после перезапуска</string>
+    <string name="pref_summary_app_font_roboto_mono">Roboto Mono (моноширинный); полностью применится после перезапуска</string>
     <string name="pref_value_app_font_system">Системный</string>
     <string name="pref_value_app_font_roboto">Roboto</string>
     <string name="pref_value_app_font_inter">Inter</string>

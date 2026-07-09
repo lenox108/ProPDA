@@ -79,14 +79,8 @@ class SearchViewModelTest {
     }
 
     private fun createViewModel() = SearchViewModel(
-        context,
         searchRepository,
-        editPostRepository,
         favoritesRepository,
-        themeRepository,
-        reputationRepository,
-        topicPreferencesHolder,
-        mainPreferencesHolder,
         otherPreferencesHolder,
         router,
         linkHandler,
