@@ -51,6 +51,30 @@ fun stripBbcodeQuotes(text: String): String {
     return s.trim()
 }
 
+private val bbcodeSpoilerOpenTag = Regex("""(?i)\[spoiler(?:=([^\]]*))?\]""")
+
+/**
+ * Схлопывает `[spoiler=Имя]…[/spoiler]` до строки «Спойлер: Имя», выбрасывая содержимое.
+ *
+ * 4PDA не умеет блочные теги внутри `[quote]`: спойлер (как и `[code]`, и вложенная цитата) при разборе
+ * теряется, а его содержимое вываливается в цитату целиком — чужие скриншоты разворачиваются на всю ширину.
+ * Поэтому в цитату кладём только заголовок. Вложенные спойлеры схлопываются изнутри наружу, поэтому берём
+ * последний открывающий тег и первый закрывающий после него.
+ */
+fun collapseBbcodeSpoilersForQuote(text: String): String {
+    var s = text
+    var guard = 0
+    while (guard++ < 64) {
+        val open = bbcodeSpoilerOpenTag.findAll(s).lastOrNull() ?: break
+        val end = s.indexOf("[/spoiler]", open.range.last + 1, ignoreCase = true)
+        if (end < 0) break
+        val title = open.groupValues[1].trim()
+        val label = if (title.isEmpty()) "Спойлер" else "Спойлер: $title"
+        s = s.replaceRange(open.range.first, end + "[/spoiler]".length, label)
+    }
+    return s
+}
+
 /**
  * Тег &lt;q&gt; в HTML5 — браузер и [HtmlCompat.fromHtml] добавляют символы кавычек вокруг текста;
  * для упоминаний вида &lt;q&gt;@nick&lt;/q&gt; в BBCode вместо @ оказываются «ёлочки».
@@ -220,6 +244,28 @@ private fun String.hasHtmlClassToken(classToken: String): Boolean {
     return classes.split(Regex("\\s+")).any { it.equals(classToken, ignoreCase = true) }
 }
 
+/**
+ * Внутренность `.block-title` спойлера — это первый `<div>` сразу за открывающим тегом блока.
+ * Поиск ограничен именно им, чтобы не подхватить заголовок вложенного спойлера/кода из тела.
+ */
+private fun spoilerBlockTitleInnerHtml(s: String, afterBlockOpenTagGt: Int): String? {
+    val nextOpen = s.indexOf("<div", afterBlockOpenTagGt, ignoreCase = true)
+    if (nextOpen < 0) return null
+    val gt = s.indexOf('>', nextOpen)
+    if (gt < 0) return null
+    if (!s.substring(nextOpen, gt + 1).hasHtmlClassToken("block-title")) return null
+    return extractDivInnerUntilMatchingClose(s, gt + 1)?.first
+}
+
+/** Заголовок спойлера как plain-текст, без [HtmlCompat] — вызывается и из Android-независимых веток. */
+private fun blockTitlePlainText(innerHtml: String): String =
+        innerHtml
+                .replace(Regex("(?is)<[^>]+>"), "")
+                .replace("&nbsp;", " ")
+                .replace('\u00a0', ' ')
+                .replace(Regex("\\s+"), " ")
+                .trim()
+
 private fun htmlFragmentToPlainForSpoilerEdit(fragment: String): String {
     val p = preprocessHtmlForPlainExtraction(fragment)
     return HtmlCompat.fromHtml(p, HtmlCompat.FROM_HTML_MODE_LEGACY)
@@ -230,7 +276,25 @@ private fun htmlFragmentToPlainForSpoilerEdit(fragment: String): String {
 }
 
 /**
- * Блоки `.post-block.spoil` в теме (WebView) → `[spoiler]…[/spoiler]`, иначе в plain попадают «Спойлер»/«Закрыть спойлер».
+ * Заголовок спойлера из `.block-title` → `=Название` для открывающего `[spoiler]`.
+ * Безымянный спойлер форум рисует как «Спойлер» — такой заголовок не восстанавливаем, иначе он
+ * при следующей правке станет настоящим именем блока. Скобки в имени ломают BBCode → заменяем.
+ */
+private fun spoilerBbcodeOpenTag(titleInnerHtml: String?): String {
+    val title = titleInnerHtml
+            ?.let { htmlFragmentToPlainForSpoilerEdit(it) }
+            ?.replace(Regex("\\s+"), " ")
+            ?.replace('[', '(')
+            ?.replace(']', ')')
+            ?.trim()
+            .orEmpty()
+    val isDefaultLabel = title.equals("Спойлер", ignoreCase = true) || title.equals("Spoiler", ignoreCase = true)
+    return if (title.isEmpty() || isDefaultLabel) "[spoiler]" else "[spoiler=$title]"
+}
+
+/**
+ * Блоки `.post-block.spoil` в теме (WebView) → `[spoiler=Название]…[/spoiler]`, иначе в plain попадают
+ * «Спойлер»/«Закрыть спойлер», а имя блока теряется при правке своего поста.
  */
 fun preprocessHtmlSpoilerBlocksForBbcodeEdit(html: String): String {
     var s = html
@@ -239,6 +303,7 @@ fun preprocessHtmlSpoilerBlocksForBbcodeEdit(html: String): String {
     val bodyOpen = Regex("(?is)<div[^>]*class=\"[^\"]*block-body[^\"]*\"[^>]*>")
     while (true) {
         val m = blockStart.find(s, searchStart) ?: break
+        val openTag = spoilerBbcodeOpenTag(spoilerBlockTitleInnerHtml(s, m.range.last + 1))
         val body = bodyOpen.find(s, m.range.first) ?: break
         val innerStart = body.range.last + 1
         val innerPair = extractDivInnerUntilMatchingClose(s, innerStart) ?: break
@@ -254,7 +319,7 @@ fun preprocessHtmlSpoilerBlocksForBbcodeEdit(html: String): String {
         } else {
             break
         }
-        val replacement = "[spoiler]$plain[/spoiler]"
+        val replacement = "$openTag$plain[/spoiler]"
         s = s.replaceRange(m.range.first, endPos, replacement)
         searchStart = m.range.first + replacement.length
     }
@@ -358,12 +423,16 @@ fun stripEmbeddedAttachmentsUiFromPostHtml(html: String): String {
 
 /**
  * Спойлер с заголовком «Прикреплённые файлы» (оригинальная разметка форума), если трансформер не вычистил.
+ *
+ * Признак ищем СТРОГО в `.block-title`, а не в первых N символах блока: у обычного пользовательского
+ * спойлера («скрины») первая же attach-картинка несёт `alt="Прикрепленное изображение"`, и окно по длине
+ * сносило спойлер вместе с картинками — из цитаты и из формы правки поста.
  */
 fun stripAttachmentSpoilerBlocksFromPostHtml(html: String): String {
     val blockStart = Regex(
         "(?is)<div\\b[^>]*class=\"[^\"]*(?:post-block\\s+spoil|spoil\\s+post-block)[^\"]*\"[^>]*>"
     )
-    val titleHasAttach = Regex("(?is)Прикреплен|Attached\\s+files")
+    val titleHasAttach = Regex("(?is)Прикрепл[её]нн\\S*\\s+файл|Attached\\s+files")
     var s = html
     var searchStart = 0
     var guard = 0
@@ -371,8 +440,8 @@ fun stripAttachmentSpoilerBlocksFromPostHtml(html: String): String {
         val m = blockStart.find(s, searchStart) ?: break
         val gt = s.indexOf('>', m.range.first)
         if (gt < 0) break
-        val blockSnippet = s.substring(m.range.first, minOf(m.range.first + 800, s.length))
-        if (!titleHasAttach.containsMatchIn(blockSnippet)) {
+        val title = spoilerBlockTitleInnerHtml(s, gt + 1)?.let { blockTitlePlainText(it) }.orEmpty()
+        if (!titleHasAttach.containsMatchIn(title)) {
             searchStart = m.range.first + 1
             continue
         }
