@@ -71,7 +71,7 @@ class QmsInteractor(
     ): QmsChatLoadOutcome = withContext(Dispatchers.IO) {
         // Pipeline calls QmsApi.fetchChat → Client.request (blocking OkHttp); must not run on Main
         // (BaseViewModel.scope uses Dispatchers.Main.immediate).
-        chatOpenPipeline.loadChat(
+        val outcome = chatOpenPipeline.loadChat(
                 userId = userId,
                 themeId = themeId,
                 traceId = traceId,
@@ -79,6 +79,17 @@ class QmsInteractor(
                 bypassCache = bypassCache,
                 sourceScreen = sourceScreen
         )
+        // Only a page actually fetched from the network marks the thread read server-side; a cache
+        // render changes nothing there, so it must not clear the local unread state either.
+        val readOnServer = when (outcome) {
+            is QmsChatLoadOutcome.Content -> !outcome.fromCache
+            is QmsChatLoadOutcome.Empty -> !outcome.fromCache
+            is QmsChatLoadOutcome.Failure -> false
+        }
+        if (readOnServer) {
+            qmsRepository.markThreadRead(userId, themeId)
+        }
+        outcome
     }
 
     suspend fun sendNewTheme(nick: String, title: String, mess: String, files: List<AttachmentItem>): QmsChatModel =
