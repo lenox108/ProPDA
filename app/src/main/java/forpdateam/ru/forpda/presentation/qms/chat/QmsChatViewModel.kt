@@ -22,7 +22,6 @@ import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
-import forpdateam.ru.forpda.ui.TemplateManager
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -40,15 +39,13 @@ import timber.log.Timber
 @HiltViewModel
 class QmsChatViewModel @Inject constructor(
         private val qmsInteractor: QmsInteractor,
-        private val qmsChatTemplate: QmsChatTemplate,
         private val avatarRepository: AvatarRepository,
         private val eventsRepository: EventsRepository,
         private val mainPreferencesHolder: MainPreferencesHolder,
-        private val templateManager: TemplateManager,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
         private val errorHandler: IErrorHandler
-) : BaseViewModel(), QmsChatWebCallbacks {
+) : BaseViewModel() {
 
     companion object {
         const val MODE_CHAT = "chat"
@@ -61,6 +58,9 @@ class QmsChatViewModel @Inject constructor(
          * sessions, long enough to avoid redundant fetches on tab re-entries.
          */
         private const val QMS_BACKGROUND_REFRESH_SKIP_MS = 60_000L
+
+        /** Messages revealed per upward page (and in the initial window). */
+        private const val MESSAGES_PAGE_SIZE = 30
     }
 
     private var subscriptionsStarted = false
@@ -98,15 +98,29 @@ class QmsChatViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var openTraceId: String = FpdaDebugLog.newTraceId()
     private var lastRealtimeMessageAtMs = 0L
+    /** Trace whose `render_visible` marker has already been logged (one per dialog open). */
+    private var renderReportedForTrace: String? = null
 
     private val _threadState = MutableStateFlow<QmsThreadUiState>(QmsThreadUiState.Idle)
     val threadState: StateFlow<QmsThreadUiState> = _threadState.asStateFlow()
+
+    /**
+     * The message window the native list renders. Replaces the WebView pipeline's incremental
+     * `showNewMess()` / `showMoreMess()` JS injections: the list is a plain state the view re-diffs,
+     * so there is nothing to «apply», verify or resend — a hidden tab simply re-collects on resume.
+     */
+    private val _visibleMessages = MutableStateFlow(QmsVisibleMessages())
+    val visibleMessages: StateFlow<QmsVisibleMessages> = _visibleMessages.asStateFlow()
+
+    /** One-shot request to pin the list to its newest message (open, dialog switch, sent message). */
+    private val _scrollToBottom = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    val scrollToBottom: SharedFlow<Unit> = _scrollToBottom.asSharedFlow()
 
     fun start() {
         val key = chatKey(userId, themeId)
         if (subscriptionsStarted) {
             if (key == loadedChatKey && currentData != null) {
-                syncLoadedChatToUi()
+                publishVisibleMessages(scrollToBottom = true)
                 return
             }
             if (isLoadInFlightFor(key)) {
@@ -123,17 +137,6 @@ class QmsChatViewModel @Inject constructor(
             }
         }
 
-        scope.launch {
-            mainPreferencesHolder.observeAppFontModeFlow().collect {
-                scope.launch { _uiEvents.emit(QmsChatUiEvent.SetAppFontMode(it)) }
-            }
-        }
-
-        scope.launch {
-            templateManager.observeThemeTypeFlow().collect {
-                scope.launch { _uiEvents.emit(QmsChatUiEvent.SetStyleType(it)) }
-            }
-        }
         scope.launch {
             eventsRepository.observeEventsTab()
                     .collect { handleEvent(it) }
@@ -186,19 +189,24 @@ class QmsChatViewModel @Inject constructor(
     }
 
     /**
-     * Pushes already-loaded messages into the WebView after view recreation or when the UI
-     * collector was not yet active when [loadChat] finished.
+     * Publishes the current message window to [visibleMessages] (and optionally asks the list to jump
+     * to the newest message). Every path that changes the thread — first load, cache hit, WebSocket
+     * append, upward pagination, read-status flip — funnels through here.
      */
-    fun syncLoadedChatToUi(clearExisting: Boolean = true) {
-        val data = currentData ?: return
-        scope.launch {
-            _uiEvents.emit(QmsChatUiEvent.ShowChat(data))
-            val end = data.messages.size
-            val start = maxOf(end - 30, 0)
-            val visible = data.messages.subList(start, end).toList()
-            if (visible.isNotEmpty()) {
-                _uiEvents.emit(QmsChatUiEvent.ResetAndShowMessages(visible, clearExisting))
-            }
+    private fun publishVisibleMessages(scrollToBottom: Boolean) {
+        val data = currentData
+        if (data == null) {
+            _visibleMessages.value = QmsVisibleMessages()
+            return
+        }
+        val end = data.messages.size
+        val start = data.showedMessIndex.coerceIn(0, end)
+        _visibleMessages.value = QmsVisibleMessages(
+                messages = data.messages.subList(start, end).toList(),
+                hasMoreAbove = start > 0,
+        )
+        if (scrollToBottom) {
+            scope.launch { _scrollToBottom.emit(Unit) }
         }
     }
 
@@ -207,7 +215,7 @@ class QmsChatViewModel @Inject constructor(
         val key = chatKey(userId, themeId)
         logChat("identity_check", mapOf("requestKey" to key))
         if (key == loadedChatKey && currentData != null) {
-            syncLoadedChatToUi()
+            publishVisibleMessages(scrollToBottom = true)
             return
         }
         loadJob?.cancel()
@@ -216,6 +224,7 @@ class QmsChatViewModel @Inject constructor(
         inFlightLoadKey = null
         currentData = null
         loadedChatKey = null
+        publishVisibleMessages(scrollToBottom = false)
         QmsOpenTiming.clear(openTraceId)
         openTraceId = FpdaDebugLog.newTraceId()
         transitionThreadState(QmsThreadUiState.Idle, "identity_reset")
@@ -230,8 +239,18 @@ class QmsChatViewModel @Inject constructor(
         loadChat(forceRefresh = true)
     }
 
-    /** Exposed for WebView render diagnostics (release logcat / snackbar detail). */
+    /** Exposed for render diagnostics (release logcat / snackbar detail). */
     fun traceIdForDiagnostics(): String = openTraceId
+
+    /**
+     * The list committed its first non-empty frame for the current open — closes the
+     * open→cache→network→render latency trace (the WebView path logged this from its render probe).
+     */
+    fun onMessagesRendered(messageCount: Int) {
+        if (messageCount <= 0 || renderReportedForTrace == openTraceId) return
+        renderReportedForTrace = openTraceId
+        QmsOpenTiming.logRenderVisible(openTraceId, themeId, userId, loadRequestId, messageCount)
+    }
 
     private fun chatKey(userId: Int, themeId: Int) = "$userId:$themeId"
 
@@ -695,9 +714,7 @@ class QmsChatViewModel @Inject constructor(
                         markRealtimeMessageActivity()
                         onNewWsMessage(tid)
                     }
-                    NotificationEvent.Type.READ -> {
-                        scope.launch { _uiEvents.emit(QmsChatUiEvent.MakeAllRead) }
-                    }
+                    NotificationEvent.Type.READ -> markAllMessagesRead()
                     NotificationEvent.Type.MENTION -> {
                     }
                     NotificationEvent.Type.HAT_EDITED -> {
@@ -750,15 +767,12 @@ class QmsChatViewModel @Inject constructor(
         }
     }
 
-    private suspend fun emitInitialMessages(data: QmsChatModel) {
+    /** Resets the window to the newest [MESSAGES_PAGE_SIZE] messages and pins the list to the bottom. */
+    private fun emitInitialMessages(data: QmsChatModel) {
         val end = data.messages.size
-        val start = maxOf(end - 30, 0)
-        data.showedMessIndex = start
-        val newMessages = data.messages.subList(start, end).toList()
-        if (newMessages.isNotEmpty()) {
-            logChat("emit_initial_messages", mapOf("count" to newMessages.size))
-            _uiEvents.emit(QmsChatUiEvent.ShowInitialMessages(newMessages))
-        }
+        data.showedMessIndex = maxOf(end - MESSAGES_PAGE_SIZE, 0)
+        logChat("emit_initial_messages", mapOf("count" to (end - data.showedMessIndex)))
+        publishVisibleMessages(scrollToBottom = true)
     }
 
     private fun qmsVisibleMessagesChanged(previous: QmsChatModel?, next: QmsChatModel): Boolean {
@@ -778,41 +792,30 @@ class QmsChatViewModel @Inject constructor(
 
     fun hasLoadedMessages(): Boolean = !currentData?.messages.isNullOrEmpty()
 
-    fun expectedVisibleMessageCount(): Int {
-        val data = currentData ?: return 0
-        val end = data.messages.size
-        val start = maxOf(end - 30, 0)
-        return end - start
-    }
-
-    /** Non-date rows in the visible window; DOM only has `.mess_container` for these. */
-    fun expectedVisibleMessContainerCount(): Int {
-        val data = currentData ?: return 0
-        val end = data.messages.size
-        val start = maxOf(end - 30, 0)
-        return data.messages.subList(start, end).count { !it.isDate }
-    }
-
-    /** Re-injects the latest message batch when WebView rendered blank but data is already loaded. */
-    fun resendVisibleMessagesToWeb(clearExisting: Boolean = false) {
-        val data = currentData ?: return
-        val end = data.messages.size
-        val start = maxOf(end - 30, 0)
-        data.showedMessIndex = start
-        val visibleMessages = data.messages.subList(start, end).toList()
-        scope.launch {
-            _uiEvents.emit(QmsChatUiEvent.ResetAndShowMessages(visibleMessages, clearExisting))
-        }
-    }
+    fun expectedVisibleMessageCount(): Int = visibleMessages.value.messages.size
 
     private fun onNewMessages(items: List<QmsMessage>, forceScroll: Boolean = true) {
         currentData?.let { data ->
             val result = items.filter { new ->
                 data.messages.none { it.id == new.id }
             }
+            if (result.isEmpty()) return
             data.messages.addAll(result)
-            scope.launch { _uiEvents.emit(QmsChatUiEvent.OnNewMessages(result, forceScroll)) }
+            publishVisibleMessages(scrollToBottom = forceScroll)
         }
+    }
+
+    /** Server says the peer read the thread → drop the unread dots (was the `makeAllRead()` JS call). */
+    private fun markAllMessagesRead() {
+        val data = currentData ?: return
+        var changed = false
+        data.messages.forEach { message ->
+            if (!message.readStatus) {
+                message.readStatus = true
+                changed = true
+            }
+        }
+        if (changed) publishVisibleMessages(scrollToBottom = false)
     }
 
     fun createThemeNote() {
@@ -846,25 +849,28 @@ class QmsChatViewModel @Inject constructor(
         }
     }
 
-    override fun loadMoreMessages() {
-        currentData?.let {
-            val endIndex = it.showedMessIndex
-            val startIndex = Math.max(endIndex - 30, 0)
-            it.showedMessIndex = startIndex
-            scope.launch { _uiEvents.emit(QmsChatUiEvent.ShowMoreMessages(it.messages, startIndex, endIndex)) }
-        }
-    }
-
-    override fun openLink(url: String) {
-        val resolved = QmsChatLinkNavigation.resolveInAppUrl(url) ?: url
-        linkHandler.handle(resolved, router)
+    /**
+     * Reveals the previous page of history (the list is scrolled to its top). The RecyclerView keeps
+     * its anchor on the first visible message, so the prepended page grows upwards without a jump —
+     * replacing the old `showMoreMess()` + `window.scrollBy(offsetHeight - lastHeight)` dance.
+     */
+    fun loadMoreMessages() {
+        val data = currentData ?: return
+        if (data.showedMessIndex <= 0) return
+        data.showedMessIndex = maxOf(data.showedMessIndex - MESSAGES_PAGE_SIZE, 0)
+        publishVisibleMessages(scrollToBottom = false)
     }
 }
 
+/** The message window rendered by the native chat list. */
+data class QmsVisibleMessages(
+        val messages: List<QmsMessage> = emptyList(),
+        /** True while older messages remain above the window (drives the scroll-to-top pagination). */
+        val hasMoreAbove: Boolean = false,
+)
+
 sealed class QmsChatUiEvent {
     data class SetFontSize(val fontSize: Int) : QmsChatUiEvent()
-    data class SetAppFontMode(val mode: forpdateam.ru.forpda.ui.AppFontMode) : QmsChatUiEvent()
-    data class SetStyleType(val styleType: String) : QmsChatUiEvent()
     data class SetTitles(val title: String, val nick: String) : QmsChatUiEvent()
     data class SetChatMode(val mode: String) : QmsChatUiEvent()
     data class OnShowSearchRes(val result: List<forpdateam.ru.forpda.entity.remote.others.user.ForumUser>) : QmsChatUiEvent()
@@ -874,14 +880,9 @@ sealed class QmsChatUiEvent {
     data class OnBlockUser(val isBlocked: Boolean) : QmsChatUiEvent()
     data class ShowAvatar(val url: String) : QmsChatUiEvent()
     data class OnUploadFiles(val files: List<AttachmentItem>) : QmsChatUiEvent()
-    object MakeAllRead : QmsChatUiEvent()
-    data class OnNewMessages(val messages: List<QmsMessage>, val forceScroll: Boolean) : QmsChatUiEvent()
-    data class ShowInitialMessages(val messages: List<QmsMessage>) : QmsChatUiEvent()
-    data class ResetAndShowMessages(val messages: List<QmsMessage>, val clearExisting: Boolean) : QmsChatUiEvent()
     data class ShowCreateNote(val title: String, val nick: String, val url: String) : QmsChatUiEvent()
     object TempSendNewTheme : QmsChatUiEvent()
     object TempSendMessage : QmsChatUiEvent()
-    data class ShowMoreMessages(val messages: List<QmsMessage>, val startIndex: Int, val endIndex: Int) : QmsChatUiEvent()
     data class LoadFailed(
             val kind: QmsLoadErrorKind,
             val message: String,

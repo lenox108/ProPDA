@@ -8,17 +8,11 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.text.Spanned
-import android.text.style.URLSpan
-import androidx.core.view.setPadding
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ForPdaCoil
-import forpdateam.ru.forpda.common.FourPdaImageUrls
-import forpdateam.ru.forpda.common.Html
-import forpdateam.ru.forpda.common.LinkMovementMethod
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.presentation.ILinkHandler
 
@@ -27,14 +21,8 @@ import forpdateam.ru.forpda.presentation.ILinkHandler
  * Фаза 1). Stable ids = post id (see [NativePostItem.stableId]) so diffing and the anchor
  * controller line up on the same key.
  *
- * Body rendering (Фаза 1): each [BodyBlock.Text] becomes a native [TextView] fed by
- * [Html.fromHtml] — this is the native-text path the phase is about. Each
- * [BodyBlock.WebFallback] currently renders a DEGRADED NATIVE PREVIEW (the block's text via
- * [Html.fromHtml] on a tinted panel with a kind label) rather than the eventual pooled
- * inline WebView. Rationale: a first on-device check should prove segmentation + fast native
- * text without dozens of WebViews (a topic hat alone has ~8 spoilers) skewing the very perf
- * we are validating (§5 Фаза 1 warns Phase-1 perf is unrepresentative). The real pooled
- * WebView fallback is the next deliberate step; [bindFallback] is the single swap point.
+ * Body rendering lives in [BodyBlockViewFactory], shared with the QMS chat renderer — the post
+ * card (header, avatar, rating, action row, highlight) is all this adapter still owns.
  */
 class TopicPostsAdapter(
         private val linkHandler: ILinkHandler,
@@ -178,15 +166,6 @@ class TopicPostsAdapter(
         holder.bind(item, highlightRemainingMs, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider)
     }
 
-    /** Per-post render pass state threaded through the recursive block rendering. */
-    private class RenderScope(val postId: Int) {
-        var spoilerSeq: Int = 0
-        /** Viewer-resolved URLs of this post's attachment images, in document order (incl. nested in
-         *  quotes/spoilers). Built as images are rendered; each image view captures its own index so a
-         *  tap opens the whole post as one swipeable gallery (WebView parity). */
-        val galleryUrls = ArrayList<String>()
-    }
-
     class PostViewHolder(
             itemView: View,
             private val linkHandler: ILinkHandler,
@@ -239,6 +218,27 @@ class TopicPostsAdapter(
         private var authorized: Boolean = false
         private var memberId: Int = 0
 
+        /** The post currently bound to this holder — the owner of whatever body views are on screen. */
+        private var boundItem: NativePostItem? = null
+
+        /** Shared body renderer; block actions are re-routed to the post that owns the visible views. */
+        private val blockFactory = BodyBlockViewFactory(
+                linkHandler,
+                spoilerStates,
+                object : BodyBlockViewFactory.Callbacks {
+                    override fun onImageClick(galleryUrls: List<String>, index: Int) =
+                            actionListener.onImageClick(galleryUrls, index)
+
+                    override fun onSpoilerCopyLink(scopeId: Int, spoilNumber: Int) {
+                        boundItem?.let { actionListener.onSpoilerCopyLink(it, spoilNumber) }
+                    }
+
+                    override fun onQuoteSelection(scopeId: Int, selectedText: String) {
+                        boundItem?.let { actionListener.onQuoteSelection(it, selectedText) }
+                    }
+                },
+        )
+
         /** Scale a base sp size by the user's font-size preference. */
         private fun scaledSp(base: Float): Float = base * settings.textScale
 
@@ -255,6 +255,7 @@ class TopicPostsAdapter(
         ) {
             pageDivider.text = pageDividerLabel.orEmpty()
             pageDivider.visibility = if (pageDividerLabel != null) View.VISIBLE else View.GONE
+            boundItem = item
             this.settings = settings
             this.searchQuery = searchQuery
             this.authorized = authorized
@@ -399,26 +400,6 @@ class TopicPostsAdapter(
 
         private fun applyRestingCardBorder() =
                 cardBg.setStroke(cardBorderWidthPx(), restingCardBorderColor())
-
-        /**
-         * Rounded Material 3 container for an inline block (quote / spoiler / …): a tonal fill plus a
-         * 1dp [colorOutlineVariant] hairline and rounded corners, so nested blocks read as distinct M3
-         * surfaces on every palette instead of flat rectangles.
-         */
-        private fun m3BlockBackground(
-                fillAttr: Int,
-                cornerDp: Float = 12f,
-        ): android.graphics.drawable.GradientDrawable {
-            val dm = itemView.resources.displayMetrics
-            return android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = cornerDp * dm.density
-                setColor(itemView.context.getColorFromAttr(fillAttr))
-                setStroke(
-                        (1f * dm.density).toInt().coerceAtLeast(1),
-                        itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant),
-                )
-            }
-        }
 
         /**
          * Post density (Комфортная/Компактная/Сверхкомпактная) — tightens the card's inner vertical
@@ -753,7 +734,13 @@ class TopicPostsAdapter(
             // (see bindHatToggle). A collapsed hat hides the body entirely, so skip rendering its (often
             // huge) content until it's expanded.
             if (isHat && hatCollapsed) return
-            renderBlocksInto(body, item.blocks, RenderScope(item.postId), item)
+            blockFactory.textScale = settings.textScale
+            blockFactory.searchQuery = searchQuery
+            blockFactory.render(
+                    body,
+                    item.blocks,
+                    BodyBlockViewFactory.RenderScope(item.postId, allowQuoteSelection = item.canQuote),
+            )
         }
 
         /** Fill [container] with a tappable «ШАПКА ТЕМЫ  ▾/▴» row that toggles the hat (WebView parity:
@@ -781,586 +768,12 @@ class TopicPostsAdapter(
             })
         }
 
-        /** Renders [blocks] as children of [container]. Reused recursively by quotes/spoilers. */
-        private fun renderBlocksInto(container: LinearLayout, blocks: List<BodyBlock>, scope: RenderScope, item: NativePostItem) {
-            for (block in blocks) {
-                val child = when (block) {
-                    is BodyBlock.Text -> textView(spanned(block.html), item)
-                    is BodyBlock.EditNote -> editNoteView(block)
-                    is BodyBlock.Image -> imageView(block, scope)
-                    is BodyBlock.Quote -> quoteView(block, scope, item)
-                    is BodyBlock.Spoiler -> spoilerView(block, scope, item)
-                    is BodyBlock.Code -> codeView(block)
-                    is BodyBlock.FileAttachment -> fileAttachmentView(block)
-                    is BodyBlock.Table -> tableView(block)
-                    is BodyBlock.WebFallback -> bindFallback(block)
-                }
-                container.addView(child)
-            }
-        }
-
-        /**
-         * Native spoiler: a tappable "▸/▾ title" header toggling a collapsible body of the recursively
-         * rendered inner blocks. Open/collapsed state persists across recycling via [spoilerStates].
-         */
-        private fun spoilerView(block: BodyBlock.Spoiler, scope: RenderScope, item: NativePostItem): View {
-            val ctx = itemView.context
-            val dm = ctx.resources.displayMetrics
-            val spoilNumber = scope.spoilerSeq + 1 // 1-based index of this spoiler within the post
-            val key = "${scope.postId}:${scope.spoilerSeq++}"
-            var open = spoilerStates[key] ?: block.initiallyOpen
-
-            val card = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding((10 * dm.density).toInt())
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
-                clipToOutline = true
-                layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = (6 * dm.density).toInt() }
-            }
-            val label = block.title?.takeIf { it.isNotBlank() } ?: "Спойлер"
-            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-            // Header row: a leading chevron that rotates open/closed + the bold accent title.
-            val chevron = TextView(ctx).apply {
-                text = "▸"
-                textSize = scaledSp(13f)
-                setTypeface(typeface, Typeface.BOLD)
-                setTextColor(accent)
-            }
-            val title = TextView(ctx).apply {
-                text = label
-                setTypeface(typeface, Typeface.BOLD)
-                textSize = scaledSp(14f)
-                setTextColor(accent)
-                setPadding((6 * dm.density).toInt(), 0, 0, 0)
-            }
-            val header = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
-                addView(chevron)
-                addView(title)
-            }
-            val bodyContainer = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(0, (8 * dm.density).toInt(), 0, 0)
-            }
-            fun applyState() {
-                chevron.rotation = if (open) 90f else 0f
-                bodyContainer.visibility = if (open) View.VISIBLE else View.GONE
-            }
-            renderBlocksInto(bodyContainer, block.inner, scope, item)
-            applyState()
-            header.setOnClickListener {
-                open = !open
-                spoilerStates[key] = open
-                applyState()
-            }
-            // Long-press the spoiler title → copy a deep link to it (parity with the WebView copySpoilerLink).
-            header.setOnLongClickListener {
-                actionListener.onSpoilerCopyLink(item, spoilNumber)
-                true
-            }
-            card.addView(header)
-            card.addView(bodyContainer)
-            return card
-        }
-
-        /**
-         * Native quote: an accent-bordered card with a tappable "author · date" header (jumps to the
-         * source post via the app) and the recursively-rendered quoted content — nested quotes included.
-         */
-        private fun quoteView(block: BodyBlock.Quote, scope: RenderScope, item: NativePostItem): View {
-            val ctx = itemView.context
-            val dm = ctx.resources.displayMetrics
-            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-            // M3 quote: a rounded tonal card (surfaceContainerHigh + hairline outline). The tonal fill and
-            // the accent-coloured author header are the quote signifiers — no extra leading colour bar.
-            val content = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding((10 * dm.density).toInt())
-                layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                )
-            }
-            val headerText = listOfNotNull(
-                    block.author?.takeIf { it.isNotBlank() },
-                    block.date?.takeIf { it.isNotBlank() },
-            ).joinToString(" · ").ifBlank { "Цитата" }
-            val header = TextView(ctx).apply {
-                text = headerText
-                textSize = scaledSp(13f)
-                setTypeface(typeface, Typeface.BOLD)
-                setTextColor(accent)
-                val src = block.sourceUrl?.takeIf { it.isNotBlank() }
-                if (src != null) setOnClickListener { linkHandler.handle(src, null) }
-            }
-            content.addView(header)
-            renderBlocksInto(content, block.inner, scope, item)
-            return LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
-                clipToOutline = true
-                layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = (6 * dm.density).toInt() }
-                addView(content)
-            }
-        }
-
-        /**
-         * Native inline attachment image. Reserves height from the server-provided display
-         * dimensions BEFORE the bitmap loads, so a late-arriving image never slides the scroll
-         * anchor (§2/§6). Tapping routes the attachment link through the app (image viewer /
-         * download), same as the WebView path.
-         */
-        private fun imageView(block: BodyBlock.Image, scope: RenderScope): View {
-            val ctx = itemView.context
-            val dm = ctx.resources.displayMetrics
-            val horizontalChromePx = (40 * dm.density).toInt() // card margins + paddings
-            val columnWidthPx = (dm.widthPixels - horizontalChromePx).coerceAtLeast(1)
-            val ratio = if (block.displayWidthPx > 0 && block.displayHeightPx > 0) {
-                block.displayHeightPx.toFloat() / block.displayWidthPx.toFloat()
-            } else {
-                DEFAULT_IMAGE_RATIO
-            }
-            val topInset = (6 * dm.density).toInt()
-            // The tap target: the enclosing <a> if any, else the image itself.
-            val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
-            val viewerUrl = FourPdaImageUrls.resolveViewerUrl(tapUrl)
-            val viewable = FourPdaImageUrls.isViewableInViewer(viewerUrl)
-            // A candidate «UPDATE / СКАЧАТЬ» button: an inline gif wrapped in a link that opens a source
-            // post / download (NOT the image viewer). Whether to ENLARGE it is decided AFTER load from the
-            // real aspect ratio — a tiny square service icon (snapback arrow, file-type icon) must stay small.
-            val isButtonGif = block.inline && !block.linkUrl.isNullOrBlank() && !viewable &&
-                    block.imageUrl.substringBefore('?').endsWith(".gif", ignoreCase = true)
-            return ImageView(ctx).apply {
-                if (block.inline) {
-                    // INLINE content image (banner / preview / animated gif peeled from post text): render at
-                    // its INTRINSIC size, downscaled to fit the column but NEVER blindly upscaled — otherwise a
-                    // small icon / low-res arrow balloons into a blurry block (user report). Crisp, like the browser.
-                    layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                    ).apply { topMargin = topInset }
-                    maxWidth = columnWidthPx
-                    maxHeight = dm.heightPixels
-                } else {
-                    // ATTACHMENT picture: compact reserved-box THUMBNAIL (a tap opens the viewer).
-                    val thumbMaxPx = (150 * dm.density).toInt().coerceAtMost(columnWidthPx)
-                    val naturalWidth = (block.displayWidthPx * dm.density).toInt()
-                    val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, thumbMaxPx) else thumbMaxPx
-                    layoutParams = LinearLayout.LayoutParams(
-                            targetWidth,
-                            (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels),
-                    ).apply { topMargin = topInset }
-                }
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                adjustViewBounds = true
-                setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
-                if (isButtonGif) {
-                    ForPdaCoil.loadInto(this, block.imageUrl) { w, h ->
-                        // Bump to a comfortable tap height ONLY for a genuinely WIDE, SHORT button graphic
-                        // («UPDATE» ≈ 5:1); leave tiny square icons (arrows, file-type glyphs) at intrinsic size.
-                        val targetH = (BUTTON_GIF_HEIGHT_DP * dm.density).toInt()
-                        if (w > 0 && h in 1 until targetH && w.toFloat() / h >= 2.5f) {
-                            (layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
-                                lp.height = targetH
-                                lp.width = LinearLayout.LayoutParams.WRAP_CONTENT
-                                layoutParams = lp
-                            }
-                        }
-                    }
-                } else {
-                    ForPdaCoil.loadInto(this, block.imageUrl)
-                }
-                if (viewable) {
-                    // Add to the post's running gallery and remember our slot; a tap opens the whole post
-                    // as one swipeable gallery starting on this image (WebView parity).
-                    val index = scope.galleryUrls.size
-                    scope.galleryUrls.add(viewerUrl)
-                    setOnClickListener { actionListener.onImageClick(scope.galleryUrls, index) }
-                } else {
-                    // Non-viewable (e.g. an off-site link) → hand off to the link handler as before.
-                    setOnClickListener { linkHandler.handle(tapUrl, null) }
-                }
-            }
-        }
-
-        /** Native file attachment chip: "📎 filename" on a panel, tap → download via the app. */
-        private fun fileAttachmentView(block: BodyBlock.FileAttachment): View {
-            val ctx = itemView.context
-            val dm = ctx.resources.displayMetrics
-            val pad = (10 * dm.density).toInt()
-            return TextView(ctx).apply {
-                text = "📎 ${block.name}"
-                textSize = scaledSp(14f)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
-                setPadding(pad, pad, pad, pad)
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
-                clipToOutline = true
-                layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = (6 * dm.density).toInt() }
-                setOnClickListener { linkHandler.handle(block.url, null) }
-            }
-        }
-
-        /**
-         * Native code block: monospace text in a horizontal scroller (long lines don't wrap) on a
-         * distinct panel, with a "Копировать" action that puts the raw code on the clipboard.
-         */
-        private fun codeView(block: BodyBlock.Code): View {
-            val ctx = itemView.context
-            val dm = ctx.resources.displayMetrics
-            val pad = (8 * dm.density).toInt()
-            val card = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
-                clipToOutline = true
-                layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = (6 * dm.density).toInt() }
-            }
-            val copyBtn = TextView(ctx).apply {
-                text = block.title?.takeIf { it.isNotBlank() }?.let { "$it · Копировать" } ?: "Копировать"
-                setTypeface(typeface, Typeface.BOLD)
-                textSize = scaledSp(12f)
-                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
-                setPadding(pad, pad, pad, pad / 2)
-                setOnClickListener {
-                    val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                            as? android.content.ClipboardManager
-                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("code", block.text))
-                }
-            }
-            val scroller = android.widget.HorizontalScrollView(ctx).apply {
-                isHorizontalScrollBarEnabled = false
-            }
-            val code = TextView(ctx).apply {
-                text = block.text
-                typeface = android.graphics.Typeface.MONOSPACE
-                textSize = scaledSp(13f)
-                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
-                setPadding(pad, 0, pad, pad)
-                setHorizontallyScrolling(true)
-            }
-            scroller.addView(code)
-            card.addView(copyBtn)
-            card.addView(scroller)
-            return card
-        }
-
-        /**
-         * Native table (Фаза 6): a horizontally-scrollable grid of bordered cells, each cell a
-         * Spannable TextView. Ragged rows are left-aligned. Merged cells aren't modelled — text
-         * still shows in its origin cell.
-         */
-        private fun tableView(block: BodyBlock.Table): View {
-            val ctx = itemView.context
-            val dm = ctx.resources.displayMetrics
-            val cellPad = (8 * dm.density).toInt()
-            val borderColor = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant)
-            val grid = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundColor(borderColor) // shows through 1px gaps as cell borders
-            }
-            block.rows.forEachIndexed { rowIndex, row ->
-                val rowView = LinearLayout(ctx).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    val topMargin = if (rowIndex == 0) 0 else (1 * dm.density).toInt()
-                    layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                    ).apply { setMargins(0, topMargin, 0, 0) }
-                }
-                row.forEachIndexed { colIndex, cellHtml ->
-                    val cell = TextView(ctx).apply {
-                        setText(highlightSearchMatches(spanned(cellHtml)))
-                        textSize = scaledSp(14f)
-                        setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
-                        setPadding(cellPad, cellPad, cellPad, cellPad)
-                        setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurface))
-                        minWidth = (64 * dm.density).toInt()
-                        val leftMargin = if (colIndex == 0) 0 else (1 * dm.density).toInt()
-                        layoutParams = LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.MATCH_PARENT,
-                        ).apply { setMargins(leftMargin, 0, 0, 0) }
-                    }
-                    rowView.addView(cell)
-                }
-                grid.addView(rowView)
-            }
-            return android.widget.HorizontalScrollView(ctx).apply {
-                isHorizontalScrollBarEnabled = false
-                addView(grid)
-                layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = (6 * dm.density).toInt() }
-            }
-        }
-
-        /** Фаза-1 degraded native preview for a complex block. Single swap point for the future WebView. */
-        private fun bindFallback(block: BodyBlock.WebFallback): View {
-            val ctx = itemView.context
-            val panel = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding((10 * resources.displayMetrics.density).toInt())
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
-                clipToOutline = true
-            }
-            // NOTE: no «[KIND]» debug label — it is a dev artifact and must never reach users
-            // (was surfacing e.g. «[UNKNOWN]» above a curator banner). Render only the content.
-            val content = TextView(ctx).apply {
-                setText(spanned(block.html))
-                textSize = scaledSp(15f)
-                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
-                setLineSpacing(0f, 1.1f)
-            }
-            panel.addView(content)
-            val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
-            panel.layoutParams = lp
-            return panel
-        }
-
-        /**
-         * The server edit note («Сообщение отредактировал … — …», + «Причина редактирования: …») — a
-         * SYSTEM meta line. Rendered smaller and muted (mirrors the WebView `.edit`: 0.875em, #757575) so
-         * it visually separates from the user's own post text. The editor-nick link inside stays tappable.
-         */
-        private fun editNoteView(block: BodyBlock.EditNote): View {
-            val ctx = itemView.context
-            val muted = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
-            // Системная строка «Сообщение отредактировал N» — это метка, а не действие: ник должен быть
-            // обычным muted-текстом, без гиперссылки и перехода в профиль. Убираем URLSpan целиком.
-            val text = stripLinks(spanned(block.html))
-            return TextView(ctx).apply {
-                setText(text)
-                textSize = scaledSp(13f) // ~0.875 of the 15sp body
-                setTextColor(muted)
-                setLineSpacing(0f, 1.15f)
-                layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
-            }
-        }
-
-        /** Remove URLSpans (and any colour spans overlapping them) so the text renders as plain, non-clickable
-         *  content — used for the «отредактировал N» system note where the nick must NOT be a link. */
-        private fun stripLinks(text: CharSequence): CharSequence {
-            if (text !is Spanned) return text
-            val urls = text.getSpans(0, text.length, URLSpan::class.java)
-            if (urls.isEmpty()) return text
-            val out = SpannableStringBuilder(text)
-            for (u in out.getSpans(0, out.length, URLSpan::class.java)) out.removeSpan(u)
-            for (fg in out.getSpans(0, out.length, android.text.style.ForegroundColorSpan::class.java)) out.removeSpan(fg)
-            return out
-        }
-
-        private fun textView(text: CharSequence, item: NativePostItem): TextView {
-            val ctx = itemView.context
-            return TextView(ctx).apply {
-                setText(highlightSearchMatches(neutralizeLowContrastColors(stripLinkColors(text))))
-                textSize = scaledSp(15f)
-                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
-                // Force in-text links (profile nicks in the hat / «отредактировал N» footer) to the readable
-                // accent — their server-side inline colour is picked for a white bg and vanishes on Sepia.
-                // Use a contrast-safe variant: the per-palette accent is tuned for that palette's LIGHT card,
-                // so on an AMOLED/dark surface it must be brightened or links «сливаются с фоном».
-                setLinkTextColor(contrastSafeLinkColor())
-                setLineSpacing(0f, 1.1f)
-                val hasLinks = text is Spanned &&
-                        text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
-                if (hasLinks) {
-                    // Attach the link movement method only when there ARE links — avoids the
-                    // ScrollingMovementMethod fighting RecyclerView drags and routes taps in-app.
-                    movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
-                        override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
-                    })
-                } else {
-                    // No links → selectable text: native Copy/Share plus a custom «Цитировать» that
-                    // wraps the selection in a [quote …] for the reply editor (§4 selection→quote).
-                    setTextIsSelectable(true)
-                    installQuoteSelectionAction(this, item)
-                }
-            }
-        }
-
-        /**
-         * Drop inline server text colours that are near-invisible on the current reading surface. The 4pda
-         * topic hat is full of colours picked for a WHITE background (white/pale nicks, headers), which the
-         * WebView neutralises via CSS but [Html.fromHtml] with FROM_HTML_OPTION_USE_CSS_COLORS applies
-         * verbatim → on Sepia/Nord/… half the hat text (and the «отредактировал»/«Куратор темы» nicks) turns
-         * invisible, leaving big empty gaps. We remove only the low-contrast spans so that text falls back to
-         * the high-contrast colorOnSurface, while readable colours (green curator note, links) stay.
-         */
-        private fun neutralizeLowContrastColors(text: CharSequence): CharSequence {
-            if (text !is Spanned) return text
-            if (text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).isEmpty()) return text
-            val surface = itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer)
-            val bg = android.graphics.Color.rgb(
-                    android.graphics.Color.red(surface),
-                    android.graphics.Color.green(surface),
-                    android.graphics.Color.blue(surface))
-            val out = SpannableStringBuilder(text)
-            for (span in out.getSpans(0, out.length, android.text.style.ForegroundColorSpan::class.java)) {
-                val fg = span.foregroundColor
-                val opaqueFg = android.graphics.Color.rgb(
-                        android.graphics.Color.red(fg), android.graphics.Color.green(fg), android.graphics.Color.blue(fg))
-                if (androidx.core.graphics.ColorUtils.calculateContrast(opaqueFg, bg) < LOW_CONTRAST_THRESHOLD) {
-                    out.removeSpan(span)
-                }
-            }
-            return out
-        }
-
-        /**
-         * Force links to the theme's readable link colour. 4pda wraps hat nav links / edit-note nicks in
-         * inline greys (`<a style="color:#…">` or a coloured parent `<span>`) that in dark mode are almost
-         * invisible — and an inline [ForegroundColorSpan] overrides the TextView's linkTextColor. Removing
-         * any colour span overlapping a [URLSpan] lets [setLinkTextColor] win, so every link is readable
-         * (parity with the WebView, which colours all links with the link colour).
-         */
-        private fun stripLinkColors(text: CharSequence): CharSequence {
-            if (text !is Spanned) return text
-            val urls = text.getSpans(0, text.length, URLSpan::class.java)
-            if (urls.isEmpty()) return text
-            if (text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).isEmpty()) return text
-            val out = SpannableStringBuilder(text)
-            for (fg in out.getSpans(0, out.length, android.text.style.ForegroundColorSpan::class.java)) {
-                val fs = out.getSpanStart(fg); val fe = out.getSpanEnd(fg)
-                val overlapsLink = urls.any { u ->
-                    val us = text.getSpanStart(u); val ue = text.getSpanEnd(u)
-                    fs < ue && us < fe
-                }
-                if (overlapsLink) out.removeSpan(fg)
-            }
-            return out
-        }
-
-        /**
-         * A link colour that stays readable on the current post surface. Some per-palette accents
-         * (e.g. Sepia Blue #4F7896) are tuned for that palette's LIGHT cream card and sit at only
-         * ~4.4:1 on BOTH the light card AND an AMOLED black surface — technically legible but
-         * perceptually dim on black, so links «сливаются с чёрным фоном». A single contrast threshold
-         * can't tell the two apart, so we gate on surface darkness: on a DARK surface we demand a
-         * comfortable link contrast (and brighten the accent toward [colorOnSurface] to reach it,
-         * mirroring the WebView, which uses a near-white link colour on dark); on a LIGHT surface we
-         * keep the accent untouched and only rescue a genuinely invisible one.
-         */
-        private fun contrastSafeLinkColor(): Int {
-            val ctx = itemView.context
-            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-            val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer)
-            val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
-            val surfaceIsDark = androidx.core.graphics.ColorUtils.calculateLuminance(surface) < 0.5
-            val target = if (surfaceIsDark) DARK_SURFACE_LINK_CONTRAST else LOW_CONTRAST_THRESHOLD
-            if (androidx.core.graphics.ColorUtils.calculateContrast(accent, surface) >= target) {
-                return accent
-            }
-            var c = accent
-            repeat(10) {
-                c = androidx.core.graphics.ColorUtils.blendARGB(c, onSurface, 0.18f)
-                if (androidx.core.graphics.ColorUtils.calculateContrast(c, surface) >= target) {
-                    return c
-                }
-            }
-            return c
-        }
-
-        /** Adds a «Цитировать» item to the text-selection action bar → quotes the selection into the editor. */
-        private fun installQuoteSelectionAction(tv: TextView, item: NativePostItem) {
-            if (!item.canQuote) return
-            tv.customSelectionActionModeCallback = object : android.view.ActionMode.Callback {
-                override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
-                    menu.add(0, QUOTE_MENU_ID, 0, "Цитировать")
-                    return true
-                }
-                override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) = false
-                override fun onActionItemClicked(mode: android.view.ActionMode, menuItem: android.view.MenuItem): Boolean {
-                    if (menuItem.itemId == QUOTE_MENU_ID) {
-                        val s = tv.selectionStart.coerceAtLeast(0)
-                        val e = tv.selectionEnd.coerceAtLeast(0)
-                        if (e > s) actionListener.onQuoteSelection(item, tv.text.subSequence(s, e).toString())
-                        mode.finish()
-                        return true
-                    }
-                    return false
-                }
-                override fun onDestroyActionMode(mode: android.view.ActionMode) {}
-            }
-        }
-
-        /** Wrap each case-insensitive [searchQuery] match in [text] with a highlight background span. */
-        private fun highlightSearchMatches(text: CharSequence): CharSequence {
-            val q = searchQuery
-            if (q.isBlank()) return text
-            val out = android.text.SpannableStringBuilder(text)
-            val hay = out.toString()
-            val color = com.google.android.material.color.MaterialColors.getColor(
-                    itemView, androidx.appcompat.R.attr.colorAccent)
-            var i = hay.indexOf(q, ignoreCase = true)
-            while (i >= 0) {
-                out.setSpan(android.text.style.BackgroundColorSpan(color), i, i + q.length,
-                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                out.setSpan(android.text.style.ForegroundColorSpan(
-                        com.google.android.material.color.MaterialColors.getColor(
-                                itemView, com.google.android.material.R.attr.colorOnPrimary)),
-                        i, i + q.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                i = hay.indexOf(q, i + q.length, ignoreCase = true)
-            }
-            return out
-        }
-
-        private fun spanned(html: String): CharSequence = try {
-            val base = Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
-                    .trimTrailingNewlines()
-            // Replace 4pda smile shortcodes (:thank_you: …) with inline images from bundled assets.
-            val ctx = itemView.context
-            val smileSize = (ctx.resources.displayMetrics.scaledDensity * scaledSp(SMILE_SIZE_SP)).toInt().coerceAtLeast(1)
-            SmileProvider.applySmiles(base, ctx.assets, smileSize)
-        } catch (t: Throwable) {
-            // Graceful degradation (§6): never crash on a single post's markup.
-            SpannableStringBuilder(html)
-        }
-
-        private fun CharSequence.trimTrailingNewlines(): CharSequence {
-            var end = length
-            while (end > 0 && (this[end - 1] == '\n' || this[end - 1] == ' ')) end--
-            return subSequence(0, end)
-        }
     }
 
     private companion object {
         /** Total lifetime of the open-highlight flash (ms). Kept generously long so the accent border is
          *  clearly noticeable even after the post-open enrichment re-binds the target post. */
         const val HIGHLIGHT_TOTAL_MS = 2600L
-        const val DEFAULT_IMAGE_RATIO = 0.66f
-
-        /** Comfortable rendered height (dp) for a small linked «UPDATE / СКАЧАТЬ» button gif: at its
-         *  intrinsic size it is only a few dp tall — too small to read or reliably tap. */
-        const val BUTTON_GIF_HEIGHT_DP = 40f
-        const val SMILE_SIZE_SP = 18f
-        const val QUOTE_MENU_ID = 0x71_0716
-        // Below this WCAG contrast ratio against the reading surface, an inline server text colour is
-        // treated as invisible and dropped so the text falls back to colorOnSurface. ~2.5 keeps readable
-        // colours (green curator note ≈4.5, medium greys ≈3.5) but strips white/pale-on-Sepia (≈1.2–2.0).
-        const val LOW_CONTRAST_THRESHOLD = 2.5
-
-        /** Comfortable link contrast on a DARK/AMOLED post surface, where saturated mid-blue accents
-         *  read dim even above the bare-legibility floor. Above this we brighten the link. */
-        const val DARK_SURFACE_LINK_CONTRAST = 5.5
 
         val ONLINE_DOT_COLOR = android.graphics.Color.parseColor("#4CAF50")
 

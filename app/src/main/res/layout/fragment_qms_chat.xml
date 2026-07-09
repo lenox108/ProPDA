@@ -1,12 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/qms_chat_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:clipChildren="false"
     android:clipToPadding="false"
     app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+    <!-- Native message list (replaces the QMS chat WebView). stackFromEnd keeps the newest message
+         pinned to the bottom, which is what the old qms.js scroll bootstrap emulated. -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/qms_messages"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        tools:listitem="@layout/item_qms_message" />
 
     <com.google.android.material.loadingindicator.LoadingIndicator
         android:id="@+id/progress_bar"
