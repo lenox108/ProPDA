@@ -83,6 +83,7 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
     @Inject lateinit var webViewChecker: WebViewChecker
     @Inject lateinit var permissionHelper: PermissionHelper
     @Inject lateinit var favoritesCacheRoom: forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
+    @Inject lateinit var eventsRepository: forpdateam.ru.forpda.model.repository.events.EventsRepository
 
     val removeTabListener: (View) -> Unit = { backHandler() }
 
@@ -617,6 +618,11 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         // Любое изменение back-состояния (вход в selection/поиск/панель, показ
         // drawer) инициируется касанием → к следующему back-жесту enabled свеж.
         updateBackDispatchEnabled()
+        // Касание = активность пользователя: снимаем idle-паузу realtime-WS (если была) и
+        // сбрасываем отсчёт бездействия. Дёшево — обычно лишь обновление метки времени.
+        if (::eventsRepository.isInitialized) {
+            eventsRepository.notifyUserActive()
+        }
     }
 
     private fun backHandler() {

@@ -99,6 +99,14 @@ class QmsChatViewModel @Inject constructor(
     private var openTraceId: String = FpdaDebugLog.newTraceId()
     private var lastRealtimeMessageAtMs = 0L
 
+    /**
+     * Пока открыт чат, удерживаем realtime-WebSocket от idle-отключения: при живом WS новые
+     * сообщения приходят мгновенно (observeEventsTab), иначе — дорогой поллинг. Уникален на
+     * инстанс VM, снимается в [onCleared]. См. [EventsRepository.requestRealtimeForScreen].
+     */
+    private val realtimeOwnerKey = "qms_chat_${System.identityHashCode(this)}"
+    private var realtimeAcquired = false
+
     private val _threadState = MutableStateFlow<QmsThreadUiState>(QmsThreadUiState.Idle)
     val threadState: StateFlow<QmsThreadUiState> = _threadState.asStateFlow()
 
@@ -116,6 +124,12 @@ class QmsChatViewModel @Inject constructor(
             return
         }
         subscriptionsStarted = true
+
+        // Открытый чат зависит от WS для мгновенной доставки сообщений — удерживаем его.
+        if (!realtimeAcquired) {
+            realtimeAcquired = true
+            eventsRepository.requestRealtimeForScreen(realtimeOwnerKey)
+        }
 
         scope.launch {
             mainPreferencesHolder.observeWebViewFontSizeFlow().collect {
@@ -153,6 +167,10 @@ class QmsChatViewModel @Inject constructor(
             key == inFlightLoadKey && loadJob?.isActive == true
 
     override fun onCleared() {
+        if (realtimeAcquired) {
+            realtimeAcquired = false
+            eventsRepository.releaseRealtimeForScreen(realtimeOwnerKey)
+        }
         super.onCleared()
     }
 
