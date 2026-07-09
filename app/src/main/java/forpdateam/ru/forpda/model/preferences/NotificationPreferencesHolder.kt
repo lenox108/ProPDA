@@ -25,6 +25,23 @@ class NotificationPreferencesHolder(
 
     fun mutedTopicsFlow(): Flow<Set<Int>> = dataStore.mutedTopicsFlow()
 
+    fun hatEnabledFlow(): Flow<Boolean> = dataStore.hatEnabledFlow()
+
+    // --- Слежение за новыми версиями (apk в шапке) ---
+    fun getHatEnabled(): Boolean = dataStore.getHatEnabledSync()
+
+    fun getHatWatchTopics(): Set<Int> = dataStore.getHatWatchTopicsSync()
+
+    fun isHatWatched(topicId: Int): Boolean = dataStore.isHatWatchedSync(topicId)
+
+    fun toggleHatWatch(topicId: Int): Boolean = dataStore.toggleHatWatchSync(topicId)
+
+    fun getHatApkSnapshot(topicId: Int): Set<String> = dataStore.getHatApkSnapshotSync(topicId)
+
+    fun hasHatApkSnapshot(topicId: Int): Boolean = dataStore.hasHatApkSnapshotSync(topicId)
+
+    fun setHatApkSnapshot(topicId: Int, value: Set<String>) = dataStore.setHatApkSnapshotSync(topicId, value)
+
     // --- Bg-check / muted topics ---
     fun getBgCheckEnabled(): Boolean = dataStore.getBgCheckEnabledSync()
 

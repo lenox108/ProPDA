@@ -185,6 +185,9 @@ class FavoritesFragment : RecyclerFragment() {
             addItem(getString(R.string.fav_select)) { _, data ->
                 enterSelectionMode(data)
             }
+            addItem(getString(R.string.fav_watch_versions)) { _, data ->
+                presenter.toggleHatWatch(data)
+            }
         }
 
 
@@ -418,6 +421,9 @@ class FavoritesFragment : RecyclerFragment() {
             is FavoritesUiEvent.OnToggleHidden -> showSnackbar(
                     if (event.nowHidden) R.string.fav_hidden_snackbar else R.string.fav_unhidden_snackbar
             )
+            is FavoritesUiEvent.OnToggleHatWatch -> showSnackbar(
+                    if (event.nowWatched) R.string.fav_watch_versions_on else R.string.fav_watch_versions_off
+            )
             is FavoritesUiEvent.ShowLoadError -> showLoadError(event.message)
             is FavoritesUiEvent.ShowNeedAuth -> Utils.showNeedAuthDialog(requireContext(), router)
             is FavoritesUiEvent.ScrollToTop -> {
@@ -637,6 +643,18 @@ class FavoritesFragment : RecyclerFragment() {
                                 else R.string.fav_mute_notifications
                         )
                 )
+            }
+
+            // «Следить за новыми версиями» — только для тем.
+            if (!item.isForum) {
+                changeTitle(
+                        9,
+                        getString(
+                                if (presenter.isHatWatched(item)) R.string.fav_unwatch_versions
+                                else R.string.fav_watch_versions
+                        )
+                )
+                allow(9)
             }
 
             show(requireContext(), this@FavoritesFragment, item)

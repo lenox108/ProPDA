@@ -106,6 +106,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var readBoundaryStore: forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
 
+    @Inject
+    lateinit var notificationPreferencesHolder: forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
+
     // topicPreferencesHolder is provided by the TabFragment supertype.
 
     private val mapper = NativePostMapper()
@@ -1084,6 +1087,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             })
             add("Перейти на страницу" to { showPagePicker() })
             add("Открыть форум темы" to { if (pageForumId > 0) navigationUseCase.openForum(pageForumId) })
+            // «Следить за новыми версиями» — пуш, когда в шапку добавят новый apk.
+            if (pageTopicId > 0) {
+                val watched = notificationPreferencesHolder.isHatWatched(pageTopicId)
+                val label = if (watched) "Не следить за новыми версиями" else "Следить за новыми версиями"
+                add(label to {
+                    val nowWatched = notificationPreferencesHolder.toggleHatWatch(pageTopicId)
+                    Toast.makeText(
+                            ctx,
+                            if (nowWatched) getString(forpdateam.ru.forpda.R.string.fav_watch_versions_on)
+                            else getString(forpdateam.ru.forpda.R.string.fav_watch_versions_off),
+                            Toast.LENGTH_SHORT
+                    ).show()
+                })
+            }
             add("Открыть в браузере" to {
                 runCatching {
                     startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,

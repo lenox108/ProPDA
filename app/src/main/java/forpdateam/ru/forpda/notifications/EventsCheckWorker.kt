@@ -46,7 +46,8 @@ class EventsCheckWorker @AssistedInject constructor(
         @Assisted params: WorkerParameters,
         private val eventsApi: NotificationEventsApi,
         private val prefs: NotificationPreferencesHolder,
-        private val eventsRepository: EventsRepository
+        private val eventsRepository: EventsRepository,
+        private val hatWatcher: forpdateam.ru.forpda.notifications.hatwatch.HatVersionWatcher
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -72,8 +73,25 @@ class EventsCheckWorker @AssistedInject constructor(
                 .onFailure { Timber.e(it, "EventsCheckWorker QMS failed") }
         runCatching { checkSource(NotificationEvent.Source.THEME) }
                 .onFailure { Timber.e(it, "EventsCheckWorker THEME failed") }
+        runCatching { checkHatVersions() }
+                .onFailure { Timber.e(it, "EventsCheckWorker HAT failed") }
 
         Result.success()
+    }
+
+    /**
+     * Обход watch-list «Следить за новыми версиями»: для каждой темы детектор грузит шапку и
+     * пушит, если появился новый apk. В фоне это единственный источник сигнала о новой версии
+     * (инспектор избранного смену шапки не сообщает).
+     */
+    private fun checkHatVersions() {
+        if (!prefs.getHatEnabled()) return
+        val topics = prefs.getHatWatchTopics()
+        if (topics.isEmpty()) return
+        for (topicId in topics) {
+            runCatching { hatWatcher.check(topicId) }
+                    .onFailure { Timber.e(it, "EventsCheckWorker hat check $topicId failed") }
+        }
     }
 
     private fun checkSource(source: NotificationEvent.Source) {

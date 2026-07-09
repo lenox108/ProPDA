@@ -41,7 +41,8 @@ class EventsRepository(
         private val authHolder: AuthHolder,
         private val countersHolder: CountersHolder,
         private val notificationPreferencesHolder: NotificationPreferencesHolder,
-        private val mentionsRepository: MentionsRepository
+        private val mentionsRepository: MentionsRepository,
+        private val hatVersionWatcher: forpdateam.ru.forpda.notifications.hatwatch.HatVersionWatcher
 ) {
     companion object {
         private const val NOTIFICATIONS_LOG_TAG = "Notifications"
@@ -128,7 +129,12 @@ class EventsRepository(
             if (BuildConfig.DEBUG) Timber.d("WSContr onMessage ${webSocketController.getCurrentId()}, ${webSocketController.isConnected()}, hasPayload=${!text.isNullOrEmpty()}")
             try {
                 eventsApi.parseWebSocketEvent(text.orEmpty())?.also {
-                    if (it.type != NotificationEvent.Type.HAT_EDITED) {
+                    if (it.type == NotificationEvent.Type.HAT_EDITED) {
+                        // Сервер сообщил, что в теме тронули шапку. Точечно пере-сканируем именно её
+                        // на предмет нового apk (фича «Следить за новыми версиями»). Раньше это
+                        // событие молча выбрасывалось.
+                        onHatEditedEvent(it)
+                    } else {
                         handleWebSocketEvent(it)
                     }
                 }
@@ -604,6 +610,23 @@ class EventsRepository(
                         true
                 ))
             }
+        }
+    }
+
+    /**
+     * Realtime-событие «в теме изменена шапка». Если пользователь следит за версиями этой темы —
+     * запускаем детектор нового apk в фоне (сеть — на ioDispatcher).
+     */
+    private fun onHatEditedEvent(event: NotificationEvent) {
+        if (!event.fromTheme()) return
+        val topicId = event.sourceId
+        if (topicId <= 0) return
+        if (!notificationPreferencesHolder.getMainEnabled()) return
+        if (!notificationPreferencesHolder.getHatEnabled()) return
+        if (!notificationPreferencesHolder.isHatWatched(topicId)) return
+        repoScope.launch(ioDispatcher) {
+            runCatching { hatVersionWatcher.check(topicId) }
+                    .onFailure { Timber.e(it, "HAT_EDITED hat check failed for topic $topicId") }
         }
     }
 
