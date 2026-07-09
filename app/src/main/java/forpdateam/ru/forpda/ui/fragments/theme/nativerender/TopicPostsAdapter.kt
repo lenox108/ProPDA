@@ -373,15 +373,31 @@ class TopicPostsAdapter(
             }
         }
 
-        // Post card fill = colorSurfaceContainerHigh (one step above the page's ...Lowest), NOT plain
-        // ...Container. In dark themes ...Lowest/...Low/...Container all collapse to near-black (static
-        // dark maps all three to #121212; the dynamic «Системный стиль» packs tones 4/10/12 — all
-        // near-black), so a card on ...Container reads AMOLED-black, indistinguishable from the page
-        // (user report «блоки постов прям чёрные, а должны быть серые»). ...High is the first tone that
-        // lifts to a real grey (static dark #242424), giving cards a visible surface on every palette.
-        // Nested blocks (quote/spoiler/code) ride one further step up on ...Highest to stay separated.
-        private fun cardBaseColor(): Int = com.google.android.material.color.MaterialColors.getColor(
-                itemView, com.google.android.material.R.attr.colorSurfaceContainerHigh)
+        // Post card fill adapts to whether the palette is LIGHT or DARK, because the app's surface
+        // ramps run in OPPOSITE directions and no single M3 role is right for both:
+        //  • Dark / AMOLED: ...Lowest/...Low/...Container all collapse to near-black (static dark maps
+        //    them to #121212; the dynamic «Системный стиль» packs tones 4/10/12 — all near-black), so a
+        //    card on ...Container reads AMOLED-black, melting into the page (user report «блоки постов
+        //    прям чёрные»). ...ContainerHigh is the first tone that lifts to a real grey (static #242424,
+        //    dynamic tone 17), so dark cards use it. colorSurface can't be used here — under the dynamic
+        //    dark scheme it is tone 6, i.e. near-black again.
+        //  • Light / cream (System light, Sepia, Nord, Gruvbox, …): the ramp is INVERTED — colorSurface
+        //    (card_background) is the LIGHTEST/near-white tone and ...ContainerHigh (background_for_cards)
+        //    is a DARKER inset grey. Using ...High there made cards look muddy-grey (user report «слишком
+        //    серые»), so light cards use colorSurface for a clean white/cream surface above the light-grey
+        //    page.
+        // Branch on the page background's luminance so it's correct for every static palette AND the
+        // dynamic wallpaper scheme. Nested blocks (quote/spoiler/code) sit on ...Highest, which reads as a
+        // lighter grey over a dark card and a subtle darker inset over a light card — separated either way.
+        private fun cardBaseColor(): Int {
+            val pageBg = com.google.android.material.color.MaterialColors.getColor(
+                    itemView, com.google.android.material.R.attr.colorSurfaceContainerLowest)
+            val role = if (androidx.core.graphics.ColorUtils.calculateLuminance(pageBg) >= 0.5)
+                com.google.android.material.R.attr.colorSurface
+            else
+                com.google.android.material.R.attr.colorSurfaceContainerHigh
+            return com.google.android.material.color.MaterialColors.getColor(itemView, role)
+        }
 
         /**
          * Resting hairline border for the post card. Elevation shadows are invisible on dark/AMOLED
@@ -1215,7 +1231,7 @@ class TopicPostsAdapter(
         private fun neutralizeLowContrastColors(text: CharSequence): CharSequence {
             if (text !is Spanned) return text
             if (text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).isEmpty()) return text
-            val surface = itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+            val surface = cardBaseColor()
             val bg = android.graphics.Color.rgb(
                     android.graphics.Color.red(surface),
                     android.graphics.Color.green(surface),
@@ -1269,7 +1285,7 @@ class TopicPostsAdapter(
         private fun contrastSafeLinkColor(): Int {
             val ctx = itemView.context
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-            val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+            val surface = cardBaseColor()
             val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
             val surfaceIsDark = androidx.core.graphics.ColorUtils.calculateLuminance(surface) < 0.5
             val target = if (surfaceIsDark) DARK_SURFACE_LINK_CONTRAST else LOW_CONTRAST_THRESHOLD
