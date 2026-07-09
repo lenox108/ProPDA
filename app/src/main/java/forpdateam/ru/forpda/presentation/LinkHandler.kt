@@ -313,6 +313,20 @@ class LinkHandler(
     }
 
     private fun handlePages(uri: Uri, router: TabRouter?, args: Map<String, String>): Boolean {
+        // Профильные сайт-счётчики ведут на /pages/posts/<uid>/ и /pages/comments/<uid>/. Раньше они не
+        // распознавались → externalIntent → браузер. Теперь открываем нативным списком.
+        if (uri.pathSegments.size >= 2) {
+            val section = uri.pathSegments[1].lowercase(Locale.ROOT)
+            if (section == "posts" || section == "comments") {
+                navigateTo(Screen.SiteUserContent().apply {
+                    url = uri.toString()
+                    kind = if (section == "comments") Screen.SiteUserContent.Kind.COMMENTS
+                           else Screen.SiteUserContent.Kind.POSTS
+                    screenTitleText = args[Screen.ARG_TITLE]
+                }, router, args)
+                return true
+            }
+        }
         if (uri.pathSegments.size > 1 && uri.pathSegments[1].equals("go", ignoreCase = true)) {
             uri.getQueryParameter("u")?.let {
                 try {

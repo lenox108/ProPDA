@@ -3098,11 +3098,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // него (свежий ответ сразу за границей, ничего не пропущено) — резюмить на границу не нужно,
         // иначе первый непрочитанный (последний пост) обрезался бы снизу под уже прочитанным.
         val firstUnseenId = page.posts.filter { it.id > boundaryId }.minByOrNull { it.id }?.id
-        val resumeIdDiag = forpdateam.ru.forpda.presentation.theme.TopicReadBoundaryPolicy.resumeAnchorPostId(
-                boundaryPostId = boundaryId, serverAnchorPostId = serverAnchorId,
-                lastLoadedPostId = lastLoadedId, firstUnseenPostId = firstUnseenId)
-        android.util.Log.i("FPDA_READ_BOUNDARY", "DECIDE topic=${page.id} boundary=$boundaryId serverAnchor=$serverAnchorId lastLoaded=$lastLoadedId firstUnseen=$firstUnseenId -> resume=$resumeIdDiag")
-        val resumeId = resumeIdDiag ?: return false
+        val resumeId = forpdateam.ru.forpda.presentation.theme.TopicReadBoundaryPolicy.resumeAnchorPostId(
+                boundaryPostId = boundaryId,
+                serverAnchorPostId = serverAnchorId,
+                lastLoadedPostId = lastLoadedId,
+                firstUnseenPostId = firstUnseenId,
+        ) ?: return false
         // Резюм — findpost на границу. Гасим «в конец/на верх», чтобы вложенная загрузка села на границу.
         pendingJumpToBottom = false
         pendingJumpToTop = false
