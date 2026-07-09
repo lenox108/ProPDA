@@ -119,11 +119,13 @@ class QmsRepository(
     }
 
     suspend fun handleEvent(event: TabNotification) {
+        android.util.Log.i("QMS_CNT", "handleEvent src=${event.source} type=${event.type} ws=${event.isWebSocket} sourceId=${event.event.sourceId}")
         if (!NotificationEvent.fromQms(event.source)) {
             return
         }
         val themesList = qmsCache.getAllThemes()
         val allContacts = qmsCache.getContacts()
+        android.util.Log.i("QMS_CNT", "cache dialogs=${themesList.size} contacts=${allContacts.size} contactCounts=${allContacts.map { it.id to it.count }}")
 
         var targetTheme: QmsTheme? = null
         var targetDialog: QmsThemes? = null
@@ -169,6 +171,7 @@ class QmsRepository(
         }
 
         val sumFromContacts = allContacts.sumOf { it.count }
+        android.util.Log.i("QMS_CNT", "match dialog=${targetDialog?.userId} theme=${targetTheme?.id} sumFromContacts=$sumFromContacts qmsBefore=${countersHolder.get().qms}")
         countersHolder.set(countersHolder.get().also { counters ->
             if (event.isWebSocket) {
                 if (targetDialog != null && targetTheme != null) {
@@ -183,6 +186,7 @@ class QmsRepository(
                 counters.qms = event.loadedEvents.sumOf { it.msgCount }
             }
         })
+        android.util.Log.i("QMS_CNT", "qmsAfter=${countersHolder.get().qms}")
     }
 
     /**
