@@ -185,6 +185,36 @@ class QmsRepository(
         })
     }
 
+    /**
+     * Fetching a QMS thread page marks it read ON THE SERVER, but nothing used to clear the LOCAL
+     * unread bookkeeping, so the contact chip, the bold dialog row and the bottom-menu badge kept
+     * showing phantom unread messages for a thread the user had just read (observed on device: the
+     * contacts screen said «4» while the site's own counter, parsed from the response headers, said 0).
+     * Worse, the stale [QmsTheme.countNew] is what [handleEvent] later sums into [CountersHolder], so a
+     * single WebSocket event resurrected the phantom count.
+     *
+     * Clears the unread state of one thread and recomputes the contact total and the QMS counter from it.
+     * A no-op when the thread was already read or its dialog is not in the cache.
+     */
+    suspend fun markThreadRead(userId: Int, themeId: Int) = withContext(Dispatchers.IO) {
+        val themes = runCatching { qmsCache.getThemes(userId) }.getOrNull() ?: return@withContext
+        val theme = themes.themes.firstOrNull { it.id == themeId } ?: return@withContext
+        if (theme.countNew <= 0) return@withContext
+
+        theme.countNew = 0
+        qmsCache.saveThemes(themes)
+
+        val contacts = qmsCache.getContacts()
+        contacts.firstOrNull { it.id == userId }?.let { contact ->
+            val remaining = themes.themes.sumOf { it.countNew }
+            if (contact.count != remaining) {
+                contact.count = remaining
+                qmsCache.updateContact(contact)
+            }
+        }
+        updateQmsCounterFromContacts(qmsCache.getContacts(), "markThreadRead")
+    }
+
     private suspend fun updateQmsCounterFromContacts(contacts: List<QmsContact>, source: String) {
         val count = contacts.sumOf { it.count }
         withContext(Dispatchers.Main.immediate) {
