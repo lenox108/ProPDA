@@ -7,6 +7,7 @@ import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.Utils
+import forpdateam.ru.forpda.common.letterAvatarDrawable
 import forpdateam.ru.forpda.databinding.NewsItemBinding
 import forpdateam.ru.forpda.databinding.SearchItemBinding
 import forpdateam.ru.forpda.databinding.SearchPostItemBinding
@@ -46,6 +47,23 @@ class SearchAdapter : BaseAdapter<SearchItem, BaseViewHolder<SearchItem>>() {
         val item = getItem(position)
         return if (item.imageUrl != null) NEWS_LAYOUT else TOPIC_LAYOUT
     }
+
+    // [SearchItem] instances are re-created on every search/page, and [BaseForumPost] has no `equals`, so the
+    // default reference check made DiffUtil treat every reload as a full replace (O(n·m) diff, no row reuse,
+    // no animation). Identify by the stable (topicId, id) pair — topic hits carry topicId, post/news hits carry
+    // id — so re-searching the same query or re-emitting cached results reuses rows instead of rebinding all.
+    override fun areItemsSame(oldItem: SearchItem, newItem: SearchItem): Boolean =
+            oldItem.topicId == newItem.topicId && oldItem.id == newItem.id
+
+    override fun areContentsSame(oldItem: SearchItem, newItem: SearchItem): Boolean =
+            oldItem.title == newItem.title &&
+                    oldItem.desc == newItem.desc &&
+                    oldItem.body == newItem.body &&
+                    oldItem.nick == newItem.nick &&
+                    oldItem.date == newItem.date &&
+                    oldItem.avatar == newItem.avatar &&
+                    oldItem.imageUrl == newItem.imageUrl &&
+                    oldItem.isOnline == newItem.isOnline
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BaseViewHolder<SearchItem> {
         return when (viewType) {
@@ -179,7 +197,14 @@ class SearchAdapter : BaseAdapter<SearchItem, BaseViewHolder<SearchItem>>() {
             binding.searchPostNick.text = item.nick
             binding.searchPostDate.text =
                 Utils.formatForumDisplayDateTime(item.date, "search.post").orEmpty().ifEmpty { item.date.orEmpty() }
-            ForPdaCoil.loadInto(binding.searchPostAvatar, item.avatar)
+            // loadAvatar (not loadInto) so a recycled post card never flashes the PREVIOUS author's face:
+            // it resets to a letter fallback synchronously and cancels any in-flight load before enqueuing
+            // (parity with the topic adapter — see [[native-avatar-recycling-wrong-face]]).
+            ForPdaCoil.loadAvatar(
+                binding.searchPostAvatar,
+                item.avatar,
+                letterAvatarDrawable(binding.searchPostAvatar.context, item.nick)
+            )
             bodyRenderer?.renderInto(binding.searchPostBody, item.body)
                 ?: run { binding.searchPostBody.removeAllViews() }
         }

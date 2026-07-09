@@ -342,36 +342,9 @@ class TopicPostsAdapter(
             avatar.setOnClickListener { if (item.userId > 0) actionListener.onAvatarClick(item) }
         }
 
-        /** Colored circle + first letter of the nick — WebView-style fallback avatar. */
-        private fun letterAvatar(ctx: android.content.Context, nick: String?): android.graphics.drawable.Drawable {
-            val letter = nick?.trim()?.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "?"
-            val palette = intArrayOf(
-                    0xFF5C6BC0.toInt(), 0xFF26A69A.toInt(), 0xFFEF5350.toInt(), 0xFF66BB6A.toInt(),
-                    0xFFAB47BC.toInt(), 0xFFFFA726.toInt(), 0xFF42A5F5.toInt(), 0xFF8D6E63.toInt())
-            val bg = palette[((nick?.hashCode() ?: 0) and 0x7FFFFFFF) % palette.size]
-            return object : android.graphics.drawable.Drawable() {
-                private val bgPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-                        .apply { color = bg }
-                private val textPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                    color = android.graphics.Color.WHITE
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    typeface = android.graphics.Typeface.DEFAULT_BOLD
-                }
-                override fun draw(canvas: android.graphics.Canvas) {
-                    val b = bounds
-                    val cx = b.exactCenterX(); val cy = b.exactCenterY()
-                    val r = minOf(b.width(), b.height()) / 2f
-                    canvas.drawCircle(cx, cy, r, bgPaint)
-                    textPaint.textSize = r
-                    val fm = textPaint.fontMetrics
-                    canvas.drawText(letter, cx, cy - (fm.ascent + fm.descent) / 2f, textPaint)
-                }
-                override fun setAlpha(alpha: Int) {}
-                override fun setColorFilter(cf: android.graphics.ColorFilter?) {}
-                @Deprecated("deprecated in Drawable")
-                override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
-            }
-        }
+        /** Colored circle + first letter of the nick — WebView-style fallback avatar (shared helper). */
+        private fun letterAvatar(ctx: android.content.Context, nick: String?): android.graphics.drawable.Drawable =
+                forpdateam.ru.forpda.common.letterAvatarDrawable(ctx, nick)
 
         private fun cardBaseColor(): Int = com.google.android.material.color.MaterialColors.getColor(
                 itemView, com.google.android.material.R.attr.colorSurfaceContainer)

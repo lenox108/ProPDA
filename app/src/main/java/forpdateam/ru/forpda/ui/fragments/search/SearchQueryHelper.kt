@@ -71,16 +71,8 @@ class SearchQueryHelper(
      */
     fun setupSearchView(searchView: SearchView, searchManager: SearchManager, componentName: android.content.ComponentName?) {
         searchView.setSearchableInfo(searchManager.getSearchableInfo(componentName))
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String): Boolean {
-                // Callback handled by caller
-                return false
-            }
-
-            override fun onQueryTextChange(newText: String): Boolean {
-                return false
-            }
-        })
+        // NB: the real OnQueryTextListener is installed by SearchFragment right after this call (it needs the
+        // nick field + presenter), so no placeholder listener here — it would only be overwritten.
         searchView.queryHint = context.getString(R.string.search_keywords)
         searchView.maxWidth = Int.MAX_VALUE
         searchView.applyToolbarSearchPlateChrome()

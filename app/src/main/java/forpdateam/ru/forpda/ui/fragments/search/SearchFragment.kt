@@ -65,7 +65,6 @@ import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
 import forpdateam.ru.forpda.model.repository.note.NotesRepository
 import forpdateam.ru.forpda.common.ClipboardHelper
-import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.ISystemLinkHandler
 import forpdateam.ru.forpda.presentation.TabRouter
@@ -90,7 +89,6 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
     @Inject lateinit var systemLinkHandler: ISystemLinkHandler
     @Inject lateinit var notesRepository: NotesRepository
     @Inject lateinit var clipboardHelper: ClipboardHelper
-    @Inject lateinit var avatarRepository: AvatarRepository
 
 
     private var _searchBinding: FragmentSearchBinding? = null
@@ -289,7 +287,10 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
         toolbarSearchView?.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String): Boolean {
                 presenter.search(query, nickField.text.toString())
-                return false
+                // Consume (true): we've handled the search ourselves. Returning false let the framework ALSO
+                // dispatch ACTION_SEARCH to the searchable-activity (setSearchableInfo is set) — a redundant
+                // second search / focus churn.
+                return true
             }
 
             override fun onQueryTextChange(newText: String): Boolean {
@@ -384,6 +385,15 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
     override fun onResumeOrShow() {
         super.onResumeOrShow()
         searchItem?.expandActionView()
+        // onPauseOrHide() сворачивает action-view (collapseActionView очищает текст SearchView), поэтому при
+        // возврате на экран поиска (жест «назад» из открытого результата) поле показывало только плейсхолдер
+        // «Keywords», хотя результаты в списке правильные. Возвращаем набранный запрос из ViewModel. post{}
+        // — т.к. expandActionView() внутри вызывает onActionViewExpanded → setQuery("") уже после нашего
+        // вызова; false — не сабмитим повторно, список результатов не трогаем.
+        val query = presenter.currentQuery()
+        if (query.isNotEmpty()) {
+            searchView?.post { searchView?.setQuery(query, false) }
+        }
     }
 
     override fun onPauseOrHide() {
@@ -458,8 +468,10 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
     fun showData(searchResult: SearchResult) {
         contentController.hideContent(ContentController.TAG_ERROR)
         setRefreshing(false)
-        recyclerView.scrollToPosition(0)
-        hideKeyboard()
+        // NB: no scroll-to-top / hideKeyboard here. showData is driven by the [currentData] StateFlow, which
+        // REPLAYS on every view re-create (e.g. returning to the results via Back) — resetting the scroll
+        // there threw the user back to the top of the list. Those side effects moved to the one-shot ShowData
+        // event (fired only for a genuinely new search / page), see [handleUiEvent].
         if (BuildConfig.DEBUG) {
             Timber.d("SEARCH SIZE %d", searchResult.items.size)
         }
@@ -482,11 +494,6 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
                 && searchResult.settings?.resourceType == SearchSettings.RESOURCE_FORUM.first
         val modeChanged = adapter.postMode != newPostMode
         adapter.postMode = newPostMode
-        if (refreshLayout.childCount <= 1) {
-            fab.visibility = View.GONE
-            refreshLayout.addView(recyclerView)
-            Timber.d("add recyclerview")
-        }
         adapter.addAll(searchResult.items, true)
         if (modeChanged) adapter.notifyDataSetChanged()
 
@@ -494,21 +501,6 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
         clearToolbarPaginationSubtitle()
     }
 
-
-    //Поле mTarget это вьюха, от которой зависит обработка движений
-    private fun fixTargetView() {
-        try {
-            val field = refreshLayout.javaClass.getDeclaredField("mTarget")
-            field.isAccessible = true
-            field.set(refreshLayout, null)
-            field.isAccessible = false
-        } catch (e: NoSuchFieldException) {
-            Timber.e(e, "SwipeRefreshLayout reflection error")
-        } catch (e: IllegalAccessException) {
-            Timber.e(e, "SwipeRefreshLayout reflection error")
-        }
-
-    }
 
     override fun onDestroyView() {
         super.onDestroyView()
@@ -611,7 +603,12 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.UpdateScrollButtonState -> updateScrollButtonState(event.enabled)
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.FillSettingsData -> fillSettingsData(event.settings, event.fields)
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.OnStartSearch -> onStartSearch(event.settings)
-            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowData -> showData(event.data)
+            // One-shot (SharedFlow, not replayed): a genuinely new search / page landed → jump to the top and
+            // drop the keyboard. Rendering itself is handled by the [currentData] collector (see observeViewModel).
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowData -> {
+                recyclerView.scrollToPosition(0)
+                hideKeyboard()
+            }
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowLoadError -> showLoadError(event.message)
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowInitialState -> showInitialState()
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SetNewsMode -> setNewsMode()
@@ -625,8 +622,7 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.LastPage -> lastPage()
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SelectPage -> selectPage()
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowNoteCreate -> showNoteCreate(event.title, event.url)
-            // WebView-driven события (аватар/шрифт/меню поста/голосование и т.п.) больше не эмитятся —
-            // поиск рендерится нативно, действия над результатом не поддерживаются (тап → открыть пост).
+            // Defensive fallback for any event without a UI action (поиск рендерится нативно, тап → открыть пост).
             else -> Unit
         }
     }

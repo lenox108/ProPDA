@@ -1,9 +1,7 @@
 package forpdateam.ru.forpda.presentation.search
 
-import android.content.Context
 import forpdateam.ru.forpda.presentation.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 import forpdateam.ru.forpda.BuildConfig
@@ -16,13 +14,8 @@ import forpdateam.ru.forpda.entity.remote.search.SearchResult
 import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
-import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
-import forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder
-import forpdateam.ru.forpda.model.repository.reputation.ReputationRepository
-import forpdateam.ru.forpda.model.repository.posteditor.PostEditorRepository
 import forpdateam.ru.forpda.model.repository.search.SearchRepository
-import forpdateam.ru.forpda.model.repository.theme.ThemeRepository
 import forpdateam.ru.forpda.presentation.theme.TopicOpenContext
 import forpdateam.ru.forpda.presentation.theme.TopicOpenTargetResolver
 import forpdateam.ru.forpda.presentation.theme.TopicUserOpenAction
@@ -38,18 +31,15 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-        @ApplicationContext private val context: Context,
         private val searchRepository: SearchRepository,
-        private val editPostRepository: PostEditorRepository,
         private val favoritesRepository: FavoritesRepository,
-        private val themeRepository: ThemeRepository,
-        private val reputationRepository: ReputationRepository,
-        private val topicPreferencesHolder: TopicPreferencesHolder,
-        private val mainPreferencesHolder: MainPreferencesHolder,
         private val otherPreferencesHolder: OtherPreferencesHolder,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
@@ -68,6 +58,9 @@ class SearchViewModel @Inject constructor(
 
     private var subscriptionsStarted = false
     private val expandedPostIds = mutableSetOf<Int>()
+
+    /** In-flight search request. Cancelled before each new one so only the latest result can win. */
+    private var searchJob: Job? = null
 
     companion object {
         const val FIELD_RESOURCE = "resource"
@@ -95,6 +88,10 @@ class SearchViewModel @Inject constructor(
     fun emitFillSettings() {
         _uiEvents.tryEmit(SearchUiEvent.FillSettingsData(settings, fields))
     }
+
+    /** Текущий поисковый запрос — чтобы вернуть его в поле SearchView после сворачивания action-view
+     *  при уходе с экрана (иначе поле показывает только плейсхолдер, а результаты остаются валидными). */
+    fun currentQuery(): String = settings.query
 
     fun initSearchSettings(url: String?, forumTitle: String? = null) {
         if (!url.isNullOrEmpty()) {
@@ -125,11 +122,15 @@ class SearchViewModel @Inject constructor(
     }
 
     fun refreshData() {
+        // Cancel any in-flight request first: rapid submit / pagination / pull-to-refresh could otherwise
+        // interleave, and a slower EARLIER response would overwrite _currentData AFTER a newer one (stale
+        // results shown). Latest-wins.
+        searchJob?.cancel()
         if (settings.query.isEmpty() && settings.nick.isNullOrEmpty() && settings.userId <= 0) {
-            scope.launch { _uiEvents.emit(SearchUiEvent.ShowInitialState) }
+            searchJob = scope.launch { _uiEvents.emit(SearchUiEvent.ShowInitialState) }
             return
         }
-        scope.launch {
+        searchJob = scope.launch {
             _refreshing.value = true
             _uiEvents.emit(SearchUiEvent.OnStartSearch(settings))
             try {
@@ -137,12 +138,16 @@ class SearchViewModel @Inject constructor(
                 expandedPostIds.retainAll(result.items.mapTo(mutableSetOf()) { it.id })
                 _currentData.value = result
                 _uiEvents.emit(SearchUiEvent.ShowData(result))
+            } catch (e: CancellationException) {
+                throw e // superseded by a newer search — let cancellation propagate, don't touch the spinner
             } catch (e: Exception) {
                 var message: String? = null
                 errorHandler.handle(e) { _, handledMessage -> message = handledMessage }
                 _uiEvents.emit(SearchUiEvent.ShowLoadError(message))
             } finally {
-                _refreshing.value = false
+                // Only the still-active (winning) job clears the spinner; a cancelled one leaves it to the
+                // new job that just set it true, avoiding a true→false→(true) flicker race.
+                if (isActive) _refreshing.value = false
             }
         }
     }
@@ -323,12 +328,10 @@ class SearchViewModel @Inject constructor(
 }
 
 sealed class SearchUiEvent {
-    data class UpdateShowAvatarState(val show: Boolean) : SearchUiEvent()
-    data class UpdateTypeAvatarState(val circle: Boolean) : SearchUiEvent()
+    // Native search (Фаза 7: WebView-движок удалён) эмитит только эти события — результаты, пагинация,
+    // настройки и контекстные действия над темой/пользователем. Прежние WebView-driven события поста
+    // (голосование/репутация/правка/удаление/меню поста и т.п.) удалены как мёртвые.
     data class UpdateScrollButtonState(val enabled: Boolean) : SearchUiEvent()
-    data class SetFontSize(val size: Int) : SearchUiEvent()
-    data class SetAppFontMode(val mode: forpdateam.ru.forpda.ui.AppFontMode) : SearchUiEvent()
-    data class SetStyleType(val styleType: String) : SearchUiEvent()
     data class FillSettingsData(val settings: SearchSettings, val fields: Map<String, List<String>>) : SearchUiEvent()
     data class OnStartSearch(val settings: SearchSettings) : SearchUiEvent()
     data class ShowData(val data: SearchResult) : SearchUiEvent()
@@ -344,17 +347,5 @@ sealed class SearchUiEvent {
     object NextPage : SearchUiEvent()
     object LastPage : SearchUiEvent()
     object SelectPage : SearchUiEvent()
-    data class ShowUserMenu(val post: IBaseForumPost) : SearchUiEvent()
-    data class ShowReputationMenu(val post: IBaseForumPost) : SearchUiEvent()
-    data class ShowPostMenu(val post: IBaseForumPost) : SearchUiEvent()
-    data class ReportPost(val post: IBaseForumPost) : SearchUiEvent()
-    data class DeletePost(val post: IBaseForumPost) : SearchUiEvent()
-    data class EditPost(val post: IBaseForumPost) : SearchUiEvent()
-    data class VotePost(val post: IBaseForumPost, val type: Boolean) : SearchUiEvent()
-    data class OpenSpoilerLinkDialog(val post: IBaseForumPost, val spoilNumber: String) : SearchUiEvent()
-    data class OpenAnchorDialog(val post: IBaseForumPost, val name: String) : SearchUiEvent()
-    data class Log(val text: String) : SearchUiEvent()
-    data class ShowChangeReputation(val post: IBaseForumPost, val type: Boolean) : SearchUiEvent()
-    data class DeletePostUi(val post: IBaseForumPost) : SearchUiEvent()
     data class ShowNoteCreate(val title: String, val url: String) : SearchUiEvent()
 }

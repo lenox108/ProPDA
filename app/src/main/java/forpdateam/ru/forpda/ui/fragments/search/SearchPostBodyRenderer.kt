@@ -42,12 +42,19 @@ class SearchPostBodyRenderer(
 ) {
     private val bodyParser = PostBodyRenderer()
 
+    // HTML → [BodyBlock] parsing is the heavy part of a bind and [renderInto] runs on the main thread for
+    // EVERY (re)bind while flinging the «поиск по сообщениям» list. RecyclerView rebinds the same item many
+    // times during a scroll, so cache the parsed block tree by body HTML — the per-bind cost then drops to
+    // just building views. Small LRU (bodies are large): enough to cover a viewport's worth of cards.
+    private val blockCache = android.util.LruCache<String, List<BodyBlock>>(BLOCK_CACHE_SIZE)
+
     fun renderInto(container: LinearLayout, bodyHtml: String?) {
         container.removeAllViews()
-        val blocks = try {
-            bodyParser.render(bodyHtml)
+        val key = bodyHtml.orEmpty()
+        val blocks = blockCache.get(key) ?: try {
+            bodyParser.render(bodyHtml).also { blockCache.put(key, it) }
         } catch (t: Throwable) {
-            listOf(BodyBlock.Text(bodyHtml.orEmpty()))
+            listOf(BodyBlock.Text(key))
         }
         val gallery = ArrayList<String>()
         renderBlocks(container, blocks, gallery, depth = 0)
@@ -301,5 +308,8 @@ class SearchPostBodyRenderer(
 
         /** Max height of a preview image in a search-result card (compact thumbnail; downscale, never upscale). */
         const val THUMB_MAX_HEIGHT_DP = 200f
+
+        /** Parsed-body LRU capacity: covers a viewport of post cards so a fling never re-parses HTML. */
+        const val BLOCK_CACHE_SIZE = 48
     }
 }
