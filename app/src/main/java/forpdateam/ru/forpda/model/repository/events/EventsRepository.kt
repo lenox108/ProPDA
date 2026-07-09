@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.model.repository.events
 
 import android.app.Application
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import timber.log.Timber
 import forpdateam.ru.forpda.BuildConfig
@@ -56,6 +57,23 @@ class EventsRepository(
          * Значение 4 подобрано эмпирически для оптимального UX на мобильных устройствах.
          */
         private const val STACKED_MAX = 4
+
+        /**
+         * Idle-таймаут foreground-WebSocket: если приложение открыто, но пользователь не
+         * взаимодействует дольше этого срока, WS отключается (пинги каждые 60с зря будят
+         * радио). Реконнект — по первому касанию ([notifyUserActive]). Экраны, которым
+         * нужен живой WS (открытый QMS-чат), удерживают его через refcount
+         * ([requestRealtimeForScreen]/[isRealtimeScreenActive]) и idle-паузу не получают.
+         */
+        private const val FOREGROUND_IDLE_TIMEOUT_MS = 5 * 60_000L
+
+        /**
+         * Минимальный интервал между «тяжёлыми» HTTP-опросами событий (getQmsEvents +
+         * getFavoritesEvents) на пути lifecycle/сеть/авторизация. Гасит двойной сетевой
+         * опрос при быстрых циклах foreground↔background (шторка/переключение приложений).
+         * WS-реконнект при этом не блокируется — троттлится только сетевой опрос.
+         */
+        private const val CHECK_EVENTS_THROTTLE_MS = 60_000L
     }
 
     private val timerPeriod = NOTIFICATION_AGGREGATION_PERIOD_MS
@@ -69,6 +87,17 @@ class EventsRepository(
     @Volatile
     private var realtimeScreenRefCount = 0
     private var reconnectAttempts = 0
+
+    // Idle-disconnect state (foreground WS). idleDisconnected=true означает, что WS сознательно
+    // закрыт из-за бездействия, хотя foregroundRealtimeEnabled ещё true — реконнект делает только
+    // notifyUserActive(). lastInteractionAt — монотонная метка последнего касания.
+    @Volatile
+    private var idleDisconnected = false
+    @Volatile
+    private var lastInteractionAt = SystemClock.elapsedRealtime()
+    private var idleJob: Job? = null
+    // Монотонная метка последнего «тяжёлого» опроса событий (см. CHECK_EVENTS_THROTTLE_MS).
+    private var lastCheckEventsAt = 0L
 
     private val pendingEvents = mapOf<NotificationEvent.Source, MutableMap<Int, NotificationEvent>>(
             NotificationEvent.Source.QMS to mutableMapOf(),
@@ -123,6 +152,9 @@ class EventsRepository(
             if (BuildConfig.DEBUG) Timber.d("WSContr onConnected ${webSocketController.getCurrentId()},  ${webSocketController.isConnected()}")
             webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
             webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
+            // Соединение живо — запускаем/перезапускаем idle-таймер относительно него.
+            // onConnected приходит с потока OkHttp; работу с idleJob сериализуем на repoScope (Main).
+            repoScope.launch { armIdleTimer() }
         }
 
         override fun onMessage(text: String?) {
@@ -231,6 +263,7 @@ class EventsRepository(
         if (enabled && !notificationPreferencesHolder.wantsPushNotifications()) {
             foregroundRealtimeEnabled = false
             BatteryDebugLogger.logState("EventsRepository", "skipForeground", "notifications disabled reason=$reason")
+            cancelIdle()
             stop("notifications_disabled")
             return
         }
@@ -238,19 +271,84 @@ class EventsRepository(
         BatteryDebugLogger.logState("EventsRepository", if (enabled) "foreground" else "background", "reason=$reason")
         foregroundRealtimeFlow.tryEmit(ForegroundRealtimeChange(enabled, reason))
         if (enabled) {
+            // Свежий foreground-сеанс: снимаем idle-паузу и стартуем полный отсчёт бездействия.
+            idleDisconnected = false
+            lastInteractionAt = SystemClock.elapsedRealtime()
             start(checkEvents = true, force = true)
+            armIdleTimer()
         } else {
+            cancelIdle()
             stop("background:$reason")
         }
     }
 
     /**
+     * Сигнал о пользовательском взаимодействии (касание/скролл). Вызывается из
+     * [forpdateam.ru.forpda.ui.activities.MainActivity.onUserInteraction]. Дёшево: обычно лишь
+     * обновляет метку времени. Если WS был закрыт по idle — мгновенно переподнимает его и
+     * досинхронизирует пропущенные события.
+     */
+    fun notifyUserActive() {
+        lastInteractionAt = SystemClock.elapsedRealtime()
+        if (!foregroundRealtimeEnabled) return
+        if (!idleDisconnected) return
+        idleDisconnected = false
+        BatteryDebugLogger.logState("EventsRepository", "idleReconnect", "user_active")
+        start(checkEvents = true, force = true)
+        armIdleTimer()
+    }
+
+    /**
+     * Запускает (перезапускает) сторож бездействия. По достижении [FOREGROUND_IDLE_TIMEOUT_MS]
+     * без взаимодействия закрывает WS, ЕСЛИ ни один экран не удерживает realtime
+     * ([isRealtimeScreenActive]); иначе откладывает паузу.
+     */
+    private fun armIdleTimer() {
+        idleJob?.cancel()
+        if (!foregroundRealtimeEnabled) return
+        idleJob = repoScope.launch {
+            while (foregroundRealtimeEnabled && !idleDisconnected) {
+                val remaining = FOREGROUND_IDLE_TIMEOUT_MS - (SystemClock.elapsedRealtime() - lastInteractionAt)
+                if (remaining > 0) {
+                    delay(remaining)
+                    continue
+                }
+                if (!webSocketController.isConnected()) {
+                    // Активного WS нет (сеть отвалилась / идёт реконнект) — отключать нечего, и
+                    // ставить idleDisconnected нельзя, иначе заблокируем авто-реконнект при
+                    // восстановлении сети. Откладываем проверку на следующий цикл.
+                    lastInteractionAt = SystemClock.elapsedRealtime()
+                    continue
+                }
+                if (isRealtimeScreenActive()) {
+                    // Открытый QMS-чат (или иной realtime-экран) требует живого WS — откладываем паузу.
+                    lastInteractionAt = SystemClock.elapsedRealtime()
+                    continue
+                }
+                idleDisconnected = true
+                reconnectAttempts = 0
+                BatteryDebugLogger.logState("EventsRepository", "idleDisconnect", "timeoutMs=$FOREGROUND_IDLE_TIMEOUT_MS")
+                cancelTimer()
+                webSocketController.disconnectAll()
+                break
+            }
+        }
+    }
+
+    private fun cancelIdle() {
+        idleJob?.cancel()
+        idleJob = null
+        idleDisconnected = false
+    }
+
+    /**
      * Экран, которому нужен realtime-WebSocket, запрашивает разрешение через refcount.
-     * Пока хотя бы один экран держит счётчик > 0, фреймворк не отключает WS даже
-     * если приложение остаётся в foreground без активных realtime-экранов.
-     * Это позволяет экрану, который в фоне (например, QMS-чат на свёрнутой вкладке),
-     * удерживать WS открытым. Сам по себе вызов НЕ открывает WS — для открытия
-     * по-прежнему требуется foreground + network + auth.
+     * Пока хотя бы один экран держит счётчик > 0, [armIdleTimer] НЕ закрывает WS по
+     * бездействию (см. [isRealtimeScreenActive] в idle-петле) — даже если пользователь
+     * долго не касается экрана. Это нужно, например, открытому QMS-чату: при живом WS он
+     * получает сообщения мгновенно, а без него уходит в поллинг (дороже по батарее).
+     * Сам по себе вызов НЕ открывает WS — для открытия по-прежнему требуется
+     * foreground + network + auth. Парный вызов — [releaseRealtimeForScreen].
      */
     fun requestRealtimeForScreen(owner: String) {
         synchronized(realtimeScreenOwners) {
@@ -393,6 +491,13 @@ class EventsRepository(
             BatteryDebugLogger.logState("EventsRepository", "skipStart", "background check=$checkEvents")
             return
         }
+        // Пока действует idle-пауза, автоматические триггеры (сеть/авторизация/сервис) WS не
+        // поднимают — реконнект делает только пользовательское взаимодействие (notifyUserActive
+        // снимает флаг перед вызовом start()).
+        if (idleDisconnected) {
+            BatteryDebugLogger.logState("EventsRepository", "skipStart", "idle_disconnected check=$checkEvents")
+            return
+        }
         if (networkStateProvider.getState() && authHolder.get().isAuth()) {
             if (!webSocketController.isConnected()) {
                 if (!force && reconnectAttempts > 0) {
@@ -415,8 +520,14 @@ class EventsRepository(
             }
 
             if (checkEvents) {
-                hardHandleEvent(NotificationEvent.Source.THEME)
-                hardHandleEvent(NotificationEvent.Source.QMS)
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastCheckEventsAt >= CHECK_EVENTS_THROTTLE_MS) {
+                    lastCheckEventsAt = now
+                    hardHandleEvent(NotificationEvent.Source.THEME)
+                    hardHandleEvent(NotificationEvent.Source.QMS)
+                } else {
+                    BatteryDebugLogger.logState("EventsRepository", "skipCheckEvents", "throttled ageMs=${now - lastCheckEventsAt}")
+                }
             }
         } else {
             BatteryDebugLogger.logState("EventsRepository", "skipStart", "net=${networkStateProvider.getState()} auth=${authHolder.get().isAuth()}")
