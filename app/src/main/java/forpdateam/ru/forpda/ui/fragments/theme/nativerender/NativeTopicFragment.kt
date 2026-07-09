@@ -255,11 +255,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /**
      * Bottom-nav «chrome» (tab bar + system navigation) height in px, pushed in by MainActivity via
-     * [onBottomChromePaddingChanged]. Used by [listBottomChromeOverlapPx] to compute how far the list runs
-     * behind the tab bar on THIS device: some hosts inset the fragment container above the chrome (overlap
-     * 0), others draw edge-to-edge behind it (overlap ≈ this value). We never blindly add it as padding —
-     * that double-counted on inset hosts (huge gap) and 0 under-counted on edge-to-edge hosts (last post cut
-     * behind the tab bar). See [applyListBottomPadding].
+     * [onBottomChromePaddingChanged]. Feeds [listBottomChromeOverlapPx], which MEASURES how much of it the
+     * list actually runs behind on this device and reserves exactly that (+ gap) as list bottom padding so
+     * the last post clears the tab bar — see [applyListBottomPadding].
      */
     private var bottomNavChromePad = 0
 
@@ -3145,13 +3143,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private fun bottomRestGapPx(): Int = (4 * resources.displayMetrics.density).toInt()
 
+    /** Height reserved for the CLASSIC pagination bar when it is currently shown, else 0. */
+    private fun classicPaginationBarPadPx(): Int {
+        val show = pagination.isInitialised && isClassicMode() && pagination.totalPages > 1 &&
+                messagePanel?.visibility != View.VISIBLE && mainPreferencesHolder.getTopicPaginationPanelEnabled()
+        return if (show) (52 * resources.displayMetrics.density).toInt() else 0
+    }
+
     /**
-     * How many px the list's BOTTOM EDGE extends BEHIND the bottom-nav chrome (tab bar + system nav) on
-     * screen, or 0 if the host already inset the container above it. MEASURED — not assumed — so it is
-     * device-agnostic: on hosts where [MainActivity.updateDimens] insets the fragment container the list
-     * ends above the tab bar (overlap 0); on hosts that draw edge-to-edge the list runs to the screen
-     * bottom behind the tab bar (overlap ≈ chrome height). The earlier «always inset» assumption was wrong
-     * on some devices and left the last post CUT behind the tab bar (user report, Call Recorder тема).
+     * How many px the list's BOTTOM EDGE runs BEHIND the bottom-nav chrome (tab bar + system nav) ON SCREEN,
+     * or 0 if the host already inset the container above it. MEASURED (getLocationOnScreen), not assumed, so
+     * it is device-agnostic: on hosts where MainActivity insets the fragment container the list ends above
+     * the tab bar (overlap 0 → tiny gap); on edge-to-edge hosts the list runs to the screen bottom behind
+     * the tab bar (overlap ≈ chrome height → reserve it so the last post clears the tab bar). We do NOT force
+     * [shouldDrawBehindBottomNav] because that changes the reply-panel/nav layout on all devices.
      */
     private fun listBottomChromeOverlapPx(): Int {
         if (bottomNavChromePad <= 0 || recyclerView.height <= 0 || !recyclerView.isAttachedToWindow) return 0
@@ -3162,36 +3167,24 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         return (listBottomOnScreen - screenBottom + bottomNavChromePad).coerceAtLeast(0)
     }
 
-    /** Height reserved for the CLASSIC pagination bar when it is currently shown, else 0. */
-    private fun classicPaginationBarPadPx(): Int {
-        val show = pagination.isInitialised && isClassicMode() && pagination.totalPages > 1 &&
-                messagePanel?.visibility != View.VISIBLE && mainPreferencesHolder.getTopicPaginationPanelEnabled()
-        return if (show) (52 * resources.displayMetrics.density).toInt() else 0
-    }
-
     /**
-     * Set the list's bottom padding to exactly clear the bottom-nav chrome ([listBottomChromeOverlapPx]),
-     * the classic pagination bar ([classicPaginationBarPadPx]) and the inter-post breathing gap
-     * ([bottomRestGapPx]). Deferred to a laid-out pass so [getLocationOnScreen] is valid; re-pins a
-     * bottom-anchored post if the reservation changed the resting position.
+     * List bottom padding = MEASURED chrome overlap ([listBottomChromeOverlapPx]) + classic pagination bar
+     * ([classicPaginationBarPadPx]) + inter-post breathing gap ([bottomRestGapPx]). Deferred to a laid-out
+     * pass so getLocationOnScreen is valid; re-measured on every list-bounds change (see the layout-change
+     * listener) so it settles as the container inset lands. Re-pins a bottom-anchored post if it changed.
      */
     private fun applyListBottomPadding() {
         if (view == null) return
         val doApply = Runnable {
             if (view == null || !recyclerView.isAttachedToWindow) return@Runnable
-            val overlap = listBottomChromeOverlapPx()
-            val barPad = classicPaginationBarPadPx()
-            val gap = bottomRestGapPx()
-            val target = overlap + barPad + gap
-            val loc = IntArray(2); recyclerView.getLocationOnScreen(loc)
+            val target = listBottomChromeOverlapPx() + classicPaginationBarPadPx() + bottomRestGapPx()
             if (recyclerView.paddingBottom != target) {
                 recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
                         recyclerView.paddingRight, target)
                 if (anchoredBottomPostId != null) recyclerView.post { reanchorBottomAfterGrowth() }
             }
         }
-        val ready = recyclerView.height > 0 && recyclerView.isAttachedToWindow
-        if (ready) doApply.run() else recyclerView.post(doApply)
+        if (recyclerView.height > 0 && recyclerView.isAttachedToWindow) doApply.run() else recyclerView.post(doApply)
     }
 
     /**
