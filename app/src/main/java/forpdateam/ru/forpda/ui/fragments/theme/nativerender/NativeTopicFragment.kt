@@ -23,6 +23,7 @@ import androidx.core.view.ViewCompat
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.theme.ThemeToolbarTitlePolicy
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
+import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
@@ -2106,15 +2107,69 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             })
             // «Профиль автора» intentionally omitted — that action is reached by tapping the avatar
             // (onAvatarClick), so it would be a redundant row here.
-            if (item.canReport) add("Пожаловаться" to {
-                linkHandler.handle("https://4pda.to/forum/index.php?act=report&p=${item.postId}", null)
-            })
+            if (item.canReport) add("Пожаловаться" to { tryReportPost(item) })
             add("Создать заметку" to { createNoteForPost(item) })
             if (item.canEdit) add("Изменить" to { onEdit(item) })
             if (item.canDelete) add("Удалить" to { onDelete(item) })
         }
         // No title header — the user asked for action rows only (the nick added visual noise).
         showM3Menu(title = null, actions = actions)
+    }
+
+    /**
+     * «Пожаловаться» — in-app report flow (parity with the old WebView ThemeDialogsHelper.tryReportPost).
+     * Previously this navigated to `act=report` via [linkHandler], which fell through to the external
+     * browser and the site form (user report «открывается браузер вместо формы жалобы»). Show the one-time
+     * warning (gated by the report-warning preference), then the reason dialog, then POST in-app.
+     */
+    private fun tryReportPost(item: NativePostItem) {
+        if (otherPreferencesHolder.getShowReportWarningSync()) {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                    .setTitle(R.string.attention)
+                    .setMessage(R.string.report_warning)
+                    .setPositiveButton(R.string.ok) { _, _ ->
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            otherPreferencesHolder.setShowReportWarning(false)
+                        }
+                        showReportDialog(item)
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .showWithStyledButtons()
+        } else {
+            showReportDialog(item)
+        }
+    }
+
+    private fun showReportDialog(item: NativePostItem) {
+        val builder = com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+        val binding = forpdateam.ru.forpda.databinding.ReportLayoutBinding
+                .inflate(android.view.LayoutInflater.from(builder.context))
+        builder
+                .setTitle(String.format(getString(R.string.report_to_post_Nick), item.nick.orEmpty()))
+                .setView(binding.root)
+                .setPositiveButton(R.string.send) { _, _ ->
+                    performReport(item, binding.reportTextField.text?.toString().orEmpty())
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .showWithStyledButtons()
+    }
+
+    private fun performReport(item: NativePostItem, message: String) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { themeApi.reportPost(pageTopicId, item.postId, message) }
+            }
+            if (view == null) return@launch
+            result.fold(
+                    onSuccess = {
+                        Toast.makeText(requireContext(),
+                                getString(R.string.report_post_success), Toast.LENGTH_SHORT).show()
+                    },
+                    onFailure = { e ->
+                        Toast.makeText(requireContext(),
+                                e.message ?: "Не удалось отправить жалобу", Toast.LENGTH_SHORT).show()
+                    })
+        }
     }
 
     /** «Цитировать из буфера»: wrap the current clipboard text in a quote from [item] (parity with the
@@ -2211,9 +2266,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (item.userId <= 0) return
         val options = ArrayList<Pair<String, () -> Unit>>()
         if (item.canPlusRep) options.add("Увеличить" to { showReputationChangeDialog(item, increase = true) })
-        options.add("Посмотреть" to {
-            linkHandler.handle("https://4pda.to/forum/index.php?showuser=${item.userId}&tab=reputation", null)
-        })
+        // Must route to the reputation-history screen — NOT a `showuser=…&tab=reputation` URL. LinkHandler
+        // matches `showuser` first and opens the PROFILE screen (the `tab=reputation` anchor is a web-only
+        // hint it ignores), so the old URL silently landed on the profile. Use the in-app rep-history nav
+        // (same call as the avatar menu's «Репутация»).
+        options.add("Посмотреть" to { navigationUseCase.openReputationHistory(item.userId) })
         if (item.canMinusRep) options.add("Уменьшить" to { showReputationChangeDialog(item, increase = false) })
         showM3Menu("Репутация ${item.nick.orEmpty()}", options)
     }
