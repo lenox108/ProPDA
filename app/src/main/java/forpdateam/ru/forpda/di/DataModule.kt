@@ -280,8 +280,9 @@ object DataModule {
             authHolder: AuthHolder,
             countersHolder: CountersHolder,
             notifPrefs: NotificationPreferencesHolder,
-            mentionsRepository: MentionsRepository
-    ) = EventsRepository(context, application, wc, api, networkState, authHolder, countersHolder, notifPrefs, mentionsRepository)
+            mentionsRepository: MentionsRepository,
+            hatVersionWatcher: forpdateam.ru.forpda.notifications.hatwatch.HatVersionWatcher
+    ) = EventsRepository(context, application, wc, api, networkState, authHolder, countersHolder, notifPrefs, mentionsRepository, hatVersionWatcher)
 
     @Provides @Singleton
     fun provideMenuRepository(

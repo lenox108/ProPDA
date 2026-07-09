@@ -40,6 +40,11 @@ class NotificationDataStore(private val context: Context) {
         private const val KEY_BG_CHECK_INTERVAL_MIN = "notifications.bg.interval_min"
         // Список тем, для которых пользователь отключил уведомления локально.
         private const val KEY_MUTED_TOPIC_IDS = "notifications.muted_topic_ids"
+        // Слежение за новыми версиями (apk в шапке темы).
+        private const val KEY_HAT_ENABLED = "notifications.hat.enabled"
+        private const val KEY_HAT_WATCH_TOPIC_IDS = "notifications.hat_watch_topic_ids"
+        // Снимок множества attach-id apk-файлов шапки: ключ строится на лету per-topic.
+        private const val KEY_HAT_SNAPSHOT_PREFIX = "notifications.hat_snapshot_"
     }
 
     // StateFlows для реактивных обновлений (instance-level для поддержки multiple contexts)
@@ -47,6 +52,7 @@ class NotificationDataStore(private val context: Context) {
     private val favEnabledFlow = MutableStateFlow(true)
     private val qmsEnabledFlow = MutableStateFlow(true)
     private val mentionsEnabledFlow = MutableStateFlow(true)
+    private val hatEnabledFlow = MutableStateFlow(true)
     private val bgCheckEnabledFlow = MutableStateFlow(true)
     private val bgCheckIntervalMinFlow = MutableStateFlow(15L) // 15 минут по умолчанию (минимум AOSP)
     private val mutedTopicsFlow = MutableStateFlow<Set<Int>>(emptySet())
@@ -58,6 +64,7 @@ class NotificationDataStore(private val context: Context) {
             favEnabledFlow.value = it.getBoolean(KEY_FAV_ENABLED, true)
             qmsEnabledFlow.value = it.getBoolean(KEY_QMS_ENABLED, true)
             mentionsEnabledFlow.value = it.getBoolean(KEY_MENTIONS_ENABLED, true)
+            hatEnabledFlow.value = it.getBoolean(KEY_HAT_ENABLED, true)
             bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
             bgCheckIntervalMinFlow.value = (it.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L)
             mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
@@ -69,6 +76,7 @@ class NotificationDataStore(private val context: Context) {
                     KEY_FAV_ENABLED -> favEnabledFlow.value = it.getBoolean(KEY_FAV_ENABLED, true)
                     KEY_QMS_ENABLED -> qmsEnabledFlow.value = it.getBoolean(KEY_QMS_ENABLED, true)
                     KEY_MENTIONS_ENABLED -> mentionsEnabledFlow.value = it.getBoolean(KEY_MENTIONS_ENABLED, true)
+                    KEY_HAT_ENABLED -> hatEnabledFlow.value = it.getBoolean(KEY_HAT_ENABLED, true)
                     KEY_BG_CHECK_ENABLED -> bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
                     KEY_BG_CHECK_INTERVAL_MIN -> bgCheckIntervalMinFlow.value = (it.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L)
                     KEY_MUTED_TOPIC_IDS -> mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
@@ -102,11 +110,19 @@ class NotificationDataStore(private val context: Context) {
                 mainEnabledFlow,
                 favEnabledFlow,
                 qmsEnabledFlow,
-                mentionsEnabledFlow
-        ) { main, fav, qms, mentions ->
-            main && (fav || qms || mentions)
+                mentionsEnabledFlow,
+                hatEnabledFlow
+        ) { flags ->
+            val main = flags[0]
+            val fav = flags[1]
+            val qms = flags[2]
+            val mentions = flags[3]
+            val hat = flags[4]
+            main && (fav || qms || mentions || hat)
         }.distinctUntilChanged()
     }
+
+    fun hatEnabledFlow(): Flow<Boolean> = hatEnabledFlow.asStateFlow()
 
     fun bgCheckEnabledFlow(): Flow<Boolean> = bgCheckEnabledFlow.asStateFlow()
 
@@ -150,6 +166,46 @@ class NotificationDataStore(private val context: Context) {
         }
         setMutedTopicsSync(current)
         return nowMuted
+    }
+
+    // --- Слежение за новыми версиями (apk в шапке) ---
+    fun getHatEnabledSync(): Boolean = prefs.getBoolean(KEY_HAT_ENABLED, true)
+
+    private fun readHatWatchTopicsFromPrefs(p: SharedPreferences): Set<Int> {
+        val raw = p.getString(KEY_HAT_WATCH_TOPIC_IDS, "").orEmpty()
+        if (raw.isEmpty()) return emptySet()
+        return raw.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+    }
+
+    fun getHatWatchTopicsSync(): Set<Int> = readHatWatchTopicsFromPrefs(prefs)
+
+    fun isHatWatchedSync(topicId: Int): Boolean =
+            topicId > 0 && readHatWatchTopicsFromPrefs(prefs).contains(topicId)
+
+    fun toggleHatWatchSync(topicId: Int): Boolean {
+        if (topicId <= 0) return false
+        val current = readHatWatchTopicsFromPrefs(prefs).toMutableSet()
+        val nowWatched = if (current.contains(topicId)) {
+            current.remove(topicId); false
+        } else {
+            current.add(topicId); true
+        }
+        prefs.edit().putString(KEY_HAT_WATCH_TOPIC_IDS, current.joinToString(",")).apply()
+        // Снимок сбрасываем при снятии слежки, чтобы повторное включение снова взяло эталон.
+        if (!nowWatched) prefs.edit().remove(KEY_HAT_SNAPSHOT_PREFIX + topicId).apply()
+        return nowWatched
+    }
+
+    fun getHatApkSnapshotSync(topicId: Int): Set<String> {
+        val value = prefs.getString(KEY_HAT_SNAPSHOT_PREFIX + topicId, "") ?: ""
+        return if (value.isEmpty()) emptySet() else value.split(",").filter { it.isNotBlank() }.toSet()
+    }
+
+    fun hasHatApkSnapshotSync(topicId: Int): Boolean =
+            prefs.contains(KEY_HAT_SNAPSHOT_PREFIX + topicId)
+
+    fun setHatApkSnapshotSync(topicId: Int, value: Set<String>) {
+        prefs.edit().putString(KEY_HAT_SNAPSHOT_PREFIX + topicId, value.joinToString(",")).apply()
     }
 
     // --- Синхронные геттеры/сеттеры (SharedPreferences) ---
@@ -198,6 +254,7 @@ class NotificationDataStore(private val context: Context) {
         val fav = getFavEnabledSync()
         val qms = getQmsEnabledSync()
         val mentions = getMentionsEnabledSync()
-        return main && (fav || qms || mentions)
+        val hat = getHatEnabledSync()
+        return main && (fav || qms || mentions || hat)
     }
 }

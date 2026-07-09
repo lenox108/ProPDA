@@ -449,6 +449,10 @@
     <string name="fav_unmute_notifications">Включить уведомления для темы</string>
     <string name="fav_notifications_muted">Уведомления для темы отключены</string>
     <string name="fav_notifications_unmuted">Уведомления для темы включены</string>
+    <string name="fav_watch_versions">Следить за новыми версиями</string>
+    <string name="fav_unwatch_versions">Не следить за новыми версиями</string>
+    <string name="fav_watch_versions_on">Слежу за новыми версиями в шапке</string>
+    <string name="fav_watch_versions_off">Слежение за версиями отключено</string>
     <string name="fav_section_hidden">Скрытое</string>
     <string name="fav_hide">Скрыть из списка</string>
     <string name="fav_unhide">Показать в списке</string>
@@ -636,6 +640,9 @@
     <string name="notification_summary_qms">Чат QMS</string>
     <string name="notification_summary_fav">Избранное</string>
     <string name="notification_summary_comment">Комментарий</string>
+    <string name="notification_hat_channel_name">Новые версии в шапке</string>
+    <string name="notification_hat_title">Новая версия приложения</string>
+    <string name="notification_hat_fallback">В шапку темы добавлен новый файл</string>
     <plurals name="notification_content_qms_count">
         <item quantity="one">%d непрочитанное сообщение</item>
         <item quantity="few">%d непрочитанных сообщения</item>
@@ -880,6 +887,8 @@
     <string name="pref_summary_download_notifications">Уведомления о загрузках файлов</string>
     <string name="pref_title_favorites_live_tab">Живой список</string>
     <string name="pref_summary_favorites_live_tab">Обновлять данные во вкладке</string>
+    <string name="pref_title_hat_watch">Новые версии приложений</string>
+    <string name="pref_summary_hat_watch">Пуш, когда в шапку отслеживаемой темы добавляют новый apk. Включайте слежение в меню темы или в избранном («Следить за новыми версиями»).</string>
     <string name="pref_title_bg_check">Фоновая проверка</string>
     <string name="pref_summary_bg_check">Опрашивает сервер периодически, когда приложение закрыто. Без постоянной иконки.</string>
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>

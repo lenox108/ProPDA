@@ -112,6 +112,21 @@
 
     <PreferenceCategory
         android:layout="@layout/preference_category_custom"
+        android:title="@string/pref_title_hat_watch">
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
+            android:dependency="notifications.main.enabled"
+            android:key="notifications.hat.enabled"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_hat_watch"
+            android:title="@string/pref_title_notify"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
         android:title="@string/pref_title_bg_check">
 
         <forpdateam.ru.forpda.ui.views.SwitchPreference

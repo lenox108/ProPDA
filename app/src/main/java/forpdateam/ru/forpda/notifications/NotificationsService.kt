@@ -602,6 +602,7 @@ class NotificationsService : Service() {
         const val CHANNEL_QMS_ID = "forpda_channel_qms"
         const val CHANNEL_MENTION_ID = "forpda_channel_mention"
         const val CHANNEL_SITE_ID = "forpda_channel_site"
+        const val CHANNEL_HAT_ID = "forpda_channel_hat"
 
         const val CHECK_LAST_EVENTS = "CHECK_LAST_EVENTS"
         /** Помечает старт через startForegroundService(): onStartCommand обязан поднять FGS в 5 сек. */
@@ -647,6 +648,11 @@ class NotificationsService : Service() {
                     NotificationChannel(
                             CHANNEL_SITE_ID,
                             context.getString(R.string.notification_summary_comment),
+                            NotificationManager.IMPORTANCE_DEFAULT
+                    ),
+                    NotificationChannel(
+                            CHANNEL_HAT_ID,
+                            context.getString(R.string.notification_hat_channel_name),
                             NotificationManager.IMPORTANCE_DEFAULT
                     )
             ))

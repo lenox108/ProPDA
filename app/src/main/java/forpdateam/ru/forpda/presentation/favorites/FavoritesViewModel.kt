@@ -492,6 +492,16 @@ class FavoritesViewModel @Inject constructor(
         scope.launch { _uiEvents.emit(FavoritesUiEvent.OnToggleMute(item, nowMuted)) }
     }
 
+    fun isHatWatched(item: FavItem): Boolean =
+            !item.isForum && item.topicId > 0 && notificationPreferencesHolder.isHatWatched(item.topicId)
+
+    /** Переключить слежение за новыми версиями (apk в шапке) для темы. */
+    fun toggleHatWatch(item: FavItem) {
+        if (item.isForum || item.topicId <= 0) return
+        val nowWatched = notificationPreferencesHolder.toggleHatWatch(item.topicId)
+        scope.launch { _uiEvents.emit(FavoritesUiEvent.OnToggleHatWatch(item, nowWatched)) }
+    }
+
     private fun MutableList<FavItem>.replaceWith(items: List<FavItem>) {
         clear()
         addAll(items)
@@ -621,6 +631,7 @@ sealed class FavoritesUiEvent {
     data class ShowSubscribeDialog(val item: FavItem) : FavoritesUiEvent()
     data class OnToggleMute(val item: FavItem, val nowMuted: Boolean) : FavoritesUiEvent()
     data class OnToggleHidden(val item: FavItem, val nowHidden: Boolean) : FavoritesUiEvent()
+    data class OnToggleHatWatch(val item: FavItem, val nowWatched: Boolean) : FavoritesUiEvent()
     data class ShowLoadError(val message: String?) : FavoritesUiEvent()
     object ShowNeedAuth : FavoritesUiEvent()
     object ScrollToTop : FavoritesUiEvent()
