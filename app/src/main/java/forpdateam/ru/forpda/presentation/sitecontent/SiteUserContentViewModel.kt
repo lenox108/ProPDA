@@ -93,7 +93,6 @@ class SiteUserContentViewModel @Inject constructor(
     fun onCommentClick(item: SiteComment) {
         val base = item.articleUrl.substringBefore('#')
         val url = if (item.commentId > 0) "$base#comment${item.commentId}" else item.articleUrl
-        timber.log.Timber.i("SITE_CONTENT_DIAG onCommentClick cid=${item.commentId} aid=${item.articleId} url=$url")
         linkHandler.handle(url, router)
     }
 }
