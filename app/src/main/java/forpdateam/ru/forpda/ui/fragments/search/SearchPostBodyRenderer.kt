@@ -258,7 +258,7 @@ class SearchPostBodyRenderer(
         val size = (ctx.resources.displayMetrics.scaledDensity * 18f).toInt().coerceAtLeast(1)
         val highlighted = applySearchHighlight(base)
         val readable = stripLinkColors(neutralizeLowContrastColors(ctx, highlighted))
-        SmileProvider.applySmiles(readable, ctx.assets, size)
+        SmileProvider.applySmiles(readable, ctx.resources, size)
     } catch (t: Throwable) {
         SpannableStringBuilder(html) as Spannable
     }

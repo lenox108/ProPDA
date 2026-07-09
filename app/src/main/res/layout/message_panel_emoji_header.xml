@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.AppCompatTextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/header_title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="@dimen/content_spacing"
+    android:paddingEnd="@dimen/content_spacing"
+    android:paddingTop="@dimen/content_spacing_half"
+    android:paddingBottom="@dimen/content_spacing_half"
+    android:textSize="@dimen/list_section_header_text_size"
+    android:textColor="?attr/colorOnSurfaceVariant"/>

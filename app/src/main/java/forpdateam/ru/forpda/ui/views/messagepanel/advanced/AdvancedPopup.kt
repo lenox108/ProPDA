@@ -72,6 +72,7 @@ class AdvancedPopup(
         val viewList = ArrayList<BasePanelItem>()
         viewList.add(CodesPanelItem(context, messagePanel, messagePanel.otherPreferencesHolder))
         viewList.add(SmilesPanelItem(context, messagePanel))
+        viewList.add(EmojiPanelItem(context, messagePanel))
         viewPager.adapter = MyPagerAdapter(viewList)
 
         binding.tabLayout.setupWithViewPager(viewPager)
