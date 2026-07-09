@@ -92,11 +92,13 @@ class Client(
         private const val EVENT_WS_URL = "wss://app.4pda.to/ws/"
 
         /**
-         * Foreground WebSocket ping interval. Raised from 30s to 45s as a low-risk
+         * Foreground WebSocket ping interval. Raised 30s → 45s → 60s as a low-risk
          * battery win (BAT-02): fewer radio wakeups while still detecting stale
-         * connections reasonably quickly.
+         * connections reasonably quickly. The WS only lives while the app is in the
+         * foreground (see [EventsRepository]/idle-disconnect), so a slightly longer
+         * keepalive has no impact on background push latency.
          */
-        private const val WEBSOCKET_PING_INTERVAL_SECONDS = 45L
+        private const val WEBSOCKET_PING_INTERVAL_SECONDS = 60L
     }
 
     // region Properties
