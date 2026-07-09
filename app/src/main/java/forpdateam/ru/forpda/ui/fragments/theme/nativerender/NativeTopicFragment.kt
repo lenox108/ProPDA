@@ -375,6 +375,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // The bottom-nav container padding lands a beat AFTER the first anchor (async window-inset pass),
         // shrinking the list. If we parked on the last post, that stale offset re-hides its action buttons
         // below the new fold — re-pin to the bottom whenever the list height actually changes while anchored.
+        // Correct the last post's bottom on EVERY layout pass while parked on it — enrichment / image loads
+        // grow it long after any fixed delay would have fired. See [maintainBottomPin].
+        recyclerView.viewTreeObserver.addOnGlobalLayoutListener(bottomPinLayoutListener)
         recyclerView.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, oldBottom ->
             if (bottom != oldBottom) {
                 // The list's bottom edge moved (container inset landed, keyboard, rotation) → the on-screen
@@ -1971,6 +1974,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     override fun onDestroyView() {
+        recyclerView.viewTreeObserver.removeOnGlobalLayoutListener(bottomPinLayoutListener)
         messagePanel?.onDestroy()
         messagePanel = null
         attachmentsPopup = null
@@ -3178,6 +3182,53 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
                     recyclerView.paddingRight, target)
             if (anchoredBottomPostId != null) recyclerView.post { reanchorBottomAfterGrowth() }
+        }
+    }
+
+    /**
+     * Keep the last post's bottom clear of the fold for as long as we are parked on it, correcting on EVERY
+     * layout pass instead of at a few guessed moments.
+     *
+     * Why: after first paint the list keeps GROWING under us — [enrichLoadedPage] adds the author's «💬 N»
+     * count line and the real rating row to every post, avatars and inline images finish loading, spoilers
+     * measure. Each of those makes the last card taller AFTER it was bottom-clamped, sliding its bottom
+     * (rating row + border) under the tab bar — the recurring «последний пост обрезается снизу». The old
+     * defence was a submitList commit callback plus two hardcoded postDelayed(250/550) re-anchors; network
+     * enrichment and image decodes routinely land after that window, and AsyncListDiffer silently drops a
+     * commit callback that a later submitList supersedes. Both are timing guesses, so both leak.
+     *
+     * A global-layout listener is the honest fix: whatever grew, whenever it grew, the very next layout pass
+     * measures the overshoot and scrolls it away. Self-limiting — once the overshoot is 0 it no-ops.
+     *
+     * Deliberately does nothing when: the user scrolled off the bottom anchor ([anchoredBottomPostId] is
+     * cleared on an upward scroll), a scroll/fling is in flight (never fight the finger), or the last post is
+     * TALLER than the viewport (it is top-aligned on purpose so it reads from the start).
+     */
+    private val bottomPinLayoutListener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
+        maintainBottomPin()
+    }
+
+    private fun maintainBottomPin() {
+        if (view == null) return
+        val anchorId = anchoredBottomPostId ?: return
+        if (anchorId != loadedItems.lastOrNull()?.postId) { anchoredBottomPostId = null; return }
+        if (recyclerView.isComputingLayout) return
+        if (recyclerView.scrollState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) return
+        val lastPos = (recyclerView.adapter?.itemCount ?: 0) - 1
+        if (lastPos < 0) return
+        val lastView = recyclerView.findViewHolderForAdapterPosition(lastPos)?.itemView ?: return
+        val visible = recyclerView.height - recyclerView.paddingTop - recyclerView.paddingBottom
+        if (visible <= 0 || lastView.height > visible) return // tall post stays TOP-aligned
+        val overshoot = lastView.bottom - (recyclerView.height - recyclerView.paddingBottom)
+        if (overshoot <= 0) return
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_CLEAR", "pin correcting overshoot=$overshoot cardH=${lastView.height} visible=$visible")
+        }
+        // Scrolling from inside a layout pass is illegal — defer one tick.
+        recyclerView.post {
+            if (view == null || anchoredBottomPostId == null) return@post
+            if (recyclerView.isComputingLayout) return@post
+            recyclerView.scrollBy(0, overshoot)
         }
     }
 
