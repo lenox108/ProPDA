@@ -1796,8 +1796,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
             }
-            if (view == null) return@launch
-            var reArm = true
+            if (view == null) { isLoadingPrevPage = false; return@launch }
+            var prepended = false
             result.onSuccess { page ->
                 // Prepending page 1 brings the real hat into view — keep it and light the toolbar ⓘ; a
                 // deeper page's repeated hat is stripped instead.
@@ -1822,19 +1822,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 updateRefreshGesture() // reaching page 1 re-enables pull-to-refresh
                 if (newItems.isNotEmpty()) {
                     prependPreservingPosition(newItems)
-                    reArm = false // re-armed inside the submitList callback after the scroll is restored
+                    prepended = true
                     // Enrich the prepended page too (ratings/💬 counts), same as the initial + next-page
                     // paths — otherwise scrolling UP into earlier pages would show them without ratings.
                     enrichLoadedPage(page)
                 }
             }
-            if (reArm) {
-                isLoadingPrevPage = false
-                // A prev page that yielded no NEW posts (all duplicates) never calls the prepend callback,
-                // so end the fill here (and reveal the list) or fillingLastPage would stay stuck true.
-                if (fillingLastPage) finishLastPageFill(scrollToBottom = true)
-            }
+            // End the prev-page load reliably HERE (mirrors loadNextPage) — NOT inside the prepend's
+            // submitList commit callback. AsyncListDiffer drops that callback when a later submitList
+            // (enrichLoadedPage) supersedes it before it commits, which left isLoadingPrevPage stuck true:
+            // the top spinner span forever and prev-pagination jammed. The prepend callback now only
+            // restores scroll position and continues the last-page fill.
+            isLoadingPrevPage = false
             hideHybridLoading()
+            // A prev page with no NEW posts never prepends, so end the fill here (reveal the list) or
+            // fillingLastPage would stay stuck true.
+            if (!prepended && fillingLastPage) finishLastPageFill(scrollToBottom = true)
         }
     }
 
@@ -1861,8 +1864,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 (recyclerView.layoutManager as? LinearLayoutManager)
                         ?.scrollToPositionWithOffset(newIndex + header, anchorOffset)
             }
-            isLoadingPrevPage = false
-            hideHybridLoading()
+            // Flag reset + spinner hide now happen in loadPrevPage's coroutine (robust against a dropped
+            // commit callback); here we only restore scroll position and continue the last-page fill.
             if (fillingLastPage) continueFillingLastPage()
         }
     }
