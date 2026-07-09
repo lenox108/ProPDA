@@ -334,14 +334,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     override fun useTopBarRoundedCorners(): Boolean = true
 
     /**
-     * Draw the list EDGE-TO-EDGE behind the bottom-nav chrome (parity with the old WebView engine). This
-     * makes the last-post clearance DETERMINISTIC on every device: the list always runs to the screen
-     * bottom, so reserving exactly [bottomNavChromePad] (+ gap) as list bottom padding always lifts the last
-     * post ABOVE the tab bar by the gap. The alternative — measuring the on-screen overlap — depended on
-     * getLocationOnScreen / displayMetrics.heightPixels, which under-reported on some devices and left the
-     * last post behind the (opaque) tab bar, reading as «a strip covering the post».
+     * Keep the DEFAULT (false): MainActivity insets the fragment container by the full bottom-nav chrome
+     * (tab bar + system nav) on EVERY device, so the RecyclerView already ends exactly at the top of the tab
+     * bar. The list therefore needs only a small breathing gap ([bottomRestGapPx]) as bottom padding to lift
+     * the last post's border off the bar — NOT the chrome height (that would double-count).
+     *
+     * Drawing edge-to-edge (true) was a wrong turn: it made the container run to the very screen bottom, so
+     * when the reply editor opens the window background flashes as a solid band below the input before the
+     * keyboard slides up (user: «сначала появляется синий фон а потом его заполняет клавиатура»). false has
+     * no such band.
      */
-    override fun shouldDrawBehindBottomNav(): Boolean = true
+    override fun shouldDrawBehindBottomNav(): Boolean = false
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -3161,19 +3164,44 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * List bottom padding = bottom-nav chrome height ([bottomNavChromePad]) + classic pagination bar
-     * ([classicPaginationBarPadPx]) + inter-post breathing gap ([bottomRestGapPx]). Deterministic:
-     * [shouldDrawBehindBottomNav]==true keeps the list edge-to-edge behind the chrome on every device, so the
-     * chrome height is EXACTLY what must be reserved to lift the last post ABOVE the tab bar by the gap — no
-     * per-device measuring, no under-count that would leave the post behind (and hidden by) the tab bar.
+     * List bottom padding = classic pagination bar ([classicPaginationBarPadPx]) + inter-post breathing gap
+     * ([bottomRestGapPx]). We do NOT add [bottomNavChromePad] here: with [shouldDrawBehindBottomNav]==false
+     * MainActivity already inset the fragment container by that chrome height, so the RecyclerView bottom
+     * edge sits at the top of the tab bar. Adding the chrome again would double-count it into a huge empty
+     * band below the last post. The only thing left to reserve is the gap that keeps the last card's border
+     * off the bar (and the pagination bar's own height when it is shown).
      */
     private fun applyListBottomPadding() {
         if (view == null) return
-        val target = bottomNavChromePad + classicPaginationBarPadPx() + bottomRestGapPx()
+        val target = classicPaginationBarPadPx() + bottomRestGapPx()
         if (recyclerView.paddingBottom != target) {
             recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
                     recyclerView.paddingRight, target)
             if (anchoredBottomPostId != null) recyclerView.post { reanchorBottomAfterGrowth() }
+        }
+    }
+
+    /**
+     * DIAGNOSTIC: log the actual on-screen clearance between the last post card's bottom and the top of the
+     * bottom-nav tab bar, so the last-post clipping can be MEASURED on a device instead of guessed. Positive
+     * = gap (good), negative = the card runs behind the bar (clipped). Debug builds only.
+     */
+    private fun logLastPostClearance(tag: String) {
+        if (!forpdateam.ru.forpda.BuildConfig.DEBUG) return
+        recyclerView.post {
+            if (view == null) return@post
+            val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return@post
+            val lastPos = (recyclerView.adapter?.itemCount ?: 0) - 1
+            if (lastPos < 0) return@post
+            val lastView = recyclerView.findViewHolderForAdapterPosition(lastPos)?.itemView
+            val rvLoc = IntArray(2).also { recyclerView.getLocationOnScreen(it) }
+            val rvBottomScreen = rvLoc[1] + recyclerView.height
+            val cardBottomScreen = lastView?.let { rvLoc[1] + it.bottom }
+            android.util.Log.i("FPDA_CLEAR",
+                    "$tag chromePad=$bottomNavChromePad padB=${recyclerView.paddingBottom} rvH=${recyclerView.height} " +
+                    "rvBottomScreen=$rvBottomScreen cardH=${lastView?.height} cardBottomScreen=$cardBottomScreen " +
+                    "lastVisiblePos=${lm.findLastVisibleItemPosition()}/$lastPos " +
+                    "clearanceToRvBottom=${cardBottomScreen?.let { rvBottomScreen - it }}")
         }
     }
 
@@ -3270,7 +3298,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // delayed [reanchorBottomAfterGrowth] re-measures with the final viewport (height-aware +
             // idempotent, so it no-ops for an already-correct open). Two ticks cover slow keyboard anims.
             recyclerView.postDelayed({ reanchorBottomAfterGrowth() }, 250)
-            recyclerView.postDelayed({ reanchorBottomAfterGrowth() }, 550)
+            recyclerView.postDelayed({ reanchorBottomAfterGrowth(); logLastPostClearance("jumpToBottom+550") }, 550)
             return
         }
         // An explicit page-jump lands on the first post of the requested page, ignoring the server's
