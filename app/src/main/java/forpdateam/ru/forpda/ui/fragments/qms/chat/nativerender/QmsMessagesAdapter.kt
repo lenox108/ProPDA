@@ -121,9 +121,13 @@ class QmsMessagesAdapter(
                     if (item.isMine) edge else gutter,
                     vPad,
             )
+            // Re-ASSIGN the params, don't just mutate them: a bare `lp.gravity = …` never requests a
+            // layout pass, so a recycled row kept its previous alignment and the unread dot stayed at
+            // the x it had in the item this holder rendered before (observed: dot drawn to the LEFT of
+            // the timestamp on a freshly sent message).
             val side = if (item.isMine) android.view.Gravity.END else android.view.Gravity.START
-            (bubble.layoutParams as LinearLayout.LayoutParams).gravity = side
-            (meta.layoutParams as LinearLayout.LayoutParams).gravity = side
+            bubble.layoutParams = (bubble.layoutParams as LinearLayout.LayoutParams).apply { gravity = side }
+            meta.layoutParams = (meta.layoutParams as LinearLayout.LayoutParams).apply { gravity = side }
 
             bubbleBg.setColor(bubbleFill(item.isMine))
             bubbleBg.setStroke(
