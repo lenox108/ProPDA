@@ -74,8 +74,16 @@ class SearchPostBodyRenderer(
                 is BodyBlock.Table -> textView(ctx, spanned(ctx, tableToHtml(block)))
                 is BodyBlock.WebFallback -> textView(ctx, spanned(ctx, block.html))
             }
-            container.addView(view, LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            // Images use WRAP_CONTENT width so their intrinsic size shows through (maxWidth only DOWNSCALES
+            // large ones) — forcing MATCH_PARENT here stretched a small icon/smiley to the full column width,
+            // upscaling it into «огромные пиксели» (the topic renderer keeps each image's own WRAP_CONTENT).
+            // Everything else fills the column.
+            val widthMode = if (block is BodyBlock.Image) {
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            } else {
+                ViewGroup.LayoutParams.MATCH_PARENT
+            }
+            container.addView(view, LinearLayout.LayoutParams(widthMode, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(ctx, 2f)
             })
         }
@@ -119,10 +127,8 @@ class SearchPostBodyRenderer(
         adjustViewBounds = true
         // Search results are a DENSE list of preview cards, so EVERY image (content banner, attachment
         // screenshot, quoted picture) is a COMPACT thumbnail — fit within the column and a modest max height,
-        // downscaled, NEVER upscaled. The topic renderer can afford full-column inline images; here a
-        // full-width screenshot balloons every result (user: «раскрываю спойлер — большое изображение»).
-        layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        // downscaled, NEVER upscaled. Width mode (WRAP_CONTENT) is applied by the caller in [renderBlocks] so
+        // a small icon keeps its intrinsic size instead of stretching to the column; maxWidth only caps.
         maxWidth = columnWidthPx
         maxHeight = dp(ctx, THUMB_MAX_HEIGHT_DP)
         val viewerUrl = block.linkUrl ?: block.imageUrl
