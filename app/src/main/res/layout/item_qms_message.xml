@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Native QMS chat bubble (replaces the WebView `.mess_container`). The root's horizontal padding is
+  set per-bind so an own message keeps a gutter on the left and an incoming one on the right; the
+  bubble and its meta row are aligned to the matching side via layout_gravity.
+
+  The bubble background (rounded M3 container) and the unread status dot are drawables built in the
+  ViewHolder so their colours follow the active palette.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/qms_message_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/qms_message_bubble"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="10dp">
+
+        <!-- Filled by BodyBlockViewFactory: text, quotes, spoilers, code, images, attachments. -->
+        <LinearLayout
+            android:id="@+id/qms_message_body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/qms_message_meta"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="2dp">
+
+        <TextView
+            android:id="@+id/qms_message_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            tools:text="21:34" />
+
+        <!-- Red dot for an unread message (WebView `.unread .status`). -->
+        <View
+            android:id="@+id/qms_message_status"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:layout_marginStart="6dp"
+            android:visibility="gone"
+            tools:visibility="visible" />
+    </LinearLayout>
+</LinearLayout>

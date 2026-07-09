@@ -23,19 +23,6 @@ object TempHelper {
      * Returns a JSON-quoted JavaScript string literal (including surrounding `"` characters)
      * safe to pass directly as [showNewMess] first argument in evaluateJavascript.
      */
-    fun transformMessageSrc(messagesSrcIn: String): String {
-        val normalized = messagesSrcIn
-                .replace("\n".toRegex(), "")
-                .replace("'".toRegex(), "&apos;")
-        // JSONObject.quote handles ", \, / and control chars, but leaves U+2028/U+2029 raw.
-        // These are valid JSON yet act as line terminators in JS string literals, so a single
-        // QMS message containing them makes the whole showNewMess(...) script a SyntaxError that
-        // never runs — leaving the WebView blank and triggering «Сообщения … не отобразились».
-        return JSONObject.quote(normalized)
-                .replace("\u2028", "\\u2028")
-                .replace("\u2029", "\\u2029")
-    }
-
     @StringRes
     fun getTypeString(type: ProfileModel.ContactType): Int {
         when (type) {

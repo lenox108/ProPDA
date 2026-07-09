@@ -12,7 +12,6 @@ import forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder
 import forpdateam.ru.forpda.presentation.announce.AnnounceTemplate
 import forpdateam.ru.forpda.presentation.articles.detail.ArticleTemplate
 import forpdateam.ru.forpda.presentation.forumrules.ForumRulesTemplate
-import forpdateam.ru.forpda.presentation.qms.chat.QmsChatTemplate
 import forpdateam.ru.forpda.presentation.theme.ThemeTemplate
 import forpdateam.ru.forpda.ui.TemplateManager
 import javax.inject.Singleton
@@ -33,7 +32,4 @@ object PresentationModule {
 
     @Provides @Singleton
     fun provideAnnounceTemplate(tm: TemplateManager) = AnnounceTemplate(tm)
-
-    @Provides @Singleton
-    fun provideQmsChatTemplate(tm: TemplateManager) = QmsChatTemplate(tm)
 }
