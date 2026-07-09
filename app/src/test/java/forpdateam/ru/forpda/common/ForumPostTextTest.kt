@@ -60,4 +60,38 @@ class ForumPostTextTest {
         val out = renderBbcodeLineBreakTagsInPostHtml(html)
         assertEquals("""<p>строка1<br><br>строка2<br>строка3</p>""", out)
     }
+
+    @Test
+    fun collapseSpoilers_namedSpoilerKeepsOnlyTitle() {
+        val text = "текст\n[spoiler=скрины][img]https://4pda.to/s/a.jpg[/img][/spoiler]\nещё"
+        assertEquals("текст\nСпойлер: скрины\nещё", collapseBbcodeSpoilersForQuote(text))
+    }
+
+    @Test
+    fun collapseSpoilers_unnamedSpoilerBecomesGenericLabel() {
+        assertEquals("Спойлер", collapseBbcodeSpoilersForQuote("[spoiler]секрет[/spoiler]"))
+    }
+
+    @Test
+    fun collapseSpoilers_nestedSpoilersCollapseToOuterTitle() {
+        val text = "[spoiler=внешний]a[spoiler=внутренний]b[/spoiler]c[/spoiler]"
+        assertEquals("Спойлер: внешний", collapseBbcodeSpoilersForQuote(text))
+    }
+
+    @Test
+    fun collapseSpoilers_multipleSiblingSpoilers() {
+        val text = "[spoiler=один]a[/spoiler] и [spoiler=два]b[/spoiler]"
+        assertEquals("Спойлер: один и Спойлер: два", collapseBbcodeSpoilersForQuote(text))
+    }
+
+    @Test
+    fun collapseSpoilers_unclosedSpoilerLeftIntact() {
+        val text = "[spoiler=битый]без закрытия"
+        assertEquals(text, collapseBbcodeSpoilersForQuote(text))
+    }
+
+    @Test
+    fun collapseSpoilers_plainTextUnchanged() {
+        assertEquals("обычный текст", collapseBbcodeSpoilersForQuote("обычный текст"))
+    }
 }
