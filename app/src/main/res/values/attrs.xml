@@ -30,6 +30,26 @@
     <!-- Обводка групп настроек (0dp / transparent вне AMOLED). -->
     <attr name="list_plate_stroke_width" format="dimension" />
     <attr name="list_plate_stroke_color" extension="reference" format="color" />
+    <!--
+        Единая поверхность КАРТОЧКИ КОНТЕНТА: посты темы, плашки списков (избранное, новости,
+        меню, настройки, DevDB…), CardStyle.Item (заметки, поиск, комменты устройств).
+
+        Зачем отдельный атрибут, а не прямая M3-роль: нужная роль зависит от темы. В светлых
+        палитрах карточка должна быть самым СВЕТЛЫМ тоном (`colorSurface` = белый/кремовый), а
+        `colorSurfaceContainerHigh` там наоборот ТЕМНЕЕ фона (inset-серый) — карточки выходили бы
+        мутными. В тёмных, наоборот, `colorSurface` почти сливается с near-black страницей, и нужен
+        поднятый `colorSurfaceContainerHigh`.
+
+        Поэтому каждая тема редиректит этот атрибут на подходящую framework-роль. Редирект именно на
+        M3-роль (а не на @color) важен: DynamicColors (Material You) переопределяет эти роли в
+        рантайме, поэтому карточки трекают обои автоматически.
+
+        ВАЖНО: атрибут обязан быть определён во ВСЕХ темах, где используется, иначе цепочка
+        `?attr/`→`?attr/` упрётся в незаданное значение и повторит прод-крэш
+        (TypedArray.getColorStateList → UnsupportedOperationException на TYPE_ATTRIBUTE,
+        см. KDoc ThemeOverlay.ForPDA.MaterialYouSurface).
+    -->
+    <attr name="content_card_surface" extension="reference" format="color" />
     <attr name="notify_dot_tab" extension="reference" />
     <attr name="item_tab_close_color" extension="reference" format="color" />
 
