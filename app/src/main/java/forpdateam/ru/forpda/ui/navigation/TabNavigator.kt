@@ -328,25 +328,42 @@ class TabNavigator(
             return
         }
 
-        if (reuseExistingThemeTabForSameTopicFreshOpen(newScreen)) {
-            return
-        }
-        if (reuseExistingThemeTabForSpecificPost(newScreen)) {
-            return
-        }
+        // Opening a topic FROM a search-results screen must always spawn a FRESH theme tab as a child of
+        // that search tab — never reuse (and steal-current) an existing topic tab elsewhere in the tree.
+        // «Найти в теме» launches the search as a CHILD of the topic it came from, so the natural stack is
+        // topic → search → post. Reusing the ancestor topic tab and setCurrent()-ing it makes a later Back
+        // remove that topic tab; TabController.remove then parks current on the topic's PARENT (forum/news),
+        // stranding the user OUT of both the topic and the results — the reported «жест назад выходит из
+        // темы вместо возврата к результатам поиска». A fresh child tab gives results → post → Back →
+        // results. This must gate EVERY theme-reuse path below, including the generic isAlone findAlone()
+        // (Screen.Theme is alone, so it would otherwise re-grab the existing topic tab even after the
+        // dedicated reuse helpers bail). reuseExistingThemeTabForSameTopicFreshOpen already self-guards on
+        // SearchFragment; centralising it here keeps all paths consistent.
+        val openingThemeFromSearch = newScreen is Screen.Theme && getCurrentFragment() is SearchFragment
 
-        if (activateAloneThemeTabIfPresent(newScreen)) {
-            return
+        if (!openingThemeFromSearch) {
+            if (reuseExistingThemeTabForSameTopicFreshOpen(newScreen)) {
+                return
+            }
+            if (reuseExistingThemeTabForSpecificPost(newScreen)) {
+                return
+            }
+
+            if (activateAloneThemeTabIfPresent(newScreen)) {
+                return
+            }
         }
 
         if (activateAloneQmsChatTabIfPresent(newScreen)) {
             return
         }
 
-        tabController.findAlone(newScreen)?.also {
-            tabController.setCurrent(it.tag)
-            updateFragmentsState()
-            return
+        if (!openingThemeFromSearch) {
+            tabController.findAlone(newScreen)?.also {
+                tabController.setCurrent(it.tag)
+                updateFragmentsState()
+                return
+            }
         }
 
         val newFragment = createFragment(newScreen.screenKey, newScreen)
