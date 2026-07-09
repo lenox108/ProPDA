@@ -33,6 +33,8 @@
         <item name="main_toolbar_stroke_color">@color/nord_main_toolbar_stroke</item>
         <item name="list_plate_stroke_width">1dp</item>
         <item name="list_plate_stroke_color">@color/nord_divider_line</item>
+        <!-- Читательская палитра светлая: карточка = самый светлый тон (colorSurface). -->
+        <item name="content_card_surface">?attr/colorSurface</item>
         <item name="smart_nav_fab_background">@color/nord_colorAccent</item>
         <item name="smart_nav_fab_icon">@color/nord_link_color_contrast</item>
         <item name="actionModeBackground">@color/nord_colorPrimary</item>

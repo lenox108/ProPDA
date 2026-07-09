@@ -143,7 +143,9 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
         override fun bind(item: ProfileModel) {
             val ctx = binding.profileAboutText.context
             val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
-            val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurface)
+            // Контраст считаем от фактической поверхности карточки (content_card_surface), а не от
+            // colorSurface — на Material You в тёмной они расходятся.
+            val surface = ctx.getColorFromAttr(forpdateam.ru.forpda.R.attr.content_card_surface)
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
             // «О себе» приходит с сервера с зашитым бледным цветом ссылки — почти невидим на светлой карточке
             // (жалоба пользователя) и тускл на тёмной. Прошлые попытки (setLinkTextColor / ForegroundColorSpan

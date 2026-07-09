@@ -349,31 +349,27 @@ class TopicPostsAdapter(
         private fun letterAvatar(ctx: android.content.Context, nick: String?): android.graphics.drawable.Drawable =
                 forpdateam.ru.forpda.common.letterAvatarDrawable(ctx, nick)
 
-        // Post card fill adapts to whether the palette is LIGHT or DARK, because the app's surface
-        // ramps run in OPPOSITE directions and no single M3 role is right for both:
-        //  • Dark / AMOLED: ...Lowest/...Low/...Container all collapse to near-black (static dark maps
-        //    them to #121212; the dynamic «Системный стиль» packs tones 4/10/12 — all near-black), so a
-        //    card on ...Container reads AMOLED-black, melting into the page (user report «блоки постов
-        //    прям чёрные»). ...ContainerHigh is the first tone that lifts to a real grey (static #242424,
-        //    dynamic tone 17), so dark cards use it. colorSurface can't be used here — under the dynamic
-        //    dark scheme it is tone 6, i.e. near-black again.
-        //  • Light / cream (System light, Sepia, Nord, Gruvbox, …): the ramp is INVERTED — colorSurface
-        //    (card_background) is the LIGHTEST/near-white tone and ...ContainerHigh (background_for_cards)
-        //    is a DARKER inset grey. Using ...High there made cards look muddy-grey (user report «слишком
-        //    серые»), so light cards use colorSurface for a clean white/cream surface above the light-grey
-        //    page.
-        // Branch on the page background's luminance so it's correct for every static palette AND the
-        // dynamic wallpaper scheme. Nested blocks (quote/spoiler/code) sit on ...Highest, which reads as a
-        // lighter grey over a dark card and a subtle darker inset over a light card — separated either way.
-        private fun cardBaseColor(): Int {
-            val pageBg = com.google.android.material.color.MaterialColors.getColor(
-                    itemView, com.google.android.material.R.attr.colorSurfaceContainerLowest)
-            val role = if (androidx.core.graphics.ColorUtils.calculateLuminance(pageBg) >= 0.5)
-                com.google.android.material.R.attr.colorSurface
-            else
-                com.google.android.material.R.attr.colorSurfaceContainerHigh
-            return com.google.android.material.color.MaterialColors.getColor(itemView, role)
-        }
+        // Post card fill = the app-wide CONTENT CARD surface (`?attr/content_card_surface`), the same
+        // role plate lists (favorites/news/menu/settings/DevDB…) and CardStyle.Item (notes, search,
+        // device comments) use — so every content card across the app is one colour.
+        //
+        // The attr is a per-theme redirect because the surface ramps run in OPPOSITE directions and no
+        // single M3 role is right for both:
+        //  • Dark / AMOLED → `colorSurfaceContainerHigh`. ...Lowest/...Low/...Container all collapse to
+        //    near-black (static dark #121212; dynamic «Системный стиль» packs tones 4/10/12), so a card
+        //    on those melts into the page («блоки постов прям чёрные»). ...High is the first tone that
+        //    lifts to a real grey (static #242424, dynamic tone 17). colorSurface can't be used — under
+        //    the dynamic dark scheme it is tone 6, near-black again.
+        //  • Light / cream (System light, Sepia, Nord, Gruvbox, …) → `colorSurface`. There the ramp is
+        //    INVERTED: colorSurface (card_background) is the LIGHTEST/near-white tone while ...High
+        //    (background_for_cards) is a DARKER inset grey, which made cards look muddy («слишком серые»).
+        //
+        // Redirecting to a framework M3 role (not a literal @color) keeps Material You working:
+        // DynamicColors overrides those roles at runtime, so cards track the wallpaper automatically.
+        // Nested blocks (quote/spoiler/code) stay on ...Highest — a lighter grey over a dark card, a
+        // subtle darker inset over a light one — separated either way.
+        private fun cardBaseColor(): Int =
+                itemView.context.getColorFromAttr(forpdateam.ru.forpda.R.attr.content_card_surface)
 
         /**
          * Resting hairline border for the post card. Elevation shadows are invisible on dark/AMOLED

@@ -227,7 +227,8 @@ class SearchPostBodyRenderer(
      */
     private fun contrastSafeLinkColor(ctx: Context): Int {
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-        val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer)
+        // Эталон — фактическая поверхность карточки поиска (CardStyle.Item.Wide → content_card_surface).
+        val surface = ctx.getColorFromAttr(forpdateam.ru.forpda.R.attr.content_card_surface)
         val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val surfaceIsDark = androidx.core.graphics.ColorUtils.calculateLuminance(surface) < 0.5
         val target = if (surfaceIsDark) DARK_SURFACE_LINK_CONTRAST else LOW_CONTRAST_THRESHOLD
@@ -290,14 +291,14 @@ class SearchPostBodyRenderer(
      * WebView neutralised via CSS but [Html.fromHtml] with FROM_HTML_OPTION_USE_CSS_COLORS applies verbatim →
      * on the dark card half the text «сливается с фоном». We remove only the low-contrast [ForegroundColorSpan]s
      * so that text falls back to the high-contrast colorOnSurface, while readable colours stay. Referenced
-     * against colorSurface (the darkest relevant surface): a colour removed here always falls back to a colour
-     * that is readable on both the card and the lighter quote bg.
+     * against content_card_surface (the card's actual fill): a colour removed here always falls back to a
+     * colour that is readable on both the card and the lighter quote bg.
      */
     private fun neutralizeLowContrastColors(ctx: Context, text: CharSequence): CharSequence {
         if (text !is Spanned) return text
         val spans = text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java)
         if (spans.isEmpty()) return text
-        val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurface)
+        val surface = ctx.getColorFromAttr(forpdateam.ru.forpda.R.attr.content_card_surface)
         val bg = android.graphics.Color.rgb(
                 android.graphics.Color.red(surface), android.graphics.Color.green(surface), android.graphics.Color.blue(surface))
         val out = SpannableStringBuilder(text)

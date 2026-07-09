@@ -78,6 +78,12 @@
         <item name="main_toolbar_stroke_color">@color/dark_main_toolbar_stroke</item>
         <item name="list_plate_stroke_width">0dp</item>
         <item name="list_plate_stroke_color">@android:color/transparent</item>
+        <!--
+            Тёмная тема: карточка = поднятый ...ContainerHigh (#242424), а не colorSurface.
+            На Material You colorSurface — это тон 6 (почти чёрный, сливается со страницей-тоном 4),
+            а ...ContainerHigh — тон 17, который читается как настоящий серый.
+        -->
+        <item name="content_card_surface">?attr/colorSurfaceContainerHigh</item>
         <item name="bottom_nav_bar_shape_appearance">@style/ShapeAppearance.ForPDA.BottomNavBar</item>
         <item name="smart_nav_fab_background">?attr/colorAccent</item>
         <item name="smart_nav_fab_icon">?attr/contrast_text_color</item>
@@ -236,6 +242,8 @@
         <item name="main_toolbar_stroke_color">@color/amoled_main_toolbar_stroke</item>
         <item name="list_plate_stroke_width">1dp</item>
         <item name="list_plate_stroke_color">@color/amoled_list_plate_stroke</item>
+        <!-- AMOLED: все surface-роли = чистый чёрный; карточки отделяет обводка list_plate_stroke. -->
+        <item name="content_card_surface">?attr/colorSurfaceContainerHigh</item>
         <item name="bottom_nav_bar_shape_appearance">@style/ShapeAppearance.ForPDA.BottomNavBar</item>
         <item name="smart_nav_fab_background">@color/amoled_colorPrimary</item>
         <item name="smart_nav_fab_icon">?attr/colorOnSurface</item>

@@ -352,6 +352,8 @@
         <item name="main_toolbar_stroke_color">@android:color/transparent</item>
         <item name="list_plate_stroke_width">0dp</item>
         <item name="list_plate_stroke_color">@android:color/transparent</item>
+        <!-- Светлая тема: карточка = самый светлый тон (белый), а не тёмный inset ...ContainerHigh. -->
+        <item name="content_card_surface">?attr/colorSurface</item>
         <item name="bottom_nav_bar_shape_appearance">@style/ShapeAppearance.ForPDA.BottomNavBar</item>
         <item name="smart_nav_fab_background">?attr/colorAccent</item>
         <item name="smart_nav_fab_icon">?attr/contrast_text_color</item>
@@ -662,8 +664,10 @@
         <item name="cardCornerRadius">@dimen/card_corner_radius</item>
         <item name="cardElevation">@dimen/card_elevation</item>
         <!-- LayoutInflater-safe: CardView инфлейтится через LayoutInflater, который
-             сам делает 2-ой уровень deref для ?attr/... и трекает палитру обоев. -->
-        <item name="cardBackgroundColor">?attr/colorSurface</item>
+             сам делает 2-ой уровень deref для ?attr/... и трекает палитру обоев.
+             content_card_surface редиректит на colorSurface (светлые) / colorSurfaceContainerHigh
+             (тёмные), чтобы карточка везде совпадала с постами темы. -->
+        <item name="cardBackgroundColor">?attr/content_card_surface</item>
         <item name="cardUseCompatPadding">true</item>
     </style>
 
