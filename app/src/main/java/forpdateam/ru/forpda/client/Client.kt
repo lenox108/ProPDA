@@ -395,6 +395,7 @@ class Client(
         parsed.favorites?.also { counters.favorites = it; changed = true }
         parsed.qms?.also { counters.qms = it; changed = true }
         if (changed) {
+            android.util.Log.i("QMS_CNT", "header overwrite qms=${parsed.qms} (was ${countersHolder.get().qms})")
             countersHolder.set(counters, source = "index_header")
         }
     }
