@@ -251,6 +251,16 @@
     <!-- Codes -->
     <string name="codes_and_smiles">Оформление и смайлы</string>
     <string name="smiles_title">Смайлы</string>
+    <string name="emoji_title">Эмодзи</string>
+    <string name="emoji_cat_smileys">Улыбки</string>
+    <string name="emoji_cat_gestures">Жесты</string>
+    <string name="emoji_cat_hearts">Сердца</string>
+    <string name="emoji_cat_animals">Животные</string>
+    <string name="emoji_cat_nature">Природа</string>
+    <string name="emoji_cat_food">Еда</string>
+    <string name="emoji_cat_activity">Активность</string>
+    <string name="emoji_cat_objects">Вещи</string>
+    <string name="emoji_cat_symbols">Символы</string>
     <string name="codes_title">Оформление</string>
     <string name="codes_text_size">Размер текста</string>
     <string name="codes_text_size_item_Size" formatted="false">Размер %s</string>

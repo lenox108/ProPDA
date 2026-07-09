@@ -212,6 +212,16 @@
     <!-- Codes -->
     <string name="codes_and_smiles">Formating and smiles</string>
     <string name="smiles_title">Smiles</string>
+    <string name="emoji_title">Emoji</string>
+    <string name="emoji_cat_smileys">Smileys</string>
+    <string name="emoji_cat_gestures">Gestures</string>
+    <string name="emoji_cat_hearts">Hearts</string>
+    <string name="emoji_cat_animals">Animals</string>
+    <string name="emoji_cat_nature">Nature</string>
+    <string name="emoji_cat_food">Food</string>
+    <string name="emoji_cat_activity">Activity</string>
+    <string name="emoji_cat_objects">Objects</string>
+    <string name="emoji_cat_symbols">Symbols</string>
     <string name="codes_title">Formating</string>
     <string name="codes_text_size">Text size</string>
     <string name="codes_text_size_item_Size" formatted="false">Size %s</string>
