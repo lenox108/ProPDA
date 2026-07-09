@@ -2020,11 +2020,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val date = item.date?.takeIf { it.isNotBlank() }?.let { " date=\"$it\"" } ?: ""
         // Full-post quote must carry the post's TEXT, not just the name/date header (mirrors the WebView
         // openFullQuote): take the raw body HTML, drop nested quote blocks, normalize DOM→editor BBCode.
+        // Spoilers collapse to their title: 4pda renders NO block tag inside [quote] (verified across ~200
+        // live quotes — not one holds a nested spoiler/code/quote), so a kept [spoiler] would silently spill
+        // the hidden screenshots into the quote at full size.
         val body = item.rawBodyHtml?.let { raw ->
             val withoutQuotes = forpdateam.ru.forpda.common.stripHtmlQuoteBlocks(raw)
             val normalized = forpdateam.ru.forpda.common.normalizeEditPostBodyFromDomHtml(withoutQuotes)
                     .ifEmpty { forpdateam.ru.forpda.common.normalizeEditPostBodyFromDomHtml(raw) }
-            forpdateam.ru.forpda.common.stripBbcodeQuotes(normalized).ifEmpty { normalized }
+            val withoutNestedQuotes = forpdateam.ru.forpda.common.stripBbcodeQuotes(normalized).ifEmpty { normalized }
+            forpdateam.ru.forpda.common.collapseBbcodeSpoilersForQuote(withoutNestedQuotes)
         }.orEmpty()
         insertIntoEditor("[quote name=\"${item.nick}\"$date post=${item.postId}]$body[/quote]${'\n'}")
     }
