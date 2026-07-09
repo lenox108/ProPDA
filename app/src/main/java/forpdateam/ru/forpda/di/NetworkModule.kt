@@ -72,7 +72,10 @@ object NetworkModule {
     @Provides @Singleton fun provideProfileParser(pp: IPatternProvider) = ProfileParser(pp)
     @Provides @Singleton fun provideQmsParser(pp: IPatternProvider) = QmsParser(pp)
     @Provides @Singleton fun provideReputationParser(pp: IPatternProvider) = ReputationParser(pp)
-    @Provides @Singleton fun provideSearchParser(pp: IPatternProvider) = SearchParser(pp)
+    // useJsoup=true: search is parsed via CSS selectors (SearchJsoupParser) instead of the fragile 21-group
+    // regexes. Validated on live 4pda HTML (A/B vs regex): topics — jsoup complete & clean vs regex's greedy
+    // broken dates + missed rows; posts — exact field parity; news — jsoup fixes the regex which parsed 0 items.
+    @Provides @Singleton fun provideSearchParser(pp: IPatternProvider) = SearchParser(pp, useJsoup = true)
     @Provides @Singleton fun provideTopicsParser(pp: IPatternProvider, psh: ForumPageSizeHolder) = TopicsParser(pp, psh)
     @Provides @Singleton fun provideAttachmentsParser(pp: IPatternProvider) = AttachmentsParser(pp)
     @Provides @Singleton fun provideUserCpParser() = UserCpParser()
