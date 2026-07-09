@@ -3176,14 +3176,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (view == null) return
         val doApply = Runnable {
             if (view == null || !recyclerView.isAttachedToWindow) return@Runnable
-            val target = listBottomChromeOverlapPx() + classicPaginationBarPadPx() + bottomRestGapPx()
+            val overlap = listBottomChromeOverlapPx()
+            val barPad = classicPaginationBarPadPx()
+            val gap = bottomRestGapPx()
+            val target = overlap + barPad + gap
+            val loc = IntArray(2); recyclerView.getLocationOnScreen(loc)
             if (recyclerView.paddingBottom != target) {
                 recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
                         recyclerView.paddingRight, target)
                 if (anchoredBottomPostId != null) recyclerView.post { reanchorBottomAfterGrowth() }
             }
         }
-        if (recyclerView.height > 0 && recyclerView.isAttachedToWindow) doApply.run() else recyclerView.post(doApply)
+        val ready = recyclerView.height > 0 && recyclerView.isAttachedToWindow
+        if (ready) doApply.run() else recyclerView.post(doApply)
     }
 
     /**
