@@ -136,6 +136,18 @@ android {
 
     buildTypes {
         debug {
+            // Тестовые debug-сборки должны подписываться ТЕМ ЖЕ ключом ForPDA 2
+            // (parallel), что и релиз — иначе debug-вариант подписан дефолтным
+            // debug-keystore, и APK нельзя поставить поверх настоящего
+            // ru.forpdateam.forpda.parallel (конфликт подписи). У buildType debug
+            // есть НЕЯВНЫЙ дефолтный debug-signingConfig, который перекрывает
+            // signingConfig флейвора (stable/legacy → signingConfigs.parallel),
+            // поэтому переопределяем его здесь явно. Когда parallel-ключа нет
+            // (смоук/CI без keystore.parallel.properties) — оставляем дефолт,
+            // и флейвор падает на signingConfigs.debug (см. productFlavors).
+            if (parallelKeystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.parallel
+            }
         }
         release {
             minifyEnabled true
