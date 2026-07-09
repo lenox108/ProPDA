@@ -56,87 +56,91 @@ class SearchParser(
         return topicFromBlock to postId
     }
 
-    fun parse(response: String, settings: SearchSettings): SearchResult = SearchResult().also { result ->
+    fun parse(response: String, settings: SearchSettings): SearchResult {
         val isNews = settings.resourceType == SearchSettings.RESOURCE_NEWS.first
         val resultTopics = settings.result == SearchSettings.RESULT_TOPICS.first
-        if (isNews) {
-            if (useJsoup) {
-                jsoupParser.parseArticles(response, settings, result)
-                return@also
-            }
-            patternProvider
-                    .getPattern(scope.scope, scope.articles)
-                    .matcher(response)
-                    .findAll { matcher ->
-                        result.items.add(SearchItem().apply {
-                            id = matcher.groupInt(1) ?: return@findAll
-                            imageUrl = matcher.group(2)
-                            date = matcher.group(3)
-                            userId = matcher.groupInt(4) ?: return@findAll
-                            nick = matcher.group(5).fromHtml()
-                            title = matcher.group(6).fromHtml()
-                            body = matcher.group(7)
-                        })
-                    }
+        return if (useJsoup) {
+            parseWithJsoup(response, settings, isNews, resultTopics)
         } else {
-            if (resultTopics) {
-                patternProvider
-                        .getPattern(scope.scope, scope.forum_topics)
-                        .matcher(response)
-                        .findAll { matcher ->
-                            result.items.add(SearchItem().apply {
-                                topicId = matcher.groupInt(1) ?: return@findAll
-                                //setId(matcher.group(1).toInt());
-                                title = matcher.group(4).fromHtml()
-                                desc = matcher.group(5).fromHtml()
-                                forumId = matcher.groupInt(6) ?: return@findAll
-                                userId = matcher.groupInt(10) ?: return@findAll
-                                nick = matcher.group(11).fromHtml()
-                                date = matcher.group(12)
-                            })
-                        }
-            } else {
-                patternProvider
-                        .getPattern(scope.scope, scope.forum_posts)
-                        .matcher(response)
-                        .findAll { matcher ->
-                            result.items.add(SearchItem().apply {
-                                val (tid, pid) = matcher.resolveForumPostTopicIdAndPostId()
-                                topicId = tid
-                                id = pid
-                                title = decodeHtmlText(matcher.group(4))
-                                date = matcher.group(5)
-                                //setNumber(matcher.group(6).toInt());
-                                isOnline = matcher.groupOrEmpty(7).contains("green")
-                                matcher.group(8)?.also {
-                                    if (!it.isEmpty()) {
-                                        avatar = "https://s.4pda.to/forum/uploads/$it"
-                                    }
-                                }
-                                nick = decodeHtmlText(matcher.group(9))
-                                userId = matcher.groupInt(10) ?: return@findAll
-                                isCurator = matcher.group(11) != null
-                                groupColor = matcher.group(12)
-                                group = matcher.group(13)
-                                canMinusRep = matcher.groupOrEmpty(14).isNotEmpty()
-                                reputation = matcher.group(15)
-                                canPlusRep = matcher.groupOrEmpty(16).isNotEmpty()
-                                canReport = matcher.groupOrEmpty(17).isNotEmpty()
-                                canEdit = matcher.groupOrEmpty(18).isNotEmpty()
-                                canDelete = matcher.groupOrEmpty(19).isNotEmpty()
-                                canQuote = matcher.groupOrEmpty(20).isNotEmpty()
-                                body = matcher.groupOrEmpty(21)
-                            })
-                        }
-            }
+            parseWithRegex(response, settings, isNews, resultTopics)
         }
-
-        if (isNews) {
-            result.pagination = Pagination.parseNews(response)
-        } else {
-            result.pagination = Pagination.parseForum(response)
-        }
-        result.settings = settings
-        return result
     }
+
+    private fun parseWithJsoup(response: String, settings: SearchSettings, isNews: Boolean, resultTopics: Boolean): SearchResult =
+            SearchResult().also { result ->
+                when {
+                    isNews -> jsoupParser.parseArticles(response, settings, result)
+                    resultTopics -> jsoupParser.parseForumTopics(response, settings, result)
+                    else -> jsoupParser.parseForumPosts(response, settings, result)
+                }
+            }
+
+    private fun parseWithRegex(response: String, settings: SearchSettings, isNews: Boolean, resultTopics: Boolean): SearchResult =
+            SearchResult().also { result ->
+                if (isNews) {
+                    patternProvider
+                            .getPattern(scope.scope, scope.articles)
+                            .matcher(response)
+                            .findAll { matcher ->
+                                result.items.add(SearchItem().apply {
+                                    id = matcher.groupInt(1) ?: return@findAll
+                                    imageUrl = matcher.group(2)
+                                    date = matcher.group(3)
+                                    userId = matcher.groupInt(4) ?: return@findAll
+                                    nick = matcher.group(5).fromHtml()
+                                    title = matcher.group(6).fromHtml()
+                                    body = matcher.group(7)
+                                })
+                            }
+                } else if (resultTopics) {
+                    patternProvider
+                            .getPattern(scope.scope, scope.forum_topics)
+                            .matcher(response)
+                            .findAll { matcher ->
+                                result.items.add(SearchItem().apply {
+                                    topicId = matcher.groupInt(1) ?: return@findAll
+                                    title = matcher.group(4).fromHtml()
+                                    desc = matcher.group(5).fromHtml()
+                                    forumId = matcher.groupInt(6) ?: return@findAll
+                                    userId = matcher.groupInt(10) ?: return@findAll
+                                    nick = matcher.group(11).fromHtml()
+                                    date = matcher.group(12)
+                                })
+                            }
+                } else {
+                    patternProvider
+                            .getPattern(scope.scope, scope.forum_posts)
+                            .matcher(response)
+                            .findAll { matcher ->
+                                result.items.add(SearchItem().apply {
+                                    val (tid, pid) = matcher.resolveForumPostTopicIdAndPostId()
+                                    topicId = tid
+                                    id = pid
+                                    title = decodeHtmlText(matcher.group(4))
+                                    date = matcher.group(5)
+                                    isOnline = matcher.groupOrEmpty(7).contains("green")
+                                    matcher.group(8)?.also {
+                                        if (!it.isEmpty()) {
+                                            avatar = "https://s.4pda.to/forum/uploads/$it"
+                                        }
+                                    }
+                                    nick = decodeHtmlText(matcher.group(9))
+                                    userId = matcher.groupInt(10) ?: return@findAll
+                                    isCurator = matcher.group(11) != null
+                                    groupColor = matcher.group(12)
+                                    group = matcher.group(13)
+                                    canMinusRep = matcher.groupOrEmpty(14).isNotEmpty()
+                                    reputation = matcher.group(15)
+                                    canPlusRep = matcher.groupOrEmpty(16).isNotEmpty()
+                                    canReport = matcher.groupOrEmpty(17).isNotEmpty()
+                                    canEdit = matcher.groupOrEmpty(18).isNotEmpty()
+                                    canDelete = matcher.groupOrEmpty(19).isNotEmpty()
+                                    canQuote = matcher.groupOrEmpty(20).isNotEmpty()
+                                    body = matcher.groupOrEmpty(21)
+                                })
+                            }
+                }
+                result.pagination = if (isNews) Pagination.parseNews(response) else Pagination.parseForum(response)
+                result.settings = settings
+            }
 }
