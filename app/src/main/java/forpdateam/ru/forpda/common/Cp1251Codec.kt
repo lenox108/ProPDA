@@ -82,7 +82,15 @@ object Cp1251Codec {
      * управляющий символ, и смайлы в комментах пропадали при отправке.
      */
     @JvmStatic
-    fun encodeFormValueWithEntities(value: String?): String {
+    fun encodeFormValueWithEntities(value: String?): String = encode(escapeNonCp1251(value))
+
+    /**
+     * Заменяет непредставимые в windows-1251 символы (эмодзи и прочий Unicode вне cp1251) на
+     * `&#NNNN;` — без percent-encoding. Для multipart-форм (тело поста форума), где значение уходит
+     * телом части, а не percent-encoded парой; см. [encodeFormValueWithEntities] для обычных форм.
+     */
+    @JvmStatic
+    fun escapeNonCp1251(value: String?): String {
         if (value.isNullOrEmpty()) return ""
         val encoder = charset.newEncoder()
         val sb = StringBuilder(value.length)
@@ -98,7 +106,7 @@ object Cp1251Codec {
             }
             i += count
         }
-        return encode(sb.toString())
+        return sb.toString()
     }
 
     private fun isRepresentableInCp1251(s: String): Boolean =

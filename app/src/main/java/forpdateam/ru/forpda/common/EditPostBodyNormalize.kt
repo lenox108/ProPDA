@@ -66,9 +66,14 @@ fun decodeBbcodeLineBreaksForEditor(text: String): String =
  * Тело поля `Post` при submit — как в браузерной textarea: сырые `\n`, не `[br]`.
  * IPB в textarea отдаёт `[br]`, но при сохранении принимает переводы строк; литеральные
  * `[br]` в POST попадают в HTML поста как видимый текст.
+ *
+ * Эмодзи и прочий Unicode вне windows-1251 уходят как `&#NNNN;` — ровно так их шлёт браузер
+ * с `accept-charset=windows-1251`, и именно в таком виде 4PDA их хранит (в HTML тем видно
+ * `&#128513;`). Без этого cp1251-движок IPB получал битые байты, и эмодзи из поста пропадал.
+ * Обратно (`&#NNNN;` → эмодзи) текст разворачивает [decodeForumPostTextareaContent] при правке.
  */
 fun encodeEditPostBodyForSubmit(text: String): String =
-        text.replace("\r\n", "\n").replace('\r', '\n')
+        Cp1251Codec.escapeNonCp1251(text.replace("\r\n", "\n").replace('\r', '\n'))
 
 fun normalizeEditPostBodyForEditor(text: String): String {
     var s = decodeBbcodeLineBreaksForEditor(text)
