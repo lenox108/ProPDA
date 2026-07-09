@@ -181,9 +181,12 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        clearToolbarScrollFlags()
-        appBarLayout.setExpanded(true, false)
-        ensureOpaquePinnedToolbarUnderlay()
+        // Pin the toolbar the way every other list screen does. The WebView the list replaced kept the
+        // toolbar visible by forcing its own elevation/translationZ to 0; a RecyclerView is added to the
+        // CoordinatorLayout after the AppBarLayout and, at equal Z, simply painted over it — the avatar,
+        // title and refresh action vanished behind the topmost message. pinStaticOpaqueToolbar() raises
+        // the app bar (bringToFront + elevation) on top of clearing the scroll flags.
+        pinStaticOpaqueToolbar()
         setListsBackground()
         messagePanelHost.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
 
@@ -286,7 +289,6 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
             layoutManager = messagesLayoutManager
             adapter = messagesAdapter
             clipToPadding = false
-            setHasFixedSize(false)
             itemAnimator = null // a chat re-diffs on every WS tick; animations only add jitter
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
