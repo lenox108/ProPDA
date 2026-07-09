@@ -1,6 +1,10 @@
 package forpdateam.ru.forpda.ui.fragments.theme.nativerender
 
 import android.content.res.AssetManager
+import android.content.res.Resources
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.text.Spannable
 import android.text.SpannableStringBuilder
@@ -15,7 +19,7 @@ import java.util.regex.Pattern
  *
  * The shortcode → filename map is parsed once from the same `assets/forpda/scripts/z_emoticons.js`
  * the WebView uses, so the two stay in sync. v1 handles only unambiguous colon-delimited word
- * shortcodes (`:[a-z0-9_]+:`) — the ones that currently leak as literal text; 2-char emoticons like
+ * shortcodes (`:[a-z0-9_-]+:`) — the ones that currently leak as literal text; 2-char emoticons like
  * `:)` are a later, riskier (false-positive-prone) step. Smile gifs are local (no network, no async
  * layout jump); they render as a static first frame at a fixed inline size.
  */
@@ -32,7 +36,8 @@ object SmileProvider {
     @Volatile
     private var pattern: Pattern? = null
 
-    private val drawableCache = HashMap<String, Drawable?>()
+    /** gif filename → decoded first frame (null = known-undecodable, don't retry). */
+    private val bitmapCache = HashMap<String, Bitmap?>()
 
     private fun ensureLoaded(assets: AssetManager) {
         if (codeToFile != null) return
@@ -42,7 +47,8 @@ object SmileProvider {
             runCatching {
                 val js = assets.open(EMOTICON_SCRIPT).bufferedReader().use { it.readText() }
                 // Match:  ":word:": ["file.gif"  — colon-delimited word shortcodes only.
-                val entry = Pattern.compile("\"(:[a-z0-9_]+:)\"\\s*:\\s*\\[\"([a-z0-9_]+\\.gif)\"")
+                // Hyphens are part of the word (":scratch_one-s_head:", ":i-m_so_happy:").
+                val entry = Pattern.compile("\"(:[a-z0-9_-]+:)\"\\s*:\\s*\\[\"([a-z0-9_-]+\\.gif)\"")
                 val m = entry.matcher(js)
                 while (m.find()) {
                     map[m.group(1)!!] = m.group(2)!!
@@ -64,8 +70,8 @@ object SmileProvider {
      * Returns [text] with every known smile shortcode replaced by an inline [ImageSpan] sized
      * [sizePx] square. If nothing matches (or the map failed to load) the original text is returned.
      */
-    fun applySmiles(text: CharSequence, assets: AssetManager, sizePx: Int): CharSequence {
-        ensureLoaded(assets)
+    fun applySmiles(text: CharSequence, res: Resources, sizePx: Int): CharSequence {
+        ensureLoaded(res.assets)
         val p = pattern ?: return text
         val map = codeToFile ?: return text
         val m = p.matcher(text)
@@ -76,7 +82,7 @@ object SmileProvider {
         m.reset(out)
         while (m.find()) {
             val file = map[m.group()] ?: continue
-            val drawable = drawableFor(file, assets, sizePx) ?: continue
+            val drawable = drawableFor(file, res, sizePx) ?: continue
             out.setSpan(
                     ImageSpan(drawable, ImageSpan.ALIGN_BOTTOM),
                     m.start(), m.end(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
@@ -85,17 +91,26 @@ object SmileProvider {
         return out
     }
 
-    private fun drawableFor(file: String, assets: AssetManager, sizePx: Int): Drawable? {
-        val cached = drawableCache[file]
-        if (cached != null) {
-            return cached.constantState?.newDrawable()?.mutate()?.apply { setBounds(0, 0, sizePx, sizePx) }
-        }
-        if (drawableCache.containsKey(file)) return null // known-missing
-        val d = runCatching {
-            assets.open("$SMILE_ASSET_DIR/$file").use { Drawable.createFromStream(it, file) }
+    /**
+     * A fresh [BitmapDrawable] per span over a shared cached frame — an [ImageSpan]'s drawable carries
+     * its own bounds and may be drawn by several TextViews at once, so instances are never shared.
+     *
+     * Decoding goes through [BitmapFactory] rather than `Drawable.createFromStream`: 149 of the 171
+     * bundled smiles are animated, and for those the latter hands back an `AnimatedImageDrawable`
+     * whose `constantState` is null — uncopyable, so every cache hit produced a null drawable and the
+     * shortcode leaked through as literal text.
+     */
+    private fun drawableFor(file: String, res: Resources, sizePx: Int): Drawable? {
+        val frame = frameFor(file, res.assets) ?: return null
+        return BitmapDrawable(res, frame).apply { setBounds(0, 0, sizePx, sizePx) }
+    }
+
+    private fun frameFor(file: String, assets: AssetManager): Bitmap? = synchronized(bitmapCache) {
+        if (bitmapCache.containsKey(file)) return bitmapCache[file] // includes known-undecodable (null)
+        val frame = runCatching {
+            assets.open("$SMILE_ASSET_DIR/$file").use { BitmapFactory.decodeStream(it) }
         }.getOrNull()
-        drawableCache[file] = d
-        return d?.constantState?.newDrawable()?.mutate()?.apply { setBounds(0, 0, sizePx, sizePx) }
-                ?: d?.apply { setBounds(0, 0, sizePx, sizePx) }
+        bitmapCache[file] = frame
+        return frame
     }
 }
