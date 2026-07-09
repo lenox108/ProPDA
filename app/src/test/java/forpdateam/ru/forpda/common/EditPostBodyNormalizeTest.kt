@@ -142,6 +142,18 @@ class EditPostBodyNormalizeTest {
     }
 
     @Test
+    fun normalizeDomHtml_namedSpoilerKeepsItsTitle() {
+        val html = """<div class="post-block spoil close"><div class="block-title" title="Открыть этот спойлер">скрины</div><div class="block-body">содержимое</div></div>"""
+        assertTrue(normalizeEditPostBodyFromDomHtml(html).contains("[spoiler=скрины]содержимое[/spoiler]"))
+    }
+
+    @Test
+    fun normalizeDomHtml_bracketsInSpoilerTitleDoNotBreakBbcode() {
+        val html = """<div class="post-block spoil close"><div class="block-title">скрины [1]</div><div class="block-body">t</div></div>"""
+        assertTrue(normalizeEditPostBodyFromDomHtml(html).contains("[spoiler=скрины (1)]"))
+    }
+
+    @Test
     fun normalizeDomHtml_stripsSmartQuoteToggleFromCollapsedQuote() {
         val html = """
             <div class="post-block quote smart-quote-collapsible smart-quote-collapsed">
