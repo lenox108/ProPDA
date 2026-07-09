@@ -6,6 +6,7 @@ import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.attachments.TopicAttachmentsFragment
 import forpdateam.ru.forpda.ui.fragments.auth.AuthFragment
+import forpdateam.ru.forpda.ui.fragments.sitecontent.SiteUserContentFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.brands.BrandsFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.device.DeviceFragment
@@ -191,6 +192,13 @@ object TabHelper {
                     screen.topicTitle?.let { putString(TabFragment.ARG_TITLE, it) }
                 })
             }
+            is Screen.SiteUserContent -> {
+                createFragment(SiteUserContentFragment::class.java, args.apply {
+                    putString(SiteUserContentFragment.ARG_URL, screen.url)
+                    putString(SiteUserContentFragment.ARG_KIND, screen.kind.name)
+                    screen.screenTitleText?.let { putString(TabFragment.ARG_TITLE, it) }
+                })
+            }
             is Screen.Search -> {
                 createFragment(SearchFragment::class.java, args.apply {
                     putString(TabFragment.ARG_TAB, screen.searchUrl)
@@ -257,6 +265,7 @@ object TabHelper {
             is Screen.QmsChat -> QmsChatFragment::class.java
             is Screen.Reputation -> ReputationFragment::class.java
             is Screen.Attachments -> TopicAttachmentsFragment::class.java
+            is Screen.SiteUserContent -> SiteUserContentFragment::class.java
             is Screen.Search -> SearchFragment::class.java
             is Screen.Downloads -> DownloadsFragment::class.java
             is Screen.Theme -> forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment::class.java
@@ -295,6 +304,7 @@ object TabHelper {
             is QmsChatFragment -> Screen.QmsChat::class.java
             is ReputationFragment -> Screen.Reputation::class.java
             is TopicAttachmentsFragment -> Screen.Attachments::class.java
+            is SiteUserContentFragment -> Screen.SiteUserContent::class.java
             is SearchFragment -> Screen.Search::class.java
             is DownloadsFragment -> Screen.Downloads::class.java
             // Native topic engine maps to Screen.Theme — otherwise it hits the else-fallback

@@ -101,6 +101,13 @@ object NetworkModule {
     @Provides @Singleton fun provideAttachmentsApi(wc: IWebClient, p: AttachmentsParser) = AttachmentsApi(wc, p)
     @Provides @Singleton fun provideTopicAttachmentsParser() = TopicAttachmentsParser()
     @Provides @Singleton fun provideTopicAttachmentsApi(wc: IWebClient, p: TopicAttachmentsParser) = TopicAttachmentsApi(wc, p)
+    @Provides @Singleton fun provideSiteCommentsParser() =
+            forpdateam.ru.forpda.model.data.remote.api.sitecontent.SiteCommentsParser()
+    @Provides @Singleton fun provideSiteUserContentApi(
+            wc: IWebClient,
+            ap: ArticleParser,
+            cp: forpdateam.ru.forpda.model.data.remote.api.sitecontent.SiteCommentsParser,
+    ) = forpdateam.ru.forpda.model.data.remote.api.sitecontent.SiteUserContentApi(wc, ap, cp)
     @Provides @Singleton fun provideUserCpApi(wc: IWebClient, p: UserCpParser) = UserCpApi(wc, p)
     // endregion
 }

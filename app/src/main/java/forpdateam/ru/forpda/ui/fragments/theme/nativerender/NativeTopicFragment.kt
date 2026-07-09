@@ -3094,11 +3094,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val serverAnchorId = page.anchorPostId?.removePrefix("entry")?.trim()?.toIntOrNull()
                 ?: page.anchor?.removePrefix("entry")?.trim()?.toIntOrNull()
         val lastLoadedId = page.posts.lastOrNull { it.id > 0 }?.id
-        val resumeId = forpdateam.ru.forpda.presentation.theme.TopicReadBoundaryPolicy.resumeAnchorPostId(
-                boundaryPostId = boundaryId,
-                serverAnchorPostId = serverAnchorId,
-                lastLoadedPostId = lastLoadedId,
-        ) ?: return false
+        // Первый не-виденный пост окна = наименьший id строго больше границы. Если сервер сел ровно на
+        // него (свежий ответ сразу за границей, ничего не пропущено) — резюмить на границу не нужно,
+        // иначе первый непрочитанный (последний пост) обрезался бы снизу под уже прочитанным.
+        val firstUnseenId = page.posts.filter { it.id > boundaryId }.minByOrNull { it.id }?.id
+        val resumeIdDiag = forpdateam.ru.forpda.presentation.theme.TopicReadBoundaryPolicy.resumeAnchorPostId(
+                boundaryPostId = boundaryId, serverAnchorPostId = serverAnchorId,
+                lastLoadedPostId = lastLoadedId, firstUnseenPostId = firstUnseenId)
+        android.util.Log.i("FPDA_READ_BOUNDARY", "DECIDE topic=${page.id} boundary=$boundaryId serverAnchor=$serverAnchorId lastLoaded=$lastLoadedId firstUnseen=$firstUnseenId -> resume=$resumeIdDiag")
+        val resumeId = resumeIdDiag ?: return false
         // Резюм — findpost на границу. Гасим «в конец/на верх», чтобы вложенная загрузка села на границу.
         pendingJumpToBottom = false
         pendingJumpToTop = false
@@ -3231,6 +3235,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // lands on the last post, so flash it too.
             ids.lastOrNull()?.let { postsAdapter.requestHighlight(it) }
             recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
+            // Re-anchor once the viewport has SETTLED. On the send-reply reload (getlastpost right after
+            // hideMessagePanel/hideKeyboard) the first anchor can measure a still-collapsing viewport, so a
+            // FITTING post is mis-judged as taller-than-screen and top-pinned → cut on the bottom. A settle-
+            // delayed [reanchorBottomAfterGrowth] re-measures with the final viewport (height-aware +
+            // idempotent, so it no-ops for an already-correct open). Two ticks cover slow keyboard anims.
+            recyclerView.postDelayed({ reanchorBottomAfterGrowth() }, 250)
+            recyclerView.postDelayed({ reanchorBottomAfterGrowth() }, 550)
             return
         }
         // An explicit page-jump lands on the first post of the requested page, ignoring the server's

@@ -152,6 +152,19 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
         var topicTitle: String? = null
     }
 
+    /**
+     * Нативный список сайтового контента пользователя (профильные счётчики «Постов»/«Комментов»
+     * ведут на `https://4pda.to/<ник>/posts|comments/`). Раньше эти ссылки проваливались в браузер
+     * (LinkHandler их не знал); теперь открываются в приложении.
+     */
+    class SiteUserContent : Screen() {
+        var url: String = ""
+        var kind: Kind = Kind.POSTS
+        var screenTitleText: String? = null
+
+        enum class Kind { POSTS, COMMENTS }
+    }
+
     class Search : Screen() {
         var searchUrl: String? = null
     }

@@ -40,4 +40,25 @@ class TopicReadBoundaryPolicyTest {
         assertNull(TopicReadBoundaryPolicy.resumeAnchorPostId(100, null, 100))
         assertNull(TopicReadBoundaryPolicy.resumeAnchorPostId(100, null, null))
     }
+
+    @Test
+    fun serverAtFirstUnseen_noOverride_trustServer() {
+        // Свежий ответ (500) — ПЕРВЫЙ не-виденный пост сразу за границей (100), сервер сел ровно на него.
+        // Ничего не пропущено → не резюмим на границу (иначе 500 обрезался бы снизу под прочитанным 100).
+        // Это кейс «ответ на свой пост»: юзер видел свой пост (100), пришёл ответ (500) — открыть надо ответ.
+        assertNull(TopicReadBoundaryPolicy.resumeAnchorPostId(100, 500, 500, firstUnseenPostId = 500))
+    }
+
+    @Test
+    fun serverBelowFirstUnseen_walkDown_resumeAtBoundary() {
+        // Реальный walk-down: между границей (100) и серверным таргетом (500) есть не-виденные посты —
+        // первый из них 200. Сервер проскочил 200..499 → резюмим на границу, чтобы не пропустить их.
+        assertEquals(100, TopicReadBoundaryPolicy.resumeAnchorPostId(100, 500, 900, firstUnseenPostId = 200))
+    }
+
+    @Test
+    fun firstUnseenNull_fallsBackToBoundaryComparison() {
+        // firstUnseen неизвестен → прежнее поведение (резюм на границу при server > boundary).
+        assertEquals(100, TopicReadBoundaryPolicy.resumeAnchorPostId(100, 500, 900, firstUnseenPostId = null))
+    }
 }
