@@ -523,6 +523,57 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
+        // Уточняем в коде, что существующий «Размер шрифта» — это размер текста именно в темах/постах.
+        findPreference<Preference>(Preferences.Main.WEBVIEW_FONT_SIZE)?.title = "Размер шрифта в темах"
+
+        // НОВЫЙ отдельный ползунок: размер шрифта ВСЕГО приложения (интерфейс).
+        findPreference<Preference>("main.app_font_size")?.apply {
+            fun appSizeSummary() =
+                "Весь интерфейс, 100% = 16 (сейчас ${mainPreferencesHolder.getAppFontSize()}); применится после возврата из настроек"
+            title = "Размер шрифта приложения"
+            summary = appSizeSummary()
+            setOnPreferenceClickListener {
+                val dialogView = requireActivity().layoutInflater.inflate(R.layout.dialog_font_size, null)
+                    ?: throw IllegalStateException("Failed to inflate dialog_font_size")
+                val seekBar = dialogView.findViewById<SeekBar>(R.id.value_seekbar)
+                    ?: throw IllegalStateException("seekBar not found")
+                val textView = dialogView.findViewById<TextView>(R.id.value_textview)
+                    ?: throw IllegalStateException("textView not found")
+                seekBar.progress = mainPreferencesHolder.getAppFontSize() - 8
+                textView.text = (seekBar.progress + 8).toString()
+                textView.textSize = (seekBar.progress + 8).toFloat()
+                seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(sb: SeekBar, i: Int, b: Boolean) {
+                        textView.text = (i + 8).toString()
+                        textView.textSize = (i + 8).toFloat()
+                    }
+                    override fun onStartTrackingTouch(sb: SeekBar) {}
+                    override fun onStopTrackingTouch(sb: SeekBar) {}
+                })
+                MaterialAlertDialogBuilder(requireActivity())
+                    .setTitle("Размер шрифта приложения")
+                    .setView(dialogView)
+                    .setPositiveButton(R.string.ok) { _, _ ->
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            mainPreferencesHolder.setAppFontSize(seekBar.progress + 8)
+                            summary = appSizeSummary()
+                        }
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .setNeutralButton(R.string.reset, null)
+                    .showWithStyledButtons()
+                    .getButton(DialogInterface.BUTTON_NEUTRAL)
+                    .setOnClickListener {
+                        seekBar.progress = 16 - 8
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            mainPreferencesHolder.setAppFontSize(16)
+                            summary = appSizeSummary()
+                        }
+                    }
+                false
+            }
+        }
+
         findPreference<Preference>("open_notifications")?.apply {
             setOnPreferenceClickListener {
                 val intent = Intent(activity, SettingsActivity::class.java)
@@ -725,15 +776,14 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun updateAppFontSummary(mode: AppFontMode) {
-        findPreference<Preference>(Preferences.Main.APP_FONT_MODE)?.setSummary(
-            when (mode) {
-                AppFontMode.SYSTEM -> R.string.pref_summary_app_font_system
-                AppFontMode.ROBOTO -> R.string.pref_summary_app_font_roboto
-                AppFontMode.INTER -> R.string.pref_summary_app_font_inter
-                AppFontMode.SOURCE_SANS_3 -> R.string.pref_summary_app_font_source_sans_3
-                AppFontMode.OPEN_SANS -> R.string.pref_summary_app_font_open_sans
-            }
-        )
+        findPreference<Preference>(Preferences.Main.APP_FONT_MODE)?.summary = when (mode) {
+            AppFontMode.SYSTEM -> getString(R.string.pref_summary_app_font_system)
+            AppFontMode.ROBOTO -> getString(R.string.pref_summary_app_font_roboto)
+            AppFontMode.INTER -> getString(R.string.pref_summary_app_font_inter)
+            AppFontMode.SOURCE_SANS_3 -> getString(R.string.pref_summary_app_font_source_sans_3)
+            AppFontMode.OPEN_SANS -> getString(R.string.pref_summary_app_font_open_sans)
+            AppFontMode.ROBOTO_MONO -> "Roboto Mono — моноширинный; применится после возврата из настроек"
+        }
     }
 
     private fun updateAccentSummary(palette: Preferences.Main.AccentPalette) {

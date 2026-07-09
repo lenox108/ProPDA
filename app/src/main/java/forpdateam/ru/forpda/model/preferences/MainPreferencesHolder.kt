@@ -13,6 +13,7 @@ class MainPreferencesHolder(
 
     // --- Flow-наблюдения ---
     fun observeWebViewFontSizeFlow(): Flow<Int> = dataStore.observeWebViewFontSizeFlow()
+    fun observeAppFontSizeFlow(): Flow<Int> = dataStore.observeAppFontSizeFlow()
 
     fun observeScrollButtonEnabledFlow(): Flow<Boolean> = dataStore.observeScrollButtonEnabledFlow()
 
@@ -62,6 +63,7 @@ class MainPreferencesHolder(
 
     // --- Геттеры (instant mirror reads, no runBlocking) ---
     fun getWebViewFontSize(): Int = dataStore.getWebViewFontSizeImmediate()
+    fun getAppFontSize(): Int = dataStore.getAppFontSizeImmediate()
 
     fun getSystemDownloader(): Boolean = dataStore.getSystemDownloaderImmediate()
 
@@ -124,6 +126,7 @@ class MainPreferencesHolder(
 
     // --- Сеттеры (suspend — mirror updated inside DataStore) ---
     suspend fun setWebViewFontSize(size: Int) = dataStore.setWebViewFontSize(size)
+    suspend fun setAppFontSize(size: Int) = dataStore.setAppFontSize(size)
 
     suspend fun setBottomNavColumns(columns: Int) = dataStore.setBottomNavColumns(columns)
 

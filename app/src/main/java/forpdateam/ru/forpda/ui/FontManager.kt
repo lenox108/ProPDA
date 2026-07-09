@@ -13,7 +13,8 @@ enum class AppFontMode {
     ROBOTO,
     INTER,
     SOURCE_SANS_3,
-    OPEN_SANS
+    OPEN_SANS,
+    ROBOTO_MONO
 }
 
 object FontController {
@@ -23,11 +24,13 @@ object FontController {
     private const val SOURCE_SANS_3_WEB_FONT_STACK = "\"ForPdaSourceSans3\", system-ui, sans-serif"
     private const val OPEN_SANS_WEB_FONT_STACK = "\"ForPdaOpenSans\", system-ui, sans-serif"
     private const val SYSTEM_WEB_FONT_STACK = "system-ui, sans-serif"
+    private const val ROBOTO_MONO_WEB_FONT_STACK = "\"Roboto Mono\", monospace"
     const val ROBOTO_WEB_FONT_CLASS = "font_roboto"
     const val INTER_WEB_FONT_CLASS = "font_inter"
     const val SOURCE_SANS_3_WEB_FONT_CLASS = "font_source_sans_3"
     const val OPEN_SANS_WEB_FONT_CLASS = "font_open_sans"
     const val SYSTEM_WEB_FONT_CLASS = "font_system"
+    const val ROBOTO_MONO_WEB_FONT_CLASS = "font_roboto_mono"
 
     fun getCurrentFontMode(mainPreferencesHolder: MainPreferencesHolder): AppFontMode =
         mainPreferencesHolder.getAppFontMode()
@@ -54,6 +57,7 @@ object FontController {
         AppFontMode.INTER -> INTER_WEB_FONT_STACK
         AppFontMode.SOURCE_SANS_3 -> SOURCE_SANS_3_WEB_FONT_STACK
         AppFontMode.OPEN_SANS -> OPEN_SANS_WEB_FONT_STACK
+        AppFontMode.ROBOTO_MONO -> ROBOTO_MONO_WEB_FONT_STACK
     }
 
     fun webFontClass(mode: AppFontMode): String = when (mode) {
@@ -62,6 +66,7 @@ object FontController {
         AppFontMode.INTER -> INTER_WEB_FONT_CLASS
         AppFontMode.SOURCE_SANS_3 -> SOURCE_SANS_3_WEB_FONT_CLASS
         AppFontMode.OPEN_SANS -> OPEN_SANS_WEB_FONT_CLASS
+        AppFontMode.ROBOTO_MONO -> ROBOTO_MONO_WEB_FONT_CLASS
     }
 
     @StyleRes
@@ -71,6 +76,7 @@ object FontController {
         AppFontMode.INTER -> R.style.ThemeOverlay_ForPDA_InterFont
         AppFontMode.SOURCE_SANS_3 -> R.style.ThemeOverlay_ForPDA_SourceSans3Font
         AppFontMode.OPEN_SANS -> R.style.ThemeOverlay_ForPDA_OpenSansFont
+        AppFontMode.ROBOTO_MONO -> R.style.ThemeOverlay_ForPDA_RobotoMonoFont
     }
 
     fun nativeFontFamilyApplied(mode: AppFontMode): String = when (mode) {
@@ -79,6 +85,7 @@ object FontController {
         AppFontMode.INTER -> "forpda_inter"
         AppFontMode.SOURCE_SANS_3 -> "forpda_source_sans_3"
         AppFontMode.OPEN_SANS -> "forpda_open_sans"
+        AppFontMode.ROBOTO_MONO -> "monospace"
     }
 
     fun applyNativeTheme(activity: Activity, mode: AppFontMode) {
@@ -121,6 +128,7 @@ html {
     /** Only the active mode's faces are embedded — avoids loading every bundled TTF on each WebView open. */
     fun webFontFaceDeclarations(mode: AppFontMode): String = when (mode) {
         AppFontMode.SYSTEM -> ""
+        AppFontMode.ROBOTO_MONO -> "" // «Roboto Mono»/monospace web-safe, @font-face не нужен
         AppFontMode.ROBOTO -> """
 @import url("file:///android_asset/fonts/roboto/import.min.css");
 """.trim()
@@ -298,7 +306,7 @@ code,
 }
 </style>
 <script>
-document.documentElement.classList.remove("$ROBOTO_WEB_FONT_CLASS", "$INTER_WEB_FONT_CLASS", "$SOURCE_SANS_3_WEB_FONT_CLASS", "$OPEN_SANS_WEB_FONT_CLASS", "$SYSTEM_WEB_FONT_CLASS");
+document.documentElement.classList.remove("$ROBOTO_WEB_FONT_CLASS", "$INTER_WEB_FONT_CLASS", "$SOURCE_SANS_3_WEB_FONT_CLASS", "$OPEN_SANS_WEB_FONT_CLASS", "$SYSTEM_WEB_FONT_CLASS", "$ROBOTO_MONO_WEB_FONT_CLASS");
 document.documentElement.classList.add("$fontClass");
 </script>
 """.trim()
