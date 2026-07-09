@@ -373,8 +373,15 @@ class TopicPostsAdapter(
             }
         }
 
+        // Post card fill = colorSurfaceContainerHigh (one step above the page's ...Lowest), NOT plain
+        // ...Container. In dark themes ...Lowest/...Low/...Container all collapse to near-black (static
+        // dark maps all three to #121212; the dynamic «Системный стиль» packs tones 4/10/12 — all
+        // near-black), so a card on ...Container reads AMOLED-black, indistinguishable from the page
+        // (user report «блоки постов прям чёрные, а должны быть серые»). ...High is the first tone that
+        // lifts to a real grey (static dark #242424), giving cards a visible surface on every palette.
+        // Nested blocks (quote/spoiler/code) ride one further step up on ...Highest to stay separated.
         private fun cardBaseColor(): Int = com.google.android.material.color.MaterialColors.getColor(
-                itemView, com.google.android.material.R.attr.colorSurfaceContainer)
+                itemView, com.google.android.material.R.attr.colorSurfaceContainerHigh)
 
         /**
          * Resting hairline border for the post card. Elevation shadows are invisible on dark/AMOLED
@@ -813,7 +820,7 @@ class TopicPostsAdapter(
             val card = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding((10 * dm.density).toInt())
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHighest)
                 clipToOutline = true
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -901,7 +908,7 @@ class TopicPostsAdapter(
             renderBlocksInto(content, block.inner, scope, item)
             return LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHighest)
                 clipToOutline = true
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1000,7 +1007,7 @@ class TopicPostsAdapter(
                 textSize = scaledSp(14f)
                 setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
                 setPadding(pad, pad, pad, pad)
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHighest)
                 clipToOutline = true
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1020,7 +1027,7 @@ class TopicPostsAdapter(
             val pad = (8 * dm.density).toInt()
             val card = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHighest)
                 clipToOutline = true
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1113,7 +1120,7 @@ class TopicPostsAdapter(
             val panel = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding((10 * resources.displayMetrics.density).toInt())
-                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+                background = m3BlockBackground(com.google.android.material.R.attr.colorSurfaceContainerHighest)
                 clipToOutline = true
             }
             // NOTE: no «[KIND]» debug label — it is a dev artifact and must never reach users
@@ -1208,7 +1215,7 @@ class TopicPostsAdapter(
         private fun neutralizeLowContrastColors(text: CharSequence): CharSequence {
             if (text !is Spanned) return text
             if (text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).isEmpty()) return text
-            val surface = itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer)
+            val surface = itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh)
             val bg = android.graphics.Color.rgb(
                     android.graphics.Color.red(surface),
                     android.graphics.Color.green(surface),
@@ -1262,7 +1269,7 @@ class TopicPostsAdapter(
         private fun contrastSafeLinkColor(): Int {
             val ctx = itemView.context
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-            val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer)
+            val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh)
             val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
             val surfaceIsDark = androidx.core.graphics.ColorUtils.calculateLuminance(surface) < 0.5
             val target = if (surfaceIsDark) DARK_SURFACE_LINK_CONTRAST else LOW_CONTRAST_THRESHOLD
