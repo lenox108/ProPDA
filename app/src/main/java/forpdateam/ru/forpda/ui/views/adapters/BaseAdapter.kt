@@ -40,28 +40,11 @@ abstract class BaseAdapter<E, VH : BaseViewHolder<E>> : RecyclerView.Adapter<VH>
         val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize() = oldList.size
             override fun getNewListSize() = this@BaseAdapter.items.size
-            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean {
-                val oldItem = oldList[oldPos]
-                val newItem = this@BaseAdapter.items[newPos]
-                // For TabFragment, compare by tag which is unique identifier
-                return if (oldItem is forpdateam.ru.forpda.ui.fragments.TabFragment && 
-                          newItem is forpdateam.ru.forpda.ui.fragments.TabFragment) {
-                    oldItem.tag == newItem.tag
-                } else {
-                    oldItem == newItem
-                }
-            }
-            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean {
-                // For TabFragment, content changes when title or state changes
-                val oldItem = oldList[oldPos]
-                val newItem = this@BaseAdapter.items[newPos]
-                return if (oldItem is forpdateam.ru.forpda.ui.fragments.TabFragment && 
-                          newItem is forpdateam.ru.forpda.ui.fragments.TabFragment) {
-                    oldItem.getTabTitle() == newItem.getTabTitle() && oldItem.tag == newItem.tag
-                } else {
-                    oldItem == newItem
-                }
-            }
+            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
+                    areItemsSame(oldList[oldPos], this@BaseAdapter.items[newPos])
+
+            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
+                    areContentsSame(oldList[oldPos], this@BaseAdapter.items[newPos])
         })
         try {
             diff.dispatchUpdatesTo(this)
@@ -70,6 +53,29 @@ abstract class BaseAdapter<E, VH : BaseViewHolder<E>> : RecyclerView.Adapter<VH>
             notifyDataSetChanged()
         }
     }
+
+    /**
+     * Stable-identity check for [DiffUtil] («тот же элемент»). Default keeps the historical behaviour:
+     * [TabFragment]s match by tag, everything else by reference/`equals`. Subclasses whose items are
+     * re-created on each load (e.g. search results) should override to compare by a stable id so DiffUtil
+     * can reuse rows and animate instead of treating every reload as a full replace (O(n·m) diff for nothing).
+     */
+    protected open fun areItemsSame(oldItem: E, newItem: E): Boolean =
+            if (oldItem is forpdateam.ru.forpda.ui.fragments.TabFragment &&
+                    newItem is forpdateam.ru.forpda.ui.fragments.TabFragment) {
+                oldItem.tag == newItem.tag
+            } else {
+                oldItem == newItem
+            }
+
+    /** Content-equality check for [DiffUtil] («содержимое не изменилось» → без ре-байнда). */
+    protected open fun areContentsSame(oldItem: E, newItem: E): Boolean =
+            if (oldItem is forpdateam.ru.forpda.ui.fragments.TabFragment &&
+                    newItem is forpdateam.ru.forpda.ui.fragments.TabFragment) {
+                oldItem.getTabTitle() == newItem.getTabTitle() && oldItem.tag == newItem.tag
+            } else {
+                oldItem == newItem
+            }
 
     fun clear() {
         items.clear()

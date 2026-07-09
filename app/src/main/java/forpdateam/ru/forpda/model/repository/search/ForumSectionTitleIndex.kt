@@ -8,14 +8,27 @@ import forpdateam.ru.forpda.model.data.remote.api.search.SearchTitleSimilarity
 
 class ForumSectionTitleIndex {
 
-    private val topicsByForum = linkedMapOf<Int, LinkedHashMap<Int, IndexedTitle>>()
+    // Bounded LRU: this index accumulates the titles of every forum section the user browses for the whole
+    // session, purely to offer «Похожие темы» suggestions. Unbounded it was a slow memory creep over a long
+    // session. accessOrder=true keeps the recently-visited forums; the eldest forum is evicted past the cap,
+    // and each forum's own title map is likewise capped (see [boundedTitleMap]).
+    private val topicsByForum = object : LinkedHashMap<Int, LinkedHashMap<Int, IndexedTitle>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, LinkedHashMap<Int, IndexedTitle>>): Boolean =
+                size > MAX_FORUMS
+    }
+
+    private fun boundedTitleMap(): LinkedHashMap<Int, IndexedTitle> =
+            object : LinkedHashMap<Int, IndexedTitle>(16, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, IndexedTitle>): Boolean =
+                        size > MAX_TOPICS_PER_FORUM
+            }
 
     @Synchronized
     fun record(forumId: Int, data: TopicsData) {
         val resolvedForumId = data.id.takeIf { it > 0 } ?: forumId
         if (resolvedForumId <= 0) return
 
-        val forumTopics = topicsByForum.getOrPut(resolvedForumId) { linkedMapOf() }
+        val forumTopics = topicsByForum.getOrPut(resolvedForumId) { boundedTitleMap() }
         (data.pinnedItems + data.topicItems).forEach { item ->
             if (item.id > 0 && !item.title.isNullOrBlank()) {
                 forumTopics[item.id] = item.toIndexedTitle(resolvedForumId, isSubForum = false)
@@ -86,5 +99,11 @@ class ForumSectionTitleIndex {
     companion object {
         const val SUGGESTION_LABEL = "Похожие темы"
         private const val DEFAULT_LIMIT = 5
+
+        /** Max forum sections kept in the in-memory suggestion index (LRU). */
+        private const val MAX_FORUMS = 24
+
+        /** Max indexed topic titles per forum section (LRU). */
+        private const val MAX_TOPICS_PER_FORUM = 400
     }
 }
