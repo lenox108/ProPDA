@@ -52,6 +52,9 @@ class TopicPostsAdapter(
         fun onDelete(item: NativePostItem)
         /** The user tapped the reputation avatar badge → open the reputation menu. */
         fun onReputation(item: NativePostItem)
+        /** Long-press on the 👍/👎 post-rating icon → change the author's user reputation directly
+         *  ([up] = raise, matching the pressed thumb). A shortcut over the avatar-badge → menu path. */
+        fun onReputationLongPress(item: NativePostItem, up: Boolean)
         /** The user tapped the author avatar → open the user menu (profile/rep/QMS/messages…). */
         fun onAvatarClick(item: NativePostItem)
         /** The user tapped the «⋮» post menu → reply/quote/copy-link/share/report/edit/delete/note. */
@@ -662,7 +665,10 @@ class TopicPostsAdapter(
             // Left group: post-rating vote 👍 · rating · 👎 (the WebView's rep-thumb-final outline
             // thumbs, background stripped, tinted to the muted action-icon colour).
             if (canPlus) {
-                actions.addView(iconAction(R.drawable.ic_post_thumb_up, null) { actionListener.onVote(item, up = true) })
+                actions.addView(iconAction(R.drawable.ic_post_thumb_up, null,
+                        onLongClick = { actionListener.onReputationLongPress(item, up = true) }) {
+                    actionListener.onVote(item, up = true)
+                })
             }
             // Show the rating NUMBER only when it's non-zero — the WebView hides a «0» rating
             // (post_rating_hidden), otherwise every post would carry a meaningless «0» between the thumbs.
@@ -670,7 +676,10 @@ class TopicPostsAdapter(
                     ?.takeIf { it.isNotBlank() && it.replace("+", "").trim().toIntOrNull() != 0 }
                     ?.let { actions.addView(ratingLabel(it)) }
             if (canMinus) {
-                actions.addView(iconAction(R.drawable.ic_post_thumb_down, null) { actionListener.onVote(item, up = false) })
+                actions.addView(iconAction(R.drawable.ic_post_thumb_down, null,
+                        onLongClick = { actionListener.onReputationLongPress(item, up = false) }) {
+                    actionListener.onVote(item, up = false)
+                })
             }
             // Spacer pushes reply/quote to the right edge, matching the WebView footer layout.
             if (item.canQuote) {
@@ -687,7 +696,12 @@ class TopicPostsAdapter(
          * A footer action icon tinted muted grey (`colorOnSurfaceVariant`) to match the WebView's
          * `post-action-icon-color`; a text label (if any) uses the accent colour.
          */
-        private fun iconAction(iconRes: Int, label: String?, onClick: () -> Unit): TextView {
+        private fun iconAction(
+                iconRes: Int,
+                label: String?,
+                onLongClick: (() -> Unit)? = null,
+                onClick: () -> Unit,
+        ): TextView {
             val ctx = itemView.context
             val dm = ctx.resources.displayMetrics
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
@@ -716,6 +730,13 @@ class TopicPostsAdapter(
                 setPadding(padH, padV, padH, padV)
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setOnClickListener { onClick() }
+                if (onLongClick != null) {
+                    setOnLongClickListener {
+                        it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        onLongClick()
+                        true
+                    }
+                }
             }
         }
 

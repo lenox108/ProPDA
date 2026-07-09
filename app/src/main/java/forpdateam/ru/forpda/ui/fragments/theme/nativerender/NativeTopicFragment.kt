@@ -2321,6 +2321,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         showM3Menu("Репутация ${item.nick.orEmpty()}", options)
     }
 
+    /**
+     * Long-press on a post's 👍/👎 icon → jump straight to the reputation-change dialog for the author
+     * ([up] = raise, matching the pressed thumb). Faster than the avatar-badge → menu path. The thumbs
+     * can appear via the quote-fallback even when reputation can't actually be changed (own limit reached,
+     * etc.), so guard on the direction-specific flag and tell the user instead of silently no-op'ing.
+     */
+    override fun onReputationLongPress(item: NativePostItem, up: Boolean) {
+        if (item.userId <= 0) return
+        val allowed = if (up) item.canPlusRep else item.canMinusRep
+        if (!allowed) {
+            Toast.makeText(requireContext(),
+                    "Нельзя изменить репутацию этому пользователю", Toast.LENGTH_SHORT).show()
+            return
+        }
+        showReputationChangeDialog(item, increase = up)
+    }
+
     private fun showReputationChangeDialog(item: NativePostItem, increase: Boolean) {
         val ctx = requireContext()
         val input = android.widget.EditText(ctx).apply { hint = "Комментарий (необязательно)" }
