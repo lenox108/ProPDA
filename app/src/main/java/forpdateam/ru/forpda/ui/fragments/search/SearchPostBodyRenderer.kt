@@ -245,13 +245,43 @@ class SearchPostBodyRenderer(
     }
 
     private fun spanned(ctx: Context, html: String): CharSequence = try {
-        val base = Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
+        // 4pda marks EVERY search hit with <span class="searchlite">…</span>. Html.fromHtml ignores CSS CLASSES,
+        // so the match rendered as plain text — the user couldn't see WHY a post matched (4pda content search is
+        // MORPHOLOGICAL: «зарядка» matches «зарядку/заряжать», so the literal typed word often isn't there), and
+        // the post looked like it lacked the word. Convert the class to an inline sentinel colour (fromHtml DOES
+        // honour inline `color`), then swap that sentinel for a real highlight span below — restoring the old
+        // WebView's visible match marker.
+        val prepared = SEARCHLITE_OPEN.replace(html, "<span style=\"color:#$SEARCHLITE_SENTINEL_HEX\">")
+        val base = Html.fromHtml(prepared, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
                 .let { var e = it.length; while (e > 0 && (it[e - 1] == '\n' || it[e - 1] == ' ')) e--; it.subSequence(0, e) }
         val size = (ctx.resources.displayMetrics.scaledDensity * 18f).toInt().coerceAtLeast(1)
-        val readable = stripLinkColors(neutralizeLowContrastColors(ctx, base))
+        val highlighted = applySearchHighlight(base)
+        val readable = stripLinkColors(neutralizeLowContrastColors(ctx, highlighted))
         SmileProvider.applySmiles(readable, ctx.assets, size)
     } catch (t: Throwable) {
         SpannableStringBuilder(html) as Spannable
+    }
+
+    /**
+     * Swap the sentinel foreground colour (injected above for each 4pda `searchlite` match) for a visible
+     * highlight — a translucent amber background + bold — so the matched word (or the stemmed word-FORM 4pda
+     * actually matched) is obvious, mirroring the old WebView's yellow marker. Done AFTER [Html.fromHtml] and
+     * BEFORE [neutralizeLowContrastColors] so the sentinel foreground never survives to be «readability-fixed».
+     */
+    private fun applySearchHighlight(text: CharSequence): CharSequence {
+        if (text !is Spanned) return text
+        val hasSentinel = text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java)
+                .any { it.foregroundColor == SEARCHLITE_SENTINEL }
+        if (!hasSentinel) return text
+        val out = SpannableStringBuilder(text)
+        for (span in out.getSpans(0, out.length, android.text.style.ForegroundColorSpan::class.java)) {
+            if (span.foregroundColor != SEARCHLITE_SENTINEL) continue
+            val start = out.getSpanStart(span); val end = out.getSpanEnd(span)
+            out.removeSpan(span)
+            out.setSpan(android.text.style.BackgroundColorSpan(SEARCH_HIGHLIGHT_BG), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            out.setSpan(android.text.style.StyleSpan(Typeface.BOLD), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return out
     }
 
     /**
@@ -317,5 +347,15 @@ class SearchPostBodyRenderer(
 
         /** Parsed-body LRU capacity: covers a viewport of post cards so a fling never re-parses HTML. */
         const val BLOCK_CACHE_SIZE = 48
+
+        /** Matches a 4pda search-hit wrapper `<span class="searchlite">`, whatever quoting/extra attrs it uses. */
+        private val SEARCHLITE_OPEN = Regex("<span[^>]*class=[\"']searchlite[\"'][^>]*>", RegexOption.IGNORE_CASE)
+
+        /** Improbable magenta injected on each match so [Html.fromHtml] (which honours inline `color`) tags it. */
+        private const val SEARCHLITE_SENTINEL_HEX = "fe02fe"
+        private const val SEARCHLITE_SENTINEL = 0xFFFE02FE.toInt()
+
+        /** Translucent amber match highlight — readable over text on both light and dark surfaces. */
+        private const val SEARCH_HIGHLIGHT_BG = 0x66FFC107.toInt()
     }
 }
