@@ -638,7 +638,9 @@ class ThemeApi(
     fun reportPost(topicId: Int, postId: Int, message: String): Boolean {
         val request = NetworkRequest.Builder()
                 .url("https://4pda.to/forum/index.php?act=report&send=1&t=$topicId&p=$postId")
-                .formHeader("message", Cp1251Codec.encode(message), true)
+                // Текст пользователя: непредставимое в cp1251 (эмодзи) → `&#NNNN;`, как браузерная
+                // форма с accept-charset=windows-1251. Обычный encode подставлял 0x1A, и смайл пропадал.
+                .formHeader("message", Cp1251Codec.encodeFormValueWithEntities(message), true)
                 .build()
         val response = webClient.request(request)
         val p = Pattern.compile("<div class=\"errorwrap\">\n" +

@@ -89,7 +89,9 @@ class ReputationApi(
                 .xhrHeader()
         fields.forEach { (key, value) ->
             if (key == form.messageFieldName) {
-                builder.formHeader(key, Cp1251Codec.encode(value), encoded = true)
+                // Текст пользователя: непредставимое в cp1251 (эмодзи) → `&#NNNN;`, как браузерная
+                // форма с accept-charset=windows-1251. Обычный encode подставлял 0x1A, и смайл пропадал.
+                builder.formHeader(key, Cp1251Codec.encodeFormValueWithEntities(value), encoded = true)
             } else {
                 builder.formHeader(key, value)
             }
