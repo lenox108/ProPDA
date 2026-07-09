@@ -417,7 +417,13 @@ class FavoritesViewModel @Inject constructor(
     }
 
     fun openAttachments(item: FavItem) {
-        linkHandler.handle("https://4pda.to/forum/index.php?act=attach&code=showtopic&tid=" + item.topicId, router)
+        // Раньше: linkHandler.handle(act=attach&code=showtopic) → LinkHandler не знает этот act →
+        // externalIntent → внешний браузер (без forum-кук = логин-стена, фича не работала). Теперь —
+        // нативный экран вложений.
+        router.navigateTo(Screen.Attachments().apply {
+            topicId = item.topicId
+            topicTitle = item.topicTitle
+        })
     }
 
     fun openForum(item: FavItem) {
