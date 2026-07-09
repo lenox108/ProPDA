@@ -99,6 +99,7 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
 
     private lateinit var appliedUiPalette: Preferences.Main.UiPalette
     private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
+    private var appliedAppFontSize: Int = 16
     private var appliedMaterialYou: Boolean = false
     private lateinit var appliedAccent: Preferences.Main.AccentPalette
     private var appliedAccentStyle: Preferences.Main.AccentStyle = Preferences.Main.AccentStyle.TONAL
@@ -122,7 +123,17 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
 
     override fun attachBaseContext(base: Context) {
         val localizedContext = LocaleHelper.onAttach(base)
-        super.attachBaseContext(localizedContext)
+        // App-wide font size (отдельно от «размера в темах»): масштабируем ВЕСЬ интерфейс через
+        // Configuration.fontScale — множим на выбранный размер (16 = 100%), поверх системного scale.
+        val appFontSize = try { MainDataStore(base).getAppFontSizeImmediate() } catch (e: Exception) { 16 }
+        val ctx = if (appFontSize != 16) {
+            val cfg = android.content.res.Configuration(localizedContext.resources.configuration)
+            cfg.fontScale = cfg.fontScale * (appFontSize / 16f)
+            localizedContext.createConfigurationContext(cfg)
+        } else {
+            localizedContext
+        }
+        super.attachBaseContext(ctx)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -146,6 +157,7 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
             Preferences.Main.ThemeMode.SYSTEM
         }
         appliedFontMode = tempDataStore.getAppFontModeImmediate()
+        appliedAppFontSize = tempDataStore.getAppFontSizeImmediate()
         // Запоминаем Material You + accent, чтобы onResume пересоздал активити при
         // их изменении (как уже делается для палитры/шрифта) — иначе переключение
         // в настройках не подхватывалось бы на уже открытых экранах без рестарта.
@@ -404,6 +416,13 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         if (::appliedFontMode.isInitialized && fontModeNow != appliedFontMode) {
             appliedFontMode = fontModeNow
             if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=fontMode selectedFontMode=%s", fontModeNow)
+            recreate()
+            return
+        }
+        val appFontSizeNow = mainPreferencesHolder.getAppFontSize()
+        if (appFontSizeNow != appliedAppFontSize) {
+            appliedAppFontSize = appFontSizeNow
+            if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=appFontSize size=%s", appFontSizeNow)
             recreate()
             return
         }

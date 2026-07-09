@@ -85,6 +85,11 @@
             android:title="@string/pref_title_text_size"
             app:iconSpaceReserved="false" />
 
+        <Preference
+            android:key="main.app_font_size"
+            android:layout="@layout/preference_custom"
+            app:iconSpaceReserved="false" />
+
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="false"
             android:key="main.webview.compatibility_mode"

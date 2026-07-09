@@ -301,6 +301,7 @@ class MessagePanel(
             AppFontMode.INTER -> ResourcesCompat.getFont(context, R.font.forpda_inter) ?: Typeface.DEFAULT
             AppFontMode.SOURCE_SANS_3 -> ResourcesCompat.getFont(context, R.font.forpda_source_sans_3) ?: Typeface.DEFAULT
             AppFontMode.OPEN_SANS -> ResourcesCompat.getFont(context, R.font.forpda_open_sans) ?: Typeface.DEFAULT
+            AppFontMode.ROBOTO_MONO -> Typeface.MONOSPACE
         }
     }
 
