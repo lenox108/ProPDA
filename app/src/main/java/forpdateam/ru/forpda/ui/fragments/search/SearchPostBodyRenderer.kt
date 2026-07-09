@@ -236,7 +236,7 @@ class SearchPostBodyRenderer(
                 .let { var e = it.length; while (e > 0 && (it[e - 1] == '\n' || it[e - 1] == ' ')) e--; it.subSequence(0, e) }
         val size = (ctx.resources.displayMetrics.scaledDensity * 18f).toInt().coerceAtLeast(1)
         val readable = stripLinkColors(neutralizeLowContrastColors(ctx, base))
-        SmileProvider.applySmiles(readable, ctx.assets, size)
+        SmileProvider.applySmiles(readable, ctx.resources, size)
     } catch (t: Throwable) {
         SpannableStringBuilder(html) as Spannable
     }

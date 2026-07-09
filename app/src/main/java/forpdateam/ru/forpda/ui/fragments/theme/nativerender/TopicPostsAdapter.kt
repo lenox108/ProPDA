@@ -1329,7 +1329,7 @@ class TopicPostsAdapter(
             // Replace 4pda smile shortcodes (:thank_you: …) with inline images from bundled assets.
             val ctx = itemView.context
             val smileSize = (ctx.resources.displayMetrics.scaledDensity * scaledSp(SMILE_SIZE_SP)).toInt().coerceAtLeast(1)
-            SmileProvider.applySmiles(base, ctx.assets, smileSize)
+            SmileProvider.applySmiles(base, ctx.resources, smileSize)
         } catch (t: Throwable) {
             // Graceful degradation (§6): never crash on a single post's markup.
             SpannableStringBuilder(html)
