@@ -289,8 +289,10 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
         val context = recyclerView.context
         titleColor = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
         titleColorNew = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+        // Blend from the ACTUAL plate fill (content_card_surface), not colorSurface — otherwise the
+        // selected row is tinted off a colour the row never had (the two diverge under Material You dark).
         selectionRowColor = ColorUtils.blendARGB(
-                context.getColorFromAttr(com.google.android.material.R.attr.colorSurface),
+                context.getColorFromAttr(R.attr.content_card_surface),
                 context.getColorFromAttr(androidx.appcompat.R.attr.colorAccent),
                 0.30f
         )
