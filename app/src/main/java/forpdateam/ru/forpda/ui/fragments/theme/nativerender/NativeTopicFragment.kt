@@ -252,10 +252,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /**
      * Bottom-nav «chrome» (tab bar + system navigation) height in px, pushed in by MainActivity via
-     * [onBottomChromePaddingChanged]. The list View measures full-height and overflows its clipped parent
-     * by exactly this much, so a plain bottom-anchor buries the last post's action buttons behind the tab
-     * bar. Reserved as the RecyclerView's bottom padding (clipToPadding=false → still scrolls edge-to-edge)
-     * so resting content — the last post especially — clears the tab bar. Parity with the WebView spacer.
+     * [onBottomChromePaddingChanged]. NOT added to the list padding — the fragment's container is already
+     * inset by this amount in MainActivity.updateDimens (shouldDrawBehindBottomNav()==false), so the list
+     * already sits above the tab bar. Kept only as a change signal (the inset lands a beat after the first
+     * anchor and shrinks the list, so we re-pin a bottom-anchored post when it changes).
      */
     private var bottomNavChromePad = 0
 
@@ -1744,7 +1744,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         fillingLastPage = false
         if (scrollToBottom) {
             val last = (recyclerView.adapter?.itemCount ?: 0) - 1
-            if (last >= 0) (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(last)
+            if (last >= 0) {
+                // This path only runs for a last page SHORTER than the viewport (maybeFillLastPage trigger),
+                // so the last post always FITS — a plain bottom-clamp is correct and flash-free. The resting
+                // gap that keeps its border off the tab bar comes from [bottomRestGapPx] padding; bottomAlignPost
+                // is a defensive pull-up (and no-ops on a taller-than-viewport post, see its height guard).
+                (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPosition(last)
+                bottomAlignPost(last)
+            }
             anchoredBottomPostId = loadedItems.lastOrNull()?.postId // survive enrichment growth (see reanchorBottomAfterGrowth)
         }
         recyclerView.alpha = 1f
@@ -2649,27 +2656,37 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             val show = isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE &&
                     mainPreferencesHolder.getTopicPaginationPanelEnabled()
             bar.visibility = if (show) View.VISIBLE else View.GONE
-            // Reserve bottom room: always the bottom-nav chrome (so the last post clears the tab bar), plus
-            // the pagination bar's own height when it is shown (CLASSIC). clipToPadding=false keeps the
-            // scroll edge-to-edge; this only affects the resting/bottom-aligned position.
+            // Reserve bottom room: always the bottom-nav chrome (so the last post clears the tab bar) plus a
+            // breathing gap ([bottomRestGapPx], so the last card's border isn't flush/clipped), plus the
+            // pagination bar's own height when it is shown (CLASSIC). clipToPadding=false keeps the scroll
+            // edge-to-edge; this only affects the resting/bottom-aligned position.
             val barPad = if (show) (52 * resources.displayMetrics.density).toInt() else 0
+            // NOTE: the fragment's container is ALREADY inset by the bottom-nav chrome height in
+            // MainActivity.updateDimens (shouldDrawBehindBottomNav()==false), so the RecyclerView bottom
+            // already sits above the tab bar. Adding bottomNavChromePad here too double-counted it and left
+            // a huge empty gap under the last post (user: «отступ до нижнего тулбара больше, чем между
+            // постами»). Reserve only the pagination bar height (CLASSIC) + the inter-post breathing gap.
             recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
-                    recyclerView.paddingRight, bottomNavChromePad + barPad)
+                    recyclerView.paddingRight, barPad + bottomRestGapPx())
         }
     }
 
     /**
-     * MainActivity reports the bottom-nav chrome height (tab bar + system nav) here. Reserve it as the
-     * list's bottom padding so the last post's action buttons never hide behind the tab bar (see
-     * [bottomNavChromePad]); re-pin if we were parked on the last post when the reservation lands.
+     * MainActivity reports the bottom-nav chrome height (tab bar + system nav) here. We do NOT add it to the
+     * list padding — MainActivity.updateDimens already insets this fragment's CONTAINER by the same amount
+     * (shouldDrawBehindBottomNav()==false), so the list already sits above the tab bar; adding it again
+     * double-counted and left a huge empty gap under the last post. We still track the value as a change
+     * signal and re-pin the bottom-anchored post when the container inset lands and shrinks the list.
      */
     override fun onBottomChromePaddingChanged(padding: Int) {
         if (bottomNavChromePad == padding) return
         bottomNavChromePad = padding
         if (view == null) return
         if (pagination.isInitialised) updatePaginationBar() else {
+            // Container is already inset by the chrome height (see updatePaginationBar note) — reserve only
+            // the inter-post breathing gap here, not bottomNavChromePad again (would double-count → big gap).
             recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
-                    recyclerView.paddingRight, bottomNavChromePad)
+                    recyclerView.paddingRight, bottomRestGapPx())
         }
         if (anchoredBottomPostId != null) recyclerView.post { reanchorBottomAfterGrowth() }
     }
@@ -3011,10 +3028,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (anchorId != loadedItems.lastOrNull()?.postId) { anchoredBottomPostId = null; return }
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         val itemCount = recyclerView.adapter?.itemCount ?: return
+        val lastPos = itemCount - 1
         // Still parked at the end (last item at least partially visible) → re-pin it to the bottom.
-        if (lm.findLastVisibleItemPosition() >= itemCount - 1) {
-            lm.scrollToPosition(itemCount - 1)
-            bottomAlignPost(itemCount - 1)
+        if (lm.findLastVisibleItemPosition() >= lastPos) {
+            val lastView = recyclerView.findViewHolderForAdapterPosition(lastPos)?.itemView
+            val visible = recyclerView.height - recyclerView.paddingTop - recyclerView.paddingBottom
+            if (lastView != null && lastView.height > visible) {
+                // Last post is TALLER than the screen: it must stay TOP-aligned so the user reads it from the
+                // start (user: «большой пост должен выравниваться по верху, а не обрезаться»). Never bottom-
+                // anchor it here — that cut its top. Re-top-align only if growth pushed its top off-screen.
+                if (lastView.top < recyclerView.paddingTop) lm.scrollToPositionWithOffset(lastPos, 0)
+                return
+            }
+            lm.scrollToPosition(lastPos)
+            bottomAlignPost(lastPos)
         } else {
             anchoredBottomPostId = null // user scrolled away — stop re-pinning
         }
@@ -3082,16 +3109,40 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * laid-out item and, if it overshoots the bottom edge, [scrollBy] exactly that much so its bottom (with
      * the like/quote/reputation row) sits at the viewport bottom. No-op when the post already fits.
      */
+    /**
+     * Breathing gap kept BELOW the last post at rest so its bottom border / rounded corner / open-highlight
+     * clears the tab-bar chrome instead of sitting flush against it, where it reads as clipped (user:
+     * «последнее сообщение чуть срезано снизу, видно по границе поста»).
+     *
+     * Sized so the space between the last card and the bottom-nav bar EQUALS the inter-post gap (user:
+     * «такой же минимальный отступ как между постами»). Cards carry a 4dp vertical margin each, so adjacent
+     * posts show an 8dp neutral gap (4dp + 4dp). The last card already contributes its own 4dp bottom margin,
+     * so this padding adds the remaining 4dp → 8dp total, matching the inter-post spacing.
+     *
+     * This MUST be layout padding, not a scroll: the last post is the content end, so a bottom-anchor
+     * `scrollBy` to open a gap below it is clamped to zero (nothing below to scroll into) and does nothing —
+     * verified on device (clearance stayed 0 despite scrollBy(gap)). Reserved as extra [recyclerView]
+     * paddingBottom; clipToPadding=false keeps mid-scroll content edge-to-edge, so the gap only shows at the
+     * very bottom.
+     */
+    private fun bottomRestGapPx(): Int = (4 * resources.displayMetrics.density).toInt()
+
+    /**
+     * Pull the post at [concatPos] up if its bottom is CLIPPED below the (padded) bottom edge — e.g. a mid
+     * post whose action buttons fell behind the tab-bar chrome. For the true last post the gap comes from
+     * [bottomRestGapPx] padding, not from here (scroll can't open space past the content end).
+     */
     private fun bottomAlignPost(concatPos: Int) {
         recyclerView.post {
             if (view == null) return@post
             val itemView = recyclerView.findViewHolderForAdapterPosition(concatPos)?.itemView ?: return@post
-            // Breathing gap so the last card's bottom border / rounded corner clears the tab-bar chrome
-            // instead of sitting flush against it, where it reads as clipped (user: «последнее сообщение
-            // чуть срезано снизу, видно по границе поста»). Matches the inter-card vertical spacing.
-            val gap = (12 * resources.displayMetrics.density).toInt()
+            // A post TALLER than the viewport must never be bottom-anchored — that would cut its TOP (user:
+            // «большой пост обрезается по верху, а должен выравниваться по верху»). Bottom-align only applies
+            // to a post that fits; a tall one is left TOP-pinned by the caller.
+            val visible = recyclerView.height - recyclerView.paddingTop - recyclerView.paddingBottom
+            if (itemView.height > visible) return@post
             val bottomLimit = recyclerView.height - recyclerView.paddingBottom
-            val overshoot = itemView.bottom - bottomLimit + gap
+            val overshoot = itemView.bottom - bottomLimit
             if (overshoot > 0) recyclerView.scrollBy(0, overshoot)
         }
     }
