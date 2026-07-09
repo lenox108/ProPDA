@@ -14,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsApi
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsParser
+import forpdateam.ru.forpda.model.data.remote.api.attachments.TopicAttachmentsApi
+import forpdateam.ru.forpda.model.data.remote.api.attachments.TopicAttachmentsParser
 import forpdateam.ru.forpda.model.data.remote.api.auth.AuthApi
 import forpdateam.ru.forpda.model.data.remote.api.auth.AuthParser
 import forpdateam.ru.forpda.model.data.remote.api.devdb.DevDbApi
@@ -97,6 +99,8 @@ object NetworkModule {
     @Provides @Singleton fun provideSearchApi(wc: IWebClient, p: SearchParser) = SearchApi(wc, p)
     @Provides @Singleton fun provideTopicsApi(wc: IWebClient, p: TopicsParser) = TopicsApi(wc, p)
     @Provides @Singleton fun provideAttachmentsApi(wc: IWebClient, p: AttachmentsParser) = AttachmentsApi(wc, p)
+    @Provides @Singleton fun provideTopicAttachmentsParser() = TopicAttachmentsParser()
+    @Provides @Singleton fun provideTopicAttachmentsApi(wc: IWebClient, p: TopicAttachmentsParser) = TopicAttachmentsApi(wc, p)
     @Provides @Singleton fun provideUserCpApi(wc: IWebClient, p: UserCpParser) = UserCpApi(wc, p)
     // endregion
 }

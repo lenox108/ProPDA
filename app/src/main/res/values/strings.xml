@@ -509,6 +509,7 @@
     <string name="attachments">Вложения</string>
     <string name="attachments_count">Вложений: %d</string>
     <string name="no_attachments">Нет вложений</string>
+    <string name="attachments_truncated">В теме слишком много вложений — показаны не все</string>
 
 
     <!-- Forum -->

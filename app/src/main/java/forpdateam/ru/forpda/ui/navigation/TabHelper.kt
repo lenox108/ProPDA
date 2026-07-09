@@ -4,6 +4,7 @@ import timber.log.Timber
 import android.os.Bundle
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.ui.fragments.TabFragment
+import forpdateam.ru.forpda.ui.fragments.attachments.TopicAttachmentsFragment
 import forpdateam.ru.forpda.ui.fragments.auth.AuthFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesFragment
 import forpdateam.ru.forpda.ui.fragments.devdb.brands.BrandsFragment
@@ -184,6 +185,12 @@ object TabHelper {
                     putString(TabFragment.ARG_TAB, screen.reputationUrl)
                 })
             }
+            is Screen.Attachments -> {
+                createFragment(TopicAttachmentsFragment::class.java, args.apply {
+                    putInt(TopicAttachmentsFragment.ARG_TOPIC_ID, screen.topicId)
+                    screen.topicTitle?.let { putString(TabFragment.ARG_TITLE, it) }
+                })
+            }
             is Screen.Search -> {
                 createFragment(SearchFragment::class.java, args.apply {
                     putString(TabFragment.ARG_TAB, screen.searchUrl)
@@ -249,6 +256,7 @@ object TabHelper {
             is Screen.QmsThemes -> QmsThemesFragment::class.java
             is Screen.QmsChat -> QmsChatFragment::class.java
             is Screen.Reputation -> ReputationFragment::class.java
+            is Screen.Attachments -> TopicAttachmentsFragment::class.java
             is Screen.Search -> SearchFragment::class.java
             is Screen.Downloads -> DownloadsFragment::class.java
             is Screen.Theme -> forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment::class.java
@@ -286,6 +294,7 @@ object TabHelper {
             is QmsThemesFragment -> Screen.QmsThemes::class.java
             is QmsChatFragment -> Screen.QmsChat::class.java
             is ReputationFragment -> Screen.Reputation::class.java
+            is TopicAttachmentsFragment -> Screen.Attachments::class.java
             is SearchFragment -> Screen.Search::class.java
             is DownloadsFragment -> Screen.Downloads::class.java
             // Native topic engine maps to Screen.Theme — otherwise it hits the else-fallback

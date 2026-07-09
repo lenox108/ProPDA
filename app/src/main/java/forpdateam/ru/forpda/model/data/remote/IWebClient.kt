@@ -31,6 +31,15 @@ interface IWebClient {
     @Throws(Exception::class)
     fun get(url: String): NetworkResponse
 
+    /**
+     * GET с ограничением размера тела: читает не более [maxBytes] байт, не загружая гигантские
+     * страницы целиком в память (страница `act=attach&code=showtopic` не пагинируется и на больших
+     * темах весит десятки-сотни МБ). Если тело обрезано — [NetworkResponse.truncated] = true.
+     * Реализация по умолчанию (моки/фейки) игнорирует лимит и делегирует в [get].
+     */
+    @Throws(Exception::class)
+    fun getCapped(url: String, maxBytes: Long): NetworkResponse = get(url)
+
     @Throws(Exception::class)
     fun request(request: NetworkRequest): NetworkResponse
 

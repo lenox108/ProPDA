@@ -13,7 +13,9 @@ data class NetworkResponse(
     var locationHeader: String? = null,
     var body: String = "",
     /** Фрагмент (#entry…) из заголовка Location при редиректе — OkHttp его обрезает. */
-    var redirectFragment: String? = null
+    var redirectFragment: String? = null,
+    /** true, если тело прочитано с ограничением по размеру (capped read) и было обрезано. */
+    var truncated: Boolean = false
 ) {
     /**
      * Полный URL редиректа включая фрагмент. Если [redirect] уже содержит '#'

@@ -205,6 +205,45 @@ class Client(
         return request(NetworkRequest.Builder().url(url).build())
     }
 
+    /**
+     * GET, читающий не более [maxBytes] байт декодированного тела. Мы буферизуем только `maxBytes+1`
+     * байт из источника и закрываем ответ — остаток скачивания обрывается, гигантская страница целиком
+     * в память не грузится. cp1251 — однобайтовая кодировка, поэтому обрезка по байтам безопасна (не
+     * рвёт символ). Счётчики/проверку форум-ошибок на (возможно частичном) теле намеренно пропускаем.
+     */
+    @Throws(Exception::class)
+    override fun getCapped(url: String, maxBytes: Long): NetworkResponse {
+        checkNetworkAvailable()
+        val netRequest = NetworkRequest.Builder().url(url).build()
+        val requestBuilder = prepareRequest(netRequest, null)
+        val response = NetworkResponse(netRequest.url)
+        var okHttpResponse: Response? = null
+        try {
+            okHttpResponse = client.newCall(requestBuilder.build()).execute()
+            response.code = okHttpResponse.code
+            response.message = okHttpResponse.message
+            response.redirect = okHttpResponse.request.url.toString()
+            val body = okHttpResponse.body
+            if (body != null) {
+                val source = body.source()
+                source.request(maxBytes + 1) // подтягиваем максимум cap+1 байт, чтобы увидеть переполнение
+                val buffered = source.buffer
+                val truncated = buffered.size > maxBytes
+                val toRead = if (truncated) maxBytes else buffered.size
+                val bytes = buffered.readByteArray(toRead)
+                val charset = body.contentType()?.charset() ?: Charsets.UTF_8
+                response.body = String(bytes, charset)
+                response.truncated = truncated
+            }
+            if (BuildConfig.DEBUG) {
+                Timber.d("getCapped: code=${response.code} bytes=${response.body.length} truncated=${response.truncated}")
+            }
+        } finally {
+            okHttpResponse?.close()
+        }
+        return response
+    }
+
     @Throws(Exception::class)
     override fun request(request: NetworkRequest): NetworkResponse {
         return request(request, client, null)

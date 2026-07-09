@@ -146,6 +146,12 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
         var reputationUrl: String? = null
     }
 
+    /** Нативный список вложений темы (act=attach&code=showtopic&tid=…). */
+    class Attachments : Screen() {
+        var topicId: Int = 0
+        var topicTitle: String? = null
+    }
+
     class Search : Screen() {
         var searchUrl: String? = null
     }

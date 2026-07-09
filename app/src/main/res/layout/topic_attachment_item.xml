@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingBottom="@dimen/content_padding_vertical"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/content_padding_vertical">
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/attach_item_image"
+        android:layout_width="@dimen/dp48"
+        android:layout_height="@dimen/dp48"
+        android:layout_marginEnd="@dimen/content_padding_horizontal"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null"
+        tools:src="@drawable/ic_attachment" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/attach_item_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="middle"
+            android:maxLines="2"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="@dimen/list_topic_title_text_size"
+            tools:text="screenshot_2024_final_version.png" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/attach_item_size"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="@dimen/list_topic_meta_text_size"
+            android:visibility="gone"
+            tools:text="123,4 Кб"
+            tools:visibility="visible" />
+
+    </LinearLayout>
+
+</LinearLayout>
