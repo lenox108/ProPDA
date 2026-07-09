@@ -83,16 +83,17 @@ class SiteUserContentViewModel @Inject constructor(
         })
     }
 
-    /** Тап по комментарию → открыть статью, на которой он оставлен (нативно через LinkHandler). */
+    /**
+     * Тап по комментарию → открыть статью с ЯКОРЕМ на этот коммент. Роутим через
+     * [ILinkHandler.handle] c URL вида `…/<articleId>/slug/#comment<id>` — это тот же путь, что у
+     * нотификаций/упоминаний: LinkHandler.handleSite достаёт из URL articleId+commentId, а движок
+     * статьи «вооружает» deeplink-скролл на коммент (`deeplink_comment_scroll_armed`). Ручной
+     * `navigateTo(ArticleDetail)` этот скролл не запускал (открывал статью в начале).
+     */
     fun onCommentClick(item: SiteComment) {
-        if (item.articleId > 0) {
-            router.navigateTo(Screen.ArticleDetail().apply {
-                articleId = item.articleId
-                articleTitle = item.articleTitle
-                articleUrl = item.articleUrl
-            })
-        } else {
-            linkHandler.handle(item.articleUrl, router)
-        }
+        val base = item.articleUrl.substringBefore('#')
+        val url = if (item.commentId > 0) "$base#comment${item.commentId}" else item.articleUrl
+        timber.log.Timber.i("SITE_CONTENT_DIAG onCommentClick cid=${item.commentId} aid=${item.articleId} url=$url")
+        linkHandler.handle(url, router)
     }
 }

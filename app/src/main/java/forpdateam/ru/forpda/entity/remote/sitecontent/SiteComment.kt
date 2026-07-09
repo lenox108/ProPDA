@@ -6,6 +6,9 @@ package forpdateam.ru.forpda.entity.remote.sitecontent
  */
 data class SiteComment(
         val articleId: Int,
+        /** id самого комментария (из `#comment<id>` пермалинка) — нужен, чтобы статья открылась
+         *  с якорем на этот коммент, а не просто в начале. */
+        val commentId: Int,
         val articleTitle: String,
         val articleUrl: String,
         val snippet: String,

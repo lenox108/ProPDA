@@ -23,10 +23,13 @@ class SiteCommentsParser {
             val permalink = li.selectFirst("span.more-meta a:has(i.icon-link)")
                     ?: li.selectFirst("span.more-meta a[href]")
                     ?: continue
-            val href = permalink.absUrl("href").ifBlank { permalink.attr("href") }
+            // attr("href") сохраняет фрагмент `#comment<id>` (absUrl его иногда режет) — берём id коммента отсюда.
+            val rawHref = permalink.attr("href")
+            val href = permalink.absUrl("href").ifBlank { rawHref }
             if (href.isBlank()) continue
 
             val articleId = lastPathNumber(href)
+            val commentId = COMMENT_ANCHOR.find(rawHref)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             val title = li.selectFirst("span.post-title")?.text()?.trim().orEmpty()
             val snippet = li.selectFirst("div.content")?.text()?.trim().orEmpty()
             val date = li.selectFirst("span.h-meta")?.text()?.trim()
@@ -34,6 +37,7 @@ class SiteCommentsParser {
 
             out.add(SiteComment(
                     articleId = articleId,
+                    commentId = commentId,
                     articleTitle = title.ifBlank { "Статья" },
                     articleUrl = href,
                     snippet = snippet,
@@ -53,5 +57,6 @@ class SiteCommentsParser {
     private companion object {
         const val BASE_URL = "https://4pda.to/"
         val SEGMENT_NUMBER = Regex("""/(\d+)(?=/)""")
+        val COMMENT_ANCHOR = Regex("""#comment(\d+)""")
     }
 }
