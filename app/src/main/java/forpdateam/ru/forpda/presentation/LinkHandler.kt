@@ -265,6 +265,25 @@ class LinkHandler(
     }
 
     private fun handleSite(uri: Uri, router: TabRouter?, args: Map<String, String>): Boolean {
+        // Профильные сайт-счётчики ведут на /<ник>/posts/ и /<ник>/comments/. LinkHandler их раньше не
+        // распознавал → externalIntent → браузер. Теперь открываем нативным списком.
+        run {
+            val segs = uri.pathSegments
+            if (segs.size >= 2) {
+                val first = segs[0].lowercase(Locale.ROOT)
+                val section = segs[1].lowercase(Locale.ROOT)
+                val reserved = setOf("news", "articles", "reviews", "tag", "software", "games", "review", "forum", "pages", "devdb", "special")
+                if ((section == "posts" || section == "comments") && first !in reserved) {
+                    navigateTo(Screen.SiteUserContent().apply {
+                        url = uri.toString()
+                        kind = if (section == "comments") Screen.SiteUserContent.Kind.COMMENTS
+                               else Screen.SiteUserContent.Kind.POSTS
+                        screenTitleText = args[Screen.ARG_TITLE]
+                    }, router, args)
+                    return true
+                }
+            }
+        }
         val matcher = sitePattern.matcher(uri.toString())
         if (matcher.find()) {
             navigateTo(Screen.ArticleDetail().apply {

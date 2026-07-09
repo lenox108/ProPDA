@@ -515,6 +515,11 @@
     <string name="no_attachments">Нет вложений</string>
     <string name="attachments_truncated">В теме слишком много вложений — показаны не все</string>
 
+    <!-- Site user content (профильные «Публикации»/«Комментарии») -->
+    <string name="site_content_posts_title">Публикации</string>
+    <string name="site_content_comments_title">Комментарии</string>
+    <string name="nothing_found">Ничего не найдено</string>
+
 
     <!-- Forum -->
     <string name="forum_refresh">Обновить форумы</string>
