@@ -47,6 +47,7 @@ class MainDataStore(private val context: Context) {
 
     private object PreferencesKeys {
         val WEBVIEW_FONT_SIZE = intPreferencesKey("webview_font_size")
+        val APP_FONT_SIZE = intPreferencesKey("app_font_size")
         val IS_SYSTEM_DOWNLOADER = booleanPreferencesKey("is_system_downloader")
         val DOWNLOAD_METHOD = stringPreferencesKey("download_method")
         val DOWNLOAD_FOLDER_URI = stringPreferencesKey("download_folder_uri")
@@ -81,6 +82,13 @@ class MainDataStore(private val context: Context) {
     fun observeWebViewFontSizeFlow(): Flow<Int> =
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
                 max(min(preferences[PreferencesKeys.WEBVIEW_FONT_SIZE] ?: 16, 64), 8)
+            }, 16)
+
+    /** App-wide UI font size (sp at 100% = 16). Scales the whole interface via Configuration.fontScale;
+     *  independent of the per-post «Размер шрифта в темах» (WEBVIEW_FONT_SIZE). */
+    fun observeAppFontSizeFlow(): Flow<Int> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                max(min(preferences[PreferencesKeys.APP_FONT_SIZE] ?: 16, 64), 8)
             }, 16)
 
     fun observeScrollButtonEnabledFlow(): Flow<Boolean> =
@@ -543,6 +551,21 @@ class MainDataStore(private val context: Context) {
             return max(min(legacy.getInt(AppPreferences.Main.WEBVIEW_FONT_SIZE, 16), 64), 8)
         }
         val mirrored = mirrorPrefs.getInt("webview_font_size", -1)
+        if (mirrored > 0) return max(min(mirrored, 64), 8)
+        return 16
+    }
+
+    suspend fun setAppFontSize(size: Int) {
+        val clamped = max(min(size, 64), 8)
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.APP_FONT_SIZE] = clamped
+        }
+        mirrorPrefs.edit().putInt("app_font_size", clamped).apply()
+    }
+
+    /** Instant synchronous read from the SharedPreferences mirror (used in attachBaseContext). */
+    fun getAppFontSizeImmediate(): Int {
+        val mirrored = mirrorPrefs.getInt("app_font_size", -1)
         if (mirrored > 0) return max(min(mirrored, 64), 8)
         return 16
     }

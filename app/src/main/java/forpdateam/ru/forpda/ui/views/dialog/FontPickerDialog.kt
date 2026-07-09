@@ -24,7 +24,15 @@ import kotlin.math.roundToInt
  */
 object FontPickerDialog {
 
-    private data class Entry(val mode: AppFontMode, @StringRes val title: Int, @FontRes val font: Int)
+    // literalTitle — для шрифтов без строкового ресурса (имя-собственное, напр. «Roboto Mono»).
+    // monospace — рисовать превью платформенным monospace (Typeface.MONOSPACE).
+    private data class Entry(
+            val mode: AppFontMode,
+            @StringRes val title: Int,
+            @FontRes val font: Int,
+            val literalTitle: String? = null,
+            val monospace: Boolean = false,
+    )
 
     // font = 0 для системного (Typeface.DEFAULT).
     private val entries = listOf(
@@ -33,6 +41,7 @@ object FontPickerDialog {
             Entry(AppFontMode.INTER, R.string.pref_value_app_font_inter, R.font.forpda_inter),
             Entry(AppFontMode.SOURCE_SANS_3, R.string.pref_value_app_font_source_sans_3, R.font.forpda_source_sans_3),
             Entry(AppFontMode.OPEN_SANS, R.string.pref_value_app_font_open_sans, R.font.forpda_open_sans),
+            Entry(AppFontMode.ROBOTO_MONO, R.string.pref_value_app_font_system, 0, literalTitle = "Roboto Mono", monospace = true),
     )
 
     fun show(context: Context, current: AppFontMode, onPick: (AppFontMode) -> Unit) {
@@ -54,8 +63,11 @@ object FontPickerDialog {
 
         entries.forEach { e ->
             val selected = e.mode == current
-            val face = if (e.font == 0) Typeface.DEFAULT
-            else runCatching { ResourcesCompat.getFont(context, e.font) }.getOrNull() ?: Typeface.DEFAULT
+            val face = when {
+                e.monospace -> Typeface.MONOSPACE
+                e.font == 0 -> Typeface.DEFAULT
+                else -> runCatching { ResourcesCompat.getFont(context, e.font) }.getOrNull() ?: Typeface.DEFAULT
+            }
 
             val sample = TextView(context).apply {
                 text = context.getString(R.string.font_preview_sample)
@@ -64,7 +76,7 @@ object FontPickerDialog {
                 typeface = face
             }
             val label = TextView(context).apply {
-                text = context.getString(e.title)
+                text = e.literalTitle ?: context.getString(e.title)
                 setTextColor(onSurfaceVar)
                 textSize = 12f
                 setPadding(0, px(4), 0, 0)

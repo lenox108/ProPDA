@@ -56,6 +56,7 @@ internal fun forpdaFontFamily(mode: AppFontMode): FontFamily = when (mode) {
     AppFontMode.INTER -> InterFontFamily
     AppFontMode.SOURCE_SANS_3 -> SourceSans3FontFamily
     AppFontMode.OPEN_SANS -> OpenSansFontFamily
+    AppFontMode.ROBOTO_MONO -> FontFamily.Monospace
 }
 
 /** Applies [family] to every role of the M3 baseline [Typography] — mirrors `android:fontFamily` theme-wide override. */
