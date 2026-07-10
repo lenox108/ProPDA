@@ -38,6 +38,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Created by radiationx on 31.07.17.
@@ -255,9 +256,10 @@ class NotificationsService : Service() {
         avatarBitmapCache.evictAll()
         serviceScope.cancel()  // Отменяем все корутины
         serviceJob.cancel()
-        // Принудительно снимаем ВСЕ наши уведомления, чтобы шторка не залипала
-        // после остановки сервиса (foreground + stacked).
-        cancelAllNotifications()
+        // Снимаем только «служебное» FGS-уведомление: уведомления о событиях форума живут
+        // сами по себе, и остановка сервиса не повод их гасить. Там, где их действительно
+        // надо убрать (логаут, выключение push), это делается явно.
+        removeForegroundNotification()
         // EventsRepository является singleton'ом. Не отменяем его repoScope из lifecycle
         // сервиса, иначе последующие события обновляют вкладки, но уже не доходят до notify().
         super.onDestroy()
@@ -268,23 +270,35 @@ class NotificationsService : Service() {
         Timber.i("onTaskRemoved")
         // Пользователь смахнул приложение из Recents. Без явной остановки foreground-сервис
         // продолжает жить вместе со своим обязательным уведомлением в шторке.
-        cancelAllNotifications()
+        //
+        // Уведомления о новых сообщениях при этом НЕ трогаем: свайп из Recents не значит
+        // «я всё прочитал». Раньше здесь снималось всё подряд, включая уведомление о
+        // неотправленном быстром ответе — вместе с текстом, который пользователь набрал.
+        removeForegroundNotification()
         stopSelf()
+    }
+
+    /** Убирает «служебное» FGS-уведомление, не трогая уведомления о событиях. */
+    private fun removeForegroundNotification() {
+        if (foregroundPromoted) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            foregroundPromoted = false
+        }
+        runCatching { getNotificationManager().cancel(FOREGROUND_NOTIFICATION_ID) }
+                .onFailure { Timber.e(it, "cancel foreground notification failed") }
     }
 
     /**
      * Снимает ТОЛЬКО уведомления о событиях форума. Раньше здесь стоял `cancelAll()`, который
      * заодно стирал прогресс загрузки файла и уведомление о доступном обновлении — они живут
      * в своих каналах и к этому сервису отношения не имеют.
+     *
+     * Вызывается там, где показывать события больше нечего и незачем: логаут и выключение push.
      */
     private fun cancelAllNotifications() {
-        if (foregroundPromoted) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            foregroundPromoted = false
-        }
+        removeForegroundNotification()
         val manager = getNotificationManager()
         runCatching {
-            manager.cancel(FOREGROUND_NOTIFICATION_ID)
             manager.cancel(NotificationPublisher.NOTIFY_STACKED_QMS_ID)
             manager.cancel(NotificationPublisher.NOTIFY_STACKED_FAV_ID)
             postedEventNotifyIds.toList().forEach { manager.cancel(it) }
@@ -335,11 +349,14 @@ class NotificationsService : Service() {
             val width = res.getDimension(android.R.dimen.notification_large_icon_width).toInt()
             serviceScope.launch {
                 runCatching {
-                    val url = avatarRepository.getAvatar(event.userId, event.userNick)
-                    val bitmap = ForPdaCoil.loadBitmapForNotification(this@NotificationsService, url, width, height)
-                    var b = bitmap
-                    b = BitmapUtils.centerCrop(b, width, height, 1.0f)
-                    BitmapUtils.createAvatar(b, width, height, true)
+                    // serviceScope живёт на Main.immediate: загрузка аватара и обрезка битмапа
+                    // на нём подвешивали кадры ровно в момент прихода уведомления.
+                    withContext(Dispatchers.IO) {
+                        val url = avatarRepository.getAvatar(event.userId, event.userNick)
+                        val bitmap = ForPdaCoil.loadBitmapForNotification(this@NotificationsService, url, width, height)
+                        val cropped = BitmapUtils.centerCrop(bitmap, width, height, 1.0f)
+                        BitmapUtils.createAvatar(cropped, width, height, true)
+                    }
                 }.onSuccess { avatar ->
                     avatarBitmapCache.put(cacheKey, avatar)
                     sendNotification(event, avatar)

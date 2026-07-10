@@ -45,13 +45,22 @@ object NotificationActions {
                 .build()
     }
 
-    /** «Прочитано» — снимает уведомление; для упоминаний ещё и помечает на сервере. */
+    /**
+     * «Прочитано» — снимает уведомление; для упоминаний В ТЕМЕ ещё и помечает ответ прочитанным.
+     *
+     * Только в теме: отметка ложится ключом `topic:<id>:post:<id>`, а у упоминания в комментарии
+     * к новости sourceId — это ID статьи. Такой ключ не совпадёт ни с чем, что умеет строить
+     * список «Ответы»: уведомление снялось бы, строка осталась жирной, а в сохранённое
+     * множество прочитанного попал бы мусор, который никогда оттуда не уйдёт.
+     */
+    fun marksAnswerReadFor(event: NotificationEvent): Boolean = event.isMention && event.fromTheme()
+
     fun markReadAction(context: Context, event: NotificationEvent): NotificationCompat.Action {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_MARK_READ
             data = actionUri(event.notifyId(), "mark_read")
             putExtra(NotificationActionReceiver.EXTRA_NOTIFY_ID, event.notifyId())
-            putExtra(NotificationActionReceiver.EXTRA_IS_MENTION, event.isMention)
+            putExtra(NotificationActionReceiver.EXTRA_IS_MENTION, marksAnswerReadFor(event))
             putExtra(NotificationActionReceiver.EXTRA_TOPIC_ID, event.sourceId)
             putExtra(NotificationActionReceiver.EXTRA_POST_ID, event.messageId)
         }
