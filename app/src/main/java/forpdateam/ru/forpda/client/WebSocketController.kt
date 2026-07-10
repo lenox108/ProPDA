@@ -2,16 +2,11 @@ package forpdateam.ru.forpda.client
 
 import timber.log.Timber
 import forpdateam.ru.forpda.BuildConfig
-import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.data.remote.IWebClient
-import forpdateam.ru.forpda.model.repository.events.EventsRepository
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import java.lang.Exception
-import java.net.SocketTimeoutException
-import java.util.*
-import java.util.concurrent.TimeoutException
+import java.util.Random
 
 class WebSocketController(
         private val webClient: IWebClient,
@@ -50,30 +45,51 @@ class WebSocketController(
             }
         }
 
-        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {}
+        /**
+         * Сервер прислал close-фрейм. OkHttp вызовет [onClosed] только если мы сами закроем
+         * сокет в ответ — иначе цикл чтения просто завершится, а состояние навсегда останется
+         * `connected = true`, и [isConnected] будет врать, блокируя переподключение.
+         */
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            if (BuildConfig.DEBUG) Timber.d("WSListener onClosing: code=$code")
+            webSocket.close(NORMAL_CLOSURE, null)
+            handleTermination(webSocket, ClosedException(code, reason))
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (BuildConfig.DEBUG) Timber.d("WSListener onClosed: code=$code")
+            handleTermination(webSocket, ClosedException(code, reason))
+        }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            val shouldNotify = synchronized(lock) {
-                val eventWebSocket = getByWebSocketLocked(webSocket)
-                val currentWebSocket = getByIdLocked(currentId)
-                if (BuildConfig.DEBUG) Timber.d("WSListener onFailure: code=${response?.code}; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
-                eventWebSocket?.connected = false
-                eventWebSocket?.also {
-                    try {
-                        webSockets.remove(eventWebSocket)
-                    } catch (ex: Exception) {
-                        Timber.e(ex, "WebSocket remove error")
-                    }
-                }
-                currentWebSocket == eventWebSocket
-            }
-            if (shouldNotify) {
-                listener.onDisconnected(t, response)
-            }
+            if (BuildConfig.DEBUG) Timber.d("WSListener onFailure: code=${response?.code}")
+            handleTermination(webSocket, t, response)
+        }
+    }
+
+    /**
+     * Единая точка снятия сокета с учёта: убирает состояние из списка и уведомляет слушателя
+     * ровно один раз, только если умер текущий сокет.
+     */
+    private fun handleTermination(webSocket: WebSocket, t: Throwable, response: Response? = null) {
+        val shouldNotify = synchronized(lock) {
+            val eventWebSocket = getByWebSocketLocked(webSocket) ?: return
+            val currentWebSocket = getByIdLocked(currentId)
+            eventWebSocket.connected = false
+            webSockets.remove(eventWebSocket)
+            val wasCurrent = currentWebSocket == eventWebSocket
+            if (wasCurrent) currentId = NO_ID
+            wasCurrent
+        }
+        if (shouldNotify) {
+            listener.onDisconnected(t, response)
         }
     }
 
     fun connect() {
+        // Снимаем «осиротевшие» сокеты (например, тот, чей close-фрейм мы только что обработали),
+        // иначе список растёт, а мёртвые соединения продолжают держать ресурсы.
+        disconnectAll()
         val newId = (1000..16384).random()
         val newWebSocket = webClient.createWebSocketConnection(webSocketListener)
         val newWebSocketState = WebSocketState(newId, newWebSocket, true)
@@ -119,8 +135,13 @@ class WebSocketController(
 
     private fun IntRange.random() = Random().nextInt((endInclusive + 1) - start) + start
 
+    /** Штатное закрытие соединения сервером — для слушателя это такой же обрыв, как и сбой. */
+    class ClosedException(val code: Int, val closeReason: String) :
+            java.io.IOException("WebSocket closed by peer: code=$code reason=$closeReason")
+
     companion object {
         const val NO_ID = -1
+        private const val NORMAL_CLOSURE = 1000
         private const val LOG_TAG = "WebSocketController"
     }
 
