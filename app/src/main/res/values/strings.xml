@@ -876,9 +876,6 @@
     <string name="support_author_usdt_trc20" translatable="false">TF2aHE8mSrqAqMKFPAZwigFbwNDUjvCpaZ</string>
     <string name="copied">Скопировано</string>
     <!-- notifications -->
-    <string name="pref_title_sound">Звук</string>
-    <string name="pref_title_vibration">Вибрация</string>
-    <string name="pref_title_indicator">Индикатор</string>
     <string name="pref_title_enable_avatars">Загружать аватары</string>
     <string name="pref_title_download_notifications">Уведомления о загрузках</string>
     <string name="pref_summary_download_notifications">Прогресс и завершение скачивания файлов. Не зависит от общего переключателя уведомлений.</string>
