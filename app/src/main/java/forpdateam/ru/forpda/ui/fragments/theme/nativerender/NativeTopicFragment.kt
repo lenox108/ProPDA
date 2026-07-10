@@ -140,6 +140,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var lastRequestedUrl: String? = null
     private var isLoadingNextPage = false
     private var isLoadingPrevPage = false
+    /** Bumped on every [loadTopic]. In-flight coroutines snapshot it at launch and drop their result if a
+     *  full reload (refresh / topic switch via tab reuse) overtook them — otherwise a stale next/prev-page
+     *  onSuccess would append the OLD topic's posts into the freshly reset list (registerAndFilterNew
+     *  dedups by postId only and doesn't know the topic changed). */
+    private var loadEpoch = 0
     /** True while auto-pulling previous pages to fill an under-filled last page (see maybeFillLastPage). */
     private var fillingLastPage = false
 
@@ -1667,12 +1672,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun loadNextPage() {
         val url = pagination.nextPageUrl() ?: return
         isLoadingNextPage = true
+        val epoch = loadEpoch
         showHybridLoading(atTop = false)
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
             }
             if (view == null) return@launch
+            if (epoch != loadEpoch) {
+                // A full reload overtook this page load — drop the stale posts. Don't touch the loading
+                // flags: loadTopic already reset them, and a NEWER page load may own them by now.
+                hideHybridLoading()
+                return@launch
+            }
             result.onSuccess { page ->
                 processHatForPage(page) // strip the repeated hat 4pda echoes onto this deeper page
                 val newItems = pagination.registerAndFilterNew(
@@ -1762,12 +1774,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun loadPrevPage() {
         val url = pagination.prevPageUrl() ?: return
         isLoadingPrevPage = true
+        val epoch = loadEpoch
         showHybridLoading(atTop = true)
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
             }
             if (view == null) return@launch
+            if (epoch != loadEpoch) {
+                // A full reload overtook this page load — drop the stale posts. Don't touch the loading
+                // flags or fillingLastPage: loadTopic already reset them (and re-showed the list).
+                hideHybridLoading()
+                return@launch
+            }
             var reArm = true
             result.onSuccess { page ->
                 // Prepending page 1 brings the real hat into view — keep it and light the toolbar ⓘ; a
@@ -2841,6 +2860,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         setRefreshing(true)
         isLoadingNextPage = false
         isLoadingPrevPage = false
+        // Invalidate in-flight loads (this one included, if another loadTopic overtakes it): their results
+        // belong to the previous topic/page-set and must not touch the freshly reset list.
+        val epoch = ++loadEpoch
         // Defensive: never leave the list hidden if a previous last-page fill was interrupted mid-flight.
         fillingLastPage = false
         recyclerView.alpha = 1f
@@ -2848,7 +2870,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             val result = withContext(Dispatchers.IO) {
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
             }
-            if (view == null) return@launch
+            if (view == null || epoch != loadEpoch) return@launch
             result.onSuccess { page ->
                 loadedUrl = url
                 pageForumId = page.forumId

@@ -132,6 +132,19 @@ class TopicPaginationControllerTest {
     }
 
     @Test
+    fun registerAndFilterNew_doesNotFilterByTopic_staleResultsNeedCallerGuard() {
+        val c = TopicPaginationController()
+        c.reset(topicId = 42, pagination = pagination(current = 1, all = 3), initialItems = items(1, 2))
+        // Topic switch (tab reuse / refresh) while the old topic's next-page load is still in flight.
+        c.reset(topicId = 99, pagination = pagination(current = 1, all = 2), initialItems = items(500))
+        // The old topic's posts sail straight through the dedup — it knows only postIds, not topics.
+        // This is WHY NativeTopicFragment must drop page-load results overtaken by loadTopic (loadEpoch);
+        // the controller itself cannot tell them apart.
+        val stale = c.registerAndFilterNew(items(3, 4))
+        assertEquals(listOf(3, 4), stale.map { it.postId })
+    }
+
+    @Test
     fun totalPages_canGrowWhileReading() {
         val c = TopicPaginationController()
         c.reset(topicId = 42, pagination = pagination(current = 1, all = 2), initialItems = items(1))
