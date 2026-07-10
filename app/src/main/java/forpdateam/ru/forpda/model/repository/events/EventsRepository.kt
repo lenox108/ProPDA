@@ -63,6 +63,9 @@ class EventsRepository(
          */
         private const val BACKGROUND_GRACE_MS = 45_000L
 
+        /** Верхняя граница истории событий: нужна только для отмены ещё висящих уведомлений. */
+        private const val EVENTS_HISTORY_MAX = 200
+
         /**
          * Максимальное количество событий для группового (stacked) уведомления.
          * Если событий больше — отправляется summary-уведомление с количеством.
@@ -98,12 +101,20 @@ class EventsRepository(
         }
     }
 
-    // synchronizedMap: события обрабатываются на многопоточном Dispatchers.Default/IO,
-    // put/remove атомарны; итерации (checkOldEvents/onTopicRead/onTopicPostsRead) берут
-    // снапшот под synchronized(eventsHistory) — иначе ConcurrentModificationException.
-    // LinkedHashMap внутри сохраняет порядок вставки.
+    // synchronizedMap: put/remove атомарны; итерации (checkOldEvents/onTopicRead/
+    // onTopicPostsRead) берут снапшот под synchronized(eventsHistory) — иначе
+    // ConcurrentModificationException.
+    //
+    // Записи удаляются только при прочтении события, поэтому без ограничения карта росла бы
+    // весь сеанс. Держим окно последних событий: более старые уведомления пользователь всё
+    // равно уже смахнул, и отменять их нечего.
     private val eventsHistory: MutableMap<Int, NotificationEvent> =
-            java.util.Collections.synchronizedMap(LinkedHashMap())
+            java.util.Collections.synchronizedMap(
+                    object : LinkedHashMap<Int, NotificationEvent>(64, 0.75f, false) {
+                        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, NotificationEvent>): Boolean =
+                                size > EVENTS_HISTORY_MAX
+                    }
+            )
 
 
     private val notifyEventFlow = MutableSharedFlow<NotificationEvent>(
@@ -133,27 +144,35 @@ class EventsRepository(
     fun observeForegroundRealtimeChanges(): Flow<ForegroundRealtimeChange> =
             foregroundRealtimeFlow.asSharedFlow()
 
+    /**
+     * Колбэки OkHttp приходят на его читающем потоке, а [pendingEvents],
+     * [pendingAggregationJob] и [reconnectAttempts] читаются и пишутся с главного.
+     * Все они — обычные не-потокобезопасные поля, поэтому обработку целиком заводим
+     * в [repoScope] (Main.immediate): состояние остаётся однопоточным, порядок событий
+     * сохраняется. Разбор текста оставляем на потоке OkHttp — он ничего не мутирует.
+     */
     private val controllerListener: WebSocketController.Listener = object : WebSocketController.Listener() {
         override fun onConnected() {
             if (BuildConfig.DEBUG) Timber.d("WSContr onConnected ${webSocketController.getCurrentId()},  ${webSocketController.isConnected()}")
-            // Без сброса бэкофф рос через весь сеанс: после пары обрывов даже первый сбой
-            // на здоровой сети ждал бы пять минут до переподключения.
-            reconnectAttempts = 0
-            webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
-            webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
+            repoScope.launch {
+                // Без сброса бэкофф рос через весь сеанс: после пары обрывов даже первый сбой
+                // на здоровой сети ждал бы пять минут до переподключения.
+                reconnectAttempts = 0
+                webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
+                webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
+            }
         }
 
         override fun onMessage(text: String?) {
             if (BuildConfig.DEBUG) Timber.d("WSContr onMessage ${webSocketController.getCurrentId()}, ${webSocketController.isConnected()}, hasPayload=${!text.isNullOrEmpty()}")
-            try {
-                eventsApi.parseWebSocketEvent(text.orEmpty())?.also {
-                    if (it.type != NotificationEvent.Type.HAT_EDITED) {
-                        handleWebSocketEvent(it)
-                    }
-                }
+            val event = try {
+                eventsApi.parseWebSocketEvent(text.orEmpty())
             } catch (ex: Exception) {
                 Timber.e(ex, "Events parse error")
-            }
+                null
+            } ?: return
+            if (event.type == NotificationEvent.Type.HAT_EDITED) return
+            repoScope.launch { handleWebSocketEvent(event) }
         }
 
         override fun onDisconnected(throwable: Throwable, response: Response?) {
@@ -169,9 +188,11 @@ class EventsRepository(
             // Переподключаемся на ЛЮБОМ обрыве, а не только по таймауту: штатный close-фрейм
             // сервера и обычные для мобильной сети IOException раньше молча убивали realtime
             // до конца сеанса. Бэкофф и гейт по foreground не дают этому стать штормом.
-            if (foregroundRealtimeEnabled) {
-                if (BuildConfig.DEBUG) Timber.d("start onDisconnected")
-                start(checkEvents = false, force = false)
+            repoScope.launch {
+                if (foregroundRealtimeEnabled) {
+                    if (BuildConfig.DEBUG) Timber.d("start onDisconnected")
+                    start(checkEvents = false, force = false)
+                }
             }
         }
     }
@@ -580,46 +601,43 @@ class EventsRepository(
         return true
     }
 
+    /**
+     * Пришло READ-событие: снимаем уведомления, которые оно закрывает.
+     *
+     * Раньше из истории удалялся только NEW-ключ, а MENTION оставался навсегда: карта росла,
+     * а каждое следующее READ повторно слало отмену уже снятого уведомления. Теперь ключ
+     * удаляется тот же, по которому уведомление нашли.
+     */
     private fun checkOldEvent(event: NotificationEvent) {
-        var oldEvent = eventsHistory[event.notifyId(NotificationEvent.Type.NEW)]
-        var delete = false
         if (BuildConfig.DEBUG) {
-            Timber.d("checkOldEvent old=$oldEvent new=$event")
+            Timber.d("checkOldEvent new=$event")
         }
 
         if (event.fromTheme()) {
-            //Убираем уведомления избранного
-            if (oldEvent != null && event.messageId >= oldEvent.messageId) {
-                cancelEventFlow.tryEmit(oldEvent)
-                delete = true
+            // Уведомление избранного закрывается только сообщением не старше показанного.
+            cancelAndForget(event.notifyId(NotificationEvent.Type.NEW)) { old ->
+                event.messageId >= old.messageId
             }
-
-            //Убираем уведомление упоминаний
-            oldEvent = eventsHistory[event.notifyId(NotificationEvent.Type.MENTION)]
-            if (oldEvent != null) {
-                cancelEventFlow.tryEmit(oldEvent)
-                delete = true
-            }
+            cancelAndForget(event.notifyId(NotificationEvent.Type.MENTION))
         } else if (event.fromQms()) {
-
-            //Убираем уведомление кумыса
-            if (oldEvent != null) {
-                cancelEventFlow.tryEmit(oldEvent)
-                delete = true
-            }
+            cancelAndForget(event.notifyId(NotificationEvent.Type.NEW))
         }
 
-        if (delete || oldEvent == null) {
-            notifyTabs(TabNotification(
-                    event.source,
-                    event.type,
-                    event,
-                    true
-            ))
-        }
-        if (delete) {
-            eventsHistory.remove(event.notifyId(NotificationEvent.Type.NEW))
-        }
+        // Вкладки обновляем всегда: даже если снимать было нечего, счётчик мог измениться
+        // на другом устройстве.
+        notifyTabs(TabNotification(
+                event.source,
+                event.type,
+                event,
+                true
+        ))
+    }
+
+    private inline fun cancelAndForget(notifyId: Int, shouldCancel: (NotificationEvent) -> Boolean = { true }) {
+        val old = eventsHistory[notifyId] ?: return
+        if (!shouldCancel(old)) return
+        cancelEventFlow.tryEmit(old)
+        eventsHistory.remove(notifyId)
     }
 
     private fun checkOldEvents(loadedEvents: List<NotificationEvent>, source: NotificationEvent.Source) {
@@ -722,26 +740,30 @@ class EventsRepository(
 
             checkOldEvents(loadedEvents, source)
 
+            // События, о которых уже сообщил WebSocket, показываем поимённо (у них есть тип и
+            // messageId), остальные новые уходят в общий стек.
+            //
+            // Здесь стоял `else if (event.isMention && !favEnabled) stackedNewEvents.remove(newEvent)`,
+            // который выбрасывал из стека события, НЕ совпавшие по sourceId, — то есть чужие.
+            // Он был и лишним: стек всё равно проходит через checkNotify(), где выключенное
+            // избранное отсекается целиком.
             for (event in events) {
                 for (newEvent in newEvents) {
-                    if (newEvent.sourceId == event.sourceId) {
-                        stackedNewEvents.remove(newEvent)
-                        newEvent.type = event.type
-                        newEvent.messageId = event.messageId
+                    if (newEvent.sourceId != event.sourceId) continue
+                    stackedNewEvents.remove(newEvent)
+                    newEvent.type = event.type
+                    newEvent.messageId = event.messageId
 
-                        notifyTabs(TabNotification(
-                                newEvent.source,
-                                newEvent.type,
-                                newEvent,
-                                false,
-                                loadedEvents.toList(),
-                                newEvents.toList()
-                        ))
+                    notifyTabs(TabNotification(
+                            newEvent.source,
+                            newEvent.type,
+                            newEvent,
+                            false,
+                            loadedEvents.toList(),
+                            newEvents.toList()
+                    ))
 
-                        sendNotification(newEvent)
-                    } else if (event.isMention && !notificationPreferencesHolder.getFavEnabled()) {
-                        stackedNewEvents.remove(newEvent)
-                    }
+                    sendNotification(newEvent)
                 }
             }
 

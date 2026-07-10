@@ -21,11 +21,8 @@ class WebSocketController(
 
         override fun onOpen(webSocket: WebSocket, response: Response) {
             val shouldNotify = synchronized(lock) {
-                val eventWebSocket = getByWebSocketLocked(webSocket)
-                val currentWebSocket = getByIdLocked(currentId)
-                if (BuildConfig.DEBUG) Timber.d("WSListener onOpen; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
-                eventWebSocket?.connected = true
-                currentWebSocket == eventWebSocket
+                if (BuildConfig.DEBUG) Timber.d("WSListener onOpen; current=$currentId")
+                markCurrentLocked(webSocket)
             }
             if (shouldNotify) {
                 listener.onConnected()
@@ -34,11 +31,8 @@ class WebSocketController(
 
         override fun onMessage(webSocket: WebSocket, text: String) {
             val shouldNotify = synchronized(lock) {
-                val eventWebSocket = getByWebSocketLocked(webSocket)
-                val currentWebSocket = getByIdLocked(currentId)
-                if (BuildConfig.DEBUG) Timber.d("WSListener onMessage: hasPayload=${text.isNotEmpty()}; ${eventWebSocket?.id}, ${currentWebSocket?.id}")
-                eventWebSocket?.connected = true
-                currentWebSocket == eventWebSocket
+                if (BuildConfig.DEBUG) Timber.d("WSListener onMessage: hasPayload=${text.isNotEmpty()}; current=$currentId")
+                markCurrentLocked(webSocket)
             }
             if (shouldNotify) {
                 listener.onMessage(text)
@@ -65,6 +59,20 @@ class WebSocketController(
             if (BuildConfig.DEBUG) Timber.d("WSListener onFailure: code=${response?.code}")
             handleTermination(webSocket, t, response)
         }
+    }
+
+    /**
+     * Помечает сокет живым и отвечает, актуален ли он.
+     *
+     * Отдельный метод, потому что наивное `current == event` возвращало `true`, когда оба
+     * равны null: сокет уже снят с учёта (обрыв, disconnectAll), currentId == NO_ID — и
+     * сообщение с мёртвого соединения всё равно доходило до слушателя. Так после ухода
+     * приложения в фон долетали «призрачные» события.
+     */
+    private fun markCurrentLocked(webSocket: WebSocket): Boolean {
+        val eventWebSocket = getByWebSocketLocked(webSocket) ?: return false
+        eventWebSocket.connected = true
+        return eventWebSocket.id == currentId
     }
 
     /**
