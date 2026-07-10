@@ -2849,6 +2849,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
             }
             if (view == null) return@launch
+            // Latest-wins: a newer loadTopic (refresh, page jump, tab reuse for another topic via
+            // loadThemeUrlFromNavigator) may have superseded this request while it was in flight.
+            // Rendering the stale result would wipe the fresh content (pagination.reset + loadedItems
+            // rebuild), so drop it. The superseding load owns the refresh indicator too — don't touch it.
+            // The nested reload (maybeResumeToReadBoundary) starts FROM onSuccess after this guard and
+            // re-stamps lastRequestedUrl itself, so it stays the latest.
+            if (url != lastRequestedUrl) return@launch
             result.onSuccess { page ->
                 loadedUrl = url
                 pageForumId = page.forumId
