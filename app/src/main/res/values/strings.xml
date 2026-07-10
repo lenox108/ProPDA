@@ -880,8 +880,8 @@
     <string name="pref_summary_download_notifications">Уведомления о загрузках файлов</string>
     <string name="pref_title_favorites_live_tab">Живой список</string>
     <string name="pref_summary_favorites_live_tab">Обновлять данные во вкладке</string>
-    <string name="pref_title_bg_check">Фоновая проверка</string>
-    <string name="pref_summary_bg_check">Опрашивает сервер периодически, когда приложение закрыто. Без постоянной иконки.</string>
+    <string name="pref_title_bg_check">Работать в фоне</string>
+    <string name="pref_summary_bg_check">Выключено: приложение ничего не делает, пока закрыто. Уведомления приходят, только когда оно открыто.</string>
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
     <string name="pref_title_android_notification_settings">Системные настройки Android</string>
     <string name="pref_title_open_android_notification_settings">Открыть настройки уведомлений</string>

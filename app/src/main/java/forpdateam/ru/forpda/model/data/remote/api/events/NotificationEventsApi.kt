@@ -40,19 +40,73 @@ class NotificationEventsApi(private val webClient: IWebClient) {
         @JvmField
         val webSocketEventPattern: Pattern = Pattern.compile("\\[(\\d+),(\\d+),\"([\\s\\S])(\\d+)\",(\\d+),(\\d+)\\]")
         private const val FAV_INSPECTOR_URL = "https://4pda.to/forum/index.php?act=inspector&CODE=fav"
-        private const val FAV_INSPECTOR_CACHE_TTL_MS = 8000L
+        private const val QMS_INSPECTOR_URL = "https://4pda.to/forum/index.php?act=inspector&CODE=qms"
+        private const val INSPECTOR_CACHE_TTL_MS = 8000L
     }
 
-    private val favInspectorLock = Any()
-    private var cachedFavInspectorEvents: List<NotificationEvent>? = null
-    private var cachedFavInspectorAtMs: Long = 0L
-    private var favInspectorFetchInProgress = false
+    /**
+     * На возврате приложения на передний план опрос inspector'а запрашивают три независимых
+     * места подряд. Короткий TTL схлопывает этот всплеск в один сетевой запрос, а
+     * [fetchInProgress] не даёт параллельным вызовам продублировать его.
+     */
+    private inner class InspectorCache(
+            private val url: String,
+            private val parse: (String) -> List<NotificationEvent>
+    ) {
+        private val lock = Any()
+        private var cached: List<NotificationEvent>? = null
+        private var cachedAtMs: Long = 0L
+        private var fetchInProgress = false
+
+        fun invalidate() {
+            synchronized(lock) {
+                cached = null
+                cachedAtMs = 0L
+            }
+        }
+
+        @Throws(Exception::class)
+        fun get(): List<NotificationEvent> {
+            synchronized(lock) {
+                while (fetchInProgress) {
+                    try {
+                        (lock as Object).wait(30000L)
+                    } catch (ie: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw ie
+                    }
+                }
+                val snapshot = cached
+                if (snapshot != null && (System.currentTimeMillis() - cachedAtMs) < INSPECTOR_CACHE_TTL_MS) {
+                    return ArrayList(snapshot)
+                }
+                fetchInProgress = true
+            }
+            try {
+                val response: NetworkResponse = webClient.get(url)
+                val parsed = parse(response.body)
+                synchronized(lock) {
+                    cached = ArrayList(parsed)
+                    cachedAtMs = System.currentTimeMillis()
+                    fetchInProgress = false
+                    (lock as Object).notifyAll()
+                }
+                return ArrayList(parsed)
+            } catch (e: Exception) {
+                synchronized(lock) {
+                    fetchInProgress = false
+                    (lock as Object).notifyAll()
+                }
+                throw e
+            }
+        }
+    }
+
+    private val favInspectorCache = InspectorCache(FAV_INSPECTOR_URL) { getFavoritesEvents(it) }
+    private val qmsInspectorCache = InspectorCache(QMS_INSPECTOR_URL) { getQmsEvents(it) }
 
     fun invalidateFavoritesInspectorCache() {
-        synchronized(favInspectorLock) {
-            cachedFavInspectorEvents = null
-            cachedFavInspectorAtMs = 0L
-        }
+        favInspectorCache.invalidate()
     }
 
     fun parseWebSocketEvent(message: String): NotificationEvent? {
@@ -84,40 +138,7 @@ class NotificationEventsApi(private val webClient: IWebClient) {
     }
 
     @Throws(Exception::class)
-    fun getFavoritesEvents(): List<NotificationEvent> {
-        val now = System.currentTimeMillis()
-        synchronized(favInspectorLock) {
-            while (favInspectorFetchInProgress) {
-                try {
-                    (favInspectorLock as Object).wait(30000L)
-                } catch (ie: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    throw ie
-                }
-            }
-            if (cachedFavInspectorEvents != null && (now - cachedFavInspectorAtMs) < FAV_INSPECTOR_CACHE_TTL_MS) {
-                return ArrayList(cachedFavInspectorEvents!!)
-            }
-            favInspectorFetchInProgress = true
-        }
-        try {
-            val response: NetworkResponse = webClient.get(FAV_INSPECTOR_URL)
-            val parsed = getFavoritesEvents(response.body)
-            synchronized(favInspectorLock) {
-                cachedFavInspectorEvents = ArrayList(parsed)
-                cachedFavInspectorAtMs = System.currentTimeMillis()
-                favInspectorFetchInProgress = false
-                (favInspectorLock as Object).notifyAll()
-            }
-            return ArrayList(parsed)
-        } catch (e: Exception) {
-            synchronized(favInspectorLock) {
-                favInspectorFetchInProgress = false
-                (favInspectorLock as Object).notifyAll()
-            }
-            throw e
-        }
-    }
+    fun getFavoritesEvents(): List<NotificationEvent> = favInspectorCache.get()
 
     fun getFavoritesEvents(response: String): List<NotificationEvent> {
         val events = mutableListOf<NotificationEvent>()
@@ -145,10 +166,7 @@ class NotificationEventsApi(private val webClient: IWebClient) {
     }
 
     @Throws(Exception::class)
-    fun getQmsEvents(): List<NotificationEvent> {
-        val response: NetworkResponse = webClient.get("https://4pda.to/forum/index.php?act=inspector&CODE=qms")
-        return getQmsEvents(response.body)
-    }
+    fun getQmsEvents(): List<NotificationEvent> = qmsInspectorCache.get()
 
     fun getQmsEvents(response: String): List<NotificationEvent> {
         val events = mutableListOf<NotificationEvent>()

@@ -58,6 +58,9 @@ class NotificationsService : Service() {
 
     internal val avatarBitmapCache = object : android.util.LruCache<String, Bitmap>(64) {}
 
+    /** ID уведомлений, опубликованных этим сервисом, — чтобы снимать ровно их, а не всё подряд. */
+    private val postedEventNotifyIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
+
     @SuppressLint("MissingPermission")
     private fun notifySafe(id: Int, notification: android.app.Notification, event: NotificationEvent?, channelId: String) {
         val category = event?.notificationLogCategory() ?: "stack"
@@ -81,6 +84,7 @@ class NotificationsService : Service() {
             return
         }
         getNotificationManager().notify(id, notification)
+        postedEventNotifyIds.add(id)
         if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Published $category notification")
     }
 
@@ -211,6 +215,14 @@ class NotificationsService : Service() {
             false
         }
         eventsRepository.externalStart(checkEvents)
+
+        // externalStart в фоне не делает ничего: WebSocket поднимается только при
+        // foregroundRealtime. Если мы при этом успели подняться как FGS (фолбэк-старт),
+        // то держали бы уведомление в шторке и foreground-приоритет процесса впустую —
+        // и снять его было бы уже некому, т.к. process_stop давно прошёл.
+        if (!eventsRepository.isForegroundRealtimeActive()) {
+            detachForegroundIfPromoted("no_realtime_work")
+        }
         return START_NOT_STICKY
     }
 
@@ -219,7 +231,9 @@ class NotificationsService : Service() {
     private fun detachForegroundIfPromoted(reason: String) {
         if (!foregroundPromoted) return
         BatteryDebugLogger.logState("NotificationsService", "foregroundDetach", "reason=$reason")
-        stopForeground(STOP_FOREGROUND_DETACH)
+        // REMOVE, а не DETACH: при DETACH «служебное» уведомление остаётся висеть в шторке
+        // уже без сервиса — то самое залипшее уведомление, ради которого FGS и прячут.
+        stopForeground(STOP_FOREGROUND_REMOVE)
         foregroundPromoted = false
     }
 
@@ -285,18 +299,37 @@ class NotificationsService : Service() {
         stopSelf()
     }
 
+    /**
+     * Снимает ТОЛЬКО уведомления о событиях форума. Раньше здесь стоял `cancelAll()`, который
+     * заодно стирал прогресс загрузки файла и уведомление о доступном обновлении — они живут
+     * в своих каналах и к этому сервису отношения не имеют.
+     */
     private fun cancelAllNotifications() {
         if (foregroundPromoted) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             foregroundPromoted = false
         }
-        // На всякий случай снимаем stacked-уведомления и все наши ID. Метод cancel(null)
-        // снимает ВСЕ уведомления нашего приложения — это самый надёжный способ убрать
-        // "залипшее" уведомление из шторки.
-        try {
-            getNotificationManager().cancelAll()
-        } catch (t: Throwable) {
-            Timber.e(t, "cancelAll notifications failed")
+        val manager = getNotificationManager()
+        runCatching {
+            manager.cancel(FOREGROUND_NOTIFICATION_ID)
+            manager.cancel(NOTIFY_STACKED_QMS_ID)
+            manager.cancel(NOTIFY_STACKED_FAV_ID)
+            postedEventNotifyIds.toList().forEach { manager.cancel(it) }
+            postedEventNotifyIds.clear()
+            // Подметаем и то, что опубликовал фоновый EventsCheckWorker: он не проходит
+            // через notifySafe, поэтому в postedEventNotifyIds его ID не попадают.
+            cancelActiveEventChannelNotifications(manager)
+        }.onFailure { Timber.e(it, "cancel event notifications failed") }
+    }
+
+    private fun cancelActiveEventChannelNotifications(manager: NotificationManagerCompat) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val systemManager = getSystemService(NotificationManager::class.java) ?: return
+        val active = runCatching { systemManager.activeNotifications }.getOrNull() ?: return
+        for (sbn in active) {
+            if (sbn.notification?.channelId in EVENT_CHANNEL_IDS) {
+                manager.cancel(sbn.tag, sbn.id)
+            }
         }
     }
 
@@ -307,7 +340,9 @@ class NotificationsService : Service() {
     }
 
     private fun cancelNotification(event: NotificationEvent) {
-        getNotificationManager().cancel(event.notifyId())
+        val id = event.notifyId()
+        getNotificationManager().cancel(id)
+        postedEventNotifyIds.remove(id)
     }
 
     fun sendNotification(event: NotificationEvent) {
@@ -602,6 +637,16 @@ class NotificationsService : Service() {
         const val CHANNEL_QMS_ID = "forpda_channel_qms"
         const val CHANNEL_MENTION_ID = "forpda_channel_mention"
         const val CHANNEL_SITE_ID = "forpda_channel_site"
+
+        /** Каналы событий форума. Каналы загрузок и обновлений сюда НЕ входят намеренно. */
+        @JvmStatic
+        val EVENT_CHANNEL_IDS: Set<String> = setOf(
+                CHANNEL_FAV_ID,
+                CHANNEL_QMS_ID,
+                CHANNEL_MENTION_ID,
+                CHANNEL_SITE_ID,
+                FOREGROUND_CHANNEL_ID
+        )
 
         const val CHECK_LAST_EVENTS = "CHECK_LAST_EVENTS"
         /** Помечает старт через startForegroundService(): onStartCommand обязан поднять FGS в 5 сек. */

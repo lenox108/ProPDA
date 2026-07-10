@@ -171,6 +171,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         NotificationsService.createEventChannels(this)
         setupNetworkTracking()
         setupBackgroundEventsCheck()
+        setupRealtimePushToggle()
         setupAppUpdateCheck()
 
         // Lifecycle observer для очистки ресурсов
@@ -383,12 +384,37 @@ class App : Application(), androidx.work.Configuration.Provider {
         rescheduleEventsCheckWorker()
         appScope.launch {
             kotlinx.coroutines.flow.combine(
-                    notificationPreferencesHolder.mainEnabledFlow().distinctUntilChanged(),
+                    // wantsPushNotificationsFlow, а не mainEnabledFlow: выключение последнего
+                    // семейства push (темы/QMS/упоминания) тоже обязано снять воркер.
+                    notificationPreferencesHolder.wantsPushNotificationsFlow().distinctUntilChanged(),
                     notificationPreferencesHolder.bgCheckEnabledFlow().distinctUntilChanged(),
                     notificationPreferencesHolder.bgCheckIntervalMinFlow().distinctUntilChanged()
             ) { _, _, _ -> }.collect {
                 rescheduleEventsCheckWorker()
             }
+        }
+    }
+
+    /**
+     * Держит realtime-WebSocket в согласии с настройками push прямо во время сеанса.
+     * Раньше включение/выключение уведомлений подхватывалось только на следующем переходе
+     * приложения из фона на передний план.
+     */
+    private fun setupRealtimePushToggle() {
+        appScope.launch(Dispatchers.Main.immediate) {
+            notificationPreferencesHolder.wantsPushNotificationsFlow()
+                    .distinctUntilChanged()
+                    .collect { wants ->
+                        val foreground = ProcessLifecycleOwner.get().lifecycle.currentState
+                                .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+                        if (!wants) {
+                            eventsRepository.setForegroundRealtimeEnabled(false, "push_prefs_disabled")
+                        } else if (foreground) {
+                            // Оба вызова сами проверяют авторизацию и молча выходят без неё.
+                            eventsRepository.setForegroundRealtimeEnabled(true, "push_prefs_enabled")
+                            forpdateam.ru.forpda.notifications.NotificationsService.startAndCheckNoBind(this@App)
+                        }
+                    }
         }
     }
 
@@ -401,9 +427,9 @@ class App : Application(), androidx.work.Configuration.Provider {
             Timber.d("EventsCheckWorker: cancelled (main=$mainEnabled bg=$bgEnabled)")
             return
         }
-        // Минимум 30 мин: 15 мин при 4 HTTP-запросах = 96 пробуждений/день, что лишнее
-        // для push-канала, на котором пользователь может не заметить минутной задержки.
-        val intervalMin = notificationPreferencesHolder.getBgCheckIntervalMin().coerceAtLeast(30L)
+        // Нижняя граница задана в NotificationDataStore и уже применена геттером; здесь
+        // просто читаем, чтобы UI-список и планировщик не расходились.
+        val intervalMin = notificationPreferencesHolder.getBgCheckIntervalMin()
         val constraints = androidx.work.Constraints.Builder()
                 .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
                 .setRequiresBatteryNotLow(true)
@@ -519,12 +545,12 @@ class App : Application(), androidx.work.Configuration.Provider {
     private inner class AppLifecycleObserver : DefaultLifecycleObserver {
         override fun onStop(owner: LifecycleOwner) {
             BatteryDebugLogger.logState("AppLifecycle", "background")
-            eventsRepository.setForegroundRealtimeEnabled(false, "process_stop")
+            eventsRepository.onAppBackgrounded()
         }
 
         override fun onStart(owner: LifecycleOwner) {
             BatteryDebugLogger.logState("AppLifecycle", "foreground")
-            eventsRepository.setForegroundRealtimeEnabled(true, "process_start")
+            eventsRepository.onAppForegrounded()
         }
         
         override fun onDestroy(owner: LifecycleOwner) {
