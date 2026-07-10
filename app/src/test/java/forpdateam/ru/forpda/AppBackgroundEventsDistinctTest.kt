@@ -34,7 +34,9 @@ class AppBackgroundEventsDistinctTest {
         )
         val combineBlock = method.substring(combineOpen, combineClose)
         for (flow in listOf(
-            "mainEnabledFlow().distinctUntilChanged()",
+            // wantsPushNotificationsFlow, а не mainEnabledFlow: выключение последнего
+            // семейства push тоже обязано снять фоновый воркер.
+            "wantsPushNotificationsFlow().distinctUntilChanged()",
             "bgCheckEnabledFlow().distinctUntilChanged()",
             "bgCheckIntervalMinFlow().distinctUntilChanged()"
         )) {

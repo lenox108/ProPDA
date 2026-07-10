@@ -23,9 +23,6 @@ class NotificationDataStore(private val context: Context) {
         
         // Ключи должны совпадать с ключами в preferences_notifications.xml
         private const val KEY_MAIN_ENABLED = "notifications.main.enabled"
-        private const val KEY_MAIN_SOUND_ENABLED = "notifications.main.sound_enabled"
-        private const val KEY_MAIN_VIBRATION_ENABLED = "notifications.main.vibration_enabled"
-        private const val KEY_MAIN_INDICATOR_ENABLED = "notifications.main.indicator_enabled"
         private const val KEY_MAIN_AVATARS_ENABLED = "notifications.main.avatars_enabled"
         private const val KEY_FAV_ENABLED = "notifications.fav.enabled"
         private const val KEY_FAV_ONLY_IMPORTANT = "notifications.fav.only_important"
@@ -45,6 +42,18 @@ class NotificationDataStore(private val context: Context) {
         private const val KEY_HAT_WATCH_TOPIC_IDS = "notifications.hat_watch_topic_ids"
         // Снимок множества attach-id apk-файлов шапки: ключ строится на лету per-topic.
         private const val KEY_HAT_SNAPSHOT_PREFIX = "notifications.hat_snapshot_"
+        // Ключи упоминаний, о которых уже уведомили из фона (дедуп между циклами воркера).
+        private const val KEY_NOTIFIED_MENTION_KEYS = "notifications.notified_mention_keys"
+        // Первый фоновый проход только запоминает непрочитанные упоминания, не уведомляя о них:
+        // иначе включение фичи высыпало бы в шторку всю накопленную историю.
+        private const val KEY_MENTION_KEYS_SEEDED = "notifications.mention_keys_seeded"
+
+        /**
+         * Нижняя граница фоновой проверки. 15 минут — минимум AOSP, но это 96 пробуждений
+         * с сетью в сутки ради канала, где минутная задержка незаметна.
+         * Единственный источник истины: и UI-список, и планировщик обязаны сходиться сюда.
+         */
+        const val MIN_BG_CHECK_INTERVAL_MIN = 30L
     }
 
     // StateFlows для реактивных обновлений (instance-level для поддержки multiple contexts)
@@ -54,11 +63,30 @@ class NotificationDataStore(private val context: Context) {
     private val mentionsEnabledFlow = MutableStateFlow(true)
     private val hatEnabledFlow = MutableStateFlow(true)
     private val bgCheckEnabledFlow = MutableStateFlow(true)
-    private val bgCheckIntervalMinFlow = MutableStateFlow(15L) // 15 минут по умолчанию (минимум AOSP)
+    private val bgCheckIntervalMinFlow = MutableStateFlow(MIN_BG_CHECK_INTERVAL_MIN)
     private val mutedTopicsFlow = MutableStateFlow<Set<Int>>(emptySet())
+
+    /**
+     * Обязательно поле, а не лямбда по месту регистрации: SharedPreferencesImpl держит
+     * слушателей в WeakHashMap, и анонимный слушатель без сильной ссылки может быть собран
+     * GC — после чего Flow'ы молча перестают реагировать на изменение настроек.
+     */
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+        when (key) {
+            KEY_MAIN_ENABLED -> mainEnabledFlow.value = sp.getBoolean(KEY_MAIN_ENABLED, true)
+            KEY_FAV_ENABLED -> favEnabledFlow.value = sp.getBoolean(KEY_FAV_ENABLED, true)
+            KEY_QMS_ENABLED -> qmsEnabledFlow.value = sp.getBoolean(KEY_QMS_ENABLED, true)
+            KEY_MENTIONS_ENABLED -> mentionsEnabledFlow.value = sp.getBoolean(KEY_MENTIONS_ENABLED, true)
+            KEY_HAT_ENABLED -> hatEnabledFlow.value = sp.getBoolean(KEY_HAT_ENABLED, true)
+            KEY_BG_CHECK_ENABLED -> bgCheckEnabledFlow.value = sp.getBoolean(KEY_BG_CHECK_ENABLED, true)
+            KEY_BG_CHECK_INTERVAL_MIN -> bgCheckIntervalMinFlow.value = readBgIntervalFromPrefs(sp)
+            KEY_MUTED_TOPIC_IDS -> mutedTopicsFlow.value = readMutedTopicsFromPrefs(sp)
+        }
+    }
 
     private val prefs: SharedPreferences by lazy {
         context.getSharedPreferences(prefsName(context), Context.MODE_PRIVATE).also {
+            migrateLegacyBgInterval(it)
             // Инициализируем StateFlows текущими значениями
             mainEnabledFlow.value = it.getBoolean(KEY_MAIN_ENABLED, true)
             favEnabledFlow.value = it.getBoolean(KEY_FAV_ENABLED, true)
@@ -66,24 +94,29 @@ class NotificationDataStore(private val context: Context) {
             mentionsEnabledFlow.value = it.getBoolean(KEY_MENTIONS_ENABLED, true)
             hatEnabledFlow.value = it.getBoolean(KEY_HAT_ENABLED, true)
             bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
-            bgCheckIntervalMinFlow.value = (it.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L)
+            bgCheckIntervalMinFlow.value = readBgIntervalFromPrefs(it)
             mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
 
-            // Слушатель изменений для обновления Flow
-            it.registerOnSharedPreferenceChangeListener { _, key ->
-                when (key) {
-                    KEY_MAIN_ENABLED -> mainEnabledFlow.value = it.getBoolean(KEY_MAIN_ENABLED, true)
-                    KEY_FAV_ENABLED -> favEnabledFlow.value = it.getBoolean(KEY_FAV_ENABLED, true)
-                    KEY_QMS_ENABLED -> qmsEnabledFlow.value = it.getBoolean(KEY_QMS_ENABLED, true)
-                    KEY_MENTIONS_ENABLED -> mentionsEnabledFlow.value = it.getBoolean(KEY_MENTIONS_ENABLED, true)
-                    KEY_HAT_ENABLED -> hatEnabledFlow.value = it.getBoolean(KEY_HAT_ENABLED, true)
-                    KEY_BG_CHECK_ENABLED -> bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
-                    KEY_BG_CHECK_INTERVAL_MIN -> bgCheckIntervalMinFlow.value = (it.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L)
-                    KEY_MUTED_TOPIC_IDS -> mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
-                }
-            }
+            it.registerOnSharedPreferenceChangeListener(prefsListener)
         }
     }
+
+    /**
+     * Раньше в списке был пункт «15 минут», который код всё равно поднимал до 30.
+     * Переписываем сохранённое значение, иначе ListPreference не нашла бы его среди
+     * вариантов и показала бы пустую строку.
+     */
+    private fun migrateLegacyBgInterval(p: SharedPreferences) {
+        val raw = p.getString(KEY_BG_CHECK_INTERVAL_MIN, null) ?: return
+        val parsed = raw.toLongOrNull() ?: return
+        if (parsed >= MIN_BG_CHECK_INTERVAL_MIN) return
+        p.edit().putString(KEY_BG_CHECK_INTERVAL_MIN, MIN_BG_CHECK_INTERVAL_MIN.toString()).apply()
+        Timber.i("Migrated background check interval %d -> %d min", parsed, MIN_BG_CHECK_INTERVAL_MIN)
+    }
+
+    private fun readBgIntervalFromPrefs(p: SharedPreferences): Long =
+            (p.getString(KEY_BG_CHECK_INTERVAL_MIN, null)?.toLongOrNull() ?: MIN_BG_CHECK_INTERVAL_MIN)
+                    .coerceAtLeast(MIN_BG_CHECK_INTERVAL_MIN)
 
     private fun readMutedTopicsFromPrefs(p: SharedPreferences): Set<Int> {
         val raw = p.getString(KEY_MUTED_TOPIC_IDS, "").orEmpty()
@@ -133,8 +166,7 @@ class NotificationDataStore(private val context: Context) {
     // --- Bg-check / muted topics синхронные геттеры/сеттеры ---
     fun getBgCheckEnabledSync(): Boolean = prefs.getBoolean(KEY_BG_CHECK_ENABLED, true)
 
-    fun getBgCheckIntervalMinSync(): Long =
-            (prefs.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L).coerceAtLeast(15L)
+    fun getBgCheckIntervalMinSync(): Long = readBgIntervalFromPrefs(prefs)
 
     fun getMutedTopicsSync(): Set<Int> = readMutedTopicsFromPrefs(prefs)
 
@@ -217,13 +249,24 @@ class NotificationDataStore(private val context: Context) {
         prefs.edit().putString(KEY_DATA_FAVORITES_EVENTS, value.joinToString(",")).apply()
     }
 
+    /**
+     * putStringSet, а не joinToString: ключ упоминания содержит и `:`, и `/`, и произвольную
+     * ссылку — любой разделитель, который мы бы выбрали, рано или поздно встретился бы внутри.
+     */
+    fun getNotifiedMentionKeysSync(): Set<String> =
+            prefs.getStringSet(KEY_NOTIFIED_MENTION_KEYS, emptySet())?.toSet() ?: emptySet()
+
+    fun setNotifiedMentionKeysSync(value: Set<String>) {
+        prefs.edit().putStringSet(KEY_NOTIFIED_MENTION_KEYS, value).apply()
+    }
+
+    fun getMentionKeysSeededSync(): Boolean = prefs.getBoolean(KEY_MENTION_KEYS_SEEDED, false)
+
+    fun setMentionKeysSeededSync(value: Boolean) {
+        prefs.edit().putBoolean(KEY_MENTION_KEYS_SEEDED, value).apply()
+    }
+
     fun getMainEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_ENABLED, true)
-
-    fun getMainSoundEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_SOUND_ENABLED, true)
-
-    fun getMainVibrationEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_VIBRATION_ENABLED, true)
-
-    fun getMainIndicatorEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_INDICATOR_ENABLED, true)
 
     fun getMainAvatarsEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_AVATARS_ENABLED, true)
 

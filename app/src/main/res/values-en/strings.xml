@@ -522,6 +522,9 @@
     <string name="notification_action_reply">Reply</string>
     <string name="notification_action_reply_hint">Message…</string>
     <string name="notification_action_mark_read">Mark read</string>
+    <string name="notification_action_retry">Retry</string>
+    <string name="notification_quick_reply_failed_title">Message not sent</string>
+    <string name="notification_stacked_more">…and %1$d more</string>
     <string name="notification_title_favorite">New posts in a favorite topic</string>
     <string name="notification_content_mention_fallback">Open the topic to view the reply</string>
     <string name="notification_content_theme_fallback">Open favorites to view new posts</string>
@@ -700,13 +703,11 @@
     <string name="support_author_usdt_label">USDT Tron (TRC20)</string>
     <string name="copied">Copied</string>
     <!-- notifications -->
-    <string name="pref_title_sound">Sound</string>
-    <string name="pref_title_vibration">Vibration</string>
-    <string name="pref_title_indicator">Indication</string>
     <string name="pref_title_enable_avatars">Load userpics</string>
-    <string name="pref_summary_download_notifications">File download notifications</string>
-    <string name="pref_title_bg_check">Background check</string>
-    <string name="pref_summary_bg_check">Periodically checks the server when the app is closed. No persistent icon.</string>
+    <string name="pref_title_download_notifications">Download notifications</string>
+    <string name="pref_summary_download_notifications">Progress and completion of file downloads. Independent of the main notifications switch.</string>
+    <string name="pref_title_bg_check">Run in background</string>
+    <string name="pref_summary_bg_check">Off: the app does nothing while closed. Notifications arrive only while it is open.</string>
     <string name="pref_title_bg_check_interval">Background check interval</string>
     <string name="pref_title_android_notification_settings">Android notification settings</string>
     <string name="pref_title_open_android_notification_settings">Open notification settings</string>

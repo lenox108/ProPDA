@@ -57,8 +57,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
     }
 
     private fun handleReply(context: Context, intent: Intent, notifyId: Int) {
-        val text = RemoteInput.getResultsFromIntent(intent)
-                ?.getCharSequence(KEY_REPLY_TEXT)?.toString()?.trim()
+        // Текст приходит либо из RemoteInput (обычный ответ из шторки), либо из extra —
+        // это повтор после неудачной отправки, и вводить его заново пользователь не должен.
+        val text = (RemoteInput.getResultsFromIntent(intent)
+                ?.getCharSequence(KEY_REPLY_TEXT)?.toString()
+                ?: intent.getStringExtra(EXTRA_PENDING_TEXT))
+                ?.trim()
         if (text.isNullOrEmpty()) return
         val userId = intent.getIntExtra(EXTRA_USER_ID, 0)
         val themeId = intent.getIntExtra(EXTRA_TOPIC_ID, 0)
@@ -70,6 +74,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 NotificationManagerCompat.from(context).cancel(notifyId)
             } catch (t: Throwable) {
                 Timber.e(t, "Notification quick-reply failed user=$userId theme=$themeId")
+                // Уведомление уже свернулось, и без этого текст пользователя пропадал молча:
+                // он был уверен, что сообщение ушло.
+                QuickReplyFailureNotification.show(context, notifyId, userId, themeId, text)
             } finally {
                 pending.finish()
             }
@@ -85,5 +92,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_POST_ID = "extra_post_id"
         const val EXTRA_USER_ID = "extra_user_id"
         const val EXTRA_IS_MENTION = "extra_is_mention"
+
+        /** Сохранённый текст неотправленного ответа: несёт его действие «Повторить». */
+        const val EXTRA_PENDING_TEXT = "extra_pending_text"
     }
 }

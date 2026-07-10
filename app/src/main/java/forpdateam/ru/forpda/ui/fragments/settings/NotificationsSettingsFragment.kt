@@ -44,11 +44,11 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         configureSystemSettingsLinks()
     }
 
+    /**
+     * Звук, вибрация и индикатор — свойства канала уведомлений, приложение их не контролирует.
+     * Пользователь настраивает их в системных экранах каналов, ссылки на которые ниже.
+     */
     private fun configureVersionAwareUi() {
-        preferenceScreen.findPreference<Preference>("notifications.main.sound_enabled")?.isVisible = false
-        preferenceScreen.findPreference<Preference>("notifications.main.vibration_enabled")?.isVisible = false
-        preferenceScreen.findPreference<Preference>("notifications.main.indicator_enabled")?.isVisible = false
-
         preferenceScreen.findPreference<PreferenceCategory>("notifications.system.category")?.isVisible = true
         updateVersionAwareUi()
     }
