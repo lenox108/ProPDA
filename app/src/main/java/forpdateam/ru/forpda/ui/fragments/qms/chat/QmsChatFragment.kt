@@ -289,6 +289,13 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
             layoutManager = messagesLayoutManager
             adapter = messagesAdapter
             clipToPadding = false
+            // Same page tone the native topic list paints under its post cards, so the gaps between
+            // bubbles and the strip under the last one match the rest of the app.
+            setBackgroundColor(
+                    requireContext().getColorFromAttr(
+                            com.google.android.material.R.attr.colorSurfaceContainerLowest,
+                    ),
+            )
             itemAnimator = null // a chat re-diffs on every WS tick; animations only add jitter
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
