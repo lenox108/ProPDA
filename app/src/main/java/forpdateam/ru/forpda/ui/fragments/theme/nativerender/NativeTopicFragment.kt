@@ -221,6 +221,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var pendingJumpToBottom: Boolean = false
 
     /**
+     * Обновление жестом «снизу вверх» ([refreshFromBottom]): наибольший id поста, который пользователь
+     * видел ДО перезагрузки. Если свежая страница принесла посты новее — [applyInitialAnchor] сядет на
+     * первый из них вместо низа (см. [forpdateam.ru.forpda.presentation.theme.TopicRefreshAnchorPolicy]).
+     * 0 = обычная загрузка, не обновление.
+     */
+    private var pendingRefreshSeenUpToPostId: Int = 0
+
+    /**
+     * Обновление снизу: разрешить дошагать до страницы с непрочитанным. Пока пользователь читал, тема
+     * могла перевалить за границу страницы — тогда перезагрузка ТЕКУЩЕЙ страницы не приносит ничего
+     * нового (она уже заполнена), а все непрочитанные лежат ниже. Живой замер на теме 1103268: клиент
+     * видел `newCount=0`, тогда как на следующей странице ждали 20 непрочитанных постов.
+     * Только HYBRID: в CLASSIC низ страницы — это не низ темы, и шагать вниз нельзя.
+     */
+    private var refreshFollowNextPageArmed: Boolean = false
+
+    /**
      * Клиентская граница прочитанного: разрешить резюм-на-границу только один раз за открытие темы —
      * на ПЕРВОЙ успешной загрузке. Взводится в [onViewCreated] перед первым [loadTopic], гасится сразу
      * после проверки, чтобы последующие загрузки (пагинация, переходы по страницам, findpost-резюм)
@@ -1601,11 +1618,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * page even after infinite-scrolling down — and land back at the bottom. Without the
      * [pendingJumpToBottom] flag the fresh load's [applyInitialAnchor] falls to the page TOP, which is
      * the reported «после обновления кидает на первый пост последней страницы» bug.
+     *
+     * «Вернуться на низ» верно только когда обновление не принесло новых постов. Принесло — низ
+     * оказывается ПОСЛЕДНИМ непрочитанным, а всё новое уезжает вверх (и тут же метится прочитанным
+     * в [markVisiblePostsRead]). Поэтому запоминаем последний виденный пост: [applyInitialAnchor]
+     * посадит якорь на первый пост новее него.
      */
     private fun refreshFromBottom() {
         val url = if (pagination.isInitialised) pagination.pageUrl(pagination.loadedPage) else (loadedUrl ?: topicUrl)
         pendingJumpToBottom = true
-        loadTopic(url)
+        pendingRefreshSeenUpToPostId = loadedItems.maxOfOrNull { it.postId } ?: 0
+        refreshFollowNextPageArmed = !isClassicMode()
+        loadTopic(url, preserveRefreshIntent = true)
     }
 
     /**
@@ -2964,10 +2988,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     // endregion
 
-    private fun loadTopic(url: String) {
+    private fun loadTopic(url: String, preserveRefreshIntent: Boolean = false) {
         if (url.isBlank()) {
             setRefreshing(false)
             return
+        }
+        if (!preserveRefreshIntent) {
+            // Любая загрузка, кроме обновления снизу и его шага на следующую страницу, гасит
+            // refresh-намерение. Иначе взведённые флаги пережили бы её и применились к чужому рендеру:
+            // явный переход («страница N», «В конец темы») получил бы якорь «первый непрочитанный», а
+            // смена темы в этом же табе — ещё и шаг по страницам ЧУЖОЙ темы (id постов глобальны,
+            // сравнение с seenUpTo другой темы бессмысленно).
+            pendingRefreshSeenUpToPostId = 0
+            refreshFollowNextPageArmed = false
         }
         // Remember the requested target so the navigator's redundant echo of the initial open (see
         // loadThemeUrlFromNavigator) doesn't fire a second, page-1 load in parallel.
@@ -3031,6 +3064,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
                 val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
                 pagination.reset(topicId, page.pagination, items)
+                // Обновление снизу: на этой странице непрочитанного нет, но тема выросла за её границу —
+                // шагаем вниз, пока не найдём страницу с непрочитанным (иначе новые посты не видны вовсе).
+                // Каждый шаг увеличивает loadedPage, так что цикл упирается в последнюю страницу.
+                if (refreshFollowNextPageArmed && pendingJumpToBottom &&
+                        items.none { it.postId > pendingRefreshSeenUpToPostId }) {
+                    pagination.nextPageUrl()?.let { next ->
+                        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                            android.util.Log.i("FPDA_REFRESH_ANCHOR", "follow_next_page topic=${page.id} " +
+                                    "page=${page.pagination.current}/${page.pagination.all} seenUpTo=$pendingRefreshSeenUpToPostId")
+                        }
+                        loadTopic(next, preserveRefreshIntent = true) // индикатор держим: вложенная загрузка его снимет
+                        return@onSuccess
+                    }
+                }
+                refreshFollowNextPageArmed = false
                 updateRefreshGesture() // top pull feeds prev-page loading, not refresh, when pages are above
                 barCurrentPage = pagination.loadedPage
                 loadedItems.clear()
@@ -3051,6 +3099,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 enrichLoadedPage(page)
             }.onFailure { error ->
                 setRefreshing(false)
+                pendingRefreshSeenUpToPostId = 0 // не переживать неудачную загрузку — иначе стухнет
+                refreshFollowNextPageArmed = false
                 Toast.makeText(requireContext(), "Ошибка загрузки темы: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
@@ -3401,6 +3451,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             android.util.Log.i("FPDA_CLEAR", "applyInitialAnchor ids=${ids.size} jumpToBottom=$pendingJumpToBottom " +
                     "restore=$pendingRestorePostId jumpToTop=$pendingJumpToTop target=$targetId unread=$hasUnreadTarget")
         }
+        val refreshSeenUpTo = pendingRefreshSeenUpToPostId
+        pendingRefreshSeenUpToPostId = 0
         // Restore-scroll «где остановился»: вернуться на сохранённый пост и его точный offset (после
         // пересоздания фрагмента). Приоритетнее серверного якоря и границы прочитанного — это ровно то
         // место, где стоял пользователь.
@@ -3425,6 +3477,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // выравниваем по верху (не режем с обеих сторон) — см. [anchorPost].
         if (pendingJumpToBottom) {
             pendingJumpToBottom = false
+            // Обновление снизу принесло новые посты → садимся на ПЕРВЫЙ непрочитанный, а не на низ
+            // (иначе новое уезжает вверх и тут же метится прочитанным).
+            val firstUnseen = forpdateam.ru.forpda.presentation.theme.TopicRefreshAnchorPolicy
+                    .firstUnseenPostId(ids, refreshSeenUpTo)
+            if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                android.util.Log.i("FPDA_REFRESH_ANCHOR", "topic=$pageTopicId seenUpTo=$refreshSeenUpTo " +
+                        "firstUnseen=$firstUnseen lastOnPage=${ids.lastOrNull()} " +
+                        "newCount=${ids.count { it > refreshSeenUpTo }}")
+            }
+            if (firstUnseen != null) {
+                val idx = ids.indexOf(firstUnseen)
+                anchoredBottomPostId = null
+                anchorPost(idx + headerOffset(), isLast = idx == ids.size - 1)
+                postsAdapter.requestHighlight(firstUnseen)
+                recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
+                return
+            }
             val lastPos = (ids.size - 1 + headerOffset()).coerceAtLeast(0)
             anchoredBottomPostId = ids.lastOrNull()
             if (forpdateam.ru.forpda.BuildConfig.DEBUG) android.util.Log.i("FPDA_CLEAR", "anchor SET(jumpToBottom)=$anchoredBottomPostId lastPos=$lastPos")
