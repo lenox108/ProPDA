@@ -19,7 +19,9 @@ import forpdateam.ru.forpda.ui.activities.MainActivity
 import timber.log.Timber
 
 /**
- * Shared system-notification builder for foreground service and background worker.
+ * Единая сборка системных уведомлений для foreground-сервиса и фонового воркера.
+ * До этого у каждого была своя копия билдера, и они успели разойтись: воркер не умел
+ * ни аватарки, ни stacked-уведомления, ни события сайта.
  */
 object NotificationPublisher {
 
@@ -32,6 +34,7 @@ object NotificationPublisher {
     private const val INBOX_STYLE_THRESHOLD = 4
     private const val INBOX_STYLE_MAX_LINES = 6
 
+    /** @return ID опубликованного уведомления либо null, если публикация не состоялась. */
     @SuppressLint("MissingPermission")
     fun publish(
             context: Context,
@@ -39,8 +42,8 @@ object NotificationPublisher {
             event: NotificationEvent,
             intentUrlOverride: String? = null,
             largeIcon: android.graphics.Bitmap? = null,
-    ) {
-        if (!prefs.getMainEnabled()) return
+    ): Int? {
+        if (!prefs.getMainEnabled()) return null
 
         val channelId = channelIdFor(event)
         NotificationsService.createEventChannels(context)
@@ -79,30 +82,24 @@ object NotificationPublisher {
         if (largeIcon != null && !event.fromSite()) {
             builder.setLargeIcon(largeIcon)
         }
+        NotificationActions.apply(context, builder, event)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                Log.w(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} notification: POST_NOTIFICATIONS denied")
-                return
-            }
-        }
+        if (!canNotify(context, event.notificationLogCategory())) return null
         val manager = NotificationManagerCompat.from(context)
-        if (!manager.areNotificationsEnabled()) {
-            Log.w(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} notification: disabled by system")
-            return
-        }
-        manager.notify(event.notifyId(), builder.build())
+        val notifyId = event.notifyId()
+        manager.notify(notifyId, builder.build())
         Log.i(NOTIFICATIONS_LOG_TAG, "Published ${event.notificationLogCategory()} notification")
+        return notifyId
     }
 
+    /** @return ID опубликованного stacked-уведомления либо null, если публикация не состоялась. */
     @SuppressLint("MissingPermission")
     fun publishStacked(
             context: Context,
             prefs: NotificationPreferencesHolder,
             events: List<NotificationEvent>,
-    ) {
-        if (events.isEmpty() || !prefs.getMainEnabled()) return
+    ): Int? {
+        if (events.isEmpty() || !prefs.getMainEnabled()) return null
 
         val first = events.first()
         val channelId = channelIdFor(first)
@@ -136,20 +133,25 @@ object NotificationPublisher {
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
-                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                Log.w(NOTIFICATIONS_LOG_TAG, "Skip stacked notification: POST_NOTIFICATIONS denied")
-                return
-            }
-        }
+        if (!canNotify(context, "stacked")) return null
         val manager = NotificationManagerCompat.from(context)
-        if (!manager.areNotificationsEnabled()) {
-            Log.w(NOTIFICATIONS_LOG_TAG, "Skip stacked notification: disabled by system")
-            return
-        }
         manager.notify(notifyId, builder.build())
         Log.i(NOTIFICATIONS_LOG_TAG, "Published stacked ${first.notificationLogCategory()} notification, count=${events.size}")
+        return notifyId
+    }
+
+    private fun canNotify(context: Context, category: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.w(NOTIFICATIONS_LOG_TAG, "Skip $category notification: POST_NOTIFICATIONS denied")
+            return false
+        }
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            Log.w(NOTIFICATIONS_LOG_TAG, "Skip $category notification: disabled by system")
+            return false
+        }
+        return true
     }
 
     fun cancel(context: Context, event: NotificationEvent) {
@@ -266,7 +268,7 @@ object NotificationPublisher {
                 inbox.addLine(stackedLineFor(context, event))
             }
             if (events.size > show) {
-                inbox.addLine("...and ${events.size - show} more")
+                inbox.addLine(context.getString(R.string.notification_stacked_more, events.size - show))
             }
             return inbox
         }
@@ -303,7 +305,7 @@ object NotificationPublisher {
         }
         if (events.size > size) {
             content.append("<br>")
-            content.append("...и еще ").append(events.size - size)
+            content.append(context.getString(R.string.notification_stacked_more, events.size - size))
         }
         return ApiUtils.spannedFromHtml(content.toString()) ?: content
     }

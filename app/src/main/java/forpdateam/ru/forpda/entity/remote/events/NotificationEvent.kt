@@ -65,13 +65,26 @@ data class NotificationEvent @JvmOverloads constructor(
         return NotificationEvent.fromQms(source)
     }
 
+    /**
+     * ID уведомления в шторке и ключ истории событий.
+     *
+     * Упаковка бит-в-бит, а не хеш: [sourceId] в старших 27 битах, [source] и [type] —
+     * в младших. Значит два события совпадают по ID тогда и только тогда, когда совпадают
+     * все три поля (при sourceId < 2^27, чего с запасом хватает на ID тем 4PDA).
+     * Результат всегда неотрицателен — отрицательные ID заняты служебными уведомлениями
+     * (stacked QMS/избранное, foreground-канал).
+     */
     @JvmOverloads
     fun notifyId(type: Type? = this.type): Int {
         val actualType = type ?: this.type
-        return sourceId / 4 + actualType.value + actualType.value
+        val id = sourceId and SOURCE_ID_MASK
+        return (id shl 4) or (source.ordinal shl 2) or actualType.ordinal
     }
 
     companion object {
+        /** 27 бит под sourceId: 4 младших бита уходят под source.ordinal и type.ordinal. */
+        private const val SOURCE_ID_MASK = 0x07FFFFFF
+
         const val SRC_EVENT_NEW = 1
         const val SRC_EVENT_READ = 2
         const val SRC_EVENT_MENTION = 3

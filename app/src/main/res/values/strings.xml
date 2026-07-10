@@ -648,6 +648,9 @@
     <string name="notification_action_reply">Ответить</string>
     <string name="notification_action_reply_hint">Сообщение…</string>
     <string name="notification_action_mark_read">Прочитано</string>
+    <string name="notification_action_retry">Повторить</string>
+    <string name="notification_quick_reply_failed_title">Сообщение не отправлено</string>
+    <string name="notification_stacked_more">…и ещё %1$d</string>
     <string name="notification_title_favorite">Новые сообщения в избранной теме</string>
     <string name="notification_content_mention_fallback">Откройте тему, чтобы посмотреть ответ</string>
     <string name="notification_content_theme_fallback">Откройте избранное, чтобы посмотреть новые сообщения</string>
@@ -896,17 +899,15 @@
     <string name="support_author_usdt_trc20" translatable="false">TF2aHE8mSrqAqMKFPAZwigFbwNDUjvCpaZ</string>
     <string name="copied">Скопировано</string>
     <!-- notifications -->
-    <string name="pref_title_sound">Звук</string>
-    <string name="pref_title_vibration">Вибрация</string>
-    <string name="pref_title_indicator">Индикатор</string>
     <string name="pref_title_enable_avatars">Загружать аватары</string>
-    <string name="pref_summary_download_notifications">Уведомления о загрузках файлов</string>
+    <string name="pref_title_download_notifications">Уведомления о загрузках</string>
+    <string name="pref_summary_download_notifications">Прогресс и завершение скачивания файлов. Не зависит от общего переключателя уведомлений.</string>
     <string name="pref_title_favorites_live_tab">Живой список</string>
     <string name="pref_summary_favorites_live_tab">Обновлять данные во вкладке</string>
     <string name="pref_title_hat_watch">Новые версии приложений</string>
     <string name="pref_summary_hat_watch">Пуш, когда в шапку отслеживаемой темы добавляют новый apk. Включайте слежение в меню темы или в избранном («Следить за новыми версиями»).</string>
-    <string name="pref_title_bg_check">Фоновая проверка</string>
-    <string name="pref_summary_bg_check">Опрашивает сервер периодически, когда приложение закрыто. Без постоянной иконки.</string>
+    <string name="pref_title_bg_check">Работать в фоне</string>
+    <string name="pref_summary_bg_check">Выключено: приложение ничего не делает, пока закрыто. Уведомления приходят, только когда оно открыто.</string>
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
     <string name="pref_title_android_notification_settings">Системные настройки Android</string>
     <string name="pref_title_open_android_notification_settings">Открыть настройки уведомлений</string>
