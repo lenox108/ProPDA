@@ -292,6 +292,7 @@
     <string name="codes_name_sub">Снизу</string>
     <string name="codes_name_sup">Сверху</string>
     <string name="codes_name_curator">Куратор</string>
+    <string name="codes_name_release">Релизер</string>
     <string name="codes_font">Название шрифта</string>
     <string name="codes_font_text">Текст</string>
     <string name="codes_list_item_Pos" formatted="false">Пункт списка %d</string>
