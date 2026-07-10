@@ -40,6 +40,11 @@ class NotificationDataStore(private val context: Context) {
         private const val KEY_BG_CHECK_INTERVAL_MIN = "notifications.bg.interval_min"
         // Список тем, для которых пользователь отключил уведомления локально.
         private const val KEY_MUTED_TOPIC_IDS = "notifications.muted_topic_ids"
+        // Ключи упоминаний, о которых уже уведомили из фона (дедуп между циклами воркера).
+        private const val KEY_NOTIFIED_MENTION_KEYS = "notifications.notified_mention_keys"
+        // Первый фоновый проход только запоминает непрочитанные упоминания, не уведомляя о них:
+        // иначе включение фичи высыпало бы в шторку всю накопленную историю.
+        private const val KEY_MENTION_KEYS_SEEDED = "notifications.mention_keys_seeded"
 
         /**
          * Нижняя граница фоновой проверки. 15 минут — минимум AOSP, но это 96 пробуждений
@@ -189,6 +194,23 @@ class NotificationDataStore(private val context: Context) {
 
     fun setDataFavoritesEventsSync(value: Set<String>) {
         prefs.edit().putString(KEY_DATA_FAVORITES_EVENTS, value.joinToString(",")).apply()
+    }
+
+    /**
+     * putStringSet, а не joinToString: ключ упоминания содержит и `:`, и `/`, и произвольную
+     * ссылку — любой разделитель, который мы бы выбрали, рано или поздно встретился бы внутри.
+     */
+    fun getNotifiedMentionKeysSync(): Set<String> =
+            prefs.getStringSet(KEY_NOTIFIED_MENTION_KEYS, emptySet())?.toSet() ?: emptySet()
+
+    fun setNotifiedMentionKeysSync(value: Set<String>) {
+        prefs.edit().putStringSet(KEY_NOTIFIED_MENTION_KEYS, value).apply()
+    }
+
+    fun getMentionKeysSeededSync(): Boolean = prefs.getBoolean(KEY_MENTION_KEYS_SEEDED, false)
+
+    fun setMentionKeysSeededSync(value: Boolean) {
+        prefs.edit().putBoolean(KEY_MENTION_KEYS_SEEDED, value).apply()
     }
 
     fun getMainEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_ENABLED, true)

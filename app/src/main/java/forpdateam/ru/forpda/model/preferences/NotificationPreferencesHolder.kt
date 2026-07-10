@@ -40,6 +40,15 @@ class NotificationPreferencesHolder(
 
     fun toggleTopicMute(topicId: Int): Boolean = dataStore.toggleTopicMuteSync(topicId)
 
+    // --- Фоновые упоминания ---
+    fun getNotifiedMentionKeys(): Set<String> = dataStore.getNotifiedMentionKeysSync()
+
+    fun setNotifiedMentionKeys(value: Set<String>) = dataStore.setNotifiedMentionKeysSync(value)
+
+    fun getMentionKeysSeeded(): Boolean = dataStore.getMentionKeysSeededSync()
+
+    fun setMentionKeysSeeded(value: Boolean) = dataStore.setMentionKeysSeededSync(value)
+
     // --- Синхронные геттеры/сеттеры ---
     fun setDataQmsEvents(value: Set<String>) = dataStore.setDataQmsEventsSync(value)
 
