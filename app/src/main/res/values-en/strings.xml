@@ -693,9 +693,6 @@
     <string name="support_author_usdt_label">USDT Tron (TRC20)</string>
     <string name="copied">Copied</string>
     <!-- notifications -->
-    <string name="pref_title_sound">Sound</string>
-    <string name="pref_title_vibration">Vibration</string>
-    <string name="pref_title_indicator">Indication</string>
     <string name="pref_title_enable_avatars">Load userpics</string>
     <string name="pref_title_download_notifications">Download notifications</string>
     <string name="pref_summary_download_notifications">Progress and completion of file downloads. Independent of the main notifications switch.</string>
