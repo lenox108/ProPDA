@@ -1516,7 +1516,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val touchSlop = vc.scaledTouchSlop
         val density = resources.displayMetrics.density
         val captureDist = kotlin.math.max(touchSlop * 3f, 48f * density)
-        val triggerDist = 160f * density
+        val triggerDist = 230f * density
         val maxReleaseVelocity = 1450f * density
         val minDurationMs = 240L
         recyclerView.addOnItemTouchListener(object : androidx.recyclerview.widget.RecyclerView.OnItemTouchListener {
