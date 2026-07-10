@@ -388,13 +388,29 @@ class EventsRepository(
             return
         }
         if (networkStateProvider.getState() && authHolder.get().isAuth()) {
-            if (!webSocketController.isConnected()) {
+            // Whether to hold a socket open is now decided in ONE place (see [RealtimeConnectPolicy]).
+            // This branch used to check only network+auth, so a network or auth change re-opened the
+            // socket after NotificationsService had stopped it because the user disabled notifications:
+            // `stop()` never clears `foregroundRealtimeEnabled`, so the guard in
+            // `setForegroundRealtimeEnabled()` was bypassed and the 45-second pings came back.
+            val wantsRealtime = RealtimeConnectPolicy.shouldOpenWebSocket(
+                    foregroundRealtime = foregroundRealtimeEnabled,
+                    networkAvailable = networkStateProvider.getState(),
+                    authorized = authHolder.get().isAuth(),
+                    wantsPushNotifications = notificationPreferencesHolder.wantsPushNotifications(),
+            )
+            if (!wantsRealtime) {
+                BatteryDebugLogger.logState("EventsRepository", "skipWebSocket", "notifications disabled")
+                if (webSocketController.isConnected()) {
+                    stop("notifications_disabled")
+                }
+            } else if (!webSocketController.isConnected()) {
                 if (!force && reconnectAttempts > 0) {
                     val delayMs = reconnectBackoffMs()
                     BatteryDebugLogger.logState("EventsRepository", "reconnectBackoff", "attempt=$reconnectAttempts delayMs=$delayMs")
                     repoScope.launch {
                         delay(delayMs)
-                        if (foregroundRealtimeEnabled && networkStateProvider.getState() && authHolder.get().isAuth() && !webSocketController.isConnected()) {
+                        if (!webSocketController.isConnected()) {
                             start(checkEvents = false, force = true)
                         }
                     }
@@ -607,12 +623,19 @@ class EventsRepository(
         }
     }
 
+    /**
+     * An event that already arrived is processed regardless of the notification preference: muting
+     * notifications must not freeze the app itself. [notifyTabs] is the in-app bus — the QMS badge
+     * ([forpdateam.ru.forpda.model.repository.qms.QmsRepository.handleEvent]), the favourites badge and
+     * an open QMS chat all hang off it — and it shows nothing to the user.
+     *
+     * Only the notification-producing tail stays gated. It is a two-layer gate already:
+     * [sendNotification] re-checks the master toggle and [checkNotify] re-checks each event family, so
+     * nothing leaks through. [handleEvent] is skipped explicitly because its pending-event aggregation
+     * ends in [hardHandleEvent], which goes to the NETWORK for the sole purpose of building
+     * notifications — pointless traffic when the user asked for none.
+     */
     private fun handleWebSocketEvent(event: NotificationEvent) {
-        if (!notificationPreferencesHolder.getMainEnabled()) {
-            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip websocket event: app preference disabled")
-            return
-        }
-
         if (event.isRead) {
             clearMentionUnreadOverride(event)
             checkOldEvent(event)
@@ -626,6 +649,10 @@ class EventsRepository(
                 event,
                 true
         ))
+        if (!notificationPreferencesHolder.getMainEnabled()) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip websocket event notification: app preference disabled")
+            return
+        }
         handleEvent(listOf(event), event.source)
     }
 
