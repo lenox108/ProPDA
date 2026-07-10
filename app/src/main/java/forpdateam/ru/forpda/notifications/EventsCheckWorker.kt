@@ -48,9 +48,12 @@ class EventsCheckWorker @AssistedInject constructor(
             Timber.d("EventsCheckWorker: foreground realtime active, skip")
             return@withContext Result.success()
         }
-        if (!prefs.getMainEnabled()) {
-            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: app preference disabled")
-            Timber.d("EventsCheckWorker: main disabled, skip")
+        // Планировщик снимает эту работу, как только push перестают быть нужны, но отмена
+        // может и не доехать (гонка, убитый процесс, старая запись в базе WorkManager).
+        // Тогда пробуждение всё равно случится — пусть оно хотя бы не ходит в сеть.
+        if (!prefs.wantsPushNotifications()) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: no push families enabled")
+            Timber.d("EventsCheckWorker: push disabled, skip")
             return@withContext Result.success()
         }
         if (!prefs.getBgCheckEnabled()) {
