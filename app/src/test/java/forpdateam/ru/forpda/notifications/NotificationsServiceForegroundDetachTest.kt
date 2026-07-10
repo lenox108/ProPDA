@@ -14,6 +14,10 @@ import org.junit.Test
  * возврате на передний план из кода убран (в foreground FGS не поднимается вовсе).
  * В результате DETACH оставлял в шторке уведомление, снять которое было уже некому.
  *
+ * Отдельно пиннится граница ответственности: смахивание приложения из Recents убирает только
+ * служебное уведомление. Уведомления о новых сообщениях (и о неотправленном быстром ответе,
+ * который несёт набранный пользователем текст) переживают свайп.
+ *
  * Source-level вместо Robolectric, потому что `NotificationsService` — `@AndroidEntryPoint`,
  * и поднимать Hilt-граф ради одного assert'а избыточно.
  */
@@ -21,8 +25,7 @@ class NotificationsServiceForegroundDetachTest {
 
     @Test
     fun detachForegroundIfPromoted_removesTheNotification() {
-        val body = readServiceSource()
-        val detachMethod = extractMethodBody(body, "detachForegroundIfPromoted")
+        val detachMethod = extractMethodBody(readServiceSource(), "detachForegroundIfPromoted")
         assertNotNull("метод detachForegroundIfPromoted должен существовать", detachMethod)
         assertTrue(
             "detachForegroundIfPromoted должен вызывать stopForeground(STOP_FOREGROUND_REMOVE): " +
@@ -36,14 +39,37 @@ class NotificationsServiceForegroundDetachTest {
     }
 
     @Test
-    fun cancelAllNotifications_stillUsesStopForegroundRemove() {
-        val body = readServiceSource()
-        val cancelMethod = extractMethodBody(body, "cancelAllNotifications")
-        assertNotNull("метод cancelAllNotifications должен существовать", cancelMethod)
+    fun removeForegroundNotification_usesStopForegroundRemove() {
+        val method = extractMethodBody(readServiceSource(), "removeForegroundNotification")
+        assertNotNull("метод removeForegroundNotification должен существовать", method)
         assertTrue(
-            "cancelAllNotifications обязан вызывать stopForeground(STOP_FOREGROUND_REMOVE); " +
-                    "иначе при логауте/выключении/свайпе уведомление не уберётся из шторки.\n$cancelMethod",
-            cancelMethod!!.contains("STOP_FOREGROUND_REMOVE")
+            "снятие FGS обязано удалять уведомление, а не отцеплять его.\n$method",
+            method!!.contains("STOP_FOREGROUND_REMOVE")
+        )
+    }
+
+    @Test
+    fun onTaskRemoved_doesNotCancelEventNotifications() {
+        val method = extractMethodBody(readServiceSource(), "onTaskRemoved", modifier = "override")
+        assertNotNull("метод onTaskRemoved должен существовать", method)
+        assertTrue(
+            "свайп из Recents не значит «я всё прочитал»: события и неотправленный ответ " +
+                    "обязаны пережить его.\n$method",
+            !method!!.contains("cancelAllNotifications")
+        )
+        assertTrue(
+            "служебное FGS-уведомление при этом снять надо.\n$method",
+            method.contains("removeForegroundNotification")
+        )
+    }
+
+    @Test
+    fun cancelAllNotifications_neverTouchesForeignChannels() {
+        val method = extractMethodBody(readServiceSource(), "cancelAllNotifications")
+        assertNotNull("метод cancelAllNotifications должен существовать", method)
+        assertTrue(
+            "cancelAll() снёс бы прогресс загрузки и уведомление об обновлении.\n$method",
+            !method!!.contains("cancelAll()")
         )
     }
 
@@ -61,8 +87,8 @@ class NotificationsServiceForegroundDetachTest {
         return file.readText()
     }
 
-    private fun extractMethodBody(body: String, name: String): String? {
-        val signature = Regex("""\bprivate\s+fun\s+${Regex.escape(name)}\s*\([^)]*\)\s*\{""")
+    private fun extractMethodBody(body: String, name: String, modifier: String = "private"): String? {
+        val signature = Regex("""\b$modifier\s+fun\s+${Regex.escape(name)}\s*\([^)]*\)[^{]*\{""")
         val match = signature.find(body) ?: return null
         val start = match.range.last + 1
         var depth = 1
