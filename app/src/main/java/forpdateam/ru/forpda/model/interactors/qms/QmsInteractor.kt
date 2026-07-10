@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 class QmsInteractor(
         private val qmsRepository: QmsRepository,
@@ -35,7 +36,13 @@ class QmsInteractor(
         // Счётчики и меню — UI-состояние: [CountersHolder]/[MenuRepository] должны обновляться на Main,
         // иначе бейдж QMS в нижней навигации не перерисовывается при WS-событии с фона (IO-поток).
         eventsJob = eventsScope.launch {
-            eventsRepository.observeEventsTab().collect { qmsRepository.handleEvent(it) }
+            eventsRepository.observeEventsTab().collect { event ->
+                // A throw here (a Room hiccup while recomputing the counters) used to cancel this
+                // collector for the rest of the process — every later event was then silently lost and
+                // the QMS badge stayed frozen until the app restarted. Keep the subscription alive.
+                runCatching { qmsRepository.handleEvent(event) }
+                        .onFailure { Timber.e(it, "QMS counters: handleEvent failed") }
+            }
         }
     }
 
@@ -71,7 +78,7 @@ class QmsInteractor(
     ): QmsChatLoadOutcome = withContext(Dispatchers.IO) {
         // Pipeline calls QmsApi.fetchChat → Client.request (blocking OkHttp); must not run on Main
         // (BaseViewModel.scope uses Dispatchers.Main.immediate).
-        chatOpenPipeline.loadChat(
+        val outcome = chatOpenPipeline.loadChat(
                 userId = userId,
                 themeId = themeId,
                 traceId = traceId,
@@ -79,6 +86,17 @@ class QmsInteractor(
                 bypassCache = bypassCache,
                 sourceScreen = sourceScreen
         )
+        // Only a page actually fetched from the network marks the thread read server-side; a cache
+        // render changes nothing there, so it must not clear the local unread state either.
+        val readOnServer = when (outcome) {
+            is QmsChatLoadOutcome.Content -> !outcome.fromCache
+            is QmsChatLoadOutcome.Empty -> !outcome.fromCache
+            is QmsChatLoadOutcome.Failure -> false
+        }
+        if (readOnServer) {
+            qmsRepository.markThreadRead(userId, themeId)
+        }
+        outcome
     }
 
     suspend fun sendNewTheme(nick: String, title: String, mess: String, files: List<AttachmentItem>): QmsChatModel =

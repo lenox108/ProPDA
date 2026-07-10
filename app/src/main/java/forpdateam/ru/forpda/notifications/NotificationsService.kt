@@ -102,8 +102,10 @@ class NotificationsService : Service() {
                 // показывать пользователю уже нечего.
                 notificationPreferencesHolder.wantsPushNotificationsFlow().collect { wants ->
                     if (!wants) {
-                        // Принудительно останавливаем WebSocket перед остановкой сервиса
-                        eventsRepository.onDestroy()
+                        // Гасим realtime через флаг, а не только сокет: onDestroy() рвал соединение,
+                        // но оставлял foregroundRealtimeEnabled=true, и первое же изменение сети или
+                        // авторизации поднимало WebSocket заново уже при выключенных уведомлениях.
+                        eventsRepository.setForegroundRealtimeEnabled(false, "notifications_disabled")
                         cancelAllNotifications()
                         stopSelf()
                     }

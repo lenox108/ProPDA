@@ -73,18 +73,13 @@ class QmsChatViewModelLoadTest {
             interactor: QmsInteractor,
             events: EventsRepository = mockEventsRepository(),
     ): QmsChatViewModel {
-        val templateManager = mockk<TemplateManager>(relaxed = true)
-        every { templateManager.observeThemeTypeFlow() } returns flowOf("light")
         val prefs = mockk<MainPreferencesHolder>(relaxed = true)
         every { prefs.observeWebViewFontSizeFlow() } returns flowOf(100)
-        every { prefs.observeAppFontModeFlow() } returns flowOf(forpdateam.ru.forpda.ui.AppFontMode.SYSTEM)
         return QmsChatViewModel(
                 interactor,
                 mockk(relaxed = true),
-                mockk(relaxed = true),
                 events,
                 prefs,
-                templateManager,
                 mockk(relaxed = true),
                 mockk(relaxed = true),
                 mockk<IErrorHandler>(relaxed = true)
@@ -368,5 +363,90 @@ class QmsChatViewModelLoadTest {
         assertEquals(QmsLoadErrorKind.NETWORK, warning.kind)
         assertNotNull(warning.cacheAgeMinutes)
         assertTrue(warning.cacheAgeMinutes!! >= 0)
+    }
+
+    private fun chatWith(messageCount: Int): QmsChatModel = QmsChatModel().apply {
+        userId = 1
+        themeId = 2
+        nick = "nick"
+        title = "title"
+        repeat(messageCount) { index ->
+            messages.add(QmsMessage().apply {
+                id = index + 1
+                content = "message ${index + 1}"
+            })
+        }
+    }
+
+    private fun loadedViewModel(chat: QmsChatModel): QmsChatViewModel {
+        val interactor = mockk<QmsInteractor>()
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(chat, fromCache = false, pageKind = mockk(relaxed = true))
+        return viewModel(interactor).also { it.start() }
+    }
+
+    @Test
+    fun `initial window exposes the newest page and reports more above`() = runTest {
+        val vm = loadedViewModel(chatWith(75))
+        advanceUntilIdle()
+
+        val window = vm.visibleMessages.value
+        assertEquals(30, window.messages.size)
+        assertEquals(46, window.messages.first().id)
+        assertEquals(75, window.messages.last().id)
+        assertTrue(window.hasMoreAbove)
+    }
+
+    @Test
+    fun `loadMoreMessages grows the window upwards until history is exhausted`() = runTest {
+        val vm = loadedViewModel(chatWith(40))
+        advanceUntilIdle()
+
+        vm.loadMoreMessages()
+        advanceUntilIdle()
+
+        val window = vm.visibleMessages.value
+        assertEquals(40, window.messages.size)
+        assertEquals(1, window.messages.first().id)
+        assertFalse("nothing left above", window.hasMoreAbove)
+
+        // History exhausted: another request must not shift or re-emit a different window.
+        vm.loadMoreMessages()
+        advanceUntilIdle()
+        assertEquals(40, vm.visibleMessages.value.messages.size)
+    }
+
+    @Test
+    fun `a short thread has no history above`() = runTest {
+        val vm = loadedViewModel(chatWith(3))
+        advanceUntilIdle()
+
+        assertEquals(3, vm.visibleMessages.value.messages.size)
+        assertFalse(vm.visibleMessages.value.hasMoreAbove)
+    }
+
+    @Test
+    fun `websocket read event clears unread flags`() = runTest {
+        val chat = chatWith(2).apply { messages.forEach { it.readStatus = false } }
+        val vm = loadedViewModel(chat)
+        advanceUntilIdle()
+        assertTrue(vm.visibleMessages.value.messages.none { it.readStatus })
+
+        vm.handleEvent(TabNotification(
+                source = NotificationEvent.Source.QMS,
+                type = NotificationEvent.Type.READ,
+                event = NotificationEvent(
+                        type = NotificationEvent.Type.READ,
+                        source = NotificationEvent.Source.QMS,
+                        messageId = 2,
+                        sourceId = 2,
+                        userId = 1
+                ),
+                isWebSocket = true
+        ))
+        advanceUntilIdle()
+
+        assertTrue(vm.visibleMessages.value.messages.all { it.readStatus })
     }
 }

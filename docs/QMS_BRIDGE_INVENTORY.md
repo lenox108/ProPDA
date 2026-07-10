@@ -1,39 +1,37 @@
 # QMS Bridge Inventory
 
-## Files inspected
-- `app/src/main/java/forpdateam/ru/forpda/ui/fragments/qms/chat/QmsChatJsInterface.kt`
-- `app/src/main/java/forpdateam/ru/forpda/ui/fragments/qms/chat/QmsChatFragment.kt`
-- `app/src/main/java/forpdateam/ru/forpda/presentation/qms/chat/QmsChatViewModel.kt`
-- `app/src/main/java/forpdateam/ru/forpda/presentation/qms/chat/QmsChatTemplate.kt`
-- `app/src/main/assets/forpda/scripts/modules/qms.js`
+## Status: no bridge — QMS chat has no WebView
 
-QMS chat uses a local trusted template loaded into `ExtendedWebView` with
-`WebViewSecurityProfile.TRUSTED_LOCAL_TEMPLATE`.
+The QMS chat screen was migrated off the WebView engine. It renders natively:
+`ui/fragments/qms/chat/QmsChatFragment.kt` hosts a `RecyclerView` + `QmsMessagesAdapter`, and message
+bodies are segmented by the shared `PostBodyRenderer` and drawn by `BodyBlockViewFactory` — the same
+renderer the native topic screen uses for post bodies.
+
+Removed with the engine swap:
+
+| Removed | What it was |
+|---|---|
+| `ui/fragments/qms/chat/QmsChatJsInterface.kt` | The `IChat` bridge (`loadMoreMessages`, `openLink`) |
+| `presentation/qms/chat/QmsChatWebCallbacks.kt` | The bridge's callback interface on the ViewModel |
+| `presentation/qms/chat/QmsChatTemplate.kt` | MiniTemplator assembly of the chat HTML |
+| `presentation/qms/chat/QmsWebRenderPolicy.kt`, `QmsWebRenderProbe.kt` | Blank-render retry / DOM-probe policy |
+| `assets/template_qms_chat.html`, `template_qms_chat_mess.html` | The HTML shell + message template |
+| `assets/forpda/scripts/modules/qms.js` | Scroll bootstrap, upward pagination, `makeAllRead`, link binding |
+| `assets/forpda/styles/**/qms.{less,css}` | Chat bubble styling |
+| `WebViewSecurityProfile.TRUSTED_QMS_CHAT` | The QMS-only trust tier that allowed the base bridge |
 
 ## Bridge registrations
-| File | Interface name | Registered object | Notes |
-|---|---|---|---|
-| `app/src/main/java/forpdateam/ru/forpda/ui/fragments/qms/chat/QmsChatFragment.kt` | `IBase` | `ExtendedWebView` base bridge | Required to flush queued QMS JavaScript after DOM/page load; trusted local QMS template/assets only. |
-| `app/src/main/java/forpdateam/ru/forpda/ui/fragments/qms/chat/QmsChatFragment.kt` | `IChat` | `QmsChatJsInterface` | Triggered by `qms.js` when the user scrolls to the top; trusted local QMS template/assets only. |
 
-## Exported QMS methods
-| Method | Parameters | Destructive? | Risk | Notes |
-|---|---|---|---|---|
-| `loadMoreMessages()` | None | No | Low | Delegates to `QmsChatWebCallbacks.loadMoreMessages()` on the UI thread. It does not send messages, upload files, delete data, block users, or change server state. |
-
-`app/src/main/assets/forpda/scripts/modules/qms.js` calls:
-
-```javascript
-IChat.loadMoreMessages();
-```
+None. The QMS chat registers no `@JavascriptInterface` object and creates no `WebView`.
 
 ## Destructive actions
-- Message sending and new-theme creation are native UI actions from `MessagePanel` / `ChatThemeCreator`, not JavaScript bridge calls.
-- Attachment add/delete/retry flows are native `AttachmentsPopup` callbacks, not JavaScript bridge methods.
-- QMS dialog/theme deletion exists in QMS list screens, not in the chat WebView bridge.
-- No exported QMS bridge method currently sends messages, edits content, deletes messages, deletes dialogs, uploads files, or opens arbitrary URLs.
+
+Message sending, new-dialog creation and attachment upload were already native UI actions
+(`MessagePanel` / `ChatThemeCreator` / `AttachmentsPopup`) and remain so. Pagination, marking a thread
+read and link navigation are now plain Kotlin calls into `QmsChatViewModel` / `ILinkHandler`.
 
 ## Conclusion
-- Token guard required: no for the current QMS bridge.
-- Why: the only exported chat method is non-destructive pagination, so adding a token protocol would change behavior without protecting any current mutating QMS action.
-- Recommended next task: none for QMS until a destructive QMS JavaScript call is introduced. If that happens, follow the Theme render-token pattern before exposing it.
+
+- Token guard required: no — there is no bridge to guard.
+- If a QMS WebView is ever reintroduced, follow the Theme render-token pattern before exposing any
+  mutating method.

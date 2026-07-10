@@ -10,7 +10,6 @@
 |---|---|---|---|---|
 | Forum topic / Theme | `THEME` | `ui/fragments/theme/ThemeFragmentWeb.kt` | `TRUSTED_LOCAL_TEMPLATE` | Yes (`enableBaseBridge()`) |
 | Search results | `SEARCH` | `ui/fragments/search/SearchFragment.kt` | `TRUSTED_STATIC_ARTICLE` | No |
-| QMS chat | `QMS` | `ui/fragments/qms/chat/QmsChatFragment.kt` | `TRUSTED_LOCAL_TEMPLATE` | Yes (`enableBaseBridge()`) |
 | News / article detail | `NEWS` | `ui/fragments/news/details/ArticleContentFragment.kt` | `TRUSTED_STATIC_ARTICLE` | No |
 
 All four pipelines share the same WebView subclass: **`ExtendedWebView`** (`ui/views/ExtendedWebView.kt`), which extends `NestedWebView` (→ `WebView`) and implements the `IBase` JS bridge interface. Static pages (forum rules, announcements) also use `ExtendedWebView` with `TRUSTED_STATIC_ARTICLE` but have no dynamic render lifecycle and are out of scope for the shared controller for now.
@@ -65,7 +64,7 @@ Immutable snapshot that mirrors the three independent Theme validity systems (`T
 File: `ui/views/ExtendedWebView.kt`. All four pipelines depend on this.
 
 ### Security profiles (enum `WebViewSecurityProfile`, lines ~42–61)
-- `TRUSTED_LOCAL_TEMPLATE` — fully trusted local content (Theme, QMS). JS enabled, `IBase` base bridge permitted.
+- `TRUSTED_LOCAL_TEMPLATE` — fully trusted local content (Theme). JS enabled, `IBase` base bridge permitted.
 - `TRUSTED_STATIC_ARTICLE` — locally generated static content (articles, search, rules, announcements). JS enabled, but `IBase` base bridge **forbidden** — only narrow read-only interfaces allowed.
 - `UNTRUSTED_EXTERNAL` — JS disabled.
 - `init(profile)` (~135–226) configures `WebSettings`: JS on for non-`UNTRUSTED_EXTERNAL`; multi-window + JS-open-windows for trusted; DOM storage on; file access fully disabled; mixed-content `NEVER_ALLOW` in release / `COMPATIBILITY_MODE` in debug.
@@ -144,31 +143,11 @@ Uses `ExtendedWebView` (field `:127`); fragment implements `ExtendedWebView.JsLi
 
 ---
 
-## Pipeline 3 — QMS chat
+## Pipeline 3 — QMS chat (retired)
 
-Files: `ui/fragments/qms/chat/QmsChatFragment.kt`, `presentation/qms/chat/QmsWebRenderPolicy.kt`, `presentation/qms/chat/QmsWebRenderProbe.kt`.
-
-Uses `ExtendedWebView` (field `:121`); fragment implements `ExtendedWebView.JsLifeCycleListener` `:98`. Unlike Search/News, QMS **enables the base bridge** so `domContentLoaded()` fires.
-
-| # | Concern | Location |
-|---|---|---|
-| 1 | WebView created/init | `onCreateView()` `:192–198` (`init(TRUSTED_LOCAL_TEMPLATE)` + `enableBaseBridge()`); added at `:207`; **re-created** on renderer crash in `recoverQmsWebViewAfterRendererGone()` `:2413–2432` |
-| 2 | Security profile | `TRUSTED_LOCAL_TEMPLATE` `:196` & `:2415`; base bridge enabled `:197` |
-| 3 | `loadDataWithBaseURL` | `dispatchQmsShellLoad()` `:975`, base `https://4pda.to/forum/`, shell HTML from `qmsChatTemplate.generateHtmlBase()` `:942`; deferral via `WebViewLoadDispatchPolicy.shouldDeferLoadUntilLayout` `:952–975` |
-| 4 | Render generation | `qmsLoadGeneration` + `qmsLoadChatKey`, bumped in `prepareQmsChatSwitchWithoutReload()` `:848–850`, `loadBaseWebContainer()` `:901–903`, recovery `:2381–2382`; DOM probe token `qmsDomReadyProbeToken` `:1621`; queued JS bound via `PendingQmsJs(generation, chatKey, js)` `:2726–2730` |
-| 5 | Stale callbacks ignored | central `isCurrentQmsLoad(generation)` `:1325–1336`; used at probe start `:1587–1596`, probe callback `:1635–1656`, exec runnables `:1447/1463/1480/1483`, render-verify `:1981`, `onPageFinished` `:2663/2678/2686`; probe-chain via `QmsWebRenderPolicy.isCurrentDomReadyProbe()` `:1626–1652`; watchdog `:1022` |
-| 6 | `addJavascriptInterface` | `onViewCreated()` `:222` (`IChat`, `JS_INTERFACE` `:2623`); recovery `:2426` |
-| 7 | `removeJavascriptInterface` | `onDestroyView()` `:334` (+ `removeBaseBridge()` `:335`); recovery `:2404–2405` |
-| 8 | `clearQueuedJs` | `prepareQmsChatSwitchWithoutReload()` `:873`; `loadBaseWebContainer()` `:929`; plus auto on `ExtendedWebView.onPause()`/`endWork()` |
-| 9 | DOM-ready / page-ready | `onDomContentComplete()` `:1578–1584` → `verifyQmsDomReady()` `:1586–1623` → `runQmsDomReadyProbe()` `:1625–1690` (uses `QmsWebRenderProbe.domReadyProbeScript()`, backoff `QmsWebRenderPolicy.domReadyDelayMs(attempt)`, `MAX_DOM_READY_ATTEMPTS=10`); success → `completeQmsDomReady()` `:1706` → `markQmsDomReadyAndFlush()` `:1726–1774`; `onPageFinished()` `:2649–2689` posts delayed verify (32 ms) |
-| 10 | Blank-screen recovery | renderer-gone recovery (`onRenderProcessGone` → `recoverQmsWebViewAfterRendererGone()` `:2381–2432`); DOM-probe retry loop is the soft-recovery path |
-| 11 | Timers paused/resumed | inherited `ExtendedWebView.onPause()/onResume()`; messages re-render after resume via the DOM-ready probe loop + queued-JS flush |
-| 12 | Pending JS queued/flushed | `PendingQmsJs` queue (`:2726`); flushed in `markQmsDomReadyAndFlush()`; `execQmsJsAfterLayout`/`execQmsJsWithInjectFeedback` runnables |
-
-**Notes:** QMS has the most elaborate DOM-ready probe machinery and is a strong reference for the shared controller's DOM-confirmation contract. Phase 9 migrates QMS **second**. Privacy: never log private QMS message content (Safety Rule 12).
-
-
----
+QMS chat no longer uses a WebView. The screen renders natively (`RecyclerView` + `QmsMessagesAdapter`,
+bodies via the shared `PostBodyRenderer` / `BodyBlockViewFactory`), so it has no render generation,
+no DOM-ready probe, no blank-render watchdog and no JS bridge. See `QMS_BRIDGE_INVENTORY.md`.
 
 ## Pipeline 4 — News / article detail
 

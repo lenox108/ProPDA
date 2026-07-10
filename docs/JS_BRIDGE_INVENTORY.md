@@ -13,7 +13,6 @@
 | `app/src/main/java/forpdateam/ru/forpda/ui/fragments/theme/modules/ThemeBridgeHandler.kt` | `IThemeView` | `ThemeViewBridge` | Yes. Theme WebView uses `TRUSTED_LOCAL_TEMPLATE`. | Narrow compatibility bridge exposing only the no-op history callback. |
 | `app/src/main/java/forpdateam/ru/forpda/ui/fragments/theme/modules/ThemeBridgeHandler.kt` | `IThemePresenter` | `ThemeJsInterface` | Yes. Theme WebView uses `TRUSTED_LOCAL_TEMPLATE`. | Broad, high-risk theme bridge surface. |
 | `app/src/main/java/forpdateam/ru/forpda/ui/fragments/search/SearchFragment.kt` | `IThemePresenter` | `SearchJsInterface` | Search uses `TRUSTED_STATIC_ARTICLE` for locally generated result HTML; this specialized bridge is still registered. | Menu/copy/share methods only; no direct destructive methods. |
-| `app/src/main/java/forpdateam/ru/forpda/ui/fragments/qms/chat/QmsChatFragment.kt` | `IChat` | `QmsChatJsInterface` | Yes. QMS WebView uses `TRUSTED_LOCAL_TEMPLATE`. | Pagination-only QMS bridge. QMS also enables `IBase`. |
 | `app/src/main/java/forpdateam/ru/forpda/ui/fragments/news/details/ArticleContentFragment.kt` | `INews` | `this` (`ArticleContentFragment`) | Yes. News WebView uses `TRUSTED_STATIC_ARTICLE`; bridge is removed on unexpected page start. | News comments, poll vote, image, and external browser bridge. |
 | `app/src/main/java/forpdateam/ru/forpda/ui/fragments/other/ForumRulesFragment.kt` | `IRules` | `this` (`ForumRulesFragment`) | Yes. Rules WebView uses `TRUSTED_STATIC_ARTICLE`. | Copies a rule after native confirmation. |
 
@@ -33,7 +32,6 @@
 | `app/src/main/java/forpdateam/ru/forpda/presentation/theme/ThemeJsInterface.kt` | `ThemeJsInterface` | `setHistoryBody(index, body)`, `setPollOpen(bValue)`, `setHatOpen(bValue)`, `setInlineHatOpen(topicId, bValue)` | Theme state | Partial | Mutates local history/open-state. |
 | `app/src/main/java/forpdateam/ru/forpda/presentation/theme/ThemeJsInterface.kt` | `ThemeJsInterface` | `copySelectedText(text)`, `toast(text)`, `log(text)`, `showPollResults(url)`, `showPoll()`, `copySpoilerLink(postId, spoilNumber)`, `shareSelectedText(text)`, `openLink(url)`, `rememberLinkSourceAnchor(payload)`, `anchorDialog(postId, name)` | Theme utility/link actions | Partial | `openLink` and link-source methods need URL/source trust validation. |
 | `app/src/main/java/forpdateam/ru/forpda/presentation/search/SearchJsInterface.kt` | `SearchJsInterface` | `showUserMenu(postId)`, `showReputationMenu(postId)`, `showPostMenu(postId)`, `toast(text)`, `log(text)`, `copySelectedText(text)`, `shareSelectedText(text)` | Search result actions | No direct destructive method | Menus may lead to native actions after user interaction. |
-| `app/src/main/java/forpdateam/ru/forpda/ui/fragments/qms/chat/QmsChatJsInterface.kt` | `QmsChatJsInterface` | `loadMoreMessages()` | QMS pagination | No | Loads/reveals older messages only. |
 | `app/src/main/java/forpdateam/ru/forpda/ui/fragments/news/details/ArticleContentFragment.kt` | `ArticleContentFragment` | `toComments()` | News navigation | No | Opens comments. |
 | `app/src/main/java/forpdateam/ru/forpda/ui/fragments/news/details/ArticleContentFragment.kt` | `ArticleContentFragment` | `sendPoll(id, answer, from, token)` | News poll | Yes | Uses trusted HTML token check. |
 | `app/src/main/java/forpdateam/ru/forpda/ui/fragments/news/details/ArticleContentFragment.kt` | `ArticleContentFragment` | `openImage(url)`, `openExternalBrowser(url)` | News links/media | Partial | Opens supplied image URL or browser URL. |
@@ -47,12 +45,12 @@
 - `votePost(postId, type)` and `submitPoll(action, method, encodedForm)` submit votes/polls.
 - `openLink(url)`, `openImage(url)`, and `openExternalBrowser(url)` cross the URL/content boundary.
 - `sendPoll(id, answer, from, token)` submits a news poll vote.
-- QMS bridge currently exposes no send/delete/edit actions.
+- QMS chat has no bridge at all: the screen renders natively (`QmsMessagesAdapter` + `BodyBlockViewFactory`), see `QMS_BRIDGE_INVENTORY.md`.
 
 ## Risks
 - Fragment registered as JS interface: partly. `ThemeBridgeHandler` no longer registers `ThemeFragmentWeb`; `ArticleContentFragment` and `ForumRulesFragment` still register `this` for their trusted static WebViews.
 - Broad bridge surface: yes. `ThemeJsInterface` contains most exported methods and all theme destructive actions.
-- Methods without token/session validation: theme destructive methods (`reportPost`, `reply`, `quote*`, `deletePost`, `editPost`, `votePost`, `submitPoll`) do not have the new `ThemeRenderGuard` integrated yet. QMS pagination has no token guard but is non-destructive. News `sendPoll` has its own trusted HTML token check.
+- Methods without token/session validation: theme destructive methods (`reportPost`, `reply`, `quote*`, `deletePost`, `editPost`, `votePost`, `submitPoll`) do not have the new `ThemeRenderGuard` integrated yet. News `sendPoll` has its own trusted HTML token check.
 - External link handling: WebView navigation, theme `openLink`, link-handler redirects, and downloads pass through `UrlPolicy`/`SystemLinkHandler`. `mailto:` remains allowed as an external URL; all other non-http(s) schemes are blocked to prevent arbitrary app intent abuse.
 - File-like schemes: `file:`, `content:`, `data:`, `javascript:`, `about:`, and `app_cache:` are blocked as navigations/downloads and are not forwarded to external intents.
 
