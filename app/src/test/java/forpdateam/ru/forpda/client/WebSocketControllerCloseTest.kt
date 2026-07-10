@@ -23,7 +23,17 @@ class WebSocketControllerCloseTest {
 
     private class RecordingListener : WebSocketController.Listener() {
         var disconnects = 0
+        var messages = 0
+        var connects = 0
         var lastThrowable: Throwable? = null
+
+        override fun onConnected() {
+            connects++
+        }
+
+        override fun onMessage(text: String?) {
+            messages++
+        }
 
         override fun onDisconnected(throwable: Throwable, response: Response?) {
             disconnects++
@@ -94,5 +104,41 @@ class WebSocketControllerCloseTest {
 
         assertTrue("текущий сокет жив, состояние трогать нельзя", f.controller.isConnected())
         assertEquals(0, f.listener.disconnects)
+    }
+
+    /**
+     * `current == event` возвращало true, когда оба равны null: после disconnectAll()
+     * (уход приложения в фон) currentId == NO_ID и список пуст, поэтому долетевшее с мёртвого
+     * соединения сообщение проходило как актуальное.
+     */
+    @Test
+    fun messageFromClosedSocket_isIgnoredAfterDisconnectAll() {
+        val f = Fixture()
+        f.controller.disconnectAll()
+
+        f.wsListener.onMessage(f.socket, """[1,2,"t100",1,5]""")
+
+        assertEquals("сообщение с отключённого сокета не должно доходить до слушателя", 0, f.listener.messages)
+    }
+
+    @Test
+    fun messageFromStaleSocket_isIgnoredWhileAnotherIsCurrent() {
+        val f = Fixture()
+        val stale: WebSocket = mockk(relaxed = true)
+
+        f.wsListener.onMessage(stale, """[1,2,"t100",1,5]""")
+
+        assertEquals(0, f.listener.messages)
+    }
+
+    @Test
+    fun openOfClosedSocket_doesNotReportConnected() {
+        val f = Fixture()
+        f.controller.disconnectAll()
+
+        f.wsListener.onOpen(f.socket, mockk(relaxed = true))
+
+        assertEquals(0, f.listener.connects)
+        assertFalse(f.controller.isConnected())
     }
 }
