@@ -82,7 +82,6 @@ object NotificationPublisher {
         if (largeIcon != null && !event.fromSite()) {
             builder.setLargeIcon(largeIcon)
         }
-        applyLegacyAlerts(prefs, builder)
         NotificationActions.apply(context, builder, event)
 
         if (!canNotify(context, event.notificationLogCategory())) return null
@@ -134,27 +133,11 @@ object NotificationPublisher {
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
 
-        applyLegacyAlerts(prefs, builder)
-
         if (!canNotify(context, "stacked")) return null
         val manager = NotificationManagerCompat.from(context)
         manager.notify(notifyId, builder.build())
         Log.i(NOTIFICATIONS_LOG_TAG, "Published stacked ${first.notificationLogCategory()} notification, count=${events.size}")
         return notifyId
-    }
-
-    /**
-     * На Android 8+ звук, вибрация и индикатор — свойства канала, приложение их переопределить
-     * не может (и не должно: пользователь настраивает канал в системных настройках). До Oreo
-     * каналов нет, и единственный способ уважить наши переключатели — выставить defaults здесь.
-     */
-    private fun applyLegacyAlerts(prefs: NotificationPreferencesHolder, builder: NotificationCompat.Builder) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return
-        var defaults = 0
-        if (prefs.getMainSoundEnabled()) defaults = defaults or android.app.Notification.DEFAULT_SOUND
-        if (prefs.getMainVibrationEnabled()) defaults = defaults or android.app.Notification.DEFAULT_VIBRATE
-        if (prefs.getMainIndicatorEnabled()) defaults = defaults or android.app.Notification.DEFAULT_LIGHTS
-        builder.setDefaults(defaults)
     }
 
     private fun canNotify(context: Context, category: String): Boolean {
@@ -327,9 +310,7 @@ object NotificationPublisher {
         return ApiUtils.spannedFromHtml(content.toString()) ?: content
     }
 
-    /** Каналов до Android 8 нет, а сам класс NotificationChannel появился только в API 26. */
     private fun ensureChannel(context: Context, channelId: String, channelName: String) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val ch = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
         context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
     }

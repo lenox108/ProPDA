@@ -45,22 +45,15 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     }
 
     /**
-     * Звук, вибрация и индикатор на Android 8+ — свойства канала уведомлений, приложение их
-     * не контролирует. Там показываем ссылки на системные экраны каналов и прячем наши
-     * тумблеры. До Oreo каналов нет: тумблеры работают (см. NotificationPublisher), а вот
-     * ACTION_CHANNEL_NOTIFICATION_SETTINGS не существует — прячем всю системную категорию.
+     * Звук, вибрация и индикатор — свойства канала уведомлений, приложение их не контролирует.
+     * Пользователь настраивает их в системных экранах каналов, ссылки на которые ниже.
      */
     private fun configureVersionAwareUi() {
-        val hasChannels = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-        for (key in LEGACY_ALERT_PREFERENCE_KEYS) {
-            preferenceScreen.findPreference<Preference>(key)?.isVisible = !hasChannels
-        }
-        preferenceScreen.findPreference<PreferenceCategory>("notifications.system.category")?.isVisible = hasChannels
+        preferenceScreen.findPreference<PreferenceCategory>("notifications.system.category")?.isVisible = true
         updateVersionAwareUi()
     }
 
     private fun configureSystemSettingsLinks() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         preferenceScreen.findPreference<Preference>("notifications.system.app")?.setOnPreferenceClickListener {
             openAndroidNotificationSettings()
             true
@@ -172,12 +165,5 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
 
     companion object {
         const val PREFERENCE_SCREEN_NAME = "notifications"
-
-        /** Применимы только до Android 8; выше ими владеет канал уведомлений. */
-        private val LEGACY_ALERT_PREFERENCE_KEYS = listOf(
-                "notifications.main.sound_enabled",
-                "notifications.main.vibration_enabled",
-                "notifications.main.indicator_enabled"
-        )
     }
 }

@@ -23,9 +23,6 @@ class NotificationDataStore(private val context: Context) {
         
         // Ключи должны совпадать с ключами в preferences_notifications.xml
         private const val KEY_MAIN_ENABLED = "notifications.main.enabled"
-        private const val KEY_MAIN_SOUND_ENABLED = "notifications.main.sound_enabled"
-        private const val KEY_MAIN_VIBRATION_ENABLED = "notifications.main.vibration_enabled"
-        private const val KEY_MAIN_INDICATOR_ENABLED = "notifications.main.indicator_enabled"
         private const val KEY_MAIN_AVATARS_ENABLED = "notifications.main.avatars_enabled"
         private const val KEY_FAV_ENABLED = "notifications.fav.enabled"
         private const val KEY_FAV_ONLY_IMPORTANT = "notifications.fav.only_important"
@@ -214,12 +211,6 @@ class NotificationDataStore(private val context: Context) {
     }
 
     fun getMainEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_ENABLED, true)
-
-    fun getMainSoundEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_SOUND_ENABLED, true)
-
-    fun getMainVibrationEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_VIBRATION_ENABLED, true)
-
-    fun getMainIndicatorEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_INDICATOR_ENABLED, true)
 
     fun getMainAvatarsEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_AVATARS_ENABLED, true)
 

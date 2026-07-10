@@ -149,9 +149,6 @@ object Preferences {
         object MainNotif {
             private const val PREFIX = Notifications.PREFIX + "main."
             const val ENABLED = PREFIX + "enabled"
-            const val SOUND_ENABLED = PREFIX + "sound_enabled"
-            const val VIBRATION_ENABLED = PREFIX + "vibration_enabled"
-            const val INDICATOR_ENABLED = PREFIX + "indicator_enabled"
             const val AVATARS_ENABLED = PREFIX + "avatars_enabled"
         }
 

@@ -210,20 +210,18 @@ class NotificationsService : Service() {
 
     private fun promoteToForegroundIfNeeded() {
         if (foregroundPromoted) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                    FOREGROUND_CHANNEL_ID,
-                    getString(R.string.notification_foreground_channel_name),
-                    NotificationManager.IMPORTANCE_MIN
-            ).apply {
-                setShowBadge(false)
-                enableLights(false)
-                enableVibration(false)
-                // Канал FGS максимально скрытный: ни шторка, ни lock-screen не показывают.
-                setLockscreenVisibility(Notification.VISIBILITY_SECRET)
-            }
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+                FOREGROUND_CHANNEL_ID,
+                getString(R.string.notification_foreground_channel_name),
+                NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            setShowBadge(false)
+            enableLights(false)
+            enableVibration(false)
+            // Канал FGS максимально скрытный: ни шторка, ни lock-screen не показывают.
+            setLockscreenVisibility(Notification.VISIBILITY_SECRET)
         }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         val notification = NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notify_favorites)
                 .setContentTitle(getString(R.string.app_name))
@@ -309,7 +307,6 @@ class NotificationsService : Service() {
     }
 
     private fun cancelActiveEventChannelNotifications(manager: NotificationManagerCompat) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val systemManager = getSystemService(NotificationManager::class.java) ?: return
         val active = runCatching { systemManager.activeNotifications }.getOrNull() ?: return
         for (sbn in active) {
@@ -418,14 +415,8 @@ class NotificationsService : Service() {
             }
         }
 
-        /**
-         * До Android 8 каналов не существует, а класс [NotificationChannel] появился в API 26 —
-         * обращение к нему на «семёрке» валит приложение с NoClassDefFoundError. Флейвор legacy
-         * ставится на Android 7, так что гейт обязателен.
-         */
         @JvmStatic
         fun createEventChannels(context: Context) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             manager.deleteNotificationChannel(LEGACY_CHANNEL_DEFAULT_ID)
             manager.createNotificationChannels(listOf(
