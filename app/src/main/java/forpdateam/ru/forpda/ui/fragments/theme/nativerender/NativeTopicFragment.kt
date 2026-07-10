@@ -385,6 +385,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
              */
             override fun onScrollStateChanged(rv: androidx.recyclerview.widget.RecyclerView, newState: Int) {
                 if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_DRAGGING) {
+                    if (forpdateam.ru.forpda.BuildConfig.DEBUG && anchoredBottomPostId != null) android.util.Log.i("FPDA_CLEAR", "anchor CLEARED (user drag)")
                     anchoredBottomPostId = null
                 }
             }
@@ -1805,6 +1806,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 bottomAlignPost(last)
             }
             anchoredBottomPostId = loadedItems.lastOrNull()?.postId // survive enrichment growth (see reanchorBottomAfterGrowth)
+            if (forpdateam.ru.forpda.BuildConfig.DEBUG) android.util.Log.i("FPDA_CLEAR", "anchor SET(fillLastPage)=$anchoredBottomPostId")
         }
         recyclerView.alpha = 1f
     }
@@ -3365,6 +3367,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     ) {
         val ids = items.map { it.postId }
         val targetId = anchorPostId?.toIntOrNull()
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_CLEAR", "applyInitialAnchor ids=${ids.size} jumpToBottom=$pendingJumpToBottom " +
+                    "restore=$pendingRestorePostId jumpToTop=$pendingJumpToTop target=$targetId unread=$hasUnreadTarget")
+        }
         // Restore-scroll «где остановился»: вернуться на сохранённый пост и его точный offset (после
         // пересоздания фрагмента). Приоритетнее серверного якоря и границы прочитанного — это ровно то
         // место, где стоял пользователь.
@@ -3391,6 +3397,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             pendingJumpToBottom = false
             val lastPos = (ids.size - 1 + headerOffset()).coerceAtLeast(0)
             anchoredBottomPostId = ids.lastOrNull()
+            if (forpdateam.ru.forpda.BuildConfig.DEBUG) android.util.Log.i("FPDA_CLEAR", "anchor SET(jumpToBottom)=$anchoredBottomPostId lastPos=$lastPos")
             anchorPost(lastPos, isLast = true)
             // Highlight the last post (2s border) — parity with the first-unread open; the read-topic open
             // lands on the last post, so flash it too.
@@ -3432,6 +3439,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(target, 0)
                     isLastPost -> {
                         anchoredBottomPostId = ids.last()
+                        if (forpdateam.ru.forpda.BuildConfig.DEBUG) android.util.Log.i("FPDA_CLEAR", "anchor SET(resolver)=$anchoredBottomPostId")
                         anchorPost(target, isLast = true)
                     }
                     else -> anchorPost(target, isLast = false)
