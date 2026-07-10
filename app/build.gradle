@@ -216,6 +216,19 @@ android {
         // Required for Robolectric tests that resolve merged Android resources
         // (e.g. theme attribute resolution in MaterialYouThemeFallbackTest).
         unitTests.includeAndroidResources = true
+        unitTests.all {
+            // Robolectric loads its native runtime once per SDK sandbox, and the loader
+            // (DefaultNativeRuntimeLoader.maybeCopyFonts) opens a JVM-global zip FileSystem over the
+            // fonts of nativeruntime-dist-compat, which pre-V sandboxes leave open. A second sandbox
+            // in the same JVM then dies with FileSystemAlreadyExistsException, so whether a run is
+            // green depends on the order Gradle happens to execute test classes in. Our tests span
+            // three SDKs (28, 33 and the default 35), so give each class its own JVM. Still broken in
+            // Robolectric 4.16, so this cannot be fixed by upgrading.
+            it.forkEvery = 1
+            // forkEvery alone costs ~1.7x wall clock; the extra forks bring it back under the
+            // single-JVM baseline.
+            it.maxParallelForks = Math.max(1, Runtime.runtime.availableProcessors().intdiv(2))
+        }
     }
 
     lint {
