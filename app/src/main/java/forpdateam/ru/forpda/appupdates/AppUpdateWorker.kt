@@ -30,8 +30,11 @@ class AppUpdateWorker @AssistedInject constructor(
                 }
             }
             .onFailure { error ->
+                // Не ретраим: backoff разогнал бы одно суточное пробуждение до серии
+                // (30 мин → 5 ч), а фид может быть недоступен часами (403 от GitHub
+                // под CGNAT). Следующая попытка — в штатный срок, через сутки.
                 Timber.e(error, "App update check failed")
-                return@withContext Result.retry()
+                return@withContext Result.success()
             }
         Result.success()
     }
