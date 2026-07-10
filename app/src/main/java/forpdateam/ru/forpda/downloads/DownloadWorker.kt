@@ -46,6 +46,14 @@ class DownloadWorker @AssistedInject constructor(
     @Named("data_storage") private val dataStoragePreferences: SharedPreferences
 ) : Worker(appContext, params) {
 
+    /**
+     * Читается один раз на запуск и проверяется в [notifyIfAllowed]. Раньше флаг был локальной
+     * переменной doWork(), поэтому до [writeToDestination] не доходил: стартовое и финальное
+     * уведомления гасились, а уведомление о прогрессе всё равно всплывало на первых процентах.
+     */
+    @Volatile
+    private var downloadNotificationsEnabled = false
+
     override fun doWork(): Result {
         val url = inputData.getString(KEY_URL) ?: run {
             Timber.w("DownloadWorker: missing KEY_URL")
@@ -61,6 +69,7 @@ class DownloadWorker @AssistedInject constructor(
         if (BuildConfig.DEBUG) Timber.d("DownloadWorker start: mime=$mime attempt=$runAttemptCount")
 
         val downloadsEnabled = notificationPreferencesHolder.getDownloadsEnabled()
+        downloadNotificationsEnabled = downloadsEnabled
         if (BuildConfig.DEBUG) Timber.d("DownloadWorker: downloadsEnabled=$downloadsEnabled")
         if (!downloadsEnabled) {
             if (BuildConfig.DEBUG) Timber.d("DownloadWorker: notifications disabled, running without notifications")
@@ -332,6 +341,7 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     private fun notifyIfAllowed(id: Int, notification: android.app.Notification) {
+        if (!downloadNotificationsEnabled) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !NotificationManagerCompat.from(applicationContext).areNotificationsEnabled()
         ) {

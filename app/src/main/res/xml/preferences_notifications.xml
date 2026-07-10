@@ -44,13 +44,22 @@
             android:title="@string/pref_title_enable_avatars"
             app:iconSpaceReserved="false" />
 
+    </PreferenceCategory>
+
+    <!--
+      Загрузки намеренно вне главного тумблера: это не push, а прогресс действия, которое
+      пользователь запустил сам. Так же считает и код — wantsPushNotifications() учитывает
+      только темы/QMS/упоминания, а DownloadWorker смотрит исключительно на свой флаг.
+    -->
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/downloads">
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"
-            android:dependency="notifications.main.enabled"
             android:key="notifications.downloads.enabled"
             android:layout="@layout/preference_custom"
             android:summary="@string/pref_summary_download_notifications"
-            android:title="@string/downloads"
+            android:title="@string/pref_title_download_notifications"
             app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
