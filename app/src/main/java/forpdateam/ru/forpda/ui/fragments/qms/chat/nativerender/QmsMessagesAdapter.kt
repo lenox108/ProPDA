@@ -91,21 +91,24 @@ class QmsMessagesAdapter(
         private val time: TextView = itemView.findViewById(R.id.qms_message_time)
         private val status: View = itemView.findViewById(R.id.qms_message_status)
 
-        /** Rounded bubble background; the fill is re-tinted per bind (own vs. incoming message). */
+        /**
+         * Rounded bubble background; the fill is re-tinted per bind (own vs. incoming message).
+         * Radius and elevation come from the app-wide card metrics (`CardStyle.Item`), so a bubble is
+         * cut from the same cloth as a post card, a favourites plate or a note.
+         */
         private val bubbleBg = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = BUBBLE_CORNER_DP * itemView.resources.displayMetrics.density
-        }
-
-        /** Red unread dot, WebView parity with `.mess_container.unread .status`. */
-        private val statusBg = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(UNREAD_DOT_COLOR)
+            cornerRadius = itemView.resources.getDimension(R.dimen.card_corner_radius)
         }
 
         init {
             bubble.background = bubbleBg
             bubble.clipToOutline = true
-            status.background = statusBg
+            androidx.core.view.ViewCompat.setElevation(
+                    bubble,
+                    itemView.resources.getDimension(R.dimen.card_elevation),
+            )
+            // The app's one unread marker (bottom-nav badge → `?attr/notify_dot_tab`), not a private red.
+            status.setBackgroundResource(R.drawable.notify_dot)
         }
 
         fun bind(item: QmsChatItem.Message, textScale: Float) {
@@ -134,10 +137,7 @@ class QmsMessagesAdapter(
             // post-card surface the factory assumes by default — an own bubble is accent-tinted.
             blockFactory.readingSurfaceColor = { fill }
             bubbleBg.setColor(fill)
-            bubbleBg.setStroke(
-                    (1f * dm.density).toInt().coerceAtLeast(1),
-                    ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant),
-            )
+            bubbleBg.setStroke((1f * dm.density).toInt().coerceAtLeast(1), bubbleBorderColor(fill))
 
             body.removeAllViews()
             blockFactory.render(body, item.blocks, BodyBlockViewFactory.RenderScope(item.id))
@@ -153,53 +153,46 @@ class QmsMessagesAdapter(
         }
 
         /**
-         * Incoming bubbles must lift off the list background, and own bubbles must read apart from
-         * incoming ones — on all ten palettes.
-         *
-         * The M3 container roles can't be trusted for the first job: several of the app's palettes
-         * resolve `colorSurfaceContainerHigh` to the very same value as the page tint
-         * (`colorSurfaceContainerLowest`, see [TabFragment.setListsBackground]), which left every
-         * incoming bubble invisible but for its hairline. So we take the role colour when it is
-         * genuinely distinct and otherwise synthesise one tonal step off the page. Own bubbles then
-         * add the WebView's `mix(accent, card, 10%)` tint on top of that fill.
+         * An incoming bubble IS a content card, so it takes the app-wide card fill
+         * (`?attr/content_card_surface`) — the very role a post card, a favourites plate, a note and a
+         * search result use. That attr is a per-theme redirect (`colorSurface` on light/cream ramps,
+         * `colorSurfaceContainerHigh` on dark/AMOLED, where the lower containers collapse to near-black),
+         * which is exactly why hand-picking an M3 container role here produced invisible bubbles on some
+         * palettes. An own bubble keeps the WebView's `mix(accent, card, 10%)` tint over that same fill.
          */
         private fun bubbleFill(isMine: Boolean): Int {
             val ctx = itemView.context
-            val page = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest)
-            val role = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh)
-            val base = if (isDistinctFrom(role, page)) {
-                role
-            } else {
-                val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
-                androidx.core.graphics.ColorUtils.blendARGB(page, onSurface, SYNTHETIC_BUBBLE_STEP)
-            }
-            if (!isMine) return base
+            val card = ctx.getColorFromAttr(R.attr.content_card_surface)
+            if (!isMine) return card
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-            return androidx.core.graphics.ColorUtils.blendARGB(base, accent, OWN_BUBBLE_ACCENT_RATIO)
+            return androidx.core.graphics.ColorUtils.blendARGB(card, accent, OWN_BUBBLE_ACCENT_RATIO)
         }
 
-        /** Perceptible fill difference — below this the two surfaces look like one flat sheet. */
-        private fun isDistinctFrom(color: Int, other: Int): Boolean = kotlin.math.abs(
-                androidx.core.graphics.ColorUtils.calculateLuminance(color) -
-                        androidx.core.graphics.ColorUtils.calculateLuminance(other),
-        ) >= MIN_BUBBLE_LUMINANCE_DELTA
+        /**
+         * The same hairline a post card draws: bare `colorOutline` on a light fill, and on a dark one
+         * lifted toward `colorOnSurface` until the edge separates from a near-black card (elevation
+         * shadows are invisible there). Keeps bubbles delineated on AMOLED and dynamic dark schemes.
+         */
+        private fun bubbleBorderColor(fill: Int): Int {
+            val ctx = itemView.context
+            val outline = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutline)
+            if (androidx.core.graphics.ColorUtils.calculateLuminance(fill) >= 0.5) return outline
+            val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+            return androidx.core.graphics.ColorUtils.blendARGB(outline, onSurface, DARK_CARD_BORDER_LIFT)
+        }
     }
 
     private companion object {
         const val TYPE_DATE = 0
         const val TYPE_MESSAGE = 1
-        const val BUBBLE_CORNER_DP = 16f
 
         /** Free space left on the opposite side of a bubble (CSS: `margin-left/right: 4em`). */
         const val BUBBLE_GUTTER_DP = 56f
         const val LIST_EDGE_DP = 12f
         const val OWN_BUBBLE_ACCENT_RATIO = 0.12f
 
-        /** Tonal step used when the palette's container role collapses onto the page tint. */
-        const val SYNTHETIC_BUBBLE_STEP = 0.07f
-        const val MIN_BUBBLE_LUMINANCE_DELTA = 0.015
-
-        val UNREAD_DOT_COLOR = android.graphics.Color.parseColor("#EF5350")
+        /** How far a dark card's outline is lifted toward `colorOnSurface` (post-card parity). */
+        const val DARK_CARD_BORDER_LIFT = 0.30f
 
         val DIFF = object : DiffUtil.ItemCallback<QmsChatItem>() {
             override fun areItemsTheSame(a: QmsChatItem, b: QmsChatItem): Boolean = when {
