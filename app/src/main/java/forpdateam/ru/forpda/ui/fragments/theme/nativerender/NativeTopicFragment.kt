@@ -253,6 +253,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private var anchoredBottomPostId: Int? = null
 
+    /** Guards [maintainBottomPin] against re-entering while its own corrective scroll is pending. */
+    private var pinningInProgress = false
+
+
     /**
      * Bottom-nav «chrome» (tab bar + system navigation) height in px, pushed in by MainActivity via
      * [onBottomChromePaddingChanged]. With [shouldDrawBehindBottomNav]==true the list runs edge-to-edge
@@ -364,12 +368,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) maybeLoadNextPage()
-                if (dy < 0) { maybeLoadPrevPage(); anchoredBottomPostId = null } // user scrolled up off the bottom anchor
+                if (dy < 0) maybeLoadPrevPage()
                 markVisiblePostsRead()
                 maybeMarkTopicReadAtEnd()
                 updateBarCurrentPageFromScroll()
                 updateFabOnScroll(dy)
                 if (smartNavMenu?.isShowing() == true) smartNavMenu?.dismiss()
+            }
+
+            /**
+             * Drop the bottom anchor only when the USER actually grabs the list. It used to be dropped on any
+             * upward [onScrolled] (dy < 0) — but a metadata-enrichment relayout that grows posts ABOVE the last
+             * one makes RecyclerView compensate and dispatch exactly that, killing the pin a frame before it
+             * was due to correct the grown last post. That is why the last post stayed clipped on a real device
+             * (big, late enrichment) while the emulator (tiny, early enrichment) looked fine.
+             */
+            override fun onScrollStateChanged(rv: androidx.recyclerview.widget.RecyclerView, newState: Int) {
+                if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_DRAGGING) {
+                    anchoredBottomPostId = null
+                }
             }
         })
         // The bottom-nav container padding lands a beat AFTER the first anchor (async window-inset pass),
@@ -3230,26 +3247,41 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     private fun maintainBottomPin() {
-        if (view == null) return
+        if (view == null || pinningInProgress) return
         val anchorId = anchoredBottomPostId ?: return
         if (anchorId != loadedItems.lastOrNull()?.postId) { anchoredBottomPostId = null; return }
         if (recyclerView.isComputingLayout) return
         if (recyclerView.scrollState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         val lastPos = (recyclerView.adapter?.itemCount ?: 0) - 1
         if (lastPos < 0) return
         val lastView = recyclerView.findViewHolderForAdapterPosition(lastPos)?.itemView ?: return
         val visible = recyclerView.height - recyclerView.paddingTop - recyclerView.paddingBottom
-        if (visible <= 0 || lastView.height > visible) return // tall post stays TOP-aligned
+        if (visible <= 0) return
+        if (lastView.height > visible) {
+            // Grew TALLER than the screen: it can never be shown whole, so show it from its START. Merely
+            // returning here (the old behaviour) froze it wherever the growth left it — top mid-screen and
+            // bottom clipped, i.e. cut on the very side the user complained about.
+            if (lastView.top != recyclerView.paddingTop) {
+                pinScroll { lm.scrollToPositionWithOffset(lastPos, 0) }
+            }
+            return
+        }
         val overshoot = lastView.bottom - (recyclerView.height - recyclerView.paddingBottom)
         if (overshoot <= 0) return
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             android.util.Log.i("FPDA_CLEAR", "pin correcting overshoot=$overshoot cardH=${lastView.height} visible=$visible")
         }
-        // Scrolling from inside a layout pass is illegal — defer one tick.
+        pinScroll { recyclerView.scrollBy(0, overshoot) }
+    }
+
+    /** Run a corrective scroll one tick later (scrolling from inside a layout pass is illegal), re-entrancy-safe. */
+    private fun pinScroll(action: () -> Unit) {
+        pinningInProgress = true
         recyclerView.post {
-            if (view == null || anchoredBottomPostId == null) return@post
-            if (recyclerView.isComputingLayout) return@post
-            recyclerView.scrollBy(0, overshoot)
+            pinningInProgress = false
+            if (view == null || anchoredBottomPostId == null || recyclerView.isComputingLayout) return@post
+            action()
         }
     }
 
