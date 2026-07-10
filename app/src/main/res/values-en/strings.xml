@@ -697,7 +697,8 @@
     <string name="pref_title_vibration">Vibration</string>
     <string name="pref_title_indicator">Indication</string>
     <string name="pref_title_enable_avatars">Load userpics</string>
-    <string name="pref_summary_download_notifications">File download notifications</string>
+    <string name="pref_title_download_notifications">Download notifications</string>
+    <string name="pref_summary_download_notifications">Progress and completion of file downloads. Independent of the main notifications switch.</string>
     <string name="pref_title_bg_check">Run in background</string>
     <string name="pref_summary_bg_check">Off: the app does nothing while closed. Notifications arrive only while it is open.</string>
     <string name="pref_title_bg_check_interval">Background check interval</string>

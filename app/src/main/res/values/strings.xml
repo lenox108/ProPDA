@@ -880,7 +880,8 @@
     <string name="pref_title_vibration">Вибрация</string>
     <string name="pref_title_indicator">Индикатор</string>
     <string name="pref_title_enable_avatars">Загружать аватары</string>
-    <string name="pref_summary_download_notifications">Уведомления о загрузках файлов</string>
+    <string name="pref_title_download_notifications">Уведомления о загрузках</string>
+    <string name="pref_summary_download_notifications">Прогресс и завершение скачивания файлов. Не зависит от общего переключателя уведомлений.</string>
     <string name="pref_title_favorites_live_tab">Живой список</string>
     <string name="pref_summary_favorites_live_tab">Обновлять данные во вкладке</string>
     <string name="pref_title_bg_check">Работать в фоне</string>
