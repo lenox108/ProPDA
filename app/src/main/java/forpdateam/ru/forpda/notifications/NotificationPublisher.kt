@@ -327,7 +327,9 @@ object NotificationPublisher {
         return ApiUtils.spannedFromHtml(content.toString()) ?: content
     }
 
+    /** Каналов до Android 8 нет, а сам класс NotificationChannel появился только в API 26. */
     private fun ensureChannel(context: Context, channelId: String, channelName: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val ch = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
         context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
     }

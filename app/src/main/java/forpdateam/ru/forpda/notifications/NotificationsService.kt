@@ -10,7 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Bitmap
-import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -25,11 +24,9 @@ import forpdateam.ru.forpda.common.BitmapUtils
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.AuthHolder
-import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
-import forpdateam.ru.forpda.ui.activities.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -213,18 +210,20 @@ class NotificationsService : Service() {
 
     private fun promoteToForegroundIfNeeded() {
         if (foregroundPromoted) return
-        val channel = NotificationChannel(
-                FOREGROUND_CHANNEL_ID,
-                getString(R.string.notification_foreground_channel_name),
-                NotificationManager.IMPORTANCE_MIN
-        ).apply {
-            setShowBadge(false)
-            enableLights(false)
-            enableVibration(false)
-            // Канал FGS максимально скрытный: ни шторка, ни lock-screen не показывают.
-            setLockscreenVisibility(Notification.VISIBILITY_SECRET)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                    FOREGROUND_CHANNEL_ID,
+                    getString(R.string.notification_foreground_channel_name),
+                    NotificationManager.IMPORTANCE_MIN
+            ).apply {
+                setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+                // Канал FGS максимально скрытный: ни шторка, ни lock-screen не показывают.
+                setLockscreenVisibility(Notification.VISIBILITY_SECRET)
+            }
+            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }
-        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         val notification = NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notify_favorites)
                 .setContentTitle(getString(R.string.app_name))
@@ -419,8 +418,14 @@ class NotificationsService : Service() {
             }
         }
 
+        /**
+         * До Android 8 каналов не существует, а класс [NotificationChannel] появился в API 26 —
+         * обращение к нему на «семёрке» валит приложение с NoClassDefFoundError. Флейвор legacy
+         * ставится на Android 7, так что гейт обязателен.
+         */
         @JvmStatic
         fun createEventChannels(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             manager.deleteNotificationChannel(LEGACY_CHANNEL_DEFAULT_ID)
             manager.createNotificationChannels(listOf(
@@ -483,12 +488,4 @@ class NotificationsService : Service() {
         fun shouldStartService(wantsPushNotifications: Boolean, isAuth: Boolean): Boolean =
                 wantsPushNotifications && isAuth
     }
-}
-
-private fun NotificationEvent.notificationLogCategory(): String = when {
-    isMention -> "mention"
-    fromQms() -> "qms"
-    fromTheme() -> "favorite"
-    fromSite() -> "site"
-    else -> "unknown"
 }

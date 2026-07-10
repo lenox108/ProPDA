@@ -21,7 +21,9 @@ internal object DownloadNotifications {
     private const val OLD_CHANNEL_ID_V2 = "downloads_v2"
     private const val OLD_CHANNEL_ID_COMPLETED_V2 = "downloads_completed_v2"
 
+    /** Каналов до Android 8 нет, а класс NotificationChannel появился только в API 26. */
     fun ensureChannel(context: Context) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         
         // Удаляем все старые каналы
