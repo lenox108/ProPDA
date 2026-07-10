@@ -5,34 +5,33 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R2 (perf(fgs)): на process_stop сервис должен детачить FGS-уведомление
- * через [Service.stopForeground] с флагом STOP_FOREGROUND_DETACH, а не
- * STOP_FOREGROUND_REMOVE. Это снимает foreground-привилегии и ограничения
- * background-launch'ей, не удаляя обязательное FGS-уведомление из системы
- * (его в шторке и не было — канал VISIBILITY_SECRET).
+ * Снятие FGS обязано УДАЛЯТЬ «служебное» уведомление, а не отцеплять его.
  *
- * Тест source-level: проверяет, что в `NotificationsService.detachForegroundIfPromoted`
- * используется именно `STOP_FOREGROUND_DETACH` (не `STOP_FOREGROUND_REMOVE`),
- * и что `cancelAllNotifications` по-прежнему использует `STOP_FOREGROUND_REMOVE`
- * (для настоящего удаления уведомления при логауте/выключении/свайпе из Recents).
+ * Исторически здесь стоял STOP_FOREGROUND_DETACH — под предпосылкой, что уведомления
+ * в шторке всё равно не видно (канал VISIBILITY_SECRET) и что при возврате в foreground
+ * его восстановит `promoteToForegroundIfNeeded()`. Обе предпосылки неверны:
+ * VISIBILITY_SECRET прячет уведомление только на экране блокировки, а re-promote при
+ * возврате на передний план из кода убран (в foreground FGS не поднимается вовсе).
+ * В результате DETACH оставлял в шторке уведомление, снять которое было уже некому.
+ *
  * Source-level вместо Robolectric, потому что `NotificationsService` — `@AndroidEntryPoint`,
  * и поднимать Hilt-граф ради одного assert'а избыточно.
  */
 class NotificationsServiceForegroundDetachTest {
 
     @Test
-    fun detachForegroundIfPromoted_usesStopForegroundDetach() {
+    fun detachForegroundIfPromoted_removesTheNotification() {
         val body = readServiceSource()
         val detachMethod = extractMethodBody(body, "detachForegroundIfPromoted")
         assertNotNull("метод detachForegroundIfPromoted должен существовать", detachMethod)
         assertTrue(
-            "detachForegroundIfPromoted должен вызывать stopForeground(STOP_FOREGROUND_DETACH); получили:\n$detachMethod",
-            detachMethod!!.contains("STOP_FOREGROUND_DETACH")
+            "detachForegroundIfPromoted должен вызывать stopForeground(STOP_FOREGROUND_REMOVE): " +
+                    "иначе «служебное» уведомление залипает в шторке.\n$detachMethod",
+            detachMethod!!.contains("STOP_FOREGROUND_REMOVE")
         )
         assertTrue(
-            "cancelAllNotifications обязан остаться на STOP_FOREGROUND_REMOVE; " +
-                    "иначе на логауте/выключении уведомление не уберётся из шторки.\n$detachMethod",
-            !detachMethod.contains("STOP_FOREGROUND_REMOVE")
+            "STOP_FOREGROUND_DETACH оставляет уведомление без владельца; его сюда возвращать нельзя.\n$detachMethod",
+            !detachMethod.contains("STOP_FOREGROUND_DETACH")
         )
     }
 

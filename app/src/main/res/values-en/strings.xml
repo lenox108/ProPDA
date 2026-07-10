@@ -695,8 +695,8 @@
     <string name="pref_title_indicator">Indication</string>
     <string name="pref_title_enable_avatars">Load userpics</string>
     <string name="pref_summary_download_notifications">File download notifications</string>
-    <string name="pref_title_bg_check">Background check</string>
-    <string name="pref_summary_bg_check">Periodically checks the server when the app is closed. No persistent icon.</string>
+    <string name="pref_title_bg_check">Run in background</string>
+    <string name="pref_summary_bg_check">Off: the app does nothing while closed. Notifications arrive only while it is open.</string>
     <string name="pref_title_bg_check_interval">Background check interval</string>
     <string name="pref_title_android_notification_settings">Android notification settings</string>
     <string name="pref_title_open_android_notification_settings">Open notification settings</string>

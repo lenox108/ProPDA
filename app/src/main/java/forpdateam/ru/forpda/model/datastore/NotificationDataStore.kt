@@ -40,6 +40,13 @@ class NotificationDataStore(private val context: Context) {
         private const val KEY_BG_CHECK_INTERVAL_MIN = "notifications.bg.interval_min"
         // Список тем, для которых пользователь отключил уведомления локально.
         private const val KEY_MUTED_TOPIC_IDS = "notifications.muted_topic_ids"
+
+        /**
+         * Нижняя граница фоновой проверки. 15 минут — минимум AOSP, но это 96 пробуждений
+         * с сетью в сутки ради канала, где минутная задержка незаметна.
+         * Единственный источник истины: и UI-список, и планировщик обязаны сходиться сюда.
+         */
+        const val MIN_BG_CHECK_INTERVAL_MIN = 30L
     }
 
     // StateFlows для реактивных обновлений (instance-level для поддержки multiple contexts)
@@ -48,34 +55,58 @@ class NotificationDataStore(private val context: Context) {
     private val qmsEnabledFlow = MutableStateFlow(true)
     private val mentionsEnabledFlow = MutableStateFlow(true)
     private val bgCheckEnabledFlow = MutableStateFlow(true)
-    private val bgCheckIntervalMinFlow = MutableStateFlow(15L) // 15 минут по умолчанию (минимум AOSP)
+    private val bgCheckIntervalMinFlow = MutableStateFlow(MIN_BG_CHECK_INTERVAL_MIN)
     private val mutedTopicsFlow = MutableStateFlow<Set<Int>>(emptySet())
+
+    /**
+     * Обязательно поле, а не лямбда по месту регистрации: SharedPreferencesImpl держит
+     * слушателей в WeakHashMap, и анонимный слушатель без сильной ссылки может быть собран
+     * GC — после чего Flow'ы молча перестают реагировать на изменение настроек.
+     */
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+        when (key) {
+            KEY_MAIN_ENABLED -> mainEnabledFlow.value = sp.getBoolean(KEY_MAIN_ENABLED, true)
+            KEY_FAV_ENABLED -> favEnabledFlow.value = sp.getBoolean(KEY_FAV_ENABLED, true)
+            KEY_QMS_ENABLED -> qmsEnabledFlow.value = sp.getBoolean(KEY_QMS_ENABLED, true)
+            KEY_MENTIONS_ENABLED -> mentionsEnabledFlow.value = sp.getBoolean(KEY_MENTIONS_ENABLED, true)
+            KEY_BG_CHECK_ENABLED -> bgCheckEnabledFlow.value = sp.getBoolean(KEY_BG_CHECK_ENABLED, true)
+            KEY_BG_CHECK_INTERVAL_MIN -> bgCheckIntervalMinFlow.value = readBgIntervalFromPrefs(sp)
+            KEY_MUTED_TOPIC_IDS -> mutedTopicsFlow.value = readMutedTopicsFromPrefs(sp)
+        }
+    }
 
     private val prefs: SharedPreferences by lazy {
         context.getSharedPreferences(prefsName(context), Context.MODE_PRIVATE).also {
+            migrateLegacyBgInterval(it)
             // Инициализируем StateFlows текущими значениями
             mainEnabledFlow.value = it.getBoolean(KEY_MAIN_ENABLED, true)
             favEnabledFlow.value = it.getBoolean(KEY_FAV_ENABLED, true)
             qmsEnabledFlow.value = it.getBoolean(KEY_QMS_ENABLED, true)
             mentionsEnabledFlow.value = it.getBoolean(KEY_MENTIONS_ENABLED, true)
             bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
-            bgCheckIntervalMinFlow.value = (it.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L)
+            bgCheckIntervalMinFlow.value = readBgIntervalFromPrefs(it)
             mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
 
-            // Слушатель изменений для обновления Flow
-            it.registerOnSharedPreferenceChangeListener { _, key ->
-                when (key) {
-                    KEY_MAIN_ENABLED -> mainEnabledFlow.value = it.getBoolean(KEY_MAIN_ENABLED, true)
-                    KEY_FAV_ENABLED -> favEnabledFlow.value = it.getBoolean(KEY_FAV_ENABLED, true)
-                    KEY_QMS_ENABLED -> qmsEnabledFlow.value = it.getBoolean(KEY_QMS_ENABLED, true)
-                    KEY_MENTIONS_ENABLED -> mentionsEnabledFlow.value = it.getBoolean(KEY_MENTIONS_ENABLED, true)
-                    KEY_BG_CHECK_ENABLED -> bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
-                    KEY_BG_CHECK_INTERVAL_MIN -> bgCheckIntervalMinFlow.value = (it.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L)
-                    KEY_MUTED_TOPIC_IDS -> mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
-                }
-            }
+            it.registerOnSharedPreferenceChangeListener(prefsListener)
         }
     }
+
+    /**
+     * Раньше в списке был пункт «15 минут», который код всё равно поднимал до 30.
+     * Переписываем сохранённое значение, иначе ListPreference не нашла бы его среди
+     * вариантов и показала бы пустую строку.
+     */
+    private fun migrateLegacyBgInterval(p: SharedPreferences) {
+        val raw = p.getString(KEY_BG_CHECK_INTERVAL_MIN, null) ?: return
+        val parsed = raw.toLongOrNull() ?: return
+        if (parsed >= MIN_BG_CHECK_INTERVAL_MIN) return
+        p.edit().putString(KEY_BG_CHECK_INTERVAL_MIN, MIN_BG_CHECK_INTERVAL_MIN.toString()).apply()
+        Timber.i("Migrated background check interval %d -> %d min", parsed, MIN_BG_CHECK_INTERVAL_MIN)
+    }
+
+    private fun readBgIntervalFromPrefs(p: SharedPreferences): Long =
+            (p.getString(KEY_BG_CHECK_INTERVAL_MIN, null)?.toLongOrNull() ?: MIN_BG_CHECK_INTERVAL_MIN)
+                    .coerceAtLeast(MIN_BG_CHECK_INTERVAL_MIN)
 
     private fun readMutedTopicsFromPrefs(p: SharedPreferences): Set<Int> {
         val raw = p.getString(KEY_MUTED_TOPIC_IDS, "").orEmpty()
@@ -117,8 +148,7 @@ class NotificationDataStore(private val context: Context) {
     // --- Bg-check / muted topics синхронные геттеры/сеттеры ---
     fun getBgCheckEnabledSync(): Boolean = prefs.getBoolean(KEY_BG_CHECK_ENABLED, true)
 
-    fun getBgCheckIntervalMinSync(): Long =
-            (prefs.getString(KEY_BG_CHECK_INTERVAL_MIN, "15")?.toLongOrNull() ?: 15L).coerceAtLeast(15L)
+    fun getBgCheckIntervalMinSync(): Long = readBgIntervalFromPrefs(prefs)
 
     fun getMutedTopicsSync(): Set<Int> = readMutedTopicsFromPrefs(prefs)
 

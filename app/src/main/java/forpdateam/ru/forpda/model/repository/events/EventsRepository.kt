@@ -28,9 +28,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import okhttp3.Response
-import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 class EventsRepository(
         _context: Context,
@@ -45,9 +43,25 @@ class EventsRepository(
 ) {
     companion object {
         private const val NOTIFICATIONS_LOG_TAG = "Notifications"
-        // Internal aggregation window for websocket events. The old user preference
-        // is no longer exposed; keep batching stable and predictable.
-        private const val NOTIFICATION_AGGREGATION_PERIOD_MS = 60_000L
+
+        /**
+         * Окно склейки websocket-событий перед походом в act=inspector за заголовком и ником.
+         * Событие WS несёт только sourceId/messageId/type, поэтому запрос неизбежен, а окно
+         * нужно, чтобы всплеск сообщений в одном диалоге стоил одного запроса, а не пяти.
+         * Всплеск укладывается в пару секунд; минута здесь означала бы, что каждое уведомление
+         * приходит в шторку на минуту позже события.
+         */
+        private const val NOTIFICATION_AGGREGATION_PERIOD_MS = 2_500L
+
+        /** Не чаще одного «жёсткого» опроса inspector'а на источник за этот интервал. */
+        private const val HARD_CHECK_MIN_INTERVAL_MS = 60_000L
+
+        /**
+         * Сколько WS живёт после ухода приложения в фон. Короткое переключение в другое
+         * приложение не должно стоить полного TLS-хендшейка на возврате, а уведомления
+         * продолжают приходить ещё минуту — ровно когда пользователь ждёт ответ.
+         */
+        private const val BACKGROUND_GRACE_MS = 45_000L
 
         /**
          * Максимальное количество событий для группового (stacked) уведомления.
@@ -68,6 +82,11 @@ class EventsRepository(
     @Volatile
     private var realtimeScreenRefCount = 0
     private var reconnectAttempts = 0
+
+    private var backgroundGraceJob: Job? = null
+
+    private val hardCheckLock = Any()
+    private var lastHardCheckAtMs = 0L
 
     private val pendingEvents = mapOf<NotificationEvent.Source, MutableMap<Int, NotificationEvent>>(
             NotificationEvent.Source.QMS to mutableMapOf(),
@@ -120,6 +139,9 @@ class EventsRepository(
     private val controllerListener: WebSocketController.Listener = object : WebSocketController.Listener() {
         override fun onConnected() {
             if (BuildConfig.DEBUG) Timber.d("WSContr onConnected ${webSocketController.getCurrentId()},  ${webSocketController.isConnected()}")
+            // Без сброса бэкофф рос через весь сеанс: после пары обрывов даже первый сбой
+            // на здоровой сети ждал бы пять минут до переподключения.
+            reconnectAttempts = 0
             webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
             webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
         }
@@ -139,16 +161,19 @@ class EventsRepository(
 
         override fun onDisconnected(throwable: Throwable, response: Response?) {
             if (BuildConfig.DEBUG) Timber.d("WSContr onDisconnected ${webSocketController.getCurrentId()}, ${webSocketController.isConnected()}, code=${response?.code}")
-            if (response != null) {
-                if (BuildConfig.DEBUG) Timber.d("WSContr onDisconnected: code=${response.code}")
-                if (response.code == 403) {
-                    (application as forpdateam.ru.forpda.App).notifyForbidden(true)
-                }
-            }
-
             Timber.e(throwable, "Events check error")
-            if (foregroundRealtimeEnabled && (throwable is SocketTimeoutException || throwable is TimeoutException)) {
-                if (BuildConfig.DEBUG) Timber.d("start onFailure")
+
+            if (response?.code == 403) {
+                // Проблема не в соединении, а в авторизации: переподключение будет
+                // отбито тем же 403 и превратится в шторм.
+                (application as forpdateam.ru.forpda.App).notifyForbidden(true)
+                return
+            }
+            // Переподключаемся на ЛЮБОМ обрыве, а не только по таймауту: штатный close-фрейм
+            // сервера и обычные для мобильной сети IOException раньше молча убивали realtime
+            // до конца сеанса. Бэкофф и гейт по foreground не дают этому стать штормом.
+            if (foregroundRealtimeEnabled) {
+                if (BuildConfig.DEBUG) Timber.d("start onDisconnected")
                 start(checkEvents = false, force = false)
             }
         }
@@ -209,6 +234,46 @@ class EventsRepository(
     fun externalStart(checkEvents: Boolean) {
         if (BuildConfig.DEBUG) Timber.d("start externalStart")
         start(checkEvents = checkEvents, force = true)
+    }
+
+    /**
+     * Приложение вернулось на передний план. Отменяем отложенный разрыв WS: если пользователь
+     * просто переключился в другое приложение на пару секунд, соединение переживает это без
+     * повторного TLS-хендшейка.
+     */
+    fun onAppForegrounded() {
+        backgroundGraceJob?.cancel()
+        backgroundGraceJob = null
+        setForegroundRealtimeEnabled(true, "process_start")
+    }
+
+    /**
+     * Приложение ушло в фон. WS не рвём сразу: держим [BACKGROUND_GRACE_MS], потому что
+     * ответ обычно приходит в первые секунды после того, как пользователь свернул чат.
+     */
+    fun onAppBackgrounded() {
+        if (!foregroundRealtimeEnabled) return
+        backgroundGraceJob?.cancel()
+        backgroundGraceJob = repoScope.launch {
+            delay(BACKGROUND_GRACE_MS)
+            backgroundGraceJob = null
+            // Reason обязан содержать process_stop: по нему NotificationsService снимает FGS.
+            setForegroundRealtimeEnabled(false, "process_stop")
+        }
+    }
+
+    /**
+     * Жёсткий опрос inspector'а стоит двух сетевых запросов, а на возврат в приложение его
+     * просят сразу три независимых места (ProcessLifecycle, onCreate сервиса, onStartCommand).
+     */
+    private fun consumeHardCheckSlot(): Boolean = synchronized(hardCheckLock) {
+        val now = System.currentTimeMillis()
+        if (now - lastHardCheckAtMs < HARD_CHECK_MIN_INTERVAL_MS) {
+            BatteryDebugLogger.logState("EventsRepository", "skipHardCheck", "throttled")
+            return false
+        }
+        lastHardCheckAtMs = now
+        true
     }
 
     fun isForegroundRealtimeActive(): Boolean = foregroundRealtimeEnabled
@@ -387,6 +452,14 @@ class EventsRepository(
             BatteryDebugLogger.logState("EventsRepository", "skipStart", "background check=$checkEvents")
             return
         }
+        // Единственная точка, через которую открывается WS и уходят inspector-запросы, поэтому
+        // проверку «а нужны ли вообще push» держим здесь. Иначе подписки на сеть и авторизацию
+        // в init воскрешали соединение после того, как пользователь всё выключил.
+        if (!notificationPreferencesHolder.wantsPushNotifications()) {
+            BatteryDebugLogger.logState("EventsRepository", "skipStart", "notifications disabled")
+            stop("notifications_disabled")
+            return
+        }
         if (networkStateProvider.getState() && authHolder.get().isAuth()) {
             if (!webSocketController.isConnected()) {
                 if (!force && reconnectAttempts > 0) {
@@ -408,7 +481,7 @@ class EventsRepository(
                 webSocketController.connect()
             }
 
-            if (checkEvents) {
+            if (checkEvents && consumeHardCheckSlot()) {
                 hardHandleEvent(NotificationEvent.Source.THEME)
                 hardHandleEvent(NotificationEvent.Source.QMS)
             }
