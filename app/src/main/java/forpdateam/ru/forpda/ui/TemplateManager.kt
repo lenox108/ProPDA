@@ -28,8 +28,6 @@ class TemplateManager(
     companion object {
         const val TEMPLATE_THEME = "theme"
         const val TEMPLATE_SEARCH = "search"
-        const val TEMPLATE_QMS_CHAT = "qms_chat"
-        const val TEMPLATE_QMS_CHAT_MESS = "qms_chat_mess"
         const val TEMPLATE_NEWS = "news"
         const val TEMPLATE_FORUM_RULES = "forum_rules"
         const val TEMPLATE_ANNOUNCE = "announce"

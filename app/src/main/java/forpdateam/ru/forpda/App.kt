@@ -171,6 +171,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         NotificationsService.createEventChannels(this)
         setupNetworkTracking()
         setupBackgroundEventsCheck()
+        observeRealtimeNotificationPreference()
         setupAppUpdateCheck()
 
         // Lifecycle observer для очистки ресурсов
@@ -371,6 +372,29 @@ class App : Application(), androidx.work.Configuration.Provider {
             onNetworkLost = { webClient.clearDnsCache() },
         ).apply {
             start()
+        }
+    }
+
+    /**
+     * Держит realtime-флаг в согласии с настройкой уведомлений, пока приложение живо.
+     *
+     * Без этого включение уведомлений не поднимало WebSocket до следующего ухода в фон и обратно:
+     * [NotificationsService] гасит realtime, когда push выключают, а обратно флаг выставлялся только
+     * из [AppLifecycleObserver.onStart]. Сам [EventsRepository.setForegroundRealtimeEnabled] ещё раз
+     * проверяет `wantsPushNotifications()`, так что здесь достаточно сообщить ему о смене настройки.
+     */
+    private fun observeRealtimeNotificationPreference() {
+        appScope.launch {
+            notificationPreferencesHolder.wantsPushNotificationsFlow()
+                    .distinctUntilChanged()
+                    .collect { wants ->
+                        val foreground = ProcessLifecycleOwner.get().lifecycle.currentState
+                                .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+                        eventsRepository.setForegroundRealtimeEnabled(
+                                wants && foreground,
+                                "notifications_pref_changed",
+                        )
+                    }
         }
     }
 

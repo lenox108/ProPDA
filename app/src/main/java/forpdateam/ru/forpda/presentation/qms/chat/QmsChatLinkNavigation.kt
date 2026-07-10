@@ -4,7 +4,7 @@ import android.net.Uri
 import forpdateam.ru.forpda.common.ArticleLinkResolver
 import forpdateam.ru.forpda.common.SiteUrls
 
-/** Resolves QMS WebView links for in-app navigation (forum topics, posts, news, profiles). */
+/** Resolves links inside QMS messages for in-app navigation (forum topics, posts, news, profiles). */
 object QmsChatLinkNavigation {
 
     fun resolveInAppUrl(rawUrl: String?): String? {

@@ -36,14 +36,6 @@ object FpdaPipelineLog {
         FpdaDebugLog.log(FpdaDebugLog.TAG_QMS_CACHE, event, fields)
     }
 
-    fun qmsWebView(event: String, fields: Map<String, Any?> = emptyMap()) {
-        FpdaDebugLog.log(FpdaDebugLog.TAG_QMS_WEBVIEW, event, fields)
-    }
-
-    fun qmsWebViewWarn(event: String, fields: Map<String, Any?> = emptyMap()) {
-        FpdaDebugLog.warn(FpdaDebugLog.TAG_QMS_WEBVIEW, event, fields)
-    }
-
     fun stateRace(event: String, fields: Map<String, Any?> = emptyMap()) {
         FpdaDebugLog.log(FpdaDebugLog.TAG_STATE_RACE, event, fields)
     }
@@ -81,26 +73,6 @@ object FpdaPipelineLog {
         "bind_attached", "bind_rebind", "bind_recheck", "bind_skipped" -> "bindCommentsSection"
         "collapsed_set" -> "state_changed"
         else -> raw
-    }
-
-    fun qmsWebViewStage(
-            stage: String,
-            traceId: String? = null,
-            dialogId: Int? = null,
-            userId: Int? = null,
-            requestId: Int? = null,
-            reasonCode: String? = null,
-            extra: Map<String, Any?> = emptyMap()
-    ) {
-        val fields = linkedMapOf<String, Any?>(
-                "traceId" to traceId,
-                "dialogId" to dialogId,
-                "userId" to userId,
-                "requestId" to requestId,
-                "reasonCode" to reasonCode,
-        )
-        fields.putAll(extra)
-        qmsWebView(stage, fields)
     }
 
     fun themeLoad(event: String, fields: Map<String, Any?> = emptyMap(), warn: Boolean = false) {
