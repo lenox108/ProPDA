@@ -37,6 +37,19 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
 
     companion object {
         private var colors: MutableMap<String, String>? = null
+
+        /**
+         * Скелет поста для раздела «Релизер» (act=post + шаблон темы на 4pda).
+         * Повторяет вывод официального шаблона: три жирные метки (Тип / Версия / Краткое
+         * описание), затем свободный текст описания. Скриншоты и APK прикрепляются
+         * обычной скрепкой редактора. Формат сверен с живым релиз-постом ProPDA.
+         */
+        private val RELEASER_SKELETON = buildString {
+            append("[b]Тип:[/b] Новая версия\n")
+            append("[b]Версия:[/b] \n")
+            append("[b]Краткое описание:[/b] \n")
+            append("\n") // описание (что нового) — свободным текстом
+        }
     }
 
     private val viewScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -55,6 +68,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
                 "BACKGROUND" -> colorInsert(item)
                 "SIZE" -> sizeInsert(item)
                 "FONT" -> fontInsert(item)
+                "RELEASER" -> messagePanel.insertText(RELEASER_SKELETON)
                 else -> simpleInsertText(item)
             }
         }
@@ -315,6 +329,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
         tempCodes.add(ButtonData("SUB", R.drawable.ic_code_sub, getContext().getString(R.string.codes_name_sub)))
         tempCodes.add(ButtonData("SUP", R.drawable.ic_code_sup, getContext().getString(R.string.codes_name_sup)))
         tempCodes.add(ButtonData("CUR", R.drawable.ic_code_cur, getContext().getString(R.string.codes_name_curator)))
+        tempCodes.add(ButtonData("RELEASER", R.drawable.ic_code_release, getContext().getString(R.string.codes_name_release)))
 
         val sorted = otherPreferencesHolder.getMessagePanelBbCodesSync()
         if (sorted.isBlank()) {
