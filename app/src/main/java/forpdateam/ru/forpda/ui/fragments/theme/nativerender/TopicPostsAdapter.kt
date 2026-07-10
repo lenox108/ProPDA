@@ -708,8 +708,9 @@ class TopicPostsAdapter(
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setOnClickListener { onClick() }
                 if (onLongClick != null) {
+                    // The framework already emits the long-press haptic when the listener returns true,
+                    // so we must NOT fire performHapticFeedback ourselves — that doubled the vibration.
                     setOnLongClickListener {
-                        it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                         onLongClick()
                         true
                     }
