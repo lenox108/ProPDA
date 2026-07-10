@@ -157,22 +157,6 @@ android {
                 signingConfig signingConfigs.debug
             }
         }
-        legacy {
-            dimension "channel"
-            // Параллельная сборка с поддержкой Android 7 (API 24). Отдельный applicationId —
-            // ставится РЯДОМ с основной .parallel-версией (это другое приложение, не апдейт).
-            // ВНИМАНИЕ: minSdk 24 разрешает установку на Android 7, но не делает безопасными
-            // вызовы API 26+ — возможны падения, нужен тест на «семёрке».
-            applicationId "ru.forpdateam.forpda.legacy"
-            minSdk 24
-            versionNameSuffix " (a7)"
-            // Та же подпись, что и stable (ForPDA 2, parallel-ключ).
-            if (parallelKeystorePropertiesFile.exists()) {
-                signingConfig signingConfigs.parallel
-            } else {
-                signingConfig signingConfigs.debug
-            }
-        }
     }
 
     buildFeatures {
@@ -247,8 +231,8 @@ android {
 gradle.taskGraph.whenReady { graph ->
     def needsParallelStable = graph.allTasks.any { task ->
         def n = task.name
-        // stable и legacy подписываются одним parallel-ключом (ForPDA 2).
-        if (!n.contains("Stable") && !n.contains("Legacy")) {
+        // stable подписывается parallel-ключом (ForPDA 2).
+        if (!n.contains("Stable")) {
             return false
         }
         return n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package") || n.startsWith("install") || n.startsWith("publish")

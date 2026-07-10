@@ -93,9 +93,7 @@ class AppUpdateNotifier @Inject constructor(
         Timber.tag(AppUpdateRepository.LOG_TAG).i(message)
     }
 
-    /** Каналов до Android 8 нет, а класс NotificationChannel появился только в API 26. */
     private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL_ID,
             context.getString(R.string.pref_title_app_updates),

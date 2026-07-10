@@ -56,12 +56,6 @@ class NotificationPreferencesHolder(
 
     fun getMainEnabled(): Boolean = dataStore.getMainEnabledSync()
 
-    fun getMainSoundEnabled(): Boolean = dataStore.getMainSoundEnabledSync()
-
-    fun getMainVibrationEnabled(): Boolean = dataStore.getMainVibrationEnabledSync()
-
-    fun getMainIndicatorEnabled(): Boolean = dataStore.getMainIndicatorEnabledSync()
-
     fun getMainAvatarsEnabled(): Boolean = dataStore.getMainAvatarsEnabledSync()
 
     fun getFavEnabled(): Boolean = dataStore.getFavEnabledSync()

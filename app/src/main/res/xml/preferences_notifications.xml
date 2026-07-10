@@ -15,30 +15,6 @@
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"
             android:dependency="notifications.main.enabled"
-            android:key="notifications.main.sound_enabled"
-            android:layout="@layout/preference_custom"
-            android:title="@string/pref_title_sound"
-            app:iconSpaceReserved="false" />
-
-        <forpdateam.ru.forpda.ui.views.SwitchPreference
-            android:defaultValue="true"
-            android:dependency="notifications.main.enabled"
-            android:key="notifications.main.vibration_enabled"
-            android:layout="@layout/preference_custom"
-            android:title="@string/pref_title_vibration"
-            app:iconSpaceReserved="false" />
-
-        <forpdateam.ru.forpda.ui.views.SwitchPreference
-            android:defaultValue="true"
-            android:dependency="notifications.main.enabled"
-            android:key="notifications.main.indicator_enabled"
-            android:layout="@layout/preference_custom"
-            android:title="@string/pref_title_indicator"
-            app:iconSpaceReserved="false" />
-
-        <forpdateam.ru.forpda.ui.views.SwitchPreference
-            android:defaultValue="true"
-            android:dependency="notifications.main.enabled"
             android:key="notifications.main.avatars_enabled"
             android:layout="@layout/preference_custom"
             android:title="@string/pref_title_enable_avatars"
@@ -133,7 +109,7 @@
             app:iconSpaceReserved="false" />
 
         <ListPreference
-            android:defaultValue="15"
+            android:defaultValue="30"
             android:dependency="notifications.bg.enabled"
             android:dialogTitle="@string/pref_title_bg_check_interval"
             android:entries="@array/entries_notify_bg_interval"
