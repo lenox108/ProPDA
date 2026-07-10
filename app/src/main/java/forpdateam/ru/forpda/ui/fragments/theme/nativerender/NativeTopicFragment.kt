@@ -3208,16 +3208,39 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * List bottom padding = classic pagination bar ([classicPaginationBarPadPx]) + inter-post breathing gap
-     * ([bottomRestGapPx]). We do NOT add [bottomNavChromePad] here: with [shouldDrawBehindBottomNav]==false
-     * MainActivity already inset the fragment container by that chrome height, so the RecyclerView bottom
-     * edge sits at the top of the tab bar. Adding the chrome again would double-count it into a huge empty
-     * band below the last post. The only thing left to reserve is the gap that keeps the last card's border
-     * off the bar (and the pagination bar's own height when it is shown).
+     * How many pixels of the list's bottom edge are actually covered by the bottom-nav chrome ON SCREEN.
+     *
+     * MEASURED, never assumed. Whether the host insets the fragment container above the tab bar is
+     * device-dependent: on the emulator it does (overlap 0), on a real device it did NOT — the list ran to
+     * (and past) the screen bottom, so the last post's final [bottomNavChromePad] pixels sat behind the
+     * opaque tab bar. Device log: window height 2772, rvBottomScreen 2786, chromePad 182 → the card's bottom
+     * landed at 2772, i.e. fully behind the bar, even though it was correctly parked 14px above the list's
+     * own bottom edge.
+     *
+     * The window's decor height is the authoritative screen height here (displayMetrics.heightPixels
+     * under-reported on some devices, which is what made an earlier attempt at this under-reserve).
+     */
+    private fun listBottomChromeOverlapPx(): Int {
+        val decorHeight = activity?.window?.decorView?.height ?: 0
+        if (decorHeight <= 0 || recyclerView.height <= 0) return 0
+        val loc = IntArray(2)
+        recyclerView.getLocationOnScreen(loc)
+        val listBottomOnScreen = loc[1] + recyclerView.height
+        val chromeTopOnScreen = decorHeight - bottomNavChromePad
+        return (listBottomOnScreen - chromeTopOnScreen).coerceAtLeast(0)
+    }
+
+    /**
+     * List bottom padding = measured chrome overlap ([listBottomChromeOverlapPx]) + classic pagination bar
+     * ([classicPaginationBarPadPx]) + inter-post breathing gap ([bottomRestGapPx]).
+     *
+     * Reserving the MEASURED overlap (instead of either always adding [bottomNavChromePad] — a huge empty
+     * band on hosts that already inset the container — or never adding it — the last post hidden behind the
+     * tab bar on hosts that don't) is what makes the last post's clearance correct on every device.
      */
     private fun applyListBottomPadding() {
         if (view == null) return
-        val target = classicPaginationBarPadPx() + bottomRestGapPx()
+        val target = listBottomChromeOverlapPx() + classicPaginationBarPadPx() + bottomRestGapPx()
         if (recyclerView.paddingBottom != target) {
             recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
                     recyclerView.paddingRight, target)
@@ -3245,6 +3268,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * TALLER than the viewport (it is top-aligned on purpose so it reads from the start).
      */
     private val bottomPinLayoutListener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
+        // The list's on-screen position (and therefore its overlap with the tab bar) can change at any
+        // layout pass — recompute the reserved clearance first, then correct the last post inside it.
+        // Both are idempotent, so a settled layout produces no further work.
+        applyListBottomPadding()
         maintainBottomPin()
     }
 
@@ -3303,11 +3330,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             val rvLoc = IntArray(2).also { recyclerView.getLocationOnScreen(it) }
             val rvBottomScreen = rvLoc[1] + recyclerView.height
             val cardBottomScreen = lastView?.let { rvLoc[1] + it.bottom }
+            val decorH = activity?.window?.decorView?.height ?: 0
+            val chromeTop = decorH - bottomNavChromePad
             android.util.Log.i("FPDA_CLEAR",
-                    "$tag chromePad=$bottomNavChromePad padB=${recyclerView.paddingBottom} rvH=${recyclerView.height} " +
+                    "$tag decorH=$decorH chromePad=$bottomNavChromePad chromeTop=$chromeTop " +
+                    "overlap=${listBottomChromeOverlapPx()} padB=${recyclerView.paddingBottom} rvH=${recyclerView.height} " +
                     "rvBottomScreen=$rvBottomScreen cardH=${lastView?.height} cardBottomScreen=$cardBottomScreen " +
                     "lastVisiblePos=${lm.findLastVisibleItemPosition()}/$lastPos " +
-                    "clearanceToRvBottom=${cardBottomScreen?.let { rvBottomScreen - it }}")
+                    "clearanceToChrome=${cardBottomScreen?.let { chromeTop - it }}")
         }
     }
 
