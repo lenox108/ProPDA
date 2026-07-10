@@ -23,13 +23,14 @@ object NotificationActions {
                 .build()
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_REPLY
+            data = actionUri(event.notifyId(), "reply")
             putExtra(NotificationActionReceiver.EXTRA_NOTIFY_ID, event.notifyId())
             putExtra(NotificationActionReceiver.EXTRA_USER_ID, event.userId)
             putExtra(NotificationActionReceiver.EXTRA_TOPIC_ID, event.sourceId)
         }
         val pi = PendingIntent.getBroadcast(
                 context,
-                requestCode(event.notifyId(), REQ_REPLY),
+                event.notifyId(),
                 intent,
                 // RemoteInput требует MUTABLE на API 31+, чтобы система дописала введённый текст.
                 PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag(),
@@ -48,6 +49,7 @@ object NotificationActions {
     fun markReadAction(context: Context, event: NotificationEvent): NotificationCompat.Action {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_MARK_READ
+            data = actionUri(event.notifyId(), "mark_read")
             putExtra(NotificationActionReceiver.EXTRA_NOTIFY_ID, event.notifyId())
             putExtra(NotificationActionReceiver.EXTRA_IS_MENTION, event.isMention)
             putExtra(NotificationActionReceiver.EXTRA_TOPIC_ID, event.sourceId)
@@ -55,7 +57,7 @@ object NotificationActions {
         }
         val pi = PendingIntent.getBroadcast(
                 context,
-                requestCode(event.notifyId(), REQ_MARK_READ),
+                event.notifyId(),
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -87,11 +89,14 @@ object NotificationActions {
         else -> "forpda.group.site"
     }
 
-    private const val REQ_REPLY = 1
-    private const val REQ_MARK_READ = 2
-
-    // Уникальный requestCode на (notifyId, тип действия), чтобы PendingIntent'ы не схлопывались.
-    private fun requestCode(notifyId: Int, action: Int): Int = notifyId * 10 + action
+    /**
+     * PendingIntent сравнивает Intent'ы через filterEquals (action/data/component), игнорируя
+     * extras. Различающаяся data — единственное, что не даёт двум действиям одного уведомления
+     * и действиям разных уведомлений схлопнуться в один PendingIntent под FLAG_UPDATE_CURRENT.
+     * Поэтому requestCode здесь не несёт нагрузки и равен notifyId.
+     */
+    private fun actionUri(notifyId: Int, action: String): android.net.Uri =
+            android.net.Uri.parse("forpda://notification/$notifyId/$action")
 
     private fun mutableFlag(): Int =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
