@@ -629,6 +629,8 @@
     <string name="notification_action_reply">Ответить</string>
     <string name="notification_action_reply_hint">Сообщение…</string>
     <string name="notification_action_mark_read">Прочитано</string>
+    <string name="notification_action_retry">Повторить</string>
+    <string name="notification_quick_reply_failed_title">Сообщение не отправлено</string>
     <string name="notification_stacked_more">…и ещё %1$d</string>
     <string name="notification_title_favorite">Новые сообщения в избранной теме</string>
     <string name="notification_content_mention_fallback">Откройте тему, чтобы посмотреть ответ</string>
