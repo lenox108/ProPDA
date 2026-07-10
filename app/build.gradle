@@ -141,7 +141,7 @@ android {
             // debug-keystore, и APK нельзя поставить поверх настоящего
             // ru.forpdateam.forpda.parallel (конфликт подписи). У buildType debug
             // есть НЕЯВНЫЙ дефолтный debug-signingConfig, который перекрывает
-            // signingConfig флейвора (stable/legacy → signingConfigs.parallel),
+            // signingConfig флейвора (stable → signingConfigs.parallel),
             // поэтому переопределяем его здесь явно. Когда parallel-ключа нет
             // (смоук/CI без keystore.parallel.properties) — оставляем дефолт,
             // и флейвор падает на signingConfigs.debug (см. productFlavors).
