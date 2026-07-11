@@ -2,20 +2,19 @@
 <!--
     Custom switch widget used by SwitchPreferenceCompat.
 
-    MaterialSwitch (M3) is used instead of the legacy SwitchCompat because the
-    old switch track drawable is semi-transparent: even a fully-opaque tint
-    rendered faint, and its thumb was white in BOTH states, so ON/OFF were
-    almost indistinguishable on light reading palettes (user: «у переключателей
-    практически нет цвета»). MaterialSwitch has an opaque, filled track and a
-    thumb that changes colour + position between states.
+    Compact SwitchCompat (the size users prefer) with a custom OPAQUE pill track
+    (@drawable/pref_switch_track) instead of the semi-transparent appcompat
+    default — so the tint renders as a vivid, filled colour like an M3 switch
+    while keeping the smaller classic size. The old default thumb was white in
+    BOTH states, making ON/OFF hard to tell; colours for both track and thumb
+    are now driven per-state in SwitchPreference.onBind.
 
-    Track/thumb colours are set programmatically in SwitchPreference.onBind:
     androidx.preference can't resolve ?attr/* inside a ColorStateList at
-    inflation time, and the neutral theme's colorPrimary is literally white, so
-    the ON colour is taken from colorAccent (the real, palette-aware accent)
-    there. The literal fallbacks below only cover the single frame before bind.
+    inflation, and the neutral theme's colorPrimary is literally white, so the
+    ON colour is taken from colorAccent (the real, palette-aware accent) at bind
+    time. The literal fallbacks below only cover the single frame before bind.
 -->
-<com.google.android.material.materialswitch.MaterialSwitch xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.appcompat.widget.SwitchCompat xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/switchWidget"
     android:layout_width="wrap_content"
@@ -23,5 +22,7 @@
     android:background="@null"
     android:clickable="false"
     android:focusable="false"
+    android:thumb="@drawable/pref_switch_thumb"
+    app:track="@drawable/pref_switch_track"
     app:thumbTint="@color/preference_switch_thumb_tint"
     app:trackTint="@color/preference_switch_track_tint" />

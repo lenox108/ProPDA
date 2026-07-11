@@ -26,7 +26,7 @@ class SwitchPreference : SwitchPreferenceCompat {
         val alpha = if (isEnabled) 1f else DISABLED_ALPHA
         holder.itemView.findViewById<View>(android.R.id.title)?.alpha = alpha
         holder.itemView.findViewById<View>(android.R.id.summary)?.alpha = alpha
-        (holder.itemView.findViewById<View>(R.id.switchWidget) as? com.google.android.material.materialswitch.MaterialSwitch)?.let { sw ->
+        (holder.itemView.findViewById<View>(R.id.switchWidget) as? androidx.appcompat.widget.SwitchCompat)?.let { sw ->
             sw.alpha = alpha
             // androidx.preference can't resolve ?attr/* inside a ColorStateList at inflation, and the widget
             // context here IS the themed settings context — so resolve the palette-aware colours at bind time.
@@ -58,10 +58,6 @@ class SwitchPreference : SwitchPreferenceCompat {
                     onThumb,  // ON  → contrast thumb on the accent track
                     offThumb, // OFF → darker grey thumb, clearly reads as «off»
             ))
-            // Drop the M3 track outline: our track is already a filled, opaque colour in both states, and the
-            // default outline (colorOutline) is redundant / muddies the OFF grey.
-            sw.trackDecorationTintList = android.content.res.ColorStateList.valueOf(
-                    android.graphics.Color.TRANSPARENT)
         }
     }
 
