@@ -501,6 +501,15 @@
         <item name="colorOnBackground">?attr/colorOnSurface</item>
 
         <!--
+            Верхняя плашка тулбара = фон контента (?attr/colorSurfaceContainerLowest),
+            чтобы «плоский» top-bar chrome главных разделов сливался с фоном (см.
+            KDoc в values/styles.xml). Без этого в тёмной теме плашка оставалась
+            статичным dark_main_toolbar_accent_surface (#242424) — отдельной серой
+            полосой над фоном.
+        -->
+        <item name="main_toolbar_accent_surface">?attr/colorSurfaceContainerLowest</item>
+
+        <!--
             Anti-crash: КОНКРЕТНЫЕ @color/dark_* (см. KDoc в values/styles.xml).
             link_color — обязательное переопределение родителя MaterialYouAccent
             (?attr/colorPrimary → static), иначе TextView.<init> падает.
