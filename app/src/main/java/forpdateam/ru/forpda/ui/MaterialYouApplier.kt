@@ -37,7 +37,11 @@ import timber.log.Timber
  * приложения через собственные атрибуты остаётся прежним):
  * - [R.style.ThemeOverlay_ForPDA_MaterialYouAccent] — только акцент
  *   (`colorAccent`, `link_color`, `colorControlActivated` → `colorPrimary`).
- *   Используется для AMOLED, чтобы не поднимать поверхности с чистого чёрного.
+ *   База для остальных оверлеев.
+ * - [R.style.ThemeOverlay_ForPDA_MaterialYouAmoled] — акцент (наследует Accent)
+ *   + ПИН всех M3-surface-ролей обратно на amoled-чёрный. Используется для
+ *   AMOLED: DynamicColors тонирует surface-роли тёмно-серым (не чёрным), а наши
+ *   фоны контента их читают — без пина фон вылезал серым вместо чёрного.
  * - [R.style.ThemeOverlay_ForPDA_MaterialYouSurface] — акцент (наследует
  *   Accent) + динамический базовый фон окна (`android:colorBackground` /
  *   `colorOnBackground` → `colorSurface` / `colorOnSurface`). Используется для
@@ -145,7 +149,7 @@ object MaterialYouApplier {
         // AMOLED (не поднимаем поверхности с чистого чёрного). Работает и для
         // обоев, и для произвольного seed.
         val overlay = if (MaterialYouPolicy.isAmoledSkin(themeMode, isNight)) {
-            R.style.ThemeOverlay_ForPDA_MaterialYouAccent
+            R.style.ThemeOverlay_ForPDA_MaterialYouAmoled
         } else {
             R.style.ThemeOverlay_ForPDA_MaterialYouSurface
         }
