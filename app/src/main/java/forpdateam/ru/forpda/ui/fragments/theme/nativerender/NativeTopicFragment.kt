@@ -142,6 +142,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** The last URL handed to [loadTopic] (set even before the load completes) — dedupes the navigator's
      *  redundant echo of the initial open against [onViewCreated]'s resolved load. */
     private var lastRequestedUrl: String? = null
+
+    /**
+     * true, пока последний [loadTopic] ещё в полёте (гасится по завершении актуального запроса —
+     * epoch-гард отсеивает вытесненные). Квалифицирует дедуп в [loadThemeUrlFromNavigator]: скипать
+     * повторную загрузку того же URL можно ТОЛЬКО пока оригинал летит (эхо навигатора через миллисекунды
+     * после onViewCreated). Раньше дедуп был безусловным — [lastRequestedUrl] не протухает, и повторное
+     * открытие темы из списка спустя минуты (реюз живого таба, resolved совпал с прошлым getnewpost-URL)
+     * МОЛЧА скипалось: ни сети, ни якоря — юзер видел старые посты, хотя избранное показывало новый
+     * («тема не обновляется, пока не дёрнешь руками»). Плавающесть: тема, чьё прошлое открытие ушло в
+     * findpost-резюм, переоткрывалась свежей (URL отличался), а «ровно севшая» — залипала.
+     */
+    private var loadInFlight = false
     private var isLoadingNextPage = false
     private var isLoadingPrevPage = false
     /** Bumped on every [loadTopic]. In-flight coroutines snapshot it at launch and drop their result if a
@@ -2001,7 +2013,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // onViewCreated already issued: the navigator echoes the initial open right after onViewCreated,
             // and loading page 1 there is exactly what caused the visible «page 1 → jump to unread» flash.
             val resolved = resolveNavigatorOpenUrl(url, sourceScreen, openIntent, listHints)
-            if (resolved != lastRequestedUrl) {
+            // Дедуп ТОЛЬКО против летящего эха первого открытия (тот же URL, запрос ещё в полёте).
+            // Совпавший URL при ЗАВЕРШЁННОЙ загрузке = настоящее повторное открытие (реюз живого таба
+            // из списка) — обязаны перезагрузить: иначе свежие посты не тянутся, пока юзер не дёрнет
+            // руками (см. [loadInFlight]). Бонус: повторный тап той же ссылки заново якорится.
+            if (resolved != lastRequestedUrl || !loadInFlight) {
                 // The in-tab Back history exists for IN-TOPIC link taps (source="link"): tapping a post
                 // link inside the tab replaces its content, and «Назад» (HISTORY) should return to where
                 // you were. But this same reuse path also fires when an EXTERNAL list (search / «Мои
@@ -3210,8 +3226,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             refreshFollowNextPageArmed = false
         }
         // Remember the requested target so the navigator's redundant echo of the initial open (see
-        // loadThemeUrlFromNavigator) doesn't fire a second, page-1 load in parallel.
+        // loadThemeUrlFromNavigator) doesn't fire a second, page-1 load in parallel. The echo-dedup is
+        // valid only WHILE this load is in flight ([loadInFlight]) — an equal URL minutes later is a
+        // genuine fresh re-open and must reload (см. дедуп в loadThemeUrlFromNavigator).
         lastRequestedUrl = url
+        loadInFlight = true
         // «view=getlastpost» = «открыть в конец темы» (read topic, «Первое непрочитанное» setting). Its
         // server redirect anchors on the last-READ post, which on an already-read topic with newer posts
         // is a MIDDLE post — felt like landing on a random post. Force the landing to the true bottom of
@@ -3243,6 +3262,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // (maybeResumeToReadBoundary) starts FROM onSuccess after this guard and bumps the epoch
             // itself, so it stays the latest.
             if (epoch != loadEpoch) return@launch
+            // Этот запрос — актуальный и завершился (успехом или ошибкой): полёт окончен. Вложенные
+            // перезагрузки (boundary-резюм, шаг на след. страницу) сами взведут флаг заново в loadTopic.
+            loadInFlight = false
             result.onSuccess { page ->
                 loadedUrl = url
                 pageForumId = page.forumId
