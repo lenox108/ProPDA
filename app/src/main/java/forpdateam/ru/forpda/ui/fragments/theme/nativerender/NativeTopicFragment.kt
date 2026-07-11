@@ -3255,6 +3255,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     // endregion
 
+    /**
+     * Добавляет уникальный neutral-параметр (`_cb=<nanos>`), заставляющий CDN 4PDA сходить на origin за
+     * СВЕЖЕЙ страницей темы (edge-кэш отдаёт до ~80 мин staleness — проверено по `age` в ответе). Пишется
+     * ТОЛЬКО в fetch-URL, не в [lastRequestedUrl]/[loadedUrl], чтобы не ломать эхо-дедуп ([loadInFlight]) и
+     * якорную логику. Имя `_cb` нейтрально (не `s=` — это IPB-session); 4PDA роняет его при 302-редиректе.
+     * Фрагмент URL (`#entry…`), если есть, сохраняется ПОСЛЕ query-параметра.
+     */
+    private fun topicFetchUrlWithCacheBuster(url: String): String {
+        if (url.isBlank()) return url
+        val hashIdx = url.indexOf('#')
+        val base = if (hashIdx >= 0) url.substring(0, hashIdx) else url
+        val frag = if (hashIdx >= 0) url.substring(hashIdx) else ""
+        val sep = if (base.contains('?')) '&' else '?'
+        return "$base${sep}_cb=${System.nanoTime()}$frag"
+    }
+
     private fun loadTopic(url: String, preserveRefreshIntent: Boolean = false) {
         if (url.isBlank()) {
             setRefreshing(false)
@@ -3294,7 +3310,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         recyclerView.alpha = 1f
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
+                // Cache-buster ТОЛЬКО на сетевой fetch (не на url для дедупа/loadedUrl): CDN 4PDA отдаёт
+                // страницу темы из edge-кэша до ~80 мин давности (age в ответе), из-за чего свежий пост не
+                // приходит при открытии, пока кэш не протухнет — «тема со старым постом, помогает только
+                // ручной рефреш». WebView-путь обходил это (&s=), натив потерял. Уникальный параметр гонит
+                // CDN на origin; 4PDA его игнорирует и роняет при 302 (getnewpost/getlastpost/findpost),
+                // так что page.url остаётся чистым. Только для главной загрузки (открытие/рефреш/переход/
+                // резюм) — infinite-scroll старых страниц остаётся на CDN.
+                runCatching { themeApi.getTheme(topicFetchUrlWithCacheBuster(url), hatOpen = false, pollOpen = false) }
             }
             if (view == null) return@launch
             // Latest-wins: a newer loadTopic (refresh, page jump, tab reuse for another topic via
