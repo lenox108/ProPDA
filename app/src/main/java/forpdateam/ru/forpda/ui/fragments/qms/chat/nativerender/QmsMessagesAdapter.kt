@@ -29,6 +29,9 @@ class QmsMessagesAdapter(
         /** Tap on an attachment image → swipeable viewer over that message's images. */
         fun onImageClick(galleryUrls: List<String>, index: Int)
 
+        /** Long-press on an attachment image → actions menu (save / open in browser / copy link). */
+        fun onImageLongClick(imageUrl: String)
+
         /** Long-press on a bubble → the message actions menu (copy). */
         fun onMessageLongClick(anchor: View, item: QmsChatItem.Message)
     }
@@ -42,6 +45,9 @@ class QmsMessagesAdapter(
             object : BodyBlockViewFactory.Callbacks {
                 override fun onImageClick(galleryUrls: List<String>, index: Int) =
                         listener.onImageClick(galleryUrls, index)
+
+                override fun onImageLongClick(imageUrl: String) =
+                        listener.onImageLongClick(imageUrl)
             },
     )
 

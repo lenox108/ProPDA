@@ -65,9 +65,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var linkHandler: ILinkHandler
 
-    /** Browser/download entry point — powers the download-link long-press chooser. */
+    /** Browser/download entry point — powers the image and download-link long-press menus. */
     @Inject
     lateinit var systemLinkHandler: forpdateam.ru.forpda.presentation.ISystemLinkHandler
+
+    @Inject
+    lateinit var clipboardHelper: forpdateam.ru.forpda.common.ClipboardHelper
 
     @Inject
     lateinit var eventsRepository: forpdateam.ru.forpda.model.repository.events.EventsRepository
@@ -1398,6 +1401,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val start = index.coerceIn(0, galleryUrls.size - 1)
         forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
                 .startActivity(requireContext(), ArrayList(galleryUrls), start)
+    }
+
+    /** Long-press an attachment image → save / open in browser / copy link (WebView-menu parity). */
+    override fun onImageLongClick(imageUrl: String) {
+        ImageActionsMenu.show(requireContext(), imageUrl, systemLinkHandler, clipboardHelper)
     }
 
     /**
