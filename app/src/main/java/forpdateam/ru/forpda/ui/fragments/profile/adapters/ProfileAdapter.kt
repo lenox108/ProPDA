@@ -185,7 +185,10 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
 
         /** Brighten/blend [base] toward [onSurface] until it reaches a comfortable contrast on [surface],
          *  so the link is readable on every palette (some accents are dim on their own card). */
-        private fun contrastSafeColor(base: Int, onSurface: Int, surface: Int): Int {
+        private fun contrastSafeColor(base: Int, onSurface: Int, surfaceRaw: Int): Int {
+            // calculateContrast требует НЕпрозрачный фон — форсим alpha (палитра может
+            // дать полупрозрачный surface → IllegalArgumentException «translucent»).
+            val surface = surfaceRaw or 0xFF000000.toInt()
             val target = 4.5
             if (androidx.core.graphics.ColorUtils.calculateContrast(base, surface) >= target) return base
             var c = base
