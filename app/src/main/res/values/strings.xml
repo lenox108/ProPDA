@@ -691,6 +691,7 @@
     <string name="pref_summary_startup_screen_forum">При запуске открывается раздел «Форум».</string>
     <string name="pref_summary_startup_screen_replies">При запуске открывается раздел «Ответы».</string>
     <string name="pref_summary_startup_screen_qms">При запуске открывается раздел «QMS».</string>
+    <string name="pref_summary_startup_screen_menu">При запуске открывается экран «Меню».</string>
     <string name="pref_title_bottom_nav_order">Порядок нижнего меню</string>
     <string name="pref_summary_bottom_nav_order">Выберите, какие разделы первыми показываются на нижней панели; остальные остаются в полном меню.</string>
     <string name="pref_title_accent">Цвет акцента</string>
@@ -809,7 +810,11 @@
     <string name="pref_title_smart_preload">Умная предзагрузка страниц</string>
     <string name="pref_summary_smart_preload">Заранее подгружает следующую страницу темы при прокрутке вниз, чтобы переход был мгновенным. Отключается в режиме совместимости WebView.</string>
     <string name="pref_title_topic_pagination_panel">Панель страниц темы</string>
-    <string name="pref_summary_topic_pagination_panel">Показывает кнопки страниц под панелью темы. Удобно, если не пользоваться жестами.</string>
+    <string name="pref_summary_topic_pagination_panel">Где показывать кнопки страниц. В гибридном режиме нижняя панель недоступна.</string>
+    <string name="pref_value_topic_pagination_panels_none">Нет</string>
+    <string name="pref_value_topic_pagination_panels_top">Сверху</string>
+    <string name="pref_value_topic_pagination_panels_bottom">Снизу</string>
+    <string name="pref_value_topic_pagination_panels_both">Сверху и снизу</string>
     <string name="pref_title_topic_scroll_mode">Режим чтения тем</string>
     <string name="pref_summary_topic_scroll_mode_hybrid">Гибридный: соседние страницы догружаются при прокрутке, чтение похоже на ленту.</string>
     <string name="pref_summary_topic_scroll_mode_classic">Классический: открыта одна страница темы, переход только через панель, меню или жесты страниц.</string>
@@ -856,6 +861,8 @@
     <string name="pref_title_themes">Просмотр тем</string>
     <string name="pref_title_show_avatars">Отображать аватарки</string>
     <string name="pref_title_circle_avatars">Круглые аватарки</string>
+    <string name="pref_title_animated_smiles">Анимированные смайлы</string>
+    <string name="pref_summary_animated_smiles">Проигрывать анимацию смайлов в постах</string>
 
     <string name="pref_title_unread_top">Непрочитанные сверху</string>
     <string name="pref_title_show_dot">Индикатор новых сообщений</string>

@@ -65,7 +65,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var linkHandler: ILinkHandler
 
-    /** For the image long-press menu («Сохранить» / «Открыть в браузере», parity with the WebView). */
+    /** Browser/download entry point — powers the image and download-link long-press menus. */
     @Inject
     lateinit var systemLinkHandler: forpdateam.ru.forpda.presentation.ISystemLinkHandler
 
@@ -224,9 +224,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var paginationBar: android.widget.LinearLayout? = null
     private var paginationLabel: TextView? = null
 
-    // «Верхняя пагинация» (pref TOPIC_PAGINATION_PANEL_ENABLE) — the same «  ‹  N / M  ›  » row, pinned in
+    // «Верхняя пагинация» (pref TOPIC_PAGINATION_PANELS, top bit) — the same «  ‹  N / M  ›  » row, pinned in
     // the AppBarLayout below the toolbar (parity with the WebView top pagination panel). Shown in ALL reading
-    // modes; the bottom [paginationBar] stays a CLASSIC-mode-only navigator.
+    // modes; the bottom [paginationBar] (bottom bit) stays a CLASSIC-mode-only navigator.
     private var topPaginationBar: android.widget.LinearLayout? = null
     private var topPaginationLabel: TextView? = null
 
@@ -509,10 +509,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         boundaryResumeArmed = restorePostId <= 0
         loadTopic(if (restorePostId > 0) buildRestoreUrl(restorePostId) else resolveInitialOpenUrl())
 
-        // Live-toggle «Верхняя пагинация»: re-evaluate the top bar when the setting flips while the topic
+        // Live-toggle «Панель страниц темы»: re-evaluate both bars when the setting flips while the topic
         // tab stays alive in the background stack (the collector re-emits the current value immediately).
         viewLifecycleOwner.lifecycleScope.launch {
-            mainPreferencesHolder.observeTopicPaginationPanelEnabledFlow().collect {
+            mainPreferencesHolder.observeTopicPaginationPanelsFlow().collect {
                 if (view != null && pagination.isInitialised) updatePaginationBar()
             }
         }
@@ -712,6 +712,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         messagePanelHost.setBackgroundColor(
                 requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         panel.visibility = View.GONE
+        // Скрыть и сам ХОСТ: AdvancedPopup.attachCompactAdvancedView оборачивает панель в видимый
+        // LinearLayout с исходными layout-параметрами компактной панели (topMargin 8dp). Обёртка с
+        // GONE-содержимым имеет нулевую высоту, но её topMargin раздувает wrap_content-хост на 8dp —
+        // coordinator (layout_above=host) укорачивается, и между нижней пагинацией и таббаром
+        // просвечивала полоса фона фрагмента (?colorPrimary). См. showMessagePanel/hideMessagePanel.
+        messagePanelHost.visibility = View.GONE
         // Behavior off: with IME adjustResize the AppBar translationY would push the panel under the
         // keyboard (matches the WebView fragment's disableBehavior()).
         panel.disableBehavior()
@@ -959,6 +965,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun showMessagePanel(showKeyboard: Boolean) {
         val panel = messagePanel ?: return
         if (panel.visibility != View.VISIBLE) {
+            messagePanelHost.visibility = View.VISIBLE // хост скрыт, пока редактор закрыт (см. setupMessagePanel)
             panel.visibility = View.VISIBLE
             paginationBar?.visibility = View.GONE
             topPaginationBar?.visibility = View.GONE
@@ -997,6 +1004,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val panel = messagePanel ?: return
         panel.hideImeFromEditor()
         panel.visibility = View.GONE
+        messagePanelHost.visibility = View.GONE // без этого пустой хост оставляет 8dp-полосу над таббаром
         panel.hidePopupWindows()
         hideKeyboard()
         editingForm = null
@@ -1398,6 +1406,28 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Long-press an attachment image → save / open in browser / copy link (WebView-menu parity). */
     override fun onImageLongClick(imageUrl: String) {
         ImageActionsMenu.show(requireContext(), imageUrl, systemLinkHandler, clipboardHelper)
+    }
+
+    /**
+     * Long-press on a downloadable file link → a chooser: «Скачать» (in-app download) or «Открыть в
+     * браузере» (external). «Открыть в новой вкладке» is intentionally omitted — for a dl/post link it
+     * would route straight back to the same in-app download, so it duplicates «Скачать».
+     */
+    override fun onDownloadLinkLongPress(url: String, fileName: String?) {
+        val ctx = requireContext()
+        val labels = arrayOf(
+                getString(forpdateam.ru.forpda.R.string.app_update_action_download),
+                getString(forpdateam.ru.forpda.R.string.wv_open_in_browser),
+        )
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                .setItems(labels) { _, which ->
+                    when (which) {
+                        0 -> systemLinkHandler.handleDownload(url, fileName, ctx)
+                        1 -> systemLinkHandler.handle(url)
+                    }
+                }
+                .setNegativeButton(forpdateam.ru.forpda.R.string.cancel, null)
+                .showWithStyledButtons()
     }
 
     /** Header tap on the hat post itself toggles its body (same session state as the toolbar «Инфо»). */
@@ -2140,6 +2170,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             showAvatars = topicPreferencesHolder.getShowAvatars(),
             circleAvatars = topicPreferencesHolder.getCircleAvatars(),
             density = mainPreferencesHolder.getTopicPostDensity(),
+            animatedSmiles = topicPreferencesHolder.getAnimatedSmiles(),
     )
 
     override fun onRestoredAfterChildFragmentRemoved() {
@@ -2587,7 +2618,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             background = ctx.obtainStyledAttributes(intArrayOf(
-                    android.R.attr.selectableItemBackgroundBorderless)).use { it.getDrawable(0) }
+                    android.R.attr.selectableItemBackgroundBorderless)).let { ta ->
+                // TypedArray.use{} компилится под compileSdk 36 (TypedArray:AutoCloseable),
+                // но AutoCloseable у TypedArray только с API 31 → на API<31 .use{} роняет
+                // ClassCastException. Ручной recycle работает на всех уровнях.
+                try { ta.getDrawable(0) } finally { ta.recycle() }
+            }
             setOnClickListener { onClick() }
         }
         val label = TextView(ctx).apply {
@@ -2600,7 +2636,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1.45f)
             background = ctx.obtainStyledAttributes(intArrayOf(
-                    android.R.attr.selectableItemBackgroundBorderless)).use { it.getDrawable(0) }
+                    android.R.attr.selectableItemBackgroundBorderless)).let { ta ->
+                // TypedArray.use{} компилится под compileSdk 36 (TypedArray:AutoCloseable),
+                // но AutoCloseable у TypedArray только с API 31 → на API<31 .use{} роняет
+                // ClassCastException. Ручной recycle работает на всех уровнях.
+                try { ta.getDrawable(0) } finally { ta.recycle() }
+            }
             // Tap on «N / M» → manual page entry; long-press → a scrollable list of all pages to jump between.
             setOnClickListener { showPagePicker() }
             setOnLongClickListener {
@@ -2654,7 +2695,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /**
      * «Верхняя пагинация» — the same row placed in the AppBarLayout directly BELOW the toolbar. It carries
      * the SAME scroll flags as the toolbar (kept in sync by [applyToolbarAutoHide]) so the toolbar and the
-     * pagination hide / reveal together as ONE block. Gated by [Preferences.Main.TOPIC_PAGINATION_PANEL_ENABLE].
+     * pagination hide / reveal together as ONE block. Gated by [Preferences.Main.TopicPaginationPanels.hasTop].
      */
     private fun ensureTopPaginationBar() {
         if (topPaginationBar != null) return
@@ -2828,24 +2869,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val total = pagination.totalPages
         paginationLabel?.text = "$barCurrentPage / $total"
         applyPaginationArrowStates(paginationBar, total)
-        // «Верхняя пагинация»: pinned under the toolbar. Like the bottom bar it is a CLASSIC-mode navigator
-        // only — in HYBRID (infinite scroll) the page arrows make no sense, so the panel is hidden there and
-        // the current page shows via the toolbar subtitle instead («N / M»).
+        // «Панель страниц темы» ([TopicPaginationPanels]): independent top/bottom bits. The TOP bar
+        // (pinned under the toolbar) works in BOTH reading modes. The BOTTOM bar is a CLASSIC-only
+        // navigator — in HYBRID (infinite scroll) poststep arrows make no sense, so the bottom bit is
+        // ignored there and the page position shows via the toolbar subtitle instead («N / M»).
+        val panels = mainPreferencesHolder.getTopicPaginationPanels()
+        val editorOpen = messagePanel?.visibility == View.VISIBLE
         ensureTopPaginationBar()
         topPaginationLabel?.text = "$barCurrentPage / $total"
         applyPaginationArrowStates(topPaginationBar, total)
-        topPaginationBar?.visibility = if (isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE &&
-                mainPreferencesHolder.getTopicPaginationPanelEnabled()) View.VISIBLE else View.GONE
+        topPaginationBar?.visibility = if (panels.hasTop && total > 1 && !editorOpen) View.VISIBLE else View.GONE
         // Top-toolbar subtitle mirrors the page position — digits only, no «Страница … из …» text
         // (parity with the WebView toolbar: «1348 / 1349»).
         setSubtitle(if (total > 1) "$barCurrentPage / $total" else null)
         // The bottom pagination bar belongs to CLASSIC reading mode only; HYBRID (default) uses
         // continuous infinite scroll with no bar. Also hidden while the reply editor is open.
         paginationBar?.let { bar ->
-            // Honour «Панель страниц темы» (getTopicPaginationPanelEnabled) — user can hide the bar
-            // to rely on page swipes/FAB instead (parity with the WebView pagination panel toggle).
-            val show = isClassicMode() && total > 1 && messagePanel?.visibility != View.VISIBLE &&
-                    mainPreferencesHolder.getTopicPaginationPanelEnabled()
+            val show = isClassicMode() && panels.hasBottom && total > 1 && !editorOpen
             bar.visibility = if (show) View.VISIBLE else View.GONE
             // Reserve bottom room: always the bottom-nav chrome (so the last post clears the tab bar) plus a
             // breathing gap ([bottomRestGapPx], so the last card's border isn't flush/clipped), plus the
@@ -3223,6 +3263,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     // endregion
 
+    /**
+     * Добавляет уникальный neutral-параметр (`_cb=<nanos>`), заставляющий CDN 4PDA сходить на origin за
+     * СВЕЖЕЙ страницей темы (edge-кэш отдаёт до ~80 мин staleness — проверено по `age` в ответе). Пишется
+     * ТОЛЬКО в fetch-URL, не в [lastRequestedUrl]/[loadedUrl], чтобы не ломать эхо-дедуп ([loadInFlight]) и
+     * якорную логику. Имя `_cb` нейтрально (не `s=` — это IPB-session); 4PDA роняет его при 302-редиректе.
+     * Фрагмент URL (`#entry…`), если есть, сохраняется ПОСЛЕ query-параметра.
+     */
+    private fun topicFetchUrlWithCacheBuster(url: String): String {
+        if (url.isBlank()) return url
+        val hashIdx = url.indexOf('#')
+        val base = if (hashIdx >= 0) url.substring(0, hashIdx) else url
+        val frag = if (hashIdx >= 0) url.substring(hashIdx) else ""
+        val sep = if (base.contains('?')) '&' else '?'
+        return "$base${sep}_cb=${System.nanoTime()}$frag"
+    }
+
     private fun loadTopic(url: String, preserveRefreshIntent: Boolean = false) {
         if (url.isBlank()) {
             setRefreshing(false)
@@ -3262,7 +3318,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         recyclerView.alpha = 1f
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { themeApi.getTheme(url, hatOpen = false, pollOpen = false) }
+                // Cache-buster ТОЛЬКО на сетевой fetch (не на url для дедупа/loadedUrl): CDN 4PDA отдаёт
+                // страницу темы из edge-кэша до ~80 мин давности (age в ответе), из-за чего свежий пост не
+                // приходит при открытии, пока кэш не протухнет — «тема со старым постом, помогает только
+                // ручной рефреш». WebView-путь обходил это (&s=), натив потерял. Уникальный параметр гонит
+                // CDN на origin; 4PDA его игнорирует и роняет при 302 (getnewpost/getlastpost/findpost),
+                // так что page.url остаётся чистым. Только для главной загрузки (открытие/рефреш/переход/
+                // резюм) — infinite-scroll старых страниц остаётся на CDN.
+                runCatching { themeApi.getTheme(topicFetchUrlWithCacheBuster(url), hatOpen = false, pollOpen = false) }
             }
             if (view == null) return@launch
             // Latest-wins: a newer loadTopic (refresh, page jump, tab reuse for another topic via
@@ -3527,7 +3590,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Height reserved for the CLASSIC pagination bar when it is currently shown, else 0. */
     private fun classicPaginationBarPadPx(): Int {
         val show = pagination.isInitialised && isClassicMode() && pagination.totalPages > 1 &&
-                messagePanel?.visibility != View.VISIBLE && mainPreferencesHolder.getTopicPaginationPanelEnabled()
+                messagePanel?.visibility != View.VISIBLE && mainPreferencesHolder.getTopicPaginationPanels().hasBottom
         return if (show) (52 * resources.displayMetrics.density).toInt() else 0
     }
 

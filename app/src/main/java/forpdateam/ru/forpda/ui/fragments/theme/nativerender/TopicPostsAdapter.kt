@@ -56,6 +56,8 @@ class TopicPostsAdapter(
         fun onImageClick(galleryUrls: List<String>, index: Int)
         /** Long-press on an attachment image → actions menu (save / open in browser / copy link). */
         fun onImageLongClick(imageUrl: String)
+        /** Long-press on a downloadable file link → chooser (download / open in browser). */
+        fun onDownloadLinkLongPress(url: String, fileName: String?)
     }
 
     /**
@@ -69,6 +71,8 @@ class TopicPostsAdapter(
             val circleAvatars: Boolean = false,
             val density: forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity =
                     forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMFORTABLE,
+            /** «Анимированные смайлы»: play smile GIFs in post bodies instead of a static frame. */
+            val animatedSmiles: Boolean = true,
     )
 
     private var displaySettings = PostDisplaySettings()
@@ -244,6 +248,9 @@ class TopicPostsAdapter(
                     override fun onQuoteSelection(scopeId: Int, selectedText: String) {
                         boundItem?.let { actionListener.onQuoteSelection(it, selectedText) }
                     }
+
+                    override fun onDownloadLinkLongPress(url: String, fileName: String?) =
+                            actionListener.onDownloadLinkLongPress(url, fileName)
                 },
         )
 
@@ -380,16 +387,26 @@ class TopicPostsAdapter(
         /**
          * Resting hairline border for the post card. Elevation shadows are invisible on dark/AMOLED
          * surfaces, so without an outline every near-black card melts into the near-black page (user
-         * report). A 1dp edge keeps cards delineated in every theme. On DARK/AMOLED palettes (esp. the
-         * dynamic «Системный стиль», where colorSurfaceContainer/…Lowest and colorOutline are all nearly
-         * the same near-black) the bare M3 colorOutline is still invisible, so we lift it toward
-         * colorOnSurface until the edge separates from the black card — a faint but visible hairline.
+         * report). A 1dp edge keeps cards delineated in every theme.
+         *
+         * Delicacy (user: «рамки слишком грубо и жирно», wants VK-style near-invisible hairlines): the
+         * two adjacent card edges + the elevation shadow read as a heavy channel between posts. On LIGHT
+         * palettes we start from `colorOutlineVariant` (M3's decorative-divider role) and then blend it a
+         * third of the way toward the card fill, so the edge softens into a barely-there hairline instead
+         * of a hard rule. On DARK/AMOLED palettes (esp. the dynamic «Системный стиль», where …Container/
+         * …Lowest and both outline roles collapse to nearly the same near-black) even `colorOutline` is
+         * invisible, so we instead lift it toward `colorOnSurface` until the edge just separates from the
+         * black card — a faint but visible hairline.
          */
         private fun restingCardBorderColor(): Int {
+            val fill = cardBaseColor()
+            if (androidx.core.graphics.ColorUtils.calculateLuminance(fill) >= 0.5) {
+                val outlineVariant = com.google.android.material.color.MaterialColors.getColor(
+                        itemView, com.google.android.material.R.attr.colorOutlineVariant)
+                return androidx.core.graphics.ColorUtils.blendARGB(outlineVariant, fill, 0.35f)
+            }
             val outline = com.google.android.material.color.MaterialColors.getColor(
                     itemView, com.google.android.material.R.attr.colorOutline)
-            val fill = cardBaseColor()
-            if (androidx.core.graphics.ColorUtils.calculateLuminance(fill) >= 0.5) return outline
             val onSurface = com.google.android.material.color.MaterialColors.getColor(
                     itemView, com.google.android.material.R.attr.colorOnSurface)
             return androidx.core.graphics.ColorUtils.blendARGB(outline, onSurface, 0.30f)
@@ -755,6 +772,7 @@ class TopicPostsAdapter(
             if (isHat && hatCollapsed) return
             blockFactory.textScale = settings.textScale
             blockFactory.searchQuery = searchQuery
+            blockFactory.animatedSmiles = settings.animatedSmiles
             blockFactory.render(
                     body,
                     item.blocks,

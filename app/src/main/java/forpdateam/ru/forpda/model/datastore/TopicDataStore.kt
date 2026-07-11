@@ -43,6 +43,7 @@ class TopicDataStore(private val context: Context) {
     private object PreferencesKeys {
         val SHOW_AVATARS = booleanPreferencesKey("show_avatars")
         val CIRCLE_AVATARS = booleanPreferencesKey("circle_avatars")
+        val ANIMATED_SMILES = booleanPreferencesKey("animated_smiles")
         val ANCHOR_HISTORY = booleanPreferencesKey("anchor_history")
         val HAT_OPENED = booleanPreferencesKey("hat_opened")
         val FORUM_BLACKLIST = stringPreferencesKey("forum_blacklist")
@@ -62,6 +63,13 @@ class TopicDataStore(private val context: Context) {
                 preferences[PreferencesKeys.CIRCLE_AVATARS]
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
                         .getBoolean(AppPreferences.Theme.CIRCLE_AVATARS, true)
+            }, true)
+
+    fun observeAnimatedSmilesFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.topicDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.ANIMATED_SMILES]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Theme.ANIMATED_SMILES, true)
             }, true)
 
     suspend fun getShowAvatars(): Boolean =
@@ -87,6 +95,15 @@ class TopicDataStore(private val context: Context) {
     }
 
     fun getCircleAvatarsImmediate(): Boolean = mirrorPrefs.getBoolean("circle_avatars", true)
+
+    suspend fun setAnimatedSmiles(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.ANIMATED_SMILES] = value
+        }
+        mirrorPrefs.edit().putBoolean("animated_smiles", value).apply()
+    }
+
+    fun getAnimatedSmilesImmediate(): Boolean = mirrorPrefs.getBoolean("animated_smiles", true)
 
     suspend fun setAnchorHistory(value: Boolean) {
         safeEdit { preferences ->
