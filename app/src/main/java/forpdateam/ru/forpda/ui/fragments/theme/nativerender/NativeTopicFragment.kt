@@ -2981,28 +2981,175 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             isSending = false
             if (view == null) return@launch
             panel.setProgressState(false)
-            result.onSuccess {
+            result.onSuccess { postedPage ->
                 panel.clearMessage()
                 panel.clearAttachments()
                 messagePanelDraftMirror = ""
                 editingForm = null
                 hideMessagePanel()
                 Toast.makeText(requireContext(), "Отправлено", Toast.LENGTH_SHORT).show()
-                // Новый ответ уходит в конец темы — грузим последнюю страницу и садимся на свежий пост
-                // (getlastpost → pendingJumpToBottom → скролл на последний пост + подсветка). Правка —
+                // sendPost уже вернул распарсенную страницу со свежим/правленым постом — применяем её к
+                // списку НА МЕСТЕ (append/patch + плавный скролл + подсветка). Полный reload здесь гасил
+                // весь экран: очистка списка → спиннер → last-page fill прятал список → мигание (репорт
+                // «экран потухает, мигает, потом появляется мой пост»).
+                val appliedInPlace = if (isNewReply) {
+                    applyPostedReplyInPlace(postedPage)
+                } else {
+                    applyEditedPostInPlace(postedPage, editedPostId)
+                }
+                // Фолбэк — прежний полный reload. Новый ответ уходит в конец темы — грузим последнюю
+                // страницу и садимся на свежий пост (getlastpost → pendingJumpToBottom). Правка —
                 // перезагружаемся findpost'ом НА отредактированный пост: обычный reload loadedUrl сел бы на
                 // серверный якорь = ПЕРВЫЙ пост страницы (баг «якорь слетает на 1 пост последней страницы»).
-                if (isNewReply && pageTopicId > 0) {
-                    loadTopic("https://4pda.to/forum/index.php?showtopic=$pageTopicId&view=getlastpost")
-                } else if (editedPostId > 0) {
-                    loadTopic(buildRestoreUrl(editedPostId))
-                } else {
-                    loadedUrl?.let { loadTopic(it) }
+                if (!appliedInPlace) {
+                    if (isNewReply && pageTopicId > 0) {
+                        loadTopic("https://4pda.to/forum/index.php?showtopic=$pageTopicId&view=getlastpost")
+                    } else if (editedPostId > 0) {
+                        loadTopic(buildRestoreUrl(editedPostId))
+                    } else {
+                        loadedUrl?.let { loadTopic(it) }
+                    }
                 }
             }.onFailure { error ->
                 Toast.makeText(requireContext(), "Ошибка отправки: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    /**
+     * Применить страницу, которую вернул sendPost для НОВОГО ответа, к уже загруженному списку на месте:
+     * дописать новые посты вниз (свой + чужие, успевшие появиться), плавно доскроллить к своему посту и
+     * подсветить его — без полной перезагрузки, то есть без пустого экрана и миганий.
+     *
+     * In-place возможен только когда низ загруженного окна — страница поста или соседняя над ней
+     * (обычный ответ с конца темы). При переносе поста на СЛЕДУЮЩУЮ страницу старая последняя могла
+     * добрать чужие посты до лимита — их хвост дотягивается отдельным GET, иначе в окне осталась бы дыра.
+     * Любой нетипичный контекст (окно далеко от конца, классика с переносом страницы, гонка с другой
+     * загрузкой, свой пост не нашёлся) → false, вызывающий делает прежний полный reload.
+     */
+    private suspend fun applyPostedReplyInPlace(
+            page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
+    ): Boolean {
+        if (view == null || !pagination.isInitialised) return false
+        if (page.id <= 0 || page.id != pageTopicId) return false
+        if (isLoadingNextPage || isLoadingPrevPage || fillingLastPage) return false
+        val postedPageNumber = page.pagination.current.coerceAtLeast(1)
+        val bottomLoaded = pagination.loadedPage
+        if (postedPageNumber < bottomLoaded || postedPageNumber > bottomLoaded + 1) return false
+        // Классический режим показывает ОДНУ страницу: пост, перенесённый на новую, требует настоящего
+        // перехода на неё.
+        if (postedPageNumber == bottomLoaded + 1 && isClassicMode()) return false
+        val epoch = loadEpoch
+        isLoadingNextPage = true // сериализация с infinite scroll'ом (maybeLoad*/maybeFillLastPage)
+        try {
+            if (postedPageNumber == bottomLoaded + 1) {
+                val gap = withContext(Dispatchers.IO) {
+                    runCatching { themeApi.getTheme(pagination.pageUrl(bottomLoaded), hatOpen = false, pollOpen = false) }
+                }.getOrElse { return false }
+                if (view == null || epoch != loadEpoch) return false
+                if (gap.id != pageTopicId || gap.pagination.current != bottomLoaded) return false
+                processHatForPage(gap)
+                val gapItems = pagination.registerAndFilterNew(
+                        filterBlacklisted(tagPage(mapper.map(gap.posts), gap.pagination.current)))
+                if (gapItems.isNotEmpty()) {
+                    loadedItems.addAll(gapItems)
+                    enrichLoadedPage(gap)
+                }
+            }
+            if (epoch != loadEpoch) return false
+            processHatForPage(page) // срезать эхо шапки, иначе оно «допишется» вниз как новый пост
+            val newItems = pagination.registerAndFilterNew(
+                    filterBlacklisted(tagPage(mapper.map(page.posts), postedPageNumber)))
+            pagination.onPageAppended(postedPageNumber, page.pagination)
+            if (newItems.isEmpty()) return false // свой пост не нашли — пусть отработает полный reload
+            loadedItems.addAll(newItems)
+            markedTopicReadAtEnd = false // низ темы вырос — «дочитал до конца» должен сработать заново
+            updatePaginationBar()
+            // Якорь sendPost'а (id своего поста) надёжнее последнего элемента: параллельный чужой ответ
+            // мог успеть встать НИЖЕ нашего.
+            val targetId = page.anchorPostId?.removePrefix("entry")?.trim()?.toIntOrNull()
+                    ?.takeIf { id -> newItems.any { it.postId == id } }
+                    ?: newItems.last().postId
+            submitPosts {
+                if (view != null) scrollToPostedReply(targetId)
+            }
+            return true
+        } finally {
+            isLoadingNextPage = false
+        }
+    }
+
+    /**
+     * Плавно подъехать к свежеотправленному посту [postId] и подсветить его. Пост рядом (обычный ответ с
+     * конца темы) — smooth scroll, чтобы появление читалось как непрерывное движение; успели отскроллить
+     * далеко вверх — мгновенный прыжок [anchorPost]'ом, как при обычном открытии. Пара отложенных
+     * ре-якорей — та же, что у getlastpost-открытия: viewport ещё оседает после скрытия клавиатуры/панели,
+     * и ранний замер мог бы оставить пост под нижней кромкой.
+     */
+    private fun scrollToPostedReply(postId: Int) {
+        val idx = loadedItems.indexOfFirst { it.postId == postId }
+        if (idx < 0) return
+        val concatPos = idx + headerOffset()
+        val isLast = idx == loadedItems.size - 1
+        postsAdapter.requestHighlight(postId)
+        if (isLast) {
+            anchoredBottomPostId = postId // держать пост у нижнего края сквозь дорастание списка
+            if (forpdateam.ru.forpda.BuildConfig.DEBUG) android.util.Log.i("FPDA_CLEAR", "anchor SET(postedReply)=$postId")
+        }
+        val lm = recyclerView.layoutManager as? LinearLayoutManager
+        val lastVisible = lm?.findLastVisibleItemPosition()
+                ?: androidx.recyclerview.widget.RecyclerView.NO_POSITION
+        val near = lastVisible != androidx.recyclerview.widget.RecyclerView.NO_POSITION &&
+                concatPos - lastVisible <= POSTED_SMOOTH_SCROLL_MAX_ITEMS
+        if (near) recyclerView.smoothScrollToPosition(concatPos) else anchorPost(concatPos, isLast)
+        recyclerView.post { markVisiblePostsRead() }
+        // Ре-якорить только в покое: scrollToPosition внутри reanchor'а оборвал бы ещё идущий smooth
+        // scroll рывком (и «не видя» последний пост, ошибочно снял бы нижний якорь).
+        recyclerView.postDelayed({
+            if (view != null && recyclerView.scrollState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
+                reanchorBottomAfterGrowth()
+            }
+        }, 400)
+        recyclerView.postDelayed({
+            if (view != null) {
+                if (recyclerView.scrollState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
+                    reanchorBottomAfterGrowth()
+                }
+                markVisiblePostsRead()
+                maybeMarkTopicReadAtEnd()
+            }
+        }, 800)
+    }
+
+    /**
+     * Применить страницу после РЕДАКТИРОВАНИЯ к списку на месте: заменить содержимое совпавших постов по
+     * id — DiffUtil перебиндит только изменившиеся карточки, пост обновляется «под ногами» без прыжка
+     * скролла и без полного reload'а с пустым экраном. false — поста нет в загруженном окне (не должно
+     * случаться при правке из контекст-меню), нужен фолбэк-reload.
+     */
+    private fun applyEditedPostInPlace(
+            page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
+            editedPostId: Int,
+    ): Boolean {
+        if (view == null || !pagination.isInitialised) return false
+        if (editedPostId <= 0 || page.id <= 0 || page.id != pageTopicId) return false
+        if (loadedItems.none { it.postId == editedPostId }) return false
+        val freshById = mapper.map(page.posts).associateBy { it.postId }
+        if (!freshById.containsKey(editedPostId)) return false
+        var changed = false
+        for (i in loadedItems.indices) {
+            val existing = loadedItems[i]
+            val fresh = freshById[existing.postId] ?: continue
+            // Свежая маппа не знает страницы (pageNumber=0) — сохраняем тег, иначе слетят «Страница N».
+            val updated = fresh.copy(pageNumber = existing.pageNumber)
+            if (updated != existing) {
+                loadedItems[i] = updated
+                changed = true
+            }
+        }
+        if (changed) submitPosts()
+        postsAdapter.requestHighlight(editedPostId) // короткая вспышка = «сохранилось», parity с reload-путём
+        return true
     }
 
     // endregion
@@ -3687,6 +3834,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Idle delay after which the smart button auto-hides (appears again on the next scroll). */
         const val FAB_AUTO_HIDE_MS = 2500L
+
+        /** После отправки ответа: свой пост не дальше стольких элементов под нижней кромкой → плавный
+         *  доскролл (smoothScrollToPosition); дальше — мгновенный прыжок, чтобы анимация не тянулась. */
+        const val POSTED_SMOOTH_SCROLL_MAX_ITEMS = 8
 
         /** onSaveInstanceState keys for restore-scroll «где остановился» / устойчивость состояния. */
         private const val STATE_RESTORE_POST_ID = "native_topic_restore_post_id"
