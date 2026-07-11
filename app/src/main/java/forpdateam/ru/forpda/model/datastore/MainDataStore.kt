@@ -55,6 +55,7 @@ class MainDataStore(private val context: Context) {
         val IS_EDITOR_DEFAULT_HIDDEN = booleanPreferencesKey("is_editor_default_hidden")
         val SCROLL_BUTTON_ENABLE = booleanPreferencesKey("scroll_button_enable")
         val TOPIC_PAGINATION_PANEL_ENABLE = booleanPreferencesKey("topic_pagination_panel_enable")
+        val TOPIC_PAGINATION_PANELS = stringPreferencesKey("topic_pagination_panels")
         val TOPIC_SCROLL_MODE = stringPreferencesKey("topic_scroll_mode")
         val TOPIC_POST_DENSITY = stringPreferencesKey("topic_post_density")
         val TOPIC_TOOLBAR_BEHAVIOR = stringPreferencesKey("topic_toolbar_behavior")
@@ -98,12 +99,12 @@ class MainDataStore(private val context: Context) {
                         .getBoolean(AppPreferences.Main.SCROLL_BUTTON_ENABLE, true)
             }, true)
 
-    fun observeTopicPaginationPanelEnabledFlow(): Flow<Boolean> =
+    fun observeTopicPaginationPanelsFlow(): Flow<AppPreferences.Main.TopicPaginationPanels> =
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
-                preferences[PreferencesKeys.TOPIC_PAGINATION_PANEL_ENABLE]
-                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
-                        .getBoolean(AppPreferences.Main.TOPIC_PAGINATION_PANEL_ENABLE, false)
-            }, false)
+                preferences[PreferencesKeys.TOPIC_PAGINATION_PANELS]
+                    ?.let { parseTopicPaginationPanels(it) }
+                    ?: migrateLegacyTopicPaginationPanels()
+            }, AppPreferences.Main.TopicPaginationPanels.BOTTOM)
 
     fun observeTopicScrollModeFlow(): Flow<AppPreferences.Main.TopicScrollMode> =
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
@@ -285,37 +286,46 @@ class MainDataStore(private val context: Context) {
         return true
     }
 
-    suspend fun setTopicPaginationPanelEnabled(value: Boolean) {
+    suspend fun setTopicPaginationPanels(value: AppPreferences.Main.TopicPaginationPanels) {
         safeEdit { preferences ->
-            preferences[PreferencesKeys.TOPIC_PAGINATION_PANEL_ENABLE] = value
+            preferences[PreferencesKeys.TOPIC_PAGINATION_PANELS] = value.name
         }
-        mirrorPrefs.edit().putBoolean("topic_pagination_panel_enable", value).apply()
-        // Keep the authoritative legacy key in sync so getTopicPaginationPanelEnabledImmediate
-        // (which now reads legacy first) reflects programmatic changes too.
-        context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
-                .edit().putBoolean(AppPreferences.Main.TOPIC_PAGINATION_PANEL_ENABLE, value).apply()
+        // Mirror for the synchronous [getTopicPaginationPanelsImmediate] read (parity with
+        // topic_scroll_mode). The picker in SettingsFragment writes exclusively through here,
+        // so — unlike the old androidx SwitchPreference — the legacy default file is never
+        // touched; it survives only as the one-time migration source below.
+        mirrorPrefs.edit().putString("topic_pagination_panels", value.name).apply()
     }
 
-    fun getTopicPaginationPanelEnabledImmediate(): Boolean {
-        // The androidx SwitchPreferenceCompat in SettingsFragment persists the user's live
-        // choice straight into the default <package>_preferences file under the legacy key.
-        // That legacy value is therefore authoritative whenever it is present. The previous
-        // build mirrored mirrorPrefs.contains() first, but the mirror copy is only written by
-        // the OnSharedPreferenceChangeListener and is skipped when the fragment is detached
-        // (isAdded == false). A stale mirror "true" then overrode a legacy "false", so turning
-        // the panel OFF was ignored. Read legacy first, fall back to the mirror only when the
-        // toggle was never persisted to legacy (e.g. value set programmatically).
+    fun getTopicPaginationPanelsImmediate(): AppPreferences.Main.TopicPaginationPanels {
+        val mirrored = mirrorPrefs.getString("topic_pagination_panels", null)
+        return if (mirrored != null) parseTopicPaginationPanels(mirrored)
+        else migrateLegacyTopicPaginationPanels()
+    }
+
+    /**
+     * One-time fallback for installs predating [TopicPaginationPanels]. The legacy boolean
+     * «Панель страниц темы» toggled BOTH bars together in classic, so map an explicit true → BOTH,
+     * an explicit false → NONE; a never-set toggle → the new default (BOTTOM — a classic bottom bar,
+     * which renders as nothing in the default HYBRID mode). Once the user picks anything in the new
+     * UI the mirror/DataStore value takes over and this is no longer consulted.
+     */
+    private fun migrateLegacyTopicPaginationPanels(): AppPreferences.Main.TopicPaginationPanels {
         val legacy = context.getSharedPreferences(
                 context.packageName + "_preferences",
                 Context.MODE_PRIVATE
         )
         if (legacy.contains(AppPreferences.Main.TOPIC_PAGINATION_PANEL_ENABLE)) {
-            return legacy.getBoolean(AppPreferences.Main.TOPIC_PAGINATION_PANEL_ENABLE, false)
+            return if (legacy.getBoolean(AppPreferences.Main.TOPIC_PAGINATION_PANEL_ENABLE, false))
+                AppPreferences.Main.TopicPaginationPanels.BOTH
+            else AppPreferences.Main.TopicPaginationPanels.NONE
         }
         if (mirrorPrefs.contains("topic_pagination_panel_enable")) {
-            return mirrorPrefs.getBoolean("topic_pagination_panel_enable", false)
+            return if (mirrorPrefs.getBoolean("topic_pagination_panel_enable", false))
+                AppPreferences.Main.TopicPaginationPanels.BOTH
+            else AppPreferences.Main.TopicPaginationPanels.NONE
         }
-        return false
+        return AppPreferences.Main.TopicPaginationPanels.BOTTOM
     }
 
     suspend fun setTopicScrollMode(value: AppPreferences.Main.TopicScrollMode) {
@@ -841,8 +851,8 @@ class MainDataStore(private val context: Context) {
     suspend fun getSmartPreload(): Boolean =
             observeSmartPreloadFlow().map { it }.first()
 
-    suspend fun getTopicPaginationPanelEnabled(): Boolean =
-            observeTopicPaginationPanelEnabledFlow().map { it }.first()
+    suspend fun getTopicPaginationPanels(): AppPreferences.Main.TopicPaginationPanels =
+            observeTopicPaginationPanelsFlow().map { it }.first()
 
     suspend fun getTopicScrollMode(): AppPreferences.Main.TopicScrollMode =
             observeTopicScrollModeFlow().map { it }.first()
@@ -952,6 +962,13 @@ class MainDataStore(private val context: Context) {
         if (value.isNullOrBlank()) null else AppPreferences.Main.DownloadMethod.valueOf(value)
     } catch (_: IllegalArgumentException) {
         null
+    }
+
+    private fun parseTopicPaginationPanels(value: String?): AppPreferences.Main.TopicPaginationPanels = try {
+        if (value.isNullOrBlank()) AppPreferences.Main.TopicPaginationPanels.BOTTOM
+        else AppPreferences.Main.TopicPaginationPanels.valueOf(value)
+    } catch (_: IllegalArgumentException) {
+        AppPreferences.Main.TopicPaginationPanels.BOTTOM
     }
 
     private fun parseTopicScrollMode(value: String?): AppPreferences.Main.TopicScrollMode = try {

@@ -132,14 +132,6 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
-        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_PAGINATION_PANEL_ENABLE) {
-            val value = sharedPrefs.getBoolean(key, false)
-            if (isAdded) {
-                lifecycleScope.launch {
-                    mainPreferencesHolder.setTopicPaginationPanelEnabled(value)
-                }
-            }
-        }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_SCROLL_MODE) {
             val value = sharedPrefs.getString(key, Preferences.Main.TopicScrollMode.HYBRID.name)
             val mode = try {
@@ -154,6 +146,7 @@ class SettingsFragment : BaseSettingFragment() {
             }
             updateTopicScrollModeSummary(mode)
             updateTopicPageSwipePreferenceState(mode)
+            updateTopicPaginationPanelsSummary(mainPreferencesHolder.getTopicPaginationPanels(), mode)
         }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_POST_DENSITY) {
             val density = SettingsPreferenceParsers.parseTopicPostDensity(sharedPrefs.getString(key, Preferences.Main.TopicPostDensity.COMFORTABLE.name))
@@ -280,6 +273,14 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.ANIMATED_SMILES) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setAnimatedSmiles(value)
+                }
+            }
+        }
         if (key == AppUpdatePreferences.KEY_CHECK_ENABLED) {
             appUpdatePreferences.setCheckEnabled(sharedPrefs.getBoolean(key, true))
             appUpdateScheduler.reschedule()
@@ -315,8 +316,9 @@ class SettingsFragment : BaseSettingFragment() {
             updateDownloadFolderSummary(mainPreferencesHolder.observeDownloadFolderUriFlow().first())
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.SCROLL_BUTTON_ENABLE)
                 ?.isChecked = mainPreferencesHolder.observeScrollButtonEnabledFlow().first()
-            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_PAGINATION_PANEL_ENABLE)
-                ?.isChecked = mainPreferencesHolder.observeTopicPaginationPanelEnabledFlow().first()
+            updateTopicPaginationPanelsSummary(
+                    mainPreferencesHolder.observeTopicPaginationPanelsFlow().first(),
+                    mainPreferencesHolder.observeTopicScrollModeFlow().first())
             findPreference<ListPreference>(Preferences.Main.TOPIC_SCROLL_MODE)
                 ?.let {
                     val mode = mainPreferencesHolder.observeTopicScrollModeFlow().first()
@@ -372,6 +374,8 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = topicHolder.getShowAvatars()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.CIRCLE_AVATARS)
                 ?.isChecked = topicHolder.getCircleAvatars()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.ANIMATED_SMILES)
+                ?.isChecked = topicHolder.getAnimatedSmiles()
             // Lists preferences
             val listsHolder = forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext())
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Lists.Topic.UNREAD_TOP)
@@ -645,10 +649,17 @@ class SettingsFragment : BaseSettingFragment() {
             true
         }
 
+        findPreference<Preference>(Preferences.Main.TOPIC_PAGINATION_PANELS)?.setOnPreferenceClickListener {
+            showTopicPaginationPanelsDialog()
+            true
+        }
+
         findPreference<ListPreference>(Preferences.Main.TOPIC_SCROLL_MODE)?.setOnPreferenceChangeListener { _, newValue ->
             val mode = SettingsPreferenceParsers.parseTopicScrollMode(newValue as? String)
             updateTopicScrollModeSummary(mode)
             updateTopicPageSwipePreferenceState(mode)
+            // The pagination-panels summary depends on the mode (hybrid hides the bottom bit).
+            updateTopicPaginationPanelsSummary(mainPreferencesHolder.getTopicPaginationPanels(), mode)
             lifecycleScope.launch {
                 mainPreferencesHolder.setTopicScrollMode(mode)
             }
@@ -850,6 +861,67 @@ class SettingsFragment : BaseSettingFragment() {
         )
     }
 
+    /** Label for one [TopicPaginationPanels] value (also reused as the dialog item text). */
+    private fun paginationPanelsLabel(panels: Preferences.Main.TopicPaginationPanels): String = getString(
+            when (panels) {
+                Preferences.Main.TopicPaginationPanels.NONE -> R.string.pref_value_topic_pagination_panels_none
+                Preferences.Main.TopicPaginationPanels.TOP -> R.string.pref_value_topic_pagination_panels_top
+                Preferences.Main.TopicPaginationPanels.BOTTOM -> R.string.pref_value_topic_pagination_panels_bottom
+                Preferences.Main.TopicPaginationPanels.BOTH -> R.string.pref_value_topic_pagination_panels_both
+            })
+
+    /**
+     * Summary reflects what is EFFECTIVELY shown in the current reading mode: hybrid ignores the bottom
+     * bit, so a stored BOTTOM/BOTH collapses to «Нет»/«Сверху» there (mirrors the mode-aware picker).
+     */
+    private fun updateTopicPaginationPanelsSummary(
+            panels: Preferences.Main.TopicPaginationPanels,
+            mode: Preferences.Main.TopicScrollMode,
+    ) {
+        val effective = if (mode == Preferences.Main.TopicScrollMode.CLASSIC) panels
+        else if (panels.hasTop) Preferences.Main.TopicPaginationPanels.TOP
+        else Preferences.Main.TopicPaginationPanels.NONE
+        findPreference<Preference>(Preferences.Main.TOPIC_PAGINATION_PANELS)?.summary = paginationPanelsLabel(effective)
+    }
+
+    /**
+     * Mode-aware single-choice picker. CLASSIC offers all four combinations; HYBRID offers only
+     * «Нет»/«Сверху» (the bottom bar is meaningless over infinite scroll). To avoid losing the user's
+     * classic bottom choice, a hybrid pick edits ONLY the top bit via [TopicPaginationPanels.withTop].
+     */
+    private fun showTopicPaginationPanelsDialog() {
+        lifecycleScope.launch {
+            val mode = mainPreferencesHolder.observeTopicScrollModeFlow().first()
+            val current = mainPreferencesHolder.observeTopicPaginationPanelsFlow().first()
+            val classic = mode == Preferences.Main.TopicScrollMode.CLASSIC
+            val values = if (classic) listOf(
+                    Preferences.Main.TopicPaginationPanels.NONE,
+                    Preferences.Main.TopicPaginationPanels.TOP,
+                    Preferences.Main.TopicPaginationPanels.BOTTOM,
+                    Preferences.Main.TopicPaginationPanels.BOTH,
+            ) else listOf(
+                    Preferences.Main.TopicPaginationPanels.NONE,
+                    Preferences.Main.TopicPaginationPanels.TOP,
+            )
+            val labels = values.map { paginationPanelsLabel(it) }.toTypedArray()
+            val checked = if (classic) values.indexOf(current).coerceAtLeast(0)
+            else values.indexOf(
+                    if (current.hasTop) Preferences.Main.TopicPaginationPanels.TOP
+                    else Preferences.Main.TopicPaginationPanels.NONE)
+            MaterialAlertDialogBuilder(requireActivity())
+                    .setTitle(R.string.pref_title_topic_pagination_panel)
+                    .setSingleChoiceItems(labels, checked) { dialog, which ->
+                        val picked = values[which]
+                        val merged = if (classic) picked else current.withTop(picked.hasTop)
+                        updateTopicPaginationPanelsSummary(merged, mode)
+                        lifecycleScope.launch { mainPreferencesHolder.setTopicPaginationPanels(merged) }
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton(R.string.cancel, null)
+                    .showWithStyledButtons()
+        }
+    }
+
     private fun updateTopicPostDensitySummary(density: Preferences.Main.TopicPostDensity) {
         findPreference<ListPreference>(Preferences.Main.TOPIC_POST_DENSITY)?.setSummary(
                 when (density) {
@@ -894,6 +966,7 @@ class SettingsFragment : BaseSettingFragment() {
                     Preferences.Main.StartupScreen.FORUM -> R.string.pref_summary_startup_screen_forum
                     Preferences.Main.StartupScreen.REPLIES -> R.string.pref_summary_startup_screen_replies
                     Preferences.Main.StartupScreen.QMS -> R.string.pref_summary_startup_screen_qms
+                    Preferences.Main.StartupScreen.MENU -> R.string.pref_summary_startup_screen_menu
                     else -> R.string.pref_summary_startup_screen_news
                 }
         )
