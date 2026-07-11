@@ -251,6 +251,26 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var boundaryResumeArmed: Boolean = false
 
     /**
+     * Гейт мгновенного mark-read при открытии на первом непрочитанном (порт WebView-guard'а
+     * [TopicUnreadOpenPolicy.shouldSuppressMarkReadForFirstUnreadOpen], который жил в недостижимом для
+     * натива [ThemeUseCase.onPrimaryThemeLoaded]): короткая последняя страница показывает свой низ сразу
+     * при открытии, и [maybeMarkTopicReadAtEnd] метил тему прочитанной (и стирал границу прочитанного) в
+     * момент рендера — юзер ещё ничего не прочитал. Пока флаг взведён, mark-read-в-конце не срабатывает;
+     * гасится первым ЖЕСТОМ пользователя (drag/fling/FAB — [onScrollStateChanged]): дальше «низ виден» —
+     * снова честный сигнал «дочитал». Штампуется на каждой первичной загрузке из [ThemePage.openSessionKind].
+     */
+    private var suppressEndMarkReadUntilUserScroll: Boolean = false
+
+    /**
+     * Мостик того же гейта через findpost-резюм на границу прочитанного ([maybeResumeToReadBoundary]):
+     * страница вложенной findpost-перезагрузки несёт hasUnreadTarget=false (парсер размечает unread
+     * только для getnewpost), поэтому сам guard по ней не сработал бы — а резюм по построению сажает
+     * юзера НА границу с непрочитанным ниже, и мгновенный mark-read сжёг бы именно спасённое.
+     * Взводится перед вложенной перезагрузкой, потребляется (OR + сброс) при штамповке флага в onSuccess.
+     */
+    private var pendingSuppressEndMarkReadForResume: Boolean = false
+
+    /**
      * Restore-scroll «где остановился» / устойчивость состояния: пост и его пиксельный offset, на который
      * надо вернуться после пересоздания фрагмента (смерть процесса, восстановление FragmentManager,
      * пересоздание вью). Пишутся в [onSaveInstanceState], читаются в [onViewCreated], применяются один
@@ -409,6 +429,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_DRAGGING) {
                     if (forpdateam.ru.forpda.BuildConfig.DEBUG && anchoredBottomPostId != null) android.util.Log.i("FPDA_CLEAR", "anchor CLEARED (user drag)")
                     anchoredBottomPostId = null
+                }
+                // Жест пользователя (drag; SETTLING без drag'а = единственный smoothScroll — FAB-пейджинг,
+                // тоже действие юзера; программные коррекции идут через мгновенный scrollBy и state не меняют)
+                // → mark-read-в-конце снова разрешён: теперь «низ виден» = юзер сам туда пришёл.
+                if (newState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
+                    suppressEndMarkReadUntilUserScroll = false
+                }
+                // Границу прочитанного двигаем ТОЛЬКО по устоявшемуся вьюпорту: покадровая запись из
+                // onScrolled на флинге «вниз глянуть и назад» монотонно сжигала всё до самой глубокой
+                // мелькнувшей точки (recordSeen назад не откатывается) — источник «пропускаются непрочитанные».
+                if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
+                    recordReadBoundaryAtRest()
                 }
             }
         })
@@ -1625,9 +1657,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * the reported «после обновления кидает на первый пост последней страницы» bug.
      *
      * «Вернуться на низ» верно только когда обновление не принесло новых постов. Принесло — низ
-     * оказывается ПОСЛЕДНИМ непрочитанным, а всё новое уезжает вверх (и тут же метится прочитанным
-     * в [markVisiblePostsRead]). Поэтому запоминаем последний виденный пост: [applyInitialAnchor]
-     * посадит якорь на первый пост новее него.
+     * оказывается ПОСЛЕДНИМ непрочитанным, а всё новое уезжает вверх (и метится прочитанным при первой
+     * же записи границы в [recordReadBoundaryAtRest] — она монотонна по максимальному id). Поэтому
+     * запоминаем последний виденный пост: [applyInitialAnchor] посадит якорь на первый пост новее него.
      */
     private fun refreshFromBottom() {
         val url = if (pagination.isInitialised) pagination.pageUrl(pagination.loadedPage) else (loadedUrl ?: topicUrl)
@@ -3117,6 +3149,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 mentionScannedPostIds.clear()
                 markedTopicReadAtEnd = false
                 topicHasUnread = page.hasUnreadTarget // drives «К непрочитанному» in the smart-nav menu
+                // Порт WebView-guard'а (ThemeUseCase.onPrimaryThemeLoaded → shouldSuppressMarkReadForSession,
+                // куда натив не ходит): подлинное открытие на первом непрочитанном, севшее выше низа
+                // страницы, не должно метить тему прочитанной в момент рендера — только после жеста юзера.
+                // OR с мостиком boundary-резюма: его findpost-страница unread-метаданных не несёт.
+                suppressEndMarkReadUntilUserScroll = pendingSuppressEndMarkReadForResume ||
+                        forpdateam.ru.forpda.presentation.theme
+                                .TopicUnreadOpenPolicy.shouldSuppressMarkReadForFirstUnreadOpen(
+                                        forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy
+                                                .parseOpenSessionKind(page.openSessionKind),
+                                        page,
+                                )
+                pendingSuppressEndMarkReadForResume = false
                 closeSearch() // matches from a previous page are stale after a reload
                 updatePaginationBar()
                 postsAdapter.setTopicHat(topicHatPostId, hatCollapsed)
@@ -3132,6 +3176,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 setRefreshing(false)
                 pendingRefreshSeenUpToPostId = 0 // не переживать неудачную загрузку — иначе стухнет
                 refreshFollowNextPageArmed = false
+                pendingSuppressEndMarkReadForResume = false // мостик резюма не должен утечь в чужую загрузку
                 Toast.makeText(requireContext(), "Ошибка загрузки темы: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
@@ -3244,6 +3289,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Резюм — findpost на границу. Гасим «в конец/на верх», чтобы вложенная загрузка села на границу.
         pendingJumpToBottom = false
         pendingJumpToTop = false
+        // Findpost-страница резюма не несёт unread-метаданных — пробрасываем гейт мгновенного mark-read
+        // вручную: юзер сядет на границу с непрочитанным НИЖЕ, «низ виден при рендере» ≠ «дочитал».
+        pendingSuppressEndMarkReadForResume = true
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             android.util.Log.i("FPDA_READ_BOUNDARY",
                     "native resume_findpost topic=${page.id} boundary=$resumeId serverAnchor=$serverAnchorId lastLoaded=$lastLoadedId")
@@ -3621,12 +3669,38 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (hasNew && visibleIds.isNotEmpty()) {
             eventsRepository.onTopicPostsRead(pageTopicId, visibleIds)
         }
-        // Клиентская граница прочитанного: двигаем её на самый дальний реально-виденный сейчас пост
-        // (recordSeen монотонно игнорит откат). Это тот же фид, что WebView-движок делает в
-        // updatePageHistoryHtml/RefreshScrollSnapshot — при переоткрытии не сядем ниже непрочитанных.
-        visibleIds.maxOrNull()?.let { deepestSeen ->
-            readBoundaryStore.recordSeen(pageTopicId, deepestSeen, barCurrentPage)
+        // Границу прочитанного здесь НЕ двигаем: этот метод зовётся на каждый кадр onScrolled, и запись
+        // «самого дальнего частично-видимого» отсюда завышала границу (мелькнул краем при флинге =
+        // «прочитан» навсегда — recordSeen монотонен). Граница пишется в [recordReadBoundaryAtRest]
+        // по устоявшемуся вьюпорту; упоминаниям же частичная видимость подходит — «Ответы» должны
+        // гаснуть, как только пост показался.
+    }
+
+    /**
+     * Клиентская граница прочитанного ([TopicReadBoundaryStore]): продвигаем по УСТОЯВШЕМУСЯ вьюпорту —
+     * только из [onScrollStateChanged] (IDLE). Правила против завышения (симптом «якорь проскакивает
+     * непрочитанные», см. [maybeResumeToReadBoundary]):
+     *  - пост, торчащий частично у НИЖНЕГО края, не считается виденным — берём самый глубокий ЦЕЛИКОМ
+     *    видимый ([LinearLayoutManager.findLastCompletelyVisibleItemPosition]), а не последний частичный;
+     *  - покадровой записи из [onScrolled] нет вовсе: флинг «вниз глянуть и обратно» больше не сжигает
+     *    границу до самой глубокой мелькнувшей точки;
+     *  - виз без единого жеста (открыл-глянул-закрыл) границу не двигает: безопасное направление —
+     *    максимум перечитывание, но не пропуск; дочитку до конца закрывает [maybeMarkTopicReadAtEnd].
+     * Первый видимый (частично прокручен НАД верхним краем) считается прочитанным: юзер уже прошёл его
+     * верх; это же покрывает пост выше экрана, у которого «целиком видимых» просто нет — иначе граница
+     * застряла бы перед ним навсегда. Направление ошибки безопасно: резюм садится НА граничный пост.
+     */
+    private fun recordReadBoundaryAtRest() {
+        if (pageTopicId <= 0) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val header = headerOffset()
+        var deepestSeen = 0
+        for (pos in intArrayOf(lm.findLastCompletelyVisibleItemPosition(), lm.findFirstVisibleItemPosition())) {
+            if (pos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) continue
+            val id = loadedItems.getOrNull(pos - header)?.postId ?: continue
+            if (id > deepestSeen) deepestSeen = id
         }
+        if (deepestSeen > 0) readBoundaryStore.recordSeen(pageTopicId, deepestSeen, barCurrentPage)
     }
 
     /**
@@ -3638,6 +3712,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private fun maybeMarkTopicReadAtEnd() {
         if (markedTopicReadAtEnd || pageTopicId <= 0) return
+        // Открытие на первом непрочитанном, якорь НЕ низ страницы, юзер ещё не сделал ни одного жеста
+        // (короткая последняя страница показала свой низ прямо при рендере) — это НЕ «дочитал до конца».
+        // Ждём первого жеста ([onScrollStateChanged] гасит флаг), потом «низ виден» снова честный сигнал.
+        // Иначе тема метилась прочитанной (и граница стиралась) в момент открытия — непрочитанное над
+        // якорем терялось навсегда. markedTopicReadAtEnd не взводим: следующий вызов пере-оценит.
+        if (suppressEndMarkReadUntilUserScroll) return
         if (pagination.hasNextPage()) return // more pages below → not the end yet
         if (loadedItems.isEmpty()) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
