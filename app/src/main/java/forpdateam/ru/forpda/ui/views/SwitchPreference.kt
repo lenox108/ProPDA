@@ -42,10 +42,12 @@ class SwitchPreference : SwitchPreferenceCompat {
                     sw, com.google.android.material.R.attr.colorSurface)
             val onSurface = com.google.android.material.color.MaterialColors.getColor(
                     sw, com.google.android.material.R.attr.colorOnSurface)
-            // OFF track/thumb: opaque greys blended over the actual card surface so they stay clearly visible
-            // on light AND dark palettes (a low-alpha grey vanished on pale sepia/white cards).
-            val offTrack = androidx.core.graphics.ColorUtils.blendARGB(surface, onSurface, 0.26f)
-            val offThumb = androidx.core.graphics.ColorUtils.blendARGB(surface, onSurface, 0.55f)
+            // OFF track/thumb: track is a soft grey blended over the actual card surface (visible on light AND
+            // dark palettes), thumb is the palette's colorOutline — the standard M3 mid-grey for an off switch,
+            // which looks cleaner than a heavy dark blend.
+            val offTrack = androidx.core.graphics.ColorUtils.blendARGB(surface, onSurface, 0.22f)
+            val offThumb = com.google.android.material.color.MaterialColors.getColor(
+                    sw, com.google.android.material.R.attr.colorOutline)
             // ON thumb: black/white by accent luminance so it always contrasts with the accent track.
             val onThumb = if (androidx.core.graphics.ColorUtils.calculateLuminance(accent) > 0.5)
                 0xFF1B1B1B.toInt() else 0xFFFFFFFF.toInt()
