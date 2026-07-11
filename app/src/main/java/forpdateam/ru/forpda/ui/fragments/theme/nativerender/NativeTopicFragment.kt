@@ -65,6 +65,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var linkHandler: ILinkHandler
 
+    /** For the image long-press menu («Сохранить» / «Открыть в браузере», parity with the WebView). */
+    @Inject
+    lateinit var systemLinkHandler: forpdateam.ru.forpda.presentation.ISystemLinkHandler
+
+    @Inject
+    lateinit var clipboardHelper: forpdateam.ru.forpda.common.ClipboardHelper
+
     @Inject
     lateinit var eventsRepository: forpdateam.ru.forpda.model.repository.events.EventsRepository
 
@@ -1386,6 +1393,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val start = index.coerceIn(0, galleryUrls.size - 1)
         forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
                 .startActivity(requireContext(), ArrayList(galleryUrls), start)
+    }
+
+    /** Long-press an attachment image → save / open in browser / copy link (WebView-menu parity). */
+    override fun onImageLongClick(imageUrl: String) {
+        ImageActionsMenu.show(requireContext(), imageUrl, systemLinkHandler, clipboardHelper)
     }
 
     /** Header tap on the hat post itself toggles its body (same session state as the toolbar «Инфо»). */
