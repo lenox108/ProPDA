@@ -104,3 +104,58 @@
 
 # В search fragment юзается с рефлексией, поэтому нужно исключить
 -keep public class androidx.swiperefreshlayout.widget.SwipeRefreshLayout { *; }
+
+
+# ============================================================================
+# PRODUCTION CLEANUP: вырезать ВСЁ логирование/диагностику из release.
+# ============================================================================
+# Работает только в minify-сборках (release). В DEBUG minify выключен → R8 не
+# запускается → всё логирование остаётся для отладки. Так «логи только в DEBUG,
+# release чистый» достигается без ветвлений в исходниках.
+#
+# -assumenosideeffects: R8 считает метод без сайд-эффектов и удаляет ВЫЗОВ, если
+# результат не используется (void-логгеры — всегда). Удаляется и построение
+# аргументов (map'ы, sanitizeUrl(), форматирование id) — R8 видит их результат
+# «мёртвым» после удаления вызова и вычищает транзитивно. НЕ трогаем
+# CrashReporter/CrashTelegramUploader (прод-обработка краша) и ColdStartTracer
+# (копит тайминги) — у них есть нужные сайд-эффекты, они бьются по терминальным
+# синкам ниже только в части эмиссии Timber, не по своей логике.
+
+# 1) android.util.Log — сырые вызовы (в т.ч. ~26 негейченных, писавших в logcat в проде).
+-assumenosideeffects class android.util.Log {
+    public static *** v(...);
+    public static *** d(...);
+    public static *** i(...);
+    public static *** w(...);
+    public static *** e(...);
+    public static *** wtf(...);
+    public static *** println(...);
+    public static *** isLoggable(...);
+}
+
+# 2) Timber — в release дерево не сажается (DebugTree только в DEBUG), но вызовы+строки
+#    остаются в байткоде. Timber* покрывает Timber/$Forest/$Tree/$DebugTree.
+-assumenosideeffects class timber.log.Timber* {
+    public *** v(...);
+    public *** d(...);
+    public *** i(...);
+    public *** w(...);
+    public *** e(...);
+    public *** wtf(...);
+    public *** tag(...);
+    public *** log(...);
+}
+
+# 3) FpdaDebugLog — единый sink структурной диагностики (FPDA_* теги). Удаление его
+#    void-методов каскадом вычищает построение аргументов во всех 17 трейс-классах
+#    (ThemePostReadStateDiagnostics, FavoritesUnreadTrace, TopicHighlightDiagnostics, …),
+#    которые все финишируют здесь. Value-хелперы (sanitizeUrl/classifyHtml/newTraceId)
+#    не перечислены — они удалятся сами, когда их результат станет мёртвым.
+-assumenosideeffects class forpdateam.ru.forpda.diagnostic.FpdaDebugLog {
+    public void log(...);
+    public void warn(...);
+    public void logQms(...);
+    public void logTheme(...);
+    public void logSmartButton(...);
+    public void logArticle(...);
+}
