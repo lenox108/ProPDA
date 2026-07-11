@@ -510,7 +510,7 @@ class ThemeUseCase @Inject constructor(
 
     fun observeScrollButtonEnabledFlow(): Flow<Boolean> = mainPreferencesHolder.observeScrollButtonEnabledFlow()
 
-    fun observeTopicPaginationPanelEnabledFlow(): Flow<Boolean> = mainPreferencesHolder.observeTopicPaginationPanelEnabledFlow()
+    fun observeTopicPaginationPanelsFlow(): Flow<AppPreferences.Main.TopicPaginationPanels> = mainPreferencesHolder.observeTopicPaginationPanelsFlow()
 
     fun observeTopicScrollModeFlow(): Flow<AppPreferences.Main.TopicScrollMode> = mainPreferencesHolder.observeTopicScrollModeFlow()
 

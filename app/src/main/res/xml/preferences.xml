@@ -234,9 +234,8 @@
             android:title="@string/pref_title_topic_header_initial_state"
             app:iconSpaceReserved="false" />
 
-        <forpdateam.ru.forpda.ui.views.SwitchPreference
-            android:defaultValue="false"
-            android:key="main.topic_pagination_panel.enable"
+        <Preference
+            android:key="main.topic_pagination_panels"
             android:layout="@layout/preference_custom"
             android:summary="@string/pref_summary_topic_pagination_panel"
             android:title="@string/pref_title_topic_pagination_panel"
@@ -297,6 +296,14 @@
             android:key="theme.circle_avatars"
             android:layout="@layout/preference_custom"
             android:title="@string/pref_title_circle_avatars"
+            app:iconSpaceReserved="false" />
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
+            android:key="theme.animated_smiles"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_animated_smiles"
+            android:title="@string/pref_title_animated_smiles"
             app:iconSpaceReserved="false" />
 
         <Preference

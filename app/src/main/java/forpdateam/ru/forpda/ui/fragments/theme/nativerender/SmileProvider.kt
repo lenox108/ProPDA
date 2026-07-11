@@ -4,11 +4,19 @@ import android.content.res.AssetManager
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
+import android.os.SystemClock
 import android.text.Spannable
 import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.style.ImageSpan
+import android.view.View
+import android.widget.TextView
+import java.nio.ByteBuffer
 import java.util.regex.Pattern
 
 /**
@@ -21,7 +29,9 @@ import java.util.regex.Pattern
  * the WebView uses, so the two stay in sync. v1 handles only unambiguous colon-delimited word
  * shortcodes (`:[a-z0-9_-]+:`) — the ones that currently leak as literal text; 2-char emoticons like
  * `:)` are a later, riskier (false-positive-prone) step. Smile gifs are local (no network, no async
- * layout jump); they render as a static first frame at a fixed inline size.
+ * layout jump); by default they render as a static first frame at a fixed inline size. With the
+ * «Анимированные смайлы» pref on (and API 28+) the span carries an [AnimatedImageDrawable] instead —
+ * playback is wired to the host TextView via [startAnimations].
  */
 object SmileProvider {
 
@@ -38,6 +48,11 @@ object SmileProvider {
 
     /** gif filename → decoded first frame (null = known-undecodable, don't retry). */
     private val bitmapCache = HashMap<String, Bitmap?>()
+
+    /** gif filename → raw bytes for the animated decode path (null = unreadable, don't retry).
+     *  Each animated span needs its OWN [AnimatedImageDrawable] (per-span bounds + playback state),
+     *  so what's shared is the source bytes, not the drawable. All 171 gifs total ~1.2 MB. */
+    private val bytesCache = HashMap<String, ByteArray?>()
 
     private fun ensureLoaded(assets: AssetManager) {
         if (codeToFile != null) return
@@ -69,8 +84,10 @@ object SmileProvider {
     /**
      * Returns [text] with every known smile shortcode replaced by an inline [ImageSpan] sized
      * [sizePx] square. If nothing matches (or the map failed to load) the original text is returned.
+     * With [animated] the span gets a live [AnimatedImageDrawable] (API 28+; the host must call
+     * [startAnimations] on the TextView after setText); otherwise — a static first frame.
      */
-    fun applySmiles(text: CharSequence, res: Resources, sizePx: Int): CharSequence {
+    fun applySmiles(text: CharSequence, res: Resources, sizePx: Int, animated: Boolean = false): CharSequence {
         ensureLoaded(res.assets)
         val p = pattern ?: return text
         val map = codeToFile ?: return text
@@ -82,7 +99,8 @@ object SmileProvider {
         m.reset(out)
         while (m.find()) {
             val file = map[m.group()] ?: continue
-            val drawable = drawableFor(file, res, sizePx) ?: continue
+            val drawable = (if (animated) animatedDrawableFor(file, res.assets, sizePx) else null)
+                    ?: drawableFor(file, res, sizePx) ?: continue
             out.setSpan(
                     ImageSpan(drawable, ImageSpan.ALIGN_BOTTOM),
                     m.start(), m.end(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
@@ -112,5 +130,61 @@ object SmileProvider {
         }.getOrNull()
         bitmapCache[file] = frame
         return frame
+    }
+
+    /**
+     * A fresh [AnimatedImageDrawable] over the cached gif bytes, or null when the platform can't
+     * (API < 28), decoding fails, or the gif turns out to be single-frame (ImageDecoder then returns
+     * a plain BitmapDrawable) — every null falls back to the static [drawableFor] path in the caller.
+     */
+    private fun animatedDrawableFor(file: String, assets: AssetManager, sizePx: Int): Drawable? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+        val bytes = bytesFor(file, assets) ?: return null
+        return runCatching {
+            ImageDecoder.decodeDrawable(ImageDecoder.createSource(ByteBuffer.wrap(bytes)))
+        }.getOrNull()
+                ?.takeIf { it is AnimatedImageDrawable }
+                ?.apply { setBounds(0, 0, sizePx, sizePx) }
+    }
+
+    private fun bytesFor(file: String, assets: AssetManager): ByteArray? = synchronized(bytesCache) {
+        if (bytesCache.containsKey(file)) return bytesCache[file] // includes known-unreadable (null)
+        val bytes = runCatching {
+            assets.open("$SMILE_ASSET_DIR/$file").use { it.readBytes() }
+        }.getOrNull()
+        bytesCache[file] = bytes
+        return bytes
+    }
+
+    /**
+     * Starts playback for every animated smile span in [tv]'s current text and ties it to the view's
+     * window attachment (start on attach / stop on detach — the renderers rebuild bodies from scratch
+     * each bind, so a detached TextView is a discarded one and its playback must not keep ticking).
+     *
+     * A span's drawable lives outside the view hierarchy, so frame ticks have nothing to invalidate
+     * by themselves: a per-view [Drawable.Callback] bridges them to [TextView.invalidate]. The driver
+     * object is strongly held through the attach-listener list ([Drawable.setCallback] keeps only a
+     * weak reference). No-op below API 28 or when the text carries no animated spans.
+     */
+    fun startAnimations(tv: TextView) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+        val text = tv.text as? Spanned ?: return
+        val drawables = text.getSpans(0, text.length, ImageSpan::class.java)
+                .mapNotNull { it.drawable as? AnimatedImageDrawable }
+        if (drawables.isEmpty()) return
+        val driver = object : Drawable.Callback, View.OnAttachStateChangeListener {
+            override fun invalidateDrawable(who: Drawable) = tv.invalidate()
+            override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
+                tv.postDelayed(what, `when` - SystemClock.uptimeMillis())
+            }
+            override fun unscheduleDrawable(who: Drawable, what: Runnable) {
+                tv.removeCallbacks(what)
+            }
+            override fun onViewAttachedToWindow(v: View) = drawables.forEach { it.start() }
+            override fun onViewDetachedFromWindow(v: View) = drawables.forEach { it.stop() }
+        }
+        drawables.forEach { it.callback = driver }
+        tv.addOnAttachStateChangeListener(driver)
+        if (tv.isAttachedToWindow) drawables.forEach { it.start() }
     }
 }

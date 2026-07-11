@@ -1393,22 +1393,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * Long-press on a downloadable file link → the WebView-era chooser: «Скачать» (in-app download),
-     * «Открыть в новой вкладке» (route the link through the app) or «Открыть в браузере» (external).
+     * Long-press on a downloadable file link → a chooser: «Скачать» (in-app download) or «Открыть в
+     * браузере» (external). «Открыть в новой вкладке» is intentionally omitted — for a dl/post link it
+     * would route straight back to the same in-app download, so it duplicates «Скачать».
      */
     override fun onDownloadLinkLongPress(url: String, fileName: String?) {
         val ctx = requireContext()
         val labels = arrayOf(
                 getString(forpdateam.ru.forpda.R.string.app_update_action_download),
-                getString(forpdateam.ru.forpda.R.string.wv_open_new_tab),
                 getString(forpdateam.ru.forpda.R.string.wv_open_in_browser),
         )
         com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
                 .setItems(labels) { _, which ->
                     when (which) {
                         0 -> systemLinkHandler.handleDownload(url, fileName, ctx)
-                        1 -> linkHandler.handle(url, null)
-                        2 -> systemLinkHandler.handle(url)
+                        1 -> systemLinkHandler.handle(url)
                     }
                 }
                 .setNegativeButton(forpdateam.ru.forpda.R.string.cancel, null)

@@ -45,6 +45,12 @@ class BodyBlockViewFactory(
 
         /** The user selected text inside the body and chose «Цитировать». */
         fun onQuoteSelection(scopeId: Int, selectedText: String) = Unit
+
+        /**
+         * Long-press on a downloadable file link → the host shows a chooser
+         * (Скачать / Открыть в браузере).
+         */
+        fun onDownloadLinkLongPress(url: String, fileName: String?) = Unit
     }
 
     /**
@@ -103,6 +109,11 @@ class BodyBlockViewFactory(
 
     /** Find-on-page query; matched substrings get a highlight background when non-blank. */
     var searchQuery: String = ""
+
+    /** «Анимированные смайлы»: render smile spans as live GIFs instead of a static first frame.
+     *  Set by the host before each bind pass (topic mirrors the pref; hosts that never set it get
+     *  the static behaviour). Playback needs API 28+ — below that the flag silently degrades. */
+    var animatedSmiles: Boolean = false
 
     /**
      * The colour of the surface the text is read ON, used to decide which inline server colours are
@@ -369,6 +380,10 @@ class BodyBlockViewFactory(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = (6 * dm.density).toInt() }
             setOnClickListener { linkHandler.handle(block.url, null) }
+            setOnLongClickListener {
+                callbacks.onDownloadLinkLongPress(block.url, block.name)
+                true
+            }
         }
     }
 
@@ -442,6 +457,7 @@ class BodyBlockViewFactory(
             row.forEachIndexed { colIndex, cellHtml ->
                 val cell = TextView(ctx).apply {
                     setText(highlightSearchMatches(ctx, spanned(ctx, cellHtml)))
+                    SmileProvider.startAnimations(this)
                     textSize = scaledSp(14f)
                     setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                     setPadding(cellPad, cellPad, cellPad, cellPad)
@@ -479,6 +495,7 @@ class BodyBlockViewFactory(
         // (was surfacing e.g. «[UNKNOWN]» above a curator banner). Render only the content.
         val content = TextView(ctx).apply {
             setText(spanned(ctx, block.html))
+            SmileProvider.startAnimations(this)
             textSize = scaledSp(15f)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             setLineSpacing(0f, 1.1f)
@@ -504,6 +521,7 @@ class BodyBlockViewFactory(
         val text = stripLinks(spanned(ctx, block.html))
         return TextView(ctx).apply {
             setText(text)
+            SmileProvider.startAnimations(this)
             textSize = scaledSp(13f) // ~0.875 of the 15sp body
             setTextColor(muted)
             setLineSpacing(0f, 1.15f)
@@ -530,6 +548,7 @@ class BodyBlockViewFactory(
         return TextView(ctx).apply {
             val surface = currentSurface(ctx, scope)
             setText(highlightSearchMatches(ctx, neutralizeLowContrastColors(surface, stripLinkColors(text))))
+            SmileProvider.startAnimations(this)
             textSize = scaledSp(15f)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             // Force in-text links (profile nicks in the hat / «отредактировал N» footer) to the readable
@@ -681,7 +700,7 @@ class BodyBlockViewFactory(
                 .trimTrailingNewlines()
         // Replace 4pda smile shortcodes (:thank_you: …) with inline images from bundled assets.
         val smileSize = (ctx.resources.displayMetrics.scaledDensity * scaledSp(SMILE_SIZE_SP)).toInt().coerceAtLeast(1)
-        SmileProvider.applySmiles(base, ctx.resources, smileSize)
+        SmileProvider.applySmiles(base, ctx.resources, smileSize, animatedSmiles)
     } catch (t: Throwable) {
         // Graceful degradation (§6): never crash on a single body's markup.
         SpannableStringBuilder(html)
