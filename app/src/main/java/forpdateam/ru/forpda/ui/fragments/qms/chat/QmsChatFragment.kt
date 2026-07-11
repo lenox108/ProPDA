@@ -279,6 +279,10 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                     override fun onImageClick(galleryUrls: List<String>, index: Int) =
                             openImageViewer(galleryUrls, index)
 
+                    override fun onImageLongClick(imageUrl: String) =
+                            forpdateam.ru.forpda.ui.fragments.theme.nativerender.ImageActionsMenu
+                                    .show(requireContext(), imageUrl, systemLinkHandler, clipboardHelper)
+
                     override fun onMessageLongClick(anchor: View, item: QmsChatItem.Message) =
                             showMessageMenu(anchor, item)
                 },

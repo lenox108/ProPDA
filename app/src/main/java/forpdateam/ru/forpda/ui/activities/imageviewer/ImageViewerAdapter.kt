@@ -25,6 +25,9 @@ import timber.log.Timber
 class ImageViewerAdapter : PagerAdapter() {
 
     private var tapListener: OnPhotoTapListener? = null
+
+    /** Лонг-тап по фото → меню действий (сохранить / открыть в браузере / скопировать ссылку). */
+    private var longClickListener: ((position: Int) -> Unit)? = null
     private val items = mutableListOf<String>()
 
     /** Счётчик авто-ретраев на позицию: сбрасывается при успехе или ручном повторе. */
@@ -32,6 +35,10 @@ class ImageViewerAdapter : PagerAdapter() {
 
     fun setTapListener(tapListener: OnPhotoTapListener) {
         this.tapListener = tapListener
+    }
+
+    fun setLongClickListener(listener: (position: Int) -> Unit) {
+        longClickListener = listener
     }
 
     fun bindItem(newItems: List<String>) {
@@ -116,6 +123,11 @@ class ImageViewerAdapter : PagerAdapter() {
         ForPdaCoil.imageLoader.enqueue(request)
 
         binding.photoView.setOnPhotoTapListener(tapListener)
+        binding.photoView.setOnLongClickListener {
+            val listener = longClickListener ?: return@setOnLongClickListener false
+            listener(position)
+            true
+        }
     }
 
     /**
