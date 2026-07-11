@@ -56,11 +56,46 @@ class BodyBlockViewFactory(
         var spoilerSeq: Int = 0
 
         /**
+         * The colour of the surface the CURRENT block's text is drawn on, used to judge which inline
+         * server colours are invisible and how bright a link must be. `null` = the default post-card
+         * surface ([readingSurfaceColor]); quote/spoiler blocks override it to their own tonal fill
+         * (`colorSurfaceContainerHighest`) while rendering their inner content, since that surface is a
+         * different shade than the post card — otherwise black/white quoted text and dim links get
+         * judged against the wrong background and stay unreadable inside the card.
+         */
+        var surfaceColorOverride: Int? = null
+
+        /**
          * Viewer-resolved URLs of this body's attachment images, in document order (incl. nested in
          * quotes/spoilers). Built as images are rendered; each image view captures its own index so a
          * tap opens the whole body as one swipeable gallery (WebView parity).
          */
         val galleryUrls = ArrayList<String>()
+    }
+
+    /** The surface the text in [scope]'s current block is drawn on (block override or post card). */
+    private fun currentSurface(ctx: Context, scope: RenderScope): Int =
+            scope.surfaceColorOverride ?: readingSurfaceColor(ctx)
+
+    /**
+     * Render [blocks] into [container] as if drawn on [surfaceColor] (a quote/spoiler tonal fill), so the
+     * contrast helpers judge their text/links against the card they actually sit on. Restores the previous
+     * override afterwards, so nested quotes/spoilers unwind correctly.
+     */
+    private fun renderBlocksOnSurface(
+            ctx: Context,
+            container: LinearLayout,
+            blocks: List<BodyBlock>,
+            scope: RenderScope,
+            surfaceColor: Int,
+    ) {
+        val previous = scope.surfaceColorOverride
+        scope.surfaceColorOverride = surfaceColor
+        try {
+            renderBlocksInto(ctx, container, blocks, scope)
+        } finally {
+            scope.surfaceColorOverride = previous
+        }
     }
 
     /** Scales all body text; 1.0 = the reference 16-px body. Set before each bind pass. */
@@ -178,7 +213,8 @@ class BodyBlockViewFactory(
             chevron.rotation = if (open) 90f else 0f
             bodyContainer.visibility = if (open) View.VISIBLE else View.GONE
         }
-        renderBlocksInto(ctx, bodyContainer, block.inner, scope)
+        renderBlocksOnSurface(ctx, bodyContainer, block.inner, scope,
+                ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
         applyState()
         header.setOnClickListener {
             open = !open
@@ -225,7 +261,8 @@ class BodyBlockViewFactory(
             if (src != null) setOnClickListener { linkHandler.handle(src, null) }
         }
         content.addView(header)
-        renderBlocksInto(ctx, content, block.inner, scope)
+        renderBlocksOnSurface(ctx, content, block.inner, scope,
+                ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
@@ -491,14 +528,15 @@ class BodyBlockViewFactory(
 
     private fun textView(ctx: Context, text: CharSequence, scope: RenderScope): TextView {
         return TextView(ctx).apply {
-            setText(highlightSearchMatches(ctx, neutralizeLowContrastColors(ctx, stripLinkColors(text))))
+            val surface = currentSurface(ctx, scope)
+            setText(highlightSearchMatches(ctx, neutralizeLowContrastColors(surface, stripLinkColors(text))))
             textSize = scaledSp(15f)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             // Force in-text links (profile nicks in the hat / «отредактировал N» footer) to the readable
             // accent — their server-side inline colour is picked for a white bg and vanishes on Sepia.
             // Use a contrast-safe variant: the per-palette accent is tuned for that palette's LIGHT card,
             // so on an AMOLED/dark surface it must be brightened or links «сливаются с фоном».
-            setLinkTextColor(contrastSafeLinkColor(ctx))
+            setLinkTextColor(contrastSafeLinkColor(ctx, surface))
             setLineSpacing(0f, 1.1f)
             val hasLinks = text is Spanned &&
                     text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
@@ -525,10 +563,9 @@ class BodyBlockViewFactory(
      * invisible, leaving big empty gaps. We remove only the low-contrast spans so that text falls back to
      * the high-contrast colorOnSurface, while readable colours (green curator note, links) stay.
      */
-    private fun neutralizeLowContrastColors(ctx: Context, text: CharSequence): CharSequence {
+    private fun neutralizeLowContrastColors(surface: Int, text: CharSequence): CharSequence {
         if (text !is Spanned) return text
         if (text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).isEmpty()) return text
-        val surface = readingSurfaceColor(ctx)
         val bg = android.graphics.Color.rgb(
                 android.graphics.Color.red(surface),
                 android.graphics.Color.green(surface),
@@ -579,9 +616,8 @@ class BodyBlockViewFactory(
      * mirroring the WebView, which uses a near-white link colour on dark); on a LIGHT surface we
      * keep the accent untouched and only rescue a genuinely invisible one.
      */
-    private fun contrastSafeLinkColor(ctx: Context): Int {
+    private fun contrastSafeLinkColor(ctx: Context, surface: Int): Int {
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-        val surface = readingSurfaceColor(ctx)
         val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val surfaceIsDark = androidx.core.graphics.ColorUtils.calculateLuminance(surface) < 0.5
         val target = if (surfaceIsDark) DARK_SURFACE_LINK_CONTRAST else LOW_CONTRAST_THRESHOLD
