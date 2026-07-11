@@ -51,6 +51,12 @@ class PostBodyRenderer {
         // parseBodyFragment keeps the input as a body fragment (no <html>/<head> synthesis
         // beyond the wrapping <body>) and tolerates malformed markup gracefully.
         val body = Jsoup.parseBodyFragment(bodyHtml).body()
+        // 4pda ships inline <script> next to a linked image (e.g. `fix_linked_img_thumb("35798713-bb",
+        // 1080,2376,…)`, which resizes the thumbnail in a real browser/WebView). The native renderer has
+        // no JS engine — Html.fromHtml drops the <script> TAG but keeps its text content, so the raw JS
+        // call leaks as a visible caption under the image (user report, QMS chat). Neither <script> nor
+        // <style> carries body content, so strip both up-front before segmentation.
+        body.select("script, style").forEach { it.remove() }
         serviceIconSrcs = body.select("img").asSequence()
                 .filter { it.attr("alt").trim() == "*" }
                 .map { it.attr("src").trim() }
