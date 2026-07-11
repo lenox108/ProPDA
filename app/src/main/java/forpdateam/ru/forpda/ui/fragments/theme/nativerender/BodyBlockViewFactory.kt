@@ -635,7 +635,12 @@ class BodyBlockViewFactory(
      * mirroring the WebView, which uses a near-white link colour on dark); on a LIGHT surface we
      * keep the accent untouched and only rescue a genuinely invisible one.
      */
-    private fun contrastSafeLinkColor(ctx: Context, surface: Int): Int {
+    private fun contrastSafeLinkColor(ctx: Context, surfaceRaw: Int): Int {
+        // ColorUtils.calculateContrast требует НЕпрозрачный фон; на части палитр/тем
+        // surface приходит полупрозрачным (alpha<255) → IllegalArgumentException
+        // «background can not be translucent». Форсим непрозрачность (как в
+        // neutralizeLowContrastColors выше).
+        val surface = surfaceRaw or 0xFF000000.toInt()
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
         val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val surfaceIsDark = androidx.core.graphics.ColorUtils.calculateLuminance(surface) < 0.5
