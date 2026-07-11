@@ -54,6 +54,8 @@ class TopicPostsAdapter(
         /** Tap on an attachment image → open the swipeable image viewer over [galleryUrls] at [index]
          *  (parity with the WebView, which groups all of a post's images into one gallery). */
         fun onImageClick(galleryUrls: List<String>, index: Int)
+        /** Long-press on an attachment image → actions menu (save / open in browser / copy link). */
+        fun onImageLongClick(imageUrl: String)
         /** Long-press on a downloadable file link → chooser (download / open in browser). */
         fun onDownloadLinkLongPress(url: String, fileName: String?)
     }
@@ -235,6 +237,9 @@ class TopicPostsAdapter(
                 object : BodyBlockViewFactory.Callbacks {
                     override fun onImageClick(galleryUrls: List<String>, index: Int) =
                             actionListener.onImageClick(galleryUrls, index)
+
+                    override fun onImageLongClick(imageUrl: String) =
+                            actionListener.onImageLongClick(imageUrl)
 
                     override fun onSpoilerCopyLink(scopeId: Int, spoilNumber: Int) {
                         boundItem?.let { actionListener.onSpoilerCopyLink(it, spoilNumber) }

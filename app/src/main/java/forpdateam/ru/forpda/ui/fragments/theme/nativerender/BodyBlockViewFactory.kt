@@ -40,6 +40,10 @@ class BodyBlockViewFactory(
         /** Tap on an attachment image → swipeable viewer over the whole scope's gallery. */
         fun onImageClick(galleryUrls: List<String>, index: Int)
 
+        /** Long-press on a viewable image → actions menu (save / open in browser / copy link).
+         *  [imageUrl] is the viewer-resolved full-size URL. */
+        fun onImageLongClick(imageUrl: String) = Unit
+
         /** Long-press on a spoiler header → copy a deep link to it ([spoilNumber] is 1-based). */
         fun onSpoilerCopyLink(scopeId: Int, spoilNumber: Int) = Unit
 
@@ -357,6 +361,8 @@ class BodyBlockViewFactory(
                 val index = scope.galleryUrls.size
                 scope.galleryUrls.add(viewerUrl)
                 setOnClickListener { callbacks.onImageClick(scope.galleryUrls, index) }
+                // WebView parity: long-press → save / open in browser / copy link menu.
+                setOnLongClickListener { callbacks.onImageLongClick(viewerUrl); true }
             } else {
                 // Non-viewable (e.g. an off-site link) → hand off to the link handler as before.
                 setOnClickListener { linkHandler.handle(tapUrl, null) }

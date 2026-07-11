@@ -7,19 +7,32 @@ import android.content.Intent.FLAG_ACTIVITY_NEW_TASK
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.github.chrisbanes.photoview.OnPhotoTapListener
+import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.databinding.ActivityImgViewerBinding
+import forpdateam.ru.forpda.presentation.ISystemLinkHandler
 import forpdateam.ru.forpda.ui.EdgeToEdge
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class ImageViewerActivity : AppCompatActivity() {
+
+    @Inject
+    lateinit var systemLinkHandler: ISystemLinkHandler
+
+    @Inject
+    lateinit var clipboardHelper: ClipboardHelper
 
     private lateinit var binding: ActivityImgViewerBinding
 
@@ -68,12 +81,42 @@ class ImageViewerActivity : AppCompatActivity() {
             }
         })
         adapter.setTapListener(OnPhotoTapListener { _, _, _ -> toggle() })
+        adapter.setLongClickListener { position ->
+            currentImages.getOrNull(position)?.let { url ->
+                forpdateam.ru.forpda.ui.fragments.theme.nativerender.ImageActionsMenu
+                        .show(this, url, systemLinkHandler, clipboardHelper, withOpenItem = false)
+            }
+        }
         adapter.bindItem(currentImages)
         binding.imgViewerPager.adapter = adapter
         binding.imgViewerPager.currentItem = currentIndex
         binding.imgViewerPager.clipChildren = false
         binding.toolbar.post { updateTitle(currentIndex) }
     }
+
+    /** Toolbar actions over the CURRENT image: save / open in browser / copy link
+     *  (the old WebView long-press image menu, now living in the viewer). */
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menu.add(R.string.wv_save_image).setOnMenuItemClickListener {
+            currentImageUrl()?.let { url -> systemLinkHandler.handleDownload(url, null, this) }
+            true
+        }
+        menu.add(R.string.wv_open_in_browser).setOnMenuItemClickListener {
+            currentImageUrl()?.let { url -> systemLinkHandler.handle(url) }
+            true
+        }
+        menu.add(R.string.share).setOnMenuItemClickListener {
+            currentImageUrl()?.let { url -> Utils.shareText(this, url) }
+            true
+        }
+        menu.add(R.string.wv_copy_image_link).setOnMenuItemClickListener {
+            currentImageUrl()?.let { url -> Utils.copyToClipBoard(url, clipboardHelper) }
+            true
+        }
+        return true
+    }
+
+    private fun currentImageUrl(): String? = currentImages.getOrNull(currentIndex)
 
     private fun updateTitle(selectedPageIndex: Int) {
         if (currentImages.isEmpty() || names.isEmpty()) {
