@@ -112,16 +112,22 @@
         <item name="colorOnBackground">?attr/colorOnSurface</item>
 
         <!--
-            Верхняя плашка тулбара под Material You следует за динамическим
-            colorPrimaryContainer (мягкий тон обоев). В базовой теме остаётся
-            фирменный мятный @color/*_main_toolbar_accent_surface — этот редирект
-            действует ТОЛЬКО при активном Material You (когда накладывается этот
-            оверлей). Безопасно как ?attr/: main_toolbar_accent_surface читается
+            Верхняя плашка тулбара под Material You = тот же тон, что и фон
+            контента (?attr/colorSurfaceContainerLowest), а НЕ выделяющийся
+            colorPrimaryContainer. Экраны главных разделов (Новости / Избранное /
+            Упоминания) используют «плоский» top-bar chrome (useFlatTopBarChrome),
+            где статус-бар + тулбар + список должны читаться как ОДИН однородный
+            блок. С colorPrimaryContainer шапка выглядела отдельной серой/цветной
+            плашкой поверх фона (жалоба пользователей) — теперь она сливается с
+            фоном. В базовой теме (без Material You) остаётся фирменный
+            @color/*_main_toolbar_accent_surface — этот редирект действует ТОЛЬКО
+            при активном Material You (когда накладывается этот оверлей).
+            Безопасно как ?attr/: main_toolbar_accent_surface читается
             исключительно через getColorFromAttr (resolveAttribute дерефит ?attr/),
             а НЕ через TypedArray.getColorStateList — поэтому здесь допустим
             TYPE_ATTRIBUTE (в отличие от textColor*/icon-слотов выше).
         -->
-        <item name="main_toolbar_accent_surface">?attr/colorPrimaryContainer</item>
+        <item name="main_toolbar_accent_surface">?attr/colorSurfaceContainerLowest</item>
 
         <!--
             Anti-crash: КОНКРЕТНЫЕ @color/... для всего, что читается через
@@ -151,6 +157,44 @@
         <item name="android:textColorSecondary">@color/light_second_text_color</item>
         <item name="android:textColorLink">@color/light_link_color</item>
         <item name="android:textColorHint">@color/light_second_text_color</item>
+    </style>
+
+    <!--
+        Material You: AMOLED-оверлей. Накладывается ПОВЕРХ DynamicColors для
+        AMOLED-скинов (ThemeMode.AMOLED и SYSTEM_AMOLED ночью) — см.
+        MaterialYouApplier + MaterialYouPolicy (Mode.ACCENT_ONLY).
+
+        Зачем отдельный оверлей вместо MaterialYouAccent:
+        DynamicColors переопределяет ВСЕ M3-surface-роли (colorSurface,
+        colorSurfaceContainer* / android:colorBackground) тёмными, но
+        ТОНИРОВАННЫМИ обоями тонами — НЕ чистым чёрным. Наши фоны контента
+        (?attr/colorSurfaceContainerLowest на странице, content_card_surface →
+        ?attr/colorSurfaceContainerHigh на карточках) читают эти роли, поэтому
+        под Material You AMOLED фон вылезал тёмно-серым вместо чёрного (жалоба
+        пользователей: «фон должен быть чёрным»). Кастомные атрибуты
+        (chrome_plane_background / main_toolbar_accent_surface) DynamicColors НЕ
+        трогает — они остаются чёрными, отчего получался рассинхрон: чёрная
+        шапка на сером фоне.
+
+        Решение: наследуем акцент из MaterialYouAccent (colorPrimary/colorAccent
+        трекают обои), но ПИНИМ все surface-роли обратно на amoled-чёрный. Это
+        концептуально то же, что делает базовая AmoledAppTheme
+        (values-night/styles.xml) — все surface-роли = чистый чёрный, карточки
+        отделяются обводкой list_plate_stroke, а не поднятием тона.
+
+        Безопасность: пины КОНКРЕТНЫЕ @color/amoled_* (не ?attr/) — их безопасно
+        читает и TypedArray.getColorStateList, и resolveAttribute (в отличие от
+        TYPE_ATTRIBUTE-цепочек, ломающих инфляцию — см. KDoc MaterialYouSurface).
+    -->
+    <style name="ThemeOverlay.ForPDA.MaterialYouAmoled" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
+        <item name="android:colorBackground">@color/amoled_background_base</item>
+        <item name="colorSurface">@color/amoled_card_background</item>
+        <item name="colorSurfaceVariant">@color/amoled_card_background</item>
+        <item name="colorSurfaceContainerLowest">@color/amoled_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/amoled_card_background</item>
+        <item name="colorSurfaceContainer">@color/amoled_card_background</item>
+        <item name="colorSurfaceContainerHigh">@color/amoled_card_background</item>
+        <item name="colorSurfaceContainerHighest">@color/amoled_card_background</item>
     </style>
 
     <!--

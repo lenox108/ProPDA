@@ -228,7 +228,9 @@ class SearchPostBodyRenderer(
     private fun contrastSafeLinkColor(ctx: Context): Int {
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
         // Эталон — фактическая поверхность карточки поиска (CardStyle.Item.Wide → content_card_surface).
-        val surface = ctx.getColorFromAttr(forpdateam.ru.forpda.R.attr.content_card_surface)
+        // calculateContrast требует НЕпрозрачный фон — форсим alpha (палитра может дать
+        // полупрозрачный surface → IllegalArgumentException «translucent»).
+        val surface = ctx.getColorFromAttr(forpdateam.ru.forpda.R.attr.content_card_surface) or 0xFF000000.toInt()
         val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val surfaceIsDark = androidx.core.graphics.ColorUtils.calculateLuminance(surface) < 0.5
         val target = if (surfaceIsDark) DARK_SURFACE_LINK_CONTRAST else LOW_CONTRAST_THRESHOLD

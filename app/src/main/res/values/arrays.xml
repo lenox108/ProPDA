@@ -95,6 +95,7 @@
         <item>@string/fragment_title_forum</item>
         <item>@string/fragment_title_mentions</item>
         <item>@string/menu_item_qms</item>
+        <item>@string/menu</item>
     </string-array>
     <string-array name="entry_values_startup_screen">
         <item>NEWS</item>
@@ -102,6 +103,7 @@
         <item>FORUM</item>
         <item>REPLIES</item>
         <item>QMS</item>
+        <item>MENU</item>
     </string-array>
 
     <!-- Минимум обязан совпадать с NotificationDataStore.MIN_BG_CHECK_INTERVAL_MIN -->

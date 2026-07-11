@@ -37,7 +37,10 @@ object Preferences {
         const val IS_EDITOR_DEFAULT_HIDDEN = "message_panel.is_default_hidden"
         const val SCROLL_BUTTON_ENABLE = PREFIX + "scroll_button.enable"
         const val HAPTIC_FEEDBACK_ENABLE = PREFIX + "haptic_feedback.enable"
+        // Legacy булев «Панель страниц темы» (вкл/выкл верхнюю+нижнюю). Оставлен ТОЛЬКО
+        // для миграции в [TOPIC_PAGINATION_PANELS]; новым кодом не пишется.
         const val TOPIC_PAGINATION_PANEL_ENABLE = PREFIX + "topic_pagination_panel.enable"
+        const val TOPIC_PAGINATION_PANELS = PREFIX + "topic_pagination_panels"
         const val TOPIC_SCROLL_MODE = PREFIX + "topic_scroll_mode"
         const val TOPIC_POST_DENSITY = PREFIX + "topic_post_density"
         const val TOPIC_TOOLBAR_BEHAVIOR = PREFIX + "topic_toolbar_behavior"
@@ -97,12 +100,40 @@ object Preferences {
         enum class AccentStyle { TONAL, VIBRANT, EXPRESSIVE }
         enum class DownloadMethod { SYSTEM, EXTERNAL_MANAGER, BROWSER, ASK }
         enum class TopicScrollMode { HYBRID, CLASSIC }
+
+        /**
+         * «Панель страниц темы»: какие панели пагинации показывать. Мыслится как два
+         * независимых бита — верхняя ([hasTop]) и нижняя ([hasBottom]). В КЛАССИЧЕСКОМ
+         * режиме доступны все четыре комбинации; в ГИБРИДНОМ нижняя панель не имеет
+         * смысла (постраничные стрелки поверх бесконечной прокрутки), поэтому при
+         * отрисовке гибрида [hasBottom] игнорируется, а пикер настроек предлагает лишь
+         * «Нет»/«Сверху». Значение единое: правка «верхней» в гибриде сохраняет «нижний»
+         * бит для классики (см. [withTop]).
+         */
+        enum class TopicPaginationPanels {
+            NONE, TOP, BOTTOM, BOTH;
+
+            val hasTop: Boolean get() = this == TOP || this == BOTH
+            val hasBottom: Boolean get() = this == BOTTOM || this == BOTH
+
+            /** Тот же «нижний» бит, но с заданным «верхним» — для правки в гибриде без потери классики. */
+            fun withTop(on: Boolean): TopicPaginationPanels = of(on, hasBottom)
+
+            companion object {
+                fun of(top: Boolean, bottom: Boolean): TopicPaginationPanels = when {
+                    top && bottom -> BOTH
+                    top -> TOP
+                    bottom -> BOTTOM
+                    else -> NONE
+                }
+            }
+        }
         enum class TopicPostDensity { COMFORTABLE, COMPACT, SUPER_COMPACT }
         enum class TopicToolbarBehavior { PINNED, HIDE_ON_SCROLL }
         enum class TopicBackBehavior { HISTORY, ORIGIN }
         enum class TopicOpenTarget { FIRST_PAGE, LAST_UNREAD }
         enum class TopicHeaderInitialState { EXPANDED, COLLAPSED }
-        enum class StartupScreen { NEWS, FAVORITES, FORUM, REPLIES, QMS }
+        enum class StartupScreen { NEWS, FAVORITES, FORUM, REPLIES, QMS, MENU }
     }
 
     object Lists {
@@ -132,6 +163,7 @@ object Preferences {
         private const val PREFIX = "theme."
         const val SHOW_AVATARS = PREFIX + "show_avatars"
         const val CIRCLE_AVATARS = PREFIX + "circle_avatars"
+        const val ANIMATED_SMILES = PREFIX + "animated_smiles"
         const val ANCHOR_HISTORY = PREFIX + "anchor_history"
         const val HAT_OPENED = PREFIX + "hat_opened"
         const val FORUM_BLACKLIST = PREFIX + "forum_blacklist"

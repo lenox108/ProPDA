@@ -17,7 +17,8 @@ class MainPreferencesHolder(
 
     fun observeScrollButtonEnabledFlow(): Flow<Boolean> = dataStore.observeScrollButtonEnabledFlow()
 
-    fun observeTopicPaginationPanelEnabledFlow(): Flow<Boolean> = dataStore.observeTopicPaginationPanelEnabledFlow()
+    fun observeTopicPaginationPanelsFlow(): Flow<AppPreferences.Main.TopicPaginationPanels> =
+            dataStore.observeTopicPaginationPanelsFlow()
 
     fun observeTopicScrollModeFlow(): Flow<AppPreferences.Main.TopicScrollMode> = dataStore.observeTopicScrollModeFlow()
 
@@ -83,7 +84,8 @@ class MainPreferencesHolder(
 
     fun getSmartPreload(): Boolean = dataStore.getSmartPreloadImmediate()
 
-    fun getTopicPaginationPanelEnabled(): Boolean = dataStore.getTopicPaginationPanelEnabledImmediate()
+    fun getTopicPaginationPanels(): AppPreferences.Main.TopicPaginationPanels =
+            dataStore.getTopicPaginationPanelsImmediate()
 
     fun getTopicScrollMode(): AppPreferences.Main.TopicScrollMode = dataStore.getTopicScrollModeImmediate()
 
@@ -151,7 +153,8 @@ class MainPreferencesHolder(
 
     suspend fun setSmartPreload(value: Boolean) = dataStore.setSmartPreload(value)
 
-    suspend fun setTopicPaginationPanelEnabled(value: Boolean) = dataStore.setTopicPaginationPanelEnabled(value)
+    suspend fun setTopicPaginationPanels(value: AppPreferences.Main.TopicPaginationPanels) =
+            dataStore.setTopicPaginationPanels(value)
 
     suspend fun setTopicScrollMode(value: AppPreferences.Main.TopicScrollMode) = dataStore.setTopicScrollMode(value)
 
