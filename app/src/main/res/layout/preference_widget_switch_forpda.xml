@@ -2,19 +2,17 @@
 <!--
     Custom switch widget used by SwitchPreferenceCompat.
 
-    Compact SwitchCompat (the size users prefer) with a custom OPAQUE pill track
-    (@drawable/pref_switch_track) instead of the semi-transparent appcompat
-    default — so the tint renders as a vivid, filled colour like an M3 switch
-    while keeping the smaller classic size. The old default thumb was white in
-    BOTH states, making ON/OFF hard to tell; colours for both track and thumb
-    are now driven per-state in SwitchPreference.onBind.
-
-    androidx.preference can't resolve ?attr/* inside a ColorStateList at
-    inflation, and the neutral theme's colorPrimary is literally white, so the
-    ON colour is taken from colorAccent (the real, palette-aware accent) at bind
-    time. The literal fallbacks below only cover the single frame before bind.
+    SwitchMaterial (Material 2) draws a clean, compact switch — a circular
+    elevated thumb over a thin rounded track — that is more compact than the
+    large M3 MaterialSwitch and looks neat (unlike hand-rolled shape drawables,
+    which clipped the thumb). Per-state colours are applied in
+    SwitchPreference.onBind: androidx.preference can't resolve ?attr/* inside a
+    ColorStateList at inflation, and the neutral theme's colorPrimary is
+    literally white, so the ON colour is taken from colorAccent (the real,
+    palette-aware accent). The literal fallbacks below cover the frame before
+    bind.
 -->
-<androidx.appcompat.widget.SwitchCompat xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.switchmaterial.SwitchMaterial xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/switchWidget"
     android:layout_width="wrap_content"
@@ -22,7 +20,5 @@
     android:background="@null"
     android:clickable="false"
     android:focusable="false"
-    android:thumb="@drawable/pref_switch_thumb"
-    app:track="@drawable/pref_switch_track"
     app:thumbTint="@color/preference_switch_thumb_tint"
     app:trackTint="@color/preference_switch_track_tint" />
