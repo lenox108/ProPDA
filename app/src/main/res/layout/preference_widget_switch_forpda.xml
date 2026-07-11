@@ -1,12 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Custom switch widget used by SwitchPreferenceCompat. Tints are set with
-    explicit color resources that contain only literal ARGB selectors, so
-    they never depend on theme attributes that may be missing in some
-    Preference theme overlays (e.g. the AMOLED theme inheriting from
-    Theme.Material3.DayNight without our SwitchPreferenceCompatStyle).
+    Custom switch widget used by SwitchPreferenceCompat.
+
+    MaterialSwitch (M3) is used instead of the legacy SwitchCompat because the
+    old switch track drawable is semi-transparent: even a fully-opaque tint
+    rendered faint, and its thumb was white in BOTH states, so ON/OFF were
+    almost indistinguishable on light reading palettes (user: «у переключателей
+    практически нет цвета»). MaterialSwitch has an opaque, filled track and a
+    thumb that changes colour + position between states.
+
+    Track/thumb colours are set programmatically in SwitchPreference.onBind:
+    androidx.preference can't resolve ?attr/* inside a ColorStateList at
+    inflation time, and the neutral theme's colorPrimary is literally white, so
+    the ON colour is taken from colorAccent (the real, palette-aware accent)
+    there. The literal fallbacks below only cover the single frame before bind.
 -->
-<androidx.appcompat.widget.SwitchCompat xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.materialswitch.MaterialSwitch xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/switchWidget"
     android:layout_width="wrap_content"
