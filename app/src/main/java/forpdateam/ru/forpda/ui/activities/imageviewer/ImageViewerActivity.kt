@@ -105,6 +105,10 @@ class ImageViewerActivity : AppCompatActivity() {
             currentImageUrl()?.let { url -> systemLinkHandler.handle(url) }
             true
         }
+        menu.add(R.string.share).setOnMenuItemClickListener {
+            currentImageUrl()?.let { url -> Utils.shareText(this, url) }
+            true
+        }
         menu.add(R.string.wv_copy_image_link).setOnMenuItemClickListener {
             currentImageUrl()?.let { url -> Utils.copyToClipBoard(url, clipboardHelper) }
             true
