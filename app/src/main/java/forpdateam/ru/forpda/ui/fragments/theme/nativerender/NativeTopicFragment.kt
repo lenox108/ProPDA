@@ -2012,6 +2012,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (!isExternalListOpenSource(sourceScreen)) {
                     captureThemeBackEntry()?.let { themeBackStack.addLast(it) }
                 }
+                // Лог 11_07-11-32 (1080563): свежее навигаторное открытие ре-армит резюм на границу
+                // прочитанного. [boundaryResumeArmed] взводился ТОЛЬКО в onViewCreated, а этот путь
+                // РЕЮЗАЕТ живой таб (открыл тему → назад → открыл ту же тему из списка) — флаг оставался
+                // потреблённым первым открытием, резюм молчал, и серверный all-read bottom-редирект
+                // (страницу пометил прочитанной сам GET первого открытия) сажал на ПОСЛЕДНИЙ пост мимо
+                // непрочитанных, а мгновенный mark-read стирал границу. Взводим строго в ветке реальной
+                // загрузки: дедуп-эхо навигатора (resolved == lastRequestedUrl) не ре-армит; findpost-дип-
+                // линки отфильтрует сам maybeResumeToReadBoundary; back-по-истории гасит флаг отдельно.
+                boundaryResumeArmed = true
                 loadTopic(resolved)
             }
         }
@@ -3776,6 +3785,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 }
                 // Flash the resolved post once so the user sees where a link/find/unread open landed.
                 if (request is AnchorRequest.Post) postsAdapter.requestHighlight(request.postId)
+                // Лог 11_07-11-32: посадка на ПЕРВЫЙ НЕПРОЧИТАННЫЙ штампует границу прочитанного на сам
+                // якорный пост. [recordReadBoundaryAtRest] пишет только по жесту — но виз «открыл-глянул-
+                // закрыл» тогда не оставляет границы вовсе, а сам GET уже пометил страницу прочитанной на
+                // сервере: повторное открытие получало all-read bottom-редирект и резюму не от чего было
+                // оттолкнуться (улёт на последний пост мимо непрочитанного). Штампуем ТОЛЬКО якорь (не
+                // вьюпорт) и ТОЛЬКО для unread-посадки: резюм при переоткрытии сядет ровно сюда же.
+                // Explicit-посадки (page jump / deep-link / restore) не штампуем — monotonic recordSeen
+                // сжёг бы непрочитанное выше глубокой цели.
+                if (request is AnchorRequest.Post &&
+                        request.reason == AnchorRequest.Post.Reason.FIRST_UNREAD &&
+                        pageTopicId > 0) {
+                    readBoundaryStore.recordSeen(pageTopicId, request.postId, barCurrentPage)
+                }
             }
             // PostNotLoaded / Empty: nothing to do — downward pagination will bring later pages in.
             else -> Unit
@@ -3831,8 +3853,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      *    видимый ([LinearLayoutManager.findLastCompletelyVisibleItemPosition]), а не последний частичный;
      *  - покадровой записи из [onScrolled] нет вовсе: флинг «вниз глянуть и обратно» больше не сжигает
      *    границу до самой глубокой мелькнувшей точки;
-     *  - виз без единого жеста (открыл-глянул-закрыл) границу не двигает: безопасное направление —
+     *  - виз без единого жеста (открыл-глянул-закрыл) вьюпорт НЕ записывает: безопасное направление —
      *    максимум перечитывание, но не пропуск; дочитку до конца закрывает [maybeMarkTopicReadAtEnd].
+     *    Исключение — unread-посадка штампует САМ якорный пост в [applyInitialAnchor] (иначе у резюма
+     *    при переоткрытии нет опоры против серверного walk-down от GET этого же открытия).
      * Первый видимый (частично прокручен НАД верхним краем) считается прочитанным: юзер уже прошёл его
      * верх; это же покрывает пост выше экрана, у которого «целиком видимых» просто нет — иначе граница
      * застряла бы перед ним навсегда. Направление ошибки безопасно: резюм садится НА граничный пост.
