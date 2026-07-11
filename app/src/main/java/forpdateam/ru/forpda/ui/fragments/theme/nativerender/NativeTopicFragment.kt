@@ -709,6 +709,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         messagePanelHost.setBackgroundColor(
                 requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         panel.visibility = View.GONE
+        // Скрыть и сам ХОСТ: AdvancedPopup.attachCompactAdvancedView оборачивает панель в видимый
+        // LinearLayout с исходными layout-параметрами компактной панели (topMargin 8dp). Обёртка с
+        // GONE-содержимым имеет нулевую высоту, но её topMargin раздувает wrap_content-хост на 8dp —
+        // coordinator (layout_above=host) укорачивается, и между нижней пагинацией и таббаром
+        // просвечивала полоса фона фрагмента (?colorPrimary). См. showMessagePanel/hideMessagePanel.
+        messagePanelHost.visibility = View.GONE
         // Behavior off: with IME adjustResize the AppBar translationY would push the panel under the
         // keyboard (matches the WebView fragment's disableBehavior()).
         panel.disableBehavior()
@@ -956,6 +962,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun showMessagePanel(showKeyboard: Boolean) {
         val panel = messagePanel ?: return
         if (panel.visibility != View.VISIBLE) {
+            messagePanelHost.visibility = View.VISIBLE // хост скрыт, пока редактор закрыт (см. setupMessagePanel)
             panel.visibility = View.VISIBLE
             paginationBar?.visibility = View.GONE
             topPaginationBar?.visibility = View.GONE
@@ -994,6 +1001,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val panel = messagePanel ?: return
         panel.hideImeFromEditor()
         panel.visibility = View.GONE
+        messagePanelHost.visibility = View.GONE // без этого пустой хост оставляет 8dp-полосу над таббаром
         panel.hidePopupWindows()
         hideKeyboard()
         editingForm = null

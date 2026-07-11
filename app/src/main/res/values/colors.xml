@@ -74,7 +74,13 @@
     <color name="light_icon_toolbar_inverse">@color/dark_icon_toolbar</color>
 
     <color name="light_card_background">#ffffff</color>
-    <color name="light_main_toolbar_accent_surface">#EEF7F6</color>
+    <!--
+        Шапка главных разделов и темы = тон фона страницы (background_base),
+        чтобы статус-бар + тулбар + контент читались одним блоком. Раньше тут
+        был отдельный фирменный мятный #EEF7F6 — на фоне #F2F2F7 он выглядел
+        чужеродной плашкой (жалоба: «шапка отличается от фона и шторки»).
+    -->
+    <color name="light_main_toolbar_accent_surface">@color/light_background_base</color>
 
     <color name="light_item_tab_close">@color/md_red_400</color>
 
@@ -114,7 +120,8 @@
     <color name="dark_icon_toolbar_inverse">@color/light_icon_toolbar</color>
 
     <color name="dark_card_background">#242424</color>
-    <color name="dark_main_toolbar_accent_surface">#242424</color>
+    <!-- Как light_*: шапка = тон фона страницы, единый блок со статус-баром (было отдельное #242424). -->
+    <color name="dark_main_toolbar_accent_surface">@color/dark_background_base</color>
     <color name="dark_main_toolbar_stroke">#3A3A3C</color>
     <!-- Как body в dark_themes.css / light_themes.css: подложка WebView, иначе просвечивает lists (#000). -->
     <color name="theme_html_body_dark">#121212</color>
