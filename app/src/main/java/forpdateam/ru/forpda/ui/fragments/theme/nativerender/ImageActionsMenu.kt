@@ -39,6 +39,9 @@ object ImageActionsMenu {
         menu.addItem(context.getString(R.string.wv_open_in_browser)) { _, url ->
             systemLinkHandler.handle(url)
         }
+        menu.addItem(context.getString(R.string.share)) { ctx, url ->
+            Utils.shareText(ctx, url)
+        }
         menu.addItem(context.getString(R.string.wv_copy_image_link)) { _, url ->
             Utils.copyToClipBoard(url, clipboardHelper)
         }
