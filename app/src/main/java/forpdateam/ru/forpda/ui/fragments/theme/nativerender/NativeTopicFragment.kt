@@ -3230,11 +3230,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // него (свежий ответ сразу за границей, ничего не пропущено) — резюмить на границу не нужно,
         // иначе первый непрочитанный (последний пост) обрезался бы снизу под уже прочитанным.
         val firstUnseenId = page.posts.filter { it.id > boundaryId }.minByOrNull { it.id }?.id
+        // Эксепшен firstUnseen валиден лишь когда сама граница в загруженном окне: иначе (граница на
+        // пред. странице, сервер walk-down'ом ушёл на след.) firstUnseen посчитан по чужому окну и
+        // ложно совпадёт с серверным якорем, проглотив непрочитанный хвост пред. страницы.
+        val boundaryOnPage = page.posts.any { it.id == boundaryId }
         val resumeId = forpdateam.ru.forpda.presentation.theme.TopicReadBoundaryPolicy.resumeAnchorPostId(
                 boundaryPostId = boundaryId,
                 serverAnchorPostId = serverAnchorId,
                 lastLoadedPostId = lastLoadedId,
                 firstUnseenPostId = firstUnseenId,
+                boundaryPostOnPage = boundaryOnPage,
         ) ?: return false
         // Резюм — findpost на границу. Гасим «в конец/на верх», чтобы вложенная загрузка села на границу.
         pendingJumpToBottom = false
