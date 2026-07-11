@@ -121,7 +121,39 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private val mapper = NativePostMapper()
     private val anchorResolver = NativeAnchorResolver()
     private val pagination = TopicPaginationController()
-    private val postsAdapter by lazy { TopicPostsAdapter(linkHandler, this) }
+    /**
+     * Some posts embed an inline blue «ЖАЛОБА» image whose enclosing `<a>` points at
+     * `index.php?act=report&t=…&p=…`. The global [linkHandler] doesn't recognise `act=report`, so those
+     * body taps used to fall through to the external browser and the site's report form (user report
+     * «жалоба открывает браузер вместо формы»). Wrap the handler for the post body: intercept those links
+     * and route them into the same in-app report flow as the «Пожаловаться» post-menu action; everything
+     * else delegates to the real handler unchanged.
+     */
+    private val reportAwareLinkHandler: ILinkHandler by lazy {
+        object : ILinkHandler {
+            override fun handle(inputUrl: String?, router: forpdateam.ru.forpda.presentation.TabRouter?, args: Map<String, String>): Boolean =
+                    tryInterceptReportLink(inputUrl) || linkHandler.handle(inputUrl, router, args)
+
+            override fun handle(inputUrl: String?, router: forpdateam.ru.forpda.presentation.TabRouter?): Boolean =
+                    tryInterceptReportLink(inputUrl) || linkHandler.handle(inputUrl, router)
+
+            override fun findScreen(url: String): String? = linkHandler.findScreen(url)
+        }
+    }
+
+    /** True when [inputUrl] is an in-topic `act=report` link we handled in-app (see [reportAwareLinkHandler]). */
+    private fun tryInterceptReportLink(inputUrl: String?): Boolean {
+        val url = inputUrl ?: return false
+        val uri = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return false
+        if (!uri.getQueryParameter("act").equals("report", ignoreCase = true)) return false
+        val postId = uri.getQueryParameter("p")?.toIntOrNull() ?: return false
+        if (view == null) return false
+        val item = loadedItems.firstOrNull { it.postId == postId } ?: return false
+        tryReportPost(item)
+        return true
+    }
+
+    private val postsAdapter by lazy { TopicPostsAdapter(reportAwareLinkHandler, this) }
     private val pollHeaderAdapter = PollHeaderAdapter(
             voteListener = PollHeaderAdapter.PollVoteListener { action, method, encodedForm ->
                 submitPoll(action, method, encodedForm)
@@ -194,8 +226,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * the whole topic so the ⓘ button works on every page, matching the WebView (topic-level hat state).
      */
     private var toolbarHatItem: NativePostItem? = null
-    /** Inline hat collapse state — collapsed by default (the «Инфо» toolbar opens a popup instead). */
+    /** Inline hat collapse state. The initial value is resolved once per fresh topic open in
+     *  [applyInitialHatCollapsedState] from the «Шапка темы при открытии» setting (per-topic override
+     *  wins); afterwards it only follows the user's manual toggle for the rest of the session. */
     private var hatCollapsed: Boolean = true
+    /** Topic id whose initial hat state was already applied — guards re-applying the global setting on
+     *  in-session pagination/reload (which would clobber the user's manual toggle). Re-applies only when
+     *  a genuinely different topic is opened (tab reuse). */
+    private var hatInitialStateAppliedTopicId: Int = 0
     /** The topic's poll (parsed on page 1) — the «Опрос» toolbar button shows it in a popup. Cached at
      *  topic level so the button persists across pages once the poll page has been seen (WebView parity). */
     private var currentPoll: forpdateam.ru.forpda.entity.remote.theme.Poll? = null
@@ -290,6 +328,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var pendingSuppressEndMarkReadForResume: Boolean = false
 
     /**
+     * Fallback для findpost-резюма к границе прочитанного ([maybeResumeToReadBoundary]). Перед вложенной
+     * findpost-загрузкой сюда кладётся УЖЕ успешно распарсенная getnewpost-страница. Резюм — оптимизация
+     * (сесть на непрочитанное вместо серверного «низа»), и он НЕ должен ронять открытие темы: если пост
+     * границы удалён из темы, findpost падает исключением («Пост #… не найден») или отдаёт пустые посты —
+     * тогда вместо пустого экрана с тостом рендерим этот fallback (тема открывается на серверном якоре).
+     * Потребляется (рендер + сброс) при первом же завершении вложенной загрузки, успехом или ошибкой.
+     */
+    private var resumeFallbackPage: forpdateam.ru.forpda.entity.remote.theme.ThemePage? = null
+    private var resumeFallbackUrl: String? = null
+
+    /**
      * Restore-scroll «где остановился» / устойчивость состояния: пост и его пиксельный offset, на который
      * надо вернуться после пересоздания фрагмента (смерть процесса, восстановление FragmentManager,
      * пересоздание вью). Пишутся в [onSaveInstanceState], читаются в [onViewCreated], применяются один
@@ -325,6 +374,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * above the tab bar — see [applyListBottomPadding].
      */
     private var bottomNavChromePad = 0
+
+    /**
+     * Transient extra bottom padding reserved so an EXPLICIT deep-link/quote anchor ([AnchorRequest.Post]
+     * with reason FIND_POST) can TOP-align a target that sits near the end of the topic. Near the end there
+     * may be less than a viewport of content below the target, so `scrollToPositionWithOffset(pos, 0)` clamps
+     * at the content edge and the target never reaches the top — the user taps a quote of a recent post on the
+     * last page and sees the highlight fire but no scroll ([[theme-open-anchor-subsystem]]). Reserving the
+     * shortfall as bottom room lets the top-align land; released on the next user drag ([onScrollStateChanged])
+     * and reset on every fresh anchor ([applyInitialAnchor]).
+     */
+    private var deepLinkAnchorExtraBottomPad = 0
 
     /** Whether the loaded content still has an unread anchor — drives the «К непрочитанному» menu item. */
     private var topicHasUnread: Boolean = false
@@ -448,6 +508,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_DRAGGING) {
                     if (forpdateam.ru.forpda.BuildConfig.DEBUG && anchoredBottomPostId != null) android.util.Log.i("FPDA_CLEAR", "anchor CLEARED (user drag)")
                     anchoredBottomPostId = null
+                    // The user is scrolling away from a deep-link/quote landing → give back the transient
+                    // top-align bottom room so the topic end no longer carries phantom empty space.
+                    if (deepLinkAnchorExtraBottomPad != 0) {
+                        deepLinkAnchorExtraBottomPad = 0
+                        applyListBottomPadding()
+                    }
                 }
                 // Жест пользователя (drag; SETTLING без drag'а = единственный smoothScroll — FAB-пейджинг,
                 // тоже действие юзера; программные коррекции идут через мгновенный scrollBy и state не меняют)
@@ -1371,7 +1437,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val ctx = requireContext()
         // A throwaway adapter renders the hat post fully (no hat-collapse in the popup) with all its
         // spoilers/links, reusing the exact post rendering.
-        val popupAdapter = TopicPostsAdapter(linkHandler, this)
+        val popupAdapter = TopicPostsAdapter(reportAwareLinkHandler, this)
         popupAdapter.setDisplaySettings(currentDisplaySettings())
         val auth = authHolder.get()
         popupAdapter.setAuthContext(auth.isAuth(), auth.userId)
@@ -1430,11 +1496,29 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 .showWithStyledButtons()
     }
 
-    /** Header tap on the hat post itself toggles its body (same session state as the toolbar «Инфо»). */
+    /** Header tap on the hat post itself toggles its body. Session-only: a manual collapse lasts until the
+     *  topic is re-opened, then the global «Шапка темы при открытии» setting decides again (no per-topic
+     *  memory — the global setting must always win on open, per user report). */
     override fun onToggleHat() {
         val hatId = topicHatPostId ?: return
         hatCollapsed = !hatCollapsed
         postsAdapter.setTopicHat(hatId, hatCollapsed)
+    }
+
+    /**
+     * Apply the initial inline-hat state ONCE per fresh topic open (page 1) straight from the global
+     * «Шапка темы при открытии» setting (EXPANDED → open). Guarded by [hatInitialStateAppliedTopicId] so an
+     * in-session reload (send-post/refresh) doesn't clobber a manual toggle; [openThemeFromNavigator] resets
+     * that guard so genuinely re-opening the topic re-applies the setting (a manual collapse is NOT persisted).
+     */
+    private fun applyInitialHatCollapsedState(hatPostId: Int?) {
+        if (hatPostId == null) return // no inline hat on this page (deep page / no hat)
+        val topicId = pageTopicId
+        if (topicId <= 0 || topicId == hatInitialStateAppliedTopicId) return
+        val open = themeUseCase.getTopicHeaderInitialState() ==
+                forpdateam.ru.forpda.common.Preferences.Main.TopicHeaderInitialState.EXPANDED
+        hatCollapsed = !open
+        hatInitialStateAppliedTopicId = topicId
     }
 
     /**
@@ -2079,6 +2163,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // загрузки: дедуп-эхо навигатора (resolved == lastRequestedUrl) не ре-армит; findpost-дип-
                 // линки отфильтрует сам maybeResumeToReadBoundary; back-по-истории гасит флаг отдельно.
                 boundaryResumeArmed = true
+                // Genuine re-open of a (reused) topic tab → let the inline hat re-apply the global «Шапка
+                // при открытии» setting again. Without this the guard, still holding this topic id from the
+                // first open, would skip re-applying and the hat would keep whatever collapsed state the user
+                // last left it in — the exact «once collapsed, always collapsed» report. Echo/dedup opens
+                // never reach this branch, so an in-place reload still can't clobber a mid-session toggle.
+                hatInitialStateAppliedTopicId = 0
                 loadTopic(resolved)
             }
         }
@@ -3341,91 +3431,48 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // перезагрузки (boundary-резюм, шаг на след. страницу) сами взведут флаг заново в loadTopic.
             loadInFlight = false
             result.onSuccess { page ->
-                loadedUrl = url
-                pageForumId = page.forumId
-                pageTopicId = page.id
-                pageSt = page.st
-                pageIsInFavorite = page.isInFavorite
-                pageFavId = page.favId
+                // Findpost-резюм к границе прочитанного вернул ПУСТУЮ страницу (пост границы удалён из темы,
+                // 4PDA не отдаёт целевой пост) — не блэнкаем экран, а рендерим уже успешно загруженную
+                // getnewpost-страницу (тема открывается на серверном якоре). См. [resumeFallbackPage].
+                resumeFallbackPage?.let { fb ->
+                    if (page.posts.isEmpty()) {
+                        val fbUrl = resumeFallbackUrl ?: url
+                        resumeFallbackPage = null
+                        resumeFallbackUrl = null
+                        pendingSuppressEndMarkReadForResume = false
+                        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                            android.util.Log.i("FPDA_READ_BOUNDARY",
+                                    "resume_findpost empty (deleted boundary post) → fallback to loaded page")
+                        }
+                        renderThemePage(fbUrl, fb)
+                        return@onSuccess
+                    }
+                }
                 // Клиентская граница прочитанного: на ПЕРВОМ открытии, если серверный якорь сел бы НИЖЕ
                 // самого дальнего реально-виденного поста, перезагрузиться findpost'ом на границу (иначе
                 // проскочим непрочитанное — walk-down 4PDA). Фаер один раз за открытие; findpost-резюм не
                 // рендерим здесь — return, дальше отработает вложенная загрузка.
                 if (maybeResumeToReadBoundary(url, page)) return@onSuccess // keep the indicator; the nested findpost reload owns it
-                setRefreshing(false)
-                // Fresh (re)load of the topic — forget the previous session's topic-level hat/poll state.
-                knownHatPostId = null
-                toolbarHatItem = null
-                currentPoll = null
-                cachedPollTopicId = null
-                // The poll's HTML lives on page 1 only. Show it inline only there, but CACHE it at topic
-                // level (currentPoll) so the «Опрос» toolbar button persists across pages once page 1 has
-                // been seen — matching the WebView, where the poll button is a topic-level toggle.
-                val inlinePoll = if (page.pagination.current <= 1) page.poll else null
-                pollHeaderAdapter.setPoll(inlinePoll)
-                if (page.poll != null) {
-                    currentPoll = page.poll
-                    cachedPollTopicId = page.id
-                }
-                pageHasPoll = currentPoll != null
-                // Topic hat (SAME policy as the WebView): 4pda echoes the topic's first post as a «шапка»
-                // at the top of EVERY page. Keep it only on the real first page (as a collapsible block);
-                // on deep pages strip the repeated copy so it doesn't show again. processHatForPage returns
-                // the hat id only for page 1 (inline), but also captures [toolbarHatItem] on ANY page so the
-                // ⓘ toolbar button (and its popup) work even when the topic opens directly on a deep page.
-                topicHatPostId = processHatForPage(page)
-                pageHasHat = toolbarHatItem != null
-                refreshToolbarState()
-                applyToolbarTitleFromPage(page) // fill the title from the loaded page (deep-link/deep-page opens)
-                val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
-                val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
-                pagination.reset(topicId, page.pagination, items)
-                // Обновление снизу: на этой странице непрочитанного нет, но тема выросла за её границу —
-                // шагаем вниз, пока не найдём страницу с непрочитанным (иначе новые посты не видны вовсе).
-                // Каждый шаг увеличивает loadedPage, так что цикл упирается в последнюю страницу.
-                if (refreshFollowNextPageArmed && pendingJumpToBottom &&
-                        items.none { it.postId > pendingRefreshSeenUpToPostId }) {
-                    pagination.nextPageUrl()?.let { next ->
-                        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
-                            android.util.Log.i("FPDA_REFRESH_ANCHOR", "follow_next_page topic=${page.id} " +
-                                    "page=${page.pagination.current}/${page.pagination.all} seenUpTo=$pendingRefreshSeenUpToPostId")
-                        }
-                        loadTopic(next, preserveRefreshIntent = true) // индикатор держим: вложенная загрузка его снимет
-                        return@onSuccess
-                    }
-                }
-                refreshFollowNextPageArmed = false
-                updateRefreshGesture() // top pull feeds prev-page loading, not refresh, when pages are above
-                barCurrentPage = pagination.loadedPage
-                loadedItems.clear()
-                loadedItems.addAll(items)
-                mentionScannedPostIds.clear()
-                markedTopicReadAtEnd = false
-                topicHasUnread = page.hasUnreadTarget // drives «К непрочитанному» in the smart-nav menu
-                // Порт WebView-guard'а (ThemeUseCase.onPrimaryThemeLoaded → shouldSuppressMarkReadForSession,
-                // куда натив не ходит): подлинное открытие на первом непрочитанном, севшее выше низа
-                // страницы, не должно метить тему прочитанной в момент рендера — только после жеста юзера.
-                // OR с мостиком boundary-резюма: его findpost-страница unread-метаданных не несёт.
-                suppressEndMarkReadUntilUserScroll = pendingSuppressEndMarkReadForResume ||
-                        forpdateam.ru.forpda.presentation.theme
-                                .TopicUnreadOpenPolicy.shouldSuppressMarkReadForFirstUnreadOpen(
-                                        forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy
-                                                .parseOpenSessionKind(page.openSessionKind),
-                                        page,
-                                )
-                pendingSuppressEndMarkReadForResume = false
-                closeSearch() // matches from a previous page are stale after a reload
-                updatePaginationBar()
-                postsAdapter.setTopicHat(topicHatPostId, hatCollapsed)
-                submitPosts {
-                    if (view != null) {
-                        applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
-                        // Fill an under-filled last page from previous pages (no empty area + scroll-back works).
-                        recyclerView.post { maybeFillLastPage() }
-                    }
-                }
-                enrichLoadedPage(page)
+                // Дошли до реального рендера этой загрузки — fallback резюма (если взводился) больше не нужен.
+                resumeFallbackPage = null
+                resumeFallbackUrl = null
+                renderThemePage(url, page)
             }.onFailure { error ->
+                // Findpost-резюм к границе прочитанного упал исключением (пост границы удалён — «Пост #… не
+                // найден») — вместо пустого экрана с тостом рендерим уже успешно загруженную getnewpost-
+                // страницу. Тема открывается; максимум теряется точный якорь на непрочитанное.
+                resumeFallbackPage?.let { fb ->
+                    val fbUrl = resumeFallbackUrl ?: url
+                    resumeFallbackPage = null
+                    resumeFallbackUrl = null
+                    pendingSuppressEndMarkReadForResume = false
+                    if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                        android.util.Log.i("FPDA_READ_BOUNDARY",
+                                "resume_findpost failed (${error.message}) → fallback to loaded page")
+                    }
+                    renderThemePage(fbUrl, fb)
+                    return@onFailure
+                }
                 setRefreshing(false)
                 pendingRefreshSeenUpToPostId = 0 // не переживать неудачную загрузку — иначе стухнет
                 refreshFollowNextPageArmed = false
@@ -3433,6 +3480,98 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 Toast.makeText(requireContext(), "Ошибка загрузки темы: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    /**
+     * Рендер успешно загруженной страницы темы в список (общий путь для обычной загрузки и для fallback
+     * findpost-резюма, если тот упал на удалённом посту границы — см. [resumeFallbackPage]). Выделен из
+     * [loadTopic].onSuccess, чтобы fallback мог переиспользовать ту же логику. НЕ вызывает
+     * [maybeResumeToReadBoundary] — резюм взводится только из [loadTopic] для первичной загрузки.
+     */
+    private fun renderThemePage(
+            url: String,
+            page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
+    ) {
+        loadedUrl = url
+        pageForumId = page.forumId
+        pageTopicId = page.id
+        pageSt = page.st
+        pageIsInFavorite = page.isInFavorite
+        pageFavId = page.favId
+        setRefreshing(false)
+        // Fresh (re)load of the topic — forget the previous session's topic-level hat/poll state.
+        knownHatPostId = null
+        toolbarHatItem = null
+        currentPoll = null
+        cachedPollTopicId = null
+        // The poll's HTML lives on page 1 only. Show it inline only there, but CACHE it at topic
+        // level (currentPoll) so the «Опрос» toolbar button persists across pages once page 1 has
+        // been seen — matching the WebView, where the poll button is a topic-level toggle.
+        val inlinePoll = if (page.pagination.current <= 1) page.poll else null
+        pollHeaderAdapter.setPoll(inlinePoll)
+        if (page.poll != null) {
+            currentPoll = page.poll
+            cachedPollTopicId = page.id
+        }
+        pageHasPoll = currentPoll != null
+        // Topic hat (SAME policy as the WebView): 4pda echoes the topic's first post as a «шапка»
+        // at the top of EVERY page. Keep it only on the real first page (as a collapsible block);
+        // on deep pages strip the repeated copy so it doesn't show again. processHatForPage returns
+        // the hat id only for page 1 (inline), but also captures [toolbarHatItem] on ANY page so the
+        // ⓘ toolbar button (and its popup) work even when the topic opens directly on a deep page.
+        topicHatPostId = processHatForPage(page)
+        pageHasHat = toolbarHatItem != null
+        refreshToolbarState()
+        applyToolbarTitleFromPage(page) // fill the title from the loaded page (deep-link/deep-page opens)
+        val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
+        val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
+        pagination.reset(topicId, page.pagination, items)
+        // Обновление снизу: на этой странице непрочитанного нет, но тема выросла за её границу —
+        // шагаем вниз, пока не найдём страницу с непрочитанным (иначе новые посты не видны вовсе).
+        // Каждый шаг увеличивает loadedPage, так что цикл упирается в последнюю страницу.
+        if (refreshFollowNextPageArmed && pendingJumpToBottom &&
+                items.none { it.postId > pendingRefreshSeenUpToPostId }) {
+            pagination.nextPageUrl()?.let { next ->
+                if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                    android.util.Log.i("FPDA_REFRESH_ANCHOR", "follow_next_page topic=${page.id} " +
+                            "page=${page.pagination.current}/${page.pagination.all} seenUpTo=$pendingRefreshSeenUpToPostId")
+                }
+                loadTopic(next, preserveRefreshIntent = true) // индикатор держим: вложенная загрузка его снимет
+                return
+            }
+        }
+        refreshFollowNextPageArmed = false
+        updateRefreshGesture() // top pull feeds prev-page loading, not refresh, when pages are above
+        barCurrentPage = pagination.loadedPage
+        loadedItems.clear()
+        loadedItems.addAll(items)
+        mentionScannedPostIds.clear()
+        markedTopicReadAtEnd = false
+        topicHasUnread = page.hasUnreadTarget // drives «К непрочитанному» in the smart-nav menu
+        // Порт WebView-guard'а (ThemeUseCase.onPrimaryThemeLoaded → shouldSuppressMarkReadForSession,
+        // куда натив не ходит): подлинное открытие на первом непрочитанном, севшее выше низа
+        // страницы, не должно метить тему прочитанной в момент рендера — только после жеста юзера.
+        // OR с мостиком boundary-резюма: его findpost-страница unread-метаданных не несёт.
+        suppressEndMarkReadUntilUserScroll = pendingSuppressEndMarkReadForResume ||
+                forpdateam.ru.forpda.presentation.theme
+                        .TopicUnreadOpenPolicy.shouldSuppressMarkReadForFirstUnreadOpen(
+                                forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy
+                                        .parseOpenSessionKind(page.openSessionKind),
+                                page,
+                        )
+        pendingSuppressEndMarkReadForResume = false
+        closeSearch() // matches from a previous page are stale after a reload
+        updatePaginationBar()
+        applyInitialHatCollapsedState(topicHatPostId)
+        postsAdapter.setTopicHat(topicHatPostId, hatCollapsed)
+        submitPosts {
+            if (view != null) {
+                applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
+                // Fill an under-filled last page from previous pages (no empty area + scroll-back works).
+                recyclerView.post { maybeFillLastPage() }
+            }
+        }
+        enrichLoadedPage(page)
     }
 
     /**
@@ -3545,6 +3684,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Findpost-страница резюма не несёт unread-метаданных — пробрасываем гейт мгновенного mark-read
         // вручную: юзер сядет на границу с непрочитанным НИЖЕ, «низ виден при рендере» ≠ «дочитал».
         pendingSuppressEndMarkReadForResume = true
+        // Fallback на случай, если пост границы удалён из темы: findpost по нему упадёт (исключение
+        // «Пост #… не найден») или отдаст пустые посты. Тогда вместо пустого экрана рендерим ЭТУ уже
+        // распарсенную getnewpost-страницу. Взводим ДО вложенной загрузки — её onSuccess/onFailure читают.
+        resumeFallbackPage = page
+        resumeFallbackUrl = url
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             android.util.Log.i("FPDA_READ_BOUNDARY",
                     "native resume_findpost topic=${page.id} boundary=$resumeId serverAnchor=$serverAnchorId lastLoaded=$lastLoadedId")
@@ -3627,7 +3771,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private fun applyListBottomPadding() {
         if (view == null) return
-        val target = listBottomChromeOverlapPx() + classicPaginationBarPadPx() + bottomRestGapPx()
+        val target = listBottomChromeOverlapPx() + classicPaginationBarPadPx() + bottomRestGapPx() +
+                deepLinkAnchorExtraBottomPad
         if (recyclerView.paddingBottom != target) {
             recyclerView.setPadding(recyclerView.paddingLeft, recyclerView.paddingTop,
                     recyclerView.paddingRight, target)
@@ -3756,7 +3901,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      *  • post is TALLER than the viewport → align its TOP to the top edge («выравнивать по верху»), so it is
      *    NEVER cut on both sides — the user reads it from the beginning and scrolls down for the rest.
      */
-    private fun anchorPost(concatPos: Int, isLast: Boolean) {
+    private fun anchorPost(concatPos: Int, isLast: Boolean, topAlign: Boolean = false) {
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         lm.scrollToPositionWithOffset(concatPos, 0) // provisional top-align
         recyclerView.post {
@@ -3769,6 +3914,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // bottomAlignPost lifts its buttons above the tab bar.
                 lm.scrollToPosition(concatPos)
                 bottomAlignPost(concatPos)
+            } else if (topAlign) {
+                // Explicit deep-link / quote target: bring it to the TOP for parity with the same tap on an
+                // earlier page. Near the end of the topic there can be less than a viewport of content below
+                // it, so the provisional scroll above clamped at the content edge and the target sits lower
+                // than the top (its top offset by `shortfall`). Reserve that shortfall as transient bottom
+                // room so a second top-align actually lands — see [deepLinkAnchorExtraBottomPad]. When the
+                // target already reached the top (plenty below it), shortfall is 0 and nothing changes.
+                val shortfall = itemView.top - recyclerView.paddingTop
+                if (shortfall > 0) {
+                    deepLinkAnchorExtraBottomPad = shortfall
+                    applyListBottomPadding()
+                    lm.scrollToPositionWithOffset(concatPos, 0)
+                }
             } else {
                 // Fitting mid post: pull it fully in if its bottom is clipped by the tab-bar chrome.
                 val overflow = itemView.bottom - (recyclerView.height - recyclerView.paddingBottom)
@@ -3782,6 +3940,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             hasUnreadTarget: Boolean,
             items: List<NativePostItem>,
     ) {
+        // Drop any deep-link top-align bottom room reserved by a PREVIOUS anchor so this fresh landing
+        // measures against the real content end (a stale reservation would leave phantom space at the bottom).
+        if (deepLinkAnchorExtraBottomPad != 0) {
+            deepLinkAnchorExtraBottomPad = 0
+            applyListBottomPadding()
+        }
         val ids = items.map { it.postId }
         val targetId = anchorPostId?.toIntOrNull()
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
@@ -3878,7 +4042,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         if (forpdateam.ru.forpda.BuildConfig.DEBUG) android.util.Log.i("FPDA_CLEAR", "anchor SET(resolver)=$anchoredBottomPostId")
                         anchorPost(target, isLast = true)
                     }
-                    else -> anchorPost(target, isLast = false)
+                    // An explicit deep-link / quote / findpost target top-aligns (reserving room at the topic
+                    // end if needed); a first-unread landing keeps the empty-space-averse behaviour.
+                    else -> anchorPost(target, isLast = false,
+                            topAlign = request is AnchorRequest.Post &&
+                                    request.reason == AnchorRequest.Post.Reason.FIND_POST)
                 }
                 // Flash the resolved post once so the user sees where a link/find/unread open landed.
                 if (request is AnchorRequest.Post) postsAdapter.requestHighlight(request.postId)

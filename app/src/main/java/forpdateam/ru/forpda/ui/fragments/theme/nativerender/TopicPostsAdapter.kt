@@ -208,7 +208,12 @@ class TopicPostsAdapter(
         init {
             card.background = cardBg
             card.clipToOutline = true
-            androidx.core.view.ViewCompat.setElevation(card, 2f * itemView.resources.displayMetrics.density)
+            // Tiny 1dp elevation — half the old 2dp. The 2dp drop shadow made each post read as a heavy
+            // floating box on light palettes (user: «рамки грубоваты… может у них тень?»); dropping it to
+            // a faint 1dp keeps a hint of depth without the boxed look, VK-style. Separation still leans on
+            // the card fill vs. the neutral list background plus the soft hairline border. On dark/AMOLED
+            // the shadow is invisible anyway, so the resting hairline keeps cards delineated there.
+            androidx.core.view.ViewCompat.setElevation(card, 1f * itemView.resources.displayMetrics.density)
         }
 
         /** Running fade for a target-post highlight, cancelled on any rebind so recycling is clean. */
