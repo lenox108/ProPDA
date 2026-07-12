@@ -18,7 +18,7 @@ import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.dp2
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
-import forpdateam.ru.forpda.ui.views.dialog.shrinkWidthToContent
+import forpdateam.ru.forpda.ui.views.dialog.applyCompactWidthAnimated
 
 /**
  * Created by radiationx on 24.09.17.
@@ -57,8 +57,8 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         val dialogFragment = fm.findFragmentByTag(PREF_DIALOG_TAG)
                 as? androidx.fragment.app.DialogFragment
         (dialogFragment?.dialog as? androidx.appcompat.app.AlertDialog)?.let { alert ->
-            if (alert.isShowing) alert.shrinkWidthToContent()
-            else alert.setOnShowListener { alert.shrinkWidthToContent() }
+            if (alert.isShowing) alert.applyCompactWidthAnimated()
+            else alert.setOnShowListener { alert.applyCompactWidthAnimated() }
         }
     }
 
