@@ -192,7 +192,12 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
         setupMessagesList()
 
-        attachmentsPopup?.setEnabledTextControls(false)
+        // Keep the «Вставить» / «В спойлер» controls enabled in QMS too: uploaded files are still
+        // registered on the message via the `attaches` field, so inserting [attachment=id:name]
+        // (optionally wrapped in [spoiler]) makes 4PDA render that file inline (inside the spoiler)
+        // instead of appending it below. QMS bodies use the same PostBodyRenderer as forum posts,
+        // so the spoiler renders natively. Restores the pre-native-rewrite «В спойлер» option.
+        attachmentsPopup?.setEnabledTextControls(true)
         attachmentsPopup?.setAddOnClickListener { tryPickFile() }
         attachmentsPopup?.setRetryUploadListener(object : AttachmentsPopup.OnRetryUploadListener {
             override fun onRetry(files: List<RequestFile>, pending: List<AttachmentItem>) {
