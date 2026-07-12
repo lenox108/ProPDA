@@ -34,6 +34,13 @@ class QmsMessagesAdapter(
 
         /** Long-press on a bubble → the message actions menu (copy). */
         fun onMessageLongClick(anchor: View, item: QmsChatItem.Message)
+
+        /** Tap on a file-attachment link → download it (host passes an Activity context so the
+         *  «Способ загрузки → Спрашивать каждый раз» chooser can appear). */
+        fun onDownloadLinkTap(url: String, fileName: String?)
+
+        /** Long-press on an in-text hyperlink → chooser (open in browser / share / copy link). */
+        fun onLinkLongClick(url: String)
     }
 
     /** Spoiler expand state, keyed "messageId:spoilerIndex", surviving view recycling. */
@@ -48,6 +55,12 @@ class QmsMessagesAdapter(
 
                 override fun onImageLongClick(imageUrl: String) =
                         listener.onImageLongClick(imageUrl)
+
+                override fun onDownloadLinkTap(url: String, fileName: String?) =
+                        listener.onDownloadLinkTap(url, fileName)
+
+                override fun onLinkLongClick(url: String) =
+                        listener.onLinkLongClick(url)
             },
     )
 

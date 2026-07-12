@@ -55,6 +55,18 @@ class BodyBlockViewFactory(
          * (Скачать / Открыть в браузере).
          */
         fun onDownloadLinkLongPress(url: String, fileName: String?) = Unit
+
+        /**
+         * Tap on a downloadable file link → the host starts the download. Routed through the host
+         * (not [linkHandler]) so it can pass an **Activity** context to the download: the app-context
+         * `linkHandler.handle` path silently drops the UI context, so «Способ загрузки → Спрашивать
+         * каждый раз» could never show its chooser and the download did nothing on non-SYSTEM methods.
+         */
+        fun onDownloadLinkTap(url: String, fileName: String?) = Unit
+
+        /** Long-press on an in-text hyperlink → the host shows a chooser (открыть в браузере /
+         *  поделиться / скопировать ссылку). */
+        fun onLinkLongClick(url: String) = Unit
     }
 
     /**
@@ -385,7 +397,7 @@ class BodyBlockViewFactory(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = (6 * dm.density).toInt() }
-            setOnClickListener { linkHandler.handle(block.url, null) }
+            setOnClickListener { callbacks.onDownloadLinkTap(block.url, block.name) }
             setOnLongClickListener {
                 callbacks.onDownloadLinkLongPress(block.url, block.name)
                 true
@@ -570,6 +582,10 @@ class BodyBlockViewFactory(
                 // ScrollingMovementMethod fighting RecyclerView drags and routes taps in-app.
                 movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
                     override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
+                    override fun onLongClick(url: String): Boolean {
+                        callbacks.onLinkLongClick(url)
+                        return true
+                    }
                 })
             } else {
                 // No links → selectable text: native Copy/Share plus a custom «Цитировать» that
