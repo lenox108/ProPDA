@@ -1,6 +1,5 @@
 package forpdateam.ru.forpda.ui.compose.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,16 +27,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.material.imageview.ShapeableImageView
 import forpdateam.ru.forpda.R
@@ -47,7 +49,7 @@ import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.entity.remote.qms.QmsContact
 import forpdateam.ru.forpda.presentation.qms.contacts.QmsContactsViewModel
 import forpdateam.ru.forpda.ui.ListPlateSegment
-import forpdateam.ru.forpda.ui.getDimensionFromAttr
+import forpdateam.ru.forpda.ui.drawableResForListPlate
 import forpdateam.ru.forpda.ui.listPlateSegment
 
 /**
@@ -135,11 +137,6 @@ private fun QmsContactRow(
         onLongClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val plateFill = remember(context) { Color(context.getColorFromAttr(R.attr.content_card_surface)) }
-    val strokeColor = remember(context) { Color(context.getColorFromAttr(R.attr.list_plate_stroke_color)) }
-    val strokeWidth = with(LocalDensity.current) {
-        remember(context) { context.getDimensionFromAttr(R.attr.list_plate_stroke_width) }.toDp()
-    }
     val radius = dimensionResource(R.dimen.card_corner_radius)
     val inset = dimensionResource(R.dimen.list_plate_horizontal_inset)
     val groupGap = dimensionResource(R.dimen.list_plate_group_gap_vertical)
@@ -151,10 +148,18 @@ private fun QmsContactRow(
     }
     val gapAbove = segment == ListPlateSegment.SINGLE || segment == ListPlateSegment.FIRST
     val gapBelow = segment == ListPlateSegment.SINGLE || segment == ListPlateSegment.LAST
-    Surface(
-            color = plateFill,
-            shape = shape,
-            border = if (strokeWidth > 0.dp) BorderStroke(strokeWidth, strokeColor) else null,
+    // Плита-сегмент рисуется тем же drawable pref_plate_*, что и «Ответы» /
+    // списки диалогов QMS / избранное: рамка по периметру группы + ОДИНОЧНЫЙ
+    // внутренний разделитель (у top/middle-сегментов нижняя граница
+    // закрашивается фоном — см. layer-list в pref_plate_middle.xml). Раньше
+    // строка рисовала полную BorderStroke со всех сторон, и у соседних строк
+    // границы складывались в двойную толщину — жалоба «слишком толстые
+    // разделители в QMS» (палитра Sepia). Общий drawable гарантирует единый
+    // стиль со всеми легаси-списками.
+    val plate = remember(context, segment) {
+        ContextCompat.getDrawable(context, drawableResForListPlate(segment))
+    }
+    Box(
             modifier = Modifier
                     .fillMaxWidth()
                     .padding(
@@ -162,12 +167,19 @@ private fun QmsContactRow(
                             end = inset,
                             top = if (gapAbove) groupGap else 0.dp,
                             bottom = if (gapBelow) groupGap else 0.dp,
-                    ),
+                    )
+                    .drawBehind {
+                        plate?.let { d ->
+                            d.setBounds(0, 0, size.width.toInt(), size.height.toInt())
+                            d.draw(drawContext.canvas.nativeCanvas)
+                        }
+                    }
+                    .clip(shape)
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Row(
                 modifier = Modifier
                         .fillMaxWidth()
-                        .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start,
