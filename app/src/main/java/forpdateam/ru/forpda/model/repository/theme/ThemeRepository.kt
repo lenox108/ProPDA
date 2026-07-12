@@ -59,6 +59,13 @@ class ThemeRepository(
                                 "pollOpen" to pollOpen
                         )
                 )
+                // История посещений должна пополняться и на попадании в кэш страниц: с нативным
+                // рендером/префетчем большинство открытий тем — это cache hit, и без этой записи
+                // вкладка «История» не запоминает свежие переходы (не добавляет/не поднимает тему).
+                val cachedTopicId = if (cached.id > 0) cached.id else topicId ?: 0
+                if (cachedTopicId > 0) {
+                    historyCache.add(cachedTopicId, cached.url ?: url, cached.title)
+                }
                 return@withContext cached
             }
         }

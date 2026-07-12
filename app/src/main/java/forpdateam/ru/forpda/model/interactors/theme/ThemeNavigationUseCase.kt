@@ -29,11 +29,13 @@ class ThemeNavigationUseCase @Inject constructor(
     private var editPageHandler: ResultListenerHandler? = null
 
     /**
-     * Open the standalone fullscreen post editor ([Screen.EditPost]) for a NEW reply, seeded with the
-     * current inline-draft [message]/[attachments]/selection — parity with the WebView's «полноэкранный
-     * редактор» (ThemeFragment.fullButton → openEditPostForm). [onSync] fires when the user closes the
-     * editor without posting (restore the draft into the inline panel); [onPosted] fires after a
-     * successful post (returns the fresh page so the caller can refresh the topic).
+     * Open the standalone fullscreen post editor ([Screen.EditPost]), seeded with the current inline
+     * draft [message]/[attachments]/selection — parity with the WebView's «полноэкранный редактор»
+     * (ThemeFragment.fullButton → openEditPostForm). When [editPostId] > 0 the handoff is an EDIT of that
+     * post (carry TYPE_EDIT_POST + postId so the submit patches the post instead of creating a duplicate);
+     * otherwise it is a NEW reply. [onSync] fires when the user closes the editor without posting (restore
+     * the draft into the inline panel); [onPosted] fires after a successful post (returns the fresh page so
+     * the caller can refresh the topic).
      */
     fun openFullscreenEditor(
             forumId: Int,
@@ -44,14 +46,16 @@ class ThemeNavigationUseCase @Inject constructor(
             attachments: List<AttachmentItem>,
             selectionStart: Int?,
             selectionEnd: Int?,
+            editPostId: Int = 0,
             onSync: (EditPostSyncData) -> Unit,
             onPosted: (ThemePage) -> Unit,
     ) {
         val form = EditPostForm().apply {
-            type = EditPostForm.TYPE_NEW_POST
+            type = if (editPostId > 0) EditPostForm.TYPE_EDIT_POST else EditPostForm.TYPE_NEW_POST
             this.forumId = forumId
             this.topicId = topicId
             this.st = st
+            this.postId = editPostId
             this.message = message
             this.attachments.addAll(attachments)
         }

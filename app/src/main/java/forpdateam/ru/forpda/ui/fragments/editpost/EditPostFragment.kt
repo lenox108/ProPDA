@@ -1441,7 +1441,10 @@ class EditPostFragment : TabFragment() {
         ): Bundle {
             if (themeName != null)
                 args.putString(ARG_THEME_NAME, themeName)
-            args.putInt(EditPostForm.ARG_TYPE, EditPostForm.TYPE_NEW_POST)
+            // Honour the form's own type: handing an edit off to the fullscreen editor must keep
+            // TYPE_EDIT_POST (+ postId), otherwise the submit goes out as a NEW post and IPB creates a
+            // duplicate instead of editing (баг «из полноэкранного редактора появляется дубль»).
+            args.putInt(EditPostForm.ARG_TYPE, form.type)
             args.putParcelableArrayList(ARG_ATTACHMENTS, form.attachments)
             args.putString(ARG_MESSAGE, form.message)
             if (selectionStart != null && selectionEnd != null) {

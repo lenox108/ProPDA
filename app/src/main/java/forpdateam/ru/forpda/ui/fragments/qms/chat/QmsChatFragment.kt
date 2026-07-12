@@ -285,6 +285,14 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
                     override fun onMessageLongClick(anchor: View, item: QmsChatItem.Message) =
                             showMessageMenu(anchor, item)
+
+                    override fun onDownloadLinkTap(url: String, fileName: String?) {
+                        systemLinkHandler.handleDownload(url, fileName, requireContext())
+                    }
+
+                    override fun onLinkLongClick(url: String) =
+                            forpdateam.ru.forpda.ui.fragments.theme.nativerender.LinkActionsMenu
+                                    .show(requireContext(), url, systemLinkHandler, clipboardHelper)
                 },
         )
         messagesAdapter.textScale = mainPreferencesHolder.getWebViewFontSize() / REFERENCE_FONT_SIZE
