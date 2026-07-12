@@ -7,6 +7,7 @@ import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.RecyclerView
 import com.hannesdorfmann.adapterdelegates4.AdapterDelegate
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.entity.app.notes.NoteItem
 import forpdateam.ru.forpda.ui.dp16
 import forpdateam.ru.forpda.ui.dp40
@@ -42,6 +43,15 @@ class NoteAdapterDelegate(
 
         private lateinit var currentItem: NoteItem
 
+        // Дефолтная (не-выделенная) обводка карточки, как её задал item_note.xml:
+        // ?attr/list_plate_stroke_color шириной ?attr/list_plate_stroke_width.
+        // В светлой/тёмной темах ширина = 0dp (обводки нет, карточка отделяется
+        // тоном), в AMOLED = 1dp faint amoled_list_plate_stroke — иначе карточка
+        // #000000 на #000000 сливалась с фоном и заметки шли без разделителей.
+        // Захватываем до первого bind, чтобы восстанавливать после accent-стейта.
+        private val defaultStrokeColors = binding.root.strokeColorStateList
+        private val defaultStrokeWidth = binding.root.strokeWidth
+
         init {
             binding.root.setOnClickListener {
                 clickListener.onItemClick(currentItem)
@@ -74,10 +84,16 @@ class NoteAdapterDelegate(
             }
             binding.root.isSelected = isSelected
             binding.root.isChecked = isSelected
-            binding.root.strokeWidth = if (isSelected) {
-                binding.root.resources.getDimensionPixelSize(R.dimen.dp2)
+            // Выделение = акцентная обводка 2dp; иначе — дефолтная faint-обводка
+            // из item_note.xml (0dp в light/dark, 1dp в AMOLED). Раньше здесь
+            // жёстко ставилось 0dp в невыделенном состоянии, отчего карточки
+            // заметок в AMOLED оставались без разделителей.
+            if (isSelected) {
+                binding.root.setStrokeColor(binding.root.context.getColorFromAttr(R.attr.colorAccent))
+                binding.root.strokeWidth = binding.root.resources.getDimensionPixelSize(R.dimen.dp2)
             } else {
-                0
+                defaultStrokeColors?.let { binding.root.setStrokeColor(it) }
+                binding.root.strokeWidth = defaultStrokeWidth
             }
             binding.itemTitle.text = item.title
             val content = item.content
