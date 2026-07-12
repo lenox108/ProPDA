@@ -80,6 +80,14 @@ class QmsMessagesAdapter(
             notifyDataSetChanged()
         }
 
+    /** «Плоские посты» pref: drop the hairline stroke on quote/spoiler blocks inside messages. */
+    var flatBlocks: Boolean = false
+        set(value) {
+            if (value == field) return
+            field = value
+            notifyDataSetChanged()
+        }
+
     override fun getItemViewType(position: Int): Int = when (getItem(position)) {
         is QmsChatItem.DateDivider -> TYPE_DATE
         is QmsChatItem.Message -> TYPE_MESSAGE
@@ -97,6 +105,7 @@ class QmsMessagesAdapter(
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         blockFactory.textScale = textScale
         blockFactory.animatedSmiles = animatedSmiles
+        blockFactory.flatBlocks = flatBlocks
         when (val item = getItem(position)) {
             is QmsChatItem.DateDivider -> (holder as DateViewHolder).bind(item, textScale)
             is QmsChatItem.Message -> (holder as MessageViewHolder).bind(item, textScale)

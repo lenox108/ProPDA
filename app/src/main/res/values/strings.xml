@@ -863,6 +863,8 @@
     <string name="pref_title_circle_avatars">Круглые аватарки</string>
     <string name="pref_title_animated_smiles">Анимированные смайлы</string>
     <string name="pref_summary_animated_smiles">Проигрывать анимацию смайлов в постах</string>
+    <string name="pref_title_flat_posts">Посты без рамок</string>
+    <string name="pref_summary_flat_posts">Без рамок и теней у карточек, цитат и спойлеров</string>
 
     <string name="pref_title_unread_top">Непрочитанные сверху</string>
     <string name="pref_title_show_dot">Индикатор новых сообщений</string>

@@ -15,6 +15,8 @@ class TopicPreferencesHolder(
 
     fun observeAnimatedSmilesFlow(): Flow<Boolean> = dataStore.observeAnimatedSmilesFlow()
 
+    fun observeFlatPostsFlow(): Flow<Boolean> = dataStore.observeFlatPostsFlow()
+
     fun observeForumBlacklistFlow(): Flow<List<ForumBlacklistedUser>> = dataStore.observeForumBlacklistFlow()
 
     fun getShowAvatars(): Boolean = dataStore.getShowAvatarsImmediate()
@@ -22,6 +24,8 @@ class TopicPreferencesHolder(
     fun getCircleAvatars(): Boolean = dataStore.getCircleAvatarsImmediate()
 
     fun getAnimatedSmiles(): Boolean = dataStore.getAnimatedSmilesImmediate()
+
+    fun getFlatPosts(): Boolean = dataStore.getFlatPostsImmediate()
 
     fun getForumBlacklist(): List<ForumBlacklistedUser> = dataStore.getForumBlacklistImmediate()
 
@@ -40,6 +44,8 @@ class TopicPreferencesHolder(
     suspend fun setCircleAvatars(value: Boolean) = dataStore.setCircleAvatars(value)
 
     suspend fun setAnimatedSmiles(value: Boolean) = dataStore.setAnimatedSmiles(value)
+
+    suspend fun setFlatPosts(value: Boolean) = dataStore.setFlatPosts(value)
 
     suspend fun setAnchorHistory(value: Boolean) = dataStore.setAnchorHistory(value)
 

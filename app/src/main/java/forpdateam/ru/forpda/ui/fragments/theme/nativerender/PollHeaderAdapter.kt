@@ -73,10 +73,12 @@ class PollHeaderAdapter(
             (layoutParams as RecyclerView.LayoutParams).setMargins(hMargin, vMargin, hMargin, vMargin)
             // Match the post card's Material 3 look (rounded 16dp corners + hairline outline + a slight
             // elevation) instead of a flat rectangle, so the poll header reads as the same M3 surface as
-            // the «ШАПКА ТЕМЫ» card and every post below it.
-            background = postCardBackground(ctx)
+            // the «ШАПКА ТЕМЫ» card and every post below it. «Плоские посты» drops the outline+shadow to
+            // stay in sync with the post cards below.
+            val flat = forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(ctx).getFlatPosts()
+            background = postCardBackground(ctx, flat)
             clipToOutline = true
-            androidx.core.view.ViewCompat.setElevation(this, 2f * dm.density)
+            androidx.core.view.ViewCompat.setElevation(this, (if (flat) 0f else 2f) * dm.density)
         }
         return PollViewHolder(root)
     }
@@ -90,13 +92,16 @@ class PollHeaderAdapter(
      * `content_card_surface` fill, 16dp corners and a resting hairline outline — kept in sync with the
      * post card so the poll header sits on the identical surface as the «ШАПКА ТЕМЫ» card below it.
      */
-    private fun postCardBackground(ctx: android.content.Context): android.graphics.drawable.GradientDrawable {
+    private fun postCardBackground(ctx: android.content.Context, flat: Boolean = false): android.graphics.drawable.GradientDrawable {
         val dm = ctx.resources.displayMetrics
         val fill = ctx.getColorFromAttr(forpdateam.ru.forpda.R.attr.content_card_surface)
         return android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = 16f * dm.density
             setColor(fill)
-            setStroke((1f * dm.density).toInt().coerceAtLeast(1), restingCardBorderColor(ctx, fill))
+            setStroke(
+                    if (flat) 0 else (1f * dm.density).toInt().coerceAtLeast(1),
+                    restingCardBorderColor(ctx, fill),
+            )
         }
     }
 

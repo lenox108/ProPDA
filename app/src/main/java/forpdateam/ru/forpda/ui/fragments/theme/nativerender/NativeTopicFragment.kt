@@ -2286,6 +2286,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             circleAvatars = topicPreferencesHolder.getCircleAvatars(),
             density = mainPreferencesHolder.getTopicPostDensity(),
             animatedSmiles = topicPreferencesHolder.getAnimatedSmiles(),
+            flatBlocks = topicPreferencesHolder.getFlatPosts(),
     )
 
     override fun onRestoredAfterChildFragmentRemoved() {
