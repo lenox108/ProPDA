@@ -26,9 +26,12 @@ import java.util.regex.Pattern
  * Фаза 2 "смайлы").
  *
  * The shortcode → filename map is parsed once from the same `assets/forpda/scripts/z_emoticons.js`
- * the WebView uses, so the two stay in sync. v1 handles only unambiguous colon-delimited word
- * shortcodes (`:[a-z0-9_-]+:`) — the ones that currently leak as literal text; 2-char emoticons like
- * `:)` are a later, riskier (false-positive-prone) step. Smile gifs are local (no network, no async
+ * the WebView uses, so the two stay in sync. We handle EVERY code in that map — both the self-delimited
+ * `:word:` shortcodes (`:thank_you:`, `:4PDA:`, …) AND the classic ASCII emoticons (`:)`, `:(`, `:D`,
+ * `;)`, `:P`, `B)`, `<_<`, `o.O`, …). The ASCII ones are the common case in real posts and previously
+ * leaked as literal text ("вместо смайлов — символы"); they are guarded by whitespace/line boundaries
+ * exactly as `z_emoticons.js`'s `buildRegexp` guards them, so a `:)` inside a URL/word/code never fires.
+ * Smile gifs are local (no network, no async
  * layout jump); by default they render as a static first frame at a fixed inline size. With the
  * «Анимированные смайлы» pref on (and API 28+) the span carries an [AnimatedImageDrawable] instead —
  * playback is wired to the host TextView via [startAnimations].
@@ -61,24 +64,45 @@ object SmileProvider {
             val map = LinkedHashMap<String, String>()
             runCatching {
                 val js = assets.open(EMOTICON_SCRIPT).bufferedReader().use { it.readText() }
-                // Match:  ":word:": ["file.gif"  — colon-delimited word shortcodes only.
-                // Hyphens are part of the word (":scratch_one-s_head:", ":i-m_so_happy:").
-                val entry = Pattern.compile("\"(:[a-z0-9_-]+:)\"\\s*:\\s*\\[\"([a-z0-9_-]+\\.gif)\"")
+                // Each map entry is `<key>: ["<file>.gif"…]`. The key is EITHER a quoted string
+                // (`":happy:"`, `":)"`, `"<_<"`, `"@}-'-,-"`) OR a bare JS identifier (`o_O:`). The value's
+                // first array element is the gif filename. Parse every code (word AND ASCII), not just the
+                // lowercase `:word:` subset the old regex caught — that subset silently dropped `:4PDA:`
+                // (uppercase) and `o_O` (unquoted) too.
+                val entry = Pattern.compile(
+                        "(?:\"((?:[^\"\\\\]|\\\\.)*)\"|([A-Za-z_][A-Za-z0-9_]*))" +
+                                "\\s*:\\s*\\[\\s*\"([A-Za-z0-9_.\\-]+\\.gif)\"")
                 val m = entry.matcher(js)
                 while (m.find()) {
-                    map[m.group(1)!!] = m.group(2)!!
+                    val code = m.group(1) ?: m.group(2) ?: continue
+                    val file = m.group(3) ?: continue
+                    map[code] = file
                 }
             }
             codeToFile = map
-            pattern = if (map.isEmpty()) {
-                null
+            pattern = buildPattern(map.keys)
+        }
+    }
+
+    /**
+     * Combined alternation over every known code, longest-first (Java alternation is first-match, not
+     * longest — so `:-)` must precede `:)`). Mirrors `z_emoticons.js`'s `buildRegexp`: a self-delimited
+     * `:word:` code needs no boundary, but an ASCII emoticon (`:)`, `:D`, `B)`, `<_<`, `o.O`, …) is only
+     * matched when whitespace/line-bounded so it never fires inside a URL, word, or code snippet. The
+     * boundaries are zero-width lookarounds, so a match's [java.util.regex.Matcher.group] is the bare code
+     * and its start/end bound exactly the code (no whitespace to trim when placing the span).
+     */
+    private fun buildPattern(codes: Set<String>): Pattern? {
+        if (codes.isEmpty()) return null
+        val alternation = codes.sortedByDescending { it.length }.joinToString("|") { code ->
+            val quoted = Pattern.quote(code)
+            if (code.length > 1 && code.startsWith(":") && code.endsWith(":")) {
+                quoted
             } else {
-                // Longest first so e.g. ":happy:" isn't shadowed by a shorter prefix.
-                val alternation = map.keys.sortedByDescending { it.length }
-                        .joinToString("|") { Pattern.quote(it) }
-                Pattern.compile(alternation)
+                "(?:^|(?<=\\s))$quoted(?=\\s|\$)"
             }
         }
+        return Pattern.compile(alternation)
     }
 
     /**
