@@ -26,14 +26,38 @@ import timber.log.Timber
  * Тема alertDialogTheme не всегда задаёт контраст кнопок в тёмной теме — красим явно.
  * [android.util.TypedValue.data] для ссылки на цвет — не ARGB; через [android.content.res.TypedArray] цвет резолвится верно.
  */
-fun MaterialAlertDialogBuilder.showWithStyledButtons(): AlertDialog {
+fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = false): AlertDialog {
     val dialog = create()
     dialog.applyForPdaSurface()
     dialog.setOnShowListener {
         dialog.applyForPdaMaterialStyle()
+        // compact — сжать окно до ширины контента (для коротких диалогов-подтверждений и диалогов
+        // с одним полем), чтобы они не растягивались на ~весь экран, а выглядели минималистично.
+        if (compact) dialog.shrinkWidthToContent()
     }
     dialog.show()
     return dialog
+}
+
+/**
+ * Ужимает ширину окна диалога до ширины его контента. AlertController иначе держит ширину по
+ * windowMinWidthMinor/Major (~90–95% экрана), из-за чего короткие подтверждения выглядят пустыми.
+ * Меряем панель в UNSPECIFIED (натуральная ширина заголовка/кнопок) и ставим окну конкретную ширину
+ * в px — фиксированный размер окна перебивает внутренний минимум. Зажимаем в 300dp..90% экрана,
+ * чтобы диалог с полем ввода оставался удобным, а очень длинный заголовок не вылезал за экран.
+ */
+private fun AlertDialog.shrinkWidthToContent() {
+    val w = window ?: return
+    val panel = w.decorView.findViewById<View>(AppCompatR.id.parentPanel) ?: return
+    panel.measure(
+        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+    )
+    val density = context.resources.displayMetrics.density
+    val minPx = (300 * density).toInt()
+    val maxPx = (context.resources.displayMetrics.widthPixels * 0.90f).toInt()
+    val target = (panel.measuredWidth + (16 * density).toInt()).coerceIn(minPx, maxPx)
+    w.setLayout(target, ViewGroup.LayoutParams.WRAP_CONTENT)
 }
 
 fun AlertDialog.applyForPdaMaterialStyle() {
