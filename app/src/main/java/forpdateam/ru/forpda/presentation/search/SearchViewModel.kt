@@ -233,14 +233,18 @@ class SearchViewModel @Inject constructor(
         if (settings.resourceType == SearchSettings.RESOURCE_NEWS.first) {
             return "https://4pda.to/index.php?p=${item.id}"
         }
+        // Конкретный пост (поиск по сообщениям, «Сообщения пользователя», «Мои сообщения», …): тап открывает
+        // ИМЕННО этот пост в его теме с якорем findpost. Раньше broad-user-search на тапе уводил во вложенный
+        // поиск «посты пользователя в этой теме» (userPostsInTopicSearchUrl) — из-за этого «открывалось ещё
+        // одно окно поиска вместо перехода к посту», а из-за переиспользования таба поиска тап порой вообще
+        // не срабатывал. Drill-down теперь применяется только к результатам-темам (когда поста нет).
+        if (item.id != 0) {
+            return buildSearchFindPostTopicUrl(item.topicId, item.id)
+        }
         if (settings.isBroadUserSearch() && item.topicId > 0) {
             return settings.userPostsInTopicSearchUrl(item)
         }
-        return if (item.id != 0) {
-            buildSearchFindPostTopicUrl(item.topicId, item.id)
-        } else {
-            "https://4pda.to/forum/index.php?showtopic=${item.topicId}"
-        }
+        return "https://4pda.to/forum/index.php?showtopic=${item.topicId}"
     }
 
     fun onItemLongClick(item: SearchItem) {

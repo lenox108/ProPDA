@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Результат «поиск по сообщениям форума» — скруглённая M3-карточка, вписанная с отступом (паритет с
+  постами нативной темы item_native_post: тот же content_card_surface, лёгкий подъём и скругление).
+  Раньше использовался CardStyle.Item.Wide (cardCornerRadius=0dp, edge-to-edge) — из-за него выдача
+  постов выглядела плоской «без M3». Вертикальные промежутки задаёт SpacingItemDecoration(dp8), поэтому
+  на карточке только горизонтальный отступ.
+-->
 <androidx.cardview.widget.CardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    style="@style/CardStyle.Item.Wide"
+    style="@style/CardStyle.Item"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_marginHorizontal="8dp"
     android:background="?attr/selectableItemBackground"
     android:clickable="true"
     android:focusable="true">

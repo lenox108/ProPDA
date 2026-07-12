@@ -164,7 +164,7 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `user post search result opens posts by same user in selected topic`() = runTest {
+    fun `user post search result opens exact post with anchor`() = runTest {
         val routeUrl = SearchSettings().apply {
             source = SearchSettings.SOURCE_ALL.first
             userId = 598
@@ -172,9 +172,10 @@ class SearchViewModelTest {
             subforums = SearchSettings.SUB_FORUMS_TRUE
         }.toUrl()
         val openedUrl = slot<String>()
+        val openArgs = slot<Map<String, String>>()
         coEvery { otherPreferencesHolder.getSearchSettings() } returns ""
         coEvery { searchRepository.getSearch(any()) } returns SearchResult()
-        every { linkHandler.handle(capture(openedUrl), router, any()) } returns true
+        every { linkHandler.handle(capture(openedUrl), router, capture(openArgs)) } returns true
 
         val vm = createViewModel()
         vm.initSearchSettings(routeUrl)
@@ -187,15 +188,11 @@ class SearchViewModelTest {
             id = 999
         })
 
-        val settings = SearchSettings.parseSettings(openedUrl.captured)
-        assertEquals(SearchSettings.RESULT_POSTS.first, settings.result)
-        assertEquals(SearchSettings.SOURCE_CONTENT.first, settings.source)
-        assertEquals(SearchSettings.SUB_FORUMS_FALSE, settings.subforums)
-        assertEquals(598, settings.userId)
-        assertEquals(listOf("678"), settings.forums)
-        assertEquals(listOf("12345"), settings.topics)
-        assertFalse(openedUrl.captured.contains("view=findpost"))
-        assertFalse(openedUrl.captured.contains("&p=999"))
+        // A broad user-POST search returns concrete posts, so tapping a result opens THAT post in its
+        // topic with a findpost anchor — not a nested «посты пользователя в этой теме» search (which
+        // surprised users and, via search-tab reuse, sometimes did nothing). See buildItemClickUrl.
+        assertEquals("https://4pda.to/forum/index.php?showtopic=12345&view=findpost&p=999", openedUrl.captured)
+        assertEquals("explicit_post", openArgs.captured["topic_open_intent"])
     }
 
     @Test

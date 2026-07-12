@@ -36,7 +36,9 @@
         <!-- Читательская палитра светлая: карточка = самый светлый тон (colorSurface). -->
         <item name="content_card_surface">?attr/colorSurface</item>
         <item name="smart_nav_fab_background">@color/minimal_reader_accent_soft</item>
-        <item name="smart_nav_fab_icon">@color/minimal_reader_link_color</item>
+        <!-- Soft light FAB → тёмная иконка (как icon_toolbar на светлых поверхностях),
+             иначе muted link_color на #D8E1E8 даёт ~2.5:1 и стрелка направления не видна. -->
+        <item name="smart_nav_fab_icon">@color/minimal_reader_default_text_color</item>
         <item name="actionModeBackground">@color/minimal_reader_colorPrimary</item>
         <item name="android:windowBackground">@color/minimal_reader_background_base</item>
         <item name="android:navigationBarColor">@color/minimal_reader_navigation_bar_color</item>
