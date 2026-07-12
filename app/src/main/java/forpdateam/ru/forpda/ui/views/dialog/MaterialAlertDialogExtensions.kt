@@ -7,6 +7,7 @@ import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ListView
@@ -29,20 +30,34 @@ import timber.log.Timber
 fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = true): AlertDialog {
     val dialog = create()
     dialog.applyForPdaSurface()
+    // Отключаем системную анимацию окна: свою (плавное появление уже в нужном размере) делаем сами,
+    // иначе системный scale/переезд окна при ресайзе виден как «прыжок».
+    if (compact) dialog.window?.setWindowAnimations(0)
     dialog.setOnShowListener {
         dialog.applyForPdaMaterialStyle()
-        if (compact) {
-            // Ширину окна закрепить можно только ПОСЛЕ show(). Чтобы не было «прыжка» (кадр во всю
-            // ширину → ресайз → ре-центрирование), прячем карточку на кадр ресайза (alpha 0) и плавно
-            // проявляем уже в нужной ширине. Затемнение (dim) — атрибут окна, живёт отдельно и не мигает.
-            val decor = dialog.window?.decorView
-            decor?.alpha = 0f
-            dialog.shrinkWidthToContent()
-            decor?.post { decor.animate().alpha(1f).setDuration(110).start() }
-        }
+        if (compact) dialog.applyCompactWidthAnimated()
     }
     dialog.show()
     return dialog
+}
+
+/**
+ * Компактная ширина БЕЗ «прыжка»: закрепить ширину окна можно только после show() (это неминуемо
+ * двигает окно), поэтому прячем карточку (decor alpha=0), делаем ресайз, ДОЖИДАЕМСЯ завершения
+ * перелэйаута (OnGlobalLayout, а не один post — иначе показ ловит окно ещё «слева») и только тогда
+ * плавно проявляем — уже в финальном размере и по центру. Затемнение фона (dim) — атрибут окна,
+ * оно живёт отдельно и не мигает. Вызывать в onShow (панели уже построены и измеримы).
+ */
+fun AlertDialog.applyCompactWidthAnimated() {
+    val decor = window?.decorView ?: return
+    decor.alpha = 0f
+    shrinkWidthToContent()
+    decor.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+        override fun onGlobalLayout() {
+            decor.viewTreeObserver.removeOnGlobalLayoutListener(this)
+            decor.animate().alpha(1f).setDuration(140).start()
+        }
+    })
 }
 
 /**
@@ -56,7 +71,7 @@ fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = true): A
  * минимум. Зажимаем в 300dp..92% экрана: не уже удобного для поля ввода и не шире экрана для длинного
  * контента. Если замер невалиден (0) — ширину не трогаем (безопасный фолбэк).
  */
-fun AlertDialog.shrinkWidthToContent() {
+private fun AlertDialog.shrinkWidthToContent() {
     val w = window ?: return
     val decor = w.decorView
     val dm = context.resources.displayMetrics
@@ -95,7 +110,15 @@ fun AlertDialog.shrinkWidthToContent() {
     val minPx = (300 * dm.density).toInt()
     val maxPx = (dm.widthPixels * 0.92f).toInt()
     val target = (measured + (16 * dm.density).toInt()).coerceIn(minPx, maxPx)
-    w.setLayout(target, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+    // Закрепить ширину можно только через атрибуты окна (панель/до-show не «прилипают»). Явно ставим
+    // gravity=CENTER, иначе при ресайзе узкое окно прилипает к левому краю. Плавный показ (скрытие на
+    // время ресайза) делает вызывающий код — здесь только выставляем финальные размер/позицию.
+    w.attributes = w.attributes.apply {
+        width = target
+        height = ViewGroup.LayoutParams.WRAP_CONTENT
+        gravity = Gravity.CENTER
+    }
 }
 
 fun AlertDialog.applyForPdaMaterialStyle() {
