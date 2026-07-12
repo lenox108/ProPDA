@@ -303,6 +303,8 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         messagesAdapter.textScale = mainPreferencesHolder.getWebViewFontSize() / REFERENCE_FONT_SIZE
         messagesAdapter.animatedSmiles =
                 forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).getAnimatedSmiles()
+        messagesAdapter.flatBlocks =
+                forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).getFlatPosts()
         messagesLayoutManager = LinearLayoutManager(requireContext()).apply { stackFromEnd = true }
         chatBinding.qmsMessages.apply {
             layoutManager = messagesLayoutManager

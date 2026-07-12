@@ -131,6 +131,10 @@ class BodyBlockViewFactory(
      *  the static behaviour). Playback needs API 28+ — below that the flag silently degrades. */
     var animatedSmiles: Boolean = false
 
+    /** «Плоские посты»: drop the hairline stroke on quote and spoiler blocks (fill+radius stay).
+     *  Applies only to quotes/spoilers — code/attachment/fallback blocks keep their outline. */
+    var flatBlocks: Boolean = false
+
     /**
      * The colour of the surface the text is read ON, used to decide which inline server colours are
      * invisible and how bright a link has to be. Defaults to the app-wide content-card fill (what a
@@ -178,13 +182,14 @@ class BodyBlockViewFactory(
             ctx: Context,
             fillAttr: Int,
             cornerDp: Float = 12f,
+            flat: Boolean = false,
     ): android.graphics.drawable.GradientDrawable {
         val dm = ctx.resources.displayMetrics
         return android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = cornerDp * dm.density
             setColor(ctx.getColorFromAttr(fillAttr))
             setStroke(
-                    (1f * dm.density).toInt().coerceAtLeast(1),
+                    if (flat) 0 else (1f * dm.density).toInt().coerceAtLeast(1),
                     ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant),
             )
         }
@@ -203,7 +208,7 @@ class BodyBlockViewFactory(
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((10 * dm.density).toInt())
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest, flat = flatBlocks)
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -292,7 +297,7 @@ class BodyBlockViewFactory(
                 ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest, flat = flatBlocks)
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
