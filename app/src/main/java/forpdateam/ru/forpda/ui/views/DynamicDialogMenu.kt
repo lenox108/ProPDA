@@ -93,6 +93,14 @@ class DynamicDialogMenu<T, E> {
 
         dialog = builder.showWithStyledButtons().also { shownDialog ->
             shownDialog.setOnDismissListener { dialog = null }
+            // The dialog theme's windowMinWidthMinor forces the window to ~95% of the screen, which
+            // stretched these short action menus across the whole width (lots of empty space on the
+            // right). Let the window wrap its content instead — it then sizes to the longest label
+            // (bounded below by the container's minimumWidth), giving a compact, neatly centred menu.
+            shownDialog.window?.setLayout(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
     }
 
@@ -127,9 +135,12 @@ class DynamicDialogMenu<T, E> {
             orientation = LinearLayout.VERTICAL
             val verticalPadding = style?.contentVerticalPaddingDp ?: 8
             setPadding(0, if (title == null) dp(verticalPadding) else 0, 0, dp(verticalPadding))
-            minimumWidth = dp(280)
+            // WRAP_CONTENT (not MATCH_PARENT) so the menu is only as wide as its longest row needs,
+            // with a sensible floor so short menus don't collapse to a sliver. Paired with the window
+            // setLayout(WRAP_CONTENT) in show(), this keeps action menus compact instead of full-width.
+            minimumWidth = dp(240)
             layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
 
