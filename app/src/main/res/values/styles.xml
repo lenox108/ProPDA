@@ -66,6 +66,38 @@
         <item name="link_color_contrast">?attr/colorPrimary</item>
         <item name="colorControlActivated">?attr/colorPrimary</item>
         <item name="android:colorControlActivated">?attr/colorPrimary</item>
+        <!--
+            Material You: диалоги (MaterialAlertDialogBuilder) должны трекать
+            обои, как остальной хром. Базовые Dialog-темы палитр
+            (DayNightAppTheme.Dialog и т.п.) — это ПОЛНЫЕ темы с
+            захардкоженными статическими colorSurface/colorPrimary/colorOnSurface;
+            накладываясь на тему активити с force=true, они перебивали
+            динамические цвета — диалог «Закрыть остальные вкладки?» и все
+            прочие MaterialAlertDialog под Material You показывались в
+            статической системной палитре (жалоба «блок игнорирует Material You»).
+            Под Material You перенаправляем materialAlertDialogTheme на
+            ThemeOverlay (НЕ полную тему): он добавляет только виджет-стили
+            кнопок/полей, а цветовые роли НАСЛЕДУЕТ из уже динамической темы
+            активити. Применяется только когда активен MY-оверлей (SYSTEM +
+            тумблер), поэтому статические палитры (Sepia и др.) не затрагиваются.
+        -->
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.ForPDA.MaterialYouDialog</item>
+    </style>
+
+    <!--
+        Material You: overlay-тема для MaterialAlertDialog. Родитель —
+        ThemeOverlay.Material3.MaterialAlertDialog (именно OVERLAY, а не полная
+        Theme.*.Dialog.Alert): overlay по определению НЕ несёт полного набора
+        дефолтных цветовых ролей, поэтому при наложении на тему активити
+        colorSurface/colorPrimary/colorOnSurface/colorSecondary остаются
+        динамическими (обои), а не сбрасываются в M3-нейтраль. Здесь задаём
+        только виджет-стили — те же, что и статические Dialog-темы палитр
+        (кнопки/поля ввода), чтобы форма диалога совпадала. textColorHint
+        намеренно НЕ пиним — наследуется M3 colorOnSurfaceVariant (динамический).
+    -->
+    <style name="ThemeOverlay.ForPDA.MaterialYouDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="buttonBarButtonStyle">@style/Widget.ForPDA.DialogButton</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
     </style>
 
     <!--
