@@ -1506,15 +1506,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     override fun onDownloadLinkLongPress(url: String, fileName: String?) {
         val ctx = requireContext()
+        // Параллельно со скачиванием/открытием даём «Поделиться» и «Скопировать ссылку» — паритет
+        // с меню обычной текстовой ссылки ([LinkActionsMenu]); раньше у вложения этих пунктов не было.
         val labels = arrayOf(
                 getString(forpdateam.ru.forpda.R.string.app_update_action_download),
                 getString(forpdateam.ru.forpda.R.string.wv_open_in_browser),
+                getString(forpdateam.ru.forpda.R.string.share),
+                getString(forpdateam.ru.forpda.R.string.wv_copy_link),
         )
         com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
                 .setItems(labels) { _, which ->
                     when (which) {
                         0 -> systemLinkHandler.handleDownload(url, fileName, ctx)
                         1 -> systemLinkHandler.handle(url)
+                        2 -> forpdateam.ru.forpda.common.Utils.shareText(ctx, url)
+                        3 -> forpdateam.ru.forpda.common.Utils.copyToClipBoard(url, clipboardHelper)
                     }
                 }
                 .setNegativeButton(forpdateam.ru.forpda.R.string.cancel, null)
