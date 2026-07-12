@@ -78,6 +78,8 @@ class TopicPostsAdapter(
                     forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMFORTABLE,
             /** «Анимированные смайлы»: play smile GIFs in post bodies instead of a static frame. */
             val animatedSmiles: Boolean = true,
+            /** «Плоские посты»: drop the post-card shadow+border and the quote/spoiler stroke. */
+            val flatBlocks: Boolean = false,
     )
 
     private var displaySettings = PostDisplaySettings()
@@ -304,6 +306,7 @@ class TopicPostsAdapter(
                 applyRestingCardBorder() // hairline M3 outline so cards stay separated (esp. dark/AMOLED)
             }
             cardBg.setColor(cardBaseColor())
+            applyCardElevation()
             applyDensity()
             bindNick(item)
             bindMeta(item)
@@ -431,8 +434,16 @@ class TopicPostsAdapter(
         private fun cardBorderWidthPx(): Int =
                 (1f * itemView.resources.displayMetrics.density).toInt().coerceAtLeast(1)
 
+        /** «Плоские посты»: no resting hairline (width 0) — separation leans on the card fill alone. */
         private fun applyRestingCardBorder() =
-                cardBg.setStroke(cardBorderWidthPx(), restingCardBorderColor())
+                if (settings.flatBlocks) cardBg.setStroke(0, restingCardBorderColor())
+                else cardBg.setStroke(cardBorderWidthPx(), restingCardBorderColor())
+
+        /** Drop-shadow elevation, gated by «Плоские посты». Set per-bind (recycled holders may flip). */
+        private fun applyCardElevation() {
+            val dp = if (settings.flatBlocks) 0f else 1f
+            androidx.core.view.ViewCompat.setElevation(card, dp * itemView.resources.displayMetrics.density)
+        }
 
         /**
          * Post density (Комфортная/Компактная/Сверхкомпактная) — tightens the card's inner vertical
@@ -789,6 +800,7 @@ class TopicPostsAdapter(
             blockFactory.textScale = settings.textScale
             blockFactory.searchQuery = searchQuery
             blockFactory.animatedSmiles = settings.animatedSmiles
+            blockFactory.flatBlocks = settings.flatBlocks
             blockFactory.render(
                     body,
                     item.blocks,

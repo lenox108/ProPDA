@@ -281,6 +281,14 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.FLAT_POSTS) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setFlatPosts(value)
+                }
+            }
+        }
         if (key == AppUpdatePreferences.KEY_CHECK_ENABLED) {
             appUpdatePreferences.setCheckEnabled(sharedPrefs.getBoolean(key, true))
             appUpdateScheduler.reschedule()
@@ -376,6 +384,8 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = topicHolder.getCircleAvatars()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.ANIMATED_SMILES)
                 ?.isChecked = topicHolder.getAnimatedSmiles()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.FLAT_POSTS)
+                ?.isChecked = topicHolder.getFlatPosts()
             // Lists preferences
             val listsHolder = forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext())
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Lists.Topic.UNREAD_TOP)
