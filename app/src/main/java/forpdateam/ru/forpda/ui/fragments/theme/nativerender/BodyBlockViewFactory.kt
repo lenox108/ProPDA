@@ -668,11 +668,22 @@ class BodyBlockViewFactory(
     private fun installQuoteSelectionAction(tv: TextView, scope: RenderScope) {
         if (!scope.allowQuoteSelection) return
         tv.customSelectionActionModeCallback = object : android.view.ActionMode.Callback {
-            override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
+            /** Idempotently ensure the «Цитировать» item is present; returns true if it was (re)added. */
+            fun ensureQuoteItem(menu: android.view.Menu): Boolean {
+                if (menu.findItem(QUOTE_MENU_ID) != null) return false
                 menu.add(0, QUOTE_MENU_ID, 0, "Цитировать")
+                        .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
                 return true
             }
-            override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) = false
+            override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
+                ensureQuoteItem(menu)
+                return true
+            }
+            // MIUI/HyperOS rebuilds the floating-selection toolbar in onPrepare and drops the item added
+            // in onCreate, so «Цитировать» disappears on some Xiaomi ROMs (Android 13). Re-add it here
+            // idempotently — on stock Android the item is already present, so this is a no-op.
+            override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) =
+                    ensureQuoteItem(menu)
             override fun onActionItemClicked(mode: android.view.ActionMode, menuItem: android.view.MenuItem): Boolean {
                 if (menuItem.itemId == QUOTE_MENU_ID) {
                     val s = tv.selectionStart.coerceAtLeast(0)
