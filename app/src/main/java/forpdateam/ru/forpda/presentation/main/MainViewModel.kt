@@ -7,6 +7,7 @@ import forpdateam.ru.forpda.entity.common.AuthState
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.IWebClient
+import forpdateam.ru.forpda.model.interactors.favorites.FavoritesInteractor
 import forpdateam.ru.forpda.model.interactors.qms.QmsInteractor
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
@@ -25,6 +26,7 @@ class MainViewModel @Inject constructor(
         private val linkHandler: ILinkHandler,
         private val mainPreferencesHolder: MainPreferencesHolder,
         private val qmsInteractor: QmsInteractor,
+        private val favoritesInteractor: FavoritesInteractor,
         private val otherPreferencesHolder: OtherPreferencesHolder,
         private val webClient: IWebClient
 ) : BaseViewModel() {
@@ -60,6 +62,9 @@ class MainViewModel @Inject constructor(
         if (flowStarted) return
         flowStarted = true
         qmsInteractor.subscribeEvents()
+        // Держим бейдж избранного живым без захода в раздел (у QMS — subscribeEvents выше).
+        favoritesInteractor.subscribeEvents()
+        favoritesInteractor.seedCounter()
 
         scope.launch {
             val firstAppStart = otherPreferencesHolder.getAppFirstStart()
@@ -117,6 +122,8 @@ class MainViewModel @Inject constructor(
                 withContext(Dispatchers.IO) { webClient.refreshMenuCountersSilently() }
             }
         }
+        // Шапка форума счётчик избранного не отдаёт — пересеваем его из кэша + inspector.
+        favoritesInteractor.seedCounter()
     }
 
     override fun onCleared() {

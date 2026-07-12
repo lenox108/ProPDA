@@ -992,6 +992,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val panel = messagePanel ?: return
         val draft = panel.message.ifEmpty { messagePanelDraftMirror }
         val selection = panel.selectionRange
+        // Preserve the edit identity when handing off mid-edit: without postId + TYPE_EDIT_POST the
+        // fullscreen editor submits a NEW post and IPB adds a duplicate (баг «из полноэкранного дубль»).
+        val editing = editingForm
+        val editPostId = editing?.postId ?: 0
         navigationUseCase.openFullscreenEditor(
                 forumId = pageForumId,
                 topicId = pageTopicId,
@@ -1001,6 +1005,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 attachments = panel.attachments.toList(),
                 selectionStart = selection.getOrNull(0),
                 selectionEnd = selection.getOrNull(1),
+                editPostId = editPostId,
                 onSync = { data ->
                     if (view == null) return@openFullscreenEditor
                     messagePanelDraftMirror = data.message.orEmpty()
@@ -1021,8 +1026,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     messagePanel?.clearMessage()
                     messagePanel?.clearAttachments()
                     messagePanelDraftMirror = ""
+                    editingForm = null
                     hideMessagePanel()
-                    loadTopic(loadedUrl ?: topicUrl)
+                    // An edit re-anchors on the edited post (findpost), like the inline send path — a plain
+                    // reload of loadedUrl lands on the server anchor = first post of the page (симптом
+                    // «скролл уезжает вверх, а не на пост»). A new reply keeps the previous behaviour.
+                    if (editPostId > 0) {
+                        loadTopic(buildRestoreUrl(editPostId))
+                    } else {
+                        loadTopic(loadedUrl ?: topicUrl)
+                    }
                 },
         )
     }
@@ -1479,6 +1492,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * браузере» (external). «Открыть в новой вкладке» is intentionally omitted — for a dl/post link it
      * would route straight back to the same in-app download, so it duplicates «Скачать».
      */
+    /** Tap on a file-attachment link → download it. Passes the fragment's Activity context so the
+     *  «Способ загрузки → Спрашивать каждый раз» chooser can appear (the old `linkHandler.handle`
+     *  tap dropped the UI context, so on non-SYSTEM methods the tap silently did nothing). */
+    override fun onDownloadLinkTap(url: String, fileName: String?) {
+        systemLinkHandler.handleDownload(url, fileName, requireContext())
+    }
+
+    /** Long-press on an in-text hyperlink → open in browser / share / copy link. */
+    override fun onLinkLongClick(url: String) {
+        LinkActionsMenu.show(requireContext(), url, systemLinkHandler, clipboardHelper)
+    }
+
     override fun onDownloadLinkLongPress(url: String, fileName: String?) {
         val ctx = requireContext()
         val labels = arrayOf(
@@ -3492,6 +3517,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             url: String,
             page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
     ) {
+        // Вкладка «История»: нативный рендер грузит темы напрямую через themeApi (loadTopic), минуя
+        // ThemeRepository.getTheme, где раньше жила единственная запись посещения — после перехода на
+        // натив «История» перестала запоминать переходы. Пишем визит здесь, на рендере первой видимой
+        // страницы. Upsert по id темы: infinite-scroll старых/новых страниц идёт мимо renderThemePage,
+        // а повторный заход/рефреш просто поднимает дату.
+        viewLifecycleOwner.lifecycleScope.launch {
+            runCatching { themeUseCase.recordThemeVisit(url, page) }
+        }
         loadedUrl = url
         pageForumId = page.forumId
         pageTopicId = page.id

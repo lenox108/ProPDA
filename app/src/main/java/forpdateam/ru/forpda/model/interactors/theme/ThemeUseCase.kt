@@ -155,6 +155,20 @@ class ThemeUseCase @Inject constructor(
         pageMetadataSnapshot(page) != before
     }
 
+    /**
+     * Отметить открытие темы во вкладке «История». Нативный рендер грузит страницы напрямую через
+     * [ThemeApi], минуя запись истории в [ThemeRepository.getTheme], поэтому фрагмент дергает это на
+     * рендере первой видимой страницы. Upsert по id темы: повторный заход только поднимает дату.
+     */
+    suspend fun recordThemeVisit(url: String, page: ThemePage) {
+        val topicId = if (page.id > 0) {
+            page.id
+        } else {
+            forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi.extractTopicIdFromUrl(url) ?: 0
+        }
+        themeRepository.recordHistoryVisit(topicId, page.url ?: url, page.title)
+    }
+
     private fun pageMetadataSnapshot(page: ThemePage): String =
             page.posts.joinToString(separator = ";") { post ->
                 "${post.id}:${post.userPostCount}:${post.postRating}:${post.canPlusPostRating}:${post.canMinusPostRating}"
