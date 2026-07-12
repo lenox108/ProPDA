@@ -164,6 +164,7 @@ object Preferences {
         const val SHOW_AVATARS = PREFIX + "show_avatars"
         const val CIRCLE_AVATARS = PREFIX + "circle_avatars"
         const val ANIMATED_SMILES = PREFIX + "animated_smiles"
+        const val FLAT_POSTS = PREFIX + "flat_posts"
         const val ANCHOR_HISTORY = PREFIX + "anchor_history"
         const val HAT_OPENED = PREFIX + "hat_opened"
         const val FORUM_BLACKLIST = PREFIX + "forum_blacklist"
