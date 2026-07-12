@@ -2417,13 +2417,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             add("Ответить" to { onReply(item) })
             add("Цитировать" to { onQuote(item) })
             if (item.canQuote) add("Цитировать из буфера" to { quoteFromBuffer(item) })
-            add("Копировать ссылку на сообщение" to {
+            add("Копировать ссылку" to {
                 val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as? android.content.ClipboardManager
                 cm?.setPrimaryClip(android.content.ClipData.newPlainText("post", postUrl))
                 Toast.makeText(requireContext(), "Ссылка скопирована", Toast.LENGTH_SHORT).show()
             })
-            add("Поделиться ссылкой на сообщение" to {
+            add("Поделиться ссылкой" to {
                 runCatching {
                     startActivity(android.content.Intent.createChooser(
                             android.content.Intent(android.content.Intent.ACTION_SEND).apply {
