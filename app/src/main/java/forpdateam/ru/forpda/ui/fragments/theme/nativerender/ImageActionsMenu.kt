@@ -53,9 +53,9 @@ object ImageActionsMenu {
     private val STYLE = DynamicDialogMenu.Style(
             titleTextSizeSp = 18f,
             itemTextSizeSp = 16f,
-            itemMinHeightDp = 52,
+            itemMinHeightDp = 48,
             contentVerticalPaddingDp = 8,
-            itemVerticalPaddingDp = 12,
+            itemVerticalPaddingDp = 8,
             titleBottomPaddingDp = 4,
     )
 }

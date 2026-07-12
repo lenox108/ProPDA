@@ -41,7 +41,9 @@
         android:layout_marginHorizontal="8dp"
         android:layout_marginVertical="4dp"
         android:paddingHorizontal="12dp"
-        android:paddingVertical="10dp">
+        android:paddingVertical="10dp"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <!-- Topic-hat toggle bar («ШАПКА ТЕМЫ ▾/▴»). For the hat post the adapter shows this ABOVE the
              author header (WebView parity: the hat_button sits outside/above the collapsible hat_content),
@@ -60,12 +62,17 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="top">
+            android:gravity="top"
+            android:clipChildren="false">
 
-            <!-- Avatar with the reputation number overlaid as a badge (parity with WebView .reputation). -->
+            <!-- Avatar with the reputation number overlaid as a badge (parity with WebView .reputation).
+                 clipChildren=false so the badge (which hangs off the avatar corner via negative margins)
+                 is drawn in full instead of having its lower edge clipped. -->
             <FrameLayout
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content">
+                android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:id="@+id/native_post_avatar"
