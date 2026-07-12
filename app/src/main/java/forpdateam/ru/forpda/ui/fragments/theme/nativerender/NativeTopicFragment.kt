@@ -2581,9 +2581,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val style = forpdateam.ru.forpda.ui.views.DynamicDialogMenu.Style(
                 titleTextSizeSp = 18f,
                 itemTextSizeSp = 16f,
-                itemMinHeightDp = 52,
+                itemMinHeightDp = 48,
                 contentVerticalPaddingDp = 8,
-                itemVerticalPaddingDp = 12,
+                itemVerticalPaddingDp = 8,
                 titleBottomPaddingDp = 4,
         )
         menu.show(requireContext(), Unit, Unit, title, style)
