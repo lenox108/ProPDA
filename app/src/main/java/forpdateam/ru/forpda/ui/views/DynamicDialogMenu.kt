@@ -83,7 +83,10 @@ class DynamicDialogMenu<T, E> {
     @JvmOverloads
     fun show(uiContext: Context, context: T, data: E, title: String? = null, style: Style? = null) {
         if (dialog?.isShowing == true) return
-        val builder = MaterialAlertDialogBuilder(uiContext)
+        // Overlay зануляет windowMinWidthMinor/Major, которые AlertController иначе держит ~95% экрана
+        // (растягивая меню на всю ширину). Накладывается поверх активной materialAlertDialogTheme, так
+        // что цвета/скругления темы сохраняются — меняется только минимальная ширина.
+        val builder = MaterialAlertDialogBuilder(uiContext, R.style.ThemeOverlay_ForPDA_CompactMenuDialog)
         if (style == null) {
             title?.let { builder.setTitle(it) }
         }
