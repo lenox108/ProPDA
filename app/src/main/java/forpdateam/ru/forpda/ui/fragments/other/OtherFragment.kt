@@ -82,6 +82,13 @@ class OtherFragment : TabFragment() {
             }
             layoutManager = gridLayoutManager
             adapter = otherAdapter
+            addItemDecoration(
+                    MenuTileSpacingDecoration(
+                            spanCount = MENU_GRID_SPAN_COUNT,
+                            outerPx = resources.getDimensionPixelSize(R.dimen.content_padding_horizontal),
+                            gapPx = resources.getDimensionPixelSize(R.dimen.dp8),
+                    )
+            )
             tuneForListPerformance()
             otherAdapter.editModeChangeListener = { enabled ->
                 viewModel.onMenuDragModeChange(enabled)
