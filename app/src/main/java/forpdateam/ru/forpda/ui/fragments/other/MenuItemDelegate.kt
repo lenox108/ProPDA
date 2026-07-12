@@ -16,7 +16,6 @@ import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.databinding.ItemOtherMenuTileBinding
 import forpdateam.ru.forpda.ui.getDimensionFromAttr
 import forpdateam.ru.forpda.ui.dp4
-import forpdateam.ru.forpda.ui.dp8
 import forpdateam.ru.forpda.ui.views.drawers.adapters.DrawerMenuItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.ListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.MenuListItem
@@ -79,12 +78,14 @@ class MenuItemDelegate(
 
         private fun applyFixedGridLayoutParams() {
             val edge = binding.root.dp4
-            val gap = binding.root.dp8
+            // Horizontal spacing (16dp outer edges + 8dp inter-tile gaps) is owned by
+            // MenuTileSpacingDecoration so the outer columns line up with the profile card,
+            // section headers and the list plates (all at content_padding_horizontal).
             binding.root.updateLayoutParams<RecyclerView.LayoutParams> {
                 width = ViewGroup.LayoutParams.MATCH_PARENT
                 height = binding.root.resources.getDimensionPixelSize(R.dimen.other_menu_tile_height)
-                leftMargin = gap / 2
-                rightMargin = gap / 2
+                leftMargin = 0
+                rightMargin = 0
                 topMargin = edge
                 bottomMargin = edge
             }
