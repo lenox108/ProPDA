@@ -502,6 +502,15 @@
         <item name="textInputStyle">@style/DialogTextInputStyle</item>
     </style>
 
+    <!-- Overlay накладывается ПОВЕРХ активной materialAlertDialogTheme (у каждой темы своя, с цветами)
+         и лишь обнуляет минимальную ширину окна, которую AlertController иначе держит ~95% экрана.
+         Нужен для компактных всплывающих меню действий (DynamicDialogMenu), чтобы они сжимались до
+         ширины своего содержимого, а не растягивались на весь экран. Цвета/скругления не трогает. -->
+    <style name="ThemeOverlay.ForPDA.CompactMenuDialog" parent="">
+        <item name="android:windowMinWidthMajor">0%</item>
+        <item name="android:windowMinWidthMinor">0%</item>
+    </style>
+
     <style name="DialogTextInputStyle" parent="Widget.Material3.TextInputLayout.OutlinedBox">
         <item name="colorPrimary">@color/light_link_color</item>
         <item name="colorControlActivated">@color/light_link_color</item>
