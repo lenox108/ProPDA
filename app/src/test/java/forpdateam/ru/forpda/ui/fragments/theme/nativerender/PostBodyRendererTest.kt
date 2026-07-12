@@ -307,6 +307,24 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun replyToSnapback_makesNickTappable_wrappingItInFindpostLink() {
+        // «Ответ без цитаты»: snapback-стрелка (service-иконка, вырезается) + жирный ник. Раньше от якоря
+        // оставался пустой <a> и ник был некликабельным — тап «в никуда». Теперь ник переносится ВНУТРЬ
+        // якоря, чтобы тап по имени якорил к посту (как заголовок цитаты).
+        val snap = "https://4pda.to/s/Zy0h09PCbOrY2EKEHjYrvR8HNEq0UKeqZkUWbRHrPA3qVomOYM.gif"
+        val href = "https://4pda.to/forum/index.php?act=findpost&pid=143179849"
+        val html = "<a href=\"$href\" title=\"Перейти к сообщению\"><img src=\"$snap\" alt=\"*\" border=\"0\" /></a>" +
+                "<b>Lenox30,</b> текст ответа"
+        val blocks = renderer.render(html)
+        val text = blocks.filterIsInstance<BodyBlock.Text>().single()
+        // The nick now lives inside the snapback anchor → a real tappable findpost link.
+        assertTrue("nick must be wrapped in the findpost anchor",
+                Regex("<a[^>]*href=\"[^\"]*findpost[^\"]*\"[^>]*>(?:(?!</a>).)*Lenox30").containsMatchIn(text.html))
+        // The bare arrow <img> is stripped, not left as an empty placeholder.
+        assertFalse("snapback arrow img must be stripped from inline text", text.html.contains("<img"))
+    }
+
+    @Test
     fun attachFileIndicatorGif_isNotExploded_andLeavesNoPlaceholderBox() {
         // 4pda drops a tiny «Прикрепленный файл» indicator gif inline before an attach block. It shares the
         // /s/ path with real content thumbnails, so it must be told apart by its alt (NOT the path) — else it

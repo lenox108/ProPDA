@@ -679,7 +679,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             lp.rightMargin = m
             // Lifted a bit higher off the bottom (WebView reference sits well above the tab bar); in
             // CLASSIC it must also clear the pagination bar, so it sits higher still.
-            lp.bottomMargin = ((if (isClassicMode()) 120 else 72) * dm.density).toInt()
+            lp.bottomMargin = ((if (isClassicMode()) 152 else 112) * dm.density).toInt()
             fab.layoutParams = lp
         }
         androidx.core.view.ViewCompat.setElevation(fab, 12f * dm.density)
