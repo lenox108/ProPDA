@@ -18,12 +18,18 @@ import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.dp2
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
+import forpdateam.ru.forpda.ui.views.dialog.shrinkWidthToContent
 
 /**
  * Created by radiationx on 24.09.17.
  */
 
 open class BaseSettingFragment : PreferenceFragmentCompat() {
+
+    private companion object {
+        // Тег, под которым androidx.preference показывает диалог настройки (константа фреймворка приватна).
+        const val PREF_DIALOG_TAG = "androidx.preference.PreferenceFragment.DIALOG"
+    }
 
     private var listScrollY = 0
     private var lastIsVisible = false
@@ -37,6 +43,23 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
 
+    }
+
+    /**
+     * Диалоги настроек (ListPreference и пр.) создаёт фреймворк androidx.preference — они идут мимо
+     * нашего showWithStyledButtons, поэтому раздувались на ~весь экран. Ужимаем их ширину тем же
+     * механизмом (замер контента → фиксированная ширина окна), что и ручные диалоги.
+     */
+    override fun onDisplayPreferenceDialog(preference: Preference) {
+        super.onDisplayPreferenceDialog(preference)
+        val fm = parentFragmentManager
+        fm.executePendingTransactions()
+        val dialogFragment = fm.findFragmentByTag(PREF_DIALOG_TAG)
+                as? androidx.fragment.app.DialogFragment
+        (dialogFragment?.dialog as? androidx.appcompat.app.AlertDialog)?.let { alert ->
+            if (alert.isShowing) alert.shrinkWidthToContent()
+            else alert.setOnShowListener { alert.shrinkWidthToContent() }
+        }
     }
 
     override fun onCreateAdapter(preferenceScreen: PreferenceScreen): RecyclerView.Adapter<*> {

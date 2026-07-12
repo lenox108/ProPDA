@@ -26,13 +26,13 @@ import timber.log.Timber
  * Тема alertDialogTheme не всегда задаёт контраст кнопок в тёмной теме — красим явно.
  * [android.util.TypedValue.data] для ссылки на цвет — не ARGB; через [android.content.res.TypedArray] цвет резолвится верно.
  */
-fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = false): AlertDialog {
+fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = true): AlertDialog {
     val dialog = create()
     dialog.applyForPdaSurface()
     dialog.setOnShowListener {
         dialog.applyForPdaMaterialStyle()
-        // compact — сжать окно до ширины контента (для коротких диалогов-подтверждений и диалогов
-        // с одним полем), чтобы они не растягивались на ~весь экран, а выглядели минималистично.
+        // По умолчанию сжимаем окно до ширины контента, чтобы диалоги не растягивались на ~весь
+        // экран, а выглядели минималистично. compact=false — для диалогов, которым нужна вся ширина.
         if (compact) dialog.shrinkWidthToContent()
     }
     dialog.show()
@@ -41,22 +41,50 @@ fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = false): 
 
 /**
  * Ужимает ширину окна диалога до ширины его контента. AlertController иначе держит ширину по
- * windowMinWidthMinor/Major (~90–95% экрана), из-за чего короткие подтверждения выглядят пустыми.
- * Меряем панель в UNSPECIFIED (натуральная ширина заголовка/кнопок) и ставим окну конкретную ширину
- * в px — фиксированный размер окна перебивает внутренний минимум. Зажимаем в 300dp..90% экрана,
- * чтобы диалог с полем ввода оставался удобным, а очень длинный заголовок не вылезал за экран.
+ * windowMinWidthMinor/Major (~90–95% экрана), из-за чего диалоги выглядят растянутыми.
+ *
+ * Меряем НЕ сырую панель целиком (ListView под UNSPECIFIED отдаёт негодную ширину), а по компонентам:
+ * заголовок (topPanel), кнопки (buttonPanel) и тело — для списков это максимум ширины пунктов адаптера,
+ * иначе contentPanel. Всё в UNSPECIFIED, где match_parent ведёт себя как wrap и отдаёт натуральную
+ * ширину. Затем ставим окну конкретную ширину в px — фиксированный размер окна перебивает внутренний
+ * минимум. Зажимаем в 300dp..92% экрана: не уже удобного для поля ввода и не шире экрана для длинного
+ * контента. Если замер невалиден (0) — ширину не трогаем (безопасный фолбэк).
  */
-private fun AlertDialog.shrinkWidthToContent() {
+fun AlertDialog.shrinkWidthToContent() {
     val w = window ?: return
-    val panel = w.decorView.findViewById<View>(AppCompatR.id.parentPanel) ?: return
-    panel.measure(
-        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-    )
-    val density = context.resources.displayMetrics.density
-    val minPx = (300 * density).toInt()
-    val maxPx = (context.resources.displayMetrics.widthPixels * 0.90f).toInt()
-    val target = (panel.measuredWidth + (16 * density).toInt()).coerceIn(minPx, maxPx)
+    val decor = w.decorView
+    val dm = context.resources.displayMetrics
+
+    fun naturalWidth(v: View?): Int {
+        v ?: return 0
+        v.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        return v.measuredWidth
+    }
+
+    val titleWidth = naturalWidth(decor.findViewById(AppCompatR.id.topPanel))
+    val buttonsWidth = naturalWidth(decor.findViewById(AppCompatR.id.buttonPanel))
+
+    val lv = listView
+    val adapter = lv?.adapter
+    val bodyWidth = if (lv != null && adapter != null && adapter.count > 0) {
+        // ListView сам по себе меряется криво — меряем ширину пунктов адаптера напрямую.
+        var itemMax = 0
+        for (i in 0 until minOf(adapter.count, 50)) {
+            itemMax = maxOf(itemMax, naturalWidth(adapter.getView(i, null, lv)))
+        }
+        itemMax + lv.paddingLeft + lv.paddingRight
+    } else {
+        naturalWidth(decor.findViewById(AppCompatR.id.contentPanel))
+    }
+
+    val measured = maxOf(titleWidth, buttonsWidth, bodyWidth)
+    if (measured <= 0) return
+    val minPx = (300 * dm.density).toInt()
+    val maxPx = (dm.widthPixels * 0.92f).toInt()
+    val target = (measured + (16 * dm.density).toInt()).coerceIn(minPx, maxPx)
     w.setLayout(target, ViewGroup.LayoutParams.WRAP_CONTENT)
 }
 
