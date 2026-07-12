@@ -273,6 +273,17 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         onBackPressedDispatcher.addCallback(this, mainBackCallback)
         updateBackDispatchEnabled()
 
+        // Открытие/закрытие вкладки происходит программно (например, тап по теме в
+        // Избранном) — уже ПОСЛЕ ACTION_DOWN тапа, поэтому onUserInteraction на этот
+        // момент считает back-состояние по старому стеку и может ложно выключить
+        // mainBackCallback. Без последующего касания (юзер не скроллит) флаг остаётся
+        // устаревшим, и системный back-жест уводит на рабочий стол вместо возврата в
+        // Избранное. subscribersFlow эмитит в конце updateFragmentsState (стек уже
+        // авторитетен) → пересчитываем enabled на каждое изменение стека.
+        lifecycleScope.launch {
+            tabNavigator.subscribersFlow.collect { updateBackDispatchEnabled() }
+        }
+
         val defaultStatusBarHeight = resources.getDimensionPixelSize(R.dimen.default_statusbar_height)
         val defaultKeyboardHeight = resources.getDimensionPixelSize(R.dimen.default_keyboard_height)
 
