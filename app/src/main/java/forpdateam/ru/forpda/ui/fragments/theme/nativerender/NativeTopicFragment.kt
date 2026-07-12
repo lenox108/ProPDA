@@ -2303,7 +2303,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 .setMessage("Автор: ${item.nick.orEmpty()}")
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton(if (up) "Повысить" else "Понизить") { _, _ -> performVote(item, up) }
-                .showWithStyledButtons()
+                .showWithStyledButtons(compact = true)
     }
 
     private fun performVote(item: NativePostItem, up: Boolean) {
@@ -2623,11 +2623,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val ctx = requireContext()
         val input = android.widget.EditText(ctx).apply { hint = "Комментарий (необязательно)" }
         com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
-                .setTitle("${if (increase) "Увеличить" else "Уменьшить"} репутацию ${item.nick.orEmpty()}")
+                .setTitle(if (increase) "Увеличить репутацию" else "Уменьшить репутацию")
                 .setView(input)
                 .setPositiveButton("OK") { _, _ -> performReputationChange(item, increase, input.text?.toString().orEmpty()) }
                 .setNegativeButton("Отмена", null)
-                .showWithStyledButtons()
+                .showWithStyledButtons(compact = true)
     }
 
     private fun performReputationChange(item: NativePostItem, increase: Boolean, message: String) {
