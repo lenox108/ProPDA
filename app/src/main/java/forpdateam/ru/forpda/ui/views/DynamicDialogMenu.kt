@@ -96,14 +96,21 @@ class DynamicDialogMenu<T, E> {
 
         dialog = builder.showWithStyledButtons().also { shownDialog ->
             shownDialog.setOnDismissListener { dialog = null }
-            // The dialog theme's windowMinWidthMinor forces the window to ~95% of the screen, which
-            // stretched these short action menus across the whole width (lots of empty space on the
-            // right). Let the window wrap its content instead — it then sizes to the longest label
-            // (bounded below by the container's minimumWidth), giving a compact, neatly centred menu.
-            shownDialog.window?.setLayout(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+            // AlertController держит ширину диалога по windowMinWidthMinor/Major (~95% экрана) и по
+            // MATCH_PARENT-панели, поэтому ни обнуление min-width, ни setLayout(WRAP_CONTENT) окно не
+            // сжимали. Надёжно только одно: измерить контент и выставить окну КОНКРЕТНУЮ ширину в px —
+            // фиксированный размер окна перебивает внутренний минимум. Меряем с UNSPECIFIED, чтобы
+            // MATCH_PARENT-строки отдали свою естественную (по самому длинному тексту) ширину.
+            val dm = uiContext.resources.displayMetrics
+            val minPx = (240 * dm.density).toInt()
+            val maxPx = (dm.widthPixels * 0.92f).toInt()
+            menuView.measure(
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
             )
+            // +буфер под фон/инсеты окна, чтобы самый длинный пункт не переносился на 2 строки.
+            val targetPx = (menuView.measuredWidth + (16 * dm.density).toInt()).coerceIn(minPx, maxPx)
+            shownDialog.window?.setLayout(targetPx, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
     }
 
