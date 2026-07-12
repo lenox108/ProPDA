@@ -62,6 +62,7 @@ class PostBodyRenderer {
                 .map { it.attr("src").trim() }
                 .filter { it.isNotEmpty() }
                 .toSet()
+        linkReplyToNicks(body)
         return renderNodes(body.childNodes())
     }
 
@@ -119,6 +120,36 @@ class PostBodyRenderer {
         flushInline()
 
         return blocks
+    }
+
+    /**
+     * «Ответ без цитаты» приходит как крошечная snapback-стрелка `<a href=…findpost…><img alt="*"></a>`,
+     * за которой идёт жирный ник `<b>Ник,</b>`. Сама стрелка в нативе вырезается как service-иконка
+     * ([isServiceIcon]/[flushInline]), и от якоря остаётся ПУСТОЙ `<a>` — тапать нечего, а ник — просто
+     * `<b>`-текст без ссылки. В шапке цитаты имя кликабельно и якорит к посту ([BodyBlockViewFactory]
+     * quoteView), а тут — нет (репорт пользователя). Переносим ник ВНУТРЬ snapback-якоря, чтобы тап по
+     * имени вёл к исходному посту тем же путём (findpost → [LinkHandler] → Theme explicit_post).
+     */
+    private fun linkReplyToNicks(body: Element) {
+        for (anchor in body.select("a[href]")) {
+            // Шапка цитаты и прочие сложные блоки обрабатываются отдельно (extractQuote) — не трогаем.
+            if (anchor.closest(COMPLEX_SELECTOR) != null) continue
+            // Snapback-якорь = обёртка вокруг служебной стрелки, без собственного видимого текста.
+            val wrapsArrow = anchor.select("img").any { it.isServiceIcon() }
+            if (!wrapsArrow || anchor.text().isNotBlank()) continue
+            // Ник — ближайший следующий элемент-сосед, обычно `<b>Ник,</b>`.
+            val nick = anchor.nextElementSibling() ?: continue
+            if (nick.normalName() != "b" && nick.normalName() != "strong") continue
+            // Между стрелкой и ником допустимы только пробельные текст-ноды.
+            var between = anchor.nextSibling()
+            var onlyWhitespace = true
+            while (between != null && between !== nick) {
+                if (between !is TextNode || between.wholeText.isNotBlank()) { onlyWhitespace = false; break }
+                between = between.nextSibling()
+            }
+            if (!onlyWhitespace) continue
+            anchor.appendChild(nick) // move the nick into the snapback anchor → the name becomes tappable
+        }
     }
 
     /** True if [node]'s subtree holds a real content image (banner / preview / attach thumbnail), not a smiley. */

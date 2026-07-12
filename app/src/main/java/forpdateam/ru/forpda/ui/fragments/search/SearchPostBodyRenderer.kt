@@ -141,11 +141,9 @@ class SearchPostBodyRenderer(
     private fun quoteView(ctx: Context, block: BodyBlock.Quote, gallery: ArrayList<String>, depth: Int): View {
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(ctx, 10f), dp(ctx, 6f), dp(ctx, 10f), dp(ctx, 6f))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(ctx, 8f).toFloat()
-                setColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh))
-            }
+            setPadding(dp(ctx, 10f), dp(ctx, 8f), dp(ctx, 10f), dp(ctx, 8f))
+            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            clipToOutline = true
         }
         val head = listOfNotNull(block.author?.takeIf { it.isNotBlank() }, block.date?.takeIf { it.isNotBlank() })
                 .joinToString(" · ")
@@ -167,38 +165,58 @@ class SearchPostBodyRenderer(
     }
 
     private fun spoilerView(ctx: Context, block: BodyBlock.Spoiler, gallery: ArrayList<String>, depth: Int): View {
-        val root = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        val inner = LinearLayout(ctx).apply {
+        // M3 card parity with the topic/QMS renderer: a rounded, outlined tonal container with a rotating
+        // chevron header — not a bare header + indented body (which read as «no M3 design»).
+        val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            visibility = if (block.initiallyOpen) View.VISIBLE else View.GONE
-            setPadding(dp(ctx, 10f), dp(ctx, 4f), 0, 0)
+            setPadding(dp(ctx, 10f), dp(ctx, 10f), dp(ctx, 10f), dp(ctx, 10f))
+            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            clipToOutline = true
         }
-        val header = TextView(ctx).apply {
-            text = "▸ " + (block.title?.takeIf { it.isNotBlank() } ?: "Спойлер")
+        val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+        val label = block.title?.takeIf { it.isNotBlank() } ?: "Спойлер"
+        val chevron = TextView(ctx).apply {
+            text = "▸"
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(accent)
+        }
+        val title = TextView(ctx).apply {
+            text = label
             textSize = 14f
             setTypeface(typeface, Typeface.BOLD)
             // colorAccent (parity with the topic renderer's spoiler header) — colorPrimary reads as pale grey
             // on the light «reading» / Material You palettes, so «Прикреплённые изображения» was unreadable.
-            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
-            setPadding(0, dp(ctx, 4f), 0, dp(ctx, 4f))
-            setOnClickListener {
-                val open = inner.visibility == View.VISIBLE
-                inner.visibility = if (open) View.GONE else View.VISIBLE
-                text = (if (open) "▸ " else "▾ ") + (block.title?.takeIf { it.isNotBlank() } ?: "Спойлер")
-            }
+            setTextColor(accent)
+            setPadding(dp(ctx, 6f), 0, 0, 0)
+        }
+        val header = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(chevron)
+            addView(title)
+        }
+        val inner = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (block.initiallyOpen) View.VISIBLE else View.GONE
+            setPadding(0, dp(ctx, 8f), 0, 0)
+        }
+        chevron.rotation = if (block.initiallyOpen) 90f else 0f
+        header.setOnClickListener {
+            val open = inner.visibility == View.VISIBLE
+            inner.visibility = if (open) View.GONE else View.VISIBLE
+            chevron.rotation = if (open) 0f else 90f
         }
         if (depth < MAX_NEST) renderBlocks(inner, block.inner, gallery, depth + 1)
-        root.addView(header)
-        root.addView(inner)
-        return root
+        card.addView(header)
+        card.addView(inner)
+        return card
     }
 
     private fun codeView(ctx: Context, block: BodyBlock.Code): View {
         val scroller = HorizontalScrollView(ctx).apply {
-            background = GradientDrawable().apply {
-                cornerRadius = dp(ctx, 8f).toFloat()
-                setColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
-            }
+            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            clipToOutline = true
             setPadding(dp(ctx, 10f), dp(ctx, 8f), dp(ctx, 10f), dp(ctx, 8f))
         }
         scroller.addView(TextView(ctx).apply {
@@ -335,6 +353,24 @@ class SearchPostBodyRenderer(
     }
 
     private fun dp(ctx: Context, v: Float): Int = (v * ctx.resources.displayMetrics.density).roundToInt()
+
+    /**
+     * Rounded Material 3 container for an inline block (quote / spoiler / code): a tonal fill plus a
+     * 1dp [colorOutlineVariant] hairline and 12dp corners — the exact recipe the topic/QMS renderer uses
+     * ([BodyBlockViewFactory.m3BlockBackground]), so search-result blocks read as the same distinct M3
+     * surfaces instead of flat filled rectangles.
+     */
+    private fun m3BlockBackground(ctx: Context, fillAttr: Int): GradientDrawable {
+        val density = ctx.resources.displayMetrics.density
+        return GradientDrawable().apply {
+            cornerRadius = 12f * density
+            setColor(ctx.getColorFromAttr(fillAttr))
+            setStroke(
+                    (1f * density).toInt().coerceAtLeast(1),
+                    ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant),
+            )
+        }
+    }
 
     private companion object {
         const val MAX_NEST = 4
