@@ -3517,6 +3517,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             url: String,
             page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
     ) {
+        // Вкладка «История»: нативный рендер грузит темы напрямую через themeApi (loadTopic), минуя
+        // ThemeRepository.getTheme, где раньше жила единственная запись посещения — после перехода на
+        // натив «История» перестала запоминать переходы. Пишем визит здесь, на рендере первой видимой
+        // страницы. Upsert по id темы: infinite-scroll старых/новых страниц идёт мимо renderThemePage,
+        // а повторный заход/рефреш просто поднимает дату.
+        viewLifecycleOwner.lifecycleScope.launch {
+            runCatching { themeUseCase.recordThemeVisit(url, page) }
+        }
         loadedUrl = url
         pageForumId = page.forumId
         pageTopicId = page.id
