@@ -59,13 +59,6 @@ class ThemeRepository(
                                 "pollOpen" to pollOpen
                         )
                 )
-                // История посещений должна пополняться и на попадании в кэш страниц: с нативным
-                // рендером/префетчем большинство открытий тем — это cache hit, и без этой записи
-                // вкладка «История» не запоминает свежие переходы (не добавляет/не поднимает тему).
-                val cachedTopicId = if (cached.id > 0) cached.id else topicId ?: 0
-                if (cachedTopicId > 0) {
-                    historyCache.add(cachedTopicId, cached.url ?: url, cached.title)
-                }
                 return@withContext cached
             }
         }
@@ -104,6 +97,18 @@ class ThemeRepository(
 
     fun invalidateTopicPageCache(topicId: Int) {
         pageMemoryCache.invalidateTopic(topicId)
+    }
+
+    /**
+     * Записать посещение темы во вкладку «История». Нативный рендер тем ([NativeTopicFragment])
+     * грузит страницы напрямую через [ThemeApi.getTheme], минуя [getTheme] этого репозитория, где
+     * жила единственная запись в историю — из-за чего после перехода на нативный движок вкладка
+     * «История» перестала запоминать переходы. Этот метод — тот же upsert по id темы (дубликатов
+     * нет, повторное открытие только поднимает дату), вызываемый из рендера первой видимой страницы.
+     */
+    suspend fun recordHistoryVisit(topicId: Int, url: String?, title: String?) = withContext(Dispatchers.IO) {
+        if (topicId <= 0) return@withContext
+        historyCache.add(topicId, url, title)
     }
 
     /**
