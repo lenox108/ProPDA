@@ -14,6 +14,7 @@ import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.Html
 import forpdateam.ru.forpda.common.LinkMovementMethod
+import forpdateam.ru.forpda.common.SelectableLinkMovementMethod
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.presentation.ILinkHandler
 
@@ -577,21 +578,24 @@ class BodyBlockViewFactory(
             setLineSpacing(0f, 1.1f)
             val hasLinks = text is Spanned &&
                     text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
+            // Selectable in BOTH cases: native Copy/Share plus a custom «Цитировать» that wraps the
+            // selection in a [quote …] for the reply editor (§4 selection→quote). Previously a block
+            // with ANY link (e.g. a clickable @mention nick) fell into a link-only branch and could
+            // not be selected/copied at all — long-press did nothing.
+            setTextIsSelectable(true)
+            installQuoteSelectionAction(this, scope)
             if (hasLinks) {
-                // Attach the link movement method only when there ARE links — avoids the
-                // ScrollingMovementMethod fighting RecyclerView drags and routes taps in-app.
-                movementMethod = LinkMovementMethod(object : LinkMovementMethod.ClickListener {
+                // A selection-aware movement method: keeps the ArrowKeyMovementMethod selection
+                // behaviour that setTextIsSelectable installs (long-press → ActionMode, drag →
+                // extend) AND routes link tap/long-press in-app. Must be set AFTER
+                // setTextIsSelectable, which itself installs ArrowKeyMovementMethod.
+                movementMethod = SelectableLinkMovementMethod(object : LinkMovementMethod.ClickListener {
                     override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
                     override fun onLongClick(url: String): Boolean {
                         callbacks.onLinkLongClick(url)
                         return true
                     }
                 })
-            } else {
-                // No links → selectable text: native Copy/Share plus a custom «Цитировать» that
-                // wraps the selection in a [quote …] for the reply editor (§4 selection→quote).
-                setTextIsSelectable(true)
-                installQuoteSelectionAction(this, scope)
             }
         }
     }
