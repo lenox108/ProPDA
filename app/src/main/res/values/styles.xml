@@ -198,6 +198,44 @@
     </style>
 
     <!--
+        Material You: DARK-skin floor overlay. Накладывается ПОВЕРХ
+        MaterialYouSurface для НЕ-AMOLED тёмной темы (ThemeMode.DARK или
+        SYSTEM ночью) — но ТОЛЬКО когда системная динамика отдала слишком
+        тёмную поверхность (см. MaterialYouApplier.dynamicDarkSurfaceIsNearBlack).
+
+        Зачем: тема «Тёмная» декларирует «тёмный фон БЕЗ полной чёрной
+        AMOLED-подложки». На части устройств (наблюдалось на Android 16)
+        динамическая роль colorSurfaceContainerLowest резолвится в чистый
+        #000000 — тогда «Тёмная» под Material You визуально сливается с
+        AMOLED, и различие между двумя режимами пропадает. На Android 12–15
+        та же роль обычно тёмно-серая с оттенком обоев, и там ничего чинить
+        не нужно. Поэтому решение адаптивное: аплаер сравнивает резолвнутый
+        Lowest с эталоном @color/dark_background_base и накладывает этот
+        оверлей ТОЛЬКО если динамика темнее эталона (иначе оттенок обоев
+        сохраняется).
+
+        Что делает: пинит всю surface-рампу на статичные тона тёмной темы —
+        ровно те же значения, что базовая DayNightAppTheme (values-night):
+        база #121212, карточки #242424. Акцент при этом наследуется из
+        MaterialYouAccent и продолжает трекать обои. Это прямой аналог
+        MaterialYouAmoled, только тона тёмно-серые, а не чёрные.
+
+        Безопасность инфляции: пины КОНКРЕТНЫЕ @color/dark_* (не ?attr/) —
+        как у MaterialYouAmoled; TYPE_ATTRIBUTE-цепочек нет, TextView.<init>
+        и M3-виджеты не падают (см. KDoc MaterialYouSurface).
+    -->
+    <style name="ThemeOverlay.ForPDA.MaterialYouDarkFloor" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
+        <item name="android:colorBackground">@color/dark_card_background</item>
+        <item name="colorSurface">@color/dark_card_background</item>
+        <item name="colorSurfaceVariant">@color/dark_card_background</item>
+        <item name="colorSurfaceContainerLowest">@color/dark_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/dark_background_base</item>
+        <item name="colorSurfaceContainer">@color/dark_background_base</item>
+        <item name="colorSurfaceContainerHigh">@color/dark_card_background</item>
+        <item name="colorSurfaceContainerHighest">@color/dark_card_background</item>
+    </style>
+
+    <!--
         Material You: error-color harmonization overlay.
 
         Заменяет HarmonizedColors.applyToContextIfAvailable(...) +
