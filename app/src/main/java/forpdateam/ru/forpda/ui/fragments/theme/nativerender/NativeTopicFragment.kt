@@ -2707,7 +2707,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * no heavy divider. Tapping the label opens a page picker. CLASSIC mode only.
      */
     /**
-     * Builds one «  ‹  N / M  ›  » pagination row (surface-container background, bold `colorOnSurface`
+     * Builds one «  ‹  N / M  ›  » pagination row (page-tone `colorSurfaceContainerLowest` background, bold `colorOnSurface`
      * chevrons, label opens the page picker). Shared by the bottom [ensurePaginationBar] and the top
      * [ensureTopPaginationBar] so both stay pixel-identical. Returns the row and its centre label.
      */
@@ -2718,7 +2718,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val bar = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
-            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer))
+            // Lowest, не Container: ряд должен сливаться с фоном страницы (flat). В статических
+            // палитрах роли равны, а под Material You Container светлее Lowest — ряд читался
+            // отдельной серой полосой на странице.
+            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
             elevation = 0f
             visibility = View.GONE
         }
