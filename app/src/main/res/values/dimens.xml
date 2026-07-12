@@ -6,7 +6,7 @@
     <dimen name="card_margin_horizontal">-3dp</dimen>
     <!-- M3-style grouped lists: same geometry as preference plates ([pref_plate_*]) -->
     <dimen name="list_plate_corner_radius">@dimen/card_corner_radius</dimen>
-    <dimen name="list_plate_horizontal_inset">@dimen/dp4</dimen>
+    <dimen name="list_plate_horizontal_inset">@dimen/content_padding_horizontal</dimen>
     <!-- Только верхняя плашка TabFragment (заголовок + пагинация): почти на всю ширину, карточки списка без изменений -->
     <dimen name="top_bar_plaque_horizontal_inset">@dimen/dp4</dimen>
     <dimen name="list_plate_group_gap_vertical">@dimen/dp8</dimen>
