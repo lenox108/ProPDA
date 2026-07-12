@@ -31,9 +31,15 @@ fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = true): A
     dialog.applyForPdaSurface()
     dialog.setOnShowListener {
         dialog.applyForPdaMaterialStyle()
-        // По умолчанию сжимаем окно до ширины контента, чтобы диалоги не растягивались на ~весь
-        // экран, а выглядели минималистично. compact=false — для диалогов, которым нужна вся ширина.
-        if (compact) dialog.shrinkWidthToContent()
+        if (compact) {
+            // Ширину окна закрепить можно только ПОСЛЕ show(). Чтобы не было «прыжка» (кадр во всю
+            // ширину → ресайз → ре-центрирование), прячем карточку на кадр ресайза (alpha 0) и плавно
+            // проявляем уже в нужной ширине. Затемнение (dim) — атрибут окна, живёт отдельно и не мигает.
+            val decor = dialog.window?.decorView
+            decor?.alpha = 0f
+            dialog.shrinkWidthToContent()
+            decor?.post { decor.animate().alpha(1f).setDuration(110).start() }
+        }
     }
     dialog.show()
     return dialog
@@ -77,7 +83,11 @@ fun AlertDialog.shrinkWidthToContent() {
         }
         itemMax + lv.paddingLeft + lv.paddingRight
     } else {
-        naturalWidth(decor.findViewById(AppCompatR.id.contentPanel))
+        // contentPanel — для message-диалогов; customPanel — для setView (меню, поля ввода и т.п.).
+        maxOf(
+            naturalWidth(decor.findViewById(AppCompatR.id.contentPanel)),
+            naturalWidth(decor.findViewById(AppCompatR.id.customPanel))
+        )
     }
 
     val measured = maxOf(titleWidth, buttonsWidth, bodyWidth)

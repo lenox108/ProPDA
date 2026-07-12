@@ -94,23 +94,10 @@ class DynamicDialogMenu<T, E> {
         val menuView = createMenuView(builder.context, context, data, title.takeIf { style != null }, style)
         builder.setView(menuView)
 
+        // Ширину до показа задаёт showWithStyledButtons (сжатие по контенту customPanel ДО show()),
+        // поэтому меню сразу появляется в нужной ширине и не «прыгает» вправо с ре-центрированием.
         dialog = builder.showWithStyledButtons().also { shownDialog ->
             shownDialog.setOnDismissListener { dialog = null }
-            // AlertController держит ширину диалога по windowMinWidthMinor/Major (~95% экрана) и по
-            // MATCH_PARENT-панели, поэтому ни обнуление min-width, ни setLayout(WRAP_CONTENT) окно не
-            // сжимали. Надёжно только одно: измерить контент и выставить окну КОНКРЕТНУЮ ширину в px —
-            // фиксированный размер окна перебивает внутренний минимум. Меряем с UNSPECIFIED, чтобы
-            // MATCH_PARENT-строки отдали свою естественную (по самому длинному тексту) ширину.
-            val dm = uiContext.resources.displayMetrics
-            val minPx = (240 * dm.density).toInt()
-            val maxPx = (dm.widthPixels * 0.92f).toInt()
-            menuView.measure(
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            )
-            // +буфер под фон/инсеты окна, чтобы самый длинный пункт не переносился на 2 строки.
-            val targetPx = (menuView.measuredWidth + (16 * dm.density).toInt()).coerceIn(minPx, maxPx)
-            shownDialog.window?.setLayout(targetPx, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
     }
 
