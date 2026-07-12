@@ -49,6 +49,7 @@ import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.data.remote.api.topcis.TopicsApi
 import forpdateam.ru.forpda.model.data.storage.ExternalStorageProvider
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import forpdateam.ru.forpda.model.interactors.favorites.FavoritesInteractor
 import forpdateam.ru.forpda.model.interactors.qms.QmsInteractor
 import forpdateam.ru.forpda.model.interactors.other.MenuRepository
 import forpdateam.ru.forpda.model.preferences.*
@@ -301,5 +302,11 @@ object DataModule {
             eventsRepository: EventsRepository,
             qmsApi: QmsApi
     ) = QmsInteractor(qmsRepository, eventsRepository, qmsApi)
+
+    @Provides @Singleton
+    fun provideFavoritesInteractor(
+            favoritesRepository: FavoritesRepository,
+            eventsRepository: EventsRepository
+    ) = FavoritesInteractor(favoritesRepository, eventsRepository)
     // endregion
 }

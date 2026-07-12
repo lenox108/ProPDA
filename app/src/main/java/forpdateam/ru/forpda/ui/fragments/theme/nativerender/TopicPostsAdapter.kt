@@ -58,6 +58,11 @@ class TopicPostsAdapter(
         fun onImageLongClick(imageUrl: String)
         /** Long-press on a downloadable file link → chooser (download / open in browser). */
         fun onDownloadLinkLongPress(url: String, fileName: String?)
+        /** Tap on a downloadable file link → download it (host passes an Activity context so the
+         *  «Способ загрузки → Спрашивать каждый раз» chooser can appear). */
+        fun onDownloadLinkTap(url: String, fileName: String?)
+        /** Long-press on an in-text hyperlink → chooser (open in browser / share / copy link). */
+        fun onLinkLongClick(url: String)
     }
 
     /**
@@ -256,6 +261,12 @@ class TopicPostsAdapter(
 
                     override fun onDownloadLinkLongPress(url: String, fileName: String?) =
                             actionListener.onDownloadLinkLongPress(url, fileName)
+
+                    override fun onDownloadLinkTap(url: String, fileName: String?) =
+                            actionListener.onDownloadLinkTap(url, fileName)
+
+                    override fun onLinkLongClick(url: String) =
+                            actionListener.onLinkLongClick(url)
                 },
         )
 

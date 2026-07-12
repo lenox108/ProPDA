@@ -51,6 +51,26 @@ class FavoritesRepository(
         }
     }
 
+    /**
+     * Тихо пересчитывает бейдж непрочитанного избранного из кэша + свежего inspector'а, НЕ публикуя
+     * список в UI-поток. Нужен, чтобы циферка появлялась на «Полном меню»/в навигации без захода в
+     * избранное (у QMS эту роль играет [forpdateam.ru.forpda.model.interactors.qms.QmsInteractor],
+     * у упоминаний — EventsRepository). Дёргается из
+     * [forpdateam.ru.forpda.model.interactors.favorites.FavoritesInteractor] на старте/возврате.
+     *
+     * Пустой кэш (избранное ещё ни разу не грузили) пропускаем: считать нечего, а сетевой inspector
+     * без списка тем всё равно не даст корректный счёт.
+     */
+    suspend fun seedFavoritesCounter() = withContext(Dispatchers.IO) {
+        if (!authHolder.get().isAuth()) return@withContext
+        val cached = favoritesCache.getItems()
+        if (cached.isEmpty()) return@withContext
+        val items = cached.map(::FavItem).toMutableList()
+        mergeInspectorIntoCachedItems(items, loadInspectorEvents())
+        persistInspectorReadStateChanges(items)
+        syncFavoritesCounter(items, source = "favorites_counter_seed", protectFromHeaderInflation = false)
+    }
+
     suspend fun loadFavorites(st: Int, all: Boolean, sorting: Sorting, forceRefresh: Boolean = false): FavData = withContext(Dispatchers.IO) {
         val unreadTop = listsPreferencesHolder.getUnreadTop()
         FavoritesUnreadTrace.loadStarted(

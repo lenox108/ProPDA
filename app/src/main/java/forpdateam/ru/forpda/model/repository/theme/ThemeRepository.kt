@@ -100,6 +100,18 @@ class ThemeRepository(
     }
 
     /**
+     * Записать посещение темы во вкладку «История». Нативный рендер тем ([NativeTopicFragment])
+     * грузит страницы напрямую через [ThemeApi.getTheme], минуя [getTheme] этого репозитория, где
+     * жила единственная запись в историю — из-за чего после перехода на нативный движок вкладка
+     * «История» перестала запоминать переходы. Этот метод — тот же upsert по id темы (дубликатов
+     * нет, повторное открытие только поднимает дату), вызываемый из рендера первой видимой страницы.
+     */
+    suspend fun recordHistoryVisit(topicId: Int, url: String?, title: String?) = withContext(Dispatchers.IO) {
+        if (topicId <= 0) return@withContext
+        historyCache.add(topicId, url, title)
+    }
+
+    /**
      * Best-effort Smart Preload of one topic page (Phase 8). Fetches [url] through the normal
      * [getTheme] path so the result lands in [ThemePageMemoryCache] (the single shared store — no
      * parallel preload cache). Returns the resolved page on success so the caller can verify it
