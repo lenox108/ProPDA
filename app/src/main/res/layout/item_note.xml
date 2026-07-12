@@ -9,7 +9,8 @@
     android:foreground="?attr/selectableItemBackground"
     android:orientation="vertical"
     app:contentPadding="@dimen/dp0"
-    app:strokeColor="?attr/colorAccent"
+    app:strokeColor="?attr/list_plate_stroke_color"
+    app:strokeWidth="?attr/list_plate_stroke_width"
     style="@style/CardStyle.Item">
 
     <RelativeLayout
