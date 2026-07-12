@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.ui
 import android.app.Activity
 import android.os.Build
 import android.util.TypedValue
+import androidx.core.graphics.ColorUtils
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.DynamicColorsOptions
 import forpdateam.ru.forpda.BuildConfig
@@ -46,6 +47,12 @@ import timber.log.Timber
  *   Accent) + динамический базовый фон окна (`android:colorBackground` /
  *   `colorOnBackground` → `colorSurface` / `colorOnSurface`). Используется для
  *   SYSTEM в светлой/тёмной теме.
+ * - [R.style.ThemeOverlay_ForPDA_MaterialYouDarkFloor] — акцент (наследует
+ *   Accent) + ПИН surface-рампы на статичные тёмно-серые тона тёмной темы.
+ *   Накладывается ПОВЕРХ Surface только для НЕ-AMOLED тёмной темы и только
+ *   когда система отдала слишком тёмный `colorSurfaceContainerLowest` (см.
+ *   [dynamicDarkSurfaceIsNearBlack]): иначе «Тёмная» под Material You на
+ *   таких устройствах (Android 16) проваливалась в AMOLED-чёрный.
  *
  * ВАЖНО про реальный охват (обновлено после Этапа C `concurrent-dreaming-wren`
  * consumer-side миграции — см. план): динамику обоев получают акцент, базовый
@@ -148,7 +155,8 @@ object MaterialYouApplier {
         // SURFACE (акцент + динамический фон) для light/dark; ACCENT_ONLY для
         // AMOLED (не поднимаем поверхности с чистого чёрного). Работает и для
         // обоев, и для произвольного seed.
-        val overlay = if (MaterialYouPolicy.isAmoledSkin(themeMode, isNight)) {
+        val isAmoled = MaterialYouPolicy.isAmoledSkin(themeMode, isNight)
+        val overlay = if (isAmoled) {
             R.style.ThemeOverlay_ForPDA_MaterialYouAmoled
         } else {
             R.style.ThemeOverlay_ForPDA_MaterialYouSurface
@@ -180,10 +188,47 @@ object MaterialYouApplier {
                     // ThemeOverlay.Material3.HarmonizedColors) и безопасен
                     // на реальных устройствах. См. KDoc класса.
                     activity.theme.applyStyle(R.style.ThemeOverlay_ForPDA_HarmonizedError, true)
+                    // Адаптивный DARK-floor: тема «Тёмная» обещает тёмно-серый
+                    // фон, НЕ полный AMOLED-чёрный. На части устройств
+                    // (наблюдалось на Android 16) системная динамика отдаёт
+                    // colorSurfaceContainerLowest = чистый #000000, и «Тёмная»
+                    // под Material You сливается с AMOLED. На Android 12–15 та
+                    // же роль обычно тёмно-серая (с оттенком обоев) и трогать
+                    // её не надо. Поэтому решаем по ФАКТИЧЕСКИ резолвнутому
+                    // цвету, а не по версии SDK: если Lowest темнее нашего
+                    // эталона dark_background_base — поднимаем всю surface-рампу
+                    // на статичные тёмные тона (акцент из обоев сохраняется).
+                    if (!isAmoled && isNight && dynamicDarkSurfaceIsNearBlack(activity)) {
+                        activity.theme.applyStyle(
+                                R.style.ThemeOverlay_ForPDA_MaterialYouDarkFloor, true)
+                    }
                     if (BuildConfig.DEBUG) logResolvedColors(activity)
                 }
                 .build()
         DynamicColors.applyToActivityIfAvailable(activity, options)
+    }
+
+    /**
+     * true, если ПОСЛЕ применения DynamicColors системная динамическая роль
+     * `colorSurfaceContainerLowest` (тон фона страницы / плоской шапки / нижнего
+     * таббара) резолвится темнее нашего эталона [R.color.dark_background_base]
+     * (#121212). Такой «провал в чёрный» наблюдался на Android 16, где
+     * генератор палитры отдаёт для самой нижней тёмной поверхности тон 0
+     * (чистый #000000) — тогда «Тёмная» тема неотличима от AMOLED. На
+     * Android 12–15 та же роль обычно тёмно-серая с оттенком обоев, и функция
+     * вернёт false (оттенок сохраняем).
+     *
+     * Сравнение по фактическому цвету, а не по [Build.VERSION.SDK_INT], потому
+     * что точное поведение зависит и от версии, и от обоев/движка палитры
+     * вендора — реактивная проверка надёжнее хардкода порога SDK.
+     */
+    private fun dynamicDarkSurfaceIsNearBlack(activity: Activity): Boolean {
+        val tv = TypedValue()
+        val resolved = activity.theme.resolveAttribute(
+                com.google.android.material.R.attr.colorSurfaceContainerLowest, tv, true)
+        if (!resolved) return false
+        val reference = activity.resources.getColor(R.color.dark_background_base, activity.theme)
+        return ColorUtils.calculateLuminance(tv.data) <= ColorUtils.calculateLuminance(reference)
     }
 
     private fun logResolvedColors(activity: Activity) {

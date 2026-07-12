@@ -200,10 +200,13 @@ class BottomDrawer(
 
             bottomSheet2.apply {
                 clipToOutline = false
-                // M3 NavigationBar: панель на colorSurfaceContainer (тональная высота) —
-                // значение совпадает с прежним background_for_lists, но теперь трекает
-                // Material You как остальные поверхности.
-                background = ColorDrawable(activity.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainer))
+                // Панель = colorSurfaceContainerLowest — тот же тон, что «плоская» верхняя
+                // шапка (main_toolbar_accent_surface под Material You редиректится на Lowest)
+                // и фон страницы. Во всех статических палитрах Lowest == Container ==
+                // background_base, так что вне Material You ничего не меняется; под Material
+                // You прежний colorSurfaceContainer давал тональную ступень (light: #EEEDF6
+                // на белом верхе, dark: #181920 на чёрном) — низ и верх расходились цветом.
+                background = ColorDrawable(activity.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
                 ViewCompat.setElevation(this, 0f)
                 ViewCompat.setTranslationZ(this, 0f)
             }
