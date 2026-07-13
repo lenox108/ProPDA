@@ -3469,17 +3469,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             loadInFlight = false
             result.onSuccess { page ->
                 // Findpost-резюм к границе прочитанного вернул ПУСТУЮ страницу (пост границы удалён из темы,
-                // 4PDA не отдаёт целевой пост) — не блэнкаем экран, а рендерим уже успешно загруженную
-                // getnewpost-страницу (тема открывается на серверном якоре). См. [resumeFallbackPage].
+                // 4PDA не отдаёт целевой пост) ИЛИ страницу ЧУЖОЙ темы (пост границы ПЕРЕНЕСЁН модераторами
+                // в другую тему — IPB у findpost игнорирует showtopic и редиректит туда, где пост живёт
+                // сейчас; лог 13_07: открытие «OnePlus 15 Обсуждение» рендерило «Энергосбережение» с
+                // перенесёнными постами — «темы слились»). В обоих случаях не уводим юзера из запрошенной
+                // темы — рендерим уже успешно загруженную getnewpost-страницу. См. [resumeFallbackPage].
                 resumeFallbackPage?.let { fb ->
-                    if (page.posts.isEmpty()) {
+                    val crossTopic = fb.id > 0 && page.id > 0 && page.id != fb.id
+                    if (page.posts.isEmpty() || crossTopic) {
                         val fbUrl = resumeFallbackUrl ?: url
                         resumeFallbackPage = null
                         resumeFallbackUrl = null
                         pendingSuppressEndMarkReadForResume = false
                         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
                             android.util.Log.i("FPDA_READ_BOUNDARY",
-                                    "resume_findpost empty (deleted boundary post) → fallback to loaded page")
+                                    if (crossTopic) "resume_findpost redirected to foreign topic ${page.id} (boundary post moved) → fallback to ${fb.id}"
+                                    else "resume_findpost empty (deleted boundary post) → fallback to loaded page")
                         }
                         renderThemePage(fbUrl, fb)
                         return@onSuccess
@@ -3569,7 +3574,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         refreshToolbarState()
         applyToolbarTitleFromPage(page) // fill the title from the loaded page (deep-link/deep-page opens)
         val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
-        val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
+        // Пагинацию киим id ОТРЕНДЕРЕННОЙ страницы, а не URL запроса: findpost на перенесённый
+        // модераторами пост 302-редиректит в тему, где пост живёт сейчас, и url (showtopic=старая
+        // тема) расходится с page.id. Киинг по url тогда заставлял infinite-scroll ДОПИСЫВАТЬ в
+        // список страницы ЧУЖОЙ темы (реальное «посты двух тем слились»), а «В конец темы» грузил
+        // старую тему (лог 13_07: рендер «Энергосбережения» + страницы/конец «Обсуждения»).
+        // URL-id остаётся лишь fallback'ом на случай, если парсер не вытащил id из HTML.
+        val topicId = page.id.takeIf { it > 0 } ?: ThemeApi.extractTopicIdFromUrl(url) ?: 0
         pagination.reset(topicId, page.pagination, items)
         // Обновление снизу: на этой странице непрочитанного нет, но тема выросла за её границу —
         // шагаем вниз, пока не найдём страницу с непрочитанным (иначе новые посты не видны вовсе).
