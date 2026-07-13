@@ -271,18 +271,6 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         })
 
         onBackPressedDispatcher.addCallback(this, mainBackCallback)
-        updateBackDispatchEnabled()
-
-        // Открытие/закрытие вкладки происходит программно (например, тап по теме в
-        // Избранном) — уже ПОСЛЕ ACTION_DOWN тапа, поэтому onUserInteraction на этот
-        // момент считает back-состояние по старому стеку и может ложно выключить
-        // mainBackCallback. Без последующего касания (юзер не скроллит) флаг остаётся
-        // устаревшим, и системный back-жест уводит на рабочий стол вместо возврата в
-        // Избранное. subscribersFlow эмитит в конце updateFragmentsState (стек уже
-        // авторитетен) → пересчитываем enabled на каждое изменение стека.
-        lifecycleScope.launch {
-            tabNavigator.subscribersFlow.collect { updateBackDispatchEnabled() }
-        }
 
         val defaultStatusBarHeight = resources.getDimensionPixelSize(R.dimen.default_statusbar_height)
         val defaultKeyboardHeight = resources.getDimensionPixelSize(R.dimen.default_keyboard_height)
@@ -462,8 +450,6 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         syncStatusBarIconContrast()
         syncNavigationBarAppearance()
         presenter.onActivityResume()
-        // После смены вкладки/восстановления — освежить enabled предиктивного back.
-        updateBackDispatchEnabled()
         if (lang == null) {
             lang = LocaleHelper.getLanguage(this)
         }
@@ -577,13 +563,20 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
 
     /**
      * Единственный `OnBackPressedCallback` приложения (pull-based диспетчер:
-     * фрагмент решает через [TabFragment.onBackPressed]). Его `enabled` теперь
-     * ДИНАМИЧЕСКИЙ — см. [updateBackDispatchEnabled]: когда следующий «назад»
-     * гарантированно выйдет из приложения, callback выключается, и Android 13+
-     * показывает предиктивную анимацию отслаивания к лаунчеру. Пока enabled —
-     * поведение ровно прежнее (backHandler всегда делает корректное действие),
-     * поэтому «ложно-enabled» не даёт регрессий, а «ложно-disabled» исключён
-     * консервативным [backWillExitApp] + пересчётом на onUserInteraction/onResume.
+     * фрагмент решает через [TabFragment.onBackPressed]). ВСЕГДА `enabled`.
+     *
+     * Ранее `enabled` был ДИНАМИЧЕСКИМ: когда мы «предсказывали», что следующий
+     * back выйдет из приложения, callback выключался — чтобы Android 13+ показал
+     * предиктивную анимацию отслаивания к лаунчеру. Но при `enableOnBackInvokedCallback`
+     * система читает `enabled` в НАЧАЛЕ жеста и, если он `false`, коммитит уход к
+     * лаунчеру, что бы дальше ни поменялось. Любое окно, где флаг оказывался ложно
+     * `false` (навигация без последующего касания, гонки состояния фрагмента),
+     * приводило к РАНДОМНОМУ сворачиванию приложения вместо действия «назад» — на
+     * разных устройствах и режимах навигации по-разному. Предсказать состояние
+     * заранее и без гонок нельзя, поэтому надёжность важнее анимации: callback
+     * всегда включён, а корректный выход (в т.ч. на корневой вкладке) делает сам
+     * [backHandler] → [TabNavigator.exit] → `activity.finish()` — ровно как до
+     * появления динамической логики.
      */
     private val mainBackCallback = object : OnBackPressedCallback(true) {
         override fun handleOnBackPressed() {
@@ -597,38 +590,12 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
             } catch (e: Exception) {
                 Timber.e(e, "Error in onBackPressed")
                 finishAffinity()
-            } finally {
-                updateBackDispatchEnabled()
             }
         }
     }
 
-    /**
-     * Выйдет ли следующий «назад» из приложения. КОНСЕРВАТИВНО: возвращает true
-     * (выход → показать предиктивную анимацию) только когда мы уверены, что
-     * перехватывать нечего. Любая неопределённость → false (остаёмся enabled,
-     * прежнее поведение, без регрессий).
-     */
-    private fun backWillExitApp(): Boolean {
-        if (::bottomDrawer.isInitialized && bottomDrawer.isShown()) return false
-        val active = tabNavigator.getCurrentFragment() ?: return true
-        // Есть куда навигировать назад (не последняя вкладка) → не выход.
-        if (tabNavigator.tabController.getList().size > 1) return false
-        // Единственная (корневая) вкладка: выход, только если фрагмент сейчас
-        // ничего не перехватывает (read-only запрос, без сайд-эффектов).
-        return !active.hasBackHandling()
-    }
-
-    /** Пересчитать enabled главного back-callback. Дёшево; безопасно звать часто. */
-    private fun updateBackDispatchEnabled() {
-        mainBackCallback.isEnabled = !backWillExitApp()
-    }
-
     override fun onUserInteraction() {
         super.onUserInteraction()
-        // Любое изменение back-состояния (вход в selection/поиск/панель, показ
-        // drawer) инициируется касанием → к следующему back-жесту enabled свеж.
-        updateBackDispatchEnabled()
         // Касание = активность пользователя: снимаем idle-паузу realtime-WS (если была) и
         // сбрасываем отсчёт бездействия. Дёшево — обычно лишь обновление метки времени.
         if (::eventsRepository.isInitialized) {
