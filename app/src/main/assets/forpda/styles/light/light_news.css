@@ -1142,8 +1142,8 @@ body {
   -webkit-border-radius: 0.75rem;
   border-radius: 0.75rem;
   padding: 0 0.625rem;
-  background: var(--surface-control, rgba(33, 119, 175, 0.1));
-  color: var(--surface-accent, #2177af);
+  background: rgba(33, 119, 175, 0.1);
+  color: #2177af;
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -1152,7 +1152,7 @@ body {
   flex: 0 0 auto;
 }
 .news-comments-section .news-inline-comment-action:active {
-  background: var(--surface-control-active, rgba(33, 119, 175, 0.16));
+  background: rgba(33, 119, 175, 0.16);
 }
 .news-comments-section .news-inline-comment-action:disabled {
   opacity: 0.55;
