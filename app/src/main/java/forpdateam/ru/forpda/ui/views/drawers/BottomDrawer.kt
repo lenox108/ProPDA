@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.ui.views.drawers
 
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
@@ -200,13 +201,12 @@ class BottomDrawer(
 
             bottomSheet2.apply {
                 clipToOutline = false
-                // Панель = colorSurfaceContainerLowest — тот же тон, что «плоская» верхняя
-                // шапка (main_toolbar_accent_surface под Material You редиректится на Lowest)
-                // и фон страницы. Во всех статических палитрах Lowest == Container ==
-                // background_base, так что вне Material You ничего не меняется; под Material
-                // You прежний colorSurfaceContainer давал тональную ступень (light: #EEEDF6
-                // на белом верхе, dark: #181920 на чёрном) — низ и верх расходились цветом.
-                background = ColorDrawable(activity.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+                // Панель = полотно ChromeCanvas — ТОТ ЖЕ тон, что «плоская» верхняя шапка
+                // и фон страниц: под Material You (SYSTEM light/dark) это динамический тон
+                // обоев, вне MY fallback = colorSurfaceContainerLowest (== background_base
+                // во всех статических палитрах) — прежнее поведение. Низ и верх держатся
+                // на одном источнике и не могут разойтись цветом.
+                background = ColorDrawable(activity.chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
                 ViewCompat.setElevation(this, 0f)
                 ViewCompat.setTranslationZ(this, 0f)
             }

@@ -49,6 +49,7 @@ import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.entity.remote.qms.QmsContact
 import forpdateam.ru.forpda.presentation.qms.contacts.QmsContactsViewModel
 import forpdateam.ru.forpda.ui.ListPlateSegment
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.drawableResForListPlate
 import forpdateam.ru.forpda.ui.listPlateSegment
 
@@ -71,11 +72,16 @@ fun QmsContactsScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Тон страницы под плитами = полотно ChromeCanvas — как setListsBackground() у
+    // остальных вкладок (избранное/ответы/закладки): под Material You тонируется
+    // обоями в единый тон с шапкой/нижним баром, вне MY = surfaceContainerLowest.
+    val pageContext = LocalContext.current
+    val pageTone = remember(pageContext) {
+        Color(pageContext.chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+    }
     Surface(
             modifier = modifier.fillMaxSize(),
-            // Тон страницы под плитами — как setListsBackground() у остальных вкладок
-            // (избранное/ответы/закладки): плиты светлее страницы, а не наоборот.
-            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            color = pageTone,
     ) {
         if (state.contacts.isEmpty() && state.loading) {
             Box(Modifier.fillMaxSize()) {

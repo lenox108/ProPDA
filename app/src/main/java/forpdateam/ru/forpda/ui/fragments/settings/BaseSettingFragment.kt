@@ -15,6 +15,7 @@ import androidx.preference.PreferenceGroupAdapter
 import androidx.preference.PreferenceViewHolder
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.dp2
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
@@ -83,7 +84,7 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         super.onViewCreated(view, savedInstanceState)
         // Keep Settings background consistent with "Menu"/grouped lists:
         // page = background_base, plates = cards_background (see pref_plate_*.xml).
-        view.setBackgroundColor(view.context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        view.setBackgroundColor(view.context.chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         view.findViewById<androidx.recyclerview.widget.RecyclerView>(androidx.preference.R.id.recycler_view)?.also { list ->
             // Fix: Add padding for navigation bar to prevent bottom items from being covered
             ViewCompat.setOnApplyWindowInsetsListener(list) { v, insets ->

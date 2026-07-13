@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.ui.fragments.news.details
 import forpdateam.ru.forpda.ui.applyM3RefreshStyle
 
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.databinding.ArticleCommentsBinding
 import forpdateam.ru.forpda.common.showSnackbar
 import android.annotation.SuppressLint
@@ -106,7 +107,7 @@ class ArticleCommentsFragment : Fragment(), ArticleCommentsAdapter.ClickListener
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         _binding = ArticleCommentsBinding.inflate(inflater, container, false)
-        binding.root.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        binding.root.setBackgroundColor(requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         refreshLayout = binding.swipeRefreshList
         recyclerView = binding.baseList
         writePanel = binding.commentWritePanel
@@ -121,7 +122,7 @@ class ArticleCommentsFragment : Fragment(), ArticleCommentsAdapter.ClickListener
         refreshLayout.applyM3RefreshStyle()
         refreshLayout.setOnRefreshListener { presenter.updateComments() }
 
-        recyclerView.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        recyclerView.setBackgroundColor(requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
         recyclerView.tuneForListPerformance()
         recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(dp12, false))

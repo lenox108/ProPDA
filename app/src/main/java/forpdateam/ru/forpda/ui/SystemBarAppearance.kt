@@ -35,7 +35,9 @@ object SystemBarAppearance {
     }
 
     fun syncNavigationBar(activity: Activity, @AttrRes colorAttr: Int = R.attr.background_for_lists) {
-        activity.window.navigationBarColor = activity.getColorFromAttr(colorAttr)
+        // ChromeCanvas: системный нав-бар — часть полотна; под Material You тонируется
+        // обоями вместе с нижним таббаром, вне MY — ровно colorAttr (прежнее поведение).
+        activity.window.navigationBarColor = activity.chromeCanvasColor(colorAttr)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             activity.window.navigationBarDividerColor = Color.TRANSPARENT
         }

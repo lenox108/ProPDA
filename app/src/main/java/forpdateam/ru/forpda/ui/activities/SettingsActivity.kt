@@ -8,10 +8,12 @@ import androidx.appcompat.widget.SearchView
 import androidx.preference.PreferenceFragmentCompat
 import android.view.MenuItem
 import android.view.Menu
+import android.view.View
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.EdgeToEdge
 import forpdateam.ru.forpda.ui.FontController
 import forpdateam.ru.forpda.ui.SystemBarAppearance
@@ -90,8 +92,13 @@ class SettingsActivity : AppCompatActivity() {
         // Последний слой: усиление контраста по системной настройке (a11y, Android 14+).
         ContrastApplier.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
-        val barColor = getColorFromAttr(R.attr.main_toolbar_accent_surface)
+        val barColor = chromeCanvasColor(R.attr.main_toolbar_accent_surface)
         setContentView(R.layout.activity_settings)
+        // activity_settings корень (fragment_content) в XML держит статический
+        // colorSurfaceContainerLowest — под Material You перекрашиваем его в полотно
+        // обоев (ChromeCanvas), вне MY fallback = тот же Lowest.
+        findViewById<View>(R.id.fragment_content)?.setBackgroundColor(
+                chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         EdgeToEdge.apply(
                 this,
                 findViewById(R.id.fragment_content),
@@ -154,7 +161,7 @@ class SettingsActivity : AppCompatActivity() {
             recreate()
             return
         }
-        val barColor = getColorFromAttr(R.attr.main_toolbar_accent_surface)
+        val barColor = chromeCanvasColor(R.attr.main_toolbar_accent_surface)
         syncTopBarSystemBars(barColor)
     }
 
