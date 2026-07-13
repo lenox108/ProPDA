@@ -457,6 +457,18 @@
         <item name="android:dividerHeight">1dp</item>-->
     </style>
 
+    <!--
+        AMOLED preference-тема для SYSTEM-палитры. Раньше settingsPreferenceScreen
+        для AMOLED+SYSTEM отдавал AmoledAppTheme.NoActionBar — БЕЗ ActionBar, из-за
+        чего экран настроек в AMOLED терял верхний тулбар (заголовок «Настройки» +
+        стрелка «назад»). Curated-палитры (Sepia и др.) для AMOLED уже используют
+        preference-темы С ActionBar (DayNightPreferenceTheme.Amoled*), у SYSTEM
+        такой не было — этот стиль её добавляет (parent AmoledAppTheme = с ActionBar).
+    -->
+    <style name="DayNightPreferenceTheme.Amoled" parent="AmoledAppTheme">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
     <!-- RadioButton: выбранный кружок должен быть виден — используем colorAccent вместо colorPrimary -->
     <style name="Widget.ForPDA.RadioButton" parent="Widget.Material3.CompoundButton.RadioButton">
         <item name="colorPrimary">?attr/colorAccent</item>
