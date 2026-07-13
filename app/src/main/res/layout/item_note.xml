@@ -8,6 +8,7 @@
     android:focusable="true"
     android:foreground="?attr/selectableItemBackground"
     android:orientation="vertical"
+    android:theme="@style/ThemeOverlay.ForPDA.FlatCardSurface"
     app:contentPadding="@dimen/dp0"
     app:strokeColor="?attr/list_plate_stroke_color"
     app:strokeWidth="?attr/list_plate_stroke_width"
