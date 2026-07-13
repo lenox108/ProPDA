@@ -1137,11 +1137,8 @@ body {
         border: 0;
         .bRad(@radius_medium);
         padding: 0 10/16rem;
-        // Follow the active palette's runtime CSS vars so reply/menu chips
-        // aren't a hard-coded blue on AMOLED/reading palettes; fall back to the
-        // per-theme accent so the default light/dark look is unchanged.
-        background: var(~"--surface-control", fade(@surface_accent, 10%));
-        color: var(~"--surface-accent", @surface_accent);
+        background: fade(@surface_accent, 10%);
+        color: @surface_accent;
         font: inherit;
         font-size: 0.8125rem;
         font-weight: 600;
@@ -1149,7 +1146,7 @@ body {
         white-space: nowrap;
         flex: 0 0 auto;
         &:active {
-            background: var(~"--surface-control-active", fade(@surface_accent, 16%));
+            background: fade(@surface_accent, 16%);
         }
         &:disabled {
             opacity: 0.55;
