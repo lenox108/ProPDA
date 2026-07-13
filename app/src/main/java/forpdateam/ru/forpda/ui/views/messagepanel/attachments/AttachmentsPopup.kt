@@ -403,7 +403,11 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     fun onDeleteFiles(deletedItems: List<AttachmentItem>) {
         Timber.d("onDeleteFiles $deletedItems")
         endDeleteProgress()
-        for (item in deletedItems) {
+        // Снимок: deletedItems может быть тем же самым списком, что и [selected]
+        // (getSelected() отдаёт живой список, а deleteFiles возвращает его же обратно).
+        // Тогда selected.remove(item) в цикле мутирует итерируемую коллекцию → ConcurrentModificationException
+        // и падение приложения при удалении вложения.
+        for (item in ArrayList(deletedItems)) {
             Timber.d("Delete file $item")
             if (item.id > 0) {
                 messagePanel.setText(
