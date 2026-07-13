@@ -3574,7 +3574,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         refreshToolbarState()
         applyToolbarTitleFromPage(page) // fill the title from the loaded page (deep-link/deep-page opens)
         val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
-        val topicId = ThemeApi.extractTopicIdFromUrl(url) ?: page.id
+        // Пагинацию киим id ОТРЕНДЕРЕННОЙ страницы, а не URL запроса: findpost на перенесённый
+        // модераторами пост 302-редиректит в тему, где пост живёт сейчас, и url (showtopic=старая
+        // тема) расходится с page.id. Киинг по url тогда заставлял infinite-scroll ДОПИСЫВАТЬ в
+        // список страницы ЧУЖОЙ темы (реальное «посты двух тем слились»), а «В конец темы» грузил
+        // старую тему (лог 13_07: рендер «Энергосбережения» + страницы/конец «Обсуждения»).
+        // URL-id остаётся лишь fallback'ом на случай, если парсер не вытащил id из HTML.
+        val topicId = page.id.takeIf { it > 0 } ?: ThemeApi.extractTopicIdFromUrl(url) ?: 0
         pagination.reset(topicId, page.pagination, items)
         // Обновление снизу: на этой странице непрочитанного нет, но тема выросла за её границу —
         // шагаем вниз, пока не найдём страницу с непрочитанным (иначе новые посты не видны вовсе).
