@@ -1075,7 +1075,7 @@ body {
         line-height: 1.5;
         word-wrap: break-word;
         a {
-            color: var(--surface-accent, @surface_accent);
+            color: var(~"--ppda-accent", @surface_accent);
             text-decoration: none;
             &:active {
                 text-decoration: underline;
@@ -1137,8 +1137,13 @@ body {
         border: 0;
         .bRad(@radius_medium);
         padding: 0 10/16rem;
-        background: fade(@surface_accent, 10%);
-        color: @surface_accent;
+        // Чипы «Ответить»/«⋮» следуют акценту приложения (--ppda-accent:
+        // настройка «Цвет акцента» / Material You, корректна и в AMOLED), фон —
+        // нейтральный --surface-control. Фолбэки сохраняют прежний дефолт
+        // light/dark. NB: НЕ --surface-accent (в AMOLED серый). «Лайк» ниже
+        // красится сам (нейтральный→красный).
+        background: var(~"--surface-control", fade(@surface_accent, 10%));
+        color: var(~"--ppda-accent", @surface_accent);
         font: inherit;
         font-size: 0.8125rem;
         font-weight: 600;
@@ -1146,7 +1151,7 @@ body {
         white-space: nowrap;
         flex: 0 0 auto;
         &:active {
-            background: fade(@surface_accent, 16%);
+            background: var(~"--surface-control-active", fade(@surface_accent, 16%));
         }
         &:disabled {
             opacity: 0.55;
