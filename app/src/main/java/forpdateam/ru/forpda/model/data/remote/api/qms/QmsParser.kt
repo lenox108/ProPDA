@@ -6,6 +6,7 @@ import forpdateam.ru.forpda.model.data.remote.ParserPatterns
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
+import org.jsoup.Jsoup
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
@@ -184,7 +185,8 @@ class QmsParser(
                                 date = dateLabel.trim()
                             }
                     authorToken != null -> {
-                        val messageContent = matcher.group(6)?.trim().orEmpty()
+                        val messageContent = extractBalancedContentHtml(matcher.group(), "msg-content")
+                                ?: matcher.group(6)?.trim().orEmpty()
                         if (messageContent.isEmpty() && dateLabel.isNullOrBlank()) {
                             null
                         } else {
@@ -217,7 +219,13 @@ class QmsParser(
             parseMessagesWithPattern(response, scope.chat_pattern_container) { matcher ->
                 val classToken = matcher.group(1)?.takeIf { it.isNotEmpty() }
                         ?: matcher.group(4).orEmpty()
-                val content = matcher.group(5)?.trim().orEmpty()
+                // The capture group stops at the FIRST nested `</div>`, so a message that wraps its
+                // attached media / quote in an inner `<div>` lost everything after it (report:
+                // «полное сообщение при закреплённом медиа не показывается в личке»). Re-extract the
+                // whole `.content` block with a balanced parse; fall back to the truncated group only
+                // if the div can't be located.
+                val content = extractBalancedContentHtml(matcher.group(), "content")
+                        ?: matcher.group(5)?.trim().orEmpty()
                 val messageId = matcher.groupInt(2) ?: matcher.groupInt(3)
                 if (content.isEmpty() || messageId == null) {
                     null
@@ -248,7 +256,8 @@ class QmsParser(
             val classToken = CONTAINER_CLASS_REGEX.find(attrs)?.groupValues?.get(1).orEmpty()
             val blockEnd = openings.getOrNull(index + 1)?.first ?: response.length
             val block = response.substring(start, blockEnd)
-            val content = CONTAINER_CONTENT_REGEX.find(block)?.groupValues?.get(1)?.trim().orEmpty()
+            val content = extractBalancedContentHtml(block, "content")
+                    ?: CONTAINER_CONTENT_REGEX.find(block)?.groupValues?.get(1)?.trim().orEmpty()
             if (content.isEmpty()) return@forEachIndexed
             val time = CONTAINER_TIME_REGEX.find(block)?.groupValues?.get(1)?.trim()
             result.add(
@@ -282,7 +291,8 @@ class QmsParser(
             // Skip non-message rows (contact/blacklist/error boxes never carry msg-content).
             val blockEnd = openings.getOrNull(index + 1)?.first ?: response.length
             val block = response.substring(start, blockEnd)
-            val content = LIST_GROUP_CONTENT_REGEX.find(block)?.groupValues?.get(1)?.trim().orEmpty()
+            val content = extractBalancedContentHtml(block, "msg-content")
+                    ?: LIST_GROUP_CONTENT_REGEX.find(block)?.groupValues?.get(1)?.trim().orEmpty()
             if (content.isEmpty()) return@forEachIndexed
             val explicitId = LIST_GROUP_MESSAGE_ID_REGEX.find(attrs)?.groupValues?.get(1)?.toIntOrNull()
             val unreadStatus = LIST_GROUP_UNREAD_REGEX.find(attrs)?.groupValues?.get(1)
@@ -326,6 +336,21 @@ class QmsParser(
                 Regex("""<div[^>]*\bcontent\b[^>]*>([\s\S]*?)</div>""", RegexOption.IGNORE_CASE)
         private val CONTAINER_TIME_REGEX =
                 Regex("""<div[^>]*\btime\b[^>]*>[\s\S]*?<span>([^<]*)</span>""", RegexOption.IGNORE_CASE)
+    }
+
+    /**
+     * Extracts the FULL inner HTML of the message body `<div class="$cssClass …">` from [messageHtml]
+     * using a balanced (Jsoup) parse. The regex capture groups above are non-greedy up to the first
+     * nested `</div>`, so a message whose body wraps attached media / a quote / a spoiler in its own
+     * `<div>` had everything after that nested block silently dropped — the reported «полное сообщение
+     * при закреплённом медиа не показывается в личке». Jsoup closes tags by nesting depth, so the whole
+     * body survives. Returns `null` when the div is absent or empty, and the caller keeps the
+     * regex-captured text (never regressing a message that parsed before).
+     */
+    private fun extractBalancedContentHtml(messageHtml: String?, cssClass: String): String? {
+        if (messageHtml.isNullOrEmpty()) return null
+        val el = Jsoup.parseBodyFragment(messageHtml).selectFirst("div.$cssClass") ?: return null
+        return el.html().trim().ifEmpty { null }
     }
 
     private fun parseMessagesWithPattern(
