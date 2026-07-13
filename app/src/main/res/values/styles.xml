@@ -669,6 +669,12 @@
         <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
     </style>
 
+    <!-- Day-fallback (реальная — в values-night): AMOLED preference-тема с ActionBar
+         для SYSTEM. Предотвращает Resources$NotFoundException в дневной конфигурации. -->
+    <style name="DayNightPreferenceTheme.Amoled" parent="AmoledAppTheme">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
     <style name="DayNightPreferenceTheme" parent="DayNightAppTheme">
         <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
         <!--<item name="textAppearanceListItem">@style/CodeFont</item>
