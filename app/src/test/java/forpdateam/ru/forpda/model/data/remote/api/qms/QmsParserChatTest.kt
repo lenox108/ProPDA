@@ -195,6 +195,42 @@ class QmsParserChatTest {
         assertTrue(messages.any { it.content?.contains("First message") == true })
     }
 
+    @Test
+    fun `mess_container keeps text that follows an attached-media div`() {
+        // Репорт: «полное сообщение при закреплённом медиа не показывается в личке». Вложение/медиа
+        // приходит вложенным <div> внутри .content, а нежадный `([\s\S]*?)</div>` обрезал контент на
+        // ПЕРВОМ вложенном </div> — текст после картинки терялся. Контент должен дойти до конца.
+        val parser = QmsParser(loadProductionPatterns())
+        val html = """
+            <div class="mess_list">
+            <div class="mess_container his unread" data-mess-id="401">
+            <div class="mess"><div class="content emoticons">Before media
+            <div class="attach"><a href="/f.jpg" class="ipb-attach attach-image"><img class="attach linked-image" src="/f.jpg"></a></div>
+            After media tail</div></div>
+            <div class="time"><span>10:00</span></div></div>
+            </div>
+        """.trimIndent()
+        val messages = parser.parseChat(html).messages
+        assertEquals(1, messages.size)
+        val content = messages.first().content.orEmpty()
+        assertTrue("текст ДО медиа должен остаться", content.contains("Before media"))
+        assertTrue("вложение должно остаться", content.contains("linked-image"))
+        assertTrue("текст ПОСЛЕ медиа не должен теряться", content.contains("After media tail"))
+    }
+
+    @Test
+    fun `system list-group message keeps quote body after nested block`() {
+        // Тот же дефект на пути системных уведомлений: msg-content содержит вложенный
+        // <div class="post-block quote">, тело цитаты шло ПОСЛЕ первого </div> и терялось.
+        val parser = QmsParser(loadProductionPatterns())
+        val html = loadQmsFixture("chat_system_notifications.html")
+        val first = parser.parseMoreMessages(html).first { !it.isDate }
+        val content = first.content.orEmpty()
+        assertTrue("вводный текст сохраняется", content.contains("репутаци"))
+        assertTrue("тело цитаты после вложенного блока не должно теряться",
+                content.contains("Благодарю"))
+    }
+
     @Test(timeout = 10_000)
     fun `chat_info pattern has no catastrophic backtracking on message-less new thread`() {
         // Регресс-гейт: chat_info-паттерн имел катастрофический бэктрекинг O(n²) java.util.regex,
