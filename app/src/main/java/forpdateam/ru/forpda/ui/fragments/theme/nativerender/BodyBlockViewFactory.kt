@@ -82,7 +82,7 @@ class BodyBlockViewFactory(
          * The colour of the surface the CURRENT block's text is drawn on, used to judge which inline
          * server colours are invisible and how bright a link must be. `null` = the default post-card
          * surface ([readingSurfaceColor]); quote/spoiler blocks override it to their own tonal fill
-         * (`colorSurfaceContainerHighest`) while rendering their inner content, since that surface is a
+         * ([blockFillColor]) while rendering their inner content, since that surface is a
          * different shade than the post card — otherwise black/white quoted text and dim links get
          * judged against the wrong background and stay unreadable inside the card.
          */
@@ -175,20 +175,33 @@ class BodyBlockViewFactory(
     }
 
     /**
+     * Fill for an inline block card (quote / spoiler / code / attachment / …). Derived from the
+     * post-card surface this block sits on ([readingSurfaceColor]) nudged one tonal step toward the
+     * content colour, so the block always reads as a DISTINCT surface — even on the dark/AMOLED skins
+     * that pin `colorSurfaceContainerHigh`/`Highest` to the same value as the post card, where the
+     * bare M3 attr would make quotes and spoilers blend into the post (user report). On light skins
+     * the step darkens slightly; either way the delta from the card is guaranteed by the blend.
+     */
+    private fun blockFillColor(ctx: Context): Int {
+        val card = readingSurfaceColor(ctx)
+        val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+        return androidx.core.graphics.ColorUtils.blendARGB(card, onSurface, BLOCK_FILL_TONAL_STEP)
+    }
+
+    /**
      * Rounded Material 3 container for an inline block (quote / spoiler / …): a tonal fill plus a
      * 1dp [colorOutlineVariant] hairline and rounded corners, so nested blocks read as distinct M3
      * surfaces on every palette instead of flat rectangles.
      */
     private fun m3BlockBackground(
             ctx: Context,
-            fillAttr: Int,
             cornerDp: Float = 12f,
             flat: Boolean = false,
     ): android.graphics.drawable.GradientDrawable {
         val dm = ctx.resources.displayMetrics
         return android.graphics.drawable.GradientDrawable().apply {
             cornerRadius = cornerDp * dm.density
-            setColor(ctx.getColorFromAttr(fillAttr))
+            setColor(blockFillColor(ctx))
             setStroke(
                     if (flat) 0 else (1f * dm.density).toInt().coerceAtLeast(1),
                     ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant),
@@ -209,7 +222,7 @@ class BodyBlockViewFactory(
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((10 * dm.density).toInt())
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest, flat = flatBlocks)
+            background = m3BlockBackground(ctx, flat = flatBlocks)
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -246,8 +259,7 @@ class BodyBlockViewFactory(
             chevron.rotation = if (open) 90f else 0f
             bodyContainer.visibility = if (open) View.VISIBLE else View.GONE
         }
-        renderBlocksOnSurface(ctx, bodyContainer, block.inner, scope,
-                ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
+        renderBlocksOnSurface(ctx, bodyContainer, block.inner, scope, blockFillColor(ctx))
         applyState()
         header.setOnClickListener {
             open = !open
@@ -294,11 +306,10 @@ class BodyBlockViewFactory(
             if (src != null) setOnClickListener { linkHandler.handle(src, null) }
         }
         content.addView(header)
-        renderBlocksOnSurface(ctx, content, block.inner, scope,
-                ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
+        renderBlocksOnSurface(ctx, content, block.inner, scope, blockFillColor(ctx))
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest, flat = flatBlocks)
+            background = m3BlockBackground(ctx, flat = flatBlocks)
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -397,7 +408,7 @@ class BodyBlockViewFactory(
             textSize = scaledSp(14f)
             setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
             setPadding(pad, pad, pad, pad)
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            background = m3BlockBackground(ctx)
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -420,7 +431,7 @@ class BodyBlockViewFactory(
         val pad = (8 * dm.density).toInt()
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            background = m3BlockBackground(ctx)
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -512,7 +523,7 @@ class BodyBlockViewFactory(
         val panel = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((10 * resources.displayMetrics.density).toInt())
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            background = m3BlockBackground(ctx)
             clipToOutline = true
         }
         // NOTE: no «[KIND]» debug label — it is a dev artifact and must never reach users
@@ -776,5 +787,10 @@ class BodyBlockViewFactory(
         /** Comfortable link contrast on a DARK/AMOLED post surface, where saturated mid-blue accents
          *  read dim even above the bare-legibility floor. Above this we brighten the link. */
         const val DARK_SURFACE_LINK_CONTRAST = 5.5
+
+        /** How far an inline block card's fill is nudged from the post card toward the content colour
+         *  (see [blockFillColor]). Small enough to stay a subtle M3 tonal step, large enough to keep
+         *  quotes/spoilers visibly distinct on skins that pin all surface roles to one value. */
+        const val BLOCK_FILL_TONAL_STEP = 0.07f
     }
 }
