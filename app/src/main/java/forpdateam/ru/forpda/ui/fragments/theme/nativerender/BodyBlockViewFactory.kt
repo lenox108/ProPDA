@@ -696,8 +696,10 @@ class BodyBlockViewFactory(
             /** Idempotently ensure the «Цитировать» item is present; returns true if it was (re)added. */
             fun ensureQuoteItem(menu: android.view.Menu): Boolean {
                 if (menu.findItem(QUOTE_MENU_ID) != null) return false
+                // ALWAYS (not IF_ROOM): MIUI/HyperOS floating toolbar drops app items that land in the
+                // hidden overflow — forcing the primary row keeps «Цитировать» visible on Xiaomi.
                 menu.add(0, QUOTE_MENU_ID, 0, "Цитировать")
-                        .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
+                        .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
                 return true
             }
             override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
