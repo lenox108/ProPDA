@@ -822,6 +822,19 @@
         <item name="android:layout_marginBottom">@dimen/dp8</item>
     </style>
 
+    <!--
+        item_note — единственная карточка контента на com.google.android.material.card.MaterialCardView
+        (остальные — обычный androidx.cardview.widget.CardView / FrameLayout). MaterialCardView, в отличие
+        от обычного CardView, накладывает M3 tonal elevation overlay: композитит colorSurfaceTint
+        (= colorPrimary) поверх colorSurface пропорционально cardElevation. Под Material You primary —
+        зелёный из обоев, поэтому заметки красились заметно зеленее (#EEF2E9) всех прочих карточек
+        (#F8FAF3, без overlay) — экран «Закладки» выбивался фоном. Гасим overlay, чтобы заливка совпадала
+        со всеми экранами; app:strokeColor/strokeWidth (AMOLED-разделители) и тень 1dp остаются.
+    -->
+    <style name="ThemeOverlay.ForPDA.FlatCardSurface" parent="">
+        <item name="elevationOverlayEnabled">false</item>
+    </style>
+
 
     <!--<style name="ButtonsOnWhite">
         <item name="colorControlNormal">#757575</item>
