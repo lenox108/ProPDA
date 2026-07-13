@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Без статического background: полотно берётся от родителя fragment_content /
+     coordinator, который OtherFragment/TabFragment красит через ChromeCanvas
+     (под Material You — тон обоев, вне MY — colorSurfaceContainerLowest). XML-фон
+     тут перекрывал бы динамический тон белым Lowest — фон меню не тонировался. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="?attr/colorSurfaceContainerLowest">
+    android:layout_height="match_parent">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"

@@ -27,6 +27,7 @@ import forpdateam.ru.forpda.common.ArticleCommentsUserMessage
 import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.Html
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.common.showSnackbar
 import forpdateam.ru.forpda.common.webview.CustomWebChromeClient
 import forpdateam.ru.forpda.common.webview.CustomWebViewClient
@@ -202,6 +203,10 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         contentRoot = inflater.inflate(R.layout.fragment_article_content, container, false)
+        // Полотно вокруг статьи через ChromeCanvas (XML держит статический Lowest):
+        // под Material You тонируется обоями, вне MY fallback = тот же Lowest.
+        contentRoot.setBackgroundColor(
+                requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         val webContainer = contentRoot.findViewById<FrameLayout>(R.id.article_webview_container)
         webView = ExtendedWebView(requireContext()).also {
             it.systemLinkHandler = systemLinkHandler

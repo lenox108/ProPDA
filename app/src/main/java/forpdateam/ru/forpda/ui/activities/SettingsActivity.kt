@@ -8,6 +8,7 @@ import androidx.appcompat.widget.SearchView
 import androidx.preference.PreferenceFragmentCompat
 import android.view.MenuItem
 import android.view.Menu
+import android.view.View
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Preferences
@@ -93,6 +94,11 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val barColor = chromeCanvasColor(R.attr.main_toolbar_accent_surface)
         setContentView(R.layout.activity_settings)
+        // activity_settings корень (fragment_content) в XML держит статический
+        // colorSurfaceContainerLowest — под Material You перекрашиваем его в полотно
+        // обоев (ChromeCanvas), вне MY fallback = тот же Lowest.
+        findViewById<View>(R.id.fragment_content)?.setBackgroundColor(
+                chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         EdgeToEdge.apply(
                 this,
                 findViewById(R.id.fragment_content),
