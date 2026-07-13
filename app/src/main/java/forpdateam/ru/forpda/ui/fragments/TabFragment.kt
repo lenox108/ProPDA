@@ -60,6 +60,7 @@ import forpdateam.ru.forpda.common.applyForumAvatarShape
 import forpdateam.ru.forpda.ui.DimensionsProvider
 import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.applyTopBarPlaqueChrome
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.createTopAppBarShapeDrawable
 import forpdateam.ru.forpda.ui.resolveTopAppBarShapeStyle
 import javax.inject.Inject
@@ -153,6 +154,23 @@ open class TabFragment : Fragment() {
 
     @AttrRes
     protected open fun pinnedToolbarUnderlayColorAttr(): Int = R.attr.background_for_lists
+
+    /**
+     * Разрешённый цвет верхней плашки. Для «плоского» хрома главных разделов
+     * (main_toolbar_accent_surface) идёт через [ChromeCanvas]: под Material You
+     * (SYSTEM light/dark) — динамический тон обоев, единый со всем полотном
+     * (фон страниц/нижний бар/статус-бар); в статических палитрах — ровно
+     * значение атрибута (no-op). Прочие плашки (chrome_plane_background)
+     * остаются на своих атрибутах.
+     */
+    protected fun topBarSurfaceColor(): Int {
+        val attr = topBarSurfaceColorAttr()
+        return if (attr == R.attr.main_toolbar_accent_surface) {
+            requireContext().chromeCanvasColor(attr)
+        } else {
+            requireContext().getColorFromAttr(attr)
+        }
+    }
 
     private val mainActivity: MainActivity
         get() = activity as MainActivity
@@ -263,6 +281,14 @@ open class TabFragment : Fragment() {
         _binding = FragmentBaseBinding.inflate(inflater, container, false)
         viewFragment = binding.root
         contentController = ContentController(binding.contentProgress, binding.additionalContent, binding.fragmentContent)
+        // ChromeCanvas: coordinator и fragment_content в XML стоят на статическом
+        // ?attr/colorSurfaceContainerLowest (инфлейтер не умеет в рантайм-блендинг).
+        // Под Material You перекрашиваем их в динамическое полотно обоев сразу после
+        // инфляции; вне MY fallback = тот же Lowest — пиксельный no-op.
+        val canvas = requireContext().chromeCanvasColor(
+                com.google.android.material.R.attr.colorSurfaceContainerLowest)
+        binding.coordinatorLayout.setBackgroundColor(canvas)
+        binding.fragmentContent.setBackgroundColor(canvas)
         return viewFragment
     }
 
@@ -503,7 +529,9 @@ open class TabFragment : Fragment() {
     @JvmOverloads
     protected fun setListsBackground(view: View = coordinatorLayout) {
         // Align with settings / grouped lists: page tint = background_base, elevated rows = cards_background (plates).
-        view.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        // ChromeCanvas: под Material You полотно страницы тонируется обоями (единый тон с шапкой/низом);
+        // вне MY fallback = colorSurfaceContainerLowest — прежнее поведение без изменений.
+        view.setBackgroundColor(requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
     }
 
     @JvmOverloads
@@ -533,14 +561,14 @@ open class TabFragment : Fragment() {
                 roundedCorners = useTopBarRoundedCorners(),
                 roundedBottomCorners = if (hasGroupedPaginationHeader) true else useTopBarRoundedBottomCorners(),
         )
-        val plateFill = requireContext().getColorFromAttr(topBarSurfaceColorAttr())
-        val underlayFill = requireContext().getColorFromAttr(
-                if (hasGroupedPaginationHeader || useFlatTopBarChrome()) {
-                    topBarSurfaceColorAttr()
-                } else {
-                    pinnedToolbarUnderlayColorAttr()
-                }
-        )
+        val plateFill = topBarSurfaceColor()
+        // Подложка под pinned-тулбар: для flat/grouped хрома — тот же цвет плашки;
+        // иначе — полотно списка (под MY тонируется ChromeCanvas, вне MY = атрибут).
+        val underlayFill = if (hasGroupedPaginationHeader || useFlatTopBarChrome()) {
+            plateFill
+        } else {
+            requireContext().chromeCanvasColor(pinnedToolbarUnderlayColorAttr())
+        }
         val usesMainToolbarSurface = topBarSurfaceColorAttr() == R.attr.main_toolbar_accent_surface
         val drawAppBarStroke = !usesMainToolbarSurface
         val groupedStrokeWidthAttr = if (hasGroupedPaginationHeader && usesMainToolbarSurface) {
@@ -846,7 +874,7 @@ open class TabFragment : Fragment() {
 
     protected fun applyTopBarStatusChrome() {
         if (!isAdded || activity == null) return
-        val topBarColor = requireContext().getColorFromAttr(topBarSurfaceColorAttr())
+        val topBarColor = topBarSurfaceColor()
         toolbarLayout.setStatusBarScrimColor(topBarColor)
         if (useFlatTopBarChrome()) {
             applyStatusBarUnderlay(topBarColor)

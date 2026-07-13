@@ -89,7 +89,9 @@ object UiThemeStyles {
         val themes = paletteThemes[effectivePalette(palette)]
         return when {
             themes != null -> if (amoled) themes.amoledPreference else themes.dayPreference
-            amoled -> R.style.AmoledAppTheme_NoActionBar
+            // AMOLED+SYSTEM: preference-тема С ActionBar (иначе экран настроек терял
+            // верхний тулбар «Настройки» + «назад» — AmoledAppTheme.NoActionBar его не рисует).
+            amoled -> R.style.DayNightPreferenceTheme_Amoled
             else -> R.style.DayNightPreferenceTheme
         }
     }

@@ -5,6 +5,7 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -478,10 +479,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(pollHeaderAdapter, postsAdapter)
         // Bottom room for the CLASSIC-mode pagination bar is managed in updatePaginationBar().
         recyclerView.clipToPadding = false
-        // Page tone UNDER the post cards: the lowest surface container, so each post (colorSurfaceContainer,
-        // rounded, slightly elevated) reads as a distinct Material 3 card floating on the page — inter-card
-        // gaps and the area below the last card share this one page tone.
-        requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest).let { page ->
+        // Page tone UNDER the post cards = полотно ChromeCanvas (под Material You — динамический
+        // тон обоев, единый с шапкой/нижним баром; вне MY = colorSurfaceContainerLowest, как раньше).
+        // Карточки постов остаются на content_card_surface и всплывают над тонированным полотном.
+        requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest).let { page ->
             recyclerView.setBackgroundColor(page)
             refreshLayout.setBackgroundColor(page)
         }
@@ -776,7 +777,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // The compact panel floats with margins, so that blue leaks around it as an unwanted border.
         // Paint the host with the list surface so the panel floats seamlessly (parity with WebView).
         messagePanelHost.setBackgroundColor(
-                requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+                requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         panel.visibility = View.GONE
         // Скрыть и сам ХОСТ: AdvancedPopup.attachCompactAdvancedView оборачивает панель в видимый
         // LinearLayout с исходными layout-параметрами компактной панели (topMargin 8dp). Обёртка с
@@ -2728,7 +2729,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // Lowest, не Container: ряд должен сливаться с фоном страницы (flat). В статических
             // палитрах роли равны, а под Material You Container светлее Lowest — ряд читался
             // отдельной серой полосой на странице.
-            setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+            // Полотно ChromeCanvas — ряд пагинации сливается с фоном страницы и под MY, и в статике.
+            setBackgroundColor(ctx.chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
             elevation = 0f
             visibility = View.GONE
         }

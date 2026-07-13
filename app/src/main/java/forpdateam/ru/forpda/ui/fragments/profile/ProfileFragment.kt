@@ -212,7 +212,7 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         if (isResume) {
             SystemBarAppearance.syncStatusBarIconContrast(
                     requireActivity(),
-                    requireContext().getColorFromAttr(topBarSurfaceColorAttr())
+                    topBarSurfaceColor()
             )
         } else {
             SystemBarAppearance.syncStatusBarIconContrast(requireActivity())

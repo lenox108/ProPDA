@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import dagger.hilt.android.AndroidEntryPoint
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.other.AppMenuItem
 import forpdateam.ru.forpda.model.MenuMapper
@@ -38,6 +39,10 @@ class BottomNavOrderFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // Полотно экрана через ChromeCanvas (XML держит статический Lowest): под
+        // Material You тонируется обоями, вне MY fallback = тот же Lowest.
+        view.setBackgroundColor(
+                view.context.chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         (requireActivity() as AppCompatActivity).supportActionBar?.setTitle(R.string.pref_title_bottom_nav_order)
         adapter = OrderAdapter(
                 menuRepository.getMainMenuOrderForEdit().toMutableList()

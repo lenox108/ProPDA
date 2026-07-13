@@ -162,6 +162,18 @@
         <item name="main_toolbar_accent_surface">?attr/colorSurfaceContainerLowest</item>
 
         <!--
+            Маркер динамического полотна хрома. Сами цвета полотна вычисляются в
+            рантайме (ChromeCanvas.kt: база Lowest + примесь динамического
+            colorPrimaryContainer) — в XML их положить нельзя, поэтому оверлей
+            ставит только ФЛАГ. Ставится ТОЛЬКО здесь (SURFACE-режим = SYSTEM
+            light/dark): DarkFloor накладывается ПОВЕРХ и флаг не снимает (тёмная
+            получает тонированное полотно поверх статичной базы #121212);
+            MaterialYouAmoled идёт по ACCENT_ONLY-пути БЕЗ этого оверлея — AMOLED
+            остаётся чисто чёрным; статические палитры атрибут не задают вовсе.
+        -->
+        <item name="chrome_canvas_dynamic">true</item>
+
+        <!--
             Anti-crash: КОНКРЕТНЫЕ @color/... для всего, что читается через
             TypedArray.getColorStateList (TextView.readTextAppearance,
             CollapsingToolbarLayout, M3-виджеты). НЕ заменять на ?attr/... —
@@ -663,6 +675,12 @@
         otherwise our custom widgetLayout never reaches the SwitchCompat.
     -->
     <style name="PreferenceThemeOverlay.ForPDA" parent="PreferenceThemeOverlay">
+        <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
+    </style>
+
+    <!-- Day-fallback (реальная — в values-night): AMOLED preference-тема с ActionBar
+         для SYSTEM. Предотвращает Resources$NotFoundException в дневной конфигурации. -->
+    <style name="DayNightPreferenceTheme.Amoled" parent="AmoledAppTheme">
         <item name="switchPreferenceCompatStyle">@style/SwitchPreferenceCompatStyle</item>
     </style>
 
