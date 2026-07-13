@@ -690,9 +690,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
         fab.size = com.google.android.material.floatingactionbutton.FloatingActionButton.SIZE_MINI
         fab.setImageResource(forpdateam.ru.forpda.R.drawable.ic_arrow_down)
-        // Follow the active palette / accent colour: resolve straight from the fragment's themed context so
-        // the FAB is the palette accent (not a stale default blue). Icon uses the accent's contrast colour.
-        val fabBg = requireContext().getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+        // FAB colours are a matched pair defined per theme: smart_nav_fab_background + smart_nav_fab_icon.
+        // Read BOTH from the pair (not colorAccent) — on AMOLED palettes colorAccent == smart_nav_fab_icon,
+        // so using it as the background made the arrow invisible (bg == icon, 1:1). smart_nav_fab_background
+        // is the palette accent for normal themes and the AMOLED black behind a coloured arrow.
+        val fabBg = requireContext().getColorFromAttr(forpdateam.ru.forpda.R.attr.smart_nav_fab_background)
         val fabIcon = requireContext().getColorFromAttr(forpdateam.ru.forpda.R.attr.smart_nav_fab_icon)
         fab.backgroundTintList = android.content.res.ColorStateList.valueOf(fabBg)
         fab.imageTintList = android.content.res.ColorStateList.valueOf(fabIcon)
