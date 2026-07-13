@@ -704,24 +704,57 @@ class BodyBlockViewFactory(
     private fun installQuoteSelectionAction(tv: TextView, scope: RenderScope) {
         if (!scope.allowQuoteSelection) return
         tv.customSelectionActionModeCallback = object : android.view.ActionMode.Callback {
-            /** Idempotently ensure the «Цитировать» item is present; returns true if it was (re)added. */
-            fun ensureQuoteItem(menu: android.view.Menu): Boolean {
-                if (menu.findItem(QUOTE_MENU_ID) != null) return false
+            /** Add the «Цитировать» item (front of the menu, always visible). */
+            fun addQuoteItem(menu: android.view.Menu) {
                 // ALWAYS (not IF_ROOM): MIUI/HyperOS floating toolbar drops app items that land in the
                 // hidden overflow — forcing the primary row keeps «Цитировать» visible on Xiaomi.
                 menu.add(0, QUOTE_MENU_ID, 0, "Цитировать")
                         .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+            }
+            /** Idempotently ensure the «Цитировать» item is present; returns true if it was (re)added. */
+            fun ensureQuoteItem(menu: android.view.Menu): Boolean {
+                if (menu.findItem(QUOTE_MENU_ID) != null) return false
+                addQuoteItem(menu)
                 return true
+            }
+            /**
+             * Force «Цитировать» to the FRONT of the selection toolbar. MIUI/HyperOS ignores our
+             * menu `order` (the item lands after «Копировать»), so we rebuild the menu with our item
+             * first, then re-add the system items preserving their id/group/title/intent — Copy/Share
+             * are dispatched by item id, so their behaviour is unchanged. Adding ours first wins under
+             * BOTH orderings a ROM might use (lowest `order` AND first-inserted). Guarded: any failure
+             * falls back to merely ensuring the item exists, so the menu is never left broken.
+             */
+            fun reorderQuoteFirst(menu: android.view.Menu): Boolean {
+                if (menu.size() > 0 && menu.getItem(0).itemId == QUOTE_MENU_ID) return false
+                return try {
+                    val others = ArrayList<Array<Any?>>(menu.size())
+                    for (i in 0 until menu.size()) {
+                        val mi = menu.getItem(i)
+                        if (mi.itemId == QUOTE_MENU_ID) continue
+                        others.add(arrayOf(mi.groupId, mi.itemId, mi.order, mi.title, mi.intent))
+                    }
+                    menu.clear()
+                    addQuoteItem(menu)
+                    for (o in others) {
+                        val re = menu.add(o[0] as Int, o[1] as Int, o[2] as Int, o[3] as CharSequence?)
+                                .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
+                        (o[4] as? android.content.Intent)?.let { re.intent = it }
+                    }
+                    true
+                } catch (t: Throwable) {
+                    ensureQuoteItem(menu)
+                }
             }
             override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
                 ensureQuoteItem(menu)
                 return true
             }
-            // MIUI/HyperOS rebuilds the floating-selection toolbar in onPrepare and drops the item added
-            // in onCreate, so «Цитировать» disappears on some Xiaomi ROMs (Android 13). Re-add it here
-            // idempotently — on stock Android the item is already present, so this is a no-op.
+            // MIUI/HyperOS rebuilds the floating-selection toolbar in onPrepare and drops / reorders the
+            // item added in onCreate. Re-add it AND pull it to the front here (stock Android already has
+            // it first, so reorderQuoteFirst early-returns — a no-op there).
             override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) =
-                    ensureQuoteItem(menu)
+                    reorderQuoteFirst(menu)
             override fun onActionItemClicked(mode: android.view.ActionMode, menuItem: android.view.MenuItem): Boolean {
                 if (menuItem.itemId == QUOTE_MENU_ID) {
                     val s = tv.selectionStart.coerceAtLeast(0)
