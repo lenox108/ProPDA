@@ -25,6 +25,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.FavoriteShortcuts
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
@@ -193,6 +194,9 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         dayNightHelper.setIsNight(DayNightHelper.isUiModeNight(resources.configuration))
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // ChromeCanvas: контейнер вкладок — часть полотна; под Material You тонируется
+        // обоями (единый тон с шапкой/таббаром), вне MY = XML-значение background_for_lists.
+        binding.fragmentsContainer.setBackgroundColor(chromeCanvasColor(R.attr.background_for_lists))
 
         // Enable edge-to-edge; insets (statusBar top, navBar bottom) applied per-container in updateDimens()
         // Use the unified EdgeToEdge.apply helper so behaviour is consistent across all 4 Activities.

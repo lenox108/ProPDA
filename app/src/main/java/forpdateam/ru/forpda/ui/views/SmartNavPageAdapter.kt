@@ -11,6 +11,7 @@ import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.dp8
 import forpdateam.ru.forpda.ui.getDimensionFromAttr
 
@@ -90,7 +91,7 @@ internal class SmartNavPageViewHolder(
         )
 
         if (isCurrent) {
-            val bgColor = context.getColorFromAttr(R.attr.background_for_lists)
+            val bgColor = context.chromeCanvasColor(R.attr.background_for_lists)
             val strokeWidth = context.getDimensionFromAttr(R.attr.list_plate_stroke_width).toInt()
             val strokeColor = context.getColorFromAttr(R.attr.list_plate_stroke_color)
             if (currentBgColor != bgColor || currentStrokeWidth != strokeWidth || currentStrokeColor != strokeColor) {

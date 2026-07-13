@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.ui.fragments.other
 
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import android.os.Bundle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -73,7 +74,7 @@ class OtherFragment : TabFragment() {
         super.onViewCreated(view, savedInstanceState)
         appBarLayout.visibility = View.GONE
         // Иначе под списком просвечивает ?background_for_lists координатора — полоса над нижним меню.
-        coordinatorLayout.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        coordinatorLayout.setBackgroundColor(requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         listRecycler.apply {
             listBaseBottomPadding = paddingBottom
             val gridLayoutManager = GridLayoutManager(this.context, MENU_GRID_SPAN_COUNT)

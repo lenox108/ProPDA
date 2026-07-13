@@ -184,7 +184,7 @@ class NewsDetailsFragment : TabFragment(), TabTopScroller {
         super.onViewCreated(view, savedInstanceState)
 
         toolbar.visibility = View.VISIBLE
-        toolbar.setBackgroundColor(requireContext().getColorFromAttr(topBarSurfaceColorAttr()))
+        toolbar.setBackgroundColor(topBarSurfaceColor())
 
         val iconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         arguments?.apply {
@@ -269,7 +269,7 @@ class NewsDetailsFragment : TabFragment(), TabTopScroller {
         // Тема MainActivity работает edge-to-edge со статус-баром #0000; поэтому здесь явно
         // задаём непрозрачный фон, совпадающий с верхней плашкой.
         if (prevStatusBarColor == null) prevStatusBarColor = act.window.statusBarColor
-        SystemBarAppearance.syncStatusBar(act, requireContext().getColorFromAttr(topBarSurfaceColorAttr()))
+        SystemBarAppearance.syncStatusBar(act, topBarSurfaceColor())
     }
 
     private fun restoreStatusBar() {

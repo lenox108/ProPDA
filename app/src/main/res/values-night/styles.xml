@@ -510,6 +510,15 @@
         <item name="main_toolbar_accent_surface">?attr/colorSurfaceContainerLowest</item>
 
         <!--
+            Маркер динамического полотна хрома (ChromeCanvas.kt) — ОБЯЗАН
+            дублироваться в обеих конфигурациях стиля (values/ и values-night/):
+            ночной ресурс полностью ЗАМЕЩАЕТ дневной, а не мержится с ним.
+            Без дубля тёмная тема шла по static-пути и полотно не тонировалось
+            обоями (см. KDoc дневной версии).
+        -->
+        <item name="chrome_canvas_dynamic">true</item>
+
+        <!--
             Anti-crash: КОНКРЕТНЫЕ @color/dark_* (см. KDoc в values/styles.xml).
             link_color — обязательное переопределение родителя MaterialYouAccent
             (?attr/colorPrimary → static), иначе TextView.<init> падает.

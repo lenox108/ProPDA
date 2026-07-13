@@ -44,6 +44,7 @@ import forpdateam.ru.forpda.ui.fragments.qms.chat.nativerender.QmsMessagesAdapte
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
 import java.util.*
@@ -188,7 +189,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         // the app bar (bringToFront + elevation) on top of clearing the scroll flags.
         pinStaticOpaqueToolbar()
         setListsBackground()
-        messagePanelHost.setBackgroundColor(requireContext().getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        messagePanelHost.setBackgroundColor(requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
 
         setupMessagesList()
 
@@ -311,7 +312,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
             // Same page tone the native topic list paints under its post cards, so the gaps between
             // bubbles and the strip under the last one match the rest of the app.
             setBackgroundColor(
-                    requireContext().getColorFromAttr(
+                    requireContext().chromeCanvasColor(
                             com.google.android.material.R.attr.colorSurfaceContainerLowest,
                     ),
             )
