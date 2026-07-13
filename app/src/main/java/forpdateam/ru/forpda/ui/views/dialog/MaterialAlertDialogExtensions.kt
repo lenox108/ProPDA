@@ -109,7 +109,10 @@ private fun AlertDialog.shrinkWidthToContent() {
     if (measured <= 0) return
     val minPx = (300 * dm.density).toInt()
     val maxPx = (dm.widthPixels * 0.92f).toInt()
-    val target = (measured + (16 * dm.density).toInt()).coerceIn(minPx, maxPx)
+    // На узких плотных экранах 300dp может превышать 92% ширины (minPx > maxPx),
+    // тогда coerceIn падал «Cannot coerce value to an empty range». Ограничиваем
+    // нижнюю границу максимумом — на таком экране диалог просто занимает maxPx.
+    val target = (measured + (16 * dm.density).toInt()).coerceIn(minPx.coerceAtMost(maxPx), maxPx)
 
     // Закрепить ширину можно только через атрибуты окна (панель/до-show не «прилипают»). Явно ставим
     // gravity=CENTER, иначе при ресайзе узкое окно прилипает к левому краю. Плавный показ (скрытие на
