@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="?attr/colorSurface" />
-    <corners android:radius="@dimen/dp8" />
-</shape>
+<!--
+    Фон компактной панели ввода. База ?colorSurface + лёгкая белая накладка, чтобы поверхность ввода
+    была чуть СВЕТЛЕЕ фона поста во всех палитрах (в тёмных ladder Surface≈ContainerHigh, отдельного
+    «светлее» токена нет — осветляем накладкой). Панель тянется на всю ширину (боковой тёмной
+    подложки-рамки за ней больше нет), поэтому скруглены все углы небольшим радиусом.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/colorSurface" />
+            <corners android:radius="@dimen/dp12" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#1AFFFFFF" />
+            <corners android:radius="@dimen/dp12" />
+        </shape>
+    </item>
+</layer-list>

@@ -187,14 +187,16 @@ class MessagePanel(
             //clp.setBehavior(panelBehavior)
             clp.gravity = Gravity.BOTTOM
             if (!fullForm) {
-                clp.setMargins(context.resources.getDimensionPixelSize(R.dimen.dp8), context.resources.getDimensionPixelSize(R.dimen.dp8), context.resources.getDimensionPixelSize(R.dimen.dp8), 0)
+                // Панель ввода — во всю ширину (без боковой/верхней тёмной подложки-рамки), низ приподнят на пару px.
+                clp.setMargins(0, 0, 0, context.resources.getDimensionPixelSize(R.dimen.dp4))
             }
             clp
         } else {
             val flp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h)
             flp.gravity = Gravity.BOTTOM
             if (!fullForm) {
-                flp.setMargins(context.resources.getDimensionPixelSize(R.dimen.dp8), context.resources.getDimensionPixelSize(R.dimen.dp8), context.resources.getDimensionPixelSize(R.dimen.dp8), 0)
+                // Панель ввода — во всю ширину (без боковой/верхней тёмной подложки-рамки), низ приподнят на пару px.
+                flp.setMargins(0, 0, 0, context.resources.getDimensionPixelSize(R.dimen.dp4))
             }
             flp
         }
