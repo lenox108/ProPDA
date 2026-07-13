@@ -528,11 +528,17 @@ class BodyBlockViewFactory(
         }
         // NOTE: no «[KIND]» debug label — it is a dev artifact and must never reach users
         // (was surfacing e.g. «[UNKNOWN]» above a curator banner). Render only the content.
+        // The fallback text sits on this panel's own tonal fill (m3BlockBackground → blockFillColor),
+        // so neutralise inline server colours against THAT surface. Без этого ник, покрашенный сервером
+        // в цвет группы под белый фон (напр. цитата с [member=…]/куратором), становится нечитаемым на
+        // светлой карточке Sepia Blue (репорт: ник белым в цитировании) — тот же тракт, что и textView.
+        val surface = blockFillColor(ctx)
         val content = TextView(ctx).apply {
-            setText(spanned(ctx, block.html))
+            setText(neutralizeLowContrastColors(surface, stripLinkColors(spanned(ctx, block.html))))
             SmileProvider.startAnimations(this)
             textSize = scaledSp(15f)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            setLinkTextColor(contrastSafeLinkColor(ctx, surface))
             setLineSpacing(0f, 1.1f)
         }
         panel.addView(content)
