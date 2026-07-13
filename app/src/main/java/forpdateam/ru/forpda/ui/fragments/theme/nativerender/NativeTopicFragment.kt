@@ -3469,17 +3469,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             loadInFlight = false
             result.onSuccess { page ->
                 // Findpost-резюм к границе прочитанного вернул ПУСТУЮ страницу (пост границы удалён из темы,
-                // 4PDA не отдаёт целевой пост) — не блэнкаем экран, а рендерим уже успешно загруженную
-                // getnewpost-страницу (тема открывается на серверном якоре). См. [resumeFallbackPage].
+                // 4PDA не отдаёт целевой пост) ИЛИ страницу ЧУЖОЙ темы (пост границы ПЕРЕНЕСЁН модераторами
+                // в другую тему — IPB у findpost игнорирует showtopic и редиректит туда, где пост живёт
+                // сейчас; лог 13_07: открытие «OnePlus 15 Обсуждение» рендерило «Энергосбережение» с
+                // перенесёнными постами — «темы слились»). В обоих случаях не уводим юзера из запрошенной
+                // темы — рендерим уже успешно загруженную getnewpost-страницу. См. [resumeFallbackPage].
                 resumeFallbackPage?.let { fb ->
-                    if (page.posts.isEmpty()) {
+                    val crossTopic = fb.id > 0 && page.id > 0 && page.id != fb.id
+                    if (page.posts.isEmpty() || crossTopic) {
                         val fbUrl = resumeFallbackUrl ?: url
                         resumeFallbackPage = null
                         resumeFallbackUrl = null
                         pendingSuppressEndMarkReadForResume = false
                         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
                             android.util.Log.i("FPDA_READ_BOUNDARY",
-                                    "resume_findpost empty (deleted boundary post) → fallback to loaded page")
+                                    if (crossTopic) "resume_findpost redirected to foreign topic ${page.id} (boundary post moved) → fallback to ${fb.id}"
+                                    else "resume_findpost empty (deleted boundary post) → fallback to loaded page")
                         }
                         renderThemePage(fbUrl, fb)
                         return@onSuccess
