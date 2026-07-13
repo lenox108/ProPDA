@@ -142,7 +142,7 @@ class SearchPostBodyRenderer(
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(ctx, 10f), dp(ctx, 8f), dp(ctx, 10f), dp(ctx, 8f))
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            background = m3BlockBackground(ctx)
             clipToOutline = true
         }
         val head = listOfNotNull(block.author?.takeIf { it.isNotBlank() }, block.date?.takeIf { it.isNotBlank() })
@@ -170,7 +170,7 @@ class SearchPostBodyRenderer(
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(ctx, 10f), dp(ctx, 10f), dp(ctx, 10f), dp(ctx, 10f))
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            background = m3BlockBackground(ctx)
             clipToOutline = true
         }
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
@@ -215,7 +215,7 @@ class SearchPostBodyRenderer(
 
     private fun codeView(ctx: Context, block: BodyBlock.Code): View {
         val scroller = HorizontalScrollView(ctx).apply {
-            background = m3BlockBackground(ctx, com.google.android.material.R.attr.colorSurfaceContainerHighest)
+            background = m3BlockBackground(ctx)
             clipToOutline = true
             setPadding(dp(ctx, 10f), dp(ctx, 8f), dp(ctx, 10f), dp(ctx, 8f))
         }
@@ -355,16 +355,28 @@ class SearchPostBodyRenderer(
     private fun dp(ctx: Context, v: Float): Int = (v * ctx.resources.displayMetrics.density).roundToInt()
 
     /**
+     * Fill for an inline block card, one tonal step off the search card's own surface
+     * ([content_card_surface]) toward the content colour — the exact recipe the topic/QMS renderer uses
+     * ([BodyBlockViewFactory.blockFillColor]). Guarantees the block reads distinct from the card even on
+     * dark/AMOLED skins that pin every surface role to one value, where the bare M3 attr blends in.
+     */
+    private fun blockFillColor(ctx: Context): Int {
+        val card = ctx.getColorFromAttr(forpdateam.ru.forpda.R.attr.content_card_surface)
+        val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+        return androidx.core.graphics.ColorUtils.blendARGB(card, onSurface, BLOCK_FILL_TONAL_STEP)
+    }
+
+    /**
      * Rounded Material 3 container for an inline block (quote / spoiler / code): a tonal fill plus a
      * 1dp [colorOutlineVariant] hairline and 12dp corners — the exact recipe the topic/QMS renderer uses
      * ([BodyBlockViewFactory.m3BlockBackground]), so search-result blocks read as the same distinct M3
      * surfaces instead of flat filled rectangles.
      */
-    private fun m3BlockBackground(ctx: Context, fillAttr: Int): GradientDrawable {
+    private fun m3BlockBackground(ctx: Context): GradientDrawable {
         val density = ctx.resources.displayMetrics.density
         return GradientDrawable().apply {
             cornerRadius = 12f * density
-            setColor(ctx.getColorFromAttr(fillAttr))
+            setColor(blockFillColor(ctx))
             setStroke(
                     (1f * density).toInt().coerceAtLeast(1),
                     ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant),
@@ -380,6 +392,11 @@ class SearchPostBodyRenderer(
 
         /** Comfortable link contrast demanded on a dark surface (parity with the topic renderer). */
         const val DARK_SURFACE_LINK_CONTRAST = 5.5
+
+        /** Tonal step an inline block's fill is nudged off the card toward the content colour, so
+         *  quotes/spoilers stay distinct on skins that pin every surface role to one value (parity
+         *  with [BodyBlockViewFactory.BLOCK_FILL_TONAL_STEP]). */
+        const val BLOCK_FILL_TONAL_STEP = 0.07f
 
         /** Max height of a preview image in a search-result card (compact thumbnail; downscale, never upscale). */
         const val THUMB_MAX_HEIGHT_DP = 200f
