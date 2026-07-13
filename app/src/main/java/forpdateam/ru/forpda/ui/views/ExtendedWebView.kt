@@ -26,6 +26,7 @@ import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.BatteryDebugLogger
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.common.webview.DialogsHelper
 import forpdateam.ru.forpda.common.webview.WebViewJsBatchMetrics
 import forpdateam.ru.forpda.common.webview.UrlDecision
@@ -187,7 +188,7 @@ open class ExtendedWebView @JvmOverloads constructor(
             WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
         setRelativeFontSize(16)
-        setBackgroundColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        setBackgroundColor(context.chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         // Note: textZoom is set earlier (X-04) so the first paint uses the
         // correct font scale. Do not reset it here.
 

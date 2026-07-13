@@ -206,9 +206,15 @@ fun AppBarLayout.applyTopBarPlaqueChrome(
         surfaceColorAttr: Int = R.attr.chrome_plane_background,
 ) {
     val ctx = context
-    val fill = ctx.getColorFromAttr(surfaceColorAttr)
-    val style = resolveTopAppBarShapeStyle(useHorizontalInset, roundedCorners, roundedBottomCorners)
     val usesMainToolbarSurface = surfaceColorAttr == R.attr.main_toolbar_accent_surface
+    // Плоский хром главных разделов идёт через ChromeCanvas: под Material You плашка
+    // тонируется обоями в единый тон с полотном; вне MY — ровно значение атрибута.
+    val fill = if (usesMainToolbarSurface) {
+        ctx.chromeCanvasColor(surfaceColorAttr)
+    } else {
+        ctx.getColorFromAttr(surfaceColorAttr)
+    }
+    val style = resolveTopAppBarShapeStyle(useHorizontalInset, roundedCorners, roundedBottomCorners)
     background = ctx.createTopAppBarShapeDrawable(
             fill,
             style,

@@ -32,6 +32,7 @@ import forpdateam.ru.forpda.entity.remote.others.pagination.Pagination
 import forpdateam.ru.forpda.ui.DimensionHelper
 import forpdateam.ru.forpda.common.getToolBarHeight
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.DimensionsProvider
 import forpdateam.ru.forpda.ui.applyTopBarPlaqueChrome
 import androidx.annotation.AttrRes
@@ -263,7 +264,7 @@ class PaginationHelper(private val context: androidx.fragment.app.FragmentActivi
 
     private fun detachToolbarPaginationChrome(target: CollapsingToolbarLayout) {
         val appBar = target.parent as? AppBarLayout ?: return
-        val listBg = target.context.getColorFromAttr(R.attr.background_for_lists)
+        val listBg = target.context.chromeCanvasColor(R.attr.background_for_lists)
         appBar.background = ColorDrawable(listBg)
         appBar.clipToOutline = false
         appBar.outlineProvider = ViewOutlineProvider.BOUNDS
