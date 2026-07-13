@@ -165,7 +165,14 @@ object SmileProvider {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
         val bytes = bytesFor(file, assets) ?: return null
         return runCatching {
-            ImageDecoder.decodeDrawable(ImageDecoder.createSource(ByteBuffer.wrap(bytes)))
+            // ВАЖНО: DIRECT-буфер, а НЕ ByteBuffer.wrap(bytes). AnimatedImageDrawable
+            // декодирует кадры лениво на hwui-треде «AnimatedImageTh»; для heap-буфера
+            // (wrap) нативный ByteArrayStream::read читает Java-byte[] через JNI и на
+            // не-Java треде падает «Failed to get JNIEnv» → SIGABRT. Direct-буфер лежит
+            // в нативной памяти: читается по адресу без JNIEnv, а native-стрим держит на
+            // него global-ref, поэтому он не будет собран GC во время анимации.
+            val direct = ByteBuffer.allocateDirect(bytes.size).apply { put(bytes); rewind() }
+            ImageDecoder.decodeDrawable(ImageDecoder.createSource(direct))
         }.getOrNull()
                 ?.takeIf { it is AnimatedImageDrawable }
                 ?.apply { setBounds(0, 0, sizePx, sizePx) }
