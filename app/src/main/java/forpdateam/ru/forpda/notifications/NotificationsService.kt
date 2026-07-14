@@ -277,6 +277,23 @@ class NotificationsService : Service() {
         stopSelf()
     }
 
+    /**
+     * Android 15+ (API 35): у foreground-сервиса типа `dataSync` есть суммарный лимит
+     * времени (~6 ч за 24 ч). Когда он исчерпан, система вызывает onTimeout и ТРЕБУЕТ
+     * немедленно снять foreground. Если этого не сделать — прилетает
+     * ForegroundServiceDidNotStopInTimeException и процесс убивают (полевой краш v3.1.3).
+     *
+     * Снимаем FGS и останавливаемся. Realtime-сокет при этом умолкает, но уведомления
+     * продолжает приносить периодическая проверка событий (WorkManager), а уже показанные
+     * уведомления о форумных событиях не трогаем — как и в onTaskRemoved.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        Timber.w("FGS dataSync timeout (startId=$startId type=$fgsType) — stopping service")
+        BatteryDebugLogger.logState("NotificationsService", "fgs_timeout")
+        removeForegroundNotification()
+        stopSelf()
+    }
+
     /** Убирает «служебное» FGS-уведомление, не трогая уведомления о событиях. */
     private fun removeForegroundNotification() {
         if (foregroundPromoted) {
@@ -328,6 +345,32 @@ class NotificationsService : Service() {
         val id = event.notifyId()
         getNotificationManager().cancel(id)
         postedEventNotifyIds.remove(id)
+        Log.i(NOTIFICATIONS_LOG_TAG, "Cancelled notification id=$id source=${event.source} sourceId=${event.sourceId}")
+        // Сводка («N сообщений», [NotificationPublisher.publishStacked]) висит под собственным ID и
+        // сама не исчезает вместе с последним снятым событием — в шторке оставалась группа про уже
+        // прочитанные сообщения. Снимаем её, когда в канале не осталось ни одного события.
+        when {
+            event.fromQms() ->
+                cancelStackedIfEmpty(CHANNEL_QMS_ID, NotificationPublisher.NOTIFY_STACKED_QMS_ID, id)
+            event.fromTheme() && !event.isMention ->
+                cancelStackedIfEmpty(CHANNEL_FAV_ID, NotificationPublisher.NOTIFY_STACKED_FAV_ID, id)
+        }
+    }
+
+    /**
+     * Снимает сводное уведомление канала, если в шторке не осталось ни одного его события.
+     * [justCancelledId] исключается явно: `activeNotifications` успевает вернуть уведомление,
+     * которое мы отменили строкой выше.
+     */
+    private fun cancelStackedIfEmpty(channelId: String, stackedId: Int, justCancelledId: Int) {
+        val systemManager = getSystemService(NotificationManager::class.java) ?: return
+        val active = runCatching { systemManager.activeNotifications }.getOrNull() ?: return
+        val hasEvents = active.any { sbn ->
+            sbn.notification?.channelId == channelId && sbn.id != stackedId && sbn.id != justCancelledId
+        }
+        if (!hasEvents) {
+            getNotificationManager().cancel(stackedId)
+        }
     }
 
     fun sendNotification(event: NotificationEvent) {
