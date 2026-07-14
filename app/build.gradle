@@ -224,6 +224,11 @@ android {
             // forkEvery alone costs ~1.7x wall clock; the extra forks bring it back under the
             // single-JVM baseline.
             it.maxParallelForks = Math.max(1, Runtime.runtime.availableProcessors().intdiv(2))
+            // Tests run in a forked JVM, which does not inherit -D from the Gradle daemon.
+            // AccentPaletteGenerator gates its resource rewrite on this flag, so forward it.
+            if (System.getProperty('forpda.generateAccents') != null) {
+                it.systemProperty 'forpda.generateAccents', System.getProperty('forpda.generateAccents')
+            }
         }
     }
 

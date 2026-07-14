@@ -818,13 +818,26 @@ class SettingsFragment : BaseSettingFragment() {
      * Акцент и Material You действуют только для палитры «Системный стиль»
      * (см. AccentPolicy: palette != SYSTEM → Mode.NONE). Для палитр чтения
      * (Sepia/SepiaBlue/Minimal) — гасим оба пункта и поясняем это в описании.
+     *
+     * Плюс Material You имеет приоритет над курируемым акцентом (Mode.WALLPAPER),
+     * поэтому при включённых цветах системы выбор акцента ни на что не влияет —
+     * гасим пункт, а не оставляем кликабельную пустышку.
      */
     private fun applyAccentPaletteGating() {
         val isSystem = mainPreferencesHolder.getUiPalette() == Preferences.Main.UiPalette.SYSTEM
+        val materialYouWins = forpdateam.ru.forpda.presentation.theme.AccentPolicy.resolveMode(
+                mainPreferencesHolder.getUseMaterialYou(),
+                mainPreferencesHolder.getUiPalette(),
+                mainPreferencesHolder.getAccentPalette(),
+                android.os.Build.VERSION.SDK_INT,
+        ) == forpdateam.ru.forpda.presentation.theme.AccentPolicy.Mode.WALLPAPER
         findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.apply {
-            isEnabled = isSystem
-            if (isSystem) updateAccentSummary(mainPreferencesHolder.getAccentPalette())
-            else setSummary(R.string.pref_summary_accent_non_system)
+            isEnabled = isSystem && !materialYouWins
+            when {
+                !isSystem -> setSummary(R.string.pref_summary_accent_non_system)
+                materialYouWins -> setSummary(R.string.pref_summary_accent_material_you)
+                else -> updateAccentSummary(mainPreferencesHolder.getAccentPalette())
+            }
         }
         findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.USE_MATERIAL_YOU)?.apply {
             isEnabled = isSystem

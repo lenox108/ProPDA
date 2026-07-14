@@ -587,6 +587,7 @@
     <string name="pref_summary_accent">Choose the color of buttons, links and selection</string>
     <string name="pref_summary_accent_active">%1$s · System palette only</string>
     <string name="pref_summary_accent_non_system">Unavailable for reading palettes — works only with the System style</string>
+    <string name="pref_summary_accent_material_you">Overridden by system colors (Material You) — turn them off to pick your own accent</string>
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>
     <string name="accent_blue">Blue</string>
