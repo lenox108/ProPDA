@@ -367,6 +367,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Guards [maintainBottomPin] against re-entering while its own corrective scroll is pending. */
     private var pinningInProgress = false
 
+    /** Guards [healBottomEndGap] against re-entering while its own corrective scroll is pending. */
+    private var gapHealInProgress = false
+
 
     /**
      * Bottom-nav «chrome» (tab bar + system navigation) height in px, pushed in by MainActivity via
@@ -489,13 +492,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         applyDisplaySettings()
         recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                // The end-gap correction ([healBottomEndGap]) is a layout repair, not a user scroll: it moves
+                // the list UP by a few dozen pixels, which must not be read as «поехали вверх» (previous-page
+                // load, FAB arrow flip). Everything below it is state-derived and stays correct.
+                val healing = gapHealInProgress
                 if (dy > 0) maybeLoadNextPage()
-                if (dy < 0) maybeLoadPrevPage()
+                if (dy < 0 && !healing) maybeLoadPrevPage()
                 markVisiblePostsRead()
                 maybeMarkTopicReadAtEnd()
                 updateBarCurrentPageFromScroll()
                 updateBottomPaginationBarOffset()
-                updateFabOnScroll(dy)
+                if (!healing) updateFabOnScroll(dy)
                 if (smartNavMenu?.isShowing() == true) smartNavMenu?.dismiss()
             }
 
@@ -528,6 +535,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // мелькнувшей точки (recordSeen назад не откатывается) — источник «пропускаются непрочитанные».
                 if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
                     recordReadBoundaryAtRest()
+                    // Settled past the content end (post heights changed under the fling)? Pull the list back
+                    // onto its last post — see [healBottomEndGap]. A fling can settle without any further
+                    // layout pass, so the layout listener alone would not catch it.
+                    healBottomEndGap()
                     // Settled: re-check «низ ли это» (a fling can stop without a final onScrolled frame).
                     updateBottomPaginationBarOffset()
                 }
@@ -3958,9 +3969,67 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Both are idempotent, so a settled layout produces no further work.
         applyListBottomPadding()
         maintainBottomPin()
+        healBottomEndGap()
         // The content height moves under us too (enrichment, images, spoilers) — «низ ли это» must follow it,
         // and no scroll event fires for a layout-driven change. Idempotent: a no-op once the state matches.
         updateBottomPaginationBarOffset()
+    }
+
+    /**
+     * Close an EMPTY BAND left below the last post: after a fast fling the list can come to rest scrolled
+     * PAST the end of its content — the last card's bottom sits above the padded viewport bottom and a strip
+     * of bare page tone shows between it and the pagination bar (user: «при быстром скролле внизу иногда
+     * появляется пустое место, а при скролле чуть вверх-вниз оно пропадает»).
+     *
+     * Why it happens: post heights are not final when they are laid out. Inline images (WRAP_CONTENT until
+     * Coil delivers a drawable), smile spans and the async metadata enrichment all resize cards AFTER the
+     * layout that positioned them. A child's `requestLayout` raised while RecyclerView is mid-fling is
+     * swallowed (`stopInterceptRequestLayout(false)` drops the deferred-layout flag), so the shrink that
+     * follows a re-bind never gets a correcting layout pass — the scroll offset stays where the taller
+     * estimate put it. LinearLayoutManager fixes exactly this in `fixLayoutEndGap`, but only when a layout
+     * pass actually runs; the user's own workaround (nudge the list) is what finally triggers one.
+     *
+     * So do it ourselves, on the same terms: only at rest, only when the LAST item is laid out and there is
+     * scrollable content above to pull down. [RecyclerView.scrollBy] clamps, so a topic genuinely shorter
+     * than the viewport (its trailing space is legitimate) cannot be dragged out of place. Self-limiting —
+     * once the gap is 0 it no-ops.
+     *
+     * Deliberately skipped while a bottom anchor ([anchoredBottomPostId]) or a deep-link top-align reservation
+     * ([deepLinkAnchorExtraBottomPad]) owns the bottom: there the space below the last post is on purpose.
+     */
+    private fun healBottomEndGap() {
+        if (view == null || gapHealInProgress || pinningInProgress) return
+        if (anchoredBottomPostId != null || deepLinkAnchorExtraBottomPad != 0) return
+        if (recyclerView.isComputingLayout) return
+        if (recyclerView.scrollState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val lastPos = (recyclerView.adapter?.itemCount ?: 0) - 1
+        if (lastPos < 0) return
+        if (lm.findLastVisibleItemPosition() != lastPos) return // не у конца списка — пустоты внизу нет
+        val lastView = lm.findViewByPosition(lastPos) ?: return
+        val gap = (recyclerView.height - recyclerView.paddingBottom) - lastView.bottom
+        if (gap <= 0) return
+        if (!recyclerView.canScrollVertically(-1)) return // контент короче экрана — пустота законна
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_CLEAR", "healBottomEndGap gap=$gap lastBottom=${lastView.bottom} " +
+                    "padB=${recyclerView.paddingBottom} rvH=${recyclerView.height}")
+        }
+        // Scrolling from inside a layout pass is illegal → one tick later. Re-check the state we relied on.
+        // The flag stays raised ACROSS the scroll so [onScrolled] can tell this layout correction from a real
+        // upward scroll (it must not flip the FAB arrow to «up» or arm a previous-page load).
+        gapHealInProgress = true
+        recyclerView.post {
+            try {
+                if (view == null || recyclerView.isComputingLayout) return@post
+                if (recyclerView.scrollState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) return@post
+                if (anchoredBottomPostId != null || deepLinkAnchorExtraBottomPad != 0) return@post
+                val stillLast = lm.findViewByPosition((recyclerView.adapter?.itemCount ?: 0) - 1) ?: return@post
+                val still = (recyclerView.height - recyclerView.paddingBottom) - stillLast.bottom
+                if (still > 0) recyclerView.scrollBy(0, -still) // clamped: pulls earlier posts down into the band
+            } finally {
+                gapHealInProgress = false
+            }
+        }
     }
 
     private fun maintainBottomPin() {
