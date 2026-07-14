@@ -65,7 +65,12 @@ object ForPdaCoil {
     fun stripWordPressSizeSuffix(url: String): String = FourPdaImageUrls.stripWordPressSizeSuffix(url)
 
     fun init(application: Application, webClient: IWebClient) {
-        val okHttp = (webClient as Client).getHttpClient()
+        // Coil keeps its OWN disk cache below, so the shared client's OkHttp `Cache` must not also be in
+        // play: with both caching the same response, a revalidation could reach Coil as a bare 304 whose
+        // body neither cache held, and the image silently failed to load («imageLoadFailure … code=304»,
+        // observed on QMS attachments while the very same URL returned 200 to curl). Reuse the client for
+        // its cookies/auth/DNS interceptors, but drop the HTTP cache — that is Coil's own documented setup.
+        val okHttp = (webClient as Client).getHttpClient().newBuilder().cache(null).build()
         imageLoader = ImageLoader.Builder(application)
                 .okHttpClient(okHttp)
                 .components {

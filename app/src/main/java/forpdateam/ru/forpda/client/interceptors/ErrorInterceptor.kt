@@ -21,6 +21,12 @@ class ErrorInterceptor : Interceptor {
             Timber.w("HTTP %d %s", response.code, response.message)
             
             when (response.code) {
+                // 304 Not Modified — НЕ ошибка: это штатный ответ на условный запрос. Coil ведёт свой
+                // disk-кэш и при повторном показе картинки шлёт If-None-Match/If-Modified-Since, ожидая
+                // 304 и подставляя тело из кэша. `isSuccessful` = 200..299, поэтому мы бросали здесь
+                // исключение — и КАЖДАЯ ревалидация картинки падала («imageLoadFailure … code=304», при
+                // том что тот же URL отдаёт 200 по curl): вложения в личке оставались пустой плашкой.
+                304 -> return response
                 // 404 для форума часто возвращает HTML-заглушку «тема перенесена/не найдена»,
                 // которую умеют разбирать верхние уровни (ThemeApi relocation fallback).
                 // Важно: не читать body тут, иначе downstream уже не увидит HTML.
