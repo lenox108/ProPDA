@@ -6,5 +6,7 @@ import forpdateam.ru.forpda.presentation.Screen
 class DrawerMenuItem(
         val title: Int,
         val icon: Int,
-        val appItem: AppMenuItem
+        val appItem: AppMenuItem,
+        /** Заголовок пользовательской плитки: у ярлыков он не ресурс, а живой текст. */
+        val titleText: String? = null
 )

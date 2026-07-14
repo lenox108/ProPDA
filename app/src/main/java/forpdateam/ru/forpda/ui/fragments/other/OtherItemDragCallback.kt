@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.ui.fragments.other
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.ItemTouchHelper
 import forpdateam.ru.forpda.ui.views.drawers.adapters.MenuListItem
+import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuDropZoneListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuSectionListItem
 
 /**
@@ -16,9 +17,11 @@ class OtherItemDragCallback(
 
     private var isDragging = false
 
-    override fun isLongPressDragEnabled(): Boolean {
-        return false
-    }
+    /**
+     * В режиме редактирования плитку тащат долгим нажатием. Раньше drag стартовал сразу на
+     * ACTION_DOWN из перехватчика касаний [OtherFragment], и список нельзя было прокрутить.
+     */
+    override fun isLongPressDragEnabled(): Boolean = otherAdapter.isMenuEditMode()
 
     override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
         val dragFlags = if (isDraggableViewHolder(viewHolder)) {
@@ -81,7 +84,7 @@ class OtherItemDragCallback(
 
     private fun isDropTargetViewHolder(viewHolder: RecyclerView.ViewHolder): Boolean {
         val item = otherAdapter.items?.getOrNull(viewHolder.bindingAdapterPosition)
-        return item is MenuListItem || item is OtherMenuSectionListItem
+        return item is MenuListItem || item is OtherMenuSectionListItem || item is OtherMenuDropZoneListItem
     }
 
     interface ItemTouchHelperListener {

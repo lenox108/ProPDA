@@ -5,7 +5,9 @@ import forpdateam.ru.forpda.presentation.Screen
 
 class AppMenuItem(
         val id: Int,
-        val screen: Screen? = null
+        val screen: Screen? = null,
+        /** Не null у пользовательских плиток «Закреплённое» (см. [MenuShortcut]). */
+        val shortcut: MenuShortcut? = null
 ) {
     var count: Int = 0
 }

@@ -53,6 +53,18 @@
             app:layout_constraintTop_toBottomOf="@+id/otherMenuIcon"
             tools:text="Избранное" />
 
+        <ImageView
+            android:id="@+id/otherMenuRemove"
+            android:layout_width="@dimen/dp20"
+            android:layout_height="@dimen/dp20"
+            android:contentDescription="@string/other_menu_remove_shortcut"
+            android:src="@drawable/ic_close"
+            android:visibility="gone"
+            app:tint="?attr/colorAccent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:visibility="visible" />
+
         <TextView
             android:id="@+id/otherMenuCounter"
             android:layout_width="wrap_content"

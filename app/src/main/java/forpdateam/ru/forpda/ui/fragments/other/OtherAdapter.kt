@@ -3,8 +3,13 @@ package forpdateam.ru.forpda.ui.fragments.other
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.hannesdorfmann.adapterdelegates4.ListDelegationAdapter
+import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.CloseableInfo
+import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.entity.app.other.AppMenuItem
+import forpdateam.ru.forpda.entity.app.other.MenuShortcut
+import forpdateam.ru.forpda.entity.app.other.OtherMenuBlock
+import forpdateam.ru.forpda.entity.app.other.QuickSetting
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
 import forpdateam.ru.forpda.model.MenuMapper
 import forpdateam.ru.forpda.model.interactors.other.MenuRepository
@@ -16,13 +21,33 @@ class OtherAdapter(
         private val menuClickListener: (DrawerMenuItem) -> Unit,
         private val exitClickListener: () -> Unit,
         private val infoClickListener: (CloseableInfo) -> Unit,
+        private val editDoneListener: () -> Unit,
+        private val editResetListener: () -> Unit,
+        private val addShortcutListener: (OtherMenuSection) -> Unit,
+        private val removeShortcutListener: (DrawerMenuItem) -> Unit,
+        private val continueClickListener: (HistoryItem) -> Unit,
+        private val quickSettingClickListener: (QuickSetting) -> Unit,
+        private val blockVisibilityListener: (OtherMenuBlock) -> Unit,
+        private val blockConfigureListener: (OtherMenuBlock) -> Unit,
         topicPreferencesHolder: TopicPreferencesHolder
 ) : ListDelegationAdapter<MutableList<ListItem>>() {
 
     private var customOrderIds: List<Int> = emptyList()
     private var customLayout: Map<OtherMenuSection, List<Int>> = emptyMap()
+    private var shortcuts: List<MenuShortcut> = emptyList()
     private var isEditMode = false
     private var hasBoundMenuOnce = false
+    private var lastBind: BindArgs? = null
+
+    private class BindArgs(
+            val profileItem: ProfileModel?,
+            val infoList: List<CloseableInfo>,
+            val menuItems: List<List<AppMenuItem>>,
+            val bottomNavDuplicateIds: Set<Int>,
+            val continueItems: List<HistoryItem>,
+            val quickSettings: List<QuickSetting>,
+            val hiddenBlocks: Set<OtherMenuBlock>
+    )
 
     init {
         setHasStableIds(true)
@@ -52,10 +77,16 @@ class OtherAdapter(
         delegatesManager.apply {
             addDelegate(ProfileItemDelegate(profileClickListener, topicPreferencesHolder))
             addDelegate(DividerShadowItemDelegate())
-            addDelegate(MenuItemDelegate(::onMenuItemClick, ::onMenuItemLongClick, ::isMenuEditMode))
+            addDelegate(MenuItemDelegate(::onMenuItemClick, ::onMenuItemLongClick, ::isMenuEditMode, removeShortcutListener))
             addDelegate(ExitMenuItemDelegate(exitClickListener))
             addDelegate(OtherSectionHeaderDelegate())
             addDelegate(CloseableInfoDelegate(::onInfoCloseClicked))
+            addDelegate(OtherMenuEditBarDelegate(editDoneListener, editResetListener))
+            addDelegate(OtherMenuDropZoneDelegate())
+            addDelegate(OtherMenuAddTileDelegate(addShortcutListener))
+            addDelegate(OtherMenuHeaderDelegate(blockVisibilityListener, blockConfigureListener))
+            addDelegate(OtherMenuContinueDelegate(continueClickListener))
+            addDelegate(OtherMenuQuickSettingsDelegate(quickSettingClickListener))
         }
     }
 
@@ -64,6 +95,9 @@ class OtherAdapter(
     fun setEditMode(value: Boolean) {
         if (isEditMode == value) return
         isEditMode = value
+        // Плашка редактирования и зоны пустых секций живут только в режиме редактирования,
+        // поэтому список пересобирается целиком; плитки отдельно перебиндиваем ради рамки.
+        rebuild()
         notifyMenuItemsChanged()
         editModeChangeListener?.invoke(value)
     }
@@ -95,8 +129,17 @@ class OtherAdapter(
         return when (item) {
             is ProfileListItem -> 1L
             is DividerShadowListItem -> 2L
+            is OtherMenuEditBarListItem -> 3L
             is CloseableInfoListItem -> 10_000L + item.item.id.toLong()
             is OtherMenuSectionListItem -> 50_000L + item.section.ordinal.toLong()
+            is OtherMenuDropZoneListItem -> 60_000L + item.section.ordinal.toLong()
+            is OtherMenuAddTileListItem -> 70_000L + item.section.ordinal.toLong()
+            // Полный res-id, а не остаток: два заголовка с одинаковым «хвостом» дали бы
+            // одинаковый stable id и RecyclerView начал бы путать их между собой.
+            is OtherMenuHeaderListItem -> 10_000_000L + item.titleRes.toLong()
+            // Отдельный высокий диапазон: id тем большие и легко наехали бы на плитки меню.
+            is OtherMenuContinueListItem -> 1_000_000L + item.item.id.toLong()
+            is OtherMenuQuickSettingsListItem -> 94_000L
             is OtherMenuExitListItem -> 95_000L
             is MenuListItem -> 100_000L + item.menuItem.appItem.id.toLong()
             else -> RecyclerView.NO_ID
@@ -112,23 +155,70 @@ class OtherAdapter(
         customOrderIds = layout.values.flatten()
     }
 
+    fun setShortcuts(items: List<MenuShortcut>) {
+        shortcuts = items
+    }
+
     fun bindItems(
             profileItem: ProfileModel?,
             infoList: List<CloseableInfo>,
             newItems: List<List<AppMenuItem>>,
-            bottomNavDuplicateIds: Set<Int>
+            bottomNavDuplicateIds: Set<Int>,
+            continueItems: List<HistoryItem>,
+            quickSettings: List<QuickSetting>,
+            hiddenBlocks: Set<OtherMenuBlock>
     ) {
+        lastBind = BindArgs(
+                profileItem,
+                infoList,
+                newItems,
+                bottomNavDuplicateIds,
+                continueItems,
+                quickSettings,
+                hiddenBlocks
+        )
+        rebuild()
+    }
+
+    private fun rebuild() {
+        val args = lastBind ?: return
         val oldList = (items ?: mutableListOf()).toList()
         val newList = buildList<ListItem> {
-            add(ProfileListItem(profileItem))
+            if (isEditMode) add(OtherMenuEditBarListItem())
+            add(ProfileListItem(args.profileItem))
 
-            infoList.forEach { add(CloseableInfoListItem(it)) }
-            if (infoList.isNotEmpty()) add(DividerShadowListItem())
+            args.infoList.forEach { add(CloseableInfoListItem(it)) }
+            if (args.infoList.isNotEmpty()) add(DividerShadowListItem())
 
-            val flatItems = newItems.flatten()
-            addSection(OtherMenuSection.QUICK, columns = MENU_COLUMNS, flatItems, bottomNavDuplicateIds)
-            addSection(OtherMenuSection.PERSONAL, columns = MENU_COLUMNS, flatItems, bottomNavDuplicateIds)
-            addSection(OtherMenuSection.TOOLS, columns = MENU_COLUMNS, flatItems, bottomNavDuplicateIds)
+            // «Продолжить чтение» — самый частый сценарий возврата в приложение, поэтому идёт
+            // выше плиток. Скрытый блок вне режима редактирования исчезает совсем, а в режиме
+            // остаётся одним заголовком с кнопкой «Показать» — иначе вернуть его было бы нечем.
+            addBlock(
+                    block = OtherMenuBlock.CONTINUE,
+                    titleRes = R.string.other_menu_section_continue,
+                    hidden = args.hiddenBlocks.contains(OtherMenuBlock.CONTINUE),
+                    hasContent = args.continueItems.isNotEmpty(),
+                    configurable = false
+            ) {
+                args.continueItems.forEach { add(OtherMenuContinueListItem(it)) }
+            }
+
+            // Пользовательские плитки живут в той же сетке, что и штатные пункты: у них
+            // отрицательные id, поэтому и порядок, и секции хранятся тем же механизмом.
+            val flatItems = args.menuItems.flatten() +
+                    shortcuts.map { AppMenuItem(it.id, null, it) }
+            SECTIONS.forEach { section ->
+                addSection(section, columns = MENU_COLUMNS, flatItems, args.bottomNavDuplicateIds)
+            }
+            addBlock(
+                    block = OtherMenuBlock.QUICK_SETTINGS,
+                    titleRes = R.string.other_menu_section_quick_settings,
+                    hidden = args.hiddenBlocks.contains(OtherMenuBlock.QUICK_SETTINGS),
+                    hasContent = args.quickSettings.isNotEmpty(),
+                    configurable = true
+            ) {
+                add(OtherMenuQuickSettingsListItem(args.quickSettings))
+            }
             add(OtherMenuExitListItem())
         }
 
@@ -161,10 +251,19 @@ class OtherAdapter(
                         oldItem.item == newItem.item
                     oldItem is OtherMenuSectionListItem && newItem is OtherMenuSectionListItem ->
                         oldItem.section == newItem.section
+                    oldItem is OtherMenuContinueListItem && newItem is OtherMenuContinueListItem ->
+                        oldItem.item == newItem.item
+                    oldItem is OtherMenuHeaderListItem && newItem is OtherMenuHeaderListItem ->
+                        oldItem.editMode == newItem.editMode &&
+                            oldItem.hidden == newItem.hidden &&
+                            oldItem.configurable == newItem.configurable
+                    oldItem is OtherMenuQuickSettingsListItem && newItem is OtherMenuQuickSettingsListItem ->
+                        oldItem.items == newItem.items
                     oldItem is MenuListItem && newItem is MenuListItem -> {
                         val om = oldItem.menuItem
                         val nm = newItem.menuItem
                         om.title == nm.title &&
+                            om.titleText == nm.titleText &&
                             om.icon == nm.icon &&
                             om.appItem.count == nm.appItem.count &&
                             oldItem.section == newItem.section &&
@@ -190,6 +289,24 @@ class OtherAdapter(
         diffResult.dispatchUpdatesTo(this)
     }
 
+    /**
+     * Блок с заголовком («Продолжить чтение», «Быстрые настройки»). Вне режима редактирования
+     * скрытый или пустой блок не рендерится вовсе; в режиме редактирования заголовок остаётся
+     * всегда — он и есть точка управления видимостью и составом.
+     */
+    private fun MutableList<ListItem>.addBlock(
+            block: OtherMenuBlock,
+            titleRes: Int,
+            hidden: Boolean,
+            hasContent: Boolean,
+            configurable: Boolean,
+            content: MutableList<ListItem>.() -> Unit
+    ) {
+        if (!isEditMode && (hidden || !hasContent)) return
+        add(OtherMenuHeaderListItem(titleRes, block, isEditMode, hidden, configurable))
+        if (!hidden && hasContent) content()
+    }
+
     private fun MutableList<ListItem>.addSection(
             section: OtherMenuSection,
             columns: Int,
@@ -205,9 +322,16 @@ class OtherAdapter(
                 else -> itemsById[id]
             }
         }
-        if (orderedSectionItems.isEmpty()) return
+        // Пустая секция вне режима редактирования просто не показывается, но в режиме
+        // редактирования обязана существовать — иначе вернуть в неё плитку невозможно.
+        if (orderedSectionItems.isEmpty() && !isEditMode) return
         add(OtherMenuSectionListItem(section))
-        addAll(orderedSectionItems.map { MenuListItem(MenuMapper.mapToDrawer(it), section, columns) })
+        if (orderedSectionItems.isEmpty()) {
+            add(OtherMenuDropZoneListItem(section))
+        } else {
+            addAll(orderedSectionItems.map { MenuListItem(MenuMapper.mapToDrawer(it), section, columns) })
+        }
+        if (isEditMode) add(OtherMenuAddTileListItem(section, columns))
     }
 
     private fun layoutIdsFor(section: OtherMenuSection): List<Int> {
@@ -226,12 +350,12 @@ class OtherAdapter(
     }
 
     fun getSpanSize(position: Int, spanCount: Int): Int {
-        val item = items?.getOrNull(position)
-        return if (item is MenuListItem) {
-            spanCount / item.columns.coerceAtLeast(1)
-        } else {
-            spanCount
+        val columns = when (val item = items?.getOrNull(position)) {
+            is MenuListItem -> item.columns
+            is OtherMenuAddTileListItem -> item.columns
+            else -> return spanCount
         }
+        return spanCount / columns.coerceAtLeast(1)
     }
 
     fun isDraggableItem(position: Int): Boolean = items?.getOrNull(position) is MenuListItem
@@ -240,7 +364,8 @@ class OtherAdapter(
         val currentItems = items ?: return false
         val fromItem = currentItems.getOrNull(fromPosition) as? MenuListItem ?: return false
         val toItem = currentItems.getOrNull(toPosition)
-        return fromItem != toItem && (toItem is MenuListItem || toItem is OtherMenuSectionListItem)
+        return fromItem != toItem &&
+                (toItem is MenuListItem || toItem is OtherMenuSectionListItem || toItem is OtherMenuDropZoneListItem)
     }
 
     fun moveItem(fromPosition: Int, toPosition: Int): Boolean {
@@ -256,6 +381,7 @@ class OtherAdapter(
         item.section = when (target) {
             is MenuListItem -> target.section
             is OtherMenuSectionListItem -> target.section
+            is OtherMenuDropZoneListItem -> target.section
             else -> item.section
         }
         currentItems.add(insertPosition, item)
@@ -263,16 +389,38 @@ class OtherAdapter(
         return true
     }
 
-    fun currentVisibleMenuLayout(): Map<OtherMenuSection, List<AppMenuItem>> =
-            listOf(OtherMenuSection.QUICK, OtherMenuSection.PERSONAL, OtherMenuSection.TOOLS)
-                    .associateWith { section ->
-                        items.orEmpty()
-                                .filterIsInstance<MenuListItem>()
-                                .filter { it.section == section }
-                                .map { it.menuItem.appItem }
-                    }
+    /**
+     * Фиксирует раскладку после перетаскивания: секции, оставшиеся пустыми, сохраняются
+     * пустыми (а не откатываются к дефолту), а скрытые сейчас плитки (дубли нижней панели,
+     * пункты под авторизацией) остаются в своих секциях. Возвращает видимую раскладку для VM.
+     */
+    fun commitDragLayout(): Map<OtherMenuSection, List<AppMenuItem>> {
+        val visible = currentVisibleMenuLayout()
+        val visibleIds = visible.values.flatten().map { it.id }.toSet()
+        setCustomLayout(SECTIONS.associateWith { section ->
+            visible[section].orEmpty().map { it.id } +
+                    customLayout[section].orEmpty().filterNot { visibleIds.contains(it) }
+        })
+        rebuild()
+        return visible
+    }
 
-    private fun defaultIdsFor(section: OtherMenuSection): List<Int> = when (section) {
+    fun currentVisibleMenuLayout(): Map<OtherMenuSection, List<AppMenuItem>> =
+            SECTIONS.associateWith { section ->
+                items.orEmpty()
+                        .filterIsInstance<MenuListItem>()
+                        .filter { it.section == section }
+                        .map { it.menuItem.appItem }
+            }
+
+    /**
+     * Дефолтная раскладка секции + пользовательские плитки, закреплённые за ней. Новый ярлык
+     * попадает сюда сразу после создания, даже если сохранённый порядок плиток его ещё не знает.
+     */
+    private fun defaultIdsFor(section: OtherMenuSection): List<Int> =
+            builtInIdsFor(section) + shortcuts.filter { it.section == section }.map { it.id }
+
+    private fun builtInIdsFor(section: OtherMenuSection): List<Int> = when (section) {
         OtherMenuSection.QUICK -> listOf(
                 MenuRepository.item_article_list,
                 MenuRepository.item_forum,
@@ -296,5 +444,7 @@ class OtherAdapter(
 
     private companion object {
         const val MENU_COLUMNS = 3
+
+        val SECTIONS = listOf(OtherMenuSection.QUICK, OtherMenuSection.PERSONAL, OtherMenuSection.TOOLS)
     }
 }

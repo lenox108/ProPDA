@@ -5,23 +5,33 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
 import forpdateam.ru.forpda.entity.app.CloseableInfo
+import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.entity.app.other.AppMenuItem
+import forpdateam.ru.forpda.entity.app.other.MenuShortcut
+import forpdateam.ru.forpda.entity.app.other.OtherMenuBlock
+import forpdateam.ru.forpda.entity.app.other.QuickSetting
 import forpdateam.ru.forpda.entity.app.profile.IUserHolder
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
 import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.CloseableInfoHolder
 import forpdateam.ru.forpda.model.interactors.other.MenuRepository
+import forpdateam.ru.forpda.model.interactors.other.MenuShortcutsRepository
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
 import forpdateam.ru.forpda.model.repository.auth.AuthRepository
+import forpdateam.ru.forpda.model.repository.history.HistoryRepository
 import forpdateam.ru.forpda.model.repository.profile.ProfileRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
+import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
 import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuSection
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
@@ -41,7 +51,10 @@ class OtherViewModel @Inject constructor(
         private val menuRepository: MenuRepository,
         private val closeableInfoHolder: CloseableInfoHolder,
         private val mainPreferencesHolder: MainPreferencesHolder,
-        private val otherPreferencesHolder: OtherPreferencesHolder
+        private val otherPreferencesHolder: OtherPreferencesHolder,
+        private val menuShortcutsRepository: MenuShortcutsRepository,
+        private val historyRepository: HistoryRepository,
+        private val linkHandler: ILinkHandler
 ) : BaseViewModel() {
 
     data class UiState(
@@ -50,10 +63,24 @@ class OtherViewModel @Inject constructor(
             val infoList: List<CloseableInfo> = emptyList(),
             val menu: List<List<AppMenuItem>> = emptyList(),
             val menuTileLayout: Map<OtherMenuSection, List<Int>> = emptyMap(),
-            val bottomNavDuplicateIds: Set<Int> = emptySet()
+            val bottomNavDuplicateIds: Set<Int> = emptySet(),
+            val shortcuts: List<MenuShortcut> = emptyList(),
+            val continueItems: List<HistoryItem> = emptyList(),
+            val quickSettings: List<QuickSetting> = QuickSetting.DEFAULT,
+            val hiddenBlocks: Set<OtherMenuBlock> = emptySet()
     )
 
-    private val closeableInfoIds = arrayOf(CloseableInfoHolder.item_other_menu_drag)
+    /** Одноразовые события для диалогов закрепления. */
+    sealed interface ShortcutEvent {
+        data class HistoryLoaded(
+                val section: OtherMenuSection,
+                val items: List<HistoryItem>
+        ) : ShortcutEvent
+    }
+
+    // Старая подсказка (item_other_menu_drag) знала только про перетаскивание и у большинства
+    // пользователей уже закрыта — показываем вместо неё новую, про настройку меню целиком.
+    private val closeableInfoIds = arrayOf(CloseableInfoHolder.item_other_menu_customize)
 
     private var profileItem: ProfileModel? = null
     private var menuMap: Map<Int, List<AppMenuItem>> = emptyMap()
@@ -64,10 +91,42 @@ class OtherViewModel @Inject constructor(
     private val localCloseableInfo = mutableListOf<CloseableInfo>()
     private var isMenuDragMode = false
 
+    private var shortcuts: List<MenuShortcut> = emptyList()
+    private var continueItems: List<HistoryItem> = emptyList()
+    private var quickSettings: List<QuickSetting> = QuickSetting.DEFAULT
+    private var hiddenBlocks: Set<OtherMenuBlock> = emptySet()
+
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    private val _shortcutEvents = MutableSharedFlow<ShortcutEvent>(extraBufferCapacity = 1)
+    val shortcutEvents: SharedFlow<ShortcutEvent> = _shortcutEvents.asSharedFlow()
+
     init {
+        scope.launch {
+            menuShortcutsRepository.observe()
+                    .catch { }
+                    .collect { items ->
+                        shortcuts = items
+                        // force: добавление и удаление ярлыков происходит прямо в режиме
+                        // редактирования, где обычные обновления меню намеренно заморожены.
+                        publishMenu(force = true)
+                    }
+        }
+        scope.launch {
+            // observeItems() — StateFlow-кэш в памяти: после холодного старта он пуст, пока историю
+            // кто-нибудь не прочитает. Без этого прогрева «Продолжить чтение» не появлялось до
+            // первого захода в «Историю» или в тему.
+            runCatching { historyRepository.getHistory() }
+            historyRepository.observeItems()
+                    .catch { }
+                    .collect { items ->
+                        continueItems = items
+                                .filter { !it.url.isNullOrBlank() && !it.title.isNullOrBlank() }
+                                .take(CONTINUE_LIMIT)
+                        publishMenu()
+                    }
+        }
         scope.launch {
             runCatching { profileRepository.loadSelf() }
         }
@@ -124,6 +183,23 @@ class OtherViewModel @Inject constructor(
             isMenuTileLayoutLoaded = true
             publishMenu()
         }
+        scope.launch {
+            otherPreferencesHolder.observeOtherMenuQuickSettingsFlow()
+                    .catch { }
+                    .collect { items ->
+                        quickSettings = items
+                        // force: состав правят прямо в режиме редактирования (см. подписку на ярлыки).
+                        publishMenu(force = true)
+                    }
+        }
+        scope.launch {
+            otherPreferencesHolder.observeOtherMenuHiddenBlocksFlow()
+                    .catch { }
+                    .collect { items ->
+                        hiddenBlocks = items
+                        publishMenu(force = true)
+                    }
+        }
     }
 
     fun onMenuDragModeChange(isDragMode: Boolean) {
@@ -131,8 +207,8 @@ class OtherViewModel @Inject constructor(
         publishMenu()
     }
 
-    private fun publishMenu() {
-        if (isMenuDragMode) return
+    private fun publishMenu(force: Boolean = false) {
+        if (isMenuDragMode && !force) return
         if (!isMenuLoaded || !isMenuTileLayoutLoaded) return
         _uiState.value = UiState(
                 isReady = true,
@@ -140,8 +216,35 @@ class OtherViewModel @Inject constructor(
                 infoList = localCloseableInfo.toList(),
                 menu = menuMap.map { it.value },
                 menuTileLayout = menuTileLayout,
-                bottomNavDuplicateIds = resolveBottomNavDuplicateIds()
+                bottomNavDuplicateIds = resolveBottomNavDuplicateIds(),
+                shortcuts = shortcuts,
+                continueItems = continueItems,
+                quickSettings = quickSettings,
+                hiddenBlocks = hiddenBlocks
         )
+    }
+
+    /** Быстрая настройка «ЧС» — это навигация на экран чёрного списка форума, а не пикер. */
+    fun onOpenForumBlackList() {
+        router.navigateTo(Screen.ForumBlackList())
+    }
+
+    fun onChangeQuickSettings(items: List<QuickSetting>) {
+        scope.launch {
+            otherPreferencesHolder.setOtherMenuQuickSettings(items)
+        }
+    }
+
+    fun onToggleBlockHidden(block: OtherMenuBlock) {
+        scope.launch {
+            val updated = if (hiddenBlocks.contains(block)) hiddenBlocks - block else hiddenBlocks + block
+            otherPreferencesHolder.setOtherMenuHiddenBlocks(updated)
+        }
+    }
+
+    fun onContinueClick(item: HistoryItem) {
+        val url = item.url ?: return
+        linkHandler.handle(url, router)
     }
 
     private fun resolveBottomNavDuplicateIds(): Set<Int> {
@@ -167,6 +270,13 @@ class OtherViewModel @Inject constructor(
     }
 
     fun onMenuClick(item: AppMenuItem) {
+        val shortcut = item.shortcut
+        if (shortcut != null) {
+            // Все типы ярлыков — обычные ссылки 4PDA; разбор темы/раздела/диалога/поиска
+            // уже живёт в LinkHandler, дублировать роутинг здесь незачем.
+            linkHandler.handle(shortcut.url, router)
+            return
+        }
         if (item.screen != null) {
             router.navigateTo(item.screen)
             menuRepository.setLastOpened(item.id)
@@ -225,8 +335,53 @@ class OtherViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Возврат экрана меню к виду по умолчанию: раскладка плиток, состав быстрых настроек и
+     * видимость блоков. Пользовательские плитки-ярлыки при этом сохраняются — их удаляют крестиком.
+     */
+    fun onResetMenuLayout() {
+        menuTileLayout = emptyMap()
+        scope.launch {
+            otherPreferencesHolder.setOtherMenuTileOrder("")
+            otherPreferencesHolder.setOtherMenuQuickSettings(QuickSetting.DEFAULT)
+            otherPreferencesHolder.setOtherMenuHiddenBlocks(emptySet())
+        }
+        publishMenu()
+    }
+
+    fun onPickShortcutFromHistory(section: OtherMenuSection) {
+        scope.launch {
+            val items = runCatching { historyRepository.getHistory() }.getOrDefault(emptyList())
+            _shortcutEvents.emit(ShortcutEvent.HistoryLoaded(section, items.take(HISTORY_PICKER_LIMIT)))
+        }
+    }
+
+    fun onAddShortcut(type: MenuShortcut.Type, title: String, url: String, section: OtherMenuSection) {
+        scope.launch {
+            menuShortcutsRepository.add(type, title, url, section)
+        }
+    }
+
+    fun onRemoveShortcut(id: Int) {
+        scope.launch {
+            menuShortcutsRepository.remove(id)
+            // Мёртвый id в сохранённом порядке плиток ничего не ломает, но копится — чистим.
+            val cleaned = menuTileLayout.mapValues { entry -> entry.value.filterNot { it == id } }
+            if (cleaned != menuTileLayout) {
+                menuTileLayout = cleaned
+                otherPreferencesHolder.setOtherMenuTileOrder(
+                        otherPreferencesHolder.encodeOtherMenuTileLayout(menuTileLayout)
+                )
+            }
+        }
+    }
+
     fun onCloseInfo(item: CloseableInfo) {
         closeableInfoHolder.close(item)
     }
 
+    private companion object {
+        const val HISTORY_PICKER_LIMIT = 50
+        const val CONTINUE_LIMIT = 3
+    }
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <stroke
+        android:width="@dimen/dp2"
+        android:color="?attr/colorAccent"
+        android:dashGap="@dimen/dp4"
+        android:dashWidth="@dimen/dp6" />
+    <corners android:radius="@dimen/card_corner_radius" />
+</shape>

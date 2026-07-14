@@ -47,6 +47,9 @@ class OtherDataStore(private val context: Context) {
         val TOOLTIP_MESSAGE_PANEL_SORTING = booleanPreferencesKey("tooltip_message_panel_sorting")
         val SMART_NAV_LONG_PRESS_HINT_DISABLED = booleanPreferencesKey(AppPreferences.Other.SMART_NAV_LONG_PRESS_HINT_DISABLED)
         val OTHER_MENU_TILE_ORDER = stringPreferencesKey("other_menu_tile_order")
+        val OTHER_MENU_SHORTCUTS = stringPreferencesKey("other_menu_shortcuts")
+        val OTHER_MENU_QUICK_SETTINGS = stringPreferencesKey("other_menu_quick_settings")
+        val OTHER_MENU_HIDDEN_BLOCKS = stringPreferencesKey("other_menu_hidden_blocks")
     }
 
     val appFirstStart: Flow<Boolean> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
@@ -158,6 +161,39 @@ class OtherDataStore(private val context: Context) {
     suspend fun setOtherMenuTileOrder(value: String) {
         safeEdit { preferences ->
             preferences[PreferencesKeys.OTHER_MENU_TILE_ORDER] = value
+        }
+    }
+
+    /** JSON-массив пользовательских плиток меню (см. MenuShortcutsRepository). */
+    val otherMenuShortcuts: Flow<String> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
+        preferences[PreferencesKeys.OTHER_MENU_SHORTCUTS] ?: ""
+    }, "")
+
+    suspend fun setOtherMenuShortcuts(value: String) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.OTHER_MENU_SHORTCUTS] = value
+        }
+    }
+
+    /** Состав ряда быстрых настроек: имена QuickSetting через запятую. Пусто = набор по умолчанию. */
+    val otherMenuQuickSettings: Flow<String> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
+        preferences[PreferencesKeys.OTHER_MENU_QUICK_SETTINGS] ?: ""
+    }, "")
+
+    suspend fun setOtherMenuQuickSettings(value: String) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.OTHER_MENU_QUICK_SETTINGS] = value
+        }
+    }
+
+    /** Скрытые блоки экрана меню: имена OtherMenuBlock через запятую. */
+    val otherMenuHiddenBlocks: Flow<String> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
+        preferences[PreferencesKeys.OTHER_MENU_HIDDEN_BLOCKS] ?: ""
+    }, "")
+
+    suspend fun setOtherMenuHiddenBlocks(value: String) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.OTHER_MENU_HIDDEN_BLOCKS] = value
         }
     }
 }

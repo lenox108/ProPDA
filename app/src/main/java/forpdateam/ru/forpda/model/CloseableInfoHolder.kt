@@ -15,9 +15,17 @@ class CloseableInfoHolder(
         const val item_other_menu_drag = 10
         const val item_notes_sync = 11
 
+        /**
+         * Подсказка про настройку меню. Отдельный id, а не новый текст у [item_other_menu_drag]:
+         * тот у большинства давно закрыт (id лежит в closeable_info_closed_ids), и правка строки
+         * никому бы не показалась — про плитки-ярлыки и разделы так и не узнали бы.
+         */
+        const val item_other_menu_customize = 12
+
         val ALL_ITEMS = arrayOf(
                 item_other_menu_drag,
-                item_notes_sync
+                item_notes_sync,
+                item_other_menu_customize
         )
     }
 

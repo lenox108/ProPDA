@@ -163,6 +163,6 @@ object ThemeModePickerDialog {
                 .setTitle(R.string.pref_title_theme_mode)
                 .setView(ScrollView(context).apply { addView(list) })
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showWithStyledButtons(compact = false)
     }
 }

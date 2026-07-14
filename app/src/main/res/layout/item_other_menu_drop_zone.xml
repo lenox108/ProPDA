@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/other_menu_tile_height"
+    android:layout_marginStart="@dimen/content_padding_horizontal"
+    android:layout_marginTop="@dimen/dp4"
+    android:layout_marginEnd="@dimen/content_padding_horizontal"
+    android:layout_marginBottom="@dimen/dp4"
+    android:background="@drawable/bg_menu_drop_zone">
+
+    <TextView
+        android:id="@+id/otherMenuDropZoneTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:paddingStart="@dimen/dp16"
+        android:paddingEnd="@dimen/dp16"
+        android:text="@string/other_menu_drop_zone"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textSize="13sp" />
+</FrameLayout>
