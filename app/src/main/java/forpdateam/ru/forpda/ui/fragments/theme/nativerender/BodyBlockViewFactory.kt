@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Typeface
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.SpannedString
 import android.text.style.URLSpan
 import android.view.View
 import android.widget.ImageView
@@ -843,24 +844,88 @@ class BodyBlockViewFactory(
         return out
     }
 
+    /**
+     * The markup → [Spanned] step, memoised in [HTML_CACHE].
+     *
+     * [Html.fromHtml] runs a full XML parse and is by far the most expensive thing a bind does — on a
+     * mid-sized post it measured 2–22 ms on the UI thread, and it ran AGAIN every time the post scrolled
+     * back into view, so a fast fling dropped frames («микролаги при скроле»). The parse depends on
+     * NOTHING but the markup itself — not the palette, not the font scale, not the search query — so its
+     * result is cached under the markup string and shared by every bind of that body.
+     *
+     * What is deliberately NOT cached is everything downstream of the parse: smile spans (each needs its
+     * own drawable — a shared [android.graphics.drawable.AnimatedImageDrawable] would be driven by two
+     * TextViews at once), the contrast/link-colour rescue (depends on the current surface, so a palette
+     * switch must recompute it) and the find-on-page highlight. Those are cheap span passes over an
+     * already-parsed text.
+     *
+     * The cached instance is never handed to a TextView directly: a selectable TextView writes selection
+     * spans INTO the Spannable it is given, which would mutate the cache entry (and leak a selection
+     * between two views). Every call therefore copies first.
+     */
     private fun spanned(ctx: Context, html: String): CharSequence = try {
-        val base = Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
+        val base = HTML_CACHE.get(html) ?: Html
+                .fromHtml(html, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
                 .trimTrailingNewlines()
-        // Replace 4pda smile shortcodes (:thank_you: …) with inline images from bundled assets.
+                .let { SpannedString(it) }
+                .also { HTML_CACHE.put(html, it) }
+        // Replace 4pda smile shortcodes (:thank_you: …) with inline images from bundled assets. Runs on a
+        // private copy — see the doc above (and applySmiles itself copies again only when it finds smiles).
         val smileSize = (ctx.resources.displayMetrics.scaledDensity * scaledSp(SMILE_SIZE_SP)).toInt().coerceAtLeast(1)
-        SmileProvider.applySmiles(base, ctx.resources, smileSize, animatedSmiles)
+        SmileProvider.applySmiles(SpannableStringBuilder(base), ctx.resources, smileSize, animatedSmiles)
     } catch (t: Throwable) {
         // Graceful degradation (§6): never crash on a single body's markup.
         SpannableStringBuilder(html)
     }
 
-    private fun CharSequence.trimTrailingNewlines(): CharSequence {
-        var end = length
-        while (end > 0 && (this[end - 1] == '\n' || this[end - 1] == ' ')) end--
-        return subSequence(0, end)
-    }
+    companion object {
+        /**
+         * Parse every markup run in [blocks] into [HTML_CACHE] ahead of time. Call OFF the main thread as
+         * soon as a page's posts are known: the cache alone only pays off on a RE-bind, while a fast scroll
+         * down meets each post for the FIRST time and would still pay the parse on the UI thread. Warming
+         * moves that work to a background thread, so the bind that finally shows the post just reads spans.
+         *
+         * [Html.fromHtml] touches no UI state (it builds spans, decodes no bitmaps) and [HTML_CACHE] is an
+         * [android.util.LruCache], which is synchronised — so a warm-up racing with a bind of the same post
+         * is safe: worst case both parse it and the later put wins.
+         */
+        fun prewarm(blocks: List<BodyBlock>) {
+            for (block in blocks) when (block) {
+                is BodyBlock.Text -> prewarmHtml(block.html)
+                is BodyBlock.EditNote -> prewarmHtml(block.html)
+                is BodyBlock.WebFallback -> prewarmHtml(block.html)
+                is BodyBlock.Quote -> prewarm(block.inner)
+                is BodyBlock.Spoiler -> prewarm(block.inner)
+                is BodyBlock.Table -> block.rows.forEach { row -> row.forEach(::prewarmHtml) }
+                is BodyBlock.Image, is BodyBlock.Code, is BodyBlock.FileAttachment -> Unit
+            }
+        }
 
-    private companion object {
+        private fun prewarmHtml(html: String) {
+            if (HTML_CACHE.get(html) != null) return
+            runCatching {
+                HTML_CACHE.put(html, SpannedString(Html
+                        .fromHtml(html, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
+                        .trimTrailingNewlines()))
+            }
+        }
+
+        private fun CharSequence.trimTrailingNewlines(): CharSequence {
+            var end = length
+            while (end > 0 && (this[end - 1] == '\n' || this[end - 1] == ' ')) end--
+            return subSequence(0, end)
+        }
+
+        /**
+         * Parsed-markup cache behind [spanned], shared by every renderer instance (topic posts and QMS
+         * chat alike — a quoted post shows up in both). Sized in CHARACTERS of markup, not entries, so one
+         * monstrous topic hat can't evict a whole page of ordinary posts; ~512k chars ≈ a couple of MB of
+         * spans, which is small next to the image cache and bounded whatever the user scrolls through.
+         */
+        val HTML_CACHE = object : android.util.LruCache<String, Spanned>(512 * 1024) {
+            override fun sizeOf(key: String, value: Spanned): Int = key.length
+        }
+
         /** A 4pda post-attachment download link: `…/forum/dl/post/<id>/<name>.<ext>`. */
         val ATTACHMENT_URL: Pattern =
                 Pattern.compile("""https?://4pda\.(?:to|ru)/forum/dl/post/\d+/(.+\.([^./?#]+))(?:[?#]|$)""")
