@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  «Продолжить чтение» row (M3 two-line list item): a leading icon in a tonal circle, a title, a
+  supporting date line, and an inset divider separating it from the next row INSIDE the plate. The
+  plate background (rounded top / flat middle / rounded bottom) is chosen per position by
+  OtherMenuContinueDelegate, which also hides the divider on the plate's last row.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -7,45 +13,70 @@
     android:layout_height="wrap_content"
     android:clickable="true"
     android:focusable="true"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:paddingStart="@dimen/content_padding_horizontal"
-    android:paddingTop="@dimen/list_row_padding_vertical"
-    android:paddingEnd="@dimen/content_padding_horizontal"
-    android:paddingBottom="@dimen/list_row_padding_vertical">
-
-    <ImageView
-        android:layout_width="@dimen/dp24"
-        android:layout_height="@dimen/dp24"
-        android:layout_marginEnd="@dimen/dp16"
-        android:contentDescription="@null"
-        android:src="@drawable/ic_forum"
-        app:tint="?attr/menu_tile_icon" />
+    android:orientation="vertical">
 
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:gravity="center_vertical"
+        android:minHeight="@dimen/other_menu_continue_row_min_height"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingTop="@dimen/dp8"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingBottom="@dimen/dp8">
 
-        <TextView
-            android:id="@+id/otherContinueTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:textAppearance="?attr/textAppearanceTitleMedium"
-            android:textColor="?attr/colorOnSurface"
-            tools:text="Тема с очень длинным названием" />
+        <!-- The tonal circle behind the icon is built in the delegate: it is the accent at low alpha, so it
+             stays visible on every palette (a static M3 container role collapses into the card on AMOLED). -->
+        <FrameLayout
+            android:id="@+id/otherContinueIconCircle"
+            android:layout_width="@dimen/other_menu_continue_icon_size"
+            android:layout_height="@dimen/other_menu_continue_icon_size"
+            android:layout_marginEnd="@dimen/dp16">
 
-        <TextView
-            android:id="@+id/otherContinueDate"
-            android:layout_width="match_parent"
+            <ImageView
+                android:layout_width="@dimen/dp24"
+                android:layout_height="@dimen/dp24"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_forum"
+                app:tint="?attr/menu_tile_icon" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            tools:text="сегодня, 12:41" />
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/otherContinueTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textColor="?attr/colorOnSurface"
+                tools:text="Тема с очень длинным названием" />
+
+            <TextView
+                android:id="@+id/otherContinueDate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dp2"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="сегодня, 12:41" />
+        </LinearLayout>
     </LinearLayout>
+
+    <!-- Inset divider: starts under the text, never under the icon (M3 list). -->
+    <View
+        android:id="@+id/otherContinueDivider"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/other_menu_continue_divider_height"
+        android:layout_marginStart="@dimen/other_menu_continue_divider_inset"
+        android:background="?attr/colorOutlineVariant" />
 </LinearLayout>

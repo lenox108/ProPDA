@@ -15,6 +15,12 @@
     <!-- Полное меню (OtherFragment): те же горизонтальные поля, что у настроек и списков тем -->
     <dimen name="other_menu_plate_horizontal_margin">@dimen/list_plate_horizontal_inset</dimen>
     <dimen name="other_menu_plate_vertical_gap">@dimen/dp8</dimen>
+    <!-- «Продолжить чтение»: M3 two-line list item (72dp), tonal icon circle, divider inset past the icon
+         (16dp padding + 40dp circle + 16dp gap = 72dp). -->
+    <dimen name="other_menu_continue_row_min_height">72dp</dimen>
+    <dimen name="other_menu_continue_icon_size">40dp</dimen>
+    <dimen name="other_menu_continue_divider_inset">72dp</dimen>
+    <dimen name="other_menu_continue_divider_height">1dp</dimen>
     <dimen name="other_menu_tile_height">76dp</dimen>
     <dimen name="other_menu_tile_title_height">26dp</dimen>
     <dimen name="other_menu_action_row_height">@dimen/dp56</dimen>
@@ -134,8 +140,6 @@
     <!-- 6sp: «18566/18566» в центральной вкладке (~40% ширины) без ellipsize -->
     <dimen name="pagination_page_autosize_min_text_size">6sp</dimen>
     <dimen name="content_block_padding_vertical">@dimen/dp16</dimen>
-    <!-- Отступ одного уровня вложенности в списке форумов (ForumTreeRecyclerAdapter). -->
-    <dimen name="forum_tree_level_indent">12dp</dimen>
     <dimen name="toolbar_avatar_size">40dp</dimen>
     <dimen name="list_avatar_two_line_size">40dp</dimen>
     <dimen name="list_avatar_compact_size">24dp</dimen>
