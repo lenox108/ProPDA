@@ -23,7 +23,14 @@ enum class QuickSetting {
         fun parse(raw: String): List<QuickSetting> = when {
             raw.isBlank() -> DEFAULT
             raw == EMPTY -> emptyList()
-            else -> raw.split(',').mapNotNull { name -> entries.firstOrNull { it.name == name.trim() } }
+            else -> {
+                val parsed = raw.split(',')
+                        .mapNotNull { name -> entries.firstOrNull { it.name == name.trim() } }
+                // Сохранённый набор мог целиком состоять из пунктов, которых больше нет
+                // (FLAT_POSTS, ANIMATED_SMILES) — тогда ряд оказывался пустым навсегда, и
+                // добраться до «Изменить» было неоткуда. Пустой результат = вернуть дефолт.
+                parsed.ifEmpty { DEFAULT }
+            }
         }
 
         fun encode(items: List<QuickSetting>): String =
