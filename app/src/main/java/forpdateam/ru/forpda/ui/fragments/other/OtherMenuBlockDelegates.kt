@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.hannesdorfmann.adapterdelegates4.AdapterDelegate
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.databinding.ItemOtherMenuBlockHeaderBinding
 import forpdateam.ru.forpda.databinding.ItemOtherMenuContinueBinding
 import forpdateam.ru.forpda.databinding.ItemOtherMenuQuickSettingsBinding
@@ -107,6 +108,12 @@ class OtherMenuContinueDelegate(
 
         init {
             binding.root.setOnClickListener { current?.let(clickListener) }
+            val ctx = binding.root.context
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+            binding.otherContinueIconCircle.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, ICON_CIRCLE_ALPHA))
+            }
         }
 
         fun bind(items: List<ListItem>, position: Int) {
@@ -117,11 +124,22 @@ class OtherMenuContinueDelegate(
 
             val row = otherMenuPlateRow(items, position) { it is OtherMenuContinueListItem }
             binding.root.setBackgroundResource(drawableForPlateRow(row))
+            // Rows inside one plate are separated by an inset divider; the plate's own bottom edge closes
+            // the last one, so it must not draw a divider on top of it.
+            binding.otherContinueDivider.visibility = when (row) {
+                OtherMenuPlateRow.LAST, OtherMenuPlateRow.SINGLE -> View.GONE
+                else -> View.VISIBLE
+            }
             val horizontal = binding.root.resources.getDimensionPixelSize(R.dimen.other_menu_plate_horizontal_margin)
             binding.root.updateLayoutParams<RecyclerView.LayoutParams> {
                 leftMargin = horizontal
                 rightMargin = horizontal
             }
+        }
+
+        private companion object {
+            /** ~12% accent: a tonal circle that reads on a white card and on an AMOLED black one alike. */
+            const val ICON_CIRCLE_ALPHA = 31
         }
     }
 }

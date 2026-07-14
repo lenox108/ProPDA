@@ -28,12 +28,18 @@ internal fun otherMenuPlateRow(items: List<ListItem>, position: Int, groupPredic
     }
 }
 
+/**
+ * Plate backgrounds for the menu. Unlike the shared `pref_plate_*` set, the middle/bottom rows here draw
+ * NO top edge: the settings plates paint one stroke per row, which made every seam inside a group show a
+ * full-bleed hairline. A menu plate reads as one M3 card, and rows are separated by the inset divider the
+ * row itself draws (see `otherContinueDivider`).
+ */
 @DrawableRes
 internal fun drawableForPlateRow(row: OtherMenuPlateRow): Int = when (row) {
     OtherMenuPlateRow.SINGLE -> R.drawable.pref_plate_single
     OtherMenuPlateRow.FIRST -> R.drawable.pref_plate_top
-    OtherMenuPlateRow.MIDDLE -> R.drawable.pref_plate_middle
-    OtherMenuPlateRow.LAST -> R.drawable.pref_plate_bottom
+    OtherMenuPlateRow.MIDDLE -> R.drawable.other_menu_plate_middle
+    OtherMenuPlateRow.LAST -> R.drawable.other_menu_plate_bottom
 }
 
 internal fun View.applyOtherMenuPlateMarginsAndBackground(

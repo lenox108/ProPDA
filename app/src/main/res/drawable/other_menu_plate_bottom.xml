@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Last row of an «other menu» plate: rounded bottom corners, no top edge — the row above already
+  closed the plate there, and drawing it produced a hairline across the seam.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/content_card_surface" />
+            <stroke
+                android:width="?attr/list_plate_stroke_width"
+                android:color="?attr/list_plate_stroke_color" />
+            <corners
+                android:topLeftRadius="0dp"
+                android:topRightRadius="0dp"
+                android:bottomLeftRadius="@dimen/card_corner_radius"
+                android:bottomRightRadius="@dimen/card_corner_radius" />
+        </shape>
+    </item>
+    <item
+        android:height="?attr/list_plate_stroke_width"
+        android:gravity="top">
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/content_card_surface" />
+        </shape>
+    </item>
+</layer-list>
