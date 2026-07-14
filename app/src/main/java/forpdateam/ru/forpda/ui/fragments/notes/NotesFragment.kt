@@ -347,6 +347,10 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
         }.show()
     }
 
+    /** Контейнер заголовков внутри тулбара (см. showSearch): именно он занимает всю ширину. */
+    private val titlesHost: View
+        get() = (titlesWrapper.parent as? View) ?: titlesWrapper
+
     private fun showSearch() {
         if (searchField != null) return
         clearSelection()
@@ -374,7 +378,11 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
         searchField = field
         searchMenuItem?.isVisible = false
         closeSearchMenuItem?.isVisible = true
-        titlesWrapper.visibility = View.GONE
+        // Прятать надо КОНТЕЙНЕР заголовков целиком (fragment_base.xml: Toolbar → LinearLayout
+        // шириной match_parent → toolbar_titles_wrapper). Раньше гасился только внутренний
+        // wrapper, внешний LinearLayout продолжал занимать всю ширину тулбара — и поле поиска
+        // получало 0px: пользователь видел пустой тулбар и не мог ничего ввести.
+        titlesHost.visibility = View.GONE
         toolbar.addView(field, androidx.appcompat.widget.Toolbar.LayoutParams(
                 androidx.appcompat.widget.Toolbar.LayoutParams.MATCH_PARENT,
                 androidx.appcompat.widget.Toolbar.LayoutParams.WRAP_CONTENT
@@ -392,7 +400,7 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
         }
         searchField = null
         viewModel.clearSearch()
-        titlesWrapper.visibility = View.VISIBLE
+        titlesHost.visibility = View.VISIBLE
         updateSelectionUi()
     }
 
