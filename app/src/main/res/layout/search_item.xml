@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Результат поиска по темам — та же скруглённая M3-карточка, что и у выдачи по сообщениям
+  (search_post_item). Раньше здесь стоял CardStyle.Item.Wide (cardCornerRadius=0dp, edge-to-edge),
+  из-за чего режим «Темы» выглядел плоским «без M3». Вертикальные промежутки даёт
+  SpacingItemDecoration(dp8), поэтому на карточке только горизонтальный отступ.
+-->
 <androidx.cardview.widget.CardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/profile_block_counts"
-    style="@style/CardStyle.Item.Wide"
+    style="@style/CardStyle.Item"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_alignParentStart="true"
+    android:layout_marginHorizontal="8dp"
     android:background="?attr/selectableItemBackground"
     android:clickable="true"
     android:focusable="true">
