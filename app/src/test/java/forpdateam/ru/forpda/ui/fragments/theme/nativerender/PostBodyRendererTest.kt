@@ -388,6 +388,24 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun qmsBareAttachImg_isANativeImage_notAWebFallback() {
+        // Живая разметка личного сообщения с вложением (снята с 4pda): вложение — САМ <img
+        // class="ipb-attach attach-img">, без таблицы/якоря, как в постах форума. Раньше он не
+        // подходил ни под один селектор attachment-картинок и уезжал в WebView-фолбэк — в пузыре
+        // вместо картинки была пустая серая полоса.
+        val blocks = renderer.render(
+                """<img class="ipb-attach attach-img" attach_id="35815726" s="0" loading="lazy" src="https://4pda.to/s/abc.png" alt="Прикрепленное изображение">
+                   <br> STROKA-ODIN <br> STROKA-DVA"""
+        )
+        val image = blocks.filterIsInstance<BodyBlock.Image>().single()
+        assertEquals("https://4pda.to/s/abc.png", image.imageUrl)
+        assertTrue(blocks.none { it is BodyBlock.WebFallback })
+        val texts = blocks.filterIsInstance<BodyBlock.Text>().joinToString(" ") { it.html }
+        assertTrue(texts.contains("STROKA-ODIN"))
+        assertTrue(texts.contains("STROKA-DVA"))
+    }
+
+    @Test
     fun wrapperHoldingProseAndAttachTable_keepsBothTexts() {
         // Репорт (личка QMS): «если к сообщению прикреплена картинка и есть текст, то текст обрезается».
         // 4pda кладёт attach-таблицу в ТОТ ЖЕ div, где набранный текст; узел классифицировался как

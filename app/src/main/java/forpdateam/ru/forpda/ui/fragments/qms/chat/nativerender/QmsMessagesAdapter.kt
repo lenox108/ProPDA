@@ -106,6 +106,12 @@ class QmsMessagesAdapter(
         blockFactory.textScale = textScale
         blockFactory.animatedSmiles = animatedSmiles
         blockFactory.flatBlocks = flatBlocks
+        // A bubble sizes itself to its content, so text blocks must be measured WRAP_CONTENT within the
+        // width a bubble may occupy — see BodyBlockViewFactory.textBlockMaxWidthPx.
+        val dm = holder.itemView.resources.displayMetrics
+        blockFactory.textBlockMaxWidthPx = (dm.widthPixels -
+                ((BUBBLE_GUTTER_DP + LIST_EDGE_DP + 2 * BUBBLE_PADDING_DP) * dm.density).toInt())
+                .coerceAtLeast(1)
         when (val item = getItem(position)) {
             is QmsChatItem.DateDivider -> (holder as DateViewHolder).bind(item, textScale)
             is QmsChatItem.Message -> (holder as MessageViewHolder).bind(item, textScale)
@@ -226,6 +232,9 @@ class QmsMessagesAdapter(
         /** Free space left on the opposite side of a bubble (CSS: `margin-left/right: 4em`). */
         const val BUBBLE_GUTTER_DP = 56f
         const val LIST_EDGE_DP = 12f
+
+        /** `paddingHorizontal` of the bubble in `item_qms_message.xml`, on each side. */
+        const val BUBBLE_PADDING_DP = 14f
         const val OWN_BUBBLE_ACCENT_RATIO = 0.12f
 
         /** How far a dark card's outline is lifted toward `colorOnSurface` (post-card parity). */
