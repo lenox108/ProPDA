@@ -61,6 +61,7 @@ import kotlinx.coroutines.launch
 class FavoritesFragment : RecyclerFragment() {
 
     @Inject lateinit var router: TabRouter
+    @Inject lateinit var menuShortcutPinner: forpdateam.ru.forpda.model.interactors.other.MenuShortcutPinner
 
     private lateinit var dialogMenu: DynamicDialogMenu<FavoritesFragment, FavItem>
     private lateinit var adapter: FavoritesAdapter
@@ -187,6 +188,10 @@ class FavoritesFragment : RecyclerFragment() {
             }
             addItem(getString(R.string.fav_watch_versions)) { _, data ->
                 presenter.toggleHatWatch(data)
+            }
+            addItem(getString(R.string.other_menu_pin_to_menu)) { _, data ->
+                menuShortcutPinner.pinTopic(data.topicId, data.topicTitle.orEmpty())
+                showSnackbar(R.string.other_menu_shortcut_added)
             }
         }
 
@@ -655,6 +660,13 @@ class FavoritesFragment : RecyclerFragment() {
                         )
                 )
                 allow(9)
+            }
+
+            // «Закрепить в меню» — только для тем: у форумов нет topicId для ссылки-плитки.
+            // Индекс ищем по заголовку, а не хардкодим — список пунктов выше уже длинный.
+            if (!item.isForum) {
+                val pinIndex = containsIndex(getString(R.string.other_menu_pin_to_menu))
+                if (pinIndex != -1) allow(pinIndex)
             }
 
             show(requireContext(), this@FavoritesFragment, item)

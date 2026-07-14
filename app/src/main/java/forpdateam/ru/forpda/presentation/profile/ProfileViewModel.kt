@@ -95,6 +95,12 @@ class ProfileViewModel @Inject constructor(
         clipboardHelper.copyToClipboard(profileUrl)
     }
 
+    /** Ник и ссылка для плитки «Закрепить в меню» (закрепляет фрагмент). */
+    fun shortcutTarget(): Pair<String, String>? {
+        val url = profileUrl ?: return null
+        return (currentData?.nick.orEmpty()) to url
+    }
+
     fun navigateToQms() {
         currentData?.let {
             linkHandler.handle(it.contacts[0].url, router)

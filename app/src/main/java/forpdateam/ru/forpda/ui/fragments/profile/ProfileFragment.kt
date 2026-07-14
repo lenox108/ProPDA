@@ -50,6 +50,7 @@ import timber.log.Timber
 class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
     @Inject lateinit var authHolder: AuthHolder
     @Inject lateinit var linkHandler: ILinkHandler
+    @Inject lateinit var menuShortcutPinner: forpdateam.ru.forpda.model.interactors.other.MenuShortcutPinner
 
     private var _profileBinding: FragmentProfileBinding? = null
     private val profileBinding get() = checkNotNull(_profileBinding) { "Binding accessed after onDestroyView" }
@@ -184,6 +185,18 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         copyLinkMenuItem = menu.add(R.string.copy_link)
                 .setOnMenuItemClickListener {
                     presenter.copyUrl()
+                    true
+                }
+        menu.add(R.string.other_menu_pin_to_menu)
+                .setOnMenuItemClickListener {
+                    presenter.shortcutTarget()?.let { (nick, url) ->
+                        menuShortcutPinner.pin(
+                                forpdateam.ru.forpda.entity.app.other.MenuShortcut.Type.PROFILE,
+                                nick,
+                                url
+                        )
+                        showSnackbar(R.string.other_menu_shortcut_added)
+                    }
                     true
                 }
         writeMenuItem = menu.add(R.string.write)
