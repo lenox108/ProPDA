@@ -306,7 +306,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                 forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).getAnimatedSmiles()
         messagesAdapter.flatBlocks =
                 forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).getFlatPosts()
-        messagesLayoutManager = LinearLayoutManager(requireContext()).apply { stackFromEnd = true }
+        messagesLayoutManager = ChatLayoutManager(requireContext()).apply { stackFromEnd = true }
         chatBinding.qmsMessages.apply {
             layoutManager = messagesLayoutManager
             adapter = messagesAdapter
@@ -330,6 +330,36 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     }
 
     /**
+     * A message body is a selectable TextView, and `setTextIsSelectable(true)` makes it focusable in
+     * touch mode. A long-press therefore FOCUSES the bubble's text, and both RecyclerView (focus →
+     * `requestChildOnScreen`) and the TextView editor (caret → `requestRectangleOnScreen`) then ask
+     * the list to scroll that view/caret into view — in a `stackFromEnd` chat that yanked the list
+     * downwards the moment the selection started. The user does not need the list to chase focus
+     * here: every bubble a finger can long-press is already on screen, so the layout manager simply
+     * refuses focus-driven scrolling.
+     */
+    private class ChatLayoutManager(context: android.content.Context) : LinearLayoutManager(context) {
+        override fun onRequestChildFocus(
+                parent: RecyclerView,
+                state: RecyclerView.State,
+                child: View,
+                focused: View?,
+        ): Boolean = true // "handled" → RecyclerView must not scroll to the focused child
+
+        override fun requestChildRectangleOnScreen(
+                parent: RecyclerView,
+                child: View,
+                rect: Rect,
+                immediate: Boolean,
+                focusedChildVisible: Boolean,
+        ): Boolean = false
+    }
+
+    /** True while a text selection is live inside the list (a message body holds focus). */
+    private fun isTextSelectionActive(): Boolean =
+            _chatBinding != null && chatBinding.qmsMessages.hasFocus()
+
+    /**
      * The list already ends exactly at the top of `message_panel_host` (they are siblings, and the
      * panel's growth reflows the content container), so it must NOT reserve the panel height as
      * bottom padding the way `ExtendedWebView.setPaddingBottom` had to — that double-counted the
@@ -338,6 +368,9 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
      */
     private fun keepListPinnedToBottomAfterRelayout() {
         if (_chatBinding == null || !isListAtBottom()) return
+        // …but never while the user is selecting text: jumping to the newest message would drop the
+        // selection under their finger.
+        if (isTextSelectionActive()) return
         chatBinding.qmsMessages.post {
             if (_chatBinding == null) return@post
             scrollMessagesToBottom()
@@ -509,7 +542,9 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         val items = itemMapper.map(window.messages)
         messagesAdapter.submitList(items) {
             if (_chatBinding == null) return@submitList
-            if (pendingScrollToBottom || wasAtBottom) {
+            // A silent poll / WS tick must not tear a live text selection away by sticking the list to
+            // the newest message; an explicit request (own message just sent) still wins.
+            if (pendingScrollToBottom || (wasAtBottom && !isTextSelectionActive())) {
                 pendingScrollToBottom = false
                 scrollMessagesToBottom()
             }
