@@ -42,6 +42,24 @@ object Cp1251Codec {
     }
 
     /**
+     * Percent-decode значения, кодировка которого заранее НЕ известна: 4PDA — legacy cp1251, но часть
+     * ссылок сайт отдаёт в UTF-8 (ссылки-теги под постом: `act=search&…&query=<utf8>`). Слепой
+     * [decode] превращал их в мохибейк («Р»РёС‚РµСЂР°С‚СѓСЂР°» вместо «литература») — поиск по тегу
+     * уходил на сервер с мусором и ничего не находил.
+     *
+     * Байты cp1251-кириллицы (0xC0–0xFF подряд) почти никогда не образуют валидную UTF-8
+     * последовательность, поэтому UTF-8 декодер помечает их U+FFFD — по этому и различаем: чистый
+     * UTF-8 декод берём как есть, иначе откатываемся на cp1251.
+     */
+    @JvmStatic
+    fun decodeAuto(value: String?): String {
+        if (value.isNullOrEmpty()) return ""
+        val utf8 = runCatching { URLDecoder.decode(value, "UTF-8") }.getOrNull()
+        if (!utf8.isNullOrEmpty() && !utf8.contains('\uFFFD')) return utf8
+        return decode(value)
+    }
+
+    /**
      * Кодирует с fallback в UTF-8 для символов, отсутствующих в cp1251
      * (актуально для ников с эмодзи).
      */
