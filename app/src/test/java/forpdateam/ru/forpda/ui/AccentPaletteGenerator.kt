@@ -1,11 +1,8 @@
 package forpdateam.ru.forpda.ui
 
 import com.google.android.material.color.utilities.DynamicScheme
-import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
-import com.google.android.material.color.utilities.SchemeExpressive
-import com.google.android.material.color.utilities.SchemeTonalSpot
-import com.google.android.material.color.utilities.SchemeVibrant
+import forpdateam.ru.forpda.common.Preferences.Main.AccentStyle
 import org.junit.Ignore
 import org.junit.Test
 import java.io.File
@@ -87,9 +84,11 @@ class AccentPaletteGenerator {
         // умолчанию), сочный Vibrant (инфикс `_vibrant_`) и экспрессивный
         // Expressive (инфикс `_expressive_`, M3 Expressive — сдвинутые оттенки).
         for ((name, seed) in seeds) {
-            val tonal: DynamicScheme = SchemeTonalSpot(Hct.fromInt(seed), isDark, 0.0)
-            val vibrant: DynamicScheme = SchemeVibrant(Hct.fromInt(seed), isDark, 0.0)
-            val expressive: DynamicScheme = SchemeExpressive(Hct.fromInt(seed), isDark, 0.0)
+            // Схемы — строго через AccentSchemes (тот же код, что и живое превью в
+            // AccentPickerDialog), иначе свотч/превью и применённая тема разъезжаются.
+            val tonal: DynamicScheme = AccentSchemes.scheme(seed, AccentStyle.TONAL, isDark)
+            val vibrant: DynamicScheme = AccentSchemes.scheme(seed, AccentStyle.VIBRANT, isDark)
+            val expressive: DynamicScheme = AccentSchemes.scheme(seed, AccentStyle.EXPRESSIVE, isDark)
             sb.append("    <!-- ${name} (seed #${String.format("%06X", seed and 0xFFFFFF)}) -->\n")
             for ((suffix, selector) in roles) {
                 val t = selector(mdc).getArgb(tonal)

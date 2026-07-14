@@ -12,16 +12,14 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.annotation.StringRes
-import com.google.android.material.color.utilities.Hct
+import androidx.appcompat.view.ContextThemeWrapper
 import com.google.android.material.color.utilities.MaterialDynamicColors
-import com.google.android.material.color.utilities.SchemeExpressive
-import com.google.android.material.color.utilities.SchemeTonalSpot
-import com.google.android.material.color.utilities.SchemeVibrant
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Preferences.Main.AccentPalette
 import forpdateam.ru.forpda.common.Preferences.Main.AccentStyle
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.AccentSchemes
 import kotlin.math.roundToInt
 
 /**
@@ -58,7 +56,14 @@ object AccentPickerDialog {
         else -> entries.firstOrNull { it.palette == palette }?.title ?: R.string.accent_neutral
     }
 
-    private data class Roles(val primary: Int, val onPrimary: Int, val container: Int, val onContainer: Int)
+    private data class Roles(
+            val primary: Int,
+            val onPrimary: Int,
+            /** Цвет ссылок (`colorSecondary`). */
+            val link: Int,
+            val container: Int,
+            val onContainer: Int,
+    )
 
     fun show(
             context: Context,
@@ -73,6 +78,8 @@ object AccentPickerDialog {
                 Configuration.UI_MODE_NIGHT_YES
         val onSurface = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val outline = context.getColorFromAttr(com.google.android.material.R.attr.colorOutline)
+        // Тема БЕЗ ThemeOverlay.ForPDA.Accent.* — источник правды для «Нейтрального».
+        val neutralContext = ContextThemeWrapper(context, R.style.DayNightAppTheme)
 
         // Изменяемый выбор (превью до применения).
         var selected = current
@@ -81,23 +88,31 @@ object AccentPickerDialog {
 
         fun rolesFor(palette: AccentPalette, customColor: Int): Roles {
             val seed = when (palette) {
+                // «Нейтральный» = БЕЗ accent-оверлея (AccentPolicy.Mode.NONE), поэтому его
+                // цвет надо читать из БАЗОВОЙ темы, а не из темы активити: та уже пропатчена
+                // применённым акцентом (`colorAccent` = accent primary), и свотч показывал
+                // последний выбранный цвет вместо нейтрали.
                 AccentPalette.NEUTRAL -> return Roles(
-                        context.getColorFromAttr(androidx.appcompat.R.attr.colorAccent),
+                        neutralContext.getColorFromAttr(androidx.appcompat.R.attr.colorAccent),
                         if (isDark) Color.BLACK else Color.WHITE,
+                        neutralContext.getColorFromAttr(com.google.android.material.R.attr.colorSecondary),
                         context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh),
                         onSurface)
                 AccentPalette.CUSTOM -> customColor
                 else -> entries.first { it.palette == palette }.seed!!
             }
-            val hct = Hct.fromInt(seed)
-            val scheme = when (selectedStyle) {
-                AccentStyle.VIBRANT -> SchemeVibrant(hct, isDark, 0.0)
-                AccentStyle.EXPRESSIVE -> SchemeExpressive(hct, isDark, 0.0)
-                else -> SchemeTonalSpot(hct, isDark, 0.0)
-            }
+            val scheme = AccentSchemes.scheme(seed, selectedStyle, isDark)
             val m = MaterialDynamicColors()
-            return Roles(m.primary().getArgb(scheme), m.onPrimary().getArgb(scheme),
-                    m.primaryContainer().getArgb(scheme), m.onPrimaryContainer().getArgb(scheme))
+            // Превью показывает ровно те роли, что перекрывает accent-оверлей: кнопка —
+            // primary, ссылка — secondary (ссылки в приложении читают ?attr/colorSecondary),
+            // чип — tertiary-контейнер. Иначе «Экспрессивный» (он уводит именно secondary и
+            // tertiary) выглядел в диалоге неотличимо от «Обычного».
+            return Roles(
+                    m.primary().getArgb(scheme),
+                    m.onPrimary().getArgb(scheme),
+                    m.secondary().getArgb(scheme),
+                    m.tertiaryContainer().getArgb(scheme),
+                    m.onTertiaryContainer().getArgb(scheme))
         }
 
         // --- Превью-карточка: кнопка + ссылка + чип ---
@@ -124,7 +139,7 @@ object AccentPickerDialog {
             previewButton.background = GradientDrawable().apply {
                 cornerRadius = px(20).toFloat(); setColor(r.primary)
             }
-            previewLink.setTextColor(r.primary)
+            previewLink.setTextColor(r.link)
             previewChip.setTextColor(r.onContainer)
             previewChip.background = GradientDrawable().apply {
                 cornerRadius = px(16).toFloat(); setColor(r.container); setStroke(px(1), outline)
