@@ -49,15 +49,24 @@ class AppUpdateNotifier @Inject constructor(
             topicIntent,
             NotificationsService.activityPendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT)
         )
-        val content = result.description
-            ?.takeIf { it.isNotBlank() }
-            ?: context.getString(R.string.updater_notification_content_VerName, result.version.toString())
+        val fallback = context.getString(
+            R.string.updater_notification_content_VerName,
+            result.version.toString()
+        )
+        val content = result.description?.takeIf { it.isNotBlank() } ?: fallback
+        // Свёрнутое уведомление — одна строка: показываем первую строку релиз-нотов,
+        // полный текст уходит в BigTextStyle.
+        val collapsed = content.lineSequence().firstOrNull { it.isNotBlank() } ?: fallback
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notify_mention)
             .setContentTitle(context.getString(R.string.updater_notification_title))
-            .setContentText(content)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(content))
+            .setContentText(collapsed)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(content)
+                    .setSummaryText(fallback)
+            )
             .setContentIntent(topicPendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
