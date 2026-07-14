@@ -68,7 +68,7 @@
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.MinimalReader.BottomSheetDialog</item>
     </style>
 
-    <style name="DayNightAppTheme.MinimalReader.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.MinimalReader.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/minimal_reader_card_background</item>
         <item name="colorAccent">@color/minimal_reader_colorAccent</item>
         <item name="colorPrimary">@color/minimal_reader_link_color</item>

@@ -63,7 +63,7 @@
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.RosePine.BottomSheetDialog</item>
     </style>
 
-    <style name="DayNightAppTheme.RosePine.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.RosePine.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/rose_pine_card_background</item>
         <item name="colorAccent">@color/rose_pine_colorAccent</item>
         <item name="colorPrimary">@color/rose_pine_link_color</item>

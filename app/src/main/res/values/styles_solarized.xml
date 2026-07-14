@@ -63,7 +63,7 @@
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Solarized.BottomSheetDialog</item>
     </style>
 
-    <style name="DayNightAppTheme.Solarized.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.Solarized.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/solarized_card_background</item>
         <item name="colorAccent">@color/solarized_colorAccent</item>
         <item name="colorPrimary">@color/solarized_link_color</item>

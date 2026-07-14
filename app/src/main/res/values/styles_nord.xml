@@ -63,7 +63,7 @@
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Nord.BottomSheetDialog</item>
     </style>
 
-    <style name="DayNightAppTheme.Nord.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.Nord.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/nord_card_background</item>
         <item name="colorAccent">@color/nord_colorAccent</item>
         <item name="colorPrimary">@color/nord_link_color</item>

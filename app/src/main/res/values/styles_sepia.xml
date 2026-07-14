@@ -63,7 +63,7 @@
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.SepiaReading.BottomSheetDialog</item>
     </style>
 
-    <style name="DayNightAppTheme.SepiaReading.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.SepiaReading.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/sepia_card_background</item>
         <item name="colorAccent">@color/sepia_colorAccent</item>
         <item name="colorPrimary">@color/sepia_link_color</item>

@@ -96,6 +96,10 @@
         намеренно НЕ пиним — наследуется M3 colorOnSurfaceVariant (динамический).
     -->
     <style name="ThemeOverlay.ForPDA.MaterialYouDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <!-- Overlay сидит ПОВЕРХ активити-темы, где shapeAppearanceMediumComponent = 16dp (карточки), и
+             диалог унаследовал бы её вместо M3-шных 28dp. Задаём форму явно, как в Base.ForPDA.Dialog. -->
+        <item name="android:dialogCornerRadius" tools:targetApi="p">28dp</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.ForPDA.Dialog</item>
         <item name="buttonBarButtonStyle">@style/Widget.ForPDA.DialogButton</item>
         <item name="textInputStyle">@style/DialogTextInputStyle</item>
     </style>
@@ -525,7 +529,28 @@
         <!-- <item name="android:windowTranslucentStatus">true</item>-->
     </style>
 
-    <style name="DayNightAppTheme.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <!--
+        Общая база ВСЕХ диалогов приложения (палитры наследуют её и лишь докладывают свои цвета).
+
+        Форма: диалог берёт скругление из shapeAppearanceMediumComponent, а приложение переопределяет
+        этот атрибут на 16dp ради карточек — из-за чего всплывающие диалоги (например «Плотность
+        интерфейса» из быстрых настроек) выходили почти прямоугольными вместо M3-шных 28dp. Поэтому
+        форму диалога задаём здесь явно, не трогая карточную.
+    -->
+    <style name="Base.ForPDA.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <!-- Скругление окна диалога рисует не shapeAppearance, а windowBackground → dialogCornerRadius. -->
+        <item name="android:dialogCornerRadius" tools:targetApi="p">28dp</item>
+        <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.ForPDA.Dialog</item>
+        <item name="buttonBarButtonStyle">@style/Widget.ForPDA.DialogButton</item>
+        <item name="textInputStyle">@style/DialogTextInputStyle</item>
+    </style>
+
+    <style name="ShapeAppearance.ForPDA.Dialog" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
+    </style>
+
+    <style name="DayNightAppTheme.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/light_card_background</item>
         <item name="colorAccent">@color/light_colorAccent</item>
         <item name="colorPrimary">@color/light_link_color</item>

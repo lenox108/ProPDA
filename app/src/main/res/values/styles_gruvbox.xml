@@ -63,7 +63,7 @@
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Gruvbox.BottomSheetDialog</item>
     </style>
 
-    <style name="DayNightAppTheme.Gruvbox.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.Gruvbox.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/gruvbox_card_background</item>
         <item name="colorAccent">@color/gruvbox_colorAccent</item>
         <item name="colorPrimary">@color/gruvbox_link_color</item>
