@@ -14,9 +14,12 @@ import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.FourPdaImageUrls
 import forpdateam.ru.forpda.common.Html
 import forpdateam.ru.forpda.common.LinkMovementMethod
+import forpdateam.ru.forpda.common.MimeTypeUtil
 import forpdateam.ru.forpda.common.SelectableLinkMovementMethod
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.presentation.ILinkHandler
+import java.net.URLDecoder
+import java.util.regex.Pattern
 
 /**
  * Turns the [BodyBlock] list produced by [PostBodyRenderer] into native views.
@@ -534,12 +537,42 @@ class BodyBlockViewFactory(
         // светлой карточке Sepia Blue (репорт: ник белым в цитировании) — тот же тракт, что и textView.
         val surface = blockFillColor(ctx)
         val content = TextView(ctx).apply {
-            setText(neutralizeLowContrastColors(surface, stripLinkColors(spanned(ctx, block.html))))
+            val text = neutralizeLowContrastColors(surface, stripLinkColors(spanned(ctx, block.html)))
+            setText(text)
             SmileProvider.startAnimations(this)
             textSize = scaledSp(15f)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             setLinkTextColor(contrastSafeLinkColor(ctx, surface))
             setLineSpacing(0f, 1.1f)
+            // Links inside a fallback block used to be DEAD: the panel rendered the URLSpans but never
+            // installed a movement method, so neither tap nor long-press reached a handler (report: the
+            // «Скачать: файл.zip» attachment and the «Теги:» links did nothing). 4pda wraps both in markup
+            // that lands here, so route them like the native text block — with attachment links going to the
+            // download callback, which carries the Activity context the «Способ загрузки» chooser needs.
+            val hasLinks = text is Spanned &&
+                    text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
+            if (hasLinks) {
+                movementMethod = SelectableLinkMovementMethod(object : LinkMovementMethod.ClickListener {
+                    override fun onClick(url: String): Boolean {
+                        val fileName = attachmentFileNameOrNull(url)
+                        if (fileName != null) {
+                            callbacks.onDownloadLinkTap(url, fileName)
+                            return true
+                        }
+                        return linkHandler.handle(url, null)
+                    }
+
+                    override fun onLongClick(url: String): Boolean {
+                        val fileName = attachmentFileNameOrNull(url)
+                        if (fileName != null) {
+                            callbacks.onDownloadLinkLongPress(url, fileName)
+                        } else {
+                            callbacks.onLinkLongClick(url)
+                        }
+                        return true
+                    }
+                })
+            }
         }
         panel.addView(content)
         val lp = LinearLayout.LayoutParams(
@@ -548,6 +581,22 @@ class BodyBlockViewFactory(
         ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
         panel.layoutParams = lp
         return panel
+    }
+
+    /**
+     * The file name if [url] is a 4pda post-attachment download (`/forum/dl/post/<id>/<name>`) that is NOT
+     * a viewable picture, else `null`. Pictures stay on the link-handler path so a tap still opens them in
+     * the image viewer instead of downloading them.
+     */
+    private fun attachmentFileNameOrNull(url: String): String? {
+        val matcher = ATTACHMENT_URL.matcher(url)
+        if (!matcher.find()) return null
+        val rawName = matcher.group(1) ?: return null
+        val extension = matcher.group(2) ?: return null
+        if (MimeTypeUtil.isImage(extension)) return null
+        // 4pda percent-encodes attachment names in CP1251; decoding keeps Cyrillic file names intact (the
+        // same treatment LinkHandler.handleMedia gives them).
+        return runCatching { URLDecoder.decode(rawName, "CP1251") }.getOrDefault(rawName)
     }
 
     /**
@@ -812,6 +861,10 @@ class BodyBlockViewFactory(
     }
 
     private companion object {
+        /** A 4pda post-attachment download link: `…/forum/dl/post/<id>/<name>.<ext>`. */
+        val ATTACHMENT_URL: Pattern =
+                Pattern.compile("""https?://4pda\.(?:to|ru)/forum/dl/post/\d+/(.+\.([^./?#]+))(?:[?#]|$)""")
+
         const val DEFAULT_IMAGE_RATIO = 0.66f
 
         /** Comfortable rendered height (dp) for a small linked «UPDATE / СКАЧАТЬ» button gif: at its

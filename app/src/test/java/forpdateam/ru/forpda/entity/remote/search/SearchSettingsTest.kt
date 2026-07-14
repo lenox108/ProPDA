@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.entity.remote.search
 
+import forpdateam.ru.forpda.common.Cp1251Codec
 import forpdateam.ru.forpda.presentation.search.forumSectionSearchUrl
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,5 +56,24 @@ class SearchSettingsTest {
 
         assertEquals("⚡ elektrik ⚡", settings.nick)
         assertEquals(598, settings.userId)
+    }
+
+    @Test
+    fun parseSettings_tagLinkQueryEncodedInUtf8_decodesToReadableText() {
+        // Ссылки-теги под постом 4pda отдаёт с query в UTF-8 (не в legacy cp1251). Жёсткий cp1251-декод
+        // превращал их в мохибейк («Р»РёС‚РµСЂР°С‚СѓСЂР°») и поиск по тегу ничего не находил.
+        val url = "https://4pda.to/forum/index.php?act=search&source=all&query=" +
+                "%D0%BB%D0%B8%D1%82%D0%B5%D1%80%D0%B0%D1%82%D1%83%D1%80%D0%B0"
+
+        assertEquals("литература", SearchSettings.parseSettings(url).query)
+    }
+
+    @Test
+    fun parseSettings_ownSearchQueryEncodedInCp1251_stillDecodes() {
+        // Свой поиск шлёт cp1251 — он обязан продолжать работать.
+        val url = "https://4pda.to/forum/index.php?act=search&source=all&query=" +
+                Cp1251Codec.encode("литература")
+
+        assertEquals("литература", SearchSettings.parseSettings(url).query)
     }
 }

@@ -92,11 +92,13 @@ class SearchSettings {
                     ARG_SOURCE -> settings.source = value
                     ARG_QUERY_FORUM -> {
                         settings.resourceType = RESOURCE_FORUM.first
-                        settings.query = Cp1251Codec.decode(value)
+                        // decodeAuto, не decode: свой поиск шлёт cp1251, а ссылки-теги под постом 4pda
+                        // отдаёт в UTF-8 — жёсткий cp1251-декод превращал тег в мохибейк.
+                        settings.query = Cp1251Codec.decodeAuto(value)
                     }
                     ARG_QUERY_NEWS -> {
                         settings.resourceType = RESOURCE_NEWS.first
-                        settings.query = Cp1251Codec.decode(value)
+                        settings.query = Cp1251Codec.decodeAuto(value)
                     }
                     ARG_NICK -> {
                         settings.nick = Cp1251Codec.decodeSmart(value)
