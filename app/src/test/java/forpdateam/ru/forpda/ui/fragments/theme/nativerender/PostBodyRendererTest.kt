@@ -387,6 +387,47 @@ class PostBodyRendererTest {
         assertTrue(blocks.none { it is BodyBlock.Image })
     }
 
+    @Test
+    fun wrapperHoldingProseAndAttachTable_keepsBothTexts() {
+        // Репорт (личка QMS): «если к сообщению прикреплена картинка и есть текст, то текст обрезается».
+        // 4pda кладёт attach-таблицу в ТОТ ЖЕ div, где набранный текст; узел классифицировался как
+        // ATTACHMENT по потомку, и выкусывание вложения выбрасывало всю прозу обёртки.
+        val blocks = renderer.render(
+                """<div>Текст до картинки
+                   <table id="ipb-attach-table-7"><tr><td><a href="/full.jpg"><img class="linked-image" src="/thumb.jpg"></a></td></tr></table>
+                   текст после картинки</div>"""
+        )
+        assertTrue(blocks.any { it is BodyBlock.Image && it.imageUrl == "/thumb.jpg" })
+        val texts = blocks.filterIsInstance<BodyBlock.Text>().joinToString(" ") { it.html }
+        assertTrue("текст ДО вложения должен остаться", texts.contains("Текст до картинки"))
+        assertTrue("текст ПОСЛЕ вложения должен остаться", texts.contains("текст после картинки"))
+    }
+
+    @Test
+    fun wrapperHoldingProseAndAttachAnchor_keepsProse() {
+        val blocks = renderer.render(
+                """<div class="attach">Подпись <a href="/f.jpg" class="ipb-attach attach-image"><img class="linked-image" src="/f.jpg"></a> хвост</div>"""
+        )
+        assertTrue(blocks.any { it is BodyBlock.Image && it.imageUrl == "/f.jpg" })
+        val texts = blocks.filterIsInstance<BodyBlock.Text>().joinToString(" ") { it.html }
+        assertTrue(texts.contains("Подпись"))
+        assertTrue(texts.contains("хвост"))
+    }
+
+    @Test
+    fun wrapperHoldingOnlyAttachment_staysASingleImageBlock() {
+        // Обёртка без собственного текста peel-ится как раньше — прежнее поведение не меняем.
+        val blocks = renderer.render(
+                """Before media
+                   <div class="attach"><a href="/f.jpg" class="ipb-attach attach-image"><img class="linked-image" src="/f.jpg"></a></div>
+                   After media"""
+        )
+        assertEquals(1, blocks.count { it is BodyBlock.Image })
+        val texts = blocks.filterIsInstance<BodyBlock.Text>().joinToString(" ") { it.html }
+        assertTrue(texts.contains("Before media"))
+        assertTrue(texts.contains("After media"))
+    }
+
     private fun fixture(name: String): String {
         val path = "renderer/postbody/$name"
         return javaClass.classLoader?.getResource(path)?.readText()
