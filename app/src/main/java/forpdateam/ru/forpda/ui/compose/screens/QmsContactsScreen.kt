@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,8 +24,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,6 +84,32 @@ fun QmsContactsScreen(
     val pageTone = remember(pageContext) {
         Color(pageContext.chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
     }
+
+    // Список приходит дважды: сначала кэш из БД (observeContacts), затем свежий с сервера
+    // (loadContacts в onResumeOrShow). Если во втором списке диалог всплыл на первое место
+    // (новое сообщение), LazyColumn по key удерживает якорь на ПРЕЖНЕМ первом элементе,
+    // и новый верхний контакт уезжает за верхнюю кромку — экран открывается со сдвигом
+    // на одну строку (жалоба «верхний контакт не видно, надо скроллить наверх»).
+    // Поэтому: если пользователь стоит у самого верха, при смене головы списка возвращаем
+    // его на позицию 0. Своё положение отслеживаем только по завершении скролла — тогда
+    // якорный ремап LazyColumn (он происходит без scroll in progress) не собьёт признак.
+    val listState = rememberLazyListState()
+    var pinnedToTop by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (!scrolling) {
+                pinnedToTop = listState.firstVisibleItemIndex == 0 &&
+                        listState.firstVisibleItemScrollOffset == 0
+            }
+        }
+    }
+    val headKey = state.contacts.firstOrNull()?.id
+    LaunchedEffect(headKey) {
+        // scrollToItem сбрасывает сохранённый key-якорь (lastKnownFirstItemKey), поэтому
+        // работает независимо от того, успел ли LazyColumn уже переизмериться.
+        if (headKey != null && pinnedToTop) listState.scrollToItem(0)
+    }
+
     Surface(
             modifier = modifier.fillMaxSize(),
             color = pageTone,
@@ -105,6 +136,7 @@ fun QmsContactsScreen(
                 }
             } else {
                 LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = bottomPadding),
                 ) {
