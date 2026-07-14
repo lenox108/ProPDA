@@ -490,6 +490,49 @@ class EventsRepository(
     }
 
     /**
+     * Пользователь открыл диалог QMS в приложении (или прочитал в нём новое сообщение) — значит,
+     * сервер уже пометил тред прочитанным. Снимаем уведомления этого треда сами, как [onTopicRead]
+     * делает для тем форума.
+     *
+     * Почему без этого уведомление «залипало» в шторке:
+     *  - READ-событие по WebSocket на СВОЁ же прочтение сервер шлёт не всегда (и не мгновенно);
+     *  - а если уведомление опубликовал фоновый [forpdateam.ru.forpda.notifications.EventsCheckWorker]
+     *    (приложение было закрыто), то в [eventsHistory] его вообще нет — [checkOldEvent] отменять
+     *    было нечего. Поэтому при пустой истории шлём синтетическое событие: ID уведомления
+     *    детерминирован (sourceId+source+type), так что этого достаточно, чтобы снять его.
+     *
+     * В отличие от [onTopicRead], READ в шину вкладок ([notifyTabs]) НЕ уходит: в QMS этот тип
+     * означает «собеседник прочитал мои сообщения» (открытый чат по нему гасит точки-статусы у
+     * СВОИХ сообщений), а здесь прочитал их я. Локальные счётчики диалога чинит
+     * [forpdateam.ru.forpda.model.repository.qms.QmsRepository.markThreadRead].
+     */
+    fun onQmsThreadRead(themeId: Int) {
+        if (themeId <= 0) return
+        val toRemove = mutableListOf<Int>()
+        val snapshot = synchronized(eventsHistory) { eventsHistory.entries.map { it.key to it.value } }
+        for ((key, event) in snapshot) {
+            if (event.fromQms() && event.sourceId == themeId) {
+                cancelEventFlow.tryEmit(event)
+                toRemove.add(key)
+            }
+        }
+        for (k in toRemove) {
+            eventsHistory.remove(k)
+        }
+        // Иначе повторный таймер агрегации восстановит только что снятое уведомление.
+        pendingEvents[NotificationEvent.Source.QMS]?.entries?.removeAll { (_, event) ->
+            event.sourceId == themeId
+        }
+        if (toRemove.isEmpty()) {
+            cancelEventFlow.tryEmit(NotificationEvent(
+                    type = NotificationEvent.Type.NEW,
+                    source = NotificationEvent.Source.QMS,
+                    sourceId = themeId
+            ))
+        }
+    }
+
+    /**
      * Если пользователь открыл тему из избранного/форума/ссылки и на странице уже есть пост,
      * где его упомянули, считаем это упоминание прочитанным без обязательного захода в раздел «Ответы».
      */

@@ -68,6 +68,15 @@ class QmsInteractor(
 
     suspend fun getChat(userId: Int, themeId: Int): QmsChatModel = qmsRepository.getChat(userId, themeId)
 
+    /**
+     * Диалог прочитан в приложении: обнуляем локальный счётчик непрочитанных и снимаем уведомления
+     * этого треда из шторки.
+     */
+    suspend fun markThreadRead(userId: Int, themeId: Int) {
+        qmsRepository.markThreadRead(userId, themeId)
+        eventsRepository.onQmsThreadRead(themeId)
+    }
+
     suspend fun loadChatThread(
             userId: Int,
             themeId: Int,
@@ -94,7 +103,7 @@ class QmsInteractor(
             is QmsChatLoadOutcome.Failure -> false
         }
         if (readOnServer) {
-            qmsRepository.markThreadRead(userId, themeId)
+            markThreadRead(userId, themeId)
         }
         outcome
     }
