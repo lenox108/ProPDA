@@ -91,6 +91,27 @@ class GithubReleaseSourceTest {
     }
 
     @Test
+    fun atomHtmlDescriptionIsConvertedToPlainText() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <title>v3.1.0</title>
+                <link rel="alternate" type="text/html" href="https://github.com/lenox108/ProPDA/releases/tag/v3.1.0"/>
+                <content type="html">&lt;h2&gt;Добавлено&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;&lt;strong&gt;Настраиваемое меню&lt;/strong&gt;: плитки &amp;amp; режим&lt;/li&gt;&lt;li&gt;«Закрепить в меню»&lt;/li&gt;&lt;/ul&gt;</content>
+              </entry>
+            </feed>
+        """.trimIndent()
+
+        val candidate = source.parseAtom(xml)!!
+
+        assertEquals(
+            "Добавлено\n• Настраиваемое меню: плитки & режим\n• «Закрепить в меню»",
+            candidate.description
+        )
+    }
+
+    @Test
     fun emptyAtomFeedReturnsNull() {
         val xml = """
             <?xml version="1.0" encoding="UTF-8"?>

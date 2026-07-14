@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.appupdates
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import org.jsoup.parser.Parser
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.IOException
@@ -148,7 +149,9 @@ open class GithubReleaseSource @Inject constructor() {
         return Candidate(
             version = version,
             url = releaseUrl,
-            description = content?.takeIf { it.isNotBlank() },
+            // <content> в releases.atom — это уже отрендеренный HTML тела релиза,
+            // а не markdown, поэтому его нельзя показывать как есть.
+            description = content?.let { htmlToPlainText(it) }?.takeIf { it.isNotBlank() },
             // Atom-фид не содержит ссылок на ассеты. Но имя APK у релизов ProPDA
             // строго по шаблону `ProPDA-<x.y.z>.apk`, а download-URL детерминирован:
             // .../releases/download/<tag>/<file>. Тег берём из ссылки записи
@@ -170,6 +173,35 @@ open class GithubReleaseSource @Inject constructor() {
         val fileName = "$APK_ASSET_PREFIX$version.apk"
         val url = "https://github.com/$OWNER/$REPO/releases/download/$tag/$fileName"
         return listOf(DownloadLink(url = url, fileName = fileName, sizeBytes = null))
+    }
+
+    /**
+     * Разворачивает HTML релиз-нотов в plain-text для уведомления: блочные теги →
+     * переводы строк, `<li>` → маркер списка, остальные теги вырезаются, сущности
+     * (`&amp;`, `&#39;`, `&nbsp;`) декодируются. Результат обрезается до
+     * [MAX_DESCRIPTION_CHARS] — BigTextStyle всё равно не покажет больше.
+     */
+    fun htmlToPlainText(html: String): String {
+        val withBreaks = html
+            .replace(Regex("(?is)<(script|style)[^>]*>.*?</\\1>"), "")
+            .replace(Regex("(?i)<br\\s*/?>"), "\n")
+            .replace(Regex("(?i)<li[^>]*>"), "\n• ")
+            .replace(Regex("(?i)</(p|div|li|ul|ol|h[1-6]|tr|pre|blockquote)\\s*>"), "\n")
+            .replace(Regex("(?i)<(p|div|h[1-6]|tr|pre|blockquote)[^>]*>"), "\n")
+            .replace(Regex("(?s)<[^>]*>"), "")
+
+        val text = Parser.unescapeEntities(withBreaks, false)
+            .replace('\u00A0', ' ')
+            .lines()
+            .joinToString("\n") { it.trim() }
+            // Пустая строка перед пунктом списка не нужна (заголовок → сразу список),
+            // между абзацами/секциями оставляем максимум одну.
+            .replace(Regex("\n{2,}(?=• )"), "\n")
+            .replace(Regex("\n{3,}"), "\n\n")
+            .trim()
+
+        return if (text.length <= MAX_DESCRIPTION_CHARS) text
+        else text.take(MAX_DESCRIPTION_CHARS).trimEnd() + "…"
     }
 
     /**
@@ -231,5 +263,8 @@ open class GithubReleaseSource @Inject constructor() {
         // Соглашение об имени APK-ассета релизов: `ProPDA-<x.y.z>.apk`.
         private const val APK_ASSET_PREFIX = "ProPDA-"
         private const val USER_AGENT = "ProPDA-AppUpdateChecker"
+        // BigTextStyle обрезает длинный текст сам; ограничиваем, чтобы не таскать
+        // килобайты релиз-нотов в Notification-бандле.
+        private const val MAX_DESCRIPTION_CHARS = 1200
     }
 }
