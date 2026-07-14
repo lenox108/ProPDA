@@ -54,6 +54,7 @@ class OtherViewModel @Inject constructor(
         private val otherPreferencesHolder: OtherPreferencesHolder,
         private val menuShortcutsRepository: MenuShortcutsRepository,
         private val historyRepository: HistoryRepository,
+        private val readBoundaryStore: forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore,
         private val linkHandler: ILinkHandler
 ) : BaseViewModel() {
 
@@ -242,9 +243,32 @@ class OtherViewModel @Inject constructor(
         }
     }
 
+    /**
+     * «Продолжить чтение» = сесть ровно туда, где пользователь остановился, а не «открыть тему».
+     *
+     * Раньше строка отдавала URL из истории в [linkHandler] — обычное открытие темы с источником
+     * "link" и без хинтов списка. Дальше всё решала настройка «Открытие темы»: FIRST_PAGE сажал на
+     * страницу 1, LAST_UNREAD уходил в серверный getnewpost (а 4PDA метит страницы прочитанными по
+     * факту GET, так что якорь уезжал на чужой пост). Отсюда и жалоба «перескакивает».
+     *
+     * Теперь берём клиентскую границу прочитанного ([TopicReadBoundaryStore] — наибольший пост,
+     * реально побывавший во вьюпорте) и открываем findpost прямо на неё: резолвер видит явный пост
+     * (EXPLICIT_POST) и не подменяет якорь настройкой. Границы нет (тема из старой истории, кэш не
+     * прогрет) — честный фолбэк на прежнее поведение.
+     */
     fun onContinueClick(item: HistoryItem) {
         val url = item.url ?: return
-        linkHandler.handle(url, router)
+        val topicId = item.id
+        val boundaryPostId = if (topicId > 0) readBoundaryStore.lastSeenPostId(topicId) else 0
+        if (topicId > 0 && boundaryPostId > 0) {
+            router.navigateTo(Screen.Theme().apply {
+                themeUrl = "https://4pda.to/forum/index.php?showtopic=$topicId&view=findpost&p=$boundaryPostId"
+                topicOpenSource = "history"
+                screenTitle = item.title
+            })
+            return
+        }
+        linkHandler.handle(url, router, mapOf(Screen.ARG_TITLE to item.title.orEmpty()))
     }
 
     private fun resolveBottomNavDuplicateIds(): Set<Int> {
