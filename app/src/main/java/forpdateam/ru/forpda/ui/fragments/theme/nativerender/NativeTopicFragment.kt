@@ -97,7 +97,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var navigationUseCase: forpdateam.ru.forpda.model.interactors.theme.ThemeNavigationUseCase
 
-    /** For the «Создать заметку» post-menu action (parity with the WebView createNote). */
+    /** For the «Создать закладку» post-menu action (parity with the WebView createNote). */
     @Inject
     lateinit var notesRepository: forpdateam.ru.forpda.model.repository.note.NotesRepository
 
@@ -494,6 +494,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 markVisiblePostsRead()
                 maybeMarkTopicReadAtEnd()
                 updateBarCurrentPageFromScroll()
+                updateBottomPaginationBarOffset()
                 updateFabOnScroll(dy)
                 if (smartNavMenu?.isShowing() == true) smartNavMenu?.dismiss()
             }
@@ -527,6 +528,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // мелькнувшей точки (recordSeen назад не откатывается) — источник «пропускаются непрочитанные».
                 if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
                     recordReadBoundaryAtRest()
+                    // Settled: re-check «низ ли это» (a fling can stop without a final onScrolled frame).
+                    updateBottomPaginationBarOffset()
                 }
             }
         })
@@ -1269,6 +1272,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     add("Добавить в избранное" to { showAddToFavoritesDialog() })
                 }
             }
+            // «В закладки»: сохранить тему в Закладки (тот же диалог с папкой, что и в QMS).
+            if (pageTopicId > 0) {
+                add("В закладки" to { createNoteForTopic() })
+            }
             add("Скопировать ссылку" to {
                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as? android.content.ClipboardManager
@@ -1660,6 +1667,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             private var downX = 0f
             private var downY = 0f
             private var claimed = false
+            /** Set once this gesture has done real vertical work — the finger is scrolling, so page swipes
+             *  stay disarmed until it lifts, no matter how the pointer drifts sideways afterwards. */
+            private var verticalLocked = false
+            /** Largest vertical excursion from the down point seen SO FAR in this gesture. A plain
+             *  `e.y - downY` cancels itself out when you scroll down and back up, which made an up-down
+             *  scroll with a little sideways drift satisfy the `|dx| > |dy|` test and flip the page. */
+            private var maxAbsDy = 0f
 
             override fun onInterceptTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent): Boolean {
                 // Page swipes are a CLASSIC-only navigation (the setting itself says «доступно только в
@@ -1669,20 +1683,36 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 when (e.actionMasked) {
                     android.view.MotionEvent.ACTION_DOWN -> {
                         downX = e.x; downY = e.y; claimed = false
+                        maxAbsDy = 0f
+                        // Finger landing on a list that is still gliding = a catch-the-fling scroll, never a swipe.
+                        verticalLocked = rv.scrollState !=
+                                androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE
                     }
                     android.view.MotionEvent.ACTION_MOVE -> {
                         val dx = e.x - downX
                         val dy = e.y - downY
+                        maxAbsDy = kotlin.math.max(maxAbsDy, kotlin.math.abs(dy))
+                        // Once the finger has scrolled past the slop, this gesture belongs to the list. Latch it:
+                        // a later sideways drift (or a scroll back to the start, which zeroes `dy`) must not
+                        // resurrect the page swipe. Fixes «скроллю вверх-вниз — листает страницу».
+                        if (!claimed && maxAbsDy > touchSlop) {
+                            if (!verticalLocked) {
+                                verticalLocked = true
+                                updateRefreshGesture() // undo the pre-empt below; this is a scroll after all
+                            }
+                            return false
+                        }
+                        if (verticalLocked) return false
                         // Horizontal intent detected EARLY (lower bar than the claim below): pre-empt the parent
                         // SwipeRefreshLayout, whose dy>touchSlop threshold otherwise wins the race and steals a
                         // left/right page swipe started near the TOP (where pull-to-refresh is armed). Restored on
                         // UP/CANCEL. Fixes «свайп страницы вверху темы не срабатывает — ловит обновление сверху».
                         if (!claimed && kotlin.math.abs(dx) > touchSlop &&
-                                kotlin.math.abs(dx) > kotlin.math.abs(dy) && refreshLayout.isEnabled) {
+                                kotlin.math.abs(dx) > maxAbsDy && refreshLayout.isEnabled) {
                             refreshLayout.isEnabled = false
                         }
-                        if (!claimed && kotlin.math.abs(dx) > touchSlop * 2 &&
-                                kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.5f) {
+                        if (!claimed && kotlin.math.abs(dx) > touchSlop * 3 &&
+                                kotlin.math.abs(dx) > maxAbsDy * 2f) {
                             claimed = true
                             return true // steal the gesture → child gets CANCEL (no link tap / scroll)
                         }
@@ -2445,7 +2475,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // «Профиль автора» intentionally omitted — that action is reached by tapping the avatar
             // (onAvatarClick), so it would be a redundant row here.
             if (item.canReport) add("Пожаловаться" to { tryReportPost(item) })
-            add("Создать заметку" to { createNoteForPost(item) })
+            add("Создать закладку" to { createNoteForPost(item) })
             if (item.canEdit) add("Изменить" to { onEdit(item) })
             if (item.canDelete) add("Удалить" to { onDelete(item) })
         }
@@ -2523,7 +2553,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         onQuoteSelection(item, text)
     }
 
-    /** «Создать заметку»: open the note-create dialog pre-filled with this post's title/link (parity with
+    /** «Создать закладку»: open the note-create dialog pre-filled with this post's title/link (parity with
      *  the WebView createNote). */
     private fun createNoteForPost(item: NativePostItem) {
         val themeTitle = arguments?.getString(TabFragment.ARG_TITLE).orEmpty()
@@ -2531,6 +2561,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val url = "https://4pda.to/forum/index.php?s=&showtopic=${item.topicId}&view=findpost&p=${item.postId}"
         forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
                 .showAddNoteDialog(requireContext(), title, url, notesRepository)
+    }
+
+    /** «В закладки» из меню темы: диалог создания закладки, предзаполненный названием и ссылкой темы. */
+    private fun createNoteForTopic() {
+        if (pageTopicId <= 0) return
+        val topicTitle = getTitle().trim().ifEmpty {
+            arguments?.getString(TabFragment.ARG_TITLE).orEmpty().trim()
+        }
+        val url = "https://4pda.to/forum/index.php?showtopic=$pageTopicId"
+        forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
+                .showCreateBookmarkDialog(requireContext(), topicTitle, url, notesRepository)
     }
 
     /** Avatar tap → user menu (parity with the WebView showUserMenu), rendered as a clean M3 popup. */
@@ -2813,6 +2854,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Match the POST-CARD colour so the bottom bar blends with the content above — no visible seam,
         // like the WebView's on-page bottom pagination.
         val (bar, label) = buildPaginationRow()
+        // Parked below the fold from birth: [updateBottomPaginationBarOffset] slides it up as the list nears the
+        // end of the page, so it must never start at translationY=0 on top of the posts.
+        bar.visibility = View.GONE
+        bar.translationY = 52 * resources.displayMetrics.density
         coordinatorLayout.addView(bar, androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams(
                 androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.MATCH_PARENT,
                 androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams.WRAP_CONTENT,
@@ -3011,19 +3056,69 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Top-toolbar subtitle mirrors the page position — digits only, no «Страница … из …» text
         // (parity with the WebView toolbar: «1348 / 1349»).
         setSubtitle(if (total > 1) "$barCurrentPage / $total" else null)
-        // The bottom pagination bar belongs to CLASSIC reading mode only; HYBRID (default) uses
-        // continuous infinite scroll with no bar. Also hidden while the reply editor is open.
-        paginationBar?.let { bar ->
-            val show = isClassicMode() && panels.hasBottom && total > 1 && !editorOpen
-            bar.visibility = if (show) View.VISIBLE else View.GONE
-            // Reserve bottom room: always the bottom-nav chrome (so the last post clears the tab bar) plus a
-            // breathing gap ([bottomRestGapPx], so the last card's border isn't flush/clipped), plus the
-            // pagination bar's own height when it is shown (CLASSIC). clipToPadding=false keeps the scroll
-            // edge-to-edge; this only affects the resting/bottom-aligned position.
-            // Bottom padding = MEASURED chrome overlap + pagination bar + breathing gap (see
-            // [applyListBottomPadding]) — device-agnostic whether or not the host inset the container.
-            applyListBottomPadding()
+        // The bottom pagination bar belongs to CLASSIC reading mode only; HYBRID (default) uses continuous
+        // infinite scroll with no bar. Also gone while the reply editor is open. When it IS enabled it lives
+        // permanently below the end of the page and rides in with the scroll — see
+        // [updateBottomPaginationBarOffset]. Bottom room for it is reserved for the whole session (chrome
+        // overlap + bar height + breathing gap — see [applyListBottomPadding]), so it never covers the last
+        // post and never reflows the list.
+        updateBottomPaginationBarOffset()
+        applyListBottomPadding()
+    }
+
+    /**
+     * Bottom pagination bar = «панель страниц снизу»: it always EXISTS, parked just below the end of the page
+     * exactly like the WebView's in-page panel was. It is not toggled and never animated — its position is a
+     * pure function of how far the list still has to scroll, so it rides in under the finger and parks above
+     * the bottom-nav chrome when the last post is fully reached (the same «follows the scroll offset» model the
+     * toolbar + top pagination get for free from AppBarLayout's scroll flags).
+     *
+     * translationY = px still left to scroll, clamped to the bar's height: > barHeight of content below → the
+     * bar sits entirely off-screen; 0 left → fully parked. No visibility flip means no state to get stuck in,
+     * which is what made a very slow scroll sometimes never reveal it, and no animator means no lag.
+     *
+     * The list's bottom padding permanently reserves the bar's height ([classicPaginationBarPadPx]) plus the
+     * chrome overlap and the breathing gap, so the bar can never cover the last post at ANY offset — the post's
+     * bottom edge stays above the bar's top edge the whole way in.
+     */
+    private fun updateBottomPaginationBarOffset() {
+        val bar = paginationBar ?: return
+        val enabled = pagination.isInitialised && isClassicMode() && pagination.totalPages > 1 &&
+                messagePanel?.visibility != View.VISIBLE &&
+                mainPreferencesHolder.getTopicPaginationPanels().hasBottom &&
+                loadedItems.isNotEmpty()
+        if (!enabled) {
+            bar.visibility = View.GONE
+            return
         }
+        bar.visibility = View.VISIBLE
+        val height = bar.height
+        if (height <= 0) {
+            // Not measured yet (first layout pass) — park it off-screen on a guess and re-run once it has a
+            // height, otherwise it would flash at translationY=0 over the posts.
+            bar.translationY = 52 * resources.displayMetrics.density
+            bar.post { if (view != null) updateBottomPaginationBarOffset() }
+            return
+        }
+        bar.translationY = distanceToListBottomPx().coerceIn(0, height).toFloat()
+    }
+
+    /**
+     * Pixels the list still has to travel before the last post rests at the bottom of the padded viewport.
+     *
+     * Geometry, not [RecyclerView.canScrollVertically]: with variable-height posts the scroll range is an
+     * ESTIMATE that can still claim headroom at the true end (that is why the bar sometimes refused to show
+     * on a slow scroll). When the last item isn't even bound we are far from the end — report a distance big
+     * enough to keep the bar parked off-screen.
+     */
+    private fun distanceToListBottomPx(): Int {
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return Int.MAX_VALUE
+        val count = recyclerView.adapter?.itemCount ?: 0
+        if (count == 0) return Int.MAX_VALUE
+        if (lm.findLastVisibleItemPosition() != count - 1) return Int.MAX_VALUE
+        val lastView = lm.findViewByPosition(count - 1) ?: return Int.MAX_VALUE
+        val viewportBottom = recyclerView.height - recyclerView.paddingBottom
+        return (lastView.bottom - viewportBottom).coerceAtLeast(0)
     }
 
     /**
@@ -3863,6 +3958,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Both are idempotent, so a settled layout produces no further work.
         applyListBottomPadding()
         maintainBottomPin()
+        // The content height moves under us too (enrichment, images, spoilers) — «низ ли это» must follow it,
+        // and no scroll event fires for a layout-driven change. Idempotent: a no-op once the state matches.
+        updateBottomPaginationBarOffset()
     }
 
     private fun maintainBottomPin() {
@@ -4258,8 +4356,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         /** Font-size pref value that maps to textScale 1.0 (matches the WebView default defaultFontSize). */
         const val REFERENCE_FONT_SIZE = 16f
 
-        /** Minimum horizontal travel (dp) for a page-swipe drag to register on release. */
-        const val SWIPE_MIN_DISTANCE_DP = 80f
+        /** Minimum horizontal travel (dp) for a page-swipe drag to register on release. Deliberately far
+         *  above the claim threshold: a short lateral wobble during a vertical scroll must never turn a page. */
+        const val SWIPE_MIN_DISTANCE_DP = 110f
 
         /** Per-frame scroll delta (px) beyond which the FAB direction arrow flips. */
         const val SCROLL_HIDE_THRESHOLD = 8
