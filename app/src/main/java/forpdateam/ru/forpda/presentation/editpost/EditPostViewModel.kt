@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.HashSet
 import java.util.concurrent.TimeoutException
@@ -73,6 +74,21 @@ class EditPostViewModel @Inject constructor(
     private val _uiEvents = MutableSharedFlow<EditPostUiEvent>()
     val uiEvents: SharedFlow<EditPostUiEvent> = _uiEvents.asSharedFlow()
 
+    /**
+     * SharedFlow без replay молча роняет событие, если подписчиков ещё нет.
+     * [start] вызывается из onViewCreated, а collect стартует только с onStart
+     * (repeatOnLifecycle(STARTED)); scope работает на Main.immediate, поэтому первый эмит
+     * выполнялся синхронно и терялся. Симптом: вложения, переданные из компактной панели темы
+     * в полноэкранный редактор, не доезжали до панелей (текст выживал отдельным путём —
+     * pendingInitialMessage, вложения приходят только из ShowForm).
+     */
+    private suspend fun emitEvent(event: EditPostUiEvent) {
+        if (_uiEvents.subscriptionCount.value == 0) {
+            _uiEvents.subscriptionCount.first { it > 0 }
+        }
+        _uiEvents.emit(event)
+    }
+
     fun attachMessageSource(source: (() -> String)?) {
         messageFromView = source
     }
@@ -97,7 +113,7 @@ class EditPostViewModel @Inject constructor(
         if (postForm.type == EditPostForm.TYPE_EDIT_POST) {
             if (postForm.postId <= 0) {
                 Timber.e("TYPE_EDIT_POST has invalid post id, skip load")
-                scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+                scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
                 return
             }
             val snap = editorRepository.snapshotWarmEdit(postForm.postId)
@@ -111,11 +127,11 @@ class EditPostViewModel @Inject constructor(
                 applyEditLoadMerge()
                 Timber.d("warm snapshot postId=${postForm.postId} attachReady=${snap.attachments != null}")
             } else {
-                scope.launch { _uiEvents.emit(EditPostUiEvent.ShowEditLoadPlaceholder) }
+                scope.launch { emitEvent(EditPostUiEvent.ShowEditLoadPlaceholder) }
             }
             loadForm(keepWarmPrefill = snap != null)
         } else {
-            scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+            scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
         }
     }
 
@@ -137,7 +153,7 @@ class EditPostViewModel @Inject constructor(
                 )
                 errorHandler.handle(TimeoutException("Загрузка формы редактирования"))
                 postForm.message = ""
-                scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+                scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
             }
         }
     }
@@ -183,7 +199,7 @@ class EditPostViewModel @Inject constructor(
                     mapped.anchorPostId = postForm.postId.toString()
                     themeTemplate.mapEntity(mapped)
                 }
-                scope.launch { _uiEvents.emit(EditPostUiEvent.OnPostSend(mapped, postForm)) }
+                scope.launch { emitEvent(EditPostUiEvent.OnPostSend(mapped, postForm)) }
             }.onFailure {
                 errorHandler.handle(it)
             }
@@ -218,14 +234,14 @@ class EditPostViewModel @Inject constructor(
                     Timber.e(e, "applyEditLoadMerge failed")
                     errorHandler.handle(e)
                     postForm.message = ""
-                    scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+                    scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
                 }
             } catch (e: Throwable) {
                 cancelEditLoadSafetyTimeout()
                 Timber.e(e, "loadForm error")
                 errorHandler.handle(e)
                 postForm.message = ""
-                scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+                scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
             }
         }
     }
@@ -251,7 +267,7 @@ class EditPostViewModel @Inject constructor(
 
         if (form.errorCode != EditPostForm.ERROR_NONE) {
             postForm.errorCode = form.errorCode
-            scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+            scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
             return
         }
 
@@ -285,7 +301,7 @@ class EditPostViewModel @Inject constructor(
             editSessionBaselineAttachmentIds =
                     postForm.attachments.mapNotNull { it.id.takeIf { id -> id > 0 } }.toSet()
         }
-        scope.launch { _uiEvents.emit(EditPostUiEvent.ShowForm(postForm)) }
+        scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
     }
 
     private fun mergeAttachmentIdsFromPostText(form: EditPostForm) {
@@ -341,7 +357,7 @@ class EditPostViewModel @Inject constructor(
                                 postForm.attachments.add(item)
                             }
                         }
-                        scope.launch { _uiEvents.emit(EditPostUiEvent.OnUploadFiles(merged)) }
+                        scope.launch { emitEvent(EditPostUiEvent.OnUploadFiles(merged)) }
                     }
                     .onFailure { errorHandler.handle(it) }
         }
@@ -383,23 +399,23 @@ class EditPostViewModel @Inject constructor(
     fun deleteFiles(items: List<AttachmentItem>) {
         scope.launch {
             runCatching { editorRepository.deleteFiles(postForm.postId, items) }
-                    .onSuccess { scope.launch { _uiEvents.emit(EditPostUiEvent.OnDeleteFiles(it)) } }
+                    .onSuccess { scope.launch { emitEvent(EditPostUiEvent.OnDeleteFiles(it)) } }
                     .onFailure { errorHandler.handle(it) }
-            scope.launch { _uiEvents.emit(EditPostUiEvent.OnAttachmentDeleteProgressFinished) }
+            scope.launch { emitEvent(EditPostUiEvent.OnAttachmentDeleteProgressFinished) }
         }
     }
 
     fun onSendClick() {
         if (postForm.type == EditPostForm.TYPE_EDIT_POST) {
-            scope.launch { _uiEvents.emit(EditPostUiEvent.ShowReasonDialog(postForm)) }
+            scope.launch { emitEvent(EditPostUiEvent.ShowReasonDialog(postForm)) }
         } else {
-            scope.launch { _uiEvents.emit(EditPostUiEvent.SendMessage) }
+            scope.launch { emitEvent(EditPostUiEvent.SendMessage) }
         }
     }
 
     fun onReasonEdit(reason: String) {
         postForm.editReason = reason
-        scope.launch { _uiEvents.emit(EditPostUiEvent.SendMessage) }
+        scope.launch { emitEvent(EditPostUiEvent.SendMessage) }
     }
 
     fun exit() {
