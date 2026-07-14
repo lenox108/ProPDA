@@ -63,7 +63,7 @@
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.GreenCare.BottomSheetDialog</item>
     </style>
 
-    <style name="DayNightAppTheme.GreenCare.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.GreenCare.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/green_care_card_background</item>
         <item name="colorAccent">@color/green_care_colorAccent</item>
         <item name="colorPrimary">@color/green_care_link_color</item>

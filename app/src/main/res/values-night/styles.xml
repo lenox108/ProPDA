@@ -130,7 +130,7 @@
     </style>
 
     <!-- colorPrimary у тёмной темы #212121 — текст кнопок AlertDialog сливался с фоном карточки -->
-    <style name="DayNightAppTheme.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/dark_card_background</item>
         <item name="colorAccent">@color/dark_link_color</item>
         <item name="colorPrimary">@color/dark_link_color</item>

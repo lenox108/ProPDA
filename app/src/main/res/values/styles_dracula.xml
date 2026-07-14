@@ -63,7 +63,7 @@
         <item name="bottomSheetDialogTheme">@style/DayNightAppTheme.Dracula.BottomSheetDialog</item>
     </style>
 
-    <style name="DayNightAppTheme.Dracula.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
+    <style name="DayNightAppTheme.Dracula.Dialog" parent="Base.ForPDA.Dialog">
         <item name="android:colorBackground">@color/dracula_card_background</item>
         <item name="colorAccent">@color/dracula_colorAccent</item>
         <item name="colorPrimary">@color/dracula_link_color</item>
