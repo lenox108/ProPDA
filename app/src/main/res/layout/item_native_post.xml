@@ -67,10 +67,15 @@
 
             <!-- Avatar with the reputation number overlaid as a badge (parity with WebView .reputation).
                  clipChildren=false so the badge (which hangs off the avatar corner via negative margins)
-                 is drawn in full instead of having its lower edge clipped. -->
+                 is drawn in full instead of having its lower edge clipped.
+                 layout_gravity=center_vertical: the avatar is shorter than the nick/group/count column,
+                 so with the header's top gravity it hugged the card's upper edge. Centring it against the
+                 text column makes the header symmetric; the child gravity wins over the parent's, so this
+                 holds in every density. -->
             <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
                 android:clipChildren="false"
                 android:clipToPadding="false">
 
