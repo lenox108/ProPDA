@@ -6,7 +6,6 @@ import android.view.View
 import android.widget.RelativeLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updateLayoutParams
 import forpdateam.ru.forpda.ui.DimensionsProvider
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
 import kotlin.math.max
@@ -59,10 +58,16 @@ class QmsChatImeInsetsController(
         } else {
             0
         }
-        messagePanelHost.updateLayoutParams<RelativeLayout.LayoutParams> {
-            if (this.bottomMargin != bottomMargin) {
-                this.bottomMargin = bottomMargin
-            }
+        // NEVER re-assign layoutParams unconditionally here: `View.setLayoutParams` always calls
+        // requestLayout(), and this method is also driven by an OnGlobalLayoutListener — so an
+        // unconditional assignment made every layout pass schedule the next one, i.e. the chat screen
+        // ran a full measure/layout traversal on EVERY frame for as long as it was open. That storm is
+        // what made text selection lag and the selection handles / floating toolbar jitter (the editor
+        // repositions them on each layout). Mutate + assign only when the margin actually changes.
+        val lp = messagePanelHost.layoutParams as? RelativeLayout.LayoutParams ?: return
+        if (lp.bottomMargin != bottomMargin) {
+            lp.bottomMargin = bottomMargin
+            messagePanelHost.layoutParams = lp
         }
     }
 
