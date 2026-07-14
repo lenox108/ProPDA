@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -20,6 +21,10 @@
         android:textStyle="bold"
         tools:text="Быстрые настройки" />
 
+    <!--
+        textColor из colorAccent, а не из темы: Material3 TextButton красит текст в colorPrimary,
+        который в светлой теме приложения белый (@color/light_colorPrimary) — кнопки пропадали.
+    -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/blockHeaderConfigure"
         style="@style/Widget.Material3.Button.TextButton"
@@ -27,7 +32,9 @@
         android:layout_height="wrap_content"
         android:minWidth="0dp"
         android:text="@string/other_menu_block_configure"
+        android:textColor="?attr/colorAccent"
         android:visibility="gone"
+        app:rippleColor="?attr/colorAccent"
         tools:visibility="visible" />
 
     <com.google.android.material.button.MaterialButton
@@ -37,6 +44,8 @@
         android:layout_height="wrap_content"
         android:minWidth="0dp"
         android:text="@string/other_menu_block_hide"
+        android:textColor="?attr/colorAccent"
         android:visibility="gone"
+        app:rippleColor="?attr/colorAccent"
         tools:visibility="visible" />
 </LinearLayout>
