@@ -107,7 +107,18 @@ class PostBodyRenderer {
             val complexKind = complexKindOf(node)
             if (complexKind != null) {
                 flushInline()
-                blocks.addAll(nativeOrFallback(node as Element, complexKind))
+                val element = node as Element
+                if (wrapsProseAroundComplexBlock(element)) {
+                    // The node is not itself the complex block — it merely WRAPS one, together with prose
+                    // (4pda puts an attach table / `a.ipb-attach` right inside the div that also holds the
+                    // typed text, most visibly in QMS messages). Peeling the whole node natively keeps only
+                    // the attachment and silently drops that prose — the reported «текст обрезается, если к
+                    // сообщению прикреплена картинка». Segment the wrapper's children instead: the text
+                    // survives as its own block and the complex descendant is peeled at its own level.
+                    blocks.addAll(renderNodes(element.childNodes()))
+                } else {
+                    blocks.addAll(nativeOrFallback(element, complexKind))
+                }
             } else if (containsContentImage(node)) {
                 // The inline flow carries a CONTENT <img> (banner / preview / animated «UPDATE» gif). Html.fromHtml
                 // has no ImageGetter, so an inline image would be silently DROPPED — peel each one into its own
@@ -417,6 +428,18 @@ class PostBodyRenderer {
         // A complex descendant? Classify by the first one found (document order).
         val descendant = node.selectFirst(COMPLEX_SELECTOR) ?: return null
         return selfKind(descendant) ?: BodyBlock.WebFallback.Kind.UNKNOWN
+    }
+
+    /**
+     * True when [el] is NOT itself a complex block but wraps one together with visible prose, so peeling it
+     * as a single block would throw that prose away. Whitespace-only wrappers (`<div class="attach">` holding
+     * nothing but the attach anchor) stay on the peel path, keeping the existing single-block behaviour.
+     */
+    private fun wrapsProseAroundComplexBlock(el: Element): Boolean {
+        if (selfKind(el) != null) return false
+        val stripped = el.clone()
+        stripped.select(COMPLEX_SELECTOR).forEach { it.remove() }
+        return stripped.text().isNotBlank()
     }
 
     /** Classifies [el] itself (not its descendants); `null` if [el] is not a complex block. */
