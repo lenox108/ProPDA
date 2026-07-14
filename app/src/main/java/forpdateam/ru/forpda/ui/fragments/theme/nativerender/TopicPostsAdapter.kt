@@ -242,6 +242,28 @@ class TopicPostsAdapter(
         /** The post currently bound to this holder — the owner of whatever body views are on screen. */
         private var boundItem: NativePostItem? = null
 
+        /**
+         * Action-row / post-count icons, already tinted and sized, keyed by drawable res + pixel size.
+         * They used to be re-inflated (`getDrawable().mutate()`) on EVERY bind — three to four decodes per
+         * post, on the UI thread, during a fling. The icons are theme- and density-derived, and both a theme
+         * switch and a density change go through paths that discard the holders, so a per-holder cache never
+         * serves a stale tint. Per-HOLDER (not static) because a compound drawable carries its own bounds
+         * and must not be shared between two views that are on screen at once.
+         */
+        private val iconCache = HashMap<Long, android.graphics.drawable.Drawable>()
+
+        private fun tintedIcon(iconRes: Int, sizePx: Int, tint: Int): android.graphics.drawable.Drawable? {
+            val key = (iconRes.toLong() shl 32) or (sizePx.toLong() and 0xFFFFFFFFL)
+            iconCache[key]?.let { return it }
+            val icon = androidx.core.content.ContextCompat.getDrawable(itemView.context, iconRes)
+                    ?.mutate()?.apply {
+                        setTint(tint)
+                        setBounds(0, 0, sizePx, sizePx)
+                    } ?: return null
+            iconCache[key] = icon
+            return icon
+        }
+
         /** Shared body renderer; block actions are re-routed to the post that owns the visible views. */
         private val blockFactory = BodyBlockViewFactory(
                 linkHandler,
@@ -650,12 +672,10 @@ class TopicPostsAdapter(
             // so the only change on enrichment is the number fading in (no jump).
             postCount.visibility = if (count == null) View.INVISIBLE else View.VISIBLE
             postCount.text = count?.toString() ?: "0"
-            val icon = androidx.core.content.ContextCompat.getDrawable(
-                    itemView.context, R.drawable.ic_post_count)?.mutate()?.apply {
-                setTint(itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
-                val s = (13 * itemView.resources.displayMetrics.density).toInt()
-                setBounds(0, 0, s, s)
-            }
+            val icon = tintedIcon(
+                    R.drawable.ic_post_count,
+                    (13 * itemView.resources.displayMetrics.density).toInt(),
+                    itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
             postCount.setCompoundDrawables(icon, null, null, null)
         }
 
@@ -744,11 +764,7 @@ class TopicPostsAdapter(
                     setTypeface(typeface, Typeface.BOLD)
                     setTextColor(accent)
                 }
-                val icon = androidx.core.content.ContextCompat.getDrawable(ctx, iconRes)?.mutate()?.apply {
-                    setTint(iconTint)
-                    val s = ((if (superCompact) 16 else 18) * dm.density).toInt()
-                    setBounds(0, 0, s, s)
-                }
+                val icon = tintedIcon(iconRes, ((if (superCompact) 16 else 18) * dm.density).toInt(), iconTint)
                 setCompoundDrawables(icon, null, null, null)
                 compoundDrawablePadding = (4 * dm.density).toInt()
                 val padH = (8 * dm.density).toInt()

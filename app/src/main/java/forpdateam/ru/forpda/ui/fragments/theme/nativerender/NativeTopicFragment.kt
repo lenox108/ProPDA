@@ -31,6 +31,7 @@ import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -1976,6 +1977,28 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (item.pageDividerLabel == label) item else item.copy(pageDividerLabel = label)
         }
         if (commit != null) postsAdapter.submitList(list, commit) else postsAdapter.submitList(list)
+        prewarmBodyMarkup(list)
+    }
+
+    /**
+     * Parse the submitted posts' markup into the renderer's span cache OFF the main thread, so the bind
+     * that eventually shows a post finds its spans ready instead of running a full `Html.fromHtml` parse
+     * inside the frame (measured: 2–22 ms per post on the UI thread, the main source of the «микролаги и
+     * поддёргивания» on a fast fling).
+     *
+     * Fire-and-forget on the fragment's lifecycle scope: it is a pure cache warm-up, so a cancelled or
+     * lost run costs nothing but the old behaviour (the bind parses it itself). Already-cached bodies are
+     * skipped, so re-submits (enrichment merge, page prepend, divider relabel) do no work.
+     */
+    private fun prewarmBodyMarkup(items: List<NativePostItem>) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            withContext(Dispatchers.Default) {
+                for (item in items) {
+                    if (!isActive) return@withContext
+                    BodyBlockViewFactory.prewarm(item.blocks)
+                }
+            }
+        }
     }
 
     /**
