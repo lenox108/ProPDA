@@ -15,7 +15,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import forpdateam.ru.forpda.common.FilePickHelper
 import forpdateam.ru.forpda.common.TopicOpenListHints
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
+import forpdateam.ru.forpda.common.dedupeAttachmentsById
+import forpdateam.ru.forpda.common.mergeAttachmentIdsFromPostText
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
+import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
@@ -2456,7 +2459,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     override fun onEdit(item: NativePostItem) {
         viewLifecycleOwner.lifecycleScope.launch {
             val form = withContext(Dispatchers.IO) {
-                runCatching { editPostApi.loadForm(item.postId) }
+                runCatching {
+                    val loaded = editPostApi.loadForm(item.postId)
+                    // Страница правки отдаёт список вложений скриптом, поэтому в её HTML их обычно нет:
+                    // спрашиваем attach init отдельно (как полноэкранный редактор), а что не отдал и он —
+                    // достаём из BBCode поста. Без этого панель открывалась пустой, а сохранение уходило с
+                    // пустым `file-list` и отвязывало файлы от поста.
+                    if (loaded.errorCode == EditPostForm.ERROR_NONE && loaded.attachments.isEmpty()) {
+                        runCatching { editPostApi.loadEditAttachments(item.postId) }
+                                .getOrNull()
+                                ?.let { loaded.attachments.addAll(it) }
+                    }
+                    loaded
+                }
             }.getOrNull()
             if (view == null) return@launch
             if (form == null || form.errorCode == forpdateam.ru.forpda.entity.remote.editpost.EditPostForm.ERROR_NO_PERMISSION) {
@@ -2467,16 +2482,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // Without type=EDIT + postId the submit goes out as CODE=03 with no `p`, so IPB creates a NEW
             // post instead of editing (баг «вместо правки добавляется второе сообщение»). Populate them from
             // the tapped post + current page context, exactly like the WebView editor's arguments do.
-            form.type = forpdateam.ru.forpda.entity.remote.editpost.EditPostForm.TYPE_EDIT_POST
+            form.type = EditPostForm.TYPE_EDIT_POST
             form.postId = item.postId
             form.forumId = pageForumId
             form.topicId = pageTopicId
             form.st = pageSt
+            mergeAttachmentIdsFromPostText(form)
+            dedupeAttachmentsById(form)
             editingForm = form
             val panel = messagePanel ?: return@launch
             panel.setText(form.message)
             messagePanelDraftMirror = form.message.orEmpty()
-            form.attachments.takeIf { it.isNotEmpty() }?.let { attachmentsPopup?.setAttachments(it) }
+            // Всегда переустанавливаем список: иначе вложения предыдущего черновика/правки остаются в
+            // панели и уезжают в `file-list` чужого поста.
+            attachmentsPopup?.setAttachments(form.attachments)
             showMessagePanel(showKeyboard = true)
         }
     }
