@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceGroup
 import androidx.preference.PreferenceCategory
@@ -14,12 +15,14 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.PreferenceGroupAdapter
 import androidx.preference.PreferenceViewHolder
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.dp2
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
 import forpdateam.ru.forpda.ui.views.dialog.applyCompactWidthAnimated
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 
 /**
  * Created by radiationx on 24.09.17.
@@ -47,11 +50,18 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
     }
 
     /**
-     * Диалоги настроек (ListPreference и пр.) создаёт фреймворк androidx.preference — они идут мимо
-     * нашего showWithStyledButtons, поэтому раздувались на ~весь экран. Ужимаем их ширину тем же
-     * механизмом (замер контента → фиксированная ширина окна), что и ручные диалоги.
+     * Диалоги настроек создаёт фреймворк androidx.preference — через AppCompat AlertDialog.Builder,
+     * мимо MaterialAlertDialogBuilder. Такой диалог не получает ни M3-формы (прямые углы), ни наших
+     * цветов кнопок/шрифта — он выпадает из общего стандарта остальных диалогов приложения.
+     *
+     * Поэтому ListPreference (единственный диалоговый тип в наших preferences) показываем сами —
+     * тем же путём, что и ручные пикеры: MaterialAlertDialogBuilder + showWithStyledButtons.
+     * Значение пишем через callChangeListener → setValue, чтобы OnPreferenceChangeListener'ы
+     * экранов (сводки, рестарт темы и пр.) отрабатывали ровно как раньше.
      */
     override fun onDisplayPreferenceDialog(preference: Preference) {
+        if (preference is ListPreference && showMaterialListPreferenceDialog(preference)) return
+
         super.onDisplayPreferenceDialog(preference)
         val fm = parentFragmentManager
         fm.executePendingTransactions()
@@ -61,6 +71,28 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
             if (alert.isShowing) alert.applyCompactWidthAnimated()
             else alert.setOnShowListener { alert.applyCompactWidthAnimated() }
         }
+    }
+
+    /** @return false, если данных не хватает (пустые entries) — тогда отдаём диалог фреймворку. */
+    private fun showMaterialListPreferenceDialog(preference: ListPreference): Boolean {
+        val entries = preference.entries ?: return false
+        val values = preference.entryValues ?: return false
+        if (entries.isEmpty() || entries.size != values.size) return false
+
+        val checked = preference.value?.let { current -> values.indexOfFirst { it == current } } ?: -1
+
+        MaterialAlertDialogBuilder(requireContext())
+                .setTitle(preference.dialogTitle ?: preference.title)
+                .setSingleChoiceItems(entries, checked) { dialog, which ->
+                    val picked = values[which].toString()
+                    if (picked != preference.value && preference.callChangeListener(picked)) {
+                        preference.value = picked
+                    }
+                    dialog.dismiss()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .showWithStyledButtons()
+        return true
     }
 
     override fun onCreateAdapter(preferenceScreen: PreferenceScreen): RecyclerView.Adapter<*> {
