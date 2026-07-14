@@ -27,8 +27,6 @@ class ForumTreeRecyclerAdapter(
     private var rootForum: ForumItemTree? = null
     private val expandedIds = mutableSetOf<Int>()
     private val rows = mutableListOf<ForumItemTree>()
-    /** Глубина в дереве (0 = прямые дети корня), не поле level из кэша — так соседи не «наезжают» при кривом level. */
-    private val rowDepths = mutableListOf<Int>()
 
     fun submit(root: ForumItemTree, state: State? = null) {
         rootForum = root
@@ -51,18 +49,16 @@ class ForumTreeRecyclerAdapter(
 
     private fun rebuildRows() {
         rows.clear()
-        rowDepths.clear()
         val root = rootForum ?: return
-        fun walk(n: ForumItemTree, depth: Int) {
+        fun walk(n: ForumItemTree) {
             n.forums?.forEach { child ->
                 rows.add(child)
-                rowDepths.add(depth)
                 if (!child.forums.isNullOrEmpty() && expandedIds.contains(child.id)) {
-                    walk(child, depth + 1)
+                    walk(child)
                 }
             }
         }
-        walk(root, 0)
+        walk(root)
     }
 
     private fun toggleExpanded(id: Int) {
@@ -99,14 +95,12 @@ class ForumTreeRecyclerAdapter(
 
     private fun dispatchRebuild() {
         val oldRows = ArrayList(rows)
-        val oldDepths = ArrayList(rowDepths)
         rebuildRows()
         DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize() = oldRows.size
             override fun getNewListSize() = rows.size
             override fun areItemsTheSame(o: Int, n: Int) = oldRows[o].id == rows[n].id
-            override fun areContentsTheSame(o: Int, n: Int) =
-                oldRows[o].id == rows[n].id && oldDepths[o] == rowDepths[n]
+            override fun areContentsTheSame(o: Int, n: Int) = oldRows[o].id == rows[n].id
         }).dispatchUpdatesTo(this)
     }
 
@@ -118,8 +112,6 @@ class ForumTreeRecyclerAdapter(
     override fun onBindViewHolder(holder: VH, position: Int) {
         val item = rows[position]
         val ctx = holder.itemView.context
-        val step = ctx.resources.getDimensionPixelSize(R.dimen.forum_tree_level_indent)
-        val level = rowDepths[position].coerceAtLeast(0)
         if (holder.itemView.layoutParams == null) {
             holder.itemView.layoutParams = RecyclerView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -141,7 +133,8 @@ class ForumTreeRecyclerAdapter(
                 ensureSelectableForeground = true
         )
 
-        val titlePadH = ctx.resources.getDimensionPixelSize(R.dimen.content_padding_horizontal) + level * step
+        // Отступ заголовка одинаков на всех уровнях: подкатегории выравниваются с корневыми разделами.
+        val titlePadH = ctx.resources.getDimensionPixelSize(R.dimen.content_padding_horizontal)
         holder.binding.forumItemTitle.setPaddingRelative(titlePadH, 0, 0, 0)
         holder.binding.forumItemTitle.updateLayoutParams<ViewGroup.MarginLayoutParams> {
             topMargin = density.itemVerticalPaddingPx
