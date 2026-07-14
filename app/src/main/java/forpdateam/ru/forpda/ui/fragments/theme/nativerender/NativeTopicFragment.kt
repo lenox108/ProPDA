@@ -66,6 +66,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var linkHandler: ILinkHandler
 
+    @Inject
+    lateinit var menuShortcutPinner: forpdateam.ru.forpda.model.interactors.other.MenuShortcutPinner
+
     /** Browser/download entry point — powers the image and download-link long-press menus. */
     @Inject
     lateinit var systemLinkHandler: forpdateam.ru.forpda.presentation.ISystemLinkHandler
@@ -1286,6 +1289,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // «В закладки»: сохранить тему в Закладки (тот же диалог с папкой, что и в QMS).
             if (pageTopicId > 0) {
                 add("В закладки" to { createNoteForTopic() })
+            }
+            if (pageTopicId > 0) {
+                add(getString(forpdateam.ru.forpda.R.string.other_menu_pin_to_menu) to {
+                    menuShortcutPinner.pinTopic(pageTopicId, getTitle().trim())
+                    Toast.makeText(ctx, forpdateam.ru.forpda.R.string.other_menu_shortcut_added, Toast.LENGTH_SHORT).show()
+                })
             }
             add("Скопировать ссылку" to {
                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)

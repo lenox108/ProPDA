@@ -255,6 +255,9 @@ class SearchViewModel @Inject constructor(
         clipboardHelper.copyToClipboard(settings.toUrl())
     }
 
+    /** Название и ссылка для плитки «Закрепить в меню» (закрепляет фрагмент). */
+    fun shortcutTarget(): Pair<String, String> = settings.query to settings.toUrl()
+
     fun copyLink(item: IBaseForumPost) {
         val url = if (settings.resourceType.equals(SearchSettings.RESOURCE_NEWS.first)) {
             "https://4pda.to/index.php?p=${item.id}"

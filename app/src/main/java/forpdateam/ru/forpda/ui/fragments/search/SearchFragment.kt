@@ -85,6 +85,7 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
     @Inject lateinit var linkHandler: ILinkHandler
     @Inject lateinit var mainPreferencesHolder: MainPreferencesHolder
     @Inject lateinit var otherPreferencesHolder: OtherPreferencesHolder
+    @Inject lateinit var menuShortcutPinner: forpdateam.ru.forpda.model.interactors.other.MenuShortcutPinner
     @Inject lateinit var router: TabRouter
     @Inject lateinit var systemLinkHandler: ISystemLinkHandler
     @Inject lateinit var notesRepository: NotesRepository
@@ -358,6 +359,17 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
         menu.add(R.string.copy_link)
                 .setOnMenuItemClickListener {
                     presenter.copyLink()
+                    false
+                }
+        menu.add(R.string.other_menu_pin_to_menu)
+                .setOnMenuItemClickListener {
+                    val (query, url) = presenter.shortcutTarget()
+                    menuShortcutPinner.pin(
+                            forpdateam.ru.forpda.entity.app.other.MenuShortcut.Type.SEARCH,
+                            query.ifBlank { getString(R.string.fragment_title_search) },
+                            url
+                    )
+                    showSnackbar(R.string.other_menu_shortcut_added)
                     false
                 }
         toolbar.inflateMenu(R.menu.qms_contacts_menu)

@@ -44,6 +44,7 @@ import javax.inject.Inject
 class QmsContactsFragment : RecyclerFragment() {
 
     @Inject lateinit var notesRepository: NotesRepository
+    @Inject lateinit var menuShortcutPinner: forpdateam.ru.forpda.model.interactors.other.MenuShortcutPinner
     private val dialogMenu = DynamicDialogMenu<QmsContactsFragment, QmsContact>()
 
     private val viewModel: QmsContactsViewModel by viewModels()
@@ -75,6 +76,10 @@ class QmsContactsFragment : RecyclerFragment() {
             addItem(getString(R.string.add_to_blacklist)) { _, data -> viewModel.blockUser(data) }
             addItem(getString(R.string.delete)) { _, data -> viewModel.deleteDialog(data.id) }
             addItem(getString(R.string.create_note)) { _, data -> viewModel.createNote(data) }
+            addItem(getString(R.string.other_menu_pin_to_menu)) { _, data ->
+                menuShortcutPinner.pinDialog(data.id, data.nick.orEmpty())
+                showSnackbar(R.string.other_menu_shortcut_added)
+            }
         }
 
         mountComposeList()
