@@ -111,14 +111,66 @@
                 android:layout_marginStart="10dp"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/native_post_nick"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textStyle="bold"
-                    android:textSize="15sp"
-                    android:textColor="?attr/colorOnSurface"
-                    tools:text="SnapshotUser" />
+                <!-- Nick row. In the CLASSIC header only the nick is visible here and the date lives in
+                     the right-hand column. In the MODERN header (theme.modern_post_header) the right
+                     column is GONE and the date + ⋮ move onto this row, beside the nick. ConstraintLayout
+                     (not LinearLayout) because the nick must hug the date on short nicks yet ellipsize —
+                     not push the date off-screen — on long ones: constrainedWidth + a packed, start-biased
+                     chain gives exactly that, while ⋮ stays pinned to the end. -->
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/native_post_nick_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <TextView
+                        android:id="@+id/native_post_nick"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:textStyle="bold"
+                        android:textSize="15sp"
+                        android:textColor="?attr/colorOnSurface"
+                        app:layout_constrainedWidth="true"
+                        app:layout_constraintHorizontal_bias="0"
+                        app:layout_constraintHorizontal_chainStyle="packed"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintEnd_toStartOf="@+id/native_post_date_inline"
+                        app:layout_constraintTop_toTopOf="parent"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        tools:text="SnapshotUser" />
+
+                    <!-- Relative date («17 ч.») — MODERN only, GONE in the classic header. -->
+                    <TextView
+                        android:id="@+id/native_post_date_inline"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:textSize="13sp"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:visibility="gone"
+                        app:layout_constraintStart_toEndOf="@+id/native_post_nick"
+                        app:layout_constraintEnd_toStartOf="@+id/native_post_menu_inline"
+                        app:layout_constraintBaseline_toBaselineOf="@+id/native_post_nick"
+                        tools:text="17 ч."
+                        tools:visibility="visible" />
+
+                    <!-- Post menu — MODERN only (the classic header has its own ⋮ in the right column). -->
+                    <ImageView
+                        android:id="@+id/native_post_menu_inline"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
+                        android:padding="4dp"
+                        android:contentDescription="@string/menu"
+                        android:src="@drawable/ic_more_vert"
+                        android:visibility="gone"
+                        app:tint="?attr/colorOnSurfaceVariant"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toTopOf="@+id/native_post_nick"
+                        app:layout_constraintBottom_toBottomOf="@+id/native_post_nick"
+                        tools:visibility="visible" />
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
 
                 <!-- Author group (tinted by server groupColor) — parity with WebView .group_text. -->
                 <TextView
@@ -145,8 +197,11 @@
                     tools:visibility="visible" />
             </LinearLayout>
 
-            <!-- Right column: date on top, then post number + three-dots menu (parity with WebView). -->
+            <!-- Right column (CLASSIC header): date on top, then post number + three-dots menu (parity
+                 with WebView). GONE under theme.modern_post_header — there the date and ⋮ live inline on
+                 the nick row instead. -->
             <LinearLayout
+                android:id="@+id/native_post_right_column"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"

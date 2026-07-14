@@ -80,6 +80,14 @@ class TopicPostsAdapter(
             val animatedSmiles: Boolean = true,
             /** «Плоские посты»: drop the post-card shadow+border and the quote/spoiler stroke. */
             val flatBlocks: Boolean = false,
+            /**
+             * «Современная шапка поста»: the date moves inline next to the nick (with ⋮ pinned to the end
+             * of that row) and is shown relative («17 ч.») instead of the server's full string. Off = the
+             * classic right-hand column with «20.05.26, 14:55». The two travel together on purpose: a full
+             * date inline eats the nick on narrow screens, and a relative date alone leaves the right
+             * column holding five characters.
+             */
+            val modernHeader: Boolean = false,
     )
 
     private var displaySettings = PostDisplaySettings()
@@ -197,6 +205,10 @@ class TopicPostsAdapter(
         private val postCount: TextView = itemView.findViewById(R.id.native_post_count)
         private val number: TextView = itemView.findViewById(R.id.native_post_number)
         private val menu: ImageView = itemView.findViewById(R.id.native_post_menu)
+        /** Modern-header twins of [date]/[menu], living on the nick row; GONE in the classic header. */
+        private val dateInline: TextView = itemView.findViewById(R.id.native_post_date_inline)
+        private val menuInline: ImageView = itemView.findViewById(R.id.native_post_menu_inline)
+        private val rightColumn: View = itemView.findViewById(R.id.native_post_right_column)
         private val body: LinearLayout = itemView.findViewById(R.id.native_post_body)
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
@@ -501,6 +513,12 @@ class TopicPostsAdapter(
          * header. Runs every bind, so recycled holders reset both ways.
          */
         private fun applyHeaderDensity(dm: android.util.DisplayMetrics) {
+            // «Современная шапка»: the date + ⋮ sit inline on the nick row and the whole right-hand column
+            // goes away. Both branches are set on every bind, so a recycled holder resets either way.
+            val modern = settings.modernHeader
+            rightColumn.visibility = if (modern) View.GONE else View.VISIBLE
+            dateInline.visibility = if (modern) View.VISIBLE else View.GONE
+            menuInline.visibility = if (modern) View.VISIBLE else View.GONE
             val superCompact =
                     settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
             val avatarPx = ((if (superCompact) 32f else 44f) * dm.density).toInt()
@@ -642,7 +660,9 @@ class TopicPostsAdapter(
                 meta.setTextColor(parseColor(item.groupColor)
                         ?: itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
             }
-            date.text = item.date?.takeIf { it.isNotBlank() }.orEmpty()
+            val raw = item.date?.takeIf { it.isNotBlank() }.orEmpty()
+            date.text = raw
+            dateInline.text = if (settings.modernHeader) PostDateFormatter.relative(raw) else raw
         }
 
         /** Reputation number overlaid on the avatar (parity with WebView .reputation). Tap → rep menu. */
@@ -681,7 +701,9 @@ class TopicPostsAdapter(
 
         /** Three-dots post menu (parity with WebView showPostMenu). */
         private fun bindPostMenu(item: NativePostItem) {
-            menu.setOnClickListener { actionListener.onPostMenu(item) }
+            val open = View.OnClickListener { actionListener.onPostMenu(item) }
+            menu.setOnClickListener(open)
+            menuInline.setOnClickListener(open)
         }
 
         private fun bindFooter(item: NativePostItem) {
