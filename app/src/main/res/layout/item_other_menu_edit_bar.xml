@@ -19,13 +19,19 @@
         android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="13sp" />
 
+    <!--
+        textColor/rippleColor принудительно из colorAccent: у Material3 TextButton текст берётся
+        из colorPrimary, а он в светлой теме приложения белый (@color/light_colorPrimary) —
+        кнопка становилась невидимой на светлом фоне.
+    -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/otherMenuEditReset"
         style="@style/Widget.Material3.Button.TextButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/other_menu_edit_reset"
-        app:strokeColor="?attr/colorAccent" />
+        android:textColor="?attr/colorAccent"
+        app:rippleColor="?attr/colorAccent" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/otherMenuEditDone"
