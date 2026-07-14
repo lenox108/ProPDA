@@ -100,6 +100,19 @@ class BodyBlockViewFactory(
         val galleryUrls = ArrayList<String>()
     }
 
+    /**
+     * Width cap, in px, for text blocks rendered into a container that measures itself by its CONTENT
+     * (a QMS chat bubble), or 0 for the post-card layout whose width is already fixed.
+     *
+     * A text block is added with MATCH_PARENT width, and a vertical `wrap_content` LinearLayout does not
+     * let a MATCH_PARENT child contribute its width — so a bubble holding an attachment took its width
+     * from the 150dp thumbnail, then re-measured the text into that narrow column WITHOUT recomputing the
+     * height it had already derived from the first, wider pass. The overflowing lines were clipped: the
+     * reported «если к сообщению прикреплена картинка и есть текст, то текст обрезается». With a positive
+     * cap the text is laid out WRAP_CONTENT (so it widens the bubble up to this limit) and nothing is cut.
+     */
+    var textBlockMaxWidthPx: Int = 0
+
     /** The surface the text in [scope]'s current block is drawn on (block override or post card). */
     private fun currentSurface(ctx: Context, scope: RenderScope): Int =
             scope.surfaceColorOverride ?: readingSurfaceColor(ctx)
@@ -637,6 +650,13 @@ class BodyBlockViewFactory(
 
     private fun textView(ctx: Context, text: CharSequence, scope: RenderScope): TextView {
         return TextView(ctx).apply {
+            if (textBlockMaxWidthPx > 0) {
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                )
+                maxWidth = textBlockMaxWidthPx
+            }
             val surface = currentSurface(ctx, scope)
             setText(highlightSearchMatches(ctx, neutralizeLowContrastColors(surface, stripLinkColors(text))))
             SmileProvider.startAnimations(this)

@@ -347,7 +347,15 @@ class PostBodyRenderer {
      * img width/height so the view reserves space and a late bitmap never slides the scroll anchor.
      */
     private fun extractAttachmentImages(element: Element): List<BodyBlock.Image> {
-        val imgs = element.select("img.attach, img.linked-image")
+        // A QMS attachment IS the <img class="ipb-attach attach-img"> itself — no wrapping table or
+        // anchor like a forum post has (verified against a live dialog). `select` only walks
+        // DESCENDANTS and only knew the post-side classes, so such a picture matched nothing here and
+        // fell through to the WebView fallback, which renders as an empty grey strip in the bubble.
+        val imgs = if (element.normalName() == "img") {
+            listOf(element)
+        } else {
+            element.select("img.attach, img.linked-image, img.attach-img, img.ipb-attach")
+        }
         return imgs.mapNotNull { img ->
             val src = firstNonBlank(
                 img.attr("src"),
