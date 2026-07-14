@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.notes.adapters
 
+import android.view.View
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.hannesdorfmann.adapterdelegates4.ListDelegationAdapter
@@ -17,9 +18,14 @@ class NotesAdapter(
         private val folderListener: NoteFolderAdapterDelegate.Listener,
         private val infoClickListener: (CloseableInfo) -> Unit,
         private val manualModeProvider: () -> Boolean = { false },
-        private val onStartDrag: (RecyclerView.ViewHolder) -> Unit = {}
+        private val onStartDrag: (RecyclerView.ViewHolder) -> Unit = {},
+        private val onMoreClick: (NoteItem, View) -> Unit = { _, _ -> }
 ) : ListDelegationAdapter<MutableList<ListItem>>() {
 
+    companion object {
+        /** Перерисовать только фон-плашку строки (форма зависит от соседей), не пересобирая её. */
+        const val PAYLOAD_PLATE = "plate"
+    }
 
     /**
      * The base [ListDelegationAdapter.items] is declared nullable, but we always
@@ -35,7 +41,7 @@ class NotesAdapter(
             addDelegate(DividerShadowItemDelegate())
             addDelegate(NoteSectionHeaderDelegate())
             addDelegate(NoteFolderAdapterDelegate(folderListener))
-            addDelegate(NoteAdapterDelegate(noteClickListener, manualModeProvider, onStartDrag))
+            addDelegate(NoteAdapterDelegate(noteClickListener, manualModeProvider, onStartDrag, onMoreClick))
             addDelegate(CloseableInfoDelegate(infoClickListener))
         }
     }
@@ -96,6 +102,12 @@ class NotesAdapter(
         if (from !in list.indices || to !in list.indices) return
         list.add(to, list.removeAt(from))
         notifyItemMoved(from, to)
+        // Углы плашки у первой/последней строки группы зависят от соседей, а notifyItemMoved
+        // соседей не перебиндит — освежаем их фон payload'ом (содержимое не трогаем, чтобы
+        // не сбить активный drag).
+        val start = minOf(from, to)
+        val count = maxOf(from, to) - start + 1
+        notifyItemRangeChanged(start, count, PAYLOAD_PLATE)
     }
 
     fun itemAt(position: Int): ListItem? = itemList.getOrNull(position)

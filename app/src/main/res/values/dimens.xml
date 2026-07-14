@@ -63,6 +63,15 @@
     <dimen name="list_news_title_text_size">19sp</dimen>
     <dimen name="list_topic_meta_text_size">14sp</dimen>
     <dimen name="list_topic_title_bottom_spacing">@dimen/dp4</dimen>
+
+    <!--
+        Закладки: строка плотнее строк избранного — в ней три уровня (заголовок, превью до
+        двух строк, дата), и «comfortable»-паддинг плотности (14dp) раздувал блок. Боковые
+        отступы остаются общими (list_row_padding_horizontal), меняется только вертикальный ритм.
+    -->
+    <dimen name="note_row_padding_vertical">@dimen/dp8</dimen>
+    <dimen name="note_row_line_spacing">@dimen/dp2</dimen>
+    <dimen name="note_folder_row_min_height">@dimen/dp48</dimen>
     <dimen name="list_topic_icon_size">16dp</dimen>
     <dimen name="list_topic_icons_padding_top">@dimen/dp2</dimen>
     <dimen name="list_topic_unread_dot_size">10dp</dimen>

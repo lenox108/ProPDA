@@ -26,14 +26,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.R
-import forpdateam.ru.forpda.ui.dp8
 import forpdateam.ru.forpda.common.FilePickHelper
 import forpdateam.ru.forpda.entity.app.notes.NoteFolder
 import forpdateam.ru.forpda.entity.app.notes.NoteItem
 import forpdateam.ru.forpda.entity.app.notes.NoteSortMode
 import forpdateam.ru.forpda.presentation.notes.NotesViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
-import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesFragment
 import forpdateam.ru.forpda.ui.fragments.notes.adapters.NoteFolderAdapterDelegate
 import forpdateam.ru.forpda.ui.fragments.notes.adapters.NotesAdapter
 import forpdateam.ru.forpda.ui.views.ContentController
@@ -118,7 +116,8 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
                 manualModeProvider = {
                     latestState.sortMode == NoteSortMode.MANUAL && !isSelectionMode && searchField == null
                 },
-                onStartDrag = { holder -> itemTouchHelper.startDrag(holder) }
+                onStartDrag = { holder -> itemTouchHelper.startDrag(holder) },
+                onMoreClick = { note, anchor -> showNoteActionsMenu(note, anchor) }
         )
         recyclerView.adapter = adapter
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
@@ -133,7 +132,8 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
         )
         itemTouchHelper.attachToRecyclerView(recyclerView)
         refreshLayout.setOnRefreshListener { viewModel.loadNotes() }
-        recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(dp8, false))
+        // Никаких декораторов-отступов: строки склеены в плашку (см. NotePlate.kt), зазор
+        // ставится только на границах группы — как в избранном/ответах/QMS.
         titlesWrapper.isClickable = false
         titlesWrapper.setOnClickListener(null)
 
@@ -175,9 +175,11 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
                     true
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        // Иконка фильтра, а не папки: папка в тулбаре означает «переместить в папку»
+        // (режим выбора), и одна и та же иконка на два разных действия путала.
         folderSelectMenuItem = menu
                 .add(R.string.note_select_folder)
-                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_folder))
+                .setIcon(requireContext().getVecDrawable(R.drawable.ic_toolbar_filter))
                 .setOnMenuItemClickListener {
                     showFolderSelectorPopup()
                     true
@@ -305,6 +307,44 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
 
     private fun showFolderSelectorPopup() {
         notesDialogs.showFolderSelectorPopup(toolbar, latestState.folders)
+    }
+
+    /**
+     * Меню действий одной закладки (кнопка ⋮ в строке). Раньше единственным способом
+     * перенести закладку в папку был режим выбора, а иконка папки в тулбаре при этом
+     * фильтрует список — из-за чего перенос было не найти.
+     */
+    private fun showNoteActionsMenu(note: NoteItem, anchor: View) {
+        androidx.appcompat.widget.PopupMenu(requireContext(), anchor).apply {
+            val targetFolder = note.folderId
+            // Закладка уже в папке — предлагаем и обратный путь «Без папки» одним тапом.
+            if (targetFolder != null) {
+                menu.add(R.string.note_move_out_of_folder).setOnMenuItemClickListener {
+                    viewModel.moveNoteToFolder(note.id, null)
+                    true
+                }
+            }
+            menu.add(R.string.note_move_to_folder).setOnMenuItemClickListener {
+                notesDialogs.showMoveToFolderDialog(note, latestState.folders)
+                true
+            }
+            menu.add(R.string.edit).setOnMenuItemClickListener {
+                viewModel.editNote(note)
+                true
+            }
+            menu.add(R.string.copy_link).setOnMenuItemClickListener {
+                viewModel.copyLink(note)
+                true
+            }
+            menu.add(R.string.note_select_bookmarks).setOnMenuItemClickListener {
+                enterSelectionMode(note.id)
+                true
+            }
+            menu.add(R.string.delete).setOnMenuItemClickListener {
+                notesDialogs.confirmDeleteSelectedNotes(listOf(note.id))
+                true
+            }
+        }.show()
     }
 
     private fun showSearch() {
@@ -501,6 +541,23 @@ class NotesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<NoteIt
         updateSelectionUi()
         bindNotes(latestState)
     }
+
+    // «Назад» сначала выходит из режима выбора (и из поиска), а не закрывает вкладку —
+    // как в избранном. Без этого выделенные закладки нельзя было снять жестом назад.
+    override fun onBackPressed(): Boolean {
+        if (isSelectionMode) {
+            clearSelection()
+            return true
+        }
+        if (searchField != null) {
+            hideSearch()
+            return true
+        }
+        return super.onBackPressed()
+    }
+
+    // Read-only зеркало onBackPressed (см. TabFragment.hasBackHandling): без сайд-эффектов.
+    override fun hasBackHandling(): Boolean = isSelectionMode || searchField != null
 
     private fun clearSelection() {
         if (!isSelectionMode && selectedNoteIds.isEmpty()) return

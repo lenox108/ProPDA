@@ -9,6 +9,9 @@ import com.hannesdorfmann.adapterdelegates4.AdapterDelegate
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.databinding.ItemNoteFolderBinding
 import forpdateam.ru.forpda.entity.app.notes.NoteFolder
+import forpdateam.ru.forpda.ui.ListPlateSegment
+import forpdateam.ru.forpda.ui.currentUiDensityValues
+import forpdateam.ru.forpda.ui.setTextSizePx
 import forpdateam.ru.forpda.ui.views.drawers.adapters.ListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.NoteFolderListItem
 
@@ -32,7 +35,7 @@ class NoteFolderAdapterDelegate(
 
     override fun onBindViewHolder(items: MutableList<ListItem>, position: Int, holder: RecyclerView.ViewHolder, payloads: MutableList<Any>) {
         val item = items[position] as NoteFolderListItem
-        (holder as ViewHolder).bind(item)
+        (holder as ViewHolder).bind(item, notePlateSegment(items, position))
     }
 
     private class ViewHolder(
@@ -51,8 +54,12 @@ class NoteFolderAdapterDelegate(
             }
         }
 
-        fun bind(item: NoteFolderListItem) {
+        fun bind(item: NoteFolderListItem, segment: ListPlateSegment) {
             currentItem = item
+            binding.root.applyNotePlate(segment)
+            val density = binding.root.context.currentUiDensityValues()
+            binding.itemTitle.setTextSizePx(density.titleTextSizePx)
+            binding.itemCount.setTextSizePx(density.subtitleTextSizePx)
             binding.itemTitle.text = item.folder.name
             binding.itemCount.text = binding.root.resources.getQuantityString(
                     R.plurals.note_bookmarks_count,

@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Заголовок секции: типографика и отступы как у секций избранного (topic_item_section.xml).
+    Боковой отступ там складывается из инсета плашки (list_plate_horizontal_inset, 16dp) и
+    паддинга строки (list_row_padding_horizontal, 16dp) — здесь это те же 32dp одним значением,
+    чтобы заголовок вставал ровно над текстом строк плашки.
+-->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/itemTitle"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingStart="@dimen/content_padding_horizontal"
-    android:paddingTop="@dimen/dp16"
-    android:paddingEnd="@dimen/content_padding_horizontal"
-    android:paddingBottom="@dimen/dp8"
+    android:paddingStart="@dimen/dp32"
+    android:paddingTop="@dimen/list_section_header_padding_top"
+    android:paddingEnd="@dimen/dp32"
+    android:paddingBottom="@dimen/list_section_header_padding_bottom"
+    android:textAllCaps="true"
     android:textColor="?attr/colorOnSurfaceVariant"
     android:textSize="@dimen/list_section_header_text_size"
-    android:textStyle="bold"
     tools:text="Папки" />
