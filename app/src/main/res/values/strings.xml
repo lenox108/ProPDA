@@ -908,6 +908,8 @@
     <string name="pref_summary_animated_smiles">Проигрывать анимацию смайлов в постах</string>
     <string name="pref_title_flat_posts">Посты без рамок</string>
     <string name="pref_summary_flat_posts">Без рамок и теней у карточек, цитат и спойлеров</string>
+    <string name="pref_title_modern_post_header">Современная дата поста</string>
+    <string name="pref_summary_modern_post_header">Дата в строку с ником и относительное время («17 ч.») вместо полной даты справа</string>
 
     <string name="pref_title_unread_top">Непрочитанные сверху</string>
     <string name="pref_title_show_dot">Индикатор новых сообщений</string>

@@ -45,6 +45,7 @@ class TopicDataStore(private val context: Context) {
         val CIRCLE_AVATARS = booleanPreferencesKey("circle_avatars")
         val ANIMATED_SMILES = booleanPreferencesKey("animated_smiles")
         val FLAT_POSTS = booleanPreferencesKey("flat_posts")
+        val MODERN_POST_HEADER = booleanPreferencesKey("modern_post_header")
         val ANCHOR_HISTORY = booleanPreferencesKey("anchor_history")
         val HAT_OPENED = booleanPreferencesKey("hat_opened")
         val FORUM_BLACKLIST = stringPreferencesKey("forum_blacklist")
@@ -78,6 +79,13 @@ class TopicDataStore(private val context: Context) {
                 preferences[PreferencesKeys.FLAT_POSTS]
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
                         .getBoolean(AppPreferences.Theme.FLAT_POSTS, false)
+            }, false)
+
+    fun observeModernPostHeaderFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.topicDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.MODERN_POST_HEADER]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Theme.MODERN_POST_HEADER, false)
             }, false)
 
     suspend fun getShowAvatars(): Boolean =
@@ -121,6 +129,15 @@ class TopicDataStore(private val context: Context) {
     }
 
     fun getFlatPostsImmediate(): Boolean = mirrorPrefs.getBoolean("flat_posts", false)
+
+    suspend fun setModernPostHeader(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.MODERN_POST_HEADER] = value
+        }
+        mirrorPrefs.edit().putBoolean("modern_post_header", value).apply()
+    }
+
+    fun getModernPostHeaderImmediate(): Boolean = mirrorPrefs.getBoolean("modern_post_header", false)
 
     suspend fun setAnchorHistory(value: Boolean) {
         safeEdit { preferences ->
