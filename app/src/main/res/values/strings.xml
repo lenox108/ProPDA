@@ -31,6 +31,43 @@
     <string name="bottom_nav_state_not_selected">Не выбрано</string>
     <string name="bottom_nav_toggle_open_tabs">Показать открытые вкладки</string>
     <string name="other_menu_edit_mode_state">Режим настройки меню</string>
+    <string name="other_menu_edit_bar_title">Перетаскивайте плитки между разделами</string>
+    <string name="other_menu_edit_done">Готово</string>
+    <string name="other_menu_edit_reset">Сбросить</string>
+    <string name="other_menu_drop_zone">Перетащите плитку сюда</string>
+    <string name="other_menu_layout_reset">Меню сброшено по умолчанию</string>
+    <string name="empty_string" translatable="false"></string>
+    <string name="other_menu_add_tile">Добавить</string>
+    <string name="other_menu_remove_shortcut">Удалить плитку</string>
+    <string name="other_menu_add_title">Что закрепить?</string>
+    <string name="other_menu_add_source_history">Тема из истории</string>
+    <string name="other_menu_add_source_search">Поисковый запрос</string>
+    <string name="other_menu_add_source_link">Ссылка 4PDA</string>
+    <string name="other_menu_add_history_title">Выберите тему</string>
+    <string name="other_menu_add_history_empty">История пуста</string>
+    <string name="other_menu_add_search_title">Поисковый запрос</string>
+    <string name="other_menu_add_search_hint">Что искать</string>
+    <string name="other_menu_add_link_title">Ссылка 4PDA</string>
+    <string name="other_menu_add_link_name_hint">Название плитки</string>
+    <string name="other_menu_add_link_url_hint">https://4pda.to/…</string>
+    <string name="other_menu_add_link_invalid">Нужна ссылка на 4pda.to</string>
+    <string name="other_menu_shortcut_added">Плитка добавлена</string>
+    <string name="other_menu_shortcut_removed">Плитка удалена</string>
+    <string name="other_menu_pin_to_menu">Закрепить в меню</string>
+    <string name="other_menu_section_continue">Продолжить чтение</string>
+    <string name="other_menu_section_quick_settings">Быстрые настройки</string>
+    <string name="other_menu_quick_theme">Тема</string>
+    <string name="other_menu_quick_palette">Палитра</string>
+    <string name="other_menu_quick_font">Шрифт</string>
+    <string name="other_menu_quick_accent">Акцент</string>
+    <string name="other_menu_quick_density">Плотность</string>
+    <string name="other_menu_quick_pagination">Панель страниц</string>
+    <string name="other_menu_quick_blacklist">ЧС</string>
+    <string name="other_menu_quick_settings_picker_title">Быстрые настройки</string>
+    <string name="other_menu_block_configure">Изменить</string>
+    <string name="other_menu_block_hide">Скрыть</string>
+    <string name="other_menu_block_show">Показать</string>
+    <string name="other_menu_block_hidden">Блок скрыт</string>
     <string name="topic_row_desc">%1$s. %2$s%3$sПоследнее сообщение: %4$s, %5$s</string>
     <string name="topic_unread_status">Есть новые сообщения. </string>
     <string name="topic_closed_status">Тема закрыта. </string>
@@ -334,13 +371,18 @@
     <string name="note_create_folder">Создать папку</string>
     <string name="note_folder_name">Название папки</string>
     <string name="note_folder_name_empty">Введите название папки</string>
-    <string name="note_select_folder">Выбрать папку</string>
+    <string name="note_select_folder">Фильтр по папке</string>
+    <string name="note_actions">Действия с закладкой</string>
+    <string name="note_move_out_of_folder">Убрать из папки</string>
     <string name="note_manage_folders">Управление папками</string>
     <string name="note_move_to_folder">Переместить в папку</string>
     <string name="note_rename_folder">Переименовать папку</string>
     <string name="note_delete_folder">Удалить папку</string>
     <string name="note_delete_folder_message">Удалить папку «%1$s»? Закладки из нее будут перемещены в «Без папки».</string>
     <string name="note_select_bookmarks">Выбрать</string>
+    <!-- Дата создания закладки в списке: %1$s — время (12:25). -->
+    <string name="note_date_today">Сегодня, %1$s</string>
+    <string name="note_date_yesterday">Вчера, %1$s</string>
     <string name="note_select_all_bookmarks">Выбрать все</string>
     <string name="note_clear_visible_selection">Снять выбор</string>
     <string name="note_selected_count">Выбрано: %1$d</string>
@@ -1035,6 +1077,7 @@
 
     <!-- Closeable info -->
     <string name="closeable_info_other_menu_drag">Вы можете поменять порядок пунктов меню, для этого зажмите пункт меню и перенесите на нужное место</string>
+    <string name="closeable_info_other_menu_customize">Зажмите любую плитку, чтобы настроить меню: перетаскивайте плитки между разделами, добавляйте свои — тему, диалог, поиск или ссылку, — и удаляйте лишние</string>
     <string name="closeable_info_notes_sync" translatable="false">Закладки не синхронизируются с сервером и хранятся только локально. Чтобы не потерять, экспортируйте их (троеточие в углу экрана).</string>
 
     <!-- Menu item -->

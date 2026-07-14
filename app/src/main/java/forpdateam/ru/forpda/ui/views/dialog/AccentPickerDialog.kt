@@ -264,7 +264,7 @@ object AccentPickerDialog {
                     onPick(selected, if (selected == AccentPalette.CUSTOM) selectedCustom else null, selectedStyle)
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showWithStyledButtons(compact = false)
     }
 
     /** Ползунок оттенка (0–360°) для произвольного seed + живое превью. */
@@ -300,6 +300,6 @@ object AccentPickerDialog {
                 .setView(container)
                 .setPositiveButton(android.R.string.ok) { _, _ -> onChosen(seedForHue(hue)) }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showWithStyledButtons(compact = false)
     }
 }

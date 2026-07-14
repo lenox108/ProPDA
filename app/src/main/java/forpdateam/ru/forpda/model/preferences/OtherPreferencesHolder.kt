@@ -2,9 +2,13 @@ package forpdateam.ru.forpda.model.preferences
 
 import android.content.Context
 import forpdateam.ru.forpda.model.interactors.other.MenuRepository
+import forpdateam.ru.forpda.entity.app.other.OtherMenuBlock
+import forpdateam.ru.forpda.entity.app.other.QuickSetting
 import forpdateam.ru.forpda.model.datastore.OtherDataStore
 import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuSection
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 class OtherPreferencesHolder(
         private val context: Context
@@ -55,6 +59,18 @@ class OtherPreferencesHolder(
 
     suspend fun getOtherMenuTileLayout(): Map<OtherMenuSection, List<Int>> =
             parseOtherMenuTileLayout(dataStore.otherMenuTileOrder.first())
+
+    fun observeOtherMenuQuickSettingsFlow(): Flow<List<QuickSetting>> =
+            dataStore.otherMenuQuickSettings.map { QuickSetting.parse(it) }
+
+    suspend fun setOtherMenuQuickSettings(items: List<QuickSetting>) =
+            dataStore.setOtherMenuQuickSettings(QuickSetting.encode(items))
+
+    fun observeOtherMenuHiddenBlocksFlow(): Flow<Set<OtherMenuBlock>> =
+            dataStore.otherMenuHiddenBlocks.map { OtherMenuBlock.parse(it) }
+
+    suspend fun setOtherMenuHiddenBlocks(items: Set<OtherMenuBlock>) =
+            dataStore.setOtherMenuHiddenBlocks(OtherMenuBlock.encode(items))
 
     fun encodeOtherMenuTileLayout(layout: Map<OtherMenuSection, List<Int>>): String =
             listOf(OtherMenuSection.QUICK, OtherMenuSection.PERSONAL, OtherMenuSection.TOOLS)

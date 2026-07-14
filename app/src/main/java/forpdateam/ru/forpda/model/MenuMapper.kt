@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.model
 
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.other.AppMenuItem
+import forpdateam.ru.forpda.entity.app.other.MenuShortcut
 import forpdateam.ru.forpda.model.interactors.other.MenuRepository
 import forpdateam.ru.forpda.ui.views.drawers.adapters.DrawerMenuItem
 
@@ -10,10 +11,25 @@ object MenuMapper {
     fun mapToDrawer(item: AppMenuItem): DrawerMenuItem = DrawerMenuItem(
             getTitle(item),
             getIcon(item),
-            item
+            item,
+            item.shortcut?.title
     )
 
-    fun getTitle(item: AppMenuItem): Int = when (item.id) {
+    private fun getShortcutIcon(type: MenuShortcut.Type): Int = when (type) {
+        MenuShortcut.Type.TOPIC -> R.drawable.ic_forum
+        MenuShortcut.Type.FORUM -> R.drawable.ic_forum_go_to_topics
+        MenuShortcut.Type.DIALOG -> R.drawable.ic_comment
+        MenuShortcut.Type.SEARCH -> R.drawable.ic_search
+        MenuShortcut.Type.PROFILE -> R.drawable.ic_account_circle
+        MenuShortcut.Type.LINK -> R.drawable.ic_link
+    }
+
+    fun getTitle(item: AppMenuItem): Int = when {
+        item.shortcut != null -> R.string.empty_string
+        else -> getBuiltInTitle(item.id)
+    }
+
+    private fun getBuiltInTitle(id: Int): Int = when (id) {
         MenuRepository.item_auth -> R.string.profile
         MenuRepository.item_article_list -> R.string.fragment_title_news_list
         MenuRepository.item_favorites -> R.string.fragment_title_favorite
@@ -32,7 +48,12 @@ object MenuMapper {
         else -> R.string.error
     }
 
-    fun getIcon(item: AppMenuItem): Int = when (item.id) {
+    fun getIcon(item: AppMenuItem): Int = when {
+        item.shortcut != null -> getShortcutIcon(item.shortcut.type)
+        else -> getBuiltInIcon(item.id)
+    }
+
+    private fun getBuiltInIcon(id: Int): Int = when (id) {
         MenuRepository.item_auth -> R.drawable.ic_account_circle
         MenuRepository.item_article_list -> R.drawable.ic_newspaper
         MenuRepository.item_favorites -> R.drawable.ic_star

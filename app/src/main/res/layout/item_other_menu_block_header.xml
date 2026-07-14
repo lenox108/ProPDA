@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/dp16"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingBottom="@dimen/dp8">
+
+    <TextView
+        android:id="@+id/blockHeaderTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textSize="@dimen/list_section_header_text_size"
+        android:textStyle="bold"
+        tools:text="Быстрые настройки" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/blockHeaderConfigure"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="0dp"
+        android:text="@string/other_menu_block_configure"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/blockHeaderVisibility"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="0dp"
+        android:text="@string/other_menu_block_hide"
+        android:visibility="gone"
+        tools:visibility="visible" />
+</LinearLayout>

@@ -51,6 +51,7 @@ class CloseableInfoDelegate(
 
         private fun getStringRes(item: CloseableInfo): Int = when (item.id) {
             CloseableInfoHolder.item_other_menu_drag -> R.string.closeable_info_other_menu_drag
+            CloseableInfoHolder.item_other_menu_customize -> R.string.closeable_info_other_menu_customize
             CloseableInfoHolder.item_notes_sync -> R.string.closeable_info_notes_sync
             else -> R.string.undefined
         }

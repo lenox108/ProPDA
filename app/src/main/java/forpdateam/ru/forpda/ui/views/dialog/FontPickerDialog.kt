@@ -104,6 +104,6 @@ object FontPickerDialog {
                 .setTitle(R.string.pref_title_app_font)
                 .setView(ScrollView(context).apply { addView(list) })
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showWithStyledButtons(compact = false)
     }
 }

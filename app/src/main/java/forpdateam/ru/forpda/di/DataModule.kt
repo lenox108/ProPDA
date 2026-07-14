@@ -293,6 +293,18 @@ object DataModule {
             listsPreferencesHolder: ListsPreferencesHolder
     ) = MenuRepository(preferences, authHolder, countersHolder, listsPreferencesHolder)
 
+    @Provides @Singleton
+    fun provideMenuShortcutsRepository(
+            @ApplicationContext context: Context
+    ) = forpdateam.ru.forpda.model.interactors.other.MenuShortcutsRepository(
+            forpdateam.ru.forpda.model.datastore.OtherDataStore(context)
+    )
+
+    @Provides @Singleton
+    fun provideMenuShortcutPinner(
+            repository: forpdateam.ru.forpda.model.interactors.other.MenuShortcutsRepository
+    ) = forpdateam.ru.forpda.model.interactors.other.MenuShortcutPinner(repository)
+
     // endregion
 
     // region Interactors

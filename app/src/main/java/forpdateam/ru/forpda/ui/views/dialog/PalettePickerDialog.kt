@@ -152,7 +152,7 @@ object PalettePickerDialog {
                 .setTitle(R.string.pref_title_ui_palette)
                 .setView(content)
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showWithStyledButtons(compact = false)
     }
 
     /** Достаточный ли цвет светлый, чтобы класть тёмный текст поверх. */

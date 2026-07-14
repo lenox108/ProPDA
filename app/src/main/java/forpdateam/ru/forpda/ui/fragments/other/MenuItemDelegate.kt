@@ -23,7 +23,8 @@ import forpdateam.ru.forpda.ui.views.drawers.adapters.MenuListItem
 class MenuItemDelegate(
         private val clickListener: (DrawerMenuItem) -> Unit,
         private val longClickListener: () -> Boolean,
-        private val isEditModeProvider: () -> Boolean
+        private val isEditModeProvider: () -> Boolean,
+        private val removeShortcutListener: (DrawerMenuItem) -> Unit
 ) : AdapterDelegate<MutableList<ListItem>>() {
 
     override fun isForViewType(items: MutableList<ListItem>, position: Int): Boolean
@@ -41,14 +42,15 @@ class MenuItemDelegate(
 
     override fun onCreateViewHolder(parent: ViewGroup): RecyclerView.ViewHolder {
         val binding = ItemOtherMenuTileBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return ViewHolder(binding, clickListener, longClickListener, isEditModeProvider)
+        return ViewHolder(binding, clickListener, longClickListener, isEditModeProvider, removeShortcutListener)
     }
 
     class ViewHolder(
             private val binding: ItemOtherMenuTileBinding,
             private val clickListener: (DrawerMenuItem) -> Unit,
             private val longClickListener: () -> Boolean,
-            private val isEditModeProvider: () -> Boolean
+            private val isEditModeProvider: () -> Boolean,
+            private val removeShortcutListener: (DrawerMenuItem) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private lateinit var currentItem: DrawerMenuItem
@@ -56,6 +58,7 @@ class MenuItemDelegate(
         init {
             binding.root.setOnClickListener { clickListener(currentItem) }
             binding.root.setOnLongClickListener { longClickListener() }
+            binding.otherMenuRemove.setOnClickListener { removeShortcutListener(currentItem) }
         }
 
         fun getItem() = currentItem
@@ -94,7 +97,7 @@ class MenuItemDelegate(
         private fun bindCounterAndTitle(item: DrawerMenuItem) {
             val ctx = binding.root.context
             val count = item.appItem.count
-            val title = ctx.getString(item.title)
+            val title = item.titleText ?: ctx.getString(item.title)
             if (count > 0) {
                 binding.otherMenuCounter.text = count.toString()
                 binding.otherMenuCounter.visibility = View.VISIBLE
@@ -114,6 +117,9 @@ class MenuItemDelegate(
 
         private fun applyEditMode(isEditMode: Boolean) {
             binding.root.isSelected = isEditMode
+            // Крестик — только у пользовательских плиток: штатные пункты меню не удаляются.
+            binding.otherMenuRemove.visibility =
+                    if (isEditMode && currentItem.appItem.shortcut != null) View.VISIBLE else View.GONE
             ViewCompat.setStateDescription(
                     binding.root,
                     if (isEditMode) binding.root.context.getString(R.string.other_menu_edit_mode_state) else null
