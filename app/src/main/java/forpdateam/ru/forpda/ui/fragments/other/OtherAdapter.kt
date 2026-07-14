@@ -124,6 +124,10 @@ class OtherAdapter(
         return stableIdFor(item)
     }
 
+    /** Where a continue-reading row sits in its plate group — the thing its background is cut from. */
+    private fun continuePlateRow(items: List<ListItem>, position: Int): OtherMenuPlateRow =
+            otherMenuPlateRow(items, position) { it is OtherMenuContinueListItem }
+
     private fun stableIdFor(item: ListItem): Long {
         // Keep IDs stable across updates to avoid RV rebinding "everything" (blink).
         return when (item) {
@@ -251,8 +255,16 @@ class OtherAdapter(
                         oldItem.item == newItem.item
                     oldItem is OtherMenuSectionListItem && newItem is OtherMenuSectionListItem ->
                         oldItem.section == newItem.section
+                    // A continue-reading row draws its plate background (rounded top / flat middle /
+                    // rounded bottom) from WHERE IT SITS in the group, and that is decided at bind time.
+                    // Comparing only the item made a row that merely CHANGED PLACES count as unchanged, so
+                    // RecyclerView moved the view without rebinding it and the row kept the corners of its
+                    // previous slot — the plate ended up with cut-off bottom corners (user report, the
+                    // «Продолжить чтение» block reorders whenever a topic is read). Treat the plate position
+                    // as part of the content so a reordered row is rebound.
                     oldItem is OtherMenuContinueListItem && newItem is OtherMenuContinueListItem ->
-                        oldItem.item == newItem.item
+                        oldItem.item == newItem.item &&
+                            continuePlateRow(oldList, o) == continuePlateRow(newList, n)
                     oldItem is OtherMenuHeaderListItem && newItem is OtherMenuHeaderListItem ->
                         oldItem.editMode == newItem.editMode &&
                             oldItem.hidden == newItem.hidden &&
