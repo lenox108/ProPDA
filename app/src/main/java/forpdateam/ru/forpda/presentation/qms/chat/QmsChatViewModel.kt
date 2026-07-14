@@ -98,6 +98,8 @@ class QmsChatViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var openTraceId: String = FpdaDebugLog.newTraceId()
     private var lastRealtimeMessageAtMs = 0L
+    /** Экран чата на переднем плане (между [onScreenVisible] и [onScreenHidden]). */
+    private var screenVisible = false
     /** Trace whose `render_visible` marker has already been logged (one per dialog open). */
     private var renderReportedForTrace: String? = null
 
@@ -820,6 +822,29 @@ class QmsChatViewModel @Inject constructor(
             if (result.isEmpty()) return
             data.messages.addAll(result)
             publishVisibleMessages(scrollToBottom = forceScroll)
+            // Сообщение пришло, пока диалог открыт на экране: пользователь видит его прямо сейчас,
+            // а пуш о нём уже успел уехать в шторку — снимаем.
+            if (screenVisible) {
+                dropThreadNotifications()
+            }
+        }
+    }
+
+    /** Экран чата стал видимым: всё, что в нём есть, пользователь читает — уведомлений быть не должно. */
+    fun onScreenVisible() {
+        screenVisible = true
+        dropThreadNotifications()
+    }
+
+    fun onScreenHidden() {
+        screenVisible = false
+    }
+
+    private fun dropThreadNotifications() {
+        if (themeId <= 0 || userId <= 0) return
+        scope.launch {
+            runCatching { qmsInteractor.markThreadRead(userId, themeId) }
+                    .onFailure { Timber.d(it, "QMS markThreadRead on screen visible failed") }
         }
     }
 

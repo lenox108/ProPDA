@@ -966,12 +966,14 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         if (::messagePanel.isInitialized) {
             messagePanel.onResume()
         }
+        presenter.onScreenVisible()
         presenter.checkNewMessages()
     }
 
     override fun onPauseOrHide() {
         super.onPauseOrHide()
         logQmsChat("lifecycle_on_pause")
+        presenter.onScreenHidden()
         if (::messagePanel.isInitialized) {
             messagePanel.onPause()
         }
