@@ -10,6 +10,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.snackbar.Snackbar
 import forpdateam.ru.forpda.R
 import timber.log.Timber
@@ -86,7 +87,33 @@ fun View.makeSnackbarAboveSystemBars(message: CharSequence, duration: Int = Snac
     val themed = ContextThemeWrapper(context, 0).apply {
         theme.applyStyle(R.style.DayNightAppTheme, false)
     }
-    return Snackbar.make(themed, this, message, duration).applyNavigationBarInset(this)
+    return Snackbar.make(themed, this, message, duration)
+            .applyThemedSurfaceColors(themed)
+            .applyNavigationBarInset(this)
+}
+
+/**
+ * По умолчанию Material красит Snackbar в `colorSurfaceInverse` / `colorOnSurfaceInverse`
+ * (контрастная «инверсная» плашка). В тёмной теме это даёт СВЕТЛЫЙ фон с тёмным текстом —
+ * плашка выглядит ярко-белой и «режет глаза». Перекрашиваем её в собственную поверхность
+ * темы (`colorSurfaceContainerHigh` — приподнятый серый), чтобы snackbar сливался с текущей
+ * палитрой: тёмно-серый в тёмной теме, светлый — в светлой. Текст/действие берём с
+ * соответствующих ролей той же поверхности.
+ */
+private fun Snackbar.applyThemedSurfaceColors(themed: ContextThemeWrapper): Snackbar {
+    val background = MaterialColors.getColor(
+            themed,
+            com.google.android.material.R.attr.colorSurfaceContainerHigh,
+            MaterialColors.getColor(themed, com.google.android.material.R.attr.colorSurface, 0))
+    val onSurface = MaterialColors.getColor(
+            themed, com.google.android.material.R.attr.colorOnSurface, 0)
+    val accent = MaterialColors.getColor(
+            themed, androidx.appcompat.R.attr.colorPrimary, onSurface)
+
+    if (background != 0) setBackgroundTint(background)
+    if (onSurface != 0) setTextColor(onSurface)
+    if (accent != 0) setActionTextColor(accent)
+    return this
 }
 
 fun View.makeSnackbarAboveSystemBars(@StringRes messageRes: Int, duration: Int = Snackbar.LENGTH_SHORT): Snackbar {
