@@ -151,6 +151,9 @@ class ArticleParser(
         val commentListOpenTagRegex = Regex(
                 """(?is)<(ul|ol)\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bcomments?-list\b[^"']*["'])[^>]*>"""
         )
+        // Any <ul>/<ol> open or close tag, used to track comment-list nesting depth in the
+        // tag-only parser (which otherwise loses the reply hierarchy → flat indentation).
+        val listTagRegex = Regex("""(?is)<\s*(/?)\s*(ul|ol)\b([^>]*)>""")
         val articleContentRegexes = listOf(
                 Regex("""(?is)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bentry-content\b[^"']*["'])[^>]*>([\s\S]*?)</div>\s*<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-footer\b)"""),
                 Regex("""(?is)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bentry-content\b[^"']*["'])[^>]*>([\s\S]*?)</div>"""),
@@ -2416,6 +2419,10 @@ class ArticleParser(
                 }
                 .filter { (_, id) -> id != null && id > 0 }
                 .toList()
+        // Reply hierarchy in the tag-only stream is encoded as nested <ul class="comment-list">
+        // containers. Derive each comment's indent level from that nesting so replies stay indented
+        // (recurseComments already does this on the DOM path; the flat tag path used to drop it).
+        val levelByStart = computeCommentLevelsByStart(source, openings.map { it.first })
         val seenIds = parent.flattenComments().map { it.id }.toMutableSet()
         var taken = 0
         openings.forEachIndexed { index, (start, commentId) ->
@@ -2431,6 +2438,7 @@ class ArticleParser(
             val comment = Comment().apply {
                 this.id = id
                 this.isDeleted = isDeleted
+                level = levelByStart[start] ?: 0
                 userId = commentShowUserRegex.find(block)?.groupValues?.getOrNull(1)?.toIntOrNull()
                         ?: commentUserDataIdRegex.find(block)?.groupValues?.getOrNull(1)?.toIntOrNull()
                         ?: 0
@@ -2472,6 +2480,63 @@ class ArticleParser(
             parent.children.add(comment)
             taken++
         }
+    }
+
+    /**
+     * Maps each comment start offset in [commentStarts] to its indent level, derived from how many
+     * `comment-list` `<ul>/<ol>` containers are open at that position. The tag-only parser keeps
+     * every comment in a flat list, so without this the reply hierarchy (and its left indent) would
+     * be lost — the exact symptom of "replies render with no indent" on articles that hit the
+     * paginated/embedded tag path.
+     *
+     * Nested lists inside a comment body (e.g. a bullet list a user typed) push/pop on the shared
+     * stack too, but they are not flagged as comment-lists, so they never inflate the reply depth.
+     * Levels are normalised against the shallowest observed comment so a fragment that omits the
+     * outer wrapper still starts top-level comments at level 0.
+     */
+    private fun computeCommentLevelsByStart(source: String, commentStarts: List<Int>): Map<Int, Int> {
+        if (commentStarts.isEmpty()) return emptyMap()
+        // Ordered list of (position, commentListDepthAfterThisTag) for every <ul>/<ol> open/close.
+        val depthEvents = ArrayList<Pair<Int, Int>>()
+        val stack = ArrayList<Boolean>() // true = this open tag is a comment-list container
+        var commentListDepth = 0
+        listTagRegex.findAll(source).forEach { match ->
+            val isClose = match.groupValues[1] == "/"
+            if (isClose) {
+                if (stack.isNotEmpty()) {
+                    val wasCommentList = stack.removeAt(stack.size - 1)
+                    if (wasCommentList) commentListDepth--
+                }
+            } else {
+                val attrs = match.groupValues.getOrNull(3).orEmpty()
+                val isCommentList = attrs.contains("comment-list", ignoreCase = true) ||
+                        attrs.contains("comments-list", ignoreCase = true)
+                stack.add(isCommentList)
+                if (isCommentList) commentListDepth++
+            }
+            depthEvents.add(match.range.first to commentListDepth.coerceAtLeast(0))
+        }
+
+        fun depthAt(position: Int): Int {
+            // Depth active at `position` = depth after the last list tag that opened/closed before it.
+            var lo = 0
+            var hi = depthEvents.size - 1
+            var result = 0
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                if (depthEvents[mid].first < position) {
+                    result = depthEvents[mid].second
+                    lo = mid + 1
+                } else {
+                    hi = mid - 1
+                }
+            }
+            return result
+        }
+
+        val rawDepths = commentStarts.associateWith { depthAt(it) }
+        val minDepth = rawDepths.values.minOrNull() ?: 0
+        return rawDepths.mapValues { (_, depth) -> (depth - minDepth).coerceAtLeast(0) }
     }
 
     fun canExtractCommentEditAction(source: String?, commentId: Int = 0): Boolean =

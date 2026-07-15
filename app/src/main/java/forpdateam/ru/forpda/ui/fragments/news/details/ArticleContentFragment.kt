@@ -36,8 +36,6 @@ import forpdateam.ru.forpda.common.webview.WebViewLoadDispatchPolicy
 import forpdateam.ru.forpda.common.webview.WebViewRenderController
 import forpdateam.ru.forpda.common.webview.WebViewRenderSession
 import forpdateam.ru.forpda.diagnostic.WebViewRenderDiagnostics
-import forpdateam.ru.forpda.common.webview.UrlDecision
-import forpdateam.ru.forpda.common.webview.UrlPolicy
 import forpdateam.ru.forpda.entity.remote.news.DetailsPage
 import forpdateam.ru.forpda.entity.remote.news.Comment
 import forpdateam.ru.forpda.model.AuthHolder
@@ -83,7 +81,6 @@ import forpdateam.ru.forpda.presentation.articles.detail.ArticleOpenTrace
 import forpdateam.ru.forpda.presentation.articles.detail.ArticleTemplate
 import forpdateam.ru.forpda.diagnostic.FpdaDebugLog
 import forpdateam.ru.forpda.diagnostic.FpdaPipelineLog
-import java.security.MessageDigest
 
 /**
  * Created by radiationx on 03.09.17.
@@ -528,48 +525,14 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                         "renderGenerationId" to articleRequestId
                 )
         )
-        webView.evaluateJavascript(buildNewsPollBindScript()) { raw ->
+        webView.evaluateJavascript(NewsWebViewScripts.pollBind()) { raw ->
             if (!isWebViewReady()) return@evaluateJavascript
             logNewsPollWebViewProbe(articleId, raw)
         }
     }
 
-    private fun buildNewsPollBindScript(): String =
-            """(function(){
-              try{
-                if(typeof transformPoll==='function'){transformPoll();}
-                if(typeof bindPollExternalBrowserButtons==='function'){bindPollExternalBrowserButtons();}
-                var root=document.querySelector('#news .content div.news-poll-normalized,#news .content div[id*="poll-ajax-frame"],#news .content .news-poll');
-                var form=root?root.querySelector('form'):null;
-                var opts=form?form.querySelectorAll('input[name="answer[]"],input[name="answer"],input[name^="answer["]'):[];
-                var pollId='';
-                if(form){
-                  var m=/poll_id=(\d+)/.exec(form.getAttribute('action')||'');
-                  if(m){pollId=m[1];}
-                  if(!pollId){
-                    var input=form.querySelector('input[name="poll_id"],input[name="poll"]');
-                    pollId=input&&input.value?input.value:'';
-                  }
-                }
-                var submit=form?form.querySelector('button[type="submit"],input[type="submit"],button.btn,.vote,.btn'):null;
-                var results=root?root.querySelectorAll('.poll-list .slider,.poll-list .range,.poll-list .value'):[];
-                return JSON.stringify({
-                  pollRootFound:!!root,
-                  pollId:pollId||'',
-                  optionsCount:opts?opts.length:0,
-                  canVote:!!(form&&submit&&!submit.disabled&&opts&&opts.length>0),
-                  hasToken:root?!!root.getAttribute('data-news-poll-token'):false,
-                  renderedPollBlock:!!root,
-                  readOnlyResults:results&&results.length>0,
-                  boundSubmit:!!(submit&&submit.dataset&&submit.dataset.newsPollBound==='true')
-                });
-              }catch(e){
-                return JSON.stringify({pollRootFound:false,error:String(e&&e.message?e.message:e)});
-              }
-            })();"""
-
     private fun logNewsPollWebViewProbe(articleId: Int, raw: String?) {
-        val payload = parseNewsPollProbe(raw)
+        val payload = NewsWebViewProbes.parsePoll(raw)
         val mappedHtml = currentTrustedArticleHtml.orEmpty()
         FpdaDebugLog.logArticle(
                 FpdaDebugLog.ArticleArea.POLL,
@@ -596,38 +559,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         )
     }
 
-    private fun parseNewsPollProbe(raw: String?): NewsPollProbe =
-            runCatching {
-                val trimmed = raw?.trim()?.removeSurrounding("\"")?.replace("\\\"", "\"")
-                        ?.replace("\\\\", "\\")
-                        ?: return NewsPollProbe()
-                if (trimmed.isBlank() || trimmed == "null") return NewsPollProbe()
-                val json = JSONObject(trimmed)
-                NewsPollProbe(
-                        pollRootFound = json.optBoolean("pollRootFound"),
-                        pollId = json.optString("pollId"),
-                        optionsCount = json.optInt("optionsCount"),
-                        canVote = json.optBoolean("canVote"),
-                        hasToken = json.optBoolean("hasToken"),
-                        renderedPollBlock = json.optBoolean("renderedPollBlock"),
-                        readOnlyResults = json.optBoolean("readOnlyResults"),
-                        boundSubmit = json.optBoolean("boundSubmit"),
-                        error = json.optString("error").takeIf { it.isNotBlank() }
-                )
-            }.getOrElse { NewsPollProbe(error = it.message) }
-
-    private data class NewsPollProbe(
-            val pollRootFound: Boolean = false,
-            val pollId: String = "",
-            val optionsCount: Int = 0,
-            val canVote: Boolean = false,
-            val hasToken: Boolean = false,
-            val renderedPollBlock: Boolean = false,
-            val readOnlyResults: Boolean = false,
-            val boundSubmit: Boolean = false,
-            val error: String? = null
-    )
-
     private fun bindInlineCommentsSection(
             collapsed: Boolean,
             domState: String,
@@ -648,12 +579,17 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 )
         )
         if (!probeAfterBind) {
-            webView.evaluateJavascript(buildBindCommentsSectionScript(collapsed, domState), null)
+            webView.evaluateJavascript(
+                    NewsWebViewScripts.bindCommentsSection(collapsed, domState, articleRequestId),
+                    null,
+            )
             return
         }
-        webView.evaluateJavascript(buildBindCommentsSectionScript(collapsed, domState)) { raw ->
+        webView.evaluateJavascript(
+                NewsWebViewScripts.bindCommentsSection(collapsed, domState, articleRequestId)
+        ) { raw ->
             if (!isWebViewReady() || bindEpoch != commentsBindEpoch) return@evaluateJavascript
-            val probe = parseCommentsBindProbe(raw)
+            val probe = NewsWebViewProbes.parseCommentsBind(raw)
             commentsFooterInDom = probe.hasRoot
             FpdaDebugLog.log(
                     FpdaDebugLog.TAG_COMMENTS_SECTION,
@@ -702,74 +638,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 runCommentsCoordinator { emptyList() }
             }
         }
-    }
-
-    private fun buildBindCommentsSectionScript(collapsed: Boolean, domState: String): String =
-            """(function(){
-                try{
-                  var collapsed=${collapsed};
-                  var domState=${JSONObject.quote(domState)};
-                  var generation=${articleRequestId};
-                  if (typeof bindCommentsSection === 'function') {
-                    bindCommentsSection(collapsed, domState);
-                  } else if (typeof bindNewsInlineCommentsLoad === 'function') {
-                    bindNewsInlineCommentsLoad();
-                  }
-                  if (typeof newsInlineCommentsPruneDuplicates === 'function') {
-                    newsInlineCommentsPruneDuplicates();
-                  }
-                  var sections = document.querySelectorAll('#news-comments-section');
-                  var root = null;
-                  if (typeof newsInlineCommentsRoot === 'function') {
-                    root = newsInlineCommentsRoot();
-                  } else if (sections.length) {
-                    root = sections[0];
-                  }
-                  if (root) {
-                    root.setAttribute('data-fpda-webview-gen', String(generation));
-                  }
-                  var toggle = root ? root.querySelector('#news-comments-toggle') : null;
-                  var doc = document.documentElement;
-                  return JSON.stringify({
-                    hasRoot: !!root,
-                    hasToggle: !!toggle,
-                    sectionCount: sections ? sections.length : 0,
-                    delegation: !!(doc && doc.getAttribute('data-fpda-comments-delegation') === '1'),
-                    commentsJsReady: typeof bindCommentsSection === 'function' &&
-                      typeof newsInlineCommentsInjectHtml === 'function' &&
-                      typeof newsInlineCommentsSetState === 'function'
-                  });
-                }catch(e){
-                  return JSON.stringify({hasRoot:false,hasToggle:false,sectionCount:0,delegation:false,commentsJsReady:false});
-                }
-            })();"""
-
-    private data class CommentsBindProbe(
-            val hasRoot: Boolean,
-            val hasToggle: Boolean,
-            val sectionCount: Int,
-            val delegationInstalled: Boolean,
-            val commentsJsReady: Boolean,
-    )
-
-    private fun parseCommentsBindProbe(raw: String?): CommentsBindProbe {
-        val text = raw?.trim().orEmpty().let { value ->
-            if (value.length >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
-                value.substring(1, value.length - 1).replace("\\\"", "\"")
-            } else {
-                value
-            }
-        }
-        return runCatching {
-            val json = JSONObject(text.ifBlank { "{}" })
-            CommentsBindProbe(
-                    hasRoot = json.optBoolean("hasRoot"),
-                    hasToggle = json.optBoolean("hasToggle"),
-                    sectionCount = json.optInt("sectionCount"),
-                    delegationInstalled = json.optBoolean("delegation"),
-                    commentsJsReady = json.optBoolean("commentsJsReady"),
-            )
-        }.getOrElse { CommentsBindProbe(false, false, 0, false, false) }
     }
 
     private fun commentsDomStateFrom(state: ArticleCommentsState): String = when (state) {
@@ -2483,14 +2351,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         )
     }
 
-    private fun sha256Hex(text: String): String {
-        return runCatching {
-            val digest = MessageDigest.getInstance("SHA-256")
-                    .digest(text.toByteArray(Charsets.UTF_8))
-            digest.joinToString(separator = "") { b -> "%02x".format(b) }
-        }.getOrElse { "" }
-    }
-
     private fun updateCommentsLoadMoreVisibility(canLoadMore: Boolean, totalCount: Int, renderedCount: Int) {
         if (!isWebViewReady()) return
         val script = """(function(){
@@ -2580,7 +2440,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             logCommentsSection("render_target_missing", commentsBridgeFields(eventSource = "evalInlineCommentsState"))
             return
         }
-        val script = buildInlineCommentsStateScript(
+        val script = NewsWebViewScripts.inlineCommentsState(
                 state,
                 message,
                 html,
@@ -2651,32 +2511,6 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
         }
     }
 
-    private fun buildInlineCommentsStateScript(
-            state: String,
-            message: String,
-            html: String?,
-            scrollToCommentId: Int = 0,
-            canLoadMore: Boolean = false,
-            totalCount: Int = 0,
-            renderedCount: Int = 0,
-    ): String =
-            """(function(){
-                if (typeof newsInlineCommentsSetState !== 'function') return;
-                newsInlineCommentsSetState(""" +
-                    JSONObject.quote(state) +
-                    "," +
-                    JSONObject.quote(message) +
-                    "," +
-                    (html?.let { JSONObject.quote(it) } ?: "null") +
-                    "," +
-                    scrollToCommentId +
-                    """);
-                if (""" + JSONObject.quote(state) + """ === "loaded" &&
-                        typeof newsInlineCommentsUpdateLoadMore === "function") {
-                    newsInlineCommentsUpdateLoadMore($canLoadMore, $totalCount, $renderedCount);
-                }
-            })();"""
-
     /**
      * Arms a durable scroll-to-comment target and scrolls now. The target is re-asserted by
      * [reassertPendingCommentScroll] after every subsequent comment render, so a late re-inject or a
@@ -2722,66 +2556,14 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     }
 
     private fun buildInlineCommentsHtml(comments: List<Comment>): String =
-            comments.joinToString(separator = "") { comment -> buildInlineCommentHtml(comment) }
-
-    private fun buildInlineCommentHtml(comment: Comment): String {
-        val id = comment.id.toString()
-        val deleted = comment.isDeleted
-        val nick = Html.escapeHtml(comment.userNick.orEmpty())
-        val metaDate = NewsInlineCommentHtml.metaDateHtml(
-                comment.date.orEmpty(),
-                comment.isEdited,
-                getString(R.string.comment_edited_hint),
-        )
-        val rawContent = comment.content.orEmpty()
-        val content = when {
-            deleted && rawContent.isBlank() -> Html.escapeHtml(getString(R.string.comment_deleted))
-            else -> rawContent
-        }
-        val indent = (comment.level.coerceAtLeast(0) * 12).coerceAtMost(72)
-        val actions = if (deleted) "" else buildInlineCommentActions(comment)
-        return """
-<article class="news-inline-comment" data-news-comment-id="$id" data-deleted="$deleted" style="margin-left:${indent}px">
-    <div class="news-inline-comment-meta">
-        <button type="button" class="news-inline-comment-author" data-news-comment-action="profile" data-comment-id="$id">$nick</button>
-        $metaDate
-    </div>
-    <div class="news-inline-comment-content">$content</div>
-    $actions
-</article>
-""".trim()
-    }
-
-    private fun buildInlineCommentActions(comment: Comment): String {
-        val id = comment.id.toString()
-        val likeVisible = comment.likeAction?.isValid() == true ||
-                comment.unlikeAction?.isValid() == true ||
-                comment.toggleAction?.isValid() == true ||
-                comment.likeCount > 0 ||
-                comment.likedByMe
-        val like = if (likeVisible) {
-            val label = buildInlineCommentLikeLabel(comment.likeCount, comment.likedByMe)
-            val likedClass = if (comment.likedByMe) " liked" else " not-liked"
-            """<button type="button" class="news-inline-comment-action$likedClass" data-news-comment-action="like" data-comment-id="$id">$label</button>"""
-        } else {
-            ""
-        }
-        val reply = if (commentsViewModel.canReply(comment)) {
-            """<button type="button" class="news-inline-comment-action" data-news-comment-action="reply" data-comment-id="$id">${Html.escapeHtml(getString(R.string.reply))}</button>"""
-        } else {
-            ""
-        }
-        val more = if (inlineCommentMenuItems(comment).isNotEmpty()) {
-            """<button type="button" class="news-inline-comment-action" data-news-comment-action="menu" data-comment-id="$id">⋯</button>"""
-        } else {
-            ""
-        }
-        return """<div class="news-inline-comment-actions">$like$reply$more</div>"""
-    }
-
-    private fun buildInlineCommentLikeLabel(likeCount: Int, @Suppress("UNUSED_PARAMETER") likedByMe: Boolean): String {
-        return if (likeCount > 0) likeCount.toString() else ""
-    }
+            NewsInlineCommentHtml.commentsHtml(
+                    comments = comments,
+                    editedHint = getString(R.string.comment_edited_hint),
+                    deletedLabel = getString(R.string.comment_deleted),
+                    replyLabel = getString(R.string.reply),
+                    canReply = { commentsViewModel.canReply(it) },
+                    hasMenu = { inlineCommentMenuItems(it).isNotEmpty() },
+            )
 
     private fun patchInlineCommentLike(commentId: Int, likedByMe: Boolean, likeCount: Int, pending: Boolean) {
         if (!isWebViewReady()) return
@@ -2799,7 +2581,14 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
 
     private fun patchInlineCommentNode(comment: Comment) {
         if (!isWebViewReady()) return
-        val html = buildInlineCommentHtml(comment)
+        val html = NewsInlineCommentHtml.commentHtml(
+                comment = comment,
+                editedHint = getString(R.string.comment_edited_hint),
+                deletedLabel = getString(R.string.comment_deleted),
+                replyLabel = getString(R.string.reply),
+                canReply = commentsViewModel.canReply(comment),
+                hasMenu = inlineCommentMenuItems(comment).isNotEmpty(),
+        )
         val script = """(function(){
             if (typeof newsInlineCommentReplaceNode !== 'function') return;
             newsInlineCommentReplaceNode(${JSONObject.quote(comment.id.toString())}, ${JSONObject.quote(html)});
@@ -3186,7 +2975,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     fun openVideo(url: String) {
         webView.runInUiThread {
             if (!isWebViewReady()) return@runInUiThread
-            val safeUrl = normalizeExternalUrl(url) ?: return@runInUiThread
+            val safeUrl = NewsArticleUrls.normalizeExternal(url) ?: return@runInUiThread
             val youtubeVideoId = YouTubeUrl.extractVideoId(safeUrl)
             if (youtubeVideoId != null && YouTubeLauncher.openApp(webView.context, youtubeVideoId)) {
                 return@runInUiThread
@@ -3210,7 +2999,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     fun openTaxonomy(url: String) {
         webView.runInUiThread {
             if (!isWebViewReady()) return@runInUiThread
-            val safeUrl = normalizeTaxonomyUrl(url)
+            val safeUrl = NewsArticleUrls.normalizeTaxonomy(url)
             if (safeUrl == null) {
                 Timber.w("Blocked unsafe article taxonomy URL")
                 return@runInUiThread
@@ -3221,45 +3010,13 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
 
     private fun openExternalBrowserOnly(url: String) {
         val context = webView.context
-        val safeUrl = normalizeExternalUrl(url) ?: return
+        val safeUrl = NewsArticleUrls.normalizeExternal(url) ?: return
         try {
             ExternalBrowserLauncher.open(context, safeUrl)
         } catch (e: Exception) {
             Timber.w(e, "Unable to open external browser for %s", safeUrl)
             Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
         }
-    }
-
-    private fun normalizeExternalUrl(url: String): String? {
-        return when (val decision = UrlPolicy.classify(url)) {
-            UrlDecision.Blocked -> {
-                Timber.w("Blocked unsafe article external browser URL")
-                null
-            }
-            is UrlDecision.Internal -> decision.normalizedUrl
-            is UrlDecision.External -> decision.normalizedUrl
-        }
-    }
-
-    private fun normalizeTaxonomyUrl(url: String): String? {
-        val value = url.trim().takeIf { it.isNotBlank() } ?: return null
-        val absolute = when {
-            value.startsWith("//") -> "https:$value"
-            value.startsWith("/") -> "https://4pda.to$value"
-            else -> value
-        }
-        val uri = Uri.parse(absolute)
-        val scheme = uri.scheme?.lowercase()
-        val host = uri.host?.lowercase()
-        if (scheme != "http" && scheme != "https") return null
-        if (host != "4pda.to" && host != "www.4pda.to") return null
-
-        val lowerPath = uri.path.orEmpty().lowercase()
-        val isTaxonomyPath = lowerPath.contains("/category/") ||
-                Regex("""^/[a-z0-9_-]+/?$""").matches(lowerPath)
-        if (!isTaxonomyPath) return null
-
-        return uri.buildUpon().scheme("https").build().toString()
     }
 
     /**
