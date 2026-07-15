@@ -152,11 +152,16 @@ private fun AlertDialog.applyForPdaButtonColors() {
 }
 
 private fun AlertDialog.applyForPdaFontMode() {
-    val font = ResourcesCompat.getFont(context, R.font.forpda_roboto)
-    val family = resolveString(context, R.attr.fontFamily)
-    if (family == null || font == null || family == "sans-serif") return
+    // Резолвим шрифт приложения из ?attr/fontFamily темы. Когда оверлей шрифта указывает fontFamily на
+    // font-ресурс (@font/forpda_roboto, @font/forpda_inter …), TypedArray.getString возвращает null —
+    // старый строковый гейт срывался на `family == null`, и кастомный шрифт не докидывался в контент
+    // диалогов/меню (пункты оставались на дефолте BodyLarge, визуально ≈ системный). Читаем по РЕСУРСУ
+    // и грузим именно его — это заодно чинит не-Roboto режимы (раньше был жёстко зашит forpda_roboto
+    // для любого выбранного шрифта). Системные семейства (monospace) приходят строкой без resId — их
+    // мапим через Typeface.create; sans-serif = платформенный дефолт, докидывать нечего (SYSTEM-режим).
+    val font = resolveThemeTypeface(context) ?: return
     if (BuildConfig.DEBUG) {
-        Timber.d("nativeFontFamilyApplied=%s dialog=true", family)
+        Timber.d("nativeFontFamilyApplied dialog=true")
     }
     window?.decorView?.applyTypeface(font)
 }
@@ -212,9 +217,16 @@ private fun resolveColor(context: Context, @AttrRes attr: Int, fallback: Int): I
     return color
 }
 
-private fun resolveString(context: Context, @AttrRes attr: Int): String? {
-    val a = context.obtainStyledAttributes(intArrayOf(attr))
-    val value = a.getString(0)
+private fun resolveThemeTypeface(context: Context): Typeface? {
+    val a = context.obtainStyledAttributes(intArrayOf(R.attr.fontFamily))
+    val resId = a.getResourceId(0, 0)
+    val name = a.getString(0)
     a.recycle()
-    return value
+    return when {
+        resId != 0 -> runCatching { ResourcesCompat.getFont(context, resId) }.getOrNull()
+        // "sans-serif" — платформенный дефолт (уже в TextAppearance.BodyLarge), докидывать нечего.
+        // Прочие системные имена ("monospace") мапим напрямую, иначе меню осталось бы на sans-serif.
+        name.isNullOrBlank() || name == "sans-serif" -> null
+        else -> runCatching { Typeface.create(name, Typeface.NORMAL) }.getOrNull()
+    }
 }
