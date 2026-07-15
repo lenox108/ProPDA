@@ -113,4 +113,55 @@ class ArticleBodyParserTest {
         assertNotNull(viaExtract.html)
         assertTrue(viaExtract.html!!.contains("Delegated body"))
     }
+
+    // 4pda nests the lead paragraph in `article-header > article-anons`, but the detail_v2 body
+    // group starts AFTER the header — so the fallback body arrives without the lead (the reader saw
+    // the article jump from the title straight to the hero image). The lead must be recovered.
+    @Test
+    fun resolveArticleBodyContent_prependsArticleAnonsLeadMissingFromV2Body() {
+        val parser = newBodyParser()
+        val page = """
+            <html><body>
+              <div class="article">
+                <div class="article-header">
+                  <h1>Title</h1>
+                  <div class="article-anons">
+                    <div class="article-meta"><time>14.07.26</time><a href="#comments">240</a></div>
+                    <p>Lead sentence with <a href="https://x">a link</a>. More lead.</p>
+                  </div>
+                </div>
+                <meta property="og:description" content="Lead sentence with a link. More lead."/><!--more-->
+                <figure>img</figure><h2>Section</h2><p>Body paragraph.</p>
+              </div>
+            </body></html>
+        """.trimIndent()
+        val v2Fallback = """<!--more--><figure>img</figure><h2>Section</h2><p>Body paragraph.</p>"""
+        val result = parser.resolveArticleBodyContent(
+                pageContext = ArticleParser.ArticlePageContext(page),
+                phase = ArticleParsePhase.FULL,
+                regexFallback = v2Fallback
+        )
+
+        assertNotNull(result.html)
+        assertTrue(result.html!!.contains("Lead sentence with"))
+        // The lead's inline link survives.
+        assertTrue(result.html!!.contains("""href="https://x""""))
+        // Lead is prepended above the body, not appended after it.
+        assertTrue(result.html!!.indexOf("Lead sentence") < result.html!!.indexOf("Body paragraph"))
+    }
+
+    @Test
+    fun resolveArticleBodyContent_doesNotDuplicateLeadAlreadyInBody() {
+        val parser = newBodyParser()
+        val page = """<div class="article"><div class="article-header"><div class="article-anons"><p>Lead text here.</p></div></div></div>"""
+        val fallback = """<p>Lead text here.</p><p>Body.</p>"""
+        val result = parser.resolveArticleBodyContent(
+                pageContext = ArticleParser.ArticlePageContext(page),
+                phase = ArticleParsePhase.FULL,
+                regexFallback = fallback
+        )
+
+        assertNotNull(result.html)
+        assertEquals(1, Regex("Lead text here").findAll(result.html!!).count())
+    }
 }

@@ -45,6 +45,9 @@ class ArticleParser(
             val parsed: Comment
     )
 
+    /** Sentinel meaning "descend into every subtree" — identity-compared to skip the predicate call. */
+    private val NO_SKIP: (Node) -> Boolean = { false }
+
     private val commentProbeCache = object : LinkedHashMap<Int, CommentProbeCacheEntry>(COMMENT_PROBE_CACHE_MAX_ENTRIES, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CommentProbeCacheEntry>?): Boolean =
                 size > COMMENT_PROBE_CACHE_MAX_ENTRIES
@@ -764,7 +767,9 @@ class ArticleParser(
 
     fun mergeCommentDesktopActions(primary: Comment, desktopSource: String?): Comment {
         if (desktopSource.isNullOrBlank() || primary.children.isEmpty()) return primary
-        val desktop = parseComments(SparseArray(), desktopSource)
+        // Only actions (+ id / userId / date for matching) are read below — parse the desktop tree in
+        // actions-only mode so the ~2nd full parse skips the expensive per-comment content rendering.
+        val desktop = parseComments(SparseArray(), desktopSource, actionsOnly = true)
         val desktopById = desktop.flattenComments()
                 .filter {
                     it.id > 0 && (
@@ -2227,7 +2232,11 @@ class ArticleParser(
 
     private fun findCommentContentNode(scope: Node): Node? = commentParser.findCommentContentNode(scope)
 
-    fun parseComments(karmaMap: SparseArray<Comment.Karma>, source: String?): Comment {
+    fun parseComments(
+            karmaMap: SparseArray<Comment.Karma>,
+            source: String?,
+            actionsOnly: Boolean = false,
+    ): Comment {
         val comments = Comment()
         val normalized = ensureBalancedCommentsHtml(source)
         if (normalized.isNullOrBlank()) {
@@ -2235,7 +2244,7 @@ class ArticleParser(
             return comments
         }
         val document = Parser.parse(normalized)
-        recurseComments(karmaMap, document, comments, 0)
+        recurseComments(karmaMap, document, comments, 0, actionsOnly)
         if (comments.children.isEmpty() && hasCommentMarkup(normalized)) {
             FpdaDebugLog.log(
                     FpdaDebugLog.TAG_COMMENTS_SECTION,
@@ -2833,7 +2842,13 @@ class ArticleParser(
     }
 
 
-    private fun recurseComments(karmaMap: SparseArray<Comment.Karma>, root: Node, parentComment: Comment, argLevel: Int): Comment {
+    private fun recurseComments(
+            karmaMap: SparseArray<Comment.Karma>,
+            root: Node,
+            parentComment: Comment,
+            argLevel: Int,
+            actionsOnly: Boolean = false,
+    ): Comment {
         var level = argLevel
         val rootComments = Parser.findNode(root, "ul", "class", "comment-list")
                 ?: Parser.findNode(root, "ul", "class", "comments-list")
@@ -2895,19 +2910,27 @@ class ArticleParser(
                     }
                 }
 
-                userNick = nickNode?.let { Parser.getHtml(it, true) }
-                comment.userNick = decodeNickIfBase64(userNick.orEmpty().articleFromHtml())
+                // Nick rendering (getHtml) is skipped in actions-only mode: the desktop action-merge
+                // matches by id / (userId, date), never by nick, so it does not need the nick HTML.
+                if (!actionsOnly) {
+                    userNick = nickNode?.let { Parser.getHtml(it, true) }
+                    comment.userNick = decodeNickIfBase64(userNick.orEmpty().articleFromHtml())
+                }
 
                 date = metaNode?.let { Parser.ownText(metaNode).trim() }
                 comment.date = date
             }
 
-            val contentNode = findCommentContentNode(commentNode)
-            content = contentNode?.let { Parser.getHtml(it, true) }
-            comment.isEdited = isEditedComment(commentNode, content)
-            comment.content = compactEditedMarker(
-                    if (comment.isEdited) stripEditedMarker(content.orEmpty()) else content.orEmpty().trim()
-            )
+            // Content extraction (findCommentContentNode + getHtml, the expensive per-comment render) is
+            // skipped in actions-only mode — only [Comment.actions] are needed there.
+            if (!actionsOnly) {
+                val contentNode = findCommentContentNode(commentNode)
+                content = contentNode?.let { Parser.getHtml(it, true) }
+                comment.isEdited = isEditedComment(commentNode, content)
+                comment.content = compactEditedMarker(
+                        if (comment.isEdited) stripEditedMarker(content.orEmpty()) else content.orEmpty().trim()
+                )
+            }
             comment.actions = parseCommentActions(commentNode, comment.id, comment.userId)
             if (comment.actions.profile == null && comment.userId > 0) {
                 comment.actions.profile = Comment.Action("https://4pda.to/forum/index.php?showuser=${comment.userId}")
@@ -2919,7 +2942,7 @@ class ArticleParser(
             parentComment.children.add(comment)
 
             level++
-            recurseComments(karmaMap, commentNode, comment, level)
+            recurseComments(karmaMap, commentNode, comment, level, actionsOnly)
             level--
         }
 
@@ -2927,13 +2950,17 @@ class ArticleParser(
     }
 
     fun ensureCommentLikeActions(root: Comment, articleId: Int, commentsSource: String? = null) {
+        // Build the id→block index ONCE (single scan of the source). The previous code called
+        // extractCommentBlockInSource per comment, each re-running commentOpenTagRegex.findAll over the
+        // whole ~400KB source → O(comments × source) (the dominant cost of parsing a big thread).
+        val blockIndex = buildCommentBlockIndex(commentsSource)
         root.flattenComments().forEach { comment ->
             if (comment.isDeleted || comment.id <= 0) return@forEach
             if (comment.actions.like?.isValid() == true) {
                 applyCommentLikeState(comment)
                 return@forEach
             }
-            val block = extractCommentBlockInSource(commentsSource, comment.id)
+            val block = blockIndex[comment.id]
             fillMissingCommentLikeActionsFromHtml(comment.actions, block.orEmpty(), comment.id)
             if (comment.actions.like == null &&
                     articleId > 0 &&
@@ -2945,9 +2972,37 @@ class ArticleParser(
         }
     }
 
+    /**
+     * One-pass index of comment id → its raw HTML block (from one opening tag to the next). Replaces
+     * repeated [extractCommentBlockInSource] calls that each re-scanned the full source.
+     */
+    private fun buildCommentBlockIndex(source: String?): Map<Int, String> {
+        val html = source.orEmpty()
+        if (html.isBlank()) return emptyMap()
+        val openings = commentOpenTagRegex.findAll(html)
+                .mapNotNull { match ->
+                    val id = match.groupValues.getOrNull(2)?.toIntOrNull()
+                            ?: match.groupValues.getOrNull(3)?.toIntOrNull()
+                    id?.takeIf { it > 0 }?.let { match.range.first to it }
+                }
+                .toList()
+        if (openings.isEmpty()) return emptyMap()
+        val index = HashMap<Int, String>(openings.size)
+        openings.forEachIndexed { i, (start, id) ->
+            val end = openings.getOrNull(i + 1)?.first ?: html.length
+            // First occurrence wins, mirroring extractCommentBlockInSource's indexOfFirst.
+            if (!index.containsKey(id)) index[id] = html.substring(start, end)
+        }
+        return index
+    }
+
     private fun parseCommentActions(commentNode: Node, commentId: Int, userId: Int): Comment.Actions {
         val actions = Comment.Actions()
-        walkElements(commentNode) { node ->
+        // Skip nested reply comment-lists: those replies are separate comments walked by their own
+        // recurseComments iteration. Without this, a parent re-walks every descendant reply (and runs
+        // an expensive Parser.getHtml per link) at every depth → O(N × depth) on nested threads,
+        // which was the dominant cost of parsing a large comment tree (~5s → far less).
+        walkElements(commentNode, skipSubtree = ::isCommentListContainer) { node ->
             when (node.name.orEmpty().lowercase()) {
                 "a", "button" -> {
                     parseKarmaActDataAction(node, commentId, 1)?.let { (articleId, currentCommentId) ->
@@ -3133,23 +3188,6 @@ class ArticleParser(
         return false
     }
 
-    private fun extractCommentBlockInSource(source: String?, commentId: Int): String? {
-        val html = source.orEmpty()
-        if (html.isBlank() || commentId <= 0) return null
-        val openings = commentOpenTagRegex.findAll(html)
-                .mapNotNull { match ->
-                    val id = match.groupValues.getOrNull(2)?.toIntOrNull()
-                            ?: match.groupValues.getOrNull(3)?.toIntOrNull()
-                    id?.takeIf { it > 0 }?.let { match.range.first to it }
-                }
-                .toList()
-        val index = openings.indexOfFirst { (_, id) -> id == commentId }
-        if (index < 0) return null
-        val start = openings[index].first
-        val end = openings.getOrNull(index + 1)?.first ?: html.length
-        return html.substring(start, end)
-    }
-
     private fun parseKarmaPairAttribute(raw: String?, commentId: Int): Pair<Int, Int>? {
         val value = raw?.trim().orEmpty()
         if (value.isBlank()) return null
@@ -3293,7 +3331,7 @@ class ArticleParser(
 
     private fun resolveCommentArticleId(commentNode: Node, commentId: Int): Int {
         var articleId = 0
-        walkElements(commentNode) { node ->
+        walkElements(commentNode, skipSubtree = ::isCommentListContainer) { node ->
             if (articleId > 0) return@walkElements
             parseKarmaActDataAction(node, commentId, 1)?.first?.let { articleId = it }
                     ?: parseKarmaActDataAction(node, commentId, 0)?.first?.let { articleId = it }
@@ -3468,10 +3506,24 @@ class ArticleParser(
         return fields
     }
 
-    private fun walkElements(node: Node, action: (Node) -> Unit) {
+    private fun walkElements(
+            node: Node,
+            skipSubtree: (Node) -> Boolean = NO_SKIP,
+            action: (Node) -> Unit,
+    ) {
         if (Parser.isNotElement(node)) return
+        if (skipSubtree !== NO_SKIP && skipSubtree(node)) return
         action(node)
-        node.getNodes().forEach { walkElements(it, action) }
+        node.getNodes().forEach { walkElements(it, skipSubtree, action) }
+    }
+
+    /** True for a nested `<ul|ol class="comment-list">` — a container of *reply* comments. */
+    private fun isCommentListContainer(node: Node): Boolean {
+        val name = node.name.orEmpty()
+        if (!name.equals("ul", ignoreCase = true) && !name.equals("ol", ignoreCase = true)) return false
+        val cls = node.getAttribute("class").orEmpty()
+        return cls.contains("comment-list", ignoreCase = true) ||
+                cls.contains("comments-list", ignoreCase = true)
     }
 
     private fun isEditedComment(commentNode: Node, content: String?): Boolean {

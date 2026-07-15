@@ -103,7 +103,16 @@ class ArticleTemplate(
             }
             val contentWithoutTitle = removeTitleFromHtml(sanitizedBodyHtml, page.title)
             val contentWithoutEmbeddedComments = removeEmbeddedCommentsFromHtml(contentWithoutTitle)
-            setVariableOpt("details_content", stabilizeMediaLayout(contentWithoutEmbeddedComments))
+            // The native header card already shows the hero image (page.imgUrl); 4pda repeats that same
+            // lead image as the first `article-figure-big` in the body, so the reader saw it twice. Drop
+            // the body's leading hero figure ONLY when the header actually renders a hero — articles
+            // without a header image (imgUrl blank) keep their body figure untouched.
+            val contentDeduped = if (!page.imgUrl.isNullOrBlank()) {
+                removeLeadingHeroFigure(contentWithoutEmbeddedComments)
+            } else {
+                contentWithoutEmbeddedComments
+            }
+            setVariableOpt("details_content", stabilizeMediaLayout(contentDeduped))
             setVariableOpt(
                     "details_comments_footer",
                     commentsFooterHtml(
@@ -400,6 +409,18 @@ $image
      * Remove duplicate title from HTML content.
      * The title is already shown in the UI toolbar, so we remove it from WebView content.
      */
+    // First `<figure class="…article-figure-big…">…</figure>` — 4pda's lead image, duplicated by the
+    // native header card. Figures do not nest, so the non-greedy `</figure>` closes the right one.
+    private val leadingHeroFigureRegex = Regex(
+            """(?is)<figure\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-figure-big\b)[^>]*>[\s\S]*?</figure>"""
+    )
+
+    /** Strips the body's leading hero figure (the one mirrored in the header card). */
+    private fun removeLeadingHeroFigure(html: String?): String? {
+        if (html.isNullOrBlank()) return html
+        return leadingHeroFigureRegex.replaceFirst(html, "")
+    }
+
     private fun removeTitleFromHtml(html: String?, title: String?): String? {
         if (html.isNullOrEmpty() || title.isNullOrEmpty()) return html
 

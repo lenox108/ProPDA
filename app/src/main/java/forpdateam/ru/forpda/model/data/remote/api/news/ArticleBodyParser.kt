@@ -37,7 +37,12 @@ internal class ArticleBodyParser(
             phase: ArticleParsePhase,
             regexFallback: String? = null
     ): ArticleParser.ArticleContent {
-        regexFallback?.trim()?.takeIf { it.isNotBlank() }?.let { return ArticleParser.ArticleContent(it, false) }
+        regexFallback?.trim()?.takeIf { it.isNotBlank() }?.let { fallback ->
+            return ArticleParser.ArticleContent(
+                    prependArticleAnonsLead(pageContext.response, fallback),
+                    false
+            )
+        }
         extractArticleContentByRegex(pageContext)?.let { regexContent ->
             // When the regex matched only entry-content (narrow capture), also look for standalone
             // lead/media nodes that are siblings (not inside the matched entry-content) and prepend them.
@@ -85,6 +90,32 @@ internal class ArticleBodyParser(
         }
         if (preBlocks.isEmpty()) return bodyHtml
         return preBlocks.joinToString("\n") + "\n" + bodyHtml
+    }
+
+    // Captures the lead paragraph(s) 4pda nests in `article-header > article-anons`. The block also
+    // holds an `article-meta` (date/comment) row that has no `<p>`, so skipping to the first `<p>`
+    // lands on the lead. Kept as a cheap raw-HTML regex (no DOM walk) so the fast first-render path
+    // stays fast.
+    private val articleAnonsLeadRegex = Regex(
+            """(?is)<div\b(?=[^>]*\bclass\s*=\s*["'][^"']*\barticle-anons\b[^"']*["'])[^>]*>(?:(?!<p\b)[\s\S])*?((?:<p\b[^>]*>[\s\S]*?</p>\s*)+)"""
+    )
+
+    /**
+     * The `detail_v2` body group starts *after* `<div class="article-header">`, so the lead
+     * paragraph 4pda nests in `article-header > article-anons` never reaches the extracted body
+     * (the reader saw the article jump straight from the title to the hero image). Pull that lead
+     * out of the raw page and prepend it, unless [bodyHtml] already carries the same text (another
+     * extraction path may have included it — keep the operation idempotent).
+     */
+    private fun prependArticleAnonsLead(response: String, bodyHtml: String): String {
+        val lead = articleAnonsLeadRegex.find(response)
+                ?.groupValues?.getOrNull(1)?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: return bodyHtml
+        val leadKey = normalizeArticleText(lead)
+        if (leadKey.isBlank()) return bodyHtml
+        if (normalizeArticleText(bodyHtml).contains(leadKey)) return bodyHtml
+        return "$lead\n$bodyHtml"
     }
 
     private fun hasInlineMediaMarker(html: String): Boolean =
