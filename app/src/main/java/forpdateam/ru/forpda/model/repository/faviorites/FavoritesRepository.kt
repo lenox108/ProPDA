@@ -267,7 +267,26 @@ class FavoritesRepository(
     private suspend fun handleEventTransaction(favItems: List<FavItem>, event: TabNotification, sorting: Sorting, count: Int): Int {
         if (!NotificationEvent.fromTheme(event.source)) return count
         if (!notificationPreferencesHolder.getFavLiveTab()) return count
-        if (event.isWebSocket && event.event.isNew) return count
+
+        // Раньше здесь стоял ранний `return count`: WS-событие о новом посте в избранной теме
+        // намеренно игнорировалось, а бейдж ждал follow-up от inspector'а (~2.5s). Из-за этого
+        // счётчик избранного не рос в реальном времени — он двигался только на seed/резюме или
+        // при полном заходе в раздел. WS-событие несёт лишь sourceId/type (ник/аватар/важность и
+        // временные метки в нём пусты — см. NotificationEventsApi.parseWebSocketEvent), поэтому
+        // помечаем тему непрочитанной МИНИМАЛЬНО, не затирая метаданные строки. Точные данные
+        // (ник, важность, порядок) подтянет follow-up inspector или полный рефреш списка.
+        if (event.isWebSocket && event.event.isNew) {
+            val newFavItems = favItems.toMutableList()
+            newFavItems.find { it.topicId == event.event.sourceId && !it.isForum && it.topicId > 0 }?.also { fav ->
+                if (!fav.isNew) {
+                    fav.isNew = true
+                    fav.readState = FavoriteReadState.UNREAD
+                }
+                fav.unreadPostCount = fav.unreadPostCount.coerceAtLeast(1)
+            }
+            favoritesCache.saveFavorites(newFavItems)
+            return countUnreadFavoriteTopics(newFavItems)
+        }
 
         var newCount: Int
         val newFavItems = favItems.toMutableList()

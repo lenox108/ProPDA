@@ -235,6 +235,41 @@ class FavoritesRepositoryTest {
     }
 
     @Test
+    fun `websocket new event lights favorites badge without clobbering row metadata`() = runTest {
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = false),
+                        favoriteTopic(favId = 2, topicId = 43, isNew = false)
+                )
+        )
+        val repository = createRepository(favoritesCache)
+        // Реальное WS-событие несёт только sourceId/type; ник/важность в нём пусты
+        // (NotificationEventsApi.parseWebSocketEvent). Раньше такой NEW игнорировался — бейдж не рос.
+        val wsEvent = TabNotification(
+                source = NotificationEvent.Source.THEME,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(NotificationEvent.Type.NEW, NotificationEvent.Source.THEME).apply {
+                    sourceId = 42
+                },
+                isWebSocket = true
+        )
+
+        val counter = repository.handleEvent(wsEvent)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(1, counter)
+        assertEquals(true, item.isNew)
+        assertEquals(FavoriteReadState.UNREAD, item.readState)
+        assertEquals(true, item.unreadPostCount >= 1)
+        // Метаданные строки НЕ затёрты пустыми полями WS-события.
+        assertEquals("LastUser", item.lastUserNick)
+        assertEquals(1, item.lastUserId)
+        // Другая тема не тронута.
+        assertEquals(false, favoritesCache.getItemByTopicId(43)!!.isNew)
+    }
+
+    @Test
     fun `refresh preserves html unread when inspector reports read`() = runTest {
         val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
         val sorting = Sorting()
