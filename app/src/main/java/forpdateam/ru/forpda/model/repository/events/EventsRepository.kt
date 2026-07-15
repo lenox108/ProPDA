@@ -988,6 +988,27 @@ class EventsRepository(
                 }
             }
 
+            // Периодический/foreground hard-check приходит с events=[] (нет ожидающих WS-событий),
+            // поэтому цикл выше не эмитит ни одной TabNotification, и бейджи от inspector'а
+            // пересчитывались только на УМЕНЬШЕНИЕ (через checkOldEvents). Вновь появившиеся
+            // непрочитанные до счётчика не доходили, пока пользователь не откроет раздел.
+            // Публикуем синтетическую inspector-TabNotification (isWebSocket=false → ветка
+            // loadedEvents), чтобы QMS/Favorites пересчитали полный счёт из свежего inspector'а.
+            // sourceId=-1 гарантированно не совпадает ни с одной реальной темой/диалогом (их id > 0,
+            // системный QMS-диалог = 0), поэтому пер-элементные ветки хендлеров его пропускают и
+            // считают счётчик из loadedEvents. loadedEvents.isEmpty() означает «непрочитанных нет» —
+            // checkOldEvents уже обнулил счётчик, отдельный пересчёт не нужен.
+            if (events.isEmpty() && loadedEvents.isNotEmpty()) {
+                notifyTabs(TabNotification(
+                        source,
+                        NotificationEvent.Type.NEW,
+                        NotificationEvent(NotificationEvent.Type.NEW, source, sourceId = -1),
+                        false,
+                        loadedEvents.toList(),
+                        newEvents.toList()
+                ))
+            }
+
             sendNotifications(stackedNewEvents, source)
         }
     }
