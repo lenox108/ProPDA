@@ -1279,4 +1279,49 @@ class ArticleParserCommentsTest {
         assertTrue(comment.content.orEmpty().contains("эмейзинг"))
         assertTrue(!comment.content.orEmpty().contains("отредактирован"))
     }
+
+    @Test
+    fun parseCommentsViaTagsOnly_assignsReplyIndentLevels() {
+        // Ответы кодируются вложенным <ul class="comment-list">. Тег-путь раньше клал все
+        // комментарии плоско (level=0), из-за чего ответы шли без отступа. Теперь level берётся
+        // из глубины вложенности comment-list.
+        val html = """<ul class="comment-list"><li>
+            <div id="comment-1" class="comment"><a class="nickname">A</a><p class="content">top</p></div>
+            <ul class="comment-list"><li>
+                <div id="comment-2" class="comment"><a class="nickname">B</a><p class="content">reply</p></div>
+                <ul class="comment-list"><li>
+                    <div id="comment-3" class="comment"><a class="nickname">C</a><p class="content">nested reply</p></div>
+                </li></ul>
+            </li></ul>
+        </li><li>
+            <div id="comment-4" class="comment"><a class="nickname">D</a><p class="content">another top</p></div>
+        </li></ul>"""
+        val parser = ArticleParser(ArticlesPatternProviderStub())
+        val tree = parser.parseCommentsViaTagsOnly(SparseArray<Comment.Karma>(), html)
+
+        val byId = tree.children.associateBy { it.id }
+        assertEquals(0, byId.getValue(1).level)
+        assertEquals(1, byId.getValue(2).level)
+        assertEquals(2, byId.getValue(3).level)
+        assertEquals(0, byId.getValue(4).level)
+    }
+
+    @Test
+    fun parseCommentsViaTagsOnly_bodyBulletListDoesNotInflateLevel() {
+        // Список <ul> внутри тела комментария не должен считаться уровнем вложенности ответа.
+        val html = """<ul class="comment-list"><li>
+            <div id="comment-1" class="comment"><a class="nickname">A</a>
+                <p class="content">top with a list<ul><li>item</li></ul>after list</p>
+            </div>
+            <ul class="comment-list"><li>
+                <div id="comment-2" class="comment"><a class="nickname">B</a><p class="content">reply</p></div>
+            </li></ul>
+        </li></ul>"""
+        val parser = ArticleParser(ArticlesPatternProviderStub())
+        val tree = parser.parseCommentsViaTagsOnly(SparseArray<Comment.Karma>(), html)
+
+        val byId = tree.children.associateBy { it.id }
+        assertEquals(0, byId.getValue(1).level)
+        assertEquals(1, byId.getValue(2).level)
+    }
 }
