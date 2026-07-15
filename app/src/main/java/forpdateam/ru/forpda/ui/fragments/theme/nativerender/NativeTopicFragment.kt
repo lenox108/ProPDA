@@ -161,6 +161,26 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         return true
     }
 
+    /**
+     * Wrap [delegate] so that whenever a link is tapped it first dismisses the open hat/poll overlay, then
+     * delegates. Used only for the toolbar hat popup: a link there points to another topic or to another
+     * page of THIS topic, and leaving the hat hanging over the destination forced a manual close before the
+     * post was visible (user report «шапка висит поверх после перехода по ссылке»).
+     */
+    private fun overlayDismissingLinkHandler(delegate: ILinkHandler): ILinkHandler = object : ILinkHandler {
+        override fun handle(inputUrl: String?, router: forpdateam.ru.forpda.presentation.TabRouter?, args: Map<String, String>): Boolean {
+            dismissThemeOverlay()
+            return delegate.handle(inputUrl, router, args)
+        }
+
+        override fun handle(inputUrl: String?, router: forpdateam.ru.forpda.presentation.TabRouter?): Boolean {
+            dismissThemeOverlay()
+            return delegate.handle(inputUrl, router)
+        }
+
+        override fun findScreen(url: String): String? = delegate.findScreen(url)
+    }
+
     private val postsAdapter by lazy { TopicPostsAdapter(reportAwareLinkHandler, this) }
     private val pollHeaderAdapter = PollHeaderAdapter(
             voteListener = PollHeaderAdapter.PollVoteListener { action, method, encodedForm ->
@@ -1483,8 +1503,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 ?: return
         val ctx = requireContext()
         // A throwaway adapter renders the hat post fully (no hat-collapse in the popup) with all its
-        // spoilers/links, reusing the exact post rendering.
-        val popupAdapter = TopicPostsAdapter(reportAwareLinkHandler, this)
+        // spoilers/links, reusing the exact post rendering. Links inside the hat go through a wrapper that
+        // dismisses the overlay first, so tapping a hat link (another topic, or another page of THIS topic)
+        // reveals the destination immediately instead of leaving the hat hanging over it (user report).
+        val popupAdapter = TopicPostsAdapter(overlayDismissingLinkHandler(reportAwareLinkHandler), this)
         popupAdapter.setDisplaySettings(currentDisplaySettings())
         val auth = authHolder.get()
         popupAdapter.setAuthContext(auth.isAuth(), auth.userId)
@@ -1511,6 +1533,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      *  on the tapped image (parity with the WebView's handleImageNavigation). */
     override fun onImageClick(galleryUrls: List<String>, index: Int) {
         if (galleryUrls.isEmpty()) return
+        dismissThemeOverlay() // a tap inside the hat popup closes it too (no-op when no overlay is open)
         val start = index.coerceIn(0, galleryUrls.size - 1)
         forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
                 .startActivity(requireContext(), ArrayList(galleryUrls), start)
@@ -1530,6 +1553,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      *  «Способ загрузки → Спрашивать каждый раз» chooser can appear (the old `linkHandler.handle`
      *  tap dropped the UI context, so on non-SYSTEM methods the tap silently did nothing). */
     override fun onDownloadLinkTap(url: String, fileName: String?) {
+        dismissThemeOverlay() // a tap inside the hat popup closes it too (no-op when no overlay is open)
         systemLinkHandler.handleDownload(url, fileName, requireContext())
     }
 
