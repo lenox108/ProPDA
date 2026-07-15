@@ -27,7 +27,13 @@ class MessagePanelHelper(
         } else {
             maxOf(0, maxOf(dimensions.imeInsetBottom, dimensions.keyboardHeight))
         }
-        val bottomMargin = if (imeBottom > 0) {
+        // Хост без видимого контента (поиск, список диалогов QMS, любой TabFragment без панели ввода)
+        // поднимать не нужно: bottomMargin лишь укорачивает coordinator и открывает фон fragment_container
+        // (?colorPrimary) полосой размером с клавиатуру. Если reset-эмит теряется (закрытие поиска, навигация),
+        // эта полоса залипает как «след клавиатуры». Резервируем IME только когда есть что поднимать.
+        val bottomMargin = if (!hasVisibleContent(messagePanelHost)) {
+            0
+        } else if (imeBottom > 0) {
             imeBottom
         } else {
             baseBottomMargin
@@ -38,6 +44,16 @@ class MessagePanelHelper(
                 messagePanelHost.layoutParams = lp
             }
         }
+    }
+
+    /** Есть ли в хосте хотя бы один не-GONE ребёнок, который реально надо приподнять над IME. */
+    private fun hasVisibleContent(host: FrameLayout): Boolean {
+        for (i in 0 until host.childCount) {
+            if (host.getChildAt(i).visibility != View.GONE) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun hasCompactBbcodeHold(view: View): Boolean {
