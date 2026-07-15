@@ -77,6 +77,19 @@ class ArticleInteractor(
 
     private var cachedCommentsArticleId: Int = -1
     private var cachedCommentTree: Comment? = null
+    // Full embedded comment tree parsed ONCE, then paged in-memory. Re-parsing the ~400KB embedded
+    // source per load-more was a ~8s tagsoup DOM walk each time (measured) — the dominant cost of
+    // comment loading. Keyed by source hash so a changed source re-parses.
+    @Volatile
+    private var fullEmbeddedCommentTree: Comment? = null
+    @Volatile
+    private var fullEmbeddedCommentKey: Int? = null
+    // countCommentNodesInSource is a full-source regex scan (~1.5s on a 400KB embedded source) and was
+    // called several times per load-more; memoize it per source since it is deterministic.
+    @Volatile
+    private var cachedSourceNodeCount: Int = -1
+    @Volatile
+    private var cachedSourceNodeCountKey: Int? = null
     private var pendingScrollCommentId: Int = 0
     /** Next WordPress comment page (`cp`) to fetch from network after page 1. */
     private var commentsNextNetworkPage: Int = 2
@@ -101,6 +114,10 @@ class ArticleInteractor(
         _data.value = null
         cachedCommentsArticleId = -1
         cachedCommentTree = null
+        fullEmbeddedCommentTree = null
+        fullEmbeddedCommentKey = null
+        cachedSourceNodeCount = -1
+        cachedSourceNodeCountKey = null
         pendingScrollCommentId = 0
         resetCommentsPagination()
         StateRaceTrace.log(
@@ -559,6 +576,7 @@ class ArticleInteractor(
                     _data.value = current
                     articleCache.put(current)
                     diskCache?.put(current)
+                    prefetchCommentsIfNeeded("deferred_patch_complete")
                     val patch = ArticleDeferredExtrasMerger.buildPatch(current)
                     _extrasPatch.emit(patch)
                     session.markDeferredExtrasComplete(fullReload = false, patchApplied = true)
@@ -591,6 +609,7 @@ class ArticleInteractor(
                 _data.value = remapped
                 articleCache.put(remapped)
                 diskCache?.put(remapped)
+                prefetchCommentsIfNeeded("deferred_full_complete")
                 session.markDeferredExtrasComplete(fullReload = true, patchApplied = false)
                 val durationMs = System.currentTimeMillis() - deferredStartedAt
                 FpdaDebugLog.log(
@@ -1165,15 +1184,37 @@ class ArticleInteractor(
      * Comments are loaded only when the user expands the section ([loadComments]).
      * Article open must not fetch or parse comment trees in the background.
      */
+    /**
+     * Warms the embedded full-comment-tree cache in the background right after the article is ready,
+     * so the first "Показать" tap slices instantly instead of blocking on the ~8s one-shot parse.
+     * [loadComments] joins this job via [awaitActiveCommentsPrefetch], so a tap mid-parse still gets
+     * the warm tree (no duplicate parse). Idempotent and cheap to call repeatedly.
+     */
     fun prefetchCommentsIfNeeded(reason: String = "article_ready") {
-        FpdaDebugLog.log(
-                FpdaDebugLog.TAG_COMMENTS_SECTION,
-                "prefetch_skipped",
-                mapOf(
-                        "articleId" to (_data.value?.id ?: initData.newsId),
-                        "reason" to reason,
-                )
-        )
+        val article = _data.value ?: return
+        val articleId = article.id
+        if (articleId <= 0) return
+        val source = article.commentsSource?.takeIf { it.isNotBlank() } ?: return
+        // Already warm for this exact source, or a prefetch for it is already running.
+        if (fullEmbeddedCommentTree != null && fullEmbeddedCommentKey == source.hashCode()) return
+        if (commentsPrefetchJob?.isActive == true && commentsPrefetchArticleId == articleId) return
+        commentsPrefetchJob?.cancel()
+        commentsPrefetchArticleId = articleId
+        // Everything heavy (the eligibility regex + the ~8s parse) runs on Default so the calling
+        // thread (Main, from the deferred-extras completion) never blocks.
+        commentsPrefetchJob = scope.launch(Dispatchers.Default) {
+            if (!shouldUseEmbeddedLocalSlice(article)) return@launch
+            runCatching { embeddedFullCommentTree(article, source) }
+            FpdaDebugLog.log(
+                    FpdaDebugLog.TAG_COMMENTS_SECTION,
+                    "prefetch_warm",
+                    mapOf(
+                            "articleId" to articleId,
+                            "reason" to reason,
+                            "warmed" to (fullEmbeddedCommentKey == source.hashCode()),
+                    )
+            )
+        }
     }
 
     private fun resetCommentsPagination() {
@@ -1435,7 +1476,7 @@ class ArticleInteractor(
             }
                     .getOrNull()
                     ?.takeIf { countParsedComments(it) > 0 }
-                    ?.let { CommentBatchParse(it, newsRepository.countCommentNodesInSource(source)) }
+                    ?.let { CommentBatchParse(it, sourceNodeCount(source)) }
         }?.also { batch ->
             FpdaDebugLog.log(
                     FpdaDebugLog.TAG_COMMENTS_SECTION,
@@ -1549,15 +1590,25 @@ class ArticleInteractor(
         if (!shouldUseEmbeddedLocalSlice(article)) return null
         val source = article.commentsSource ?: return null
         if (!newsRepository.hasCommentNodeMarkup(source)) return null
-        val nodeCount = newsRepository.countCommentNodesInSource(source)
+        val nodeCount = sourceNodeCount(source)
         val page = commentPage.coerceAtLeast(1)
         return withContext(Dispatchers.Default) {
-            runCatching {
-                newsRepository.parseCommentsFromSource(article, source, paginated = true, commentPage = page)
+            // Parse the full embedded tree once (cached), then slice this page in-memory. Falls back
+            // to the per-page parse only if the one-shot full parse fails, so behaviour is unchanged
+            // on the unhappy path.
+            val sliced = embeddedFullCommentTree(article, source)?.let { full ->
+                runCatching { newsRepository.capPaginatedCommentBatch(full, page) }.getOrNull()
+            }?.takeIf { countParsedComments(it) > 0 }
+            if (sliced != null) {
+                CommentBatchParse(sliced, nodeCount)
+            } else {
+                runCatching {
+                    newsRepository.parseCommentsFromSource(article, source, paginated = true, commentPage = page)
+                }
+                        .getOrNull()
+                        ?.takeIf { countParsedComments(it) > 0 }
+                        ?.let { CommentBatchParse(it, nodeCount) }
             }
-                    .getOrNull()
-                    ?.takeIf { countParsedComments(it) > 0 }
-                    ?.let { CommentBatchParse(it, nodeCount) }
         }?.also { batch ->
             FpdaDebugLog.log(
                     FpdaDebugLog.TAG_COMMENTS_SECTION,
@@ -1573,6 +1624,43 @@ class ArticleInteractor(
     }
 
     /**
+     * Parses the full embedded comment tree ONCE and memoizes it (keyed by source hash), so that
+     * pagination slices in-memory instead of re-walking the ~400KB source per page. Returns null on
+     * parse failure, letting callers fall back to the per-page parse.
+     */
+    /** Memoized [countCommentNodesInSource] — the raw call is a ~1.5s regex scan of the full source. */
+    private fun sourceNodeCount(source: String): Int {
+        val key = source.hashCode()
+        if (cachedSourceNodeCountKey == key && cachedSourceNodeCount >= 0) return cachedSourceNodeCount
+        val count = newsRepository.countCommentNodesInSource(source)
+        cachedSourceNodeCount = count
+        cachedSourceNodeCountKey = key
+        return count
+    }
+
+    private suspend fun embeddedFullCommentTree(article: DetailsPage, source: String): Comment? {
+        val key = source.hashCode()
+        fullEmbeddedCommentTree?.let { if (fullEmbeddedCommentKey == key) return it }
+        val startNs = System.nanoTime()
+        val full = runCatching {
+            newsRepository.parseCommentsFromSource(article, source, paginated = false)
+        }.getOrNull()
+        if (full == null || countParsedComments(full) <= 0) return null
+        fullEmbeddedCommentTree = full
+        fullEmbeddedCommentKey = key
+        FpdaDebugLog.log(
+                FpdaDebugLog.TAG_COMMENTS_SECTION,
+                "embedded_full_parse_once",
+                mapOf(
+                        "articleId" to article.id,
+                        "parsedCount" to countParsedComments(full),
+                        "ms" to (System.nanoTime() - startNs) / 1_000_000,
+                )
+        )
+        return full
+    }
+
+    /**
      * Mobile article HTML may embed hundreds of comment nodes. Page 1 must slice the first batch
      * locally (tag-only + [limitPaginatedCommentBatch]) instead of re-fetching the full article.
      */
@@ -1582,8 +1670,7 @@ class ArticleInteractor(
     ): CommentBatchParse? {
         val loadedSoFar = countParsedComments(article.commentTree ?: Comment())
         val expected = effectiveCommentsCount(article)
-        val embeddedNodes = article.commentsSource
-                ?.let { newsRepository.countCommentNodesInSource(it) } ?: 0
+        val embeddedNodes = article.commentsSource?.let { sourceNodeCount(it) } ?: 0
         // Full embedded HTML: slice the next WP page locally instead of re-parsing all nodes.
         if (embeddedNodes > loadedSoFar) {
             tryParseEmbeddedCommentsPaginated(article, page)?.let { sliced ->
@@ -1605,7 +1692,7 @@ class ArticleInteractor(
     private fun shouldUseEmbeddedLocalSlice(article: DetailsPage): Boolean {
         val source = article.commentsSource ?: return false
         if (!newsRepository.hasCommentNodeMarkup(source)) return false
-        val nodeCount = newsRepository.countCommentNodesInSource(source)
+        val nodeCount = sourceNodeCount(source)
         if (nodeCount <= 0) return false
         val expected = effectiveCommentsCount(article)
         if (expected <= 0) {

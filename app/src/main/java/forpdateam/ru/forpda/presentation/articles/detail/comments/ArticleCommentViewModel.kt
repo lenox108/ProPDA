@@ -59,6 +59,13 @@ class ArticleCommentViewModel(
     private var allComments = ArrayList<Comment>()
     private var serverHasMore: Boolean = false
     private var loadingMoreComments: Boolean = false
+    // Size of the loaded list captured the moment a load-more starts, BEFORE the batch is applied.
+    // The interactor both emits the merged tree to the comments Flow AND returns it, so a load-more
+    // batch is applied twice; comparing the post-load size against the live [allComments] (which the
+    // first application already grew) made the second application see "no growth" and falsely trip
+    // the ceiling — stranding the reader at ~40/N comments. Comparing against this stable baseline
+    // is immune to the double-apply.
+    private var loadMoreBaselineSize: Int = 0
     private val pendingLikeCommentIds = mutableSetOf<Int>()
     private val _commentsState = MutableStateFlow<ArticleCommentsState>(ArticleCommentsState.NotLoaded)
     val commentsState: StateFlow<ArticleCommentsState> = _commentsState.asStateFlow()
@@ -86,6 +93,7 @@ class ArticleCommentViewModel(
         allComments = ArrayList()
         serverHasMore = false
         loadingMoreComments = false
+        loadMoreBaselineSize = 0
         firstShow = true
         deepLinkReloadTried = false
         deepLinkScrollArmed = false
@@ -357,6 +365,7 @@ class ArticleCommentViewModel(
                 if (requestId != loadRequestId.get()) return@withLock
                 try {
                     loadingMoreComments = true
+                    loadMoreBaselineSize = allComments.size
                     _refreshing.value = true
                     scheduleLoadingMoreTimeout(requestId)
                     FpdaDebugLog.log(
@@ -602,7 +611,7 @@ class ArticleCommentViewModel(
                 // Догрузка не дала прироста (сервер вернул ту же партию) → потолок: больше комментов
                 // не достать, expectedCount оказался завышен (напр. учитывает удалённый коммент).
                 // Гасим «Показать ещё», иначе кнопка и автопагинация зацикливаются на фантоме.
-                if (loadingMoreComments && list.size <= previousSize) {
+                if (loadingMoreComments && list.size <= loadMoreBaselineSize) {
                     loadMoreCeilingReached = true
                     FpdaDebugLog.log(
                             FpdaDebugLog.TAG_COMMENTS_SECTION,

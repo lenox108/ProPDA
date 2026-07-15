@@ -182,6 +182,35 @@ class ArticleTemplateTest {
         assertTrue(template.contains("defer type=\"text/javascript\" src=\"file:///android_asset/forpda/scripts/z_emoticons.js\""))
     }
 
+    @Test
+    fun `leading hero figure is stripped from body when header shows the hero image`() {
+        val html = articleTemplate().mapString(DetailsPage().apply {
+            title = "Article"
+            imgUrl = "https://4pda.to/s/hero.jpg"
+            this.html = """<figure class="article-figure-big"><img src="//4pda.to/s/lead.jpg"/></figure><h2>Section</h2><p>Body</p>"""
+            commentsCount = 3
+        })
+
+        // Header renders the hero image, and the duplicate leading figure is removed from the body.
+        assertTrue(html.contains("news-detail-header-image"))
+        assertTrue(html.contains("<img") && html.contains("hero.jpg"))
+        assertFalse(html.contains("lead.jpg"))
+        assertTrue(html.contains("Section"))
+    }
+
+    @Test
+    fun `leading figure is kept when there is no header hero image`() {
+        val html = articleTemplate().mapString(DetailsPage().apply {
+            title = "Article"
+            imgUrl = null
+            this.html = """<figure class="article-figure-big"><img src="//4pda.to/s/lead.jpg"/></figure><h2>Section</h2><p>Body</p>"""
+            commentsCount = 3
+        })
+
+        // No header hero → the body's only image must survive.
+        assertTrue(html.contains("lead.jpg"))
+    }
+
     private fun articleTemplate(
             commentsLabel: String = "Комментарии",
             showCommentsLabel: String = "Показать комментарии",

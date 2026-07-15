@@ -1371,7 +1371,15 @@ function newsInlineCommentsUpdateLoadMore(canLoadMore, totalCount, renderedCount
         more.style.display = "block";
         more.textContent = remaining > 0 ? ("Показать ещё (" + remaining + ")") : "Показать ещё";
         more.disabled = false;
-        newsInlineCommentsSuppressAutoload(root, 500);
+        // Debounce autoload ONLY right after a real new batch. This function is called many times per
+        // batch (inject, count patches, model syncs); calling suppressAutoload every time kept pushing
+        // the 500ms cooldown forward, so infinite-scroll never fired and comments appeared to "stop
+        // loading" after the first page. Suppress only when the rendered count actually grew.
+        var lastAutoloadRendered = parseInt(root.dataset.newsCommentsAutoloadRendered || "-1", 10);
+        if ((renderedCount || 0) > lastAutoloadRendered) {
+            newsInlineCommentsSuppressAutoload(root, 500);
+            root.dataset.newsCommentsAutoloadRendered = String(renderedCount || 0);
+        }
         fpdaCommentsSectionLog("load_more_shown", {
             rendered: renderedCount || 0,
             total: totalCount || 0,
