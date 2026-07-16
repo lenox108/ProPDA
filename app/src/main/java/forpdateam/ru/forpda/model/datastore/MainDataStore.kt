@@ -82,8 +82,33 @@ class MainDataStore(private val context: Context) {
 
     fun observeWebViewFontSizeFlow(): Flow<Int> =
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
-                max(min(preferences[PreferencesKeys.WEBVIEW_FONT_SIZE] ?: 16, 64), 8)
-            }, 16)
+                resolveWebViewFontSize(preferences[PreferencesKeys.WEBVIEW_FONT_SIZE])
+            }, resolveWebViewFontSize(null))
+
+    /**
+     * Single source of truth for «Размер шрифта в темах», shared by the DataStore-backed flow
+     * ([observeWebViewFontSizeFlow]) and the synchronous mirror read ([getWebViewFontSizeImmediate]).
+     *
+     * Precedence — legacy `_preferences` → DataStore/mirror → default 16 — is IDENTICAL on both
+     * paths so they can never diverge. This matters for users who upgraded from the stock 4pda app
+     * (same package): they carry a `_preferences` value (e.g. 13) that the flow used to ignore
+     * (defaulting to 16) while the immediate read honoured it — so a topic rendered at 13 while the
+     * same setting produced 16 in an open article («тема мельче новости»). The setter keeps the
+     * mirror and the DataStore in lockstep, so passing the DataStore value (flow) or reading the
+     * mirror (immediate) as the second tier yields the same number.
+     */
+    private fun resolveWebViewFontSize(fromDataStore: Int?): Int {
+        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+        if (legacy.contains(AppPreferences.Main.WEBVIEW_FONT_SIZE)) {
+            return clampWebViewFontSize(legacy.getInt(AppPreferences.Main.WEBVIEW_FONT_SIZE, 16))
+        }
+        if (fromDataStore != null) return clampWebViewFontSize(fromDataStore)
+        val mirrored = mirrorPrefs.getInt("webview_font_size", -1)
+        if (mirrored > 0) return clampWebViewFontSize(mirrored)
+        return 16
+    }
+
+    private fun clampWebViewFontSize(value: Int): Int = max(min(value, 64), 8)
 
     /** App-wide UI font size (sp at 100% = 16). Scales the whole interface via Configuration.fontScale;
      *  independent of the per-post «Размер шрифта в темах» (WEBVIEW_FONT_SIZE). */
@@ -560,16 +585,10 @@ class MainDataStore(private val context: Context) {
                 .edit().putInt(AppPreferences.Main.WEBVIEW_FONT_SIZE, clamped).apply()
     }
 
-    /** Instant synchronous read from SharedPreferences mirror (no blocking I/O). */
-    fun getWebViewFontSizeImmediate(): Int {
-        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
-        if (legacy.contains(AppPreferences.Main.WEBVIEW_FONT_SIZE)) {
-            return max(min(legacy.getInt(AppPreferences.Main.WEBVIEW_FONT_SIZE, 16), 64), 8)
-        }
-        val mirrored = mirrorPrefs.getInt("webview_font_size", -1)
-        if (mirrored > 0) return max(min(mirrored, 64), 8)
-        return 16
-    }
+    /** Instant synchronous read (no blocking I/O). Uses the SAME precedence as the flow via
+     *  [resolveWebViewFontSize] — the mirror stands in for the DataStore tier (the setter keeps them
+     *  in lockstep), so the two read paths always agree. */
+    fun getWebViewFontSizeImmediate(): Int = resolveWebViewFontSize(null)
 
     suspend fun setAppFontSize(size: Int) {
         val clamped = max(min(size, 64), 8)
