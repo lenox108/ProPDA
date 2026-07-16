@@ -789,6 +789,91 @@ class FavoritesRepositoryTest {
     }
 
     @Test
+    fun `synthetic inspector recompute does not relight a just-read favorite`() = runTest {
+        // Регрессия коммита 6574e8b: на резюме/foreground публикуется синтетическая inspector-
+        // TabNotification (isWebSocket=false, sourceId=-1, loadedEvents=свежий inspector). Тему
+        // только что дочитали до конца (локально READ + localRead-сентинел), но серверный
+        // last_read_ts ещё не догнал mark-read GET, поэтому inspector отдаёт её непрочитанной
+        // (last_post_ts=200 > last_read_ts=100). Событийный пересчёт НЕ должен зажигать её заново.
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = false).apply {
+                            localReadPostId = 42
+                            localReadPostDateMillis = 300_000L // 300s > last_post_ts=200s
+                        },
+                        favoriteTopic(favId = 2, topicId = 43, isNew = false)
+                )
+        )
+        val repository = createRepository(favoritesCache)
+        val syntheticInspector = TabNotification(
+                source = NotificationEvent.Source.THEME,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(NotificationEvent.Type.NEW, NotificationEvent.Source.THEME).apply {
+                    sourceId = -1
+                },
+                isWebSocket = false,
+                loadedEvents = listOf(
+                        themeEvent(
+                                type = NotificationEvent.Type.NEW,
+                                topicId = 42,
+                                msgCount = 1,
+                                timeStamp = 200,
+                                lastTimeStamp = 100
+                        )
+                )
+        )
+
+        val counter = repository.handleEvent(syntheticInspector)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(false, item.isNew)
+        assertEquals(FavoriteReadState.READ, item.readState)
+        assertEquals(0, item.unreadPostCount)
+        assertEquals(0, counter)
+    }
+
+    @Test
+    fun `inspector recompute still relights a read favorite on genuinely newer activity`() = runTest {
+        // Обратная сторона защиты: если inspector показывает пост НОВЕЕ момента локального прочтения
+        // (last_post_ts=400 > localRead=300s), тема реально получила новое сообщение — зажигаем.
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = false).apply {
+                            localReadPostId = 42
+                            localReadPostDateMillis = 300_000L // 300s < last_post_ts=400s
+                        }
+                )
+        )
+        val repository = createRepository(favoritesCache)
+        val syntheticInspector = TabNotification(
+                source = NotificationEvent.Source.THEME,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(NotificationEvent.Type.NEW, NotificationEvent.Source.THEME).apply {
+                    sourceId = -1
+                },
+                isWebSocket = false,
+                loadedEvents = listOf(
+                        themeEvent(
+                                type = NotificationEvent.Type.NEW,
+                                topicId = 42,
+                                msgCount = 2,
+                                timeStamp = 400,
+                                lastTimeStamp = 100
+                        )
+                )
+        )
+
+        val counter = repository.handleEvent(syntheticInspector)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(true, item.isNew)
+        assertEquals(FavoriteReadState.UNREAD, item.readState)
+        assertEquals(1, counter)
+    }
+
+    @Test
     fun `stale cache read does not override fresh unread state`() = runTest {
         val dao = FakeFavItemDao()
         val favoritesCache = FavoritesCacheRoom(dao)
