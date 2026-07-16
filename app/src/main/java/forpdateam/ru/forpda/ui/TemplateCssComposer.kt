@@ -2,12 +2,9 @@ package forpdateam.ru.forpda.ui
 
 import android.content.Context
 import android.os.Build
-import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.MaterialDynamicColors
-import com.google.android.material.color.utilities.SchemeExpressive
-import com.google.android.material.color.utilities.SchemeTonalSpot
-import com.google.android.material.color.utilities.SchemeVibrant
 import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.DayNightHelper
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
@@ -95,10 +92,12 @@ class TemplateCssComposer(
      * Возвращает hex `#RRGGBB` или null → оставить статический palette-default.
      *
      * Считается in-process (у композера @ApplicationContext без per-activity
-     * оверлея, поэтому НЕ читаем тему): Material You → системный `system_accent1`
-     * (API 31+); курируемая/произвольная палитра → M3 primary из seed тем же
-     * SchemeTonalSpot, что и нативные ресурсы. Палитры чтения (Sepia/Minimal)
-     * сохраняют свои выверенные акценты → null.
+     * оверлея, поэтому НЕ читаем тему): Material You → системная роль primary,
+     * повторяя маппинг Material по версии Android (API 34+: `system_primary_*`;
+     * API 31–33: `system_accent1_600/_200` — см. тело функции); курируемая/
+     * произвольная палитра → M3 primary из seed через общий [AccentSchemes.scheme],
+     * тот же, что и нативные ресурсы. Палитры чтения (Sepia/Minimal) сохраняют
+     * свои выверенные акценты → null.
      */
     private fun resolveDynamicAccentHex(): String? {
         if (isSepiaReading() || isSepiaBlue() || isMinimalReader() || isNewReadingPalette()) return null
@@ -106,8 +105,25 @@ class TemplateCssComposer(
         return runCatching {
             val materialYou = mainPreferencesHolder.getUseMaterialYou()
             if (materialYou && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val res = if (isNight) android.R.color.system_accent1_200
-                else android.R.color.system_accent1_600
+                // Композер работает на @ApplicationContext (без per-activity
+                // оверлея DynamicColors), поэтому не может прочитать роль
+                // ?attr/colorPrimary напрямую и повторяет маппинг Material
+                // ВРУЧНУЮ. Маппитель у Material РАЗНЫЙ по версии Android:
+                //  - API 31–33 (values-v31): colorPrimary → сырой тон-слот
+                //    палитры обоев system_accent1_600 (light) / _200 (dark).
+                //  - API 34+ (values-v34): colorPrimary → НОВАЯ системная роль
+                //    system_primary_light / system_primary_dark, которая учитывает
+                //    выбранный в системе «стиль цвета» (Tonal/Vibrant/Expressive)
+                //    и при любом не-дефолтном стиле НЕ равна system_accent1_600.
+                // Если тут всегда читать accent1_600/_200, то на Android 14+ акцент
+                // форума расходится с нативным хромом (жалоба «неправильные акценты»).
+                val res = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    if (isNight) android.R.color.system_primary_dark
+                    else android.R.color.system_primary_light
+                } else {
+                    if (isNight) android.R.color.system_accent1_200
+                    else android.R.color.system_accent1_600
+                }
                 return@runCatching "#%06X".format(context.getColor(res) and 0xFFFFFF)
             }
             val accent = mainPreferencesHolder.getAccentPalette()
@@ -116,12 +132,14 @@ class TemplateCssComposer(
                 Preferences.Main.AccentPalette.CUSTOM -> mainPreferencesHolder.getAccentCustomColor()
                 else -> curatedSeeds[accent] ?: return@runCatching null
             }
-            val hct = Hct.fromInt(seed)
-            val scheme = when (mainPreferencesHolder.getAccentStyle()) {
-                Preferences.Main.AccentStyle.VIBRANT -> SchemeVibrant(hct, isNight, 0.0)
-                Preferences.Main.AccentStyle.EXPRESSIVE -> SchemeExpressive(hct, isNight, 0.0)
-                else -> SchemeTonalSpot(hct, isNight, 0.0)
-            }
+            // ЕДИНЫЙ источник правды со схемой (AccentSchemes) — тот же, что
+            // генерит нативные @color/accent_* и превью пикера. Раньше здесь
+            // строилась схема инлайном, и для стиля EXPRESSIVE бралась RAW
+            // SchemeExpressive (primary = hue(seed)+240°): форум в WebView
+            // красился «не тем» оттенком (Синий → зелёный), пока хром/свотч/
+            // превью оставались корректными. AccentSchemes.expressive() чинит
+            // primary по тону seed — теперь все потребители сходятся.
+            val scheme = AccentSchemes.scheme(seed, mainPreferencesHolder.getAccentStyle(), isNight)
             val argb = MaterialDynamicColors().primary().getArgb(scheme)
             "#%06X".format(argb and 0xFFFFFF)
         }.getOrNull()
@@ -591,7 +609,9 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
      * Только для системной палитры (Sepia/SepiaBlue/Minimal самодостаточны, AMOLED —
      * намеренно чёрный). Два режима повторяют поведение нативной оболочки:
      *  - Material You (API 31+): DynamicColors тонирует ПОВЕРХНОСТИ обоями → в форуме
-     *    красим фон/карточки/текст системными нейтралями + ссылки системным акцентом.
+     *    красим фон/карточки/текст теми же системными ролями, что резолвит нативный
+     *    хром (API 34+: system_surface_* / system_on_surface_* + зеркало DARK-floor;
+     *    API 31–33: аппроксимация system_neutral1_*) + ссылки системным акцентом.
      *  - Курируемый/произвольный акцент (MY выкл): accent-оверлей НЕ трогает
      *    поверхности (нейтральны) → в форуме поверхности НЕ трогаем, красим только
      *    ссылки/кнопки акцентом (из seed через ту же схему, что resolveDynamicAccentHex).
@@ -615,7 +635,39 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
         if (materialYou) {
             fun hex(resId: Int): String = "#%06X".format(context.getColor(resId) and 0xFFFFFF)
             val bg: String; val card: String; val text: String
-            if (isDark) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // API 34+: Material мапит surface-роли на НОВЫЕ системные роли
+                // (values-v34), а не на сырые тон-слоты system_neutral1_*.
+                // Зеркалим то, что реально резолвит нативный хром:
+                //   фон страницы = colorSurfaceContainerLowest → system_surface_container_lowest_*
+                //   карточки     = colorSurface               → system_surface_*
+                //   текст        = colorOnSurface             → system_on_surface_*
+                if (isDark) {
+                    // Адаптивный DARK-floor — как MaterialYouApplier.
+                    // dynamicDarkSurfaceIsNearBlack(): на части устройств
+                    // (Android 16) системный lowest = чистый #000000, и натив
+                    // пинит фон на статичные тёмно-серые. Повторяем ту же
+                    // проверку, иначе форум ушёл бы в AMOLED-чёрный, пока
+                    // нативный хром остался тёмно-серым.
+                    val lowest = context.getColor(android.R.color.system_surface_container_lowest_dark)
+                    val reference = context.getColor(R.color.dark_background_base)
+                    if (androidx.core.graphics.ColorUtils.calculateLuminance(lowest) <=
+                            androidx.core.graphics.ColorUtils.calculateLuminance(reference)) {
+                        bg = hex(R.color.dark_background_base)
+                        card = hex(R.color.dark_card_background)
+                    } else {
+                        bg = hex(android.R.color.system_surface_container_lowest_dark)
+                        card = hex(android.R.color.system_surface_dark)
+                    }
+                    text = hex(android.R.color.system_on_surface_dark)
+                } else {
+                    bg = hex(android.R.color.system_surface_container_lowest_light)
+                    card = hex(android.R.color.system_surface_light)
+                    text = hex(android.R.color.system_on_surface_light)
+                }
+            } else if (isDark) {
+                // API 31–33: точные тона v31 (neutral_variant 98/6/4) фреймворк
+                // слотами не отдаёт — оставляем выверенную аппроксимацию нейтралями.
                 bg = hex(android.R.color.system_neutral1_900)
                 card = hex(android.R.color.system_neutral1_800)
                 text = hex(android.R.color.system_neutral1_50)
