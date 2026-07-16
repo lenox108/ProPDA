@@ -313,7 +313,7 @@ class FavoritesRepository(
                     }
                     val ev = byTopic[fav.topicId]
                     if (ev != null) {
-                        if (ev.favoriteInspectorHasUnread()) {
+                        if (ev.favoriteInspectorHasUnread() && !localReadDefeatsStaleInspector(fav, ev)) {
                             fav.isNew = true
                             fav.readState = FavoriteReadState.UNREAD
                             val hint = ev.inspectorUnreadHint()
@@ -621,6 +621,29 @@ private fun NotificationEvent.favoriteInspectorHasUnread(): Boolean {
     // When last_post_ts == last_read_ts, msgCount (1..199) is the unread hint if timestamps lag.
     if (timeStamp == lastTimeStamp && inspectorUnreadHint() > 0) return true
     return false
+}
+
+/**
+ * Локальное прочтение побеждает устаревший inspector.
+ *
+ * Тему только что дочитали до конца (или отправили в неё свой пост) — строка уже READ и взведены
+ * [FavItem.localReadPostId]/[FavItem.localReadPostDateMillis], — а серверный last_read_ts ещё не
+ * догнал fire-and-forget mark-read GET, поэтому inspector секунду-другую продолжает отдавать тему
+ * непрочитанной (last_post_ts > last_read_ts, либо last_read_ts=0 у нетрекнутой темы). Пока inspector
+ * не покажет активность НОВЕЕ момента локального прочтения, событийный пересчёт не должен заново
+ * зажигать индикатор.
+ *
+ * Зеркалит защиту [FavoriteReadStateMerge] («cached_read_over_inspector»), которой сетевой refresh
+ * пользуется через inspectorTimeStampSeconds/localReadTimeSeconds, а событийный путь
+ * ([handleEventTransaction]) раньше не имел — из-за чего синтетический foreground-пересчёт inspector'а
+ * (EventsRepository, коммит 6574e8b) заново помечал свежепрочитанную тему непрочитанной.
+ */
+private fun localReadDefeatsStaleInspector(fav: FavItem, ev: NotificationEvent): Boolean {
+    if (fav.isNew || fav.readState != FavoriteReadState.READ) return false
+    if (fav.localReadPostId <= 0 || fav.localReadPostDateMillis <= 0L) return false
+    val localReadSeconds = fav.localReadPostDateMillis / 1000L
+    // ev.timeStamp — last_post_ts (секунды). Пост не новее момента прочтения ⇒ тема прочитана.
+    return ev.timeStamp <= localReadSeconds
 }
 
 /**
