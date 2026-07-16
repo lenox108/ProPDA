@@ -554,7 +554,8 @@ class BodyBlockViewFactory(
             val text = neutralizeLowContrastColors(surface, stripLinkColors(spanned(ctx, block.html)))
             setText(text)
             SmileProvider.startAnimations(this)
-            textSize = scaledSp(15f)
+            // Fallback body = same 16sp reference as the normal paragraph (see textView()).
+            textSize = scaledSp(16f)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             setLinkTextColor(contrastSafeLinkColor(ctx, surface))
             setLineSpacing(0f, 1.1f)
@@ -626,7 +627,7 @@ class BodyBlockViewFactory(
         return TextView(ctx).apply {
             setText(text)
             SmileProvider.startAnimations(this)
-            textSize = scaledSp(13f) // ~0.875 of the 15sp body
+            textSize = scaledSp(14f) // ~0.875 of the 16sp body (mirrors WebView .edit: 0.875em)
             setTextColor(muted)
             setLineSpacing(0f, 1.15f)
             layoutParams = LinearLayout.LayoutParams(
@@ -660,7 +661,11 @@ class BodyBlockViewFactory(
             val surface = currentSurface(ctx, scope)
             setText(highlightSearchMatches(ctx, neutralizeLowContrastColors(surface, stripLinkColors(text))))
             SmileProvider.startAnimations(this)
-            textSize = scaledSp(15f)
+            // Body base = 16sp so at «Размер шрифта в темах» = N (textScale = N/16) the paragraph
+            // renders at N sp — matching the news/WebView path, which sets `defaultFontSize = N` px
+            // directly. A 15sp base rendered every theme one step smaller than the same setting in an
+            // open article (report: set 20 → тема ~17, новость 20). REFERENCE_FONT_SIZE is 16 too.
+            textSize = scaledSp(16f)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             // Force in-text links (profile nicks in the hat / «отредактировал N» footer) to the readable
             // accent — their server-side inline colour is picked for a white bg and vanishes on Sepia.
