@@ -1010,18 +1010,6 @@ body {
   box-sizing: border-box;
   box-shadow: 0rem 0.0625rem 0.125rem rgba(0, 0, 0, 0.1);
 }
-.news-comments-section .news-inline-comment:before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.75rem;
-  bottom: 0.75rem;
-  width: 0.125rem;
-  background: rgba(33, 119, 175, 0.22);
-  background: color-mix(in srgb, var(--surface-accent, #2177af) 22%, transparent);
-  -webkit-border-radius: 0.125rem;
-  border-radius: 0.125rem;
-}
 .news-comments-section .news-inline-comment:first-child {
   margin-top: 0;
 }
