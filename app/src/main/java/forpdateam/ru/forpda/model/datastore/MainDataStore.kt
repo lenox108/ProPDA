@@ -552,6 +552,12 @@ class MainDataStore(private val context: Context) {
             preferences[PreferencesKeys.WEBVIEW_FONT_SIZE] = clamped
         }
         mirrorPrefs.edit().putInt("webview_font_size", clamped).apply()
+        // The immediate read below reads the ORIGINAL-ForPDA legacy key first (users who upgraded
+        // from the stock app carry it in `_preferences`, e.g. stuck at 13). If we only wrote the
+        // mirror, that stale legacy value would keep winning and the topic renderer would ignore
+        // every change/reset. Keep the legacy key in sync so writes stay authoritative.
+        context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                .edit().putInt(AppPreferences.Main.WEBVIEW_FONT_SIZE, clamped).apply()
     }
 
     /** Instant synchronous read from SharedPreferences mirror (no blocking I/O). */
