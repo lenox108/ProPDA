@@ -152,6 +152,16 @@ class TemplateCssComposer(
      * их переключали в рамках одной сессии (recreate, без рестарта процесса),
      * композер-синглтон отдавал устаревший CSS до перезапуска приложения. Теперь
      * входят — CSS пересобирается сразу.
+     *
+     * [materialYouSignature] — фактические системные MY-цвета (обои). Флага
+     * [materialYou] в ключе НЕ достаточно: при смене ОБОЕВ он остаётся true, а
+     * accent/style/customColor не меняются (палитра = SYSTEM), поэтому без
+     * сигнатуры ключ идентичен и синглтон-композер отдавал СТАРЫЙ CSS — и оттенок
+     * (--ppda-accent/--forum-accent), и фон (--forum-bg/card/text) не менялись
+     * после смены обоев до перезапуска процесса. Сигнатура = реально
+     * резолвнутые системные роли primary и surface (API 34+: system_primary /
+     * system_surface; 31–33: system_accent1 / system_neutral1): при смене обоев
+     * она меняется — кэш инвалидируется, CSS пересобирается со свежими цветами.
      */
     private data class CssConfig(
             val fontMode: Any?,
@@ -165,6 +175,7 @@ class TemplateCssComposer(
             val accent: Any?,
             val accentStyle: Any?,
             val accentCustomColor: Int,
+            val materialYouSignature: String?,
     )
 
     private var cachedConfig: CssConfig? = null
@@ -182,7 +193,27 @@ class TemplateCssComposer(
             accent = mainPreferencesHolder.getAccentPalette(),
             accentStyle = mainPreferencesHolder.getAccentStyle(),
             accentCustomColor = mainPreferencesHolder.getAccentCustomColor(),
+            materialYouSignature = materialYouSignature(),
     )
+
+    /**
+     * Отпечаток текущих системных MY-цветов (обоев) для ключа кэша CSS. null,
+     * если MY выкл или API < 31 (тогда цвет обоев не участвует, и кэш держат
+     * остальные поля [CssConfig]). Читаем ровно те роли, что использует рендер
+     * (акцент + фон/карточки), чтобы кэш инвалидировался при ЛЮБОЙ смене обоев.
+     */
+    private fun materialYouSignature(): String? {
+        if (!mainPreferencesHolder.getUseMaterialYou() ||
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+        fun c(id: Int): Int = runCatching { context.getColor(id) }.getOrDefault(0)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            "${c(android.R.color.system_primary_light)}:${c(android.R.color.system_primary_dark)}:" +
+                    "${c(android.R.color.system_surface_light)}:${c(android.R.color.system_surface_dark)}"
+        } else {
+            "${c(android.R.color.system_accent1_600)}:${c(android.R.color.system_accent1_200)}:" +
+                    "${c(android.R.color.system_neutral1_50)}:${c(android.R.color.system_neutral1_900)}"
+        }
+    }
 
     /**
      * Возвращает inline CSS-оверрайды для WebView-шаблонов.
