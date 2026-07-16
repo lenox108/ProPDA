@@ -628,7 +628,8 @@ class FavoritesRepositoryTest {
                 countersHolder = CountersHolder(counterPreferences()),
                 listsPreferencesHolder = mockk(relaxed = true),
                 notificationPreferencesHolder = notificationPreferencesHolder,
-                eventsApi = eventsApi
+                eventsApi = eventsApi,
+                readBoundaryStore = mockk(relaxed = true)
         )
 
         repository.loadFavorites(0, all = false, sorting = sorting, forceRefresh = true)
@@ -1214,7 +1215,8 @@ class FavoritesRepositoryTest {
                 countersHolder = countersHolder,
                 listsPreferencesHolder = mockk<ListsPreferencesHolder>(relaxed = true),
                 notificationPreferencesHolder = notificationPreferencesHolder,
-                eventsApi = eventsApi
+                eventsApi = eventsApi,
+                readBoundaryStore = mockk(relaxed = true)
         )
     }
 

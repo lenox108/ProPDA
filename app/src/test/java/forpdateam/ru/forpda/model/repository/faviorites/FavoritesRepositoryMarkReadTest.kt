@@ -15,11 +15,13 @@ import forpdateam.ru.forpda.model.data.remote.api.events.NotificationEventsApi
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
+import forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.Runs
+import io.mockk.verify
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -154,12 +156,29 @@ class FavoritesRepositoryMarkReadTest {
         assertEquals(0, countersHolder.get().favorites)
     }
 
+    @Test
+    fun `mark read clears client read boundary for the topic`() = runTest {
+        // Регресс: после отметки прочитанным клиентская граница прочитанного должна сниматься,
+        // иначе переоткрытие темы резюмит findpost'ом на устаревшую границу вместо свежих постов.
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(favoriteTopic(favId = 1, topicId = 42, isNew = true, unreadPostCount = 3))
+        )
+        val readBoundaryStore = mockk<TopicReadBoundaryStore>(relaxed = true)
+        val repository = createRepository(favoritesCache, readBoundaryStore = readBoundaryStore)
+
+        repository.markRead(42)
+
+        verify(exactly = 1) { readBoundaryStore.clear(42) }
+    }
+
     private fun createRepository(
             favoritesCache: FavoritesCacheRoom,
             favoritesApi: FavoritesApi = mockk<FavoritesApi>(relaxed = true),
             eventsApi: NotificationEventsApi = mockk<NotificationEventsApi>(relaxed = true),
             initialFavoritesCount: Int = 0,
-            countersHolder: CountersHolder = CountersHolder(counterPreferences(initialFavoritesCount))
+            countersHolder: CountersHolder = CountersHolder(counterPreferences(initialFavoritesCount)),
+            readBoundaryStore: TopicReadBoundaryStore = mockk(relaxed = true)
     ): FavoritesRepository {
         val preferences = counterPreferences(initialFavoritesCount)
         val notificationPreferencesHolder = mockk<NotificationPreferencesHolder>(relaxed = true) {
@@ -172,7 +191,8 @@ class FavoritesRepositoryMarkReadTest {
                 countersHolder = countersHolder,
                 listsPreferencesHolder = mockk<ListsPreferencesHolder>(relaxed = true),
                 notificationPreferencesHolder = notificationPreferencesHolder,
-                eventsApi = eventsApi
+                eventsApi = eventsApi,
+                readBoundaryStore = readBoundaryStore
         )
     }
 
