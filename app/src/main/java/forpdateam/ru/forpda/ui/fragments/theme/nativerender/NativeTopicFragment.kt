@@ -24,6 +24,8 @@ import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.interactors.theme.ThemeEditorUseCase
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsAnimationCompat
+import androidx.core.view.WindowInsetsCompat
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.theme.ThemeToolbarTitlePolicy
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
@@ -607,6 +609,32 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             applyMessagePanelImeMargin(insets)
             insets
         }
+        // Ride the keyboard frame-by-frame so the panel tracks the IME edge with no exposed gap / colour
+        // flash while it slides. Без этого хост прыгает на ФИНАЛЬНУЮ высоту клавиатуры мгновенно, а клава
+        // выезжает ~200мс — в зазоре под хостом мелькает фон. DISPATCH_MODE_STOP откладывает apply-listener
+        // (resting bottomMargin) до конца анимации: во время выезда coordinator сохраняет полную высоту (его
+        // surface закрывает область, по которой едет клава), а сам хост лишь транслируется на верхний край IME.
+        ViewCompat.setWindowInsetsAnimationCallback(
+                fragmentContainer,
+                object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
+                    override fun onProgress(
+                            insets: WindowInsetsCompat,
+                            running: MutableList<WindowInsetsAnimationCompat>
+                    ): WindowInsetsCompat {
+                        if (messagePanel?.visibility == View.VISIBLE) {
+                            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                            val resting = (messagePanelHost.layoutParams
+                                    as? android.view.ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+                            messagePanelHost.translationY = (resting - imeBottom).toFloat()
+                        }
+                        return insets
+                    }
+
+                    override fun onEnd(animation: WindowInsetsAnimationCompat) {
+                        messagePanelHost.translationY = 0f
+                        ViewCompat.getRootWindowInsets(fragmentContainer)?.let { applyMessagePanelImeMargin(it) }
+                    }
+                })
         setupFab()
         setupToolbarMenu()
         setupTitleTap()
@@ -826,8 +854,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // The message-panel host sits over the fragment root, whose background is ?colorPrimary (blue).
         // The compact panel floats with margins, so that blue leaks around it as an unwanted border.
         // Paint the host with the list surface so the panel floats seamlessly (parity with WebView).
-        messagePanelHost.setBackgroundColor(
-                requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        val panelSurface = requireContext().chromeCanvasColor(
+                com.google.android.material.R.attr.colorSurfaceContainerLowest)
+        messagePanelHost.setBackgroundColor(panelSurface)
+        // Kill the coloured backdrop flash: when the keyboard opens, the host is lifted by bottomMargin =
+        // ime inset (see applyMessagePanelImeMargin), but the IME reports its FINAL height instantly while
+        // the keyboard slides in over ~200ms. During that slide the gap below the lifted host exposes the
+        // fragment root, whose background is ?colorPrimary — a brown band flashes before the keyboard
+        // covers it. Paint the root with the same list surface so that reserved area is seamless, not brown.
+        fragmentContainer.setBackgroundColor(panelSurface)
         panel.visibility = View.GONE
         // Скрыть и сам ХОСТ: AdvancedPopup.attachCompactAdvancedView оборачивает панель в видимый
         // LinearLayout с исходными layout-параметрами компактной панели (topMargin 8dp). Обёртка с
