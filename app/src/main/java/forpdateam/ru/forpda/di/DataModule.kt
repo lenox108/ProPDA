@@ -79,6 +79,7 @@ import forpdateam.ru.forpda.model.repository.reputation.ReputationRepository
 import forpdateam.ru.forpda.model.repository.search.ForumSectionTitleIndex
 import forpdateam.ru.forpda.model.repository.search.SearchRepository
 import forpdateam.ru.forpda.model.repository.theme.ThemeRepository
+import forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
 import forpdateam.ru.forpda.model.repository.topics.TopicsRepository
 import forpdateam.ru.forpda.model.NetworkStateProvider
 import forpdateam.ru.forpda.entity.app.profile.IUserHolder
@@ -173,8 +174,9 @@ object DataModule {
             countersHolder: CountersHolder,
             listsPrefs: ListsPreferencesHolder,
             notifPrefs: NotificationPreferencesHolder,
-            eventsApi: NotificationEventsApi
-    ) = FavoritesRepository(api, cacheRoom, authHolder, countersHolder, listsPrefs, notifPrefs, eventsApi)
+            eventsApi: NotificationEventsApi,
+            readBoundaryStore: TopicReadBoundaryStore
+    ) = FavoritesRepository(api, cacheRoom, authHolder, countersHolder, listsPrefs, notifPrefs, eventsApi, readBoundaryStore)
 
     @Provides @Singleton
     fun provideHistoryRepository(cacheRoom: HistoryCacheRoom) =

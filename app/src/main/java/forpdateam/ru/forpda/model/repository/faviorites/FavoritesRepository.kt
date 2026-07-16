@@ -18,6 +18,7 @@ import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesSort
 import forpdateam.ru.forpda.model.data.remote.api.favorites.Sorting
 import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
+import forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -33,7 +34,8 @@ class FavoritesRepository(
         private val countersHolder: CountersHolder,
         private val listsPreferencesHolder: ListsPreferencesHolder,
         private val notificationPreferencesHolder: NotificationPreferencesHolder,
-        private val eventsApi: NotificationEventsApi
+        private val eventsApi: NotificationEventsApi,
+        private val readBoundaryStore: TopicReadBoundaryStore
 ) {
 
     fun observeItems(sorting: Sorting? = null, unreadTop: Boolean = listsPreferencesHolder.getUnreadTop()): Flow<List<FavItem>> =
@@ -141,6 +143,11 @@ class FavoritesRepository(
         favItem.localReadPostId = topicId
         favItem.localReadPostDateMillis = System.currentTimeMillis()
         favoritesCache.updateItem(favItem)
+        // Тема помечена прочитанной — снимаем клиентскую границу прочитанного, иначе при следующем
+        // открытии TopicReadBoundaryPolicy резюмнёт findpost'ом на старую границу (последний реально
+        // виденный пост), и юзера отбросит на позавчерашний пост вместо свежих. См.
+        // [TopicReadBoundaryStore]/[maybeResumeToReadBoundary].
+        readBoundaryStore.clear(topicId)
         syncFavoritesCounter(favoritesCache.getItems(), source = "favorites_mark_read")
         // Debug #2: фиксируем фактическое изменение (было/стало) для последующего аудита.
         ThemePostReadStateDiagnostics.markReadApplied(
@@ -228,6 +235,13 @@ class FavoritesRepository(
         }
 
         if (successTopicIds.isNotEmpty()) {
+            // Явная отметка «прочитано» из списка избранного — снимаем клиентскую границу прочитанного
+            // по каждой затронутой теме. Иначе при следующем открытии TopicReadBoundaryPolicy увидит,
+            // что сервер сел бы НИЖЕ устаревшей границы (позавчерашний последний виденный пост), решит
+            // это walk-down'ом и резюмнёт findpost'ом на старую границу — юзера отбросит на старый пост
+            // вместо свежих. cold-miss после clear → резюм молчит → серверный getlastpost/getnewpost
+            // ведёт на свежак, чего пользователь и ждёт. См. [TopicReadBoundaryStore].
+            successTopicIds.forEach { readBoundaryStore.clear(it) }
             val items = favoritesCache.getItems()
             items.forEach {
                 if (it.topicId in successTopicIds && it.isNew && !it.isForum) {
