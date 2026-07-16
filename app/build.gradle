@@ -52,12 +52,16 @@ android {
     def versionMajor = "3"
     def versionMinor = "1"
     def versionPatch = "6"
-    // versionCode выводится из версии: major*10000 + minor*100 + patch.
+    def versionHotfix = 1   // 0 = обычный релиз; >0 = хотфикс (4-й компонент версии, напр. 3.1.6.1)
+    // versionCode выводится из версии: (major*10000 + minor*100 + patch)*10 + hotfix.
     // Монотонно растёт вместе с versionName — нельзя случайно выкатить
-    // даунгрейд (как было с 2.9.6=352 / 2.9.7=351). minor и patch < 100.
-    // 2.9.7 -> 20907; следующая 2.9.8 -> 20908. Все значения заведомо выше
-    // старых ручных кодов (≤352), поэтому установка поверх не ломается.
-    def versionNumber = versionMajor.toInteger() * 10000 + versionMinor.toInteger() * 100 + versionPatch.toInteger()
+    // даунгрейд (как было с 2.9.6=352 / 2.9.7=351). minor и patch < 100, hotfix < 10.
+    // 3.1.6 -> 301060, 3.1.6.1 -> 301061, следующая 3.1.7 -> 301070. Все значения
+    // заведомо выше старых кодов (≤30106), поэтому установка поверх не ломается.
+    def versionNumber = (versionMajor.toInteger() * 10000 + versionMinor.toInteger() * 100 + versionPatch.toInteger()) * 10 + versionHotfix
+    def versionNameStr = versionHotfix > 0 ?
+            "${versionMajor}.${versionMinor}.${versionPatch}.${versionHotfix}" :
+            "${versionMajor}.${versionMinor}.${versionPatch}"
     def versionBuild = 1
     def versionPropsFile = file('version.properties')
     if (versionPropsFile.canRead()) {
@@ -73,7 +77,7 @@ android {
         // По умолчанию — stable (ForPDA 2, ru.forpdateam.forpda.parallel). Оригинальный id Play: flavor store.
         applicationId "ru.forpdateam.forpda.parallel"
         versionCode versionNumber
-        versionName "${versionMajor}.${versionMinor}.${versionPatch}"
+        versionName versionNameStr
         minSdk 26
         targetSdk 35
         vectorDrawables.useSupportLibrary = true
