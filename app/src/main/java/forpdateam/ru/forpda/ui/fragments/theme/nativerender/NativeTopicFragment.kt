@@ -568,6 +568,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     healBottomEndGap()
                     // Settled: re-check «низ ли это» (a fling can stop without a final onScrolled frame).
                     updateBottomPaginationBarOffset()
+                    // ...и по той же причине — перевзвести подгрузку соседних страниц. Флинг может осесть
+                    // ровно у края, не прислав финального onScrolled-кадра в зоне порога (или его съел
+                    // healing-guard на dy<0), из-за чего след./пред. страница не грузилась, пока юзер не
+                    // «поёрзает» пальцем. Обе проверки позиционные (абсолютный край, не dy) и защищены
+                    // isLoading*-флагами, так что вызвать их в покое безопасно и идемпотентно.
+                    maybeLoadNextPage()
+                    maybeLoadPrevPage()
                 }
             }
         })
@@ -2047,7 +2054,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val range = recyclerView.computeVerticalScrollRange()
         val offset = recyclerView.computeVerticalScrollOffset()
         val extent = recyclerView.computeVerticalScrollExtent()
-        val distanceToBottom = range - (offset + extent)
+        val estimateDistance = range - (offset + extent)
+        // computeVerticalScroll* с постами переменной высоты — ОЦЕНКА, которая у истинного конца может
+        // «завышать» остаток (тот же баг, из-за которого нижняя панель иногда не показывалась — см.
+        // distanceToListBottomPx). При пороге 0 (умная предзагрузка OFF) это оставляло подгрузку невзведённой
+        // при открытии сразу на последнем посте страницы. Дублируем надёжной геометрией края (0 у истинного низа).
+        val distanceToBottom = minOf(estimateDistance, distanceToListBottomPx())
         if (distanceToBottom <= prefetchThresholdPx()) loadNextPage()
     }
 
@@ -2098,7 +2110,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun maybeLoadPrevPage() {
         if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
         if (isLoadingPrevPage || isLoadingNextPage || !pagination.hasPrevPage()) return
-        if (recyclerView.computeVerticalScrollOffset() <= prefetchThresholdPx()) loadPrevPage()
+        // Как и для нижнего края (см. maybeLoadNextPage): computeVerticalScrollOffset — оценка, у самого
+        // верха может не дотянуть до 0 при пороге 0, поэтому дублируем надёжной геометрией верхнего края.
+        val topDistance = minOf(recyclerView.computeVerticalScrollOffset(), distanceToListTopPx())
+        if (topDistance <= prefetchThresholdPx()) loadPrevPage()
     }
 
     /**
@@ -3209,6 +3224,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
+     * Верхний аналог [distanceToListBottomPx]: пиксели до истинного верха списка по геометрии первого
+     * элемента, а не по оценочному [RecyclerView.computeVerticalScrollOffset] (который у самого верха может
+     * не дотянуть до 0 при постах переменной высоты). Пока первый элемент окна не первый видимый — мы далеко
+     * от верха, возвращаем большое расстояние, чтобы upward-подгрузка не взводилась. hasPrevPage() гейтит
+     * вызов на страницы > 1, где элемент 0 — это первый пост (poll-шапки на них нет).
+     */
+    private fun distanceToListTopPx(): Int {
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return Int.MAX_VALUE
+        if ((recyclerView.adapter?.itemCount ?: 0) == 0) return Int.MAX_VALUE
+        if (lm.findFirstVisibleItemPosition() != 0) return Int.MAX_VALUE
+        val firstView = lm.findViewByPosition(0) ?: return Int.MAX_VALUE
+        return (recyclerView.paddingTop - firstView.top).coerceAtLeast(0)
+    }
+
+    /**
      * MainActivity reports the bottom-nav chrome height (tab bar + system nav) here. We re-derive the list
      * bottom padding from the MEASURED on-screen overlap with the chrome ([applyListBottomPadding]) rather
      * than adding this value blindly — that was wrong on both host kinds (double-count → huge gap when the
@@ -3809,6 +3839,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
                 // Fill an under-filled last page from previous pages (no empty area + scroll-back works).
                 recyclerView.post { maybeFillLastPage() }
+                // Открытие СРАЗУ на последнем посте средней страницы (первый непрочитанный == последний на
+                // странице) садит юзера у самого низа: тянуть вниз некуда → onScrolled(dy>0) не приходит →
+                // след. страница не подгружалась, пока не «поёрзаешь». Программная посадка на последний пост
+                // (anchorPost isLast → вложенные recyclerView.post) устаканивается через пару кадров, поэтому
+                // взводим probe с задержкой (в паритет с reanchor'ами jumpToBottom 250/550). maybeFillLastPage
+                // при этом no-op'ит на средней странице (loadedPage<totalPages), а maybeLoadNextPage —
+                // на последней (hasNextPage=false), так что пути не конфликтуют.
+                recyclerView.postDelayed({ if (view != null) maybeLoadNextPage() }, 350)
             }
         }
         enrichLoadedPage(page)
