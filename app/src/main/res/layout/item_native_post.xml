@@ -99,7 +99,8 @@
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:id="@+id/native_post_nick_row"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+                    android:layout_height="wrap_content"
+                    android:clipChildren="false">
 
                     <TextView
                         android:id="@+id/native_post_nick"
@@ -135,16 +136,18 @@
                         tools:text="17 ч."
                         tools:visibility="visible" />
 
-                    <!-- Post menu — MODERN only (the classic header has its own ⋮ in the right column). -->
-                    <!-- Height tied to the nick (0dp between the nick's top/bottom) so the 30dp-ish icon
-                         doesn't inflate the wrap-content nick row and push the group line down — that made
-                         the nick→group gap read taller than the group→count gap. Width keeps a 30dp touch
-                         target; the icon centres on the nick. -->
+                    <!-- Post menu — MODERN only (the classic header has its own ⋮ in the right column).
+                         Height 0dp (tied to the nick's top/bottom) so the icon does NOT inflate the
+                         wrap-content nick row and push the group line down — that made the nick→group gap
+                         read taller than the group→count gap. scaleType=center draws the 24dp glyph at its
+                         intrinsic size (fitCenter would shrink it to the short box); the row's
+                         clipChildren=false lets the few px of overflow show without clipping. The icon
+                         sits at the end, over empty space, so it never overlaps the group text. -->
                     <ImageView
                         android:id="@+id/native_post_menu_inline"
                         android:layout_width="30dp"
                         android:layout_height="0dp"
-                        android:padding="4dp"
+                        android:scaleType="center"
                         android:contentDescription="@string/menu"
                         android:src="@drawable/ic_more_vert"
                         android:visibility="gone"
