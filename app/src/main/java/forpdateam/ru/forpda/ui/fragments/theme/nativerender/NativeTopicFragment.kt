@@ -1199,7 +1199,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * the «Инфо»/«Опрос» toolbar buttons — parity with the WebView hat/poll overlays, which drop down
      * from under the toolbar). Capped to most of the screen height; the [content] scrolls if taller.
      */
-    private fun showThemePopup(title: String?, content: View) {
+    private fun showThemePopup(title: String?, content: View, fillHeight: Boolean = false) {
         val ctx = requireContext()
         val pad = (16 * resources.displayMetrics.density).toInt()
         val root = android.widget.LinearLayout(ctx).apply {
@@ -1218,11 +1218,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             } else {
                 setPadding(0, pad / 2, 0, 0) // small top inset so content isn't glued to the toolbar
             }
-            addView(content, android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+            // fillHeight (hat): content takes the whole panel via weight, so it scrolls inside a
+            // full-height overlay. Otherwise (poll): WRAP_CONTENT so a short list keeps its natural size.
+            addView(content, if (fillHeight)
+                android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+            else
+                android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-        presentTopSheet(root, scrollTarget = content)
+        presentTopSheet(root, scrollTarget = content, fillHeight = fillHeight)
     }
 
     /** The live hat/poll overlay panel (an in-layout view, not a Dialog), or null when none is shown. */
@@ -1271,7 +1277,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * [scrollTarget] is set and the panel would exceed the available height, that view is clamped so it
      * scrolls inside the panel instead.
      */
-    private fun presentTopSheet(root: android.widget.LinearLayout, scrollTarget: View?) {
+    private fun presentTopSheet(root: android.widget.LinearLayout, scrollTarget: View?, fillHeight: Boolean = false) {
         dismissThemeOverlay()
         val ctx = requireContext()
         // Fills the content area (ScrollingViewBehavior offsets it under the toolbar) and clips its child,
@@ -1287,9 +1293,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             setOnClickListener { dismissThemeOverlay() }
         }
         root.isClickable = true // swallow taps on the panel itself so they don't dismiss
+        // fillHeight (hat): the panel occupies the whole working area — no empty strip below.
+        // Dismiss via Back or a second tap on the «Шапка темы» button. Otherwise WRAP_CONTENT + 90% cap.
         container.addView(root, android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                if (fillHeight) android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                else android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
                 android.view.Gravity.TOP))
         coordinatorLayout.addView(container)
         themeOverlay = container
@@ -1299,8 +1308,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     override fun onPreDraw(): Boolean {
                         container.viewTreeObserver.removeOnPreDrawListener(this)
                         // Cap to ~90% of the content height so tall content scrolls inside and a strip
-                        // stays free below for tap-to-dismiss.
-                        if (scrollTarget != null) {
+                        // stays free below for tap-to-dismiss. Skipped when fillHeight — there the
+                        // content already fills the full-height panel (weight) and scrolls internally.
+                        if (scrollTarget != null && !fillHeight) {
                             val maxH = (container.height * 0.9f).toInt()
                             val overflow = root.height - maxH
                             if (overflow > 0) {
@@ -1558,7 +1568,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
         popupAdapter.submitList(listOf(hatItem))
         // No «Шапка темы» title/strip — opening it from the toolbar already makes the context clear.
-        showThemePopup(title = null, content = rv)
+        // fillHeight: the hat uses the whole working area (no empty strip below the panel).
+        showThemePopup(title = null, content = rv, fillHeight = true)
     }
 
     /** Long-press a spoiler header → copy its deep link to the clipboard (parity with copySpoilerLink). */
