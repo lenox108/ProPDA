@@ -28,7 +28,8 @@ internal object FavoriteReadStateMerge {
             hasNewerContentThanCache: Boolean = false,
             networkIsFreshRefresh: Boolean = false,
             inspectorTimeStampSeconds: Long = 0L,
-            localReadTimeSeconds: Long = 0L
+            localReadTimeSeconds: Long = 0L,
+            inspectorSnapshotPresent: Boolean = false
     ): Result {
         val htmlPlusCount = when {
             networkUnreadCount > 0 -> networkUnreadCount
@@ -148,6 +149,23 @@ internal object FavoriteReadStateMerge {
             }
             FavoriteReadState.READ -> {
                 if (cachedUnread) {
+                    // Both fresh server signals now say READ: the favorites HTML positively reports
+                    // read (no bold/+N/unread markers, so effectiveNetwork==READ) AND the inspector
+                    // snapshot is present but does NOT list this topic. The inspector enumerates the
+                    // unread favorites, so absence from a present snapshot is authoritative read.
+                    // The cached UNREAD is therefore stale — most often because the topic was read in
+                    // another client or on the site, which never fires our local markRead. Trust the
+                    // server and clear it. Without this, a plain refresh could never turn the row read
+                    // (preserve_cached_unread is self-perpetuating), diverging from every client that
+                    // simply mirrors the server. Guarded by inspectorSnapshotPresent so that when the
+                    // inspector failed to load entirely we still preserve the cached unread below.
+                    if (inspectorSnapshotPresent) {
+                        return Result(
+                                FavoriteReadState.READ,
+                                0,
+                                "inspector_absent_clears_cached_unread"
+                        )
+                    }
                     return Result(
                             FavoriteReadState.UNREAD,
                             maxOf(networkUnreadCount, cachedCount).coerceAtLeast(1),
