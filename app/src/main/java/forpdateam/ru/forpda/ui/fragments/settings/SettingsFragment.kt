@@ -1089,55 +1089,74 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun showAppUpdateAvailableSnackbar(result: AppUpdateRepository.CheckResult.UpdateAvailable) {
-        view?.let { root ->
-            val preferred = appUpdateRepository.pickPreferredDownload(result.downloads)
-            val message = if (preferred != null) {
-                getString(
-                    R.string.app_update_available_with_size,
-                    result.version.toString(),
-                    formatSize(preferred.sizeBytes)
-                )
-            } else {
-                getString(R.string.app_update_available, result.version.toString())
-            }
-            runCatching {
-            root.makeSnackbarAboveSystemBars(message, Snackbar.LENGTH_LONG)
-                .setAction(
-                    if (preferred != null) R.string.app_update_action_download
-                    else R.string.app_update_action_open_topic
-                ) {
-                    if (preferred != null) {
-                        Log.i(
-                            AppUpdateRepository.LOG_TAG,
-                            "manual UI download action fired version=${result.version} url=${preferred.url}"
-                        )
-                        Timber.tag(AppUpdateRepository.LOG_TAG).i(
-                            "manual UI download action fired version=%s url=%s",
-                            result.version,
-                            preferred.url
-                        )
-                        startApkDownload(preferred)
-                    } else {
-                        Log.i(
-                            AppUpdateRepository.LOG_TAG,
-                            "manual UI open topic action fired version=${result.version} url=${result.topicUrl}"
-                        )
-                        Timber.tag(AppUpdateRepository.LOG_TAG).i(
-                            "manual UI open topic action fired version=%s url=%s",
-                            result.version,
-                            result.topicUrl
-                        )
-                        openAppUpdateTopicUrl(result.topicUrl)
-                    }
+        // Раньше уведомление о новой версии показывалось Snackbar'ом с кнопкой-действием
+        // «Скачать». Но на Android 14+/16 инфляция Snackbar$SnackbarLayout падает
+        // (в контексте темы не разрешается colorOnSurface, см. SnackbarHelper), и показ
+        // деградировал до Toast — а у Toast НЕТ кнопки-действия, поэтому «Скачать»
+        // пропадала и обновление было не скачать («пишет что версия есть, скачать не даёт»).
+        // Диалог этой проблемы не имеет (materialAlertDialogTheme → ThemeOverlay) и кнопку
+        // потерять невозможно.
+        if (!isAdded) return
+        val preferred = appUpdateRepository.pickPreferredDownload(result.downloads)
+        val title = getString(R.string.app_update_available, result.version.toString())
+        val notes = result.description?.takeIf { it.isNotBlank() }
+
+        Log.i(
+            AppUpdateRepository.LOG_TAG,
+            "manual UI dialog shown version=${result.version} downloads=${result.downloads.size} preferredUrl=${preferred?.url}"
+        )
+        Timber.tag(AppUpdateRepository.LOG_TAG).i(
+            "manual UI dialog shown version=%s downloads=%d preferredUrl=%s",
+            result.version,
+            result.downloads.size,
+            preferred?.url
+        )
+
+        runCatching {
+            val builder = MaterialAlertDialogBuilder(requireActivity())
+                .setTitle(title)
+            if (notes != null) builder.setMessage(notes)
+
+            if (preferred != null) {
+                // Есть прямая ссылка на APK — основное действие «Скачать», запасное «Открыть тему».
+                builder.setPositiveButton(R.string.app_update_action_download) { _, _ ->
+                    Log.i(
+                        AppUpdateRepository.LOG_TAG,
+                        "manual UI download action fired version=${result.version} url=${preferred.url}"
+                    )
+                    Timber.tag(AppUpdateRepository.LOG_TAG).i(
+                        "manual UI download action fired version=%s url=%s",
+                        result.version,
+                        preferred.url
+                    )
+                    startApkDownload(preferred)
                 }
-                .show()
-            }.onFailure { e ->
-                // Снэк со Snackbar-темой всё же не построился (крайне маловероятно
-                // после фикса контекста в makeSnackbarAboveSystemBars) — не роняем
-                // настройки, показываем сообщение о доступном обновлении как Toast.
-                Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "update-available snackbar failed; toast fallback")
-                runCatching { Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show() }
+                builder.setNeutralButton(R.string.app_update_action_open_topic) { _, _ ->
+                    openAppUpdateTopicUrl(result.topicUrl)
+                }
+            } else {
+                // Прямой ссылки нет (например, версия отдана из кэша) — единственное
+                // действие «Открыть тему».
+                builder.setPositiveButton(R.string.app_update_action_open_topic) { _, _ ->
+                    Log.i(
+                        AppUpdateRepository.LOG_TAG,
+                        "manual UI open topic action fired version=${result.version} url=${result.topicUrl}"
+                    )
+                    Timber.tag(AppUpdateRepository.LOG_TAG).i(
+                        "manual UI open topic action fired version=%s url=%s",
+                        result.version,
+                        result.topicUrl
+                    )
+                    openAppUpdateTopicUrl(result.topicUrl)
+                }
             }
+            builder.setNegativeButton(R.string.close, null)
+            builder.showWithStyledButtons()
+        }.onFailure { e ->
+            // Даже диалог не построился (крайне маловероятно) — не роняем настройки,
+            // показываем хотя бы текст. Toast без кнопки — деградация, но лучше вылета.
+            Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "update-available dialog failed; toast fallback")
+            runCatching { Toast.makeText(requireContext(), title, Toast.LENGTH_LONG).show() }
         }
     }
 
@@ -1159,13 +1178,6 @@ class SettingsFragment : BaseSettingFragment() {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         startActivity(intent)
-    }
-
-    private fun formatSize(bytes: Long?): String {
-        if (bytes == null) return "—"
-        val mb = bytes / 1024.0 / 1024.0
-        return if (mb >= 1) String.format("%.2f МБ", mb)
-        else String.format("%d КБ", bytes / 1024)
     }
 
     private fun appUpdateCheckErrorMessage(error: Throwable): String {
