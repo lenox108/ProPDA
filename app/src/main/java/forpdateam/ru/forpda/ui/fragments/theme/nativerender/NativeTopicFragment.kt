@@ -2094,6 +2094,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Downward infinite scroll: when the content scrolled to within ~a viewport of the bottom. */
     private fun maybeLoadNextPage() {
+        // Входит из отложенных recyclerView.post{}: к моменту выполнения view мог быть
+        // уничтожен (onDestroyView), а loadNextPage дёргает viewLifecycleOwner (крашит
+        // при getView()==null) и recyclerView. Гейтим по живому view.
+        if (view == null) return
         if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
         // Never run a next- and prev-page load at once — serialised so only ONE loading spinner shows.
         if (isLoadingNextPage || isLoadingPrevPage || !pagination.hasNextPage()) return
@@ -2110,6 +2114,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     private fun loadNextPage() {
+        if (view == null) return // stale post after onDestroyView → viewLifecycleOwner крашит
         val url = pagination.nextPageUrl() ?: return
         isLoadingNextPage = true
         val epoch = loadEpoch
@@ -2154,6 +2159,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Upward infinite scroll: when the content scrolled to within ~a viewport of the top. */
     private fun maybeLoadPrevPage() {
+        if (view == null) return // stale post after onDestroyView → viewLifecycleOwner/recyclerView крашат
         if (isClassicMode()) return // classic mode navigates via the bottom bar, not infinite scroll
         if (isLoadingPrevPage || isLoadingNextPage || !pagination.hasPrevPage()) return
         // Как и для нижнего края (см. maybeLoadNextPage): computeVerticalScrollOffset — оценка, у самого
@@ -2223,6 +2229,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     private fun loadPrevPage() {
+        if (view == null) return // stale post after onDestroyView → viewLifecycleOwner крашит
         val url = pagination.prevPageUrl() ?: return
         isLoadingPrevPage = true
         val epoch = loadEpoch
