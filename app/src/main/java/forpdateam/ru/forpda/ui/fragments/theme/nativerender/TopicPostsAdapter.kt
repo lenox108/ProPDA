@@ -198,10 +198,11 @@ class TopicPostsAdapter(
     ) : RecyclerView.ViewHolder(itemView) {
         private val header: View = itemView.findViewById(R.id.native_post_header)
         private val avatar: ImageView = itemView.findViewById(R.id.native_post_avatar)
-        private val repBadge: TextView = itemView.findViewById(R.id.native_post_rep_badge)
         private val nick: TextView = itemView.findViewById(R.id.native_post_nick)
         private val meta: TextView = itemView.findViewById(R.id.native_post_meta)
         private val date: TextView = itemView.findViewById(R.id.native_post_date)
+        private val statsRow: View = itemView.findViewById(R.id.native_post_stats_row)
+        private val rep: TextView = itemView.findViewById(R.id.native_post_rep)
         private val postCount: TextView = itemView.findViewById(R.id.native_post_count)
         private val number: TextView = itemView.findViewById(R.id.native_post_number)
         private val menu: ImageView = itemView.findViewById(R.id.native_post_menu)
@@ -521,7 +522,7 @@ class TopicPostsAdapter(
             menuInline.visibility = if (modern) View.VISIBLE else View.GONE
             val superCompact =
                     settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
-            val avatarPx = ((if (superCompact) 32f else 44f) * dm.density).toInt()
+            val avatarPx = ((if (superCompact) 32f else 48f) * dm.density).toInt()
             avatar.layoutParams = avatar.layoutParams.apply { width = avatarPx; height = avatarPx }
             (header as? LinearLayout)?.gravity =
                     if (superCompact) android.view.Gravity.CENTER_VERTICAL else android.view.Gravity.TOP
@@ -665,25 +666,42 @@ class TopicPostsAdapter(
             dateInline.text = if (settings.modernHeader) PostDateFormatter.relative(raw) else raw
         }
 
-        /** Reputation number overlaid on the avatar (parity with WebView .reputation). Tap → rep menu. */
+        /** Reputation as a ★ N stat on the stats row (parity with WebView .reputation). Moved off the
+         *  avatar (user request) so it sits beside the post count. Tap → reputation history. Immediate —
+         *  the number is in the initial parse, so no reserved slot needed (unlike the deferred count). */
         private fun bindRepBadge(item: NativePostItem) {
-            val rep = item.reputation?.takeIf { it.isNotBlank() }
-            if (rep == null || !settings.showAvatars) {
-                repBadge.visibility = View.GONE
+            val value = item.reputation?.takeIf { it.isNotBlank() }
+            val superCompact =
+                    settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
+            if (value == null || superCompact) {
+                rep.visibility = View.GONE
                 return
             }
-            repBadge.visibility = View.VISIBLE
-            repBadge.text = rep
-            repBadge.setOnClickListener { actionListener.onReputation(item) }
+            rep.visibility = View.VISIBLE
+            rep.text = value
+            val icon = tintedIcon(
+                    R.drawable.ic_star,
+                    (13 * itemView.resources.displayMetrics.density).toInt(),
+                    itemView.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            rep.setCompoundDrawables(icon, null, null, null)
+            rep.setOnClickListener { actionListener.onReputation(item) }
         }
 
         /** Author's forum post count as a 💬 N badge (parity with WebView user_post_count). */
         private fun bindPostCount(item: NativePostItem) {
-            // Super-compact hides the post-count row entirely (user request) — no reserved slot either,
-            // so the header collapses to a single line.
+            // Super-compact hides the whole stats row (single-line header) — no reserved slot either.
             if (settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT) {
+                statsRow.visibility = View.GONE
                 postCount.visibility = View.GONE
                 return
+            }
+            statsRow.visibility = View.VISIBLE
+            // Leading gap from the reputation stat — collapses to 0 when reputation is absent so the
+            // post count doesn't float with a phantom indent. bindRepBadge ran first, so rep.visibility
+            // is already final here.
+            (postCount.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                val start = if (rep.visibility == View.VISIBLE) (14 * itemView.resources.displayMetrics.density).toInt() else 0
+                if (lp.marginStart != start) { lp.marginStart = start; postCount.layoutParams = lp }
             }
             val count = item.userPostCount?.takeIf { it > 0 }
             // The count comes from the DEFERRED enrichment (~1s after open). Reserve its row height up

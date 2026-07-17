@@ -65,43 +65,22 @@
             android:gravity="top"
             android:clipChildren="false">
 
-            <!-- Avatar with the reputation number overlaid as a badge (parity with WebView .reputation).
-                 clipChildren=false so the badge (which hangs off the avatar corner via negative margins)
-                 is drawn in full instead of having its lower edge clipped.
-                 layout_gravity=center_vertical: the avatar is shorter than the nick/group/count column,
-                 so with the header's top gravity it hugged the card's upper edge. Centring it against the
-                 text column makes the header symmetric; the child gravity wins over the parent's, so this
-                 holds in every density. -->
+            <!-- Avatar. Reputation used to be overlaid here as a corner badge; it now lives on the stats
+                 row (★ rep · 💬 posts) beside the group, so the avatar stays clean.
+                 layout_gravity=center_vertical: the avatar is shorter than the nick/group/stats column,
+                 so with the header's top gravity it would hug the card's upper edge. Centring it against
+                 the text column keeps the header symmetric; the child gravity wins over the parent's. -->
             <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:clipChildren="false"
-                android:clipToPadding="false">
+                android:layout_gravity="center_vertical">
 
                 <ImageView
                     android:id="@+id/native_post_avatar"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:contentDescription="@null"
                     android:scaleType="centerCrop" />
-
-                <TextView
-                    android:id="@+id/native_post_rep_badge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="bottom|end"
-                    android:layout_marginBottom="-3dp"
-                    android:layout_marginEnd="-3dp"
-                    android:background="@drawable/bg_post_rep_badge"
-                    android:paddingHorizontal="4dp"
-                    android:paddingVertical="1dp"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:minWidth="16dp"
-                    android:gravity="center"
-                    tools:text="28" />
             </FrameLayout>
 
             <LinearLayout
@@ -128,6 +107,7 @@
                         android:layout_height="wrap_content"
                         android:maxLines="1"
                         android:ellipsize="end"
+                        android:includeFontPadding="false"
                         android:textStyle="bold"
                         android:textSize="15sp"
                         android:textColor="?attr/colorOnSurface"
@@ -156,10 +136,14 @@
                         tools:visibility="visible" />
 
                     <!-- Post menu — MODERN only (the classic header has its own ⋮ in the right column). -->
+                    <!-- Height tied to the nick (0dp between the nick's top/bottom) so the 30dp-ish icon
+                         doesn't inflate the wrap-content nick row and push the group line down — that made
+                         the nick→group gap read taller than the group→count gap. Width keeps a 30dp touch
+                         target; the icon centres on the nick. -->
                     <ImageView
                         android:id="@+id/native_post_menu_inline"
                         android:layout_width="30dp"
-                        android:layout_height="30dp"
+                        android:layout_height="0dp"
                         android:padding="4dp"
                         android:contentDescription="@string/menu"
                         android:src="@drawable/ic_more_vert"
@@ -177,24 +161,53 @@
                     android:id="@+id/native_post_meta"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="1dp"
+                    android:layout_marginTop="3dp"
+                    android:includeFontPadding="false"
                     android:textSize="12sp"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     tools:text="Постоянный" />
 
-                <!-- Author's forum post count (💬 N) — parity with WebView user_post_count. -->
-                <TextView
-                    android:id="@+id/native_post_count"
+                <!-- Stats row: reputation (★ N) then the author's forum post count (💬 N). Reputation
+                     moved off the avatar to here (user request); it binds immediately, the post count
+                     arrives via deferred enrichment. GONE in super-compact (single-line header). -->
+                <LinearLayout
+                    android:id="@+id/native_post_stats_row"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:drawablePadding="4dp"
-                    android:gravity="center_vertical"
-                    android:textSize="12sp"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:visibility="gone"
-                    tools:text="2846"
-                    tools:visibility="visible" />
+                    android:layout_marginTop="3dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <!-- Reputation (★ N) — parity with WebView .reputation. Tap → reputation history. -->
+                    <TextView
+                        android:id="@+id/native_post_rep"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:includeFontPadding="false"
+                        android:drawablePadding="4dp"
+                        android:gravity="center_vertical"
+                        android:textSize="12sp"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:visibility="gone"
+                        tools:text="442"
+                        tools:visibility="visible" />
+
+                    <!-- Author's forum post count (💬 N) — parity with WebView user_post_count. The
+                         leading gap (separating it from reputation) is applied in code so it collapses
+                         to 0 when reputation is absent. -->
+                    <TextView
+                        android:id="@+id/native_post_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:includeFontPadding="false"
+                        android:drawablePadding="4dp"
+                        android:gravity="center_vertical"
+                        android:textSize="12sp"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:visibility="gone"
+                        tools:text="2846"
+                        tools:visibility="visible" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- Right column (CLASSIC header): date on top, then post number + three-dots menu (parity
