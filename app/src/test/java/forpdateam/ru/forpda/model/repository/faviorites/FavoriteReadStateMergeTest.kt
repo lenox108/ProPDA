@@ -331,6 +331,66 @@ class FavoriteReadStateMergeTest {
     }
 
     @Test
+    fun inspectorSnapshotAbsentTopicWithHtmlReadClearsStaleCachedUnread() {
+        // Device trace 17_07 (topics 1056449 / 300529 / 722747): the favorites HTML reports READ
+        // (parsedReadState=READ) AND the inspector snapshot is present but does NOT list the topic
+        // (ev == null → inspectorPresent=false), i.e. the server considers it read — most often
+        // because it was read in another client / on the site. The stale cached UNREAD must be
+        // cleared, not preserved forever.
+        val cached = fav(readState = FavoriteReadState.UNREAD, isNew = true, unreadPostCount = 1)
+        val result = FavoriteReadStateMerge.merge(
+                network = FavoriteReadState.READ,
+                networkUnreadCount = 0,
+                cached = cached,
+                inspectorUnread = false,
+                inspectorPresent = false,
+                inspectorSnapshotPresent = true,
+        )
+
+        assertEquals(FavoriteReadState.READ, result.readState)
+        assertEquals(0, result.unreadPostCount)
+        assertEquals("inspector_absent_clears_cached_unread", result.reason)
+    }
+
+    @Test
+    fun inspectorSnapshotMissingStillPreservesCachedUnreadOnHtmlRead() {
+        // Guard: when the inspector snapshot failed to load entirely (snapshot empty), absence of a
+        // row is NOT authoritative — a genuinely-unread topic whose HTML merely lacks +N must keep
+        // its cached UNREAD. This is the pre-existing preserve_cached_unread behavior.
+        val cached = fav(readState = FavoriteReadState.UNREAD, isNew = true, unreadPostCount = 2)
+        val result = FavoriteReadStateMerge.merge(
+                network = FavoriteReadState.READ,
+                networkUnreadCount = 0,
+                cached = cached,
+                inspectorUnread = false,
+                inspectorPresent = false,
+                inspectorSnapshotPresent = false,
+        )
+
+        assertEquals(FavoriteReadState.UNREAD, result.readState)
+        assertEquals(2, result.unreadPostCount)
+        assertEquals("preserve_cached_unread", result.reason)
+    }
+
+    @Test
+    fun inspectorSnapshotAbsentTopicWithHtmlUnreadStaysUnread() {
+        // Safety: even with a present snapshot, if the fresh HTML itself still marks the row UNREAD
+        // (bold/+N present), it must stay unread — the clear only applies when HTML positively reads.
+        val cached = fav(readState = FavoriteReadState.UNREAD, isNew = true, unreadPostCount = 1)
+        val result = FavoriteReadStateMerge.merge(
+                network = FavoriteReadState.UNREAD,
+                networkUnreadCount = 1,
+                cached = cached,
+                inspectorUnread = false,
+                inspectorPresent = false,
+                inspectorSnapshotPresent = true,
+        )
+
+        assertEquals(FavoriteReadState.UNREAD, result.readState)
+        assertEquals("network_unread", result.reason)
+    }
+
+    @Test
     fun unknownWithoutHintsDefaultsToRead() {
         val result = FavoriteReadStateMerge.merge(
                 network = FavoriteReadState.UNKNOWN,
