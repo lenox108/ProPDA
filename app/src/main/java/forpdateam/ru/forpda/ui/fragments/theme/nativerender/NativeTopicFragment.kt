@@ -2728,7 +2728,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val nick = item.nick.orEmpty()
         val actions = buildList<Pair<String, () -> Unit>> {
             add("Профиль" to { navigationUseCase.openProfile(item.userId) })
-            add("Репутация" to { navigationUseCase.openReputationHistory(item.userId) })
+            // «Репутация ±» → the same submenu the rep-badge tap opens (Увеличить / Посмотреть /
+            // Уменьшить), gated by canPlusRep/canMinusRep. Reuses onReputation so the change dialog,
+            // permission gating and API call stay in one place; «Посмотреть» keeps the old open-history behavior.
+            add("Репутация ±" to { onReputation(item) })
             add("Личные сообщения QMS" to { navigationUseCase.openQms(item.userId) })
             add("Темы пользователя" to { navigationUseCase.openSearchUserTopics(nick, item.userId) })
             add("Сообщения в этой теме" to {
