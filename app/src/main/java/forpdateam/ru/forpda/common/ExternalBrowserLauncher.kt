@@ -69,8 +69,14 @@ object ExternalBrowserLauncher {
 
     private fun queryExternalBrowserIntents(context: Context, baseIntent: Intent): List<Intent> {
         val packageManager = context.packageManager
+        // MATCH_ALL, а не MATCH_DEFAULT_ONLY: базовый интент уже несёт CATEGORY_BROWSABLE, поэтому
+        // в выборку попадают только браузеры. MATCH_DEFAULT_ONLY дополнительно требует у активити
+        // CATEGORY_DEFAULT, а часть браузеров (Soul и др.) объявляют VIEW-фильтр лишь с BROWSABLE
+        // (этого достаточно, чтобы открывать ссылки) — их отсекало, и при единственном таком браузере
+        // список кандидатов оказывался пустым → «внешний браузер не найден». Chrome объявляет DEFAULT,
+        // поэтому раньше работал только он.
         val resolvedActivities = packageManager
-                .queryIntentActivities(baseIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                .queryIntentActivities(baseIntent, PackageManager.MATCH_ALL)
                 .asSequence()
                 .mapNotNull { it.activityInfo }
                 .filterExternalBrowserActivity(context)
@@ -84,7 +90,7 @@ object ExternalBrowserLauncher {
                     packageManager
                             .queryIntentActivities(
                                     Intent(baseIntent).setPackage(browserPackage),
-                                    PackageManager.MATCH_DEFAULT_ONLY
+                                    PackageManager.MATCH_ALL
                             )
                             .asSequence()
                 }
