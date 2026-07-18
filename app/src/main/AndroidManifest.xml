@@ -19,6 +19,13 @@
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"
         tools:targetApi="33" />
+    <!--
+      Нужно для прямого системного диалога «не оптимизировать батарею»
+      (ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS). Без исключения из Doze система
+      откладывает периодическую фоновую проверку на часы, пока приложение закрыто.
+      Клиент распространяется сайдлоадом (не через Play), политика Play здесь неприменима.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <queries>
         <package android:name="com.android.chrome" />

@@ -430,9 +430,11 @@ class App : Application(), androidx.work.Configuration.Provider {
         // Нижняя граница задана в NotificationDataStore и уже применена геттером; здесь
         // просто читаем, чтобы UI-список и планировщик не расходились.
         val intervalMin = notificationPreferencesHolder.getBgCheckIntervalMin()
+        // Только сеть: батарею намеренно НЕ ограничиваем — при низком заряде проверка
+        // всё равно должна идти, иначе уведомления молча пропадают именно тогда, когда
+        // пользователь дольше всего не подходит к зарядке.
         val constraints = androidx.work.Constraints.Builder()
                 .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                .setRequiresBatteryNotLow(true)
                 .build()
         val req = androidx.work.PeriodicWorkRequestBuilder<forpdateam.ru.forpda.notifications.EventsCheckWorker>(
                 intervalMin, TimeUnit.MINUTES
@@ -450,7 +452,7 @@ class App : Application(), androidx.work.Configuration.Provider {
                 req
         )
         Timber.d("EventsCheckWorker: scheduled every $intervalMin min")
-        BatteryDebugLogger.logState("EventsCheckWorker", "scheduled", "intervalMin=$intervalMin batteryNotLow=true")
+        BatteryDebugLogger.logState("EventsCheckWorker", "scheduled", "intervalMin=$intervalMin batteryNotLow=false")
     }
 
     private fun setupAppUpdateCheck() {

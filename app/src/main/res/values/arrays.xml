@@ -106,14 +106,16 @@
         <item>MENU</item>
     </string-array>
 
-    <!-- Минимум обязан совпадать с NotificationDataStore.MIN_BG_CHECK_INTERVAL_MIN -->
+    <!-- Первый пункт (минимум) обязан совпадать с NotificationDataStore.MIN_BG_CHECK_INTERVAL_MIN -->
     <string-array name="entries_notify_bg_interval">
+        <item>15 минут</item>
         <item>30 минут</item>
         <item>1 час</item>
         <item>2 часа</item>
         <item>4 часа</item>
     </string-array>
     <string-array name="entry_values_notify_bg_interval">
+        <item>15</item>
         <item>30</item>
         <item>60</item>
         <item>120</item>
