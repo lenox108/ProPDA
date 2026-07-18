@@ -425,6 +425,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         if (!mainEnabled || !bgEnabled || !notificationPreferencesHolder.wantsPushNotifications()) {
             wm.cancelUniqueWork(forpdateam.ru.forpda.notifications.EventsCheckWorker.UNIQUE_NAME)
             Timber.d("EventsCheckWorker: cancelled (main=$mainEnabled bg=$bgEnabled)")
+            forpdateam.ru.forpda.notifications.NotifDiagLog.log(this, "scheduler: cancelled (main=$mainEnabled bg=$bgEnabled)")
             return
         }
         // Нижняя граница задана в NotificationDataStore и уже применена геттером; здесь
@@ -453,6 +454,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         )
         Timber.d("EventsCheckWorker: scheduled every $intervalMin min")
         BatteryDebugLogger.logState("EventsCheckWorker", "scheduled", "intervalMin=$intervalMin batteryNotLow=false")
+        forpdateam.ru.forpda.notifications.NotifDiagLog.log(this, "scheduler: scheduled every $intervalMin min")
     }
 
     private fun setupAppUpdateCheck() {

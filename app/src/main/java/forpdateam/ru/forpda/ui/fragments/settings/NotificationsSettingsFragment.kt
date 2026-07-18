@@ -45,6 +45,47 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         configureVersionAwareUi()
         configureSystemSettingsLinks()
         configureBatteryOptimizationLink()
+        configureBgCheckDiagnostics()
+    }
+
+    /** Журнал фоновых проверок ([forpdateam.ru.forpda.notifications.NotifDiagLog]) — работает и в release. */
+    private fun configureBgCheckDiagnostics() {
+        preferenceScreen.findPreference<Preference>("notifications.bg.diagnostics")?.setOnPreferenceClickListener {
+            showBgCheckDiagnosticsDialog()
+            true
+        }
+    }
+
+    private fun showBgCheckDiagnosticsDialog() {
+        val context = context ?: return
+        val log = forpdateam.ru.forpda.notifications.NotifDiagLog.read(context)
+                .ifBlank { getString(R.string.bg_check_diagnostics_empty) }
+        val textView = android.widget.TextView(context).apply {
+            text = log
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 12f
+            setTextIsSelectable(true)
+            val pad = (resources.displayMetrics.density * 16).toInt()
+            setPadding(pad, pad / 2, pad, pad / 2)
+        }
+        val scroll = android.widget.ScrollView(context).apply {
+            addView(textView)
+            // Свежие записи в конце — мотаем вниз после раскладки.
+            post { fullScroll(android.view.View.FOCUS_DOWN) }
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.pref_title_bg_check_diagnostics)
+                .setView(scroll)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton(R.string.bg_check_diagnostics_copy) { _, _ ->
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("notif_diag", log))
+                    android.widget.Toast.makeText(context, R.string.bg_check_diagnostics_copied, android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(R.string.bg_check_diagnostics_clear) { _, _ ->
+                    forpdateam.ru.forpda.notifications.NotifDiagLog.clear(context)
+                }
+                .show()
     }
 
     /**

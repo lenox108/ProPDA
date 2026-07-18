@@ -72,6 +72,22 @@ class CookieManager(
         }
     }
 
+    /**
+     * Дождаться, пока auth-куки из EncryptedSharedPreferences доедут в память.
+     * Для фонового воркера 500 мс потолка [loadForRequest] мало: на холодном старте
+     * медленных устройств Keystore+AES занимают больше, и опрос inspector'а уходил
+     * «гостем» — пустые события и затёртый снапшот. @return true, если гидрация успела.
+     */
+    suspend fun awaitHydration(timeoutMs: Long): Boolean {
+        if (cookiesHydrated.get()) return true
+        return withTimeoutOrNull(timeoutMs) {
+            while (!cookiesHydrated.get()) {
+                kotlinx.coroutines.delay(20L)
+            }
+            true
+        } ?: false
+    }
+
     private fun initializeCookies() {
         val authData = authHolder.get()
         val securePrefs = SecureCookiesPreferences.getInstance(context)

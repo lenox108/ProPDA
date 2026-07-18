@@ -968,6 +968,12 @@
     <string name="pref_summary_bg_check">Выключено: приложение ничего не делает, пока закрыто. Уведомления приходят, только когда оно открыто.</string>
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
     <string name="pref_title_battery_optimization">Разрешить работу в фоне без ограничений</string>
+    <string name="pref_title_bg_check_diagnostics">Диагностика фоновых проверок</string>
+    <string name="pref_summary_bg_check_diagnostics">Журнал запусков фоновой проверки: помогает понять, почему не приходят уведомления</string>
+    <string name="bg_check_diagnostics_empty">Журнал пуст. Записи появятся после первого запуска фоновой проверки.</string>
+    <string name="bg_check_diagnostics_copy">Копировать</string>
+    <string name="bg_check_diagnostics_clear">Очистить</string>
+    <string name="bg_check_diagnostics_copied">Журнал скопирован</string>
     <string name="pref_summary_battery_optimization_needed">Рекомендуется: система ограничивает работу приложения в фоне и откладывает проверку уведомлений на часы. Нажмите и разрешите.</string>
     <string name="pref_summary_battery_optimization_granted">Ограничений нет — фоновая проверка работает штатно.</string>
     <string name="pref_title_android_notification_settings">Системные настройки Android</string>

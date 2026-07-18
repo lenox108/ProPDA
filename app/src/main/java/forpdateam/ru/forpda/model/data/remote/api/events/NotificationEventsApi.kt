@@ -83,7 +83,9 @@ class NotificationEventsApi(private val webClient: IWebClient) {
                 fetchInProgress = true
             }
             try {
-                val response: NetworkResponse = webClient.get(url)
+                // Кэш-бастер: CDN 4PDA кэширует даже авторизованные GET (см. фикс bottom-refresh
+                // с «&s=»). Без него фоновый опрос мог получать стейл-ответ «ничего нового».
+                val response: NetworkResponse = webClient.get("$url&s=${System.currentTimeMillis()}")
                 val parsed = parse(response.body)
                 synchronized(lock) {
                     cached = ArrayList(parsed)
