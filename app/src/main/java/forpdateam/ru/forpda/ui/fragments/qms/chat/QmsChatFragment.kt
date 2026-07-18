@@ -42,6 +42,7 @@ import forpdateam.ru.forpda.ui.fragments.qms.chat.nativerender.QmsChatItem
 import forpdateam.ru.forpda.ui.fragments.qms.chat.nativerender.QmsChatItemMapper
 import forpdateam.ru.forpda.ui.fragments.qms.chat.nativerender.QmsMessagesAdapter
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.ui.chromeCanvasColor
@@ -189,7 +190,14 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         // the app bar (bringToFront + elevation) on top of clearing the scroll flags.
         pinStaticOpaqueToolbar()
         setListsBackground()
-        messagePanelHost.setBackgroundColor(requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        val panelSurface = requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest)
+        messagePanelHost.setBackgroundColor(panelSurface)
+        // Kill the coloured backdrop flash while the keyboard slides in: the host is lifted by
+        // bottomMargin = ime inset (final height, applied instantly), but the keyboard slides over ~200мс —
+        // in that window the gap below the lifted host exposes the fragment root (?colorPrimary), a coloured
+        // band before the keyboard covers it. Paint the root with the same list surface as the host so the
+        // reserved area is seamless. See also the WindowInsetsAnimationCompat sync below.
+        fragmentContainer.setBackgroundColor(panelSurface)
 
         setupMessagesList()
 
@@ -243,6 +251,33 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
             }
             insets
         }
+        // Ride the keyboard frame-by-frame so the input panel tracks the IME edge with no exposed gap /
+        // colour flash while it slides in. DISPATCH_MODE_STOP defers the resting-margin apply-listener until
+        // the animation ends, so during the slide the coordinator keeps its full height (its surface covers
+        // the area the keyboard slides over) and only the host is translated onto the keyboard's top edge.
+        ViewCompat.setWindowInsetsAnimationCallback(
+                coordinatorLayout,
+                object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
+                    override fun onProgress(
+                            insets: WindowInsetsCompat,
+                            running: MutableList<WindowInsetsAnimationCompat>
+                    ): WindowInsetsCompat {
+                        if (messagePanel.visibility == View.VISIBLE) {
+                            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                            val resting = (messagePanelHost.layoutParams
+                                    as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+                            messagePanelHost.translationY = (resting - imeBottom).toFloat()
+                        }
+                        return insets
+                    }
+
+                    override fun onEnd(animation: WindowInsetsAnimationCompat) {
+                        messagePanelHost.translationY = 0f
+                        // Settle from the FRESH root insets: with STOP the deferred apply-listener has not
+                        // updated the cached inset yet, so reading it here avoids a one-frame drop.
+                        applyMessagePanelImeInsets(ViewCompat.getRootWindowInsets(coordinatorLayout))
+                    }
+                })
         attachVisibleFrameLayoutListener()
 
         topScroller = RecyclerTopScroller(chatBinding.qmsMessages, appBarLayout)
