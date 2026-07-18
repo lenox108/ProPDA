@@ -6,6 +6,7 @@ import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
 import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.repository.history.HistoryRepository
+import forpdateam.ru.forpda.model.repository.history.HistoryUnreadHarvester
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
@@ -17,9 +18,12 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
+import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -39,6 +43,7 @@ class HistoryViewModelTest {
 
     private lateinit var historyRepository: HistoryRepository
     private lateinit var favoritesCache: FavoritesCacheRoom
+    private lateinit var historyUnreadHarvester: HistoryUnreadHarvester
     private lateinit var listsPrefs: ListsPreferencesHolder
     private lateinit var router: TabRouter
     private lateinit var linkHandler: ILinkHandler
@@ -52,6 +57,7 @@ class HistoryViewModelTest {
         Dispatchers.setMain(testDispatcher)
         historyRepository = mockk(relaxed = true)
         favoritesCache = mockk(relaxed = true)
+        historyUnreadHarvester = mockk(relaxed = true)
         listsPrefs = mockk(relaxed = true)
         router = mockk(relaxed = true)
         linkHandler = mockk(relaxed = true)
@@ -59,6 +65,9 @@ class HistoryViewModelTest {
         clipboardHelper = mockk(relaxed = true)
 
         every { historyRepository.observeItems() } returns itemsFlow
+        // combine() в VM ждёт эмиссию всех источников; отдаём стартовые значения, иначе items не соберутся.
+        every { favoritesCache.observeItems() } returns MutableStateFlow(emptyList<FavItem>())
+        every { listsPrefs.observeShowDotFlow() } returns flowOf(false)
     }
 
     @After
@@ -67,7 +76,7 @@ class HistoryViewModelTest {
     }
 
     private fun createViewModel(): HistoryViewModel {
-        return HistoryViewModel(historyRepository, favoritesCache, listsPrefs, router, linkHandler, errorHandler, clipboardHelper)
+        return HistoryViewModel(historyRepository, favoritesCache, historyUnreadHarvester, listsPrefs, router, linkHandler, errorHandler, clipboardHelper)
     }
 
     private fun makeItem(id: Int, url: String = "https://4pda.to/$id", title: String = "Title $id"): HistoryItem {
@@ -100,6 +109,12 @@ class HistoryViewModelTest {
         val vm = createViewModel()
         advanceUntilIdle()
 
+        // items приходят через observeItems() (кэш, который refresh()→getHistory() наполняет в проде),
+        // а не напрямую из getHistory(); эмулируем эмиссию кэша.
+        itemsFlow.emit(items)
+        advanceUntilIdle()
+
+        coVerify { historyRepository.getHistory() }
         val state = vm.uiState.value
         assertEquals(2, state.items.size)
         assertEquals(1, state.items[0].id)

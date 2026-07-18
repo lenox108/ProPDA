@@ -55,6 +55,8 @@ class ThemeUseCaseTest {
     private val mainPreferencesHolder: MainPreferencesHolder = mockk(relaxed = true)
     private val returnPositionStore =
             forpdateam.ru.forpda.model.repository.theme.TopicReturnPositionStore()
+    private val topicForumStore: forpdateam.ru.forpda.model.repository.theme.TopicForumStore =
+            mockk(relaxed = true)
     private val appScope: CoroutineScope = TestScope(dispatcher)
 
     @Before
@@ -75,6 +77,7 @@ class ThemeUseCaseTest {
             userHolder,
             topicPreferencesHolder,
             mainPreferencesHolder,
+            topicForumStore,
             appScope = appScope
         )
     }
@@ -211,6 +214,7 @@ class ThemeUseCaseTest {
                 userHolder = userHolder,
                 topicPreferencesHolder = topicPreferencesHolder,
                 mainPreferencesHolder = mainPreferencesHolder,
+                topicForumStore = topicForumStore,
                 prefetchService = prefetch,
                 appScope = appScope
         )
@@ -270,6 +274,7 @@ class ThemeUseCaseTest {
                 userHolder = userHolder,
                 topicPreferencesHolder = topicPreferencesHolder,
                 mainPreferencesHolder = mainPreferencesHolder,
+                topicForumStore = topicForumStore,
                 prefetchService = prefetch,
                 appScope = appScope
         )

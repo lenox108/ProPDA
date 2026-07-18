@@ -47,15 +47,19 @@ class TopicReadBoundaryStore @Inject constructor(
 
     fun lastSeenPostId(topicId: Int): Int = get(topicId)?.lastSeenPostId ?: 0
 
+    /** Самая дальняя страница, которую ЭТО устройство хотя бы загружало (0 = неизвестно). */
+    fun maxLoadedPage(topicId: Int): Int = get(topicId)?.maxLoadedPage ?: 0
+
     /**
      * Двигает границу вверх, если [postId] новее (больше) сохранённого. No-op при откате/невалидном id.
+     * Поля [TopicReadBoundaryRoom.maxLoadedPostId]/[TopicReadBoundaryRoom.maxLoadedPage] сохраняем
+     * (copy) — это ортогональный монотонный трек, не относящийся к «границе виденного».
      */
     fun recordSeen(topicId: Int, postId: Int, page: Int) {
         if (topicId <= 0 || postId <= 0) return
         val current = cache[topicId]
         if (current != null && postId <= current.lastSeenPostId) return
-        val updated = TopicReadBoundaryRoom(
-            topicId = topicId,
+        val updated = (current ?: TopicReadBoundaryRoom(topicId = topicId)).copy(
             lastSeenPostId = postId,
             lastSeenPage = if (page > 0) page else (current?.lastSeenPage ?: 0),
             updatedAt = System.currentTimeMillis(),
@@ -64,6 +68,32 @@ class TopicReadBoundaryStore @Inject constructor(
         appScope.launch(Dispatchers.IO) { runCatching { dao.upsert(updated) } }
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             android.util.Log.i("FPDA_READ_BOUNDARY", "recordSeen topic=$topicId lastSeenPostId=$postId page=$page")
+        }
+    }
+
+    /**
+     * Двигает трек «самого дальнего загруженного» вверх. Пишется при КАЖДОЙ загрузке страницы темы с
+     * сервера (в т.ч. предзагрузка гибридным скроллом), в отличие от [recordSeen] (только реально
+     * виденное). Монотонен. Поля границы виденного сохраняем (copy). No-op, если ни пост, ни страница
+     * не выросли.
+     */
+    fun recordLoaded(topicId: Int, postId: Int, page: Int) {
+        if (topicId <= 0 || postId <= 0) return
+        val current = cache[topicId]
+        val curMaxPost = current?.maxLoadedPostId ?: 0
+        val curMaxPage = current?.maxLoadedPage ?: 0
+        val newMaxPost = maxOf(postId, curMaxPost)
+        val newMaxPage = maxOf(if (page > 0) page else 0, curMaxPage)
+        if (newMaxPost == curMaxPost && newMaxPage == curMaxPage) return
+        val updated = (current ?: TopicReadBoundaryRoom(topicId = topicId)).copy(
+            maxLoadedPostId = newMaxPost,
+            maxLoadedPage = newMaxPage,
+            updatedAt = System.currentTimeMillis(),
+        )
+        cache[topicId] = updated
+        appScope.launch(Dispatchers.IO) { runCatching { dao.upsert(updated) } }
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_READ_BOUNDARY", "recordLoaded topic=$topicId maxLoadedPostId=$newMaxPost page=$newMaxPage")
         }
     }
 
