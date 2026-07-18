@@ -252,35 +252,39 @@
         тёмную поверхность (см. MaterialYouApplier.dynamicDarkSurfaceIsNearBlack).
 
         Зачем: тема «Тёмная» декларирует «тёмный фон БЕЗ полной чёрной
-        AMOLED-подложки». На части устройств (наблюдалось на Android 16)
-        динамическая роль colorSurfaceContainerLowest резолвится в чистый
-        #000000 — тогда «Тёмная» под Material You визуально сливается с
-        AMOLED, и различие между двумя режимами пропадает. На Android 12–15
-        та же роль обычно тёмно-серая с оттенком обоев, и там ничего чинить
-        не нужно. Поэтому решение адаптивное: аплаер сравнивает резолвнутый
-        Lowest с эталоном @color/dark_background_base и накладывает этот
-        оверлей ТОЛЬКО если динамика темнее эталона (иначе оттенок обоев
-        сохраняется).
+        AMOLED-подложки», а динамическая тёмная рампа M3 живёт заметно ниже
+        (colorSurfaceContainerLowest — тон L*=4; на Android 16 наблюдался и
+        чистый #000000) — без floor'а «Тёмная» под Material You сливается с
+        AMOLED. Гейт в аплаере сравнивает резолвнутый Lowest с эталоном
+        @color/dark_background_base (#121212, L* ~5.5); поскольку тон 4 темнее
+        эталона НЕЗАВИСИМО от цвета обоев, по факту оверлей накладывается в
+        тёмной динамике практически всегда (см. KDoc
+        MaterialYouApplier.dynamicDarkSurfaceIsNearBlack).
 
-        Что делает: пинит всю surface-рампу на статичные тона тёмной темы —
-        ровно те же значения, что базовая DayNightAppTheme (values-night):
-        база #121212, карточки #242424. Акцент при этом наследуется из
-        MaterialYouAccent и продолжает трекать обои. Это прямой аналог
-        MaterialYouAmoled, только тона тёмно-серые, а не чёрные.
+        Что делает: перепинивает СВЕТЛОТУ surface-рампы на уровни статичной
+        тёмной темы (база L* ~6 == #121212, карточки L* ~14 == #242424), но
+        ЦВЕТ оставляет из системной палитры обоев - пины указывают на
+        color-v31 селекторы с android:lStar поверх system_neutral2 (тот же
+        механизм, которым сама библиотека Material строит динамические тёмные
+        поверхности). Акцент наследуется из MaterialYouAccent и продолжает
+        трекать обои. История: до этого рампа пинилась на статичные
+        БЕСЦВЕТНЫЕ @color/dark_* - тёмная тема теряла оттенок обоев на
+        карточках/пузырях («MY стал неправильные цвета брать», скрины QMS
+        18.07.2026), оттенок оставался только у полотна ChromeCanvas.
 
-        Безопасность инфляции: пины КОНКРЕТНЫЕ @color/dark_* (не ?attr/) —
-        как у MaterialYouAmoled; TYPE_ATTRIBUTE-цепочек нет, TextView.<init>
+        Безопасность инфляции: пины КОНКРЕТНЫЕ @color/ (не ?attr/) — как у
+        MaterialYouAmoled; TYPE_ATTRIBUTE-цепочек нет, TextView.<init>
         и M3-виджеты не падают (см. KDoc MaterialYouSurface).
     -->
     <style name="ThemeOverlay.ForPDA.MaterialYouDarkFloor" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
-        <item name="android:colorBackground">@color/dark_card_background</item>
-        <item name="colorSurface">@color/dark_card_background</item>
-        <item name="colorSurfaceVariant">@color/dark_card_background</item>
-        <item name="colorSurfaceContainerLowest">@color/dark_background_base</item>
-        <item name="colorSurfaceContainerLow">@color/dark_background_base</item>
-        <item name="colorSurfaceContainer">@color/dark_background_base</item>
-        <item name="colorSurfaceContainerHigh">@color/dark_card_background</item>
-        <item name="colorSurfaceContainerHighest">@color/dark_card_background</item>
+        <item name="android:colorBackground">@color/material_you_dark_floor_card</item>
+        <item name="colorSurface">@color/material_you_dark_floor_card</item>
+        <item name="colorSurfaceVariant">@color/material_you_dark_floor_card</item>
+        <item name="colorSurfaceContainerLowest">@color/material_you_dark_floor_base</item>
+        <item name="colorSurfaceContainerLow">@color/material_you_dark_floor_base</item>
+        <item name="colorSurfaceContainer">@color/material_you_dark_floor_base</item>
+        <item name="colorSurfaceContainerHigh">@color/material_you_dark_floor_card</item>
+        <item name="colorSurfaceContainerHighest">@color/material_you_dark_floor_card</item>
     </style>
 
     <!--

@@ -22,10 +22,20 @@ import android.content.res.TypedArray
 @ColorInt
 fun Context.getColorFromAttr(@AttrRes attr: Int): Int {
     val typedValue = TypedValue()
-    return if (theme.resolveAttribute(attr, typedValue, true)) {
-        typedValue.data
-    } else {
-        Color.RED
+    if (!theme.resolveAttribute(attr, typedValue, true)) return Color.RED
+    if (typedValue.type >= TypedValue.TYPE_FIRST_COLOR_INT &&
+            typedValue.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+        return typedValue.data
+    }
+    // Атрибут резолвится не в сырой цвет, а в файл-ресурс (ColorStateList-
+    // селектор — напр., lStar-цвета Material You DarkFloor или динамические
+    // палитры Material на API 31-33): TypedValue.data тут НЕ цвет. Грузим
+    // через TypedArray, который умеет селекторы (вернёт default-цвет).
+    val ta = theme.obtainStyledAttributes(intArrayOf(attr))
+    try {
+        return ta.getColor(0, Color.RED)
+    } finally {
+        ta.recycle()
     }
 }
 

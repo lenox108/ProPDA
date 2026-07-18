@@ -10,6 +10,7 @@ import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.DayNightHelper
 import forpdateam.ru.forpda.common.Preferences
+import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.model.datastore.MainDataStore
 import forpdateam.ru.forpda.presentation.theme.AccentPolicy
 import forpdateam.ru.forpda.presentation.theme.MaterialYouPolicy
@@ -48,11 +49,13 @@ import timber.log.Timber
  *   `colorOnBackground` → `colorSurface` / `colorOnSurface`). Используется для
  *   SYSTEM в светлой/тёмной теме.
  * - [R.style.ThemeOverlay_ForPDA_MaterialYouDarkFloor] — акцент (наследует
- *   Accent) + ПИН surface-рампы на статичные тёмно-серые тона тёмной темы.
- *   Накладывается ПОВЕРХ Surface только для НЕ-AMOLED тёмной темы и только
- *   когда система отдала слишком тёмный `colorSurfaceContainerLowest` (см.
- *   [dynamicDarkSurfaceIsNearBlack]): иначе «Тёмная» под Material You на
- *   таких устройствах (Android 16) проваливалась в AMOLED-чёрный.
+ *   Accent) + перепин СВЕТЛОТЫ surface-рампы на уровни статичной тёмной темы
+ *   (`lStar`-селекторы поверх системной палитры обоев — оттенок обоев
+ *   сохраняется, см. комментарий к стилю в styles.xml). Накладывается ПОВЕРХ
+ *   Surface только для НЕ-AMOLED тёмной темы, когда система отдала слишком
+ *   тёмный `colorSurfaceContainerLowest` (см. [dynamicDarkSurfaceIsNearBlack];
+ *   на практике — почти всегда): иначе «Тёмная» под Material You
+ *   проваливалась в AMOLED-чёрный.
  *
  * ВАЖНО про реальный охват (обновлено после Этапа C `concurrent-dreaming-wren`
  * consumer-side миграции — см. план): динамику обоев получают акцент, базовый
@@ -188,16 +191,14 @@ object MaterialYouApplier {
                     // ThemeOverlay.Material3.HarmonizedColors) и безопасен
                     // на реальных устройствах. См. KDoc класса.
                     activity.theme.applyStyle(R.style.ThemeOverlay_ForPDA_HarmonizedError, true)
-                    // Адаптивный DARK-floor: тема «Тёмная» обещает тёмно-серый
-                    // фон, НЕ полный AMOLED-чёрный. На части устройств
-                    // (наблюдалось на Android 16) системная динамика отдаёт
-                    // colorSurfaceContainerLowest = чистый #000000, и «Тёмная»
-                    // под Material You сливается с AMOLED. На Android 12–15 та
-                    // же роль обычно тёмно-серая (с оттенком обоев) и трогать
-                    // её не надо. Поэтому решаем по ФАКТИЧЕСКИ резолвнутому
-                    // цвету, а не по версии SDK: если Lowest темнее нашего
-                    // эталона dark_background_base — поднимаем всю surface-рампу
-                    // на статичные тёмные тона (акцент из обоев сохраняется).
+                    // DARK-floor: тема «Тёмная» обещает тёмно-серый фон, НЕ
+                    // полный AMOLED-чёрный, а тёмная динамика M3 живёт ниже
+                    // (Lowest — тон L*=4, на Android 16 наблюдался и чистый
+                    // #000000). Если резолвнутый Lowest темнее эталона
+                    // dark_background_base — поднимаем светлоту surface-рампы
+                    // до уровней статичной тёмной темы, СОХРАНЯЯ оттенок обоев
+                    // (lStar-селекторы в оверлее; акцент тоже остаётся из
+                    // обоев).
                     if (!isAmoled && isNight && dynamicDarkSurfaceIsNearBlack(activity)) {
                         activity.theme.applyStyle(
                                 R.style.ThemeOverlay_ForPDA_MaterialYouDarkFloor, true)
@@ -212,11 +213,18 @@ object MaterialYouApplier {
      * true, если ПОСЛЕ применения DynamicColors системная динамическая роль
      * `colorSurfaceContainerLowest` (тон фона страницы / плоской шапки / нижнего
      * таббара) резолвится темнее нашего эталона [R.color.dark_background_base]
-     * (#121212). Такой «провал в чёрный» наблюдался на Android 16, где
-     * генератор палитры отдаёт для самой нижней тёмной поверхности тон 0
-     * (чистый #000000) — тогда «Тёмная» тема неотличима от AMOLED. На
-     * Android 12–15 та же роль обычно тёмно-серая с оттенком обоев, и функция
-     * вернёт false (оттенок сохраняем).
+     * (#121212, L* ~5.5).
+     *
+     * НА ПРАКТИКЕ это выполняется в тёмной динамике почти всегда: канонический
+     * M3-тон этой роли — L*=4 (Material 1.13: values-v31 →
+     * `m3_ref_palette_dynamic_neutral_variant4` с `lStar="4"`, values-v34 →
+     * `system_surface_container_lowest_dark` того же тона), а lStar пинит
+     * светлоту НЕЗАВИСИМО от оттенка обоев. Т.е. гейт отсеивает не «часть
+     * устройств», а лишь вендорские палитры, отдающие Lowest светлее #121212
+     * (тогда floor не нужен). Крайний случай — Android 16 с чистым #000000.
+     * Потеря оттенка обоев при срабатывании floor'а — БЫВШИЙ побочный эффект:
+     * с 18.07.2026 оверлей перепинивает только светлоту, оттенок сохраняется
+     * (см. комментарий к ThemeOverlay.ForPDA.MaterialYouDarkFloor).
      *
      * Сравнение по фактическому цвету, а не по [Build.VERSION.SDK_INT], потому
      * что точное поведение зависит и от версии, и от обоев/движка палитры
@@ -227,8 +235,12 @@ object MaterialYouApplier {
         val resolved = activity.theme.resolveAttribute(
                 com.google.android.material.R.attr.colorSurfaceContainerLowest, tv, true)
         if (!resolved) return false
+        // НЕ tv.data: на API 31-33 динамическая роль — селектор-файл с lStar
+        // (m3_ref_palette_dynamic_neutral_variant4), tv.data для него не цвет.
+        val lowest = activity.getColorFromAttr(
+                com.google.android.material.R.attr.colorSurfaceContainerLowest)
         val reference = activity.resources.getColor(R.color.dark_background_base, activity.theme)
-        return ColorUtils.calculateLuminance(tv.data) <= ColorUtils.calculateLuminance(reference)
+        return ColorUtils.calculateLuminance(lowest) <= ColorUtils.calculateLuminance(reference)
     }
 
     private fun logResolvedColors(activity: Activity) {

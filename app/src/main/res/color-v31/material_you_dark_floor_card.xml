@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Material You DARK-floor: тон карточек/приподнятых поверхностей. Светлота
+    запинена на уровень статичной @color/dark_card_background (#242424,
+    L* ~14), оттенок - из системной палитры обоев (см. соседний
+    material_you_dark_floor_base.xml).
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@android:color/system_neutral2_600" android:lStar="14" />
+</selector>
