@@ -155,6 +155,10 @@ class SearchViewModel @Inject constructor(
     fun search(query: String, nick: String) {
         settings.st = 0
         settings.query = query
+        // При ручном сабмите поле ника — источник истины: сбрасываем ранее зарезолвленный/пришедший из
+        // профиля username-id, иначе смена ника искала бы прежнего пользователя по старому id
+        // (репозиторий заново резолвит ник в id перед запросом).
+        if (settings.nick != nick) settings.userId = 0
         settings.nick = nick
         refreshData()
     }
@@ -162,6 +166,29 @@ class SearchViewModel @Inject constructor(
     fun search(pageNumber: Int) {
         settings.st = pageNumber
         refreshData()
+    }
+
+    /**
+     * «Открыть профиль по нику»: резолвим введённый ник в id и сразу переходим в профиль (showuser=id),
+     * без поиска постов. Профиль 4pda открывается только по числовому id — прямого профиля по нику нет.
+     */
+    fun openProfileByNick(rawNick: String) {
+        val nick = rawNick.trim()
+        if (nick.isEmpty()) {
+            _uiEvents.tryEmit(SearchUiEvent.ShowMessage(R.string.chat_creator_enter_nick))
+            return
+        }
+        scope.launch {
+            val user = runCatching { searchRepository.findUserByNick(nick) }.getOrNull()
+            if (user != null && user.id > 0) {
+                // Закрываем нижний лист настроек и прячем клавиатуру, иначе профиль открывается «вторым
+                // планом» под всё ещё видимой панелью поиска.
+                _uiEvents.emit(SearchUiEvent.CloseSettings)
+                linkHandler.handle("https://4pda.to/forum/index.php?showuser=${user.id}", router)
+            } else {
+                _uiEvents.emit(SearchUiEvent.ShowMessage(R.string.search_user_not_found))
+            }
+        }
     }
 
     fun updateSettings(field: String, position: Int) {
@@ -343,6 +370,8 @@ sealed class SearchUiEvent {
     data class OnStartSearch(val settings: SearchSettings) : SearchUiEvent()
     data class ShowData(val data: SearchResult) : SearchUiEvent()
     data class ShowLoadError(val message: String?) : SearchUiEvent()
+    data class ShowMessage(val resId: Int) : SearchUiEvent()
+    object CloseSettings : SearchUiEvent()
     object ShowInitialState : SearchUiEvent()
     object SetNewsMode : SearchUiEvent()
     object SetForumMode : SearchUiEvent()
