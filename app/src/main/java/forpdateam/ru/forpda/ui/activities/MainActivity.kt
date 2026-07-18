@@ -82,6 +82,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
     @Inject lateinit var authHolder: forpdateam.ru.forpda.model.AuthHolder
     @Inject lateinit var userHolder: forpdateam.ru.forpda.entity.app.profile.IUserHolder
     @Inject lateinit var webViewChecker: WebViewChecker
+    @Inject lateinit var blocklistGuard: forpdateam.ru.forpda.blocklist.BlocklistGuard
+    @Inject lateinit var blocklistRepository: forpdateam.ru.forpda.blocklist.BlocklistRepository
     @Inject lateinit var permissionHelper: PermissionHelper
     @Inject lateinit var favoritesCacheRoom: forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
     @Inject lateinit var eventsRepository: forpdateam.ru.forpda.model.repository.events.EventsRepository
@@ -191,6 +193,24 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         // Последний слой: усиление контраста по системной настройке (a11y, Android 14+).
         ContrastApplier.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
+
+        // Блоклист аккаунтов. Синхронная проверка по кэшу — забаненный аккаунт
+        // отправляется в BannedActivity ещё до построения UI/сетевых запросов.
+        // Свежедобавленные баны подхватывает фоновое обновление ниже; сетевой
+        // рубеж — BlocklistInterceptor (даже пропатченный UI не грузит форум).
+        if (blocklistGuard.isBanned(authHolder.get().userId, userHolder.currentNick())) {
+            startActivity(Intent(this, BannedActivity::class.java))
+            finish()
+            return
+        }
+        lifecycleScope.launch {
+            runCatching { blocklistRepository.refresh() }
+            if (!isFinishing && blocklistGuard.isBanned(authHolder.get().userId, userHolder.currentNick())) {
+                startActivity(Intent(this@MainActivity, BannedActivity::class.java))
+                finish()
+            }
+        }
+
         dayNightHelper.setIsNight(DayNightHelper.isUiModeNight(resources.configuration))
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

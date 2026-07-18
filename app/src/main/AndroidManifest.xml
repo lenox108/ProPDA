@@ -61,6 +61,11 @@
         android:enableOnBackInvokedCallback="true"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
+            android:name=".ui.activities.BannedActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/DayNightAppTheme.NoActionBar" />
+        <activity
             android:name=".ui.activities.MainActivity"
             android:configChanges="keyboardHidden|screenSize|orientation"
             android:exported="true"

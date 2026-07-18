@@ -15,7 +15,9 @@ import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.data.remote.api.NetworkRequest
 import forpdateam.ru.forpda.model.data.remote.api.NetworkResponse
+import forpdateam.ru.forpda.blocklist.BlocklistGuard
 import forpdateam.ru.forpda.client.interceptors.AuthInterceptor
+import forpdateam.ru.forpda.client.interceptors.BlocklistInterceptor
 import forpdateam.ru.forpda.client.interceptors.CacheControlInterceptor
 import forpdateam.ru.forpda.client.interceptors.ErrorInterceptor
 import forpdateam.ru.forpda.client.interceptors.ImageLoadingInterceptor
@@ -55,6 +57,8 @@ class Client(
     private val context: Context,
     private val authHolder: AuthHolder,
     private val countersHolder: CountersHolder,
+    private val blocklistGuard: BlocklistGuard,
+    private val userHolder: forpdateam.ru.forpda.entity.app.profile.IUserHolder,
     @forpdateam.ru.forpda.common.di.AppScope private val appScope: kotlinx.coroutines.CoroutineScope,
 ) : IWebClient {
 
@@ -132,6 +136,7 @@ class Client(
             .dns(cachedDns)
             .cookieJar(cookieJar)
             .cache(httpCache)
+            .addInterceptor(BlocklistInterceptor(authHolder, userHolder, blocklistGuard))
             .addInterceptor(AuthInterceptor())
             .addInterceptor(ImageLoadingInterceptor { url -> cookieJar.loadForRequest(url).isNotEmpty() })
             .addInterceptor(ErrorInterceptor())
@@ -181,6 +186,7 @@ class Client(
             .retryOnConnectionFailure(true)
             .connectionPool(sharedConnectionPool)
             .cookieJar(cookieJar)
+            .addInterceptor(BlocklistInterceptor(authHolder, userHolder, blocklistGuard))
             .addInterceptor(AuthInterceptor())
             .build()
     }

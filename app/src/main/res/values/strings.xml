@@ -1133,4 +1133,6 @@
     <string name="forum_settings_save_error">Не удалось сохранить настройку</string>
     <string name="forum_settings_saved">Настройки сохранены</string>
 
+    <string name="blocklist_banned_message">Доступ к приложению для вашего аккаунта ограничен.</string>
+
 </resources>

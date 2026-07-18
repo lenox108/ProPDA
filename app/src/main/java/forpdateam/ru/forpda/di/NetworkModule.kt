@@ -59,8 +59,10 @@ object NetworkModule {
             @ApplicationContext context: Context,
             authHolder: AuthHolder,
             countersHolder: CountersHolder,
+            blocklistGuard: forpdateam.ru.forpda.blocklist.BlocklistGuard,
+            userHolder: forpdateam.ru.forpda.entity.app.profile.IUserHolder,
             @AppScope appScope: CoroutineScope,
-    ): IWebClient = Client(context, authHolder, countersHolder, appScope)
+    ): IWebClient = Client(context, authHolder, countersHolder, blocklistGuard, userHolder, appScope)
 
     // region Parsers (concrete classes; @Binds only works for interface→impl binding)
     @Provides @Singleton fun provideAuthParser(pp: IPatternProvider) = AuthParser(pp)
