@@ -54,6 +54,7 @@ import forpdateam.ru.forpda.ui.views.*
 import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.pagination.PaginationHelper
+import androidx.appcompat.widget.TooltipCompat
 import forpdateam.ru.forpda.ui.views.tooltip.CustomTooltip
 import org.json.JSONObject
 import dagger.hilt.android.AndroidEntryPoint
@@ -301,6 +302,15 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
 
         toolbarSearchView?.let { searchQueryHelper.setupSubmitButton(submitButton, it, nickField) }
         searchQueryHelper.setupSaveButton(saveSettingsButton)
+        // Trailing-иконка у поля ника: резолвит ник в id и открывает профиль напрямую (showuser=id),
+        // без поиска постов — прямого «профиль по нику» в 4pda нет.
+        settingsBinding.searchNickBlock.setEndIconOnClickListener {
+            presenter.openProfileByNick(nickField.text.toString())
+        }
+        // Подсказка по долгому нажатию на иконку (постоянная подсказка — helperText под полем ника в XML).
+        profileEndIconView()?.let {
+            TooltipCompat.setTooltipText(it, getString(R.string.search_open_profile_hint))
+        }
         //recyclerView.setHasFixedSize(true);
         recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
         recyclerView.addItemDecoration(DevicesFragment.SpacingItemDecoration(dp8, true))
@@ -586,6 +596,9 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
         }
     }
 
+    private fun profileEndIconView(): View? =
+            settingsBinding.searchNickBlock.findViewById(com.google.android.material.R.id.text_input_end_icon)
+
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -622,6 +635,11 @@ class SearchFragment : TabFragment(), BaseAdapter.OnItemClickListener<SearchItem
                 hideKeyboard()
             }
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowLoadError -> showLoadError(event.message)
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowMessage -> showSnackbar(getString(event.resId))
+            is forpdateam.ru.forpda.presentation.search.SearchUiEvent.CloseSettings -> {
+                hideKeyboard()
+                settingsDialog.dismiss()
+            }
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.ShowInitialState -> showInitialState()
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SetNewsMode -> setNewsMode()
             is forpdateam.ru.forpda.presentation.search.SearchUiEvent.SetForumMode -> setForumMode()

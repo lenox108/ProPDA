@@ -714,6 +714,8 @@
     <!-- Search -->
     <string name="search_settings_resource">Место поиска</string>
     <string name="search_settings_hint_nick">Ник пользователя</string>
+    <string name="search_user_not_found">Пользователь с таким ником не найден</string>
+    <string name="search_open_profile_hint">Тап по иконке открывает профиль пользователя</string>
     <string name="search_settings_result">Отображение</string>
     <string name="search_settings_sorting">Сортировка</string>
     <string name="search_settings_source">Искать</string>
