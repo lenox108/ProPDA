@@ -98,6 +98,7 @@ class App : Application(), androidx.work.Configuration.Provider {
     @Inject lateinit var networkState: NetworkStateProvider
     @Inject lateinit var appUpdateScheduler: AppUpdateScheduler
     @Inject lateinit var eventsRepository: EventsRepository
+    @Inject lateinit var authHolder: forpdateam.ru.forpda.model.AuthHolder
     // endregion
 
     // region Properties
@@ -424,6 +425,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         val bgEnabled = notificationPreferencesHolder.getBgCheckEnabled()
         if (!mainEnabled || !bgEnabled || !notificationPreferencesHolder.wantsPushNotifications()) {
             wm.cancelUniqueWork(forpdateam.ru.forpda.notifications.EventsCheckWorker.UNIQUE_NAME)
+            forpdateam.ru.forpda.notifications.EventsCheckAlarmScheduler.cancel(this)
             Timber.d("EventsCheckWorker: cancelled (main=$mainEnabled bg=$bgEnabled)")
             forpdateam.ru.forpda.notifications.NotifDiagLog.log(this, "scheduler: cancelled (main=$mainEnabled bg=$bgEnabled)")
             return
@@ -452,9 +454,13 @@ class App : Application(), androidx.work.Configuration.Provider {
                 androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
                 req
         )
+        // Второй контур: точный будильник пробивает Doze там, где OEM откладывает WorkManager.
+        forpdateam.ru.forpda.notifications.EventsCheckAlarmScheduler.schedule(this, intervalMin)
+        // Отметка для самодиагностики в настройках: «работа запланирована с этого момента».
+        notificationPreferencesHolder.setBgScheduledAt(System.currentTimeMillis())
         Timber.d("EventsCheckWorker: scheduled every $intervalMin min")
         BatteryDebugLogger.logState("EventsCheckWorker", "scheduled", "intervalMin=$intervalMin batteryNotLow=false")
-        forpdateam.ru.forpda.notifications.NotifDiagLog.log(this, "scheduler: scheduled every $intervalMin min")
+        forpdateam.ru.forpda.notifications.NotifDiagLog.log(this, "scheduler: scheduled every $intervalMin min (+alarm)")
     }
 
     private fun setupAppUpdateCheck() {
@@ -550,6 +556,14 @@ class App : Application(), androidx.work.Configuration.Provider {
         override fun onStop(owner: LifecycleOwner) {
             BatteryDebugLogger.logState("AppLifecycle", "background")
             eventsRepository.onAppBackgrounded()
+            // Режим «Постоянное соединение»: приложение уходит в фон, а сокет должен жить —
+            // поднимаем сервис как FGS (только FGS удержит процесс и соединение вне UI).
+            // Окно после ухода с переднего плана позволяет старт FGS из фона.
+            if (notificationPreferencesHolder.getBgPersistentWs()
+                    && notificationPreferencesHolder.wantsPushNotifications()
+                    && authHolder.get().isAuth()) {
+                forpdateam.ru.forpda.notifications.NotificationsService.startPersistentFgs(this@App)
+            }
         }
 
         override fun onStart(owner: LifecycleOwner) {

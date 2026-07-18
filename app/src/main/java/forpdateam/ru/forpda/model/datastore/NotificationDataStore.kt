@@ -35,6 +35,13 @@ class NotificationDataStore(private val context: Context) {
         // Фоновая проверка уведомлений (WorkManager polling, когда сервис убит).
         private const val KEY_BG_CHECK_ENABLED = "notifications.bg.enabled"
         private const val KEY_BG_CHECK_INTERVAL_MIN = "notifications.bg.interval_min"
+        // Опция «Постоянное соединение»: держать WebSocket и в фоне (FGS). По умолчанию ВЫКЛ.
+        private const val KEY_BG_PERSISTENT_WS = "notifications.bg.persistent_ws"
+        // Самодиагностика: отметки последнего запуска воркера и момента планирования.
+        private const val KEY_BG_LAST_WORKER_RUN_AT = "notifications.bg.last_worker_run_at"
+        private const val KEY_BG_SCHEDULED_AT = "notifications.bg.scheduled_at"
+        // Последний реальный сетевой проход проверки: дедуп двух триггеров (periodic+alarm).
+        private const val KEY_BG_LAST_CHECK_AT = "notifications.bg.last_check_at"
         // Список тем, для которых пользователь отключил уведомления локально.
         private const val KEY_MUTED_TOPIC_IDS = "notifications.muted_topic_ids"
         // Слежение за новыми версиями (apk в шапке темы).
@@ -64,6 +71,7 @@ class NotificationDataStore(private val context: Context) {
     private val hatEnabledFlow = MutableStateFlow(true)
     private val bgCheckEnabledFlow = MutableStateFlow(true)
     private val bgCheckIntervalMinFlow = MutableStateFlow(MIN_BG_CHECK_INTERVAL_MIN)
+    private val bgPersistentWsFlow = MutableStateFlow(false)
     private val mutedTopicsFlow = MutableStateFlow<Set<Int>>(emptySet())
 
     /**
@@ -80,6 +88,7 @@ class NotificationDataStore(private val context: Context) {
             KEY_HAT_ENABLED -> hatEnabledFlow.value = sp.getBoolean(KEY_HAT_ENABLED, true)
             KEY_BG_CHECK_ENABLED -> bgCheckEnabledFlow.value = sp.getBoolean(KEY_BG_CHECK_ENABLED, true)
             KEY_BG_CHECK_INTERVAL_MIN -> bgCheckIntervalMinFlow.value = readBgIntervalFromPrefs(sp)
+            KEY_BG_PERSISTENT_WS -> bgPersistentWsFlow.value = sp.getBoolean(KEY_BG_PERSISTENT_WS, false)
             KEY_MUTED_TOPIC_IDS -> mutedTopicsFlow.value = readMutedTopicsFromPrefs(sp)
         }
     }
@@ -95,6 +104,7 @@ class NotificationDataStore(private val context: Context) {
             hatEnabledFlow.value = it.getBoolean(KEY_HAT_ENABLED, true)
             bgCheckEnabledFlow.value = it.getBoolean(KEY_BG_CHECK_ENABLED, true)
             bgCheckIntervalMinFlow.value = readBgIntervalFromPrefs(it)
+            bgPersistentWsFlow.value = it.getBoolean(KEY_BG_PERSISTENT_WS, false)
             mutedTopicsFlow.value = readMutedTopicsFromPrefs(it)
 
             it.registerOnSharedPreferenceChangeListener(prefsListener)
@@ -167,6 +177,29 @@ class NotificationDataStore(private val context: Context) {
     fun getBgCheckEnabledSync(): Boolean = prefs.getBoolean(KEY_BG_CHECK_ENABLED, true)
 
     fun getBgCheckIntervalMinSync(): Long = readBgIntervalFromPrefs(prefs)
+
+    fun bgPersistentWsFlow(): Flow<Boolean> = bgPersistentWsFlow.asStateFlow()
+
+    fun getBgPersistentWsSync(): Boolean = prefs.getBoolean(KEY_BG_PERSISTENT_WS, false)
+
+    // --- Самодиагностика фоновых проверок ---
+    fun getLastWorkerRunAtSync(): Long = prefs.getLong(KEY_BG_LAST_WORKER_RUN_AT, 0L)
+
+    fun setLastWorkerRunAtSync(value: Long) {
+        prefs.edit().putLong(KEY_BG_LAST_WORKER_RUN_AT, value).apply()
+    }
+
+    fun getBgScheduledAtSync(): Long = prefs.getLong(KEY_BG_SCHEDULED_AT, 0L)
+
+    fun setBgScheduledAtSync(value: Long) {
+        prefs.edit().putLong(KEY_BG_SCHEDULED_AT, value).apply()
+    }
+
+    fun getLastCheckAtSync(): Long = prefs.getLong(KEY_BG_LAST_CHECK_AT, 0L)
+
+    fun setLastCheckAtSync(value: Long) {
+        prefs.edit().putLong(KEY_BG_LAST_CHECK_AT, value).apply()
+    }
 
     fun getMutedTopicsSync(): Set<Int> = readMutedTopicsFromPrefs(prefs)
 

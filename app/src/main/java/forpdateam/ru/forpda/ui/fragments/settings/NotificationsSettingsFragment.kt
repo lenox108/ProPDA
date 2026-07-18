@@ -45,7 +45,26 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         configureVersionAwareUi()
         configureSystemSettingsLinks()
         configureBatteryOptimizationLink()
+        configureOemAutostartLink()
         configureBgCheckDiagnostics()
+    }
+
+    /**
+     * Вендорский экран «Автозапуска» (MIUI/EMUI/ColorOS/...) — отдельный от battery-exemption
+     * рубильник, без которого система не будит приложение в фоне. Пункт виден только на
+     * прошивках, где такой экран есть.
+     */
+    private fun configureOemAutostartLink() {
+        val preference = preferenceScreen.findPreference<Preference>("notifications.bg.oem_autostart") ?: return
+        val context = context
+        val available = context != null &&
+                forpdateam.ru.forpda.notifications.OemAutostartHelper.isAvailable(context)
+        preference.isVisible = available
+        if (!available) return
+        preference.setOnPreferenceClickListener {
+            this.context?.let { ctx -> forpdateam.ru.forpda.notifications.OemAutostartHelper.open(ctx) }
+            true
+        }
     }
 
     /** Журнал фоновых проверок ([forpdateam.ru.forpda.notifications.NotifDiagLog]) — работает и в release. */
@@ -200,6 +219,54 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         updateSystemNotificationStatus()
         updatePermissionWarning()
         updateBatteryOptimizationSummary()
+        updateBgStalledWarning()
+    }
+
+    private var bgStalledWarningPreference: Preference? = null
+
+    /**
+     * Самодиагностика фона: если запланированный воркер давно не запускался — система его
+     * блокирует (Doze/OEM). Показываем предупреждение с переходом к исправлению, чтобы
+     * пользователь не гадал, почему «не приходят уведомления».
+     */
+    private fun updateBgStalledWarning() {
+        val context = context ?: return
+        val sp = preferenceScreen.sharedPreferences ?: return
+        val bgEnabled = sp.getBoolean("notifications.main.enabled", true) &&
+                sp.getBoolean("notifications.bg.enabled", true)
+        val intervalMin = (sp.getString("notifications.bg.interval_min", null)?.toLongOrNull() ?: 30L)
+                .coerceAtLeast(15L)
+        val lastRun = sp.getLong("notifications.bg.last_worker_run_at", 0L)
+        val scheduledAt = sp.getLong("notifications.bg.scheduled_at", 0L)
+        val referencePoint = maxOf(lastRun, scheduledAt)
+        val now = System.currentTimeMillis()
+        // Порог с запасом (3 интервала + 10 мин): легитимные задержки Doze — не повод пугать.
+        val thresholdMs = intervalMin * 3 * 60_000L + 10 * 60_000L
+        val stalled = bgEnabled && referencePoint > 0L && now - referencePoint > thresholdMs
+
+        if (!stalled) {
+            bgStalledWarningPreference?.let(preferenceScreen::removePreference)
+            bgStalledWarningPreference = null
+            return
+        }
+        val gapMin = (now - referencePoint) / 60_000L
+        val summaryText = getString(R.string.pref_summary_bg_stalled_warning, gapMin, intervalMin)
+        bgStalledWarningPreference?.let {
+            it.summary = summaryText
+            return
+        }
+        bgStalledWarningPreference = Preference(context).apply {
+            layoutResource = R.layout.preference_custom
+            title = getString(R.string.pref_title_bg_stalled_warning)
+            summary = summaryText
+            setOnPreferenceClickListener {
+                // Сначала battery exemption; если есть вендорский автозапуск — он тоже виден рядом.
+                requestIgnoreBatteryOptimizations()
+                true
+            }
+            setIconSpaceReserved(false)
+            order = -2
+        }.also(preferenceScreen::addPreference)
     }
 
     private fun updatePermissionWarning() {

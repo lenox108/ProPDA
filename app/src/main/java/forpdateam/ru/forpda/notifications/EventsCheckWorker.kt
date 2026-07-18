@@ -49,24 +49,28 @@ class EventsCheckWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        if (eventsRepository.isForegroundRealtimeActive()) {
-            // Флаг может быть стейл-true: 45-секундный сброс висит на main-диспетчере, и если
-            // система заморозила процесс раньше, оттаявший для воркера процесс видит «foreground».
-            // Не верим флагу на слово — сверяемся с реальным lifecycle-состоянием UI. Прыжок на
-            // Main заодно даёт очереди главного потока прогнать отложенный сброс.
+        // Отметка «нас вообще запускали» — пишется ДО любых скипов: самодиагностика в настройках
+        // по ней отличает «система не запускает воркер» от «воркер запускается, но выходит пустым».
+        prefs.setLastWorkerRunAt(System.currentTimeMillis())
+
+        // Скип ТОЛЬКО при реально живом сокете: события несёт realtime, опрос не нужен.
+        // Раньше скип шёл по флагу foregroundRealtime — но флаг остаётся true при idle-паузе
+        // (5 мин без касаний гасят WS, флаг не трогают): приложение открыто, сокет мёртв,
+        // воркер скипал — и уведомления не приходили вообще (мёртвая зона, видна в полевом
+        // логе «skip (foreground realtime)» каждые 15 мин). Плюс тот же критерий корректно
+        // покрывает и стейл-флаг после заморозки процесса, и режим «Постоянное соединение».
+        if (eventsRepository.isWebSocketConnected()) {
+            // Прыжок на Main даёт главному потоку прогнать отложенные lifecycle-колбэки
+            // (например, 45-секундный сброс realtime после ухода в фон у замороженного процесса).
             val uiForeground = withContext(Dispatchers.Main) {
                 ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
             }
-            if (uiForeground) {
-                if (BuildConfig.DEBUG) {
-                    Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: foreground realtime active")
-                }
-                Timber.d("EventsCheckWorker: foreground realtime active, skip")
-                NotifDiagLog.log(applicationContext, "worker: skip (foreground realtime)")
-                return@withContext Result.success()
+            if (BuildConfig.DEBUG) {
+                Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: websocket connected (uiForeground=$uiForeground)")
             }
-            Timber.d("EventsCheckWorker: stale realtime flag (UI not started), proceeding")
-            NotifDiagLog.log(applicationContext, "worker: stale realtime flag ignored, proceeding")
+            Timber.d("EventsCheckWorker: websocket connected, skip")
+            NotifDiagLog.log(applicationContext, "worker: skip (websocket connected, ui=$uiForeground)")
+            return@withContext Result.success()
         }
         // Планировщик снимает эту работу, как только push перестают быть нужны, но отмена
         // может и не доехать (гонка, убитый процесс, старая запись в базе WorkManager).
@@ -101,6 +105,19 @@ class EventsCheckWorker @AssistedInject constructor(
             NotifDiagLog.log(applicationContext, "worker: skip (not authorized)")
             return@withContext Result.success()
         }
+
+        // Дедуп двух триггеров (periodic WorkManager + точный будильник): реальный сетевой
+        // проход делает максимум один из них за полуинтервал — иначе двойные пробуждения
+        // удвоили бы сетевые запросы, а событий чаще не становится.
+        val now = System.currentTimeMillis()
+        val minGapMs = prefs.getBgCheckIntervalMin() * 60_000L / 2
+        val sinceLastCheck = now - prefs.getLastCheckAt()
+        if (sinceLastCheck in 0 until minGapMs) {
+            Timber.d("EventsCheckWorker: checked ${sinceLastCheck / 1000}s ago, skip")
+            NotifDiagLog.log(applicationContext, "worker: skip (checked ${sinceLastCheck / 1000}s ago)")
+            return@withContext Result.success()
+        }
+        prefs.setLastCheckAt(now)
 
         NotifDiagLog.log(applicationContext, "worker: run start")
         runCatching { checkSource(NotificationEvent.Source.QMS) }

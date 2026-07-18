@@ -47,6 +47,23 @@ class NotificationPreferencesHolder(
 
     fun getBgCheckIntervalMin(): Long = dataStore.getBgCheckIntervalMinSync()
 
+    fun bgPersistentWsFlow(): Flow<Boolean> = dataStore.bgPersistentWsFlow()
+
+    fun getBgPersistentWs(): Boolean = dataStore.getBgPersistentWsSync()
+
+    // --- Самодиагностика фоновых проверок ---
+    fun getLastWorkerRunAt(): Long = dataStore.getLastWorkerRunAtSync()
+
+    fun setLastWorkerRunAt(value: Long) = dataStore.setLastWorkerRunAtSync(value)
+
+    fun getBgScheduledAt(): Long = dataStore.getBgScheduledAtSync()
+
+    fun setBgScheduledAt(value: Long) = dataStore.setBgScheduledAtSync(value)
+
+    fun getLastCheckAt(): Long = dataStore.getLastCheckAtSync()
+
+    fun setLastCheckAt(value: Long) = dataStore.setLastCheckAtSync(value)
+
     fun isTopicMuted(topicId: Int): Boolean = dataStore.isTopicMutedSync(topicId)
 
     fun getMutedTopics(): Set<Int> = dataStore.getMutedTopicsSync()

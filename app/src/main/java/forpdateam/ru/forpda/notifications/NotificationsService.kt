@@ -176,6 +176,15 @@ class NotificationsService : Service() {
             promoteToForegroundIfNeeded()
         }
 
+        // Возврат приложения на передний план: FGS больше не нужен (процесс держит UI),
+        // снимаем «служебное» уведомление. При следующем уходе в фон App поднимет его снова
+        // (режим «Постоянное соединение») — симметрично и без залипших уведомлений.
+        val uiForeground = androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentState
+                .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+        if (uiForeground && intent?.getBooleanExtra(EXTRA_STARTED_AS_FGS, false) != true) {
+            detachForegroundIfPromoted("app_visible")
+        }
+
         var checkEvents = intent?.action != null && intent.action == CHECK_LAST_EVENTS
         val time = System.currentTimeMillis()
 
@@ -189,6 +198,18 @@ class NotificationsService : Service() {
         }
         eventsRepository.externalStart(checkEvents)
 
+        // Режим «Постоянное соединение» в фоне: держим FGS и живой realtime. Ветка покрывает
+        // и воскрешение по START_STICKY после убийства процесса (intent=null, extra потерян,
+        // а в свежем процессе foregroundRealtime по умолчанию выключен — включаем явно).
+        if (notificationPreferencesHolder.getBgPersistentWs() && !uiForeground && authHolder.get().isAuth()) {
+            promoteToForegroundIfNeeded()
+            if (!eventsRepository.isForegroundRealtimeActive()) {
+                BatteryDebugLogger.logState("NotificationsService", "persistentRestart")
+                NotifDiagLog.log(this, "service: persistent realtime (re)start")
+                eventsRepository.setForegroundRealtimeEnabled(true, "persistent_restart")
+            }
+        }
+
         // externalStart в фоне не делает ничего: WebSocket поднимается только при
         // foregroundRealtime. Если мы при этом успели подняться как FGS (фолбэк-старт),
         // то держали бы уведомление в шторке и foreground-приоритет процесса впустую —
@@ -196,7 +217,10 @@ class NotificationsService : Service() {
         if (!eventsRepository.isForegroundRealtimeActive()) {
             detachForegroundIfPromoted("no_realtime_work")
         }
-        return START_NOT_STICKY
+        // Режим «Постоянное соединение»: сервис обязан пережить смерть UI-задачи,
+        // иначе OEM-очистка Recents убьёт и сокет. START_STICKY просит систему
+        // перезапустить нас после убийства процесса.
+        return if (notificationPreferencesHolder.getBgPersistentWs()) START_STICKY else START_NOT_STICKY
     }
 
     internal var foregroundPromoted = false
@@ -239,11 +263,15 @@ class NotificationsService : Service() {
                 .setSilent(true)
                 .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                    FOREGROUND_NOTIFICATION_ID,
-                    notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            )
+            // «Постоянное соединение» живёт под specialUse: у dataSync на Android 15 суммарный
+            // лимит ~6 ч/сутки (onTimeout), а постоянный сокет должен жить сутками.
+            val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+                    && notificationPreferencesHolder.getBgPersistentWs()) {
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            } else {
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            }
+            startForeground(FOREGROUND_NOTIFICATION_ID, notification, fgsType)
         } else {
             startForeground(FOREGROUND_NOTIFICATION_ID, notification)
         }
@@ -267,6 +295,14 @@ class NotificationsService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         Timber.i("onTaskRemoved")
+        // Режим «Постоянное соединение»: свайп из Recents НЕ должен убивать пуши — в этом
+        // весь смысл режима (как у Telegram). Сервис и сокет продолжают жить.
+        if (notificationPreferencesHolder.getBgPersistentWs()
+                && notificationPreferencesHolder.wantsPushNotifications()
+                && authHolder.get().isAuth()) {
+            BatteryDebugLogger.logState("NotificationsService", "taskRemoved", "persistent: keep running")
+            return
+        }
         // Пользователь смахнул приложение из Recents. Без явной остановки foreground-сервис
         // продолжает жить вместе со своим обязательным уведомлением в шторке.
         //
@@ -502,6 +538,23 @@ class NotificationsService : Service() {
         @JvmStatic
         fun startAndCheck(context: Context) {
             startAndCheckNoBind(context)
+        }
+
+        /**
+         * Режим «Постоянное соединение»: поднять сервис как FGS при уходе приложения в фон,
+         * чтобы процесс и WebSocket пережили потерю foreground-приоритета. Вызывается из
+         * App.onStop — в окне после ухода с переднего плана старт FGS ещё разрешён.
+         */
+        @JvmStatic
+        fun startPersistentFgs(context: Context) {
+            try {
+                BatteryDebugLogger.logState("NotificationsService", "startPersistentFgs")
+                val intent = Intent(context, NotificationsService::class.java)
+                        .putExtra(EXTRA_STARTED_AS_FGS, true)
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                Timber.w(e, "startPersistentFgs failed")
+            }
         }
 
         /** Вариант для BroadcastReceiver: без bind (может затянуться и привести к ANR). */

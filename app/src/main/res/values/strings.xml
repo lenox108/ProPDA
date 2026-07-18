@@ -968,6 +968,12 @@
     <string name="pref_summary_bg_check">Выключено: приложение ничего не делает, пока закрыто. Уведомления приходят, только когда оно открыто.</string>
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
     <string name="pref_title_battery_optimization">Разрешить работу в фоне без ограничений</string>
+    <string name="pref_title_oem_autostart">Автозапуск (настройки производителя)</string>
+    <string name="pref_summary_oem_autostart">На этой прошивке есть отдельный список автозапуска: без разрешения система не будит приложение в фоне, даже с исключением из оптимизации батареи</string>
+    <string name="pref_title_persistent_ws">Постоянное соединение</string>
+    <string name="pref_summary_persistent_ws">Мгновенные уведомления через непрерывное соединение с форумом (как у мессенджеров). Заметно расходует батарею и держит значок в шторке. Работает надёжнее вместе с «Разрешить работу в фоне без ограничений»</string>
+    <string name="pref_title_bg_stalled_warning">Фоновые проверки блокируются системой</string>
+    <string name="pref_summary_bg_stalled_warning">Последняя проверка была %1$d мин назад при интервале %2$d мин. Нажмите и разрешите работу в фоне; на прошивках с автозапуском включите и его.</string>
     <string name="pref_title_bg_check_diagnostics">Диагностика фоновых проверок</string>
     <string name="pref_summary_bg_check_diagnostics">Журнал запусков фоновой проверки: помогает понять, почему не приходят уведомления</string>
     <string name="bg_check_diagnostics_empty">Журнал пуст. Записи появятся после первого запуска фоновой проверки.</string>

@@ -320,6 +320,12 @@ class EventsRepository(
      */
     fun onAppBackgrounded() {
         if (!foregroundRealtimeEnabled) return
+        // Режим «Постоянное соединение»: сокет живёт и в фоне (его держит FGS,
+        // который поднимает App при уходе с переднего плана). Отложенный разрыв не взводим.
+        if (notificationPreferencesHolder.getBgPersistentWs()) {
+            BatteryDebugLogger.logState("EventsRepository", "persistentWs", "keep realtime in background")
+            return
+        }
         backgroundGraceJob?.cancel()
         backgroundGraceJob = repoScope.launch {
             delay(BACKGROUND_GRACE_MS)
@@ -400,6 +406,13 @@ class EventsRepository(
     private fun armIdleTimer() {
         idleJob?.cancel()
         if (!foregroundRealtimeEnabled) return
+        // «Постоянное соединение» несовместимо с idle-паузой: в фоне пользователь не касается
+        // экрана по определению, и сторож бездействия убил бы сокет через 5 минут. Пользователь
+        // явно выбрал платить батареей за постоянный realtime — уважаем выбор и в foreground.
+        if (notificationPreferencesHolder.getBgPersistentWs()) {
+            BatteryDebugLogger.logState("EventsRepository", "idleTimerSkipped", "persistent_ws")
+            return
+        }
         idleJob = repoScope.launch {
             while (foregroundRealtimeEnabled && !idleDisconnected) {
                 val remaining = FOREGROUND_IDLE_TIMEOUT_MS - (SystemClock.elapsedRealtime() - lastInteractionAt)
@@ -416,6 +429,11 @@ class EventsRepository(
                 }
                 if (isRealtimeScreenActive()) {
                     // Открытый QMS-чат (или иной realtime-экран) требует живого WS — откладываем паузу.
+                    lastInteractionAt = SystemClock.elapsedRealtime()
+                    continue
+                }
+                if (notificationPreferencesHolder.getBgPersistentWs()) {
+                    // «Постоянное соединение» включили уже после взвода сторожа — не гасим сокет.
                     lastInteractionAt = SystemClock.elapsedRealtime()
                     continue
                 }
