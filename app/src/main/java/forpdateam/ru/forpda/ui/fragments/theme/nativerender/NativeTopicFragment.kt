@@ -2139,6 +2139,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             result.onSuccess { page ->
                 processHatForPage(page) // strip the repeated hat 4pda echoes onto this deeper page
+                recordMaxLoaded(page) // догрузка вниз углубляет трек «докуда грузили» (кросс-девайс детект)
                 val newItems = pagination.registerAndFilterNew(
                         filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current)))
                 pagination.onPageAppended(page.pagination.current, page.pagination)
@@ -2254,6 +2255,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             var prepended = false
             result.onSuccess { page ->
+                recordMaxLoaded(page) // монотонно — догрузка ВВЕРХ трек не понижает, но фиксирует факт загрузки
                 // Prepending page 1 brings the real hat into view — keep it and light the toolbar ⓘ; a
                 // deeper page's repeated hat is stripped instead.
                 val hatId = processHatForPage(page)
@@ -3568,6 +3570,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (view == null || epoch != loadEpoch) return false
                 if (gap.id != pageTopicId || gap.pagination.current != bottomLoaded) return false
                 processHatForPage(gap)
+                recordMaxLoaded(gap)
                 val gapItems = pagination.registerAndFilterNew(
                         filterBlacklisted(tagPage(mapper.map(gap.posts), gap.pagination.current)))
                 if (gapItems.isNotEmpty()) {
@@ -3577,6 +3580,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             if (epoch != loadEpoch) return false
             processHatForPage(page) // срезать эхо шапки, иначе оно «допишется» вниз как новый пост
+            recordMaxLoaded(page) // свой ответ мог создать/углубить последнюю страницу
             val newItems = pagination.registerAndFilterNew(
                     filterBlacklisted(tagPage(mapper.map(page.posts), postedPageNumber)))
             pagination.onPageAppended(postedPageNumber, page.pagination)
@@ -3831,6 +3835,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         pageSt = page.st
         pageIsInFavorite = page.isInFavorite
         pageFavId = page.favId
+        recordMaxLoaded(page) // трек «докуда это устройство грузило» для кросс-девайс детекта
         setRefreshing(false)
         // Fresh (re)load of the topic — forget the previous session's topic-level hat/poll state.
         knownHatPostId = null
@@ -4007,6 +4012,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (pendingJumpToTop) return false
         val boundaryId = readBoundaryStore.lastSeenPostId(page.id)
         if (boundaryId <= 0) return false
+        // Кросс-девайс детект: если серверный якорь ушёл дальше, чем на одну страницу от самой дальней
+        // страницы, которую грузило ЭТО устройство, тему дочитали на другом устройстве/в браузере
+        // (walk-down так далеко уйти не может). Локальная граница устарела — стираем её и доверяем
+        // серверному якорю (иначе бы откатили юзера на старую позицию, где он остановился здесь).
+        if (forpdateam.ru.forpda.presentation.theme.TopicReadBoundaryPolicy.isCrossDeviceReadProgress(
+                        serverAnchorPage = page.pagination.current,
+                        maxLoadedPage = readBoundaryStore.maxLoadedPage(page.id))) {
+            if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                android.util.Log.i("FPDA_READ_BOUNDARY",
+                        "cross_device topic=${page.id} serverPage=${page.pagination.current} maxLoadedPage=${readBoundaryStore.maxLoadedPage(page.id)} → clear boundary, trust server")
+            }
+            readBoundaryStore.clear(page.id)
+            return false
+        }
         val serverAnchorId = page.anchorPostId?.removePrefix("entry")?.trim()?.toIntOrNull()
                 ?: page.anchor?.removePrefix("entry")?.trim()?.toIntOrNull()
         val lastLoadedId = page.posts.lastOrNull { it.id > 0 }?.id
@@ -4553,6 +4572,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (id > deepestSeen) deepestSeen = id
         }
         if (deepestSeen > 0) readBoundaryStore.recordSeen(pageTopicId, deepestSeen, barCurrentPage)
+    }
+
+    /**
+     * Отметить, что ЭТО устройство загрузило страницу [page] с сервера (реально видел юзер её или нет —
+     * даже предзагрузку гибридным скроллом). Питает трек `maxLoaded* ` в [readBoundaryStore], по которому
+     * [maybeResumeToReadBoundary] отличает серверный walk-down от прогресса на другом устройстве. Зовётся
+     * из ВСЕХ точек загрузки страницы (первичный рендер, догрузка next/prev, страница после отправки).
+     * maxOf id — шапка (эхо первого поста темы) имеет наименьший id и максимум не искажает.
+     */
+    private fun recordMaxLoaded(page: forpdateam.ru.forpda.entity.remote.theme.ThemePage) {
+        if (page.id <= 0) return
+        val maxPostId = page.posts.maxOfOrNull { it.id } ?: return
+        if (maxPostId > 0) readBoundaryStore.recordLoaded(page.id, maxPostId, page.pagination.current)
     }
 
     /**

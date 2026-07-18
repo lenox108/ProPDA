@@ -1,7 +1,9 @@
 package forpdateam.ru.forpda.presentation.theme
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TopicReadBoundaryPolicyTest {
@@ -101,5 +103,39 @@ class TopicReadBoundaryPolicyTest {
     fun boundaryOnPage_defaultsTrue_preservesLegacyBehavior() {
         // Дефолт boundaryPostOnPage=true сохраняет прежнее поведение для вызовов без нового аргумента.
         assertNull(TopicReadBoundaryPolicy.resumeAnchorPostId(100, 500, 500, firstUnseenPostId = 500))
+    }
+
+    // --- isCrossDeviceReadProgress ---
+
+    @Test
+    fun crossDevice_serverTwoPagesBeyondLoaded_trustsServer() {
+        // Планшет дочитал до стр. 90, телефон грузил максимум стр. 87. Серверный якорь (90) дальше, чем
+        // на одну страницу от 87 → прогресс сделан на другом устройстве.
+        assertTrue(TopicReadBoundaryPolicy.isCrossDeviceReadProgress(serverAnchorPage = 90, maxLoadedPage = 87))
+    }
+
+    @Test
+    fun crossDevice_serverOnePageBeyondLoaded_isWalkDown_notCrossDevice() {
+        // Ровно +1 страница = потолок собственного walk-down (загрузка стр. 87 метит её прочитанной,
+        // getnewpost уводит на 88). Неотличимо от «прочитали +1 стр. на другом устройстве» → безопасная
+        // сторона: НЕ кросс-девайс, отработает обычный резюм на границу.
+        assertFalse(TopicReadBoundaryPolicy.isCrossDeviceReadProgress(serverAnchorPage = 88, maxLoadedPage = 87))
+    }
+
+    @Test
+    fun crossDevice_serverAtOrBeforeLoaded_notCrossDevice() {
+        assertFalse(TopicReadBoundaryPolicy.isCrossDeviceReadProgress(serverAnchorPage = 87, maxLoadedPage = 87))
+        assertFalse(TopicReadBoundaryPolicy.isCrossDeviceReadProgress(serverAnchorPage = 50, maxLoadedPage = 87))
+    }
+
+    @Test
+    fun crossDevice_unknownMaxLoaded_detectorOff() {
+        // Cold-miss / существующие юзеры до миграции (maxLoadedPage=0) → детект выключен, фолбэк на прежнее.
+        assertFalse(TopicReadBoundaryPolicy.isCrossDeviceReadProgress(serverAnchorPage = 90, maxLoadedPage = 0))
+    }
+
+    @Test
+    fun crossDevice_invalidServerPage_detectorOff() {
+        assertFalse(TopicReadBoundaryPolicy.isCrossDeviceReadProgress(serverAnchorPage = 0, maxLoadedPage = 87))
     }
 }

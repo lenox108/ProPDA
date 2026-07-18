@@ -116,7 +116,9 @@ object DataModule {
             context,
             TopicReadBoundaryDatabase::class.java,
             "topic_read_boundary_database"
-        ).build()
+        )
+            .addMigrations(TopicReadBoundaryDatabase.MIGRATION_1_2)
+            .build()
     }
 
     @Provides @Singleton
