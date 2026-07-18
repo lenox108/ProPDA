@@ -128,6 +128,13 @@ class EditPostApi(
         if (form.postId != 0)
             builder.formHeader("p", form.postId.toString())
 
+        android.util.Log.i(
+                "ForPDA.AttachDel",
+                "sendPost type=${form.type} postId=${form.postId} file-list=[${ids}] " +
+                        "attachCount=${form.attachments.size} removeattachid=0 " +
+                        "bodyHasAttachTag=${Regex("(?i)\\[attachment").containsMatchIn(form.message)} " +
+                        "bodyHasDlUrl=${form.message.contains("/forum/dl/post/", ignoreCase = true)}"
+        )
         val response = webClient.request(builder.build())
         val redirectUrl = response.redirectWithFragment.ifBlank { response.redirect }
         if (form.type == EditPostForm.TYPE_EDIT_POST) {
