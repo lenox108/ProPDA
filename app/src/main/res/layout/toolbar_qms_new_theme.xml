@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?android:attr/colorBackground"
+    android:background="?attr/colorSurface"
     android:orientation="vertical"
     android:paddingBottom="@dimen/content_block_padding_vertical"
     android:paddingEnd="@dimen/content_padding_horizontal"
@@ -23,7 +23,7 @@
         android:layout_height="wrap_content"
         app:hintEnabled="false"
         app:boxBackgroundMode="outline"
-        app:boxBackgroundColor="?android:attr/colorBackground"
+        app:boxBackgroundColor="?attr/colorSurface"
         app:boxStrokeWidth="1dp"
         app:boxStrokeWidthFocused="2dp"
         app:boxStrokeColor="@color/qms_textfield_stroke">
@@ -54,7 +54,7 @@
         android:layout_height="wrap_content"
         app:hintEnabled="false"
         app:boxBackgroundMode="outline"
-        app:boxBackgroundColor="?android:attr/colorBackground"
+        app:boxBackgroundColor="?attr/colorSurface"
         app:boxStrokeWidth="1dp"
         app:boxStrokeWidthFocused="2dp"
         app:boxStrokeColor="@color/qms_textfield_stroke">
