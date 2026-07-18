@@ -120,18 +120,20 @@ class MentionsViewModel @Inject constructor(
     }
 
     fun onItemClick(item: MentionItem) {
-        // Ответ на КОММЕНТАРИЙ К НОВОСТИ помечаем прочитанным при открытии из списка: у новостных
-        // упоминаний нет механизма «отметить по видимому посту», как у форумных тем (ThemeViewModel
-        // гасит форумные ответы по факту рендера страницы). Без этого строка и бейдж «Ответы» висят
-        // вечно — даже после перехода в новость. Форумные упоминания не трогаем (у них своя логика).
-        if (item.type == MentionItem.TYPE_NEWS) {
-            scope.launch {
-                val (changed, snapshot) = mentionsRepository.markMentionItemRead(item)
-                if (changed) {
-                    item.state = MentionItem.STATE_READ
-                    countersHolder.setMentions(snapshot.unreadCount, source = "mention_opened_news")
-                    _uiEvents.emit(MentionsUiEvent.MentionMarkedRead(item))
-                }
+        // Помечаем упоминание прочитанным сразу при открытии из списка «Ответы» — для ЛЮБОГО типа.
+        // У новостных упоминаний иного механизма нет вовсе. У форумных штатное гашение идёт по факту
+        // рендера видимого поста в теме (ThemeViewModel/NativeTopicFragment.markVisiblePostsRead), но
+        // оно НЕ срабатывает, если пост упоминания не попал в видимое окно при открытии темы (сели на
+        // границу прочитанного, пост оказался выше/ниже вьюпорта — типично, когда после упоминания
+        // есть ещё ответы). Тогда бейдж «Ответы» висел вечно, хотя пользователь открыл ответ. Явный
+        // тап по строке — достаточно сильный сигнал прочтения (переходим ровно на этот пост), поэтому
+        // гасим ключ упоминания здесь; markMentionItemRead идемпотентен со штатным путём рендера.
+        scope.launch {
+            val (changed, snapshot) = mentionsRepository.markMentionItemRead(item)
+            if (changed) {
+                item.state = MentionItem.STATE_READ
+                countersHolder.setMentions(snapshot.unreadCount, source = "mention_opened")
+                _uiEvents.emit(MentionsUiEvent.MentionMarkedRead(item))
             }
         }
         linkHandler.handle(item.link, router, mapOf(

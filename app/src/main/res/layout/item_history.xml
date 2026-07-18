@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -10,12 +11,45 @@
     android:paddingStart="@dimen/content_padding_horizontal"
     android:paddingTop="@dimen/list_row_padding_vertical">
 
+    <!-- Индикатор «новых сообщений»: тот же вид/цвет, что в Избранном (@drawable/fav_unread_dot).
+         Пустой = точка, число = счётчик непрочитанных. Центр по вертикали у правого края строки. -->
+    <FrameLayout
+        android:id="@+id/history_unread_dot_frame"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/list_topic_unread_dot_row_height"
+        android:layout_alignParentEnd="true"
+        android:layout_centerVertical="true"
+        android:layout_marginStart="@dimen/list_topic_unread_dot_margin_start"
+        android:clipChildren="false"
+        android:minWidth="@dimen/list_topic_unread_dot_gutter_min"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/history_unread_dot"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/list_topic_unread_dot_size"
+            android:layout_gravity="center"
+            android:background="@drawable/fav_unread_dot"
+            android:contentDescription="@string/fav_new_posts_dot_cd"
+            android:gravity="center"
+            android:importantForAccessibility="no"
+            android:minWidth="@dimen/list_topic_unread_dot_size"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
+            android:textColor="@android:color/white"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            tools:text="3" />
+    </FrameLayout>
+
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/item_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentStart="true"
         android:layout_marginBottom="@dimen/content_spacing_half"
+        android:layout_toStartOf="@+id/history_unread_dot_frame"
         android:textAppearance="?attr/textAppearanceTitleMedium"
         android:textColor="?attr/colorOnSurface"
         tools:text="@string/test_topic_title" />
@@ -25,6 +59,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/item_title"
+        android:layout_toStartOf="@+id/history_unread_dot_frame"
         android:textAppearance="?attr/textAppearanceBodySmall"
         android:textColor="?attr/colorOnSurfaceVariant"
         tools:text="@string/test_topic_date" />

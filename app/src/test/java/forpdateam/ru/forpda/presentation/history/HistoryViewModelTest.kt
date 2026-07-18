@@ -3,6 +3,8 @@ package forpdateam.ru.forpda.presentation.history
 import app.cash.turbine.test
 import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.entity.app.history.HistoryItem
+import forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
+import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.repository.history.HistoryRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
@@ -36,6 +38,8 @@ class HistoryViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var historyRepository: HistoryRepository
+    private lateinit var favoritesCache: FavoritesCacheRoom
+    private lateinit var listsPrefs: ListsPreferencesHolder
     private lateinit var router: TabRouter
     private lateinit var linkHandler: ILinkHandler
     private lateinit var errorHandler: IErrorHandler
@@ -47,6 +51,8 @@ class HistoryViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         historyRepository = mockk(relaxed = true)
+        favoritesCache = mockk(relaxed = true)
+        listsPrefs = mockk(relaxed = true)
         router = mockk(relaxed = true)
         linkHandler = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
@@ -61,7 +67,7 @@ class HistoryViewModelTest {
     }
 
     private fun createViewModel(): HistoryViewModel {
-        return HistoryViewModel(historyRepository, router, linkHandler, errorHandler, clipboardHelper)
+        return HistoryViewModel(historyRepository, favoritesCache, listsPrefs, router, linkHandler, errorHandler, clipboardHelper)
     }
 
     private fun makeItem(id: Int, url: String = "https://4pda.to/$id", title: String = "Title $id"): HistoryItem {
