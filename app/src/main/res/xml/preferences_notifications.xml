@@ -134,10 +134,26 @@
             android:title="@string/pref_title_bg_check_interval"
             app:iconSpaceReserved="false" />
 
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="false"
+            android:dependency="notifications.bg.enabled"
+            android:key="notifications.bg.persistent_ws"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_persistent_ws"
+            android:title="@string/pref_title_persistent_ws"
+            app:iconSpaceReserved="false" />
+
         <Preference
             android:key="notifications.bg.battery_optimization"
             android:layout="@layout/preference_custom"
             android:title="@string/pref_title_battery_optimization"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="notifications.bg.oem_autostart"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_oem_autostart"
+            android:title="@string/pref_title_oem_autostart"
             app:iconSpaceReserved="false" />
 
         <Preference

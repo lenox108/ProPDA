@@ -26,6 +26,19 @@
       Клиент распространяется сайдлоадом (не через Play), политика Play здесь неприменима.
     -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!--
+      Точный будильник — «пробивной» триггер фоновой проверки уведомлений (Doze откладывает
+      WorkManager на часы). API 31-32 — SCHEDULE_EXACT_ALARM (отзываемое), API 33+ —
+      USE_EXACT_ALARM (выдаётся всегда; сайдлоад, политика Play неприменима).
+    -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Постоянное соединение (опция): FGS без 6-часового лимита dataSync (Android 15). -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
+        tools:targetApi="34" />
 
     <queries>
         <package android:name="com.android.chrome" />
@@ -133,7 +146,17 @@
         <service
             android:name=".notifications.NotificationsService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|specialUse">
+            <!-- Android 14+: обязательное декларирование назначения specialUse-FGS. -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent WebSocket connection for forum push notifications (user opt-in); FCM unavailable for this sideloaded client" />
+        </service>
+
+        <!-- Точный будильник фоновой проверки уведомлений (второй контур к WorkManager). -->
+        <receiver
+            android:name=".notifications.EventsCheckAlarmReceiver"
+            android:exported="false" />
 
         <!-- WorkManager foreground downloads require explicit type on Android 14+ -->
         <service
