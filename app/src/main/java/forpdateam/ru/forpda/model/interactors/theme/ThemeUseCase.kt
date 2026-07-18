@@ -63,6 +63,7 @@ class ThemeUseCase @Inject constructor(
         private val userHolder: IUserHolder,
         private val topicPreferencesHolder: TopicPreferencesHolder,
         private val mainPreferencesHolder: MainPreferencesHolder,
+        private val topicForumStore: forpdateam.ru.forpda.model.repository.theme.TopicForumStore,
         private val prefetchService: ThemePrefetchService? = null,
         @AppScope private val appScope: CoroutineScope,
 ) {
@@ -167,6 +168,10 @@ class ThemeUseCase @Inject constructor(
             forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi.extractTopicIdFromUrl(url) ?: 0
         }
         themeRepository.recordHistoryVisit(topicId, page.url ?: url, page.title)
+        // Запоминаем раздел темы для read-only индикатора «новых» в Истории (harvest флага «+» из
+        // списка раздела). Заход в тему уже пометил её прочитанной на сервере, поэтому последующее
+        // «+» в разделе = именно новые ответы с момента визита.
+        topicForumStore.put(topicId, page.forumId)
     }
 
     private fun pageMetadataSnapshot(page: ThemePage): String =

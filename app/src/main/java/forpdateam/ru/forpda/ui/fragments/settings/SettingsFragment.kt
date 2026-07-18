@@ -297,6 +297,14 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.HIGHLIGHT_UNREAD_POST) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setHighlightUnreadPost(value)
+                }
+            }
+        }
         if (key == AppUpdatePreferences.KEY_CHECK_ENABLED) {
             appUpdatePreferences.setCheckEnabled(sharedPrefs.getBoolean(key, true))
             appUpdateScheduler.reschedule()
@@ -396,6 +404,8 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = topicHolder.getFlatPosts()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.MODERN_POST_HEADER)
                 ?.isChecked = topicHolder.getModernPostHeader()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.HIGHLIGHT_UNREAD_POST)
+                ?.isChecked = topicHolder.getHighlightUnreadPost()
             // Lists preferences
             val listsHolder = forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext())
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Lists.Topic.UNREAD_TOP)

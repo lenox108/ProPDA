@@ -46,6 +46,7 @@ class TopicDataStore(private val context: Context) {
         val ANIMATED_SMILES = booleanPreferencesKey("animated_smiles")
         val FLAT_POSTS = booleanPreferencesKey("flat_posts")
         val MODERN_POST_HEADER = booleanPreferencesKey("modern_post_header")
+        val HIGHLIGHT_UNREAD_POST = booleanPreferencesKey("highlight_unread_post")
         val ANCHOR_HISTORY = booleanPreferencesKey("anchor_history")
         val HAT_OPENED = booleanPreferencesKey("hat_opened")
         val FORUM_BLACKLIST = stringPreferencesKey("forum_blacklist")
@@ -87,6 +88,13 @@ class TopicDataStore(private val context: Context) {
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
                         .getBoolean(AppPreferences.Theme.MODERN_POST_HEADER, false)
             }, false)
+
+    fun observeHighlightUnreadPostFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.topicDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.HIGHLIGHT_UNREAD_POST]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Theme.HIGHLIGHT_UNREAD_POST, true)
+            }, true)
 
     suspend fun getShowAvatars(): Boolean =
             observeShowAvatarsFlow().map { it }.first()
@@ -138,6 +146,15 @@ class TopicDataStore(private val context: Context) {
     }
 
     fun getModernPostHeaderImmediate(): Boolean = mirrorPrefs.getBoolean("modern_post_header", false)
+
+    suspend fun setHighlightUnreadPost(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.HIGHLIGHT_UNREAD_POST] = value
+        }
+        mirrorPrefs.edit().putBoolean("highlight_unread_post", value).apply()
+    }
+
+    fun getHighlightUnreadPostImmediate(): Boolean = mirrorPrefs.getBoolean("highlight_unread_post", true)
 
     suspend fun setAnchorHistory(value: Boolean) {
         safeEdit { preferences ->
