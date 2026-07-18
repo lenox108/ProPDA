@@ -77,10 +77,15 @@ class ChromeCanvasTest {
         val expected = ColorUtils.blendARGB(base, tint, k)
         val actual = ChromeCanvas.color(activity, R.attr.main_toolbar_accent_surface)
         assertEquals("canvas must follow the documented blend formula", expected, actual)
-        assertNotEquals(
-                "under MY the canvas must actually differ from the untinted base",
-                base,
-                actual,
-        )
+        if (k > 0f) {
+            // В тёмной теме k=0 (полотно = база как есть, база уже тонирована
+            // floor-селекторами) — расхождение с базой требуем только там, где
+            // бленд вообще включён.
+            assertNotEquals(
+                    "under MY the canvas must actually differ from the untinted base",
+                    base,
+                    actual,
+            )
+        }
     }
 }
