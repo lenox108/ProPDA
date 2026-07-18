@@ -964,7 +964,35 @@ class EventsRepository(
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip websocket event notification: app preference disabled")
             return
         }
+        // Forum-упоминание НЕ маршрутизируем через инспектор избранного (hardHandleEvent →
+        // getFavoritesEvents): тот знает только избранные темы, и упоминание в НЕизбранной теме
+        // при открытом приложении не доходило до шторки, хотя в «Ответах» строка появлялась
+        // (полевой репорт). Публикуем напрямую — как фоновый воркер через act=mentions.
+        if (event.fromTheme() && event.isMention) {
+            publishForegroundMention(event)
+            return
+        }
         handleEvent(listOf(event), event.source)
+    }
+
+    /**
+     * Публикует foreground-уведомление о forum-упоминании для ЛЮБОЙ темы (не только избранной).
+     * WS-событие несёт лишь sourceId/messageId, поэтому ник и заголовок дообогащаем из
+     * act=mentions (тот же источник, что у фонового воркера). Матчим по теме (sourceId): у
+     * упоминания notifyId не зависит от messageId, в шторке оно одно на тему, а самый свежий
+     * item темы в списке — первый. Не удалось дообогатить — публикуем как есть: уведомление без
+     * имени автора лучше, чем его отсутствие. [sendNotification] сам применит все гейты
+     * (главный тумблер, own-user, per-topic mute, категория «упоминания»).
+     */
+    private fun publishForegroundMention(event: NotificationEvent) {
+        repoScope.launch(ioDispatcher) {
+            val enriched = runCatching {
+                mentionsRepository.getMentions(0).items.asSequence()
+                        .mapNotNull { forpdateam.ru.forpda.notifications.MentionNotificationMapper.toNotificationEvent(it) }
+                        .firstOrNull { it.fromTheme() && it.isMention && it.sourceId == event.sourceId }
+            }.getOrNull() ?: event
+            sendNotification(enriched)
+        }
     }
 
 
