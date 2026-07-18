@@ -2895,13 +2895,20 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         pumpUploadQueue()
     }
 
+    /**
+     * relId вложения = id правимого поста (у нового ответа поста ещё нет → 0). Без реального relId
+     * сервер не находит вложение уже опубликованного поста: удаление `code=remove` отклоняется, файл
+     * не открепляется — «удаляю вложение, а в посте всё равно 3 файла».
+     */
+    private fun attachmentRelId(): Int = editingForm?.postId ?: 0
+
     /** Serialise uploads (the popup shows one batch at a time), matching the WebView fragment. */
     private fun pumpUploadQueue() {
         if (uploadInProgress) return
         val next = uploadQueue.firstOrNull() ?: return
         uploadInProgress = true
         viewLifecycleOwner.lifecycleScope.launch {
-            val result = editorUseCase.uploadFiles(0, next.first, next.second)
+            val result = editorUseCase.uploadFiles(attachmentRelId(), next.first, next.second)
             if (view != null && result is ThemeEditorUseCase.UploadResult.Success) {
                 attachmentsPopup?.onUploadFiles(result.items)
             }
@@ -2916,7 +2923,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val selected = attachmentsPopup?.getSelected() ?: emptyList()
         if (selected.isEmpty()) return
         viewLifecycleOwner.lifecycleScope.launch {
-            val result = editorUseCase.deleteFiles(0, selected)
+            val result = editorUseCase.deleteFiles(attachmentRelId(), selected)
             if (view != null && result is ThemeEditorUseCase.DeleteResult.Success) {
                 attachmentsPopup?.onDeleteFiles(result.items)
             }
