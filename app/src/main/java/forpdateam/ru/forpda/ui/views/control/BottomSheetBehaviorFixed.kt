@@ -33,6 +33,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.math.MathUtils
 import androidx.core.view.ViewCompat
+import forpdateam.ru.forpda.common.getColorFromAttr
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat
@@ -525,7 +526,7 @@ open class BottomSheetBehaviorFixed<V : View> : CoordinatorLayout.Behavior<V>, I
             materialShapeDrawable = MaterialShapeDrawable(shapeAppearanceModelDefault!!).also { drawable ->
                 drawable.initializeElevationOverlay(context)
                 if (hasBackgroundTint && bottomSheetColor != null) drawable.fillColor = bottomSheetColor
-                else { val defaultColor = TypedValue(); context.theme.resolveAttribute(android.R.attr.colorBackground, defaultColor, true); drawable.setTint(defaultColor.data) }
+                else drawable.setTint(context.getColorFromAttr(android.R.attr.colorBackground))
             }
         }
     }

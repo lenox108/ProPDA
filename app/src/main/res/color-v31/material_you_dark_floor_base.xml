@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Material You DARK-floor: тон «базы» полотна (фон страниц, нижние
+    surface-контейнеры). Светлота запинена lStar'ом на уровень статичной
+    @color/dark_background_base (#121212, L* ~5.5), но ЦВЕТ берётся из
+    системной палитры обоев (system_neutral2 - тот же слот, которым сама
+    библиотека Material строит динамические тёмные поверхности в
+    color-v31/m3_ref_palette_dynamic_neutral_variant*). Итог: та же тёмная
+    светлота, что у статичной «Тёмной», но с оттенком обоев - карточки и фон
+    не выцветают в бесцветный серый (жалоба «MY в тёмной теме стал
+    неправильные цвета брать»).
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@android:color/system_neutral2_600" android:lStar="6" />
+</selector>

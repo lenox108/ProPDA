@@ -100,6 +100,12 @@
     <color name="dark_second_text_color">#98989F</color>
 
     <color name="dark_background_base">#121212</color>
+    <!-- Material You DARK-floor: default-алиасы для API < 31 (Material You там
+         не применяется, оверлей не накладывается - значения нужны только для
+         линковки ресурсов). На API 31+ их перекрывают color-v31/ селекторы с
+         оттенком обоев и той же светлотой (lStar). -->
+    <color name="material_you_dark_floor_base">@color/dark_background_base</color>
+    <color name="material_you_dark_floor_card">@color/dark_card_background</color>
     <color name="dark_background_for_cards">#242424</color>
     <!-- Как background_base: без «островов» #1C1C1E под списками и экранами вроде поиска. -->
     <color name="dark_background_for_lists">#121212</color>

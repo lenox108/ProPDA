@@ -674,18 +674,19 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
                 //   карточки     = colorSurface               → system_surface_*
                 //   текст        = colorOnSurface             → system_on_surface_*
                 if (isDark) {
-                    // Адаптивный DARK-floor — как MaterialYouApplier.
-                    // dynamicDarkSurfaceIsNearBlack(): на части устройств
-                    // (Android 16) системный lowest = чистый #000000, и натив
-                    // пинит фон на статичные тёмно-серые. Повторяем ту же
-                    // проверку, иначе форум ушёл бы в AMOLED-чёрный, пока
-                    // нативный хром остался тёмно-серым.
+                    // Зеркало DARK-floor — как MaterialYouApplier.
+                    // dynamicDarkSurfaceIsNearBlack(): каноничный тёмный lowest
+                    // (тон L*=4, на Android 16 и чистый #000000) темнее эталона,
+                    // и натив перепинивает светлоту рампы floor-цветами. Читаем
+                    // ТЕ ЖЕ lStar-селекторы (@color/material_you_dark_floor_*):
+                    // они резолвятся и на ApplicationContext (база — системный
+                    // слот обоев), поэтому совпадение с нативом точное.
                     val lowest = context.getColor(android.R.color.system_surface_container_lowest_dark)
                     val reference = context.getColor(R.color.dark_background_base)
                     if (androidx.core.graphics.ColorUtils.calculateLuminance(lowest) <=
                             androidx.core.graphics.ColorUtils.calculateLuminance(reference)) {
-                        bg = hex(R.color.dark_background_base)
-                        card = hex(R.color.dark_card_background)
+                        bg = hex(R.color.material_you_dark_floor_base)
+                        card = hex(R.color.material_you_dark_floor_card)
                     } else {
                         bg = hex(android.R.color.system_surface_container_lowest_dark)
                         card = hex(android.R.color.system_surface_dark)
@@ -697,10 +698,13 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
                     text = hex(android.R.color.system_on_surface_light)
                 }
             } else if (isDark) {
-                // API 31–33: точные тона v31 (neutral_variant 98/6/4) фреймворк
-                // слотами не отдаёт — оставляем выверенную аппроксимацию нейтралями.
-                bg = hex(android.R.color.system_neutral1_900)
-                card = hex(android.R.color.system_neutral1_800)
+                // API 31–33: нативный DARK-floor-гейт срабатывает и здесь
+                // (динамический lowest — тон L*=4, темнее эталона независимо
+                // от обоев) → нативная рампа = floor-цвета. Зеркалим их же
+                // (lStar-селекторы резолвятся без темы), текст — прежняя
+                // аппроксимация нейтралями (точного слота v31 не отдаёт).
+                bg = hex(R.color.material_you_dark_floor_base)
+                card = hex(R.color.material_you_dark_floor_card)
                 text = hex(android.R.color.system_neutral1_50)
             } else {
                 bg = hex(android.R.color.system_neutral1_50)
