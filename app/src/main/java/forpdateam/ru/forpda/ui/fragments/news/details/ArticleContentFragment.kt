@@ -1097,6 +1097,10 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             mappedHtmlLen: Int,
             jsScrollHeight: Int = 0
     ) {
+        // Вызывается из отложенного webView.postDelayed (confirmArticleRenderFromWebView):
+        // к моменту выполнения фрагмент мог отсоединиться от NewsDetailsFragment →
+        // hostFragment() = parentFragment as ... ронял NPE. Гейт как у прочих путей.
+        if (!isWebViewReady()) return
         if (requestId != articleRequestId) return
         if (ArticleWebViewRenderProbe.shouldDeferBlankEscalation(
                         bodyVisibleByText = contentLen >= ArticleWebViewRenderProbe.MIN_VISIBLE_TEXT_LENGTH,
