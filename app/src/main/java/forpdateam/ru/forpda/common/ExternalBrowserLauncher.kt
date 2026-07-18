@@ -16,6 +16,14 @@ object ExternalBrowserLauncher {
     private const val BASE_PACKAGE_NAME = "forpdateam.ru.forpda"
     /** @see Intent.EXTRA_INTENTS — explicit chooser targets only (API 24+). */
     private const val EXTRA_INTENTS = "android.intent.extra.INTENTS"
+    /**
+     * Нейтральные host-пробы для перечисления браузеров. Хост (example.com) не заявлен ни одним
+     * не-браузерным обработчиком, поэтому по такой пробе матчатся ТОЛЬКО настоящие браузеры
+     * (заявившие любой https/http-хост), а host-специфичные BROWSABLE-активити — менеджер загрузок
+     * на прямых файловых ссылках, deep-link'и youtube/4pda и т.п. — не попадают. Реальный URL
+     * подставляется уже в явный интент запуска.
+     */
+    private val BROWSER_PROBE_URIS = listOf("https://www.example.com", "http://www.example.com")
     private val KNOWN_BROWSER_PACKAGES = listOf(
             "com.android.chrome",
             "org.mozilla.firefox",
@@ -69,15 +77,17 @@ object ExternalBrowserLauncher {
 
     private fun queryExternalBrowserIntents(context: Context, baseIntent: Intent): List<Intent> {
         val packageManager = context.packageManager
-        // MATCH_ALL, а не MATCH_DEFAULT_ONLY: базовый интент уже несёт CATEGORY_BROWSABLE, поэтому
-        // в выборку попадают только браузеры. MATCH_DEFAULT_ONLY дополнительно требует у активити
-        // CATEGORY_DEFAULT, а часть браузеров (Soul и др.) объявляют VIEW-фильтр лишь с BROWSABLE
-        // (этого достаточно, чтобы открывать ссылки) — их отсекало, и при единственном таком браузере
-        // список кандидатов оказывался пустым → «внешний браузер не найден». Chrome объявляет DEFAULT,
-        // поэтому раньше работал только он.
-        val resolvedActivities = packageManager
-                .queryIntentActivities(baseIntent, PackageManager.MATCH_ALL)
+        // Перечисляем браузеры по нейтральным host-пробам (BROWSER_PROBE_URIS), а НЕ по реальному URL:
+        // по реальной ссылке в кандидаты лезли host-специфичные обработчики (например, менеджер загрузок
+        // на прямых файловых ссылках) — и launcher открывал их вместо браузера. По нейтральному хосту
+        // матчатся только настоящие браузеры.
+        // MATCH_ALL, а не MATCH_DEFAULT_ONLY: часть браузеров (Soul и др.) объявляют VIEW-фильтр лишь с
+        // CATEGORY_BROWSABLE без CATEGORY_DEFAULT — MATCH_DEFAULT_ONLY их отсекал.
+        val probeIntents = BROWSER_PROBE_URIS.map { createBrowserViewIntent(Uri.parse(it)) }
+
+        val resolvedActivities = probeIntents
                 .asSequence()
+                .flatMap { packageManager.queryIntentActivities(it, PackageManager.MATCH_ALL).asSequence() }
                 .mapNotNull { it.activityInfo }
                 .filterExternalBrowserActivity(context)
                 .toList()
@@ -87,12 +97,14 @@ object ExternalBrowserLauncher {
         val fallbackActivities = KNOWN_BROWSER_PACKAGES
                 .asSequence()
                 .flatMap { browserPackage ->
-                    packageManager
-                            .queryIntentActivities(
-                                    Intent(baseIntent).setPackage(browserPackage),
-                                    PackageManager.MATCH_ALL
-                            )
-                            .asSequence()
+                    probeIntents.asSequence().flatMap { probe ->
+                        packageManager
+                                .queryIntentActivities(
+                                        Intent(probe).setPackage(browserPackage),
+                                        PackageManager.MATCH_ALL
+                                )
+                                .asSequence()
+                    }
                 }
                 .mapNotNull { it.activityInfo }
                 .filterExternalBrowserActivity(context)
