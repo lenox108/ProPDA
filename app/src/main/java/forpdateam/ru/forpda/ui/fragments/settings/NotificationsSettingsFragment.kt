@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.preference.Preference.OnPreferenceChangeListener
@@ -42,6 +44,62 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     private fun configureAndroidNotificationSettings() {
         configureVersionAwareUi()
         configureSystemSettingsLinks()
+        configureBatteryOptimizationLink()
+    }
+
+    /**
+     * Исключение из Doze/оптимизации батареи — главный рычаг надёжной доставки, когда
+     * приложение закрыто: без него система откладывает периодическую проверку на часы.
+     */
+    private fun configureBatteryOptimizationLink() {
+        val preference = preferenceScreen.findPreference<Preference>("notifications.bg.battery_optimization")
+                ?: return
+        preference.setOnPreferenceClickListener {
+            requestIgnoreBatteryOptimizations()
+            true
+        }
+        updateBatteryOptimizationSummary()
+    }
+
+    private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+        return pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    private fun updateBatteryOptimizationSummary() {
+        val context = context ?: return
+        val preference = preferenceScreen.findPreference<Preference>("notifications.bg.battery_optimization")
+                ?: return
+        val exempt = isIgnoringBatteryOptimizations(context)
+        preference.summary = getString(
+                if (exempt) R.string.pref_summary_battery_optimization_granted
+                else R.string.pref_summary_battery_optimization_needed
+        )
+        // Когда исключение уже выдано — оставляем пункт информативным, но не ведём в никуда.
+        preference.isEnabled = !exempt
+    }
+
+    /**
+     * Сначала пытаемся показать прямой системный диалог по имени пакета; если конкретная
+     * прошивка его не поддерживает (ActivityNotFound) — открываем общий список приложений.
+     */
+    private fun requestIgnoreBatteryOptimizations() {
+        val context = context ?: return
+        if (isIgnoringBatteryOptimizations(context)) {
+            updateBatteryOptimizationSummary()
+            return
+        }
+        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                .setData(Uri.parse("package:${context.packageName}"))
+        try {
+            startActivity(direct)
+        } catch (e: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (ignored: Exception) {
+                // Ни один экран недоступен — оставляем пользователя без действия, summary не меняем.
+            }
+        }
     }
 
     /**
@@ -100,6 +158,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     private fun updateVersionAwareUi() {
         updateSystemNotificationStatus()
         updatePermissionWarning()
+        updateBatteryOptimizationSummary()
     }
 
     private fun updatePermissionWarning() {

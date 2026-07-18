@@ -133,6 +133,12 @@
             android:layout="@layout/preference_custom"
             android:title="@string/pref_title_bg_check_interval"
             app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="notifications.bg.battery_optimization"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_battery_optimization"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
     <PreferenceCategory

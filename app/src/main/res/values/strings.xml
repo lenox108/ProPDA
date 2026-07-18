@@ -910,6 +910,8 @@
     <string name="pref_summary_flat_posts">Без рамок и теней у карточек, цитат и спойлеров</string>
     <string name="pref_title_modern_post_header">Современная дата поста</string>
     <string name="pref_summary_modern_post_header">Дата в строку с ником и относительное время («17 ч.») вместо полной даты справа</string>
+    <string name="pref_title_highlight_unread_post">Подсветка непрочитанного поста</string>
+    <string name="pref_summary_highlight_unread_post">Кратко подсвечивать первый непрочитанный пост при открытии темы</string>
 
     <string name="pref_title_unread_top">Непрочитанные сверху</string>
     <string name="pref_title_show_dot">Индикатор новых сообщений</string>
@@ -963,6 +965,9 @@
     <string name="pref_title_bg_check">Работать в фоне</string>
     <string name="pref_summary_bg_check">Выключено: приложение ничего не делает, пока закрыто. Уведомления приходят, только когда оно открыто.</string>
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
+    <string name="pref_title_battery_optimization">Разрешить работу в фоне без ограничений</string>
+    <string name="pref_summary_battery_optimization_needed">Рекомендуется: система ограничивает работу приложения в фоне и откладывает проверку уведомлений на часы. Нажмите и разрешите.</string>
+    <string name="pref_summary_battery_optimization_granted">Ограничений нет — фоновая проверка работает штатно.</string>
     <string name="pref_title_android_notification_settings">Системные настройки Android</string>
     <string name="pref_title_open_android_notification_settings">Открыть настройки уведомлений</string>
     <string name="pref_summary_android_notification_settings">Звук, вибрация, индикатор и показ на экране настраиваются в каналах Android</string>

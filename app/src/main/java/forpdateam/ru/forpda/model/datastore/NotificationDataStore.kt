@@ -49,11 +49,11 @@ class NotificationDataStore(private val context: Context) {
         private const val KEY_MENTION_KEYS_SEEDED = "notifications.mention_keys_seeded"
 
         /**
-         * Нижняя граница фоновой проверки. 15 минут — минимум AOSP, но это 96 пробуждений
-         * с сетью в сутки ради канала, где минутная задержка незаметна.
-         * Единственный источник истины: и UI-список, и планировщик обязаны сходиться сюда.
+         * Нижняя граница фоновой проверки. 15 минут — минимум AOSP для PeriodicWorkRequest:
+         * значение ниже система всё равно поднимет до 15. Единственный источник истины:
+         * и UI-список, и планировщик обязаны сходиться сюда.
          */
-        const val MIN_BG_CHECK_INTERVAL_MIN = 30L
+        const val MIN_BG_CHECK_INTERVAL_MIN = 15L
     }
 
     // StateFlows для реактивных обновлений (instance-level для поддержки multiple contexts)
