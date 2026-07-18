@@ -164,4 +164,9 @@ class UserHolder @Inject constructor(
         }
 
     override fun observeCurrentUser(): Flow<EntityWrapper<ProfileModel?>> = currentUser.asStateFlow()
+
+    override fun currentNick(): String? =
+            sharedPreferences.getString("current_user", null)?.let {
+                runCatching { JSONObject(it).nullString("nick") }.getOrNull()
+            }
 }

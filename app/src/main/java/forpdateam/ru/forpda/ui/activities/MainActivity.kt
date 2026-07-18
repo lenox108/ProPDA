@@ -191,6 +191,7 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         // Последний слой: усиление контраста по системной настройке (a11y, Android 14+).
         ContrastApplier.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
+
         dayNightHelper.setIsNight(DayNightHelper.isUiModeNight(resources.configuration))
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
