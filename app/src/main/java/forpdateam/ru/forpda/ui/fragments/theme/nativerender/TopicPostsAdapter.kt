@@ -892,9 +892,10 @@ class TopicPostsAdapter(
     }
 
     private companion object {
-        /** Total lifetime of the open-highlight flash (ms). Kept generously long so the accent border is
-         *  clearly noticeable even after the post-open enrichment re-binds the target post. */
-        const val HIGHLIGHT_TOTAL_MS = 2600L
+        /** Total lifetime of the open-highlight flash (ms). Kept long enough that the accent border is
+         *  clearly noticeable even after the post-open enrichment re-binds the target post, but short so
+         *  the flash reads as ~1s (halved from the old 2.6s per user request). */
+        const val HIGHLIGHT_TOTAL_MS = 1300L
 
         val ONLINE_DOT_COLOR = android.graphics.Color.parseColor("#4CAF50")
 

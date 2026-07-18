@@ -570,6 +570,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     healBottomEndGap()
                     // Settled: re-check «низ ли это» (a fling can stop without a final onScrolled frame).
                     updateBottomPaginationBarOffset()
+                    // ...и по той же причине пере-проверить mark-read-в-конце. onScrolled метит тему
+                    // прочитанной покадрово, но флинг к концу может осесть без финального onScrolled-кадра,
+                    // в котором последний пост уже полностью на экране (или его съел healing-guard) — тогда
+                    // тема так и оставалась непрочитанной в избранном до следующего касания. Проверка
+                    // идемпотентна (markedTopicReadAtEnd) и полностью защищена своими гейтами, поэтому
+                    // безопасна в покое. Вызываем ПОСЛЕ healBottomEndGap — на исправленной позиции.
+                    maybeMarkTopicReadAtEnd()
                     // ...и по той же причине — перевзвести подгрузку соседних страниц. Флинг может осесть
                     // ровно у края, не прислав финального onScrolled-кадра в зоне порога (или его съел
                     // healing-guard на dy<0), из-за чего след./пред. страница не грузилась, пока юзер не
@@ -2424,6 +2431,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     override fun onPause() {
         super.onPause()
         messagePanel?.onPause()
+        // Страховка на выход из темы (back/сворачивание): если юзер долистал ровно до конца, но
+        // финальный кадр onScrolled/IDLE-settle не успел зафиксировать «низ виден» до ухода — метим
+        // прочитанной здесь. Полностью защищено собственными гейтами maybeMarkTopicReadAtEnd
+        // (последний пост на экране, нет след. страницы, был жест пользователя), поэтому вызвать в
+        // onPause безопасно: тема пометится прочитанной ТОЛЬКО если её действительно дочитали до конца.
+        maybeMarkTopicReadAtEnd()
     }
 
     override fun onDestroyView() {
@@ -4386,7 +4399,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val idx = ids.indexOf(firstUnseen)
                 anchoredBottomPostId = null
                 anchorPost(idx + headerOffset(), isLast = idx == ids.size - 1)
-                postsAdapter.requestHighlight(firstUnseen)
+                if (topicPreferencesHolder.getHighlightUnreadPost()) postsAdapter.requestHighlight(firstUnseen)
                 recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
                 return
             }
@@ -4394,9 +4407,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             anchoredBottomPostId = ids.lastOrNull()
             if (forpdateam.ru.forpda.BuildConfig.DEBUG) android.util.Log.i("FPDA_CLEAR", "anchor SET(jumpToBottom)=$anchoredBottomPostId lastPos=$lastPos")
             anchorPost(lastPos, isLast = true)
-            // Highlight the last post (2s border) — parity with the first-unread open; the read-topic open
-            // lands on the last post, so flash it too.
-            ids.lastOrNull()?.let { postsAdapter.requestHighlight(it) }
+            // Highlight the last post — parity with the first-unread open; the read-topic open
+            // lands on the last post, so flash it too. Gated by the same «highlight unread post» setting.
+            if (topicPreferencesHolder.getHighlightUnreadPost()) {
+                ids.lastOrNull()?.let { postsAdapter.requestHighlight(it) }
+            }
             recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
             // Re-anchor once the viewport has SETTLED. On the send-reply reload (getlastpost right after
             // hideMessagePanel/hideKeyboard) the first anchor can measure a still-collapsing viewport, so a
@@ -4443,8 +4458,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                             topAlign = request is AnchorRequest.Post &&
                                     request.reason == AnchorRequest.Post.Reason.FIND_POST)
                 }
-                // Flash the resolved post once so the user sees where a link/find/unread open landed.
-                if (request is AnchorRequest.Post) postsAdapter.requestHighlight(request.postId)
+                // Flash the resolved post once so the user sees where a link/find/unread open landed. The
+                // first-unread landing obeys the «highlight unread post» setting; deliberate link/find/quote
+                // landings always flash (that flash is a «where did I land» cue, not the unread highlight).
+                if (request is AnchorRequest.Post &&
+                        (request.reason != AnchorRequest.Post.Reason.FIRST_UNREAD ||
+                                topicPreferencesHolder.getHighlightUnreadPost())) {
+                    postsAdapter.requestHighlight(request.postId)
+                }
                 // Лог 11_07-11-32: посадка на ПЕРВЫЙ НЕПРОЧИТАННЫЙ штампует границу прочитанного на сам
                 // якорный пост. [recordReadBoundaryAtRest] пишет только по жесту — но виз «открыл-глянул-
                 // закрыл» тогда не оставляет границы вовсе, а сам GET уже пометил страницу прочитанной на

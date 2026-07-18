@@ -322,6 +322,14 @@
             android:title="@string/pref_title_modern_post_header"
             app:iconSpaceReserved="false" />
 
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
+            android:key="theme.highlight_unread_post"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_highlight_unread_post"
+            android:title="@string/pref_title_highlight_unread_post"
+            app:iconSpaceReserved="false" />
+
         <Preference
             android:key="open_forum_blacklist"
             android:layout="@layout/preference_custom"
