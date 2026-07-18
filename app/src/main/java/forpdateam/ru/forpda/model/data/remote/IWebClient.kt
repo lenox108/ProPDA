@@ -64,6 +64,13 @@ interface IWebClient {
     fun createWebSocketConnection(webSocketListener: WebSocketListener): WebSocket
 
     /**
+     * Дождаться гидрации auth-куков из защищённого хранилища в память (важно для фоновых
+     * воркеров в холодном процессе: иначе первый запрос может уйти «гостем»).
+     * @return true, если куки готовы. Реализация по умолчанию — для моков/фейков.
+     */
+    suspend fun awaitAuthCookiesHydrated(timeoutMs: Long): Boolean = true
+
+    /**
      * Функциональный интерфейс для отслеживания прогресса загрузки.
      * В Kotlin можно использовать лямбду: { percent -> ... }
      */

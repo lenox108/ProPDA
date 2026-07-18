@@ -106,6 +106,9 @@ class Client(
     private val authKey: AtomicReference<String> = AtomicReference("0")
     // endregion
 
+    override suspend fun awaitAuthCookiesHydrated(timeoutMs: Long): Boolean =
+            cookieManager.awaitHydration(timeoutMs)
+
     // region Initialization
     init {
         // Загружаем auth_key

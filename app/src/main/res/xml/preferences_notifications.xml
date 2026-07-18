@@ -139,6 +139,13 @@
             android:layout="@layout/preference_custom"
             android:title="@string/pref_title_battery_optimization"
             app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="notifications.bg.diagnostics"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_bg_check_diagnostics"
+            android:title="@string/pref_title_bg_check_diagnostics"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
     <PreferenceCategory
