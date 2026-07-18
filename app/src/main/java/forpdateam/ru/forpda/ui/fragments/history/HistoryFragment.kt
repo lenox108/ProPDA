@@ -84,6 +84,7 @@ class HistoryFragment : RecyclerFragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.uiState.collect { state ->
                     setRefreshing(state.loading)
+                    adapter.setShowDot(state.showDot)
                     showHistory(state.items)
                 }
             }

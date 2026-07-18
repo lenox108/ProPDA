@@ -132,18 +132,24 @@ class MentionsViewModelTest {
     }
 
     @Test
-    fun `onItemClick does not mark forum mention read`() = runTest {
+    fun `onItemClick marks forum mention read and clears badge`() = runTest {
+        countersHolder.update { it.mentions = 1 }
         val forumItem = MentionItem().apply {
             state = MentionItem.STATE_UNREAD
             type = MentionItem.TYPE_TOPIC
             link = "https://4pda.to/forum/index.php?showtopic=1&view=findpost&p=42"
         }
+        coEvery { mentionsRepository.markMentionItemRead(forumItem) } returns
+                (true to MentionsRepository.UnreadMentionsSnapshot(0, emptyList()))
 
         createViewModel().onItemClick(forumItem)
         advanceUntilIdle()
 
-        // Форумные упоминания гасятся по видимому посту в ThemeViewModel, не на тапе.
-        coVerify(exactly = 0) { mentionsRepository.markMentionItemRead(any()) }
+        // Тап по форумному ответу — сильный сигнал прочтения: гасим сразу, не дожидаясь рендера
+        // видимого поста (который мог не попасть в окно при открытии темы на границе прочитанного).
+        coVerify { mentionsRepository.markMentionItemRead(forumItem) }
+        assertEquals(0, countersHolder.get().mentions)
+        assertEquals(MentionItem.STATE_READ, forumItem.state)
         verify { linkHandler.handle(forumItem.link, any(), any()) }
     }
 
@@ -181,7 +187,7 @@ class MentionsViewModelTest {
     }
 
     @Test
-    fun `opening unread mention navigates without clearing badge`() = runTest {
+    fun `onItemClick keeps badge when mention already read`() = runTest {
         countersHolder.update { it.mentions = 2 }
         val item = MentionItem().apply {
             state = MentionItem.STATE_UNREAD
@@ -189,6 +195,10 @@ class MentionsViewModelTest {
             title = "Topic"
             link = "https://4pda.to/forum/index.php?showtopic=1&view=findpost&p=42"
         }
+        // changed=false: ключ уже прочитан (или нет реального совпадения) — строку и бейдж не трогаем,
+        // но переход по ссылке всё равно происходит.
+        coEvery { mentionsRepository.markMentionItemRead(item) } returns
+                (false to MentionsRepository.UnreadMentionsSnapshot(2, listOf(42, 43)))
 
         createViewModel().onItemClick(item)
         advanceUntilIdle()
@@ -196,6 +206,6 @@ class MentionsViewModelTest {
         assertEquals(MentionItem.STATE_UNREAD, item.state)
         assertEquals(2, countersHolder.get().mentions)
         verify { linkHandler.handle(item.link, router, any()) }
-        coVerify(exactly = 0) { mentionsRepository.markMentionItemRead(any()) }
+        coVerify { mentionsRepository.markMentionItemRead(item) }
     }
 }

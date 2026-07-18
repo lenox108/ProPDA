@@ -1,6 +1,8 @@
 package forpdateam.ru.forpda.ui.fragments.history
 
+import android.graphics.Typeface
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.databinding.ItemHistoryBinding
@@ -14,8 +16,17 @@ class HistoryAdapter : BaseAdapter<HistoryItem, HistoryAdapter.HistoryHolder>() 
 
     private var itemClickListener: BaseAdapter.OnItemClickListener<HistoryItem>? = null
 
+    /** Настройка «Индикатор новых сообщений» (lists.topic.show_dot) — гейт точки/счётчика. */
+    private var showDot = false
+
     fun setItemClickListener(listener: BaseAdapter.OnItemClickListener<HistoryItem>) {
         this.itemClickListener = listener
+    }
+
+    fun setShowDot(value: Boolean) {
+        if (showDot == value) return
+        showDot = value
+        notifyDataSetChanged()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): HistoryHolder {
@@ -66,6 +77,19 @@ class HistoryAdapter : BaseAdapter<HistoryItem, HistoryAdapter.HistoryHolder>() 
             )
             binding.itemTitle.text = item.title
             binding.itemDate.text = item.date
+            // Индикатор новых сообщений (паритет с Избранным): жирный заголовок при непрочитанном,
+            // точка/счётчик гейтятся настройкой showDot. Заголовок обязательно переустанавливаем в
+            // обеих ветках — ViewHolder переиспользуется.
+            binding.itemTitle.setTypeface(
+                    Typeface.DEFAULT,
+                    if (item.isUnread) Typeface.BOLD else Typeface.NORMAL,
+            )
+            if (!showDot || !item.isUnread) {
+                binding.historyUnreadDotFrame.visibility = View.GONE
+            } else {
+                binding.historyUnreadDotFrame.visibility = View.VISIBLE
+                binding.historyUnreadDot.text = if (item.unreadCount > 1) item.unreadCount.toString() else ""
+            }
         }
     }
 }
