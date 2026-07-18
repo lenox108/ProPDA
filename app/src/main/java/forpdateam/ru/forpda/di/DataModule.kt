@@ -185,8 +185,11 @@ object DataModule {
             HistoryRepository(cacheRoom)
 
     @Provides @Singleton
-    fun provideMentionsRepository(api: MentionsApi, preferences: SharedPreferences) =
-            MentionsRepository(api, preferences)
+    fun provideMentionsRepository(
+            api: MentionsApi,
+            preferences: SharedPreferences,
+            @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
+    ) = MentionsRepository(api, preferences, context)
 
     @Provides @Singleton
     fun provideAuthRepository(
