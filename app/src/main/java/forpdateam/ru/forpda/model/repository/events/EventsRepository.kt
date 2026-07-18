@@ -487,6 +487,18 @@ class EventsRepository(
         pendingEvents[NotificationEvent.Source.THEME]?.entries?.removeAll { (_, event) ->
             !event.isMention && event.sourceId == topicId
         }
+        // Симметрично [onQmsThreadRead]: если уведомление опубликовал фоновый
+        // [forpdateam.ru.forpda.notifications.EventsCheckWorker] (приложение было закрыто), его нет
+        // в [eventsHistory] — снимать было нечего, и «новый ответ» залипал в шторке даже после
+        // прочтения темы. ID уведомления детерминирован (sourceId+source+type), поэтому синтетического
+        // события THEME/NEW достаточно, чтобы снять то, что показал воркер через NotificationPublisher.publish.
+        if (toRemove.isEmpty()) {
+            cancelEventFlow.tryEmit(NotificationEvent(
+                    type = NotificationEvent.Type.NEW,
+                    source = NotificationEvent.Source.THEME,
+                    sourceId = topicId
+            ))
+        }
     }
 
     /**
