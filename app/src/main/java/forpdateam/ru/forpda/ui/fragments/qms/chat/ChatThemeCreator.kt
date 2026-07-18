@@ -29,6 +29,13 @@ class ChatThemeCreator(
     init {
         viewStub = fragment.findViewById(R.id.toolbar_content) as ViewStub
         viewStub.layoutResource = R.layout.toolbar_qms_new_theme
+        // Инфлейтим форму в контексте активити (текущая палитра), а НЕ в дефолтном
+        // контексте ViewStub — это область тулбара с AppBarOverlay, где colorSurface —
+        // passthrough ?attr/colorSurface (перебивает тёмный ActionBar-оверлей). Из-за
+        // этого ?attr-цвета в layout становятся 2-уровневыми, и android:background роняет
+        // getDrawable при инфляции → InflateException (живой краш под Material You /
+        // AMOLED-палитрами, v3.1.9/3.2.2). В контексте активити colorSurface конкретный.
+        viewStub.layoutInflater = android.view.LayoutInflater.from(fragment.requireContext())
         creatorRoot = viewStub.inflate()
         basePaddingTop = creatorRoot.paddingTop
         nickField = fragment.findViewById(R.id.qms_theme_nick_field) as MaterialAutoCompleteTextView
