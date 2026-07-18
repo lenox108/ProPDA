@@ -16,7 +16,8 @@ import timber.log.Timber
 
 class MentionsRepository(
         private val mentionsApi: MentionsApi,
-        preferences: SharedPreferences? = null
+        preferences: SharedPreferences? = null,
+        private val context: android.content.Context? = null
 ) {
 
     private val stateLock = Any()
@@ -99,6 +100,10 @@ class MentionsRepository(
     }
 
     suspend fun markMentionItemRead(item: MentionItem): Pair<Boolean, UnreadMentionsSnapshot> = withContext(Dispatchers.IO) {
+        // Тап по строке «Ответов» — сильный сигнал прочтения: гасим и системное уведомление
+        // в шторке. Безусловно (не по changed): ключ мог быть прочитан штатным путём раньше,
+        // а пуш фонового воркера — всё ещё висеть.
+        cancelShadeNotificationFor(item)
         val normalizedLink = item.link
                 ?.replace("&amp;", "&")
                 ?.trim()
@@ -114,7 +119,44 @@ class MentionsRepository(
             topicId: Int,
             postIds: Collection<Int>
     ): Pair<Boolean, UnreadMentionsSnapshot> = withContext(Dispatchers.IO) {
-        markAnswersReadInternal(topicId, postIds).let { it.changed to it.snapshot }
+        val result = markAnswersReadInternal(topicId, postIds)
+        // Пользователь реально увидел пост(ы) с непрочитанным упоминанием — снимаем
+        // системное уведомление этой темы из шторки.
+        if (result.changed) {
+            cancelShadeMentionNotification(topicId)
+        }
+        result.let { it.changed to it.snapshot }
+    }
+
+    /**
+     * Гасим системное уведомление об упоминании при реальном прочтении. Такие уведомления
+     * публикует и фоновый [forpdateam.ru.forpda.notifications.EventsCheckWorker] — его событий
+     * нет в eventsHistory [forpdateam.ru.forpda.model.repository.events.EventsRepository],
+     * поэтому штатная отмена по истории не срабатывала: пуш висел в шторке даже после
+     * прочтения поста (полевой репорт). notifyId детерминирован (sourceId+source+type),
+     * так что достаточно синтетического события; messageId в ID не входит — уведомление
+     * на тему в шторке всегда одно (последний publish перезаписывает предыдущий).
+     */
+    private fun cancelShadeMentionNotification(topicId: Int) {
+        val ctx = context ?: return
+        if (topicId <= 0) return
+        runCatching {
+            val event = forpdateam.ru.forpda.entity.remote.events.NotificationEvent(
+                    forpdateam.ru.forpda.entity.remote.events.NotificationEvent.Type.MENTION,
+                    forpdateam.ru.forpda.entity.remote.events.NotificationEvent.Source.THEME
+            ).apply { sourceId = topicId }
+            androidx.core.app.NotificationManagerCompat.from(ctx).cancel(event.notifyId())
+        }.onFailure { Timber.w(it, "cancelShadeMentionNotification failed") }
+    }
+
+    /** Вариант для строки «Ответов»: через маппер воркера — покрывает и новостные упоминания (SITE). */
+    private fun cancelShadeNotificationFor(item: MentionItem) {
+        val ctx = context ?: return
+        runCatching {
+            val event = forpdateam.ru.forpda.notifications.MentionNotificationMapper.toNotificationEvent(item)
+                    ?: return
+            androidx.core.app.NotificationManagerCompat.from(ctx).cancel(event.notifyId())
+        }.onFailure { Timber.w(it, "cancelShadeNotificationFor failed") }
     }
 
     /**
