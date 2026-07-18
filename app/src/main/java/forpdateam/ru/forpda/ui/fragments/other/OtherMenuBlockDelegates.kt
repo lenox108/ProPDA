@@ -194,4 +194,5 @@ internal fun quickSettingTitle(setting: QuickSetting): Int = when (setting) {
     QuickSetting.DENSITY -> R.string.other_menu_quick_density
     QuickSetting.PAGINATION -> R.string.other_menu_quick_pagination
     QuickSetting.BLACKLIST -> R.string.other_menu_quick_blacklist
+    QuickSetting.NOTIFICATIONS -> R.string.other_menu_quick_notifications
 }

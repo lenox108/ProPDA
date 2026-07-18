@@ -12,7 +12,8 @@ enum class QuickSetting {
     FONT,
     DENSITY,
     PAGINATION,
-    BLACKLIST;
+    BLACKLIST,
+    NOTIFICATIONS;
 
     companion object {
         val DEFAULT = listOf(THEME, PALETTE, FONT)
