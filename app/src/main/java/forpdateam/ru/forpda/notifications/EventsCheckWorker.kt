@@ -53,23 +53,22 @@ class EventsCheckWorker @AssistedInject constructor(
         // по ней отличает «система не запускает воркер» от «воркер запускается, но выходит пустым».
         prefs.setLastWorkerRunAt(System.currentTimeMillis())
 
-        // Скип ТОЛЬКО при реально живом сокете: события несёт realtime, опрос не нужен.
-        // Раньше скип шёл по флагу foregroundRealtime — но флаг остаётся true при idle-паузе
-        // (5 мин без касаний гасят WS, флаг не трогают): приложение открыто, сокет мёртв,
-        // воркер скипал — и уведомления не приходили вообще (мёртвая зона, видна в полевом
-        // логе «skip (foreground realtime)» каждые 15 мин). Плюс тот же критерий корректно
-        // покрывает и стейл-флаг после заморозки процесса, и режим «Постоянное соединение».
-        if (eventsRepository.isWebSocketConnected()) {
-            // Прыжок на Main даёт главному потоку прогнать отложенные lifecycle-колбэки
-            // (например, 45-секундный сброс realtime после ухода в фон у замороженного процесса).
-            val uiForeground = withContext(Dispatchers.Main) {
-                ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
-            }
+        // Скипаем ТОЛЬКО в foreground при живом сокете: там процесс активен, пинги OkHttp идут,
+        // и «connected» надёжно означает доставку. В ФОНЕ «connected» может врать — тихий обрыв
+        // сети в Doze или заморозка процесса оставляют сокет-зомби, который числится живым, но
+        // ничего не доставляет (полевой лог: «skip (websocket connected, ui=false)» на закрытом
+        // приложении). Поэтому в фоне проверку НЕ пропускаем: она дёшева (дедуп last_check_at),
+        // служит страховкой поверх сокета, а снапшот-дедуп не даст дубля, если сокет всё-таки
+        // доставил событие сам. Прыжок на Main заодно прогоняет отложенные lifecycle-колбэки.
+        val uiForeground = withContext(Dispatchers.Main) {
+            ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        }
+        if (uiForeground && eventsRepository.isWebSocketConnected()) {
             if (BuildConfig.DEBUG) {
-                Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: websocket connected (uiForeground=$uiForeground)")
+                Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: foreground + websocket connected")
             }
-            Timber.d("EventsCheckWorker: websocket connected, skip")
-            NotifDiagLog.log(applicationContext, "worker: skip (websocket connected, ui=$uiForeground)")
+            Timber.d("EventsCheckWorker: foreground realtime alive, skip")
+            NotifDiagLog.log(applicationContext, "worker: skip (foreground websocket)")
             return@withContext Result.success()
         }
         // Планировщик снимает эту работу, как только push перестают быть нужны, но отмена

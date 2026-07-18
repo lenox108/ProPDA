@@ -178,6 +178,7 @@ class EventsRepository(
             if (BuildConfig.DEBUG) Timber.d("WSContr onConnected ${webSocketController.getCurrentId()},  ${webSocketController.isConnected()}")
             // onConnected приходит с потока OkHttp; reconnectAttempts/idleJob живут на Main —
             // сериализуем на repoScope.
+            forpdateam.ru.forpda.notifications.NotifDiagLog.log(application, "ws: connected")
             repoScope.launch {
                 // Без сброса бэкофф рос через весь сеанс: после пары обрывов даже первый сбой
                 // на здоровой сети ждал бы пять минут до переподключения.
@@ -197,6 +198,8 @@ class EventsRepository(
                 Timber.e(ex, "Events parse error")
                 null
             } ?: return
+            forpdateam.ru.forpda.notifications.NotifDiagLog.log(
+                    application, "ws: event ${event.source} ${event.type} id=${event.sourceId}")
             if (event.type == NotificationEvent.Type.HAT_EDITED) {
                 // Сервер сообщил, что в теме тронули шапку. Точечно пере-сканируем именно её
                 // на предмет нового apk (фича «Следить за новыми версиями»). Раньше это
@@ -210,6 +213,8 @@ class EventsRepository(
         override fun onDisconnected(throwable: Throwable, response: Response?) {
             if (BuildConfig.DEBUG) Timber.d("WSContr onDisconnected ${webSocketController.getCurrentId()}, ${webSocketController.isConnected()}, code=${response?.code}")
             Timber.e(throwable, "Events check error")
+            forpdateam.ru.forpda.notifications.NotifDiagLog.log(
+                    application, "ws: disconnected code=${response?.code} ${throwable.javaClass.simpleName}")
 
             if (response?.code == 403) {
                 // Проблема не в соединении, а в авторизации: переподключение будет
