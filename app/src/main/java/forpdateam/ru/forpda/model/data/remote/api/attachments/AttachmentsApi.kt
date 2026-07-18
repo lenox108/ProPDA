@@ -129,16 +129,10 @@ class AttachmentsApi(
                 builder.formHeader("relType", relType)
             }
             response = webClient.request(builder.build())
-            val success = isAttachRemoveResponseSuccess(response.body)
-            android.util.Log.i(
-                    "ForPDA.AttachDel",
-                    "remove id=${item.id} relId=$postId relType=$relType success=$success " +
-                            "respLen=${response.body?.length ?: -1} resp=${response.body?.take(300)?.replace("\n", "\\n")}"
-            )
             if (item.id <= 0) {
                 continue
             }
-            if (success) {
+            if (isAttachRemoveResponseSuccess(response.body)) {
                 item.status = AttachmentItem.STATUS_REMOVED
                 item.isError = false
             } else {
