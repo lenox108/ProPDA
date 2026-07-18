@@ -158,8 +158,102 @@ class MentionsRepository(
         getUnreadSnapshotInternalLocked()
     }
 
+    /**
+     * READ-событие по теме (прочитано на другом устройстве/сайте): снимаем непрочитанность всех
+     * упоминаний темы [topicId] с postId <= [upToPostId] (семантика READ — «прочитано до этого
+     * поста включительно»; при upToPostId <= 0 граница неизвестна — чистим всю тему). Ключи НЕ
+     * помечаются прочитанными навсегда: если сервер вновь отдаст строку непрочитанной или придёт
+     * новое MENTION-событие, она снова станет жирной. Возвращает (changed, snapshot).
+     */
+    suspend fun clearTopicUnreadUpTo(topicId: Int, upToPostId: Int): Pair<Boolean, UnreadMentionsSnapshot> = withContext(Dispatchers.IO) {
+        if (topicId <= 0) return@withContext false to getUnreadSnapshotInternalLocked()
+        val result = synchronized(stateLock) {
+            val matches: (String) -> Boolean = { key ->
+                MentionReadKey.fromValue(key)?.let {
+                    it.topicId == topicId && (upToPostId <= 0 || it.postId <= upToPostId)
+                } ?: false
+            }
+            var changed = false
+            for (key in locallyUnreadKeys.filter(matches)) {
+                locallyUnreadKeys.remove(key)
+                markCachedItemReadLocked(key)
+                changed = true
+            }
+            val eventKeys = unreadFromEventsKeys.filter(matches)
+            if (eventKeys.isNotEmpty()) {
+                unreadFromEventsKeys.removeAll(eventKeys.toSet())
+                unreadEventsStore.saveKeys(unreadFromEventsKeys)
+                for (key in eventKeys) {
+                    markCachedItemReadLocked(key)
+                }
+                changed = true
+            }
+            MarkReadResult(changed, UnreadMentionsSnapshot(
+                    locallyUnreadKeys.size,
+                    locallyUnreadKeys.mapNotNull { MentionReadKey.fromValue(it)?.postId }
+            ))
+        }
+        logPerf("read-event clear", SystemClock.uptimeMillis(), "topic=$topicId upTo=$upToPostId changed=${result.changed} unread=${result.snapshot.unreadCount}")
+        result.changed to result.snapshot
+    }
+
+    /**
+     * Сверяем локальное состояние непрочитанных упоминаний с АВТОРИТЕТНЫМ серверным счётчиком из шапки
+     * форума. Если сервер говорит, что упоминаний меньше, чем держим локально, значит часть наших
+     * override'ов устарела («осиротела»): пользователь прочитал упоминание на другом устройстве/сайте
+     * или пост совпал не по тому id, а READ-событие по WebSocket не пришло. Такие ключи вечно висели в
+     * `unreadFromEventsKeys`/`locallyUnreadKeys` (prefs переживают рестарт) и держали бейдж «Ответы»
+     * зажжённым, хотя всё прочитано — локальный пересчёт `setMentions(getUnreadSnapshot())` перебивал
+     * корректный серверный 0 обратно на 1.
+     *
+     * Гасим ТОЛЬКО безошибочный случай — сервер авторитетно говорит «упоминаний 0», а локально мы
+     * ещё держим непрочитанные. Тогда все локальные override'ы устарели, снимаем их полностью. При
+     * `0 < serverMentions < size` неизвестно, какой именно override устарел, поэтому НЕ трогаем (лучше
+     * показать лишний бейдж, чем спрятать реальное упоминание). Свежее упоминание сервер считает
+     * (serverMentions>=1 вместе с приходом override из realtime-события) — под срез не попадает.
+     * Возвращаем true, если что-то реально сняли (вызвавшему стоит перетянуть бейдж к снапшоту).
+     */
+    suspend fun reconcileWithServerMentionCount(serverMentions: Int): Boolean = withContext(Dispatchers.IO) {
+        if (serverMentions != 0) return@withContext false
+        synchronized(stateLock) {
+            if (locallyUnreadKeys.isEmpty() && unreadFromEventsKeys.isEmpty()) return@synchronized false
+            // Помечаем ключи локально-прочитанными навсегда (как при реальном открытии поста): сервер
+            // авторитетно подтвердил, что непрочитанных нет, поэтому ни повторный refresh act=mentions,
+            // ни запоздавшее realtime-событие по этому же посту не должны воскресить override.
+            val keysToRead = (locallyUnreadKeys + unreadFromEventsKeys)
+            for (key in keysToRead) {
+                locallyReadKeys.add(key)
+                markCachedItemReadLocked(key)
+            }
+            locallyUnreadKeys.clear()
+            unreadFromEventsKeys.clear()
+            readStateStore.saveReadKeys(locallyReadKeys)
+            unreadEventsStore.saveKeys(unreadFromEventsKeys)
+            logPerf("server reconcile", SystemClock.uptimeMillis(), "server=0 cleared=${keysToRead.size}")
+            true
+        }
+    }
+
     suspend fun getUnreadSnapshot(): UnreadMentionsSnapshot = withContext(Dispatchers.IO) {
         getUnreadSnapshotInternalLocked()
+    }
+
+    /**
+     * Полный сброс локального состояния упоминаний (выход из аккаунта): прочитанные ключи,
+     * unread-override'ы и кэш страниц принадлежат конкретному пользователю — у другого аккаунта
+     * те же topic:post-ключи означают ЕГО упоминания, и чужой стейт давал бы ложную жирность/
+     * прочитанность и залипший бейдж.
+     */
+    suspend fun clearAllLocalState() = withContext(Dispatchers.IO) {
+        synchronized(stateLock) {
+            cachedPages.clear()
+            locallyReadKeys.clear()
+            locallyUnreadKeys.clear()
+            unreadFromEventsKeys.clear()
+            readStateStore.saveReadKeys(locallyReadKeys)
+            unreadEventsStore.saveKeys(unreadFromEventsKeys)
+            hasLoadedMentions = false
+        }
     }
 
     private fun getUnreadSnapshotInternalLocked(): UnreadMentionsSnapshot {
@@ -252,6 +346,7 @@ class MentionsRepository(
     private fun extractPostId(link: String): Int? = extractMentionPostId(link)
 
     private fun restoreLocalUnreadStateLocked(data: MentionsData) {
+        var eventsStoreDirty = false
         for (item in data.items) {
             val key = item.localReadStateKey() ?: continue
             if (key in locallyReadKeys) {
@@ -271,7 +366,18 @@ class MentionsRepository(
                 }
             } else if (!item.isRead) {
                 locallyUnreadKeys.add(key)
+                // Персистим непрочитанность: сам GET act=mentions гасит unread-класс на сервере
+                // (следующий запрос вернёт строку прочитанной), а `locallyUnreadKeys` живёт только
+                // в памяти. Без записи в prefs фоновая проба воркера или рестарт процесса теряли
+                // «жирность» строки при всё ещё горящем бейдже из шапки. Снимается теми же путями,
+                // что и event-override: открытие поста / READ-событие / server-reconcile(0).
+                if (unreadFromEventsKeys.add(key)) {
+                    eventsStoreDirty = true
+                }
             }
+        }
+        if (eventsStoreDirty) {
+            unreadEventsStore.saveKeys(unreadFromEventsKeys)
         }
         hasLoadedMentions = true
     }

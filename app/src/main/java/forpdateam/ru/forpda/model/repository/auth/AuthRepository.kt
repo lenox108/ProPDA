@@ -7,6 +7,7 @@ import forpdateam.ru.forpda.entity.remote.auth.AuthForm
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.CountersHolder
 import forpdateam.ru.forpda.model.data.remote.api.auth.AuthApi
+import forpdateam.ru.forpda.model.repository.mentions.MentionsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,7 +19,8 @@ class AuthRepository(
         private val authApi: AuthApi,
         private val authHolder: AuthHolder,
         private val countersHolder: CountersHolder,
-        private val userHolder: IUserHolder
+        private val userHolder: IUserHolder,
+        private val mentionsRepository: MentionsRepository
 ) {
 
     suspend fun loadForm(): AuthForm = withContext(Dispatchers.IO) {
@@ -40,6 +42,10 @@ class AuthRepository(
             favorites = 0
             qms = 0
         })
+        // Локальный стейт упоминаний принадлежит аккаунту: без сброса ключи прочитанности и
+        // unread-override'ы прошлого пользователя протекали в следующий (ложная жирность строк,
+        // залипший бейдж «Ответы»).
+        mentionsRepository.clearAllLocalState()
         userHolder.user = null
         result
     }

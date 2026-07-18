@@ -191,8 +191,9 @@ object DataModule {
             api: AuthApi,
             authHolder: AuthHolder,
             countersHolder: CountersHolder,
-            userHolder: IUserHolder
-    ) = AuthRepository(api, authHolder, countersHolder, userHolder)
+            userHolder: IUserHolder,
+            mentionsRepository: MentionsRepository
+    ) = AuthRepository(api, authHolder, countersHolder, userHolder, mentionsRepository)
 
     @Provides @Singleton
     fun provideProfileRepository(
