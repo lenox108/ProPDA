@@ -505,6 +505,148 @@ class MentionsRepositoryTest {
         assertEquals(1, repository.getUnreadSnapshot().unreadCount)
     }
 
+    @Test
+    fun reconcileWithServerMentionCount_clearsStaleOrphanOverrideWhenServerSaysZero() = runTest {
+        // «Осиротевший» override: realtime сказал «непрочитано», но сервер в шапке форума уже 0
+        // (прочитано на др. устройстве, READ-событие не дошло). Раньше держал бейдж «Ответы» на 1.
+        every { mentionsApi.getMentions(0) } returns MentionsData().apply {
+            items.add(mention(1, 42, MentionItem.STATE_READ))
+        }
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.markMentionUnreadFromNotification(1, 42)
+        repository.refreshMentions(0)
+        assertEquals(1, repository.getUnreadSnapshot().unreadCount)
+
+        val cleared = repository.reconcileWithServerMentionCount(0)
+
+        assertEquals(true, cleared)
+        assertEquals(0, repository.getUnreadSnapshot().unreadCount)
+        assertEquals(listOf(true), repository.refreshMentions(0).items.map { it.isRead })
+    }
+
+    @Test
+    fun reconcileWithServerMentionCount_noopWhenNothingLocallyUnread() = runTest {
+        every { mentionsApi.getMentions(0) } returns MentionsData().apply {
+            items.add(mention(1, 42, MentionItem.STATE_READ))
+        }
+        val repository = MentionsRepository(mentionsApi)
+        repository.refreshMentions(0)
+
+        assertEquals(false, repository.reconcileWithServerMentionCount(0))
+        assertEquals(0, repository.getUnreadSnapshot().unreadCount)
+    }
+
+    @Test
+    fun reconcileWithServerMentionCount_keepsUnreadWhenServerStillCountsMention() = runTest {
+        // Сервер подтверждает непрочитанное (>=1) — свежее упоминание не должно попасть под срез.
+        every { mentionsApi.getMentions(0) } returns MentionsData().apply {
+            items.add(mention(1, 42, MentionItem.STATE_READ))
+        }
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.markMentionUnreadFromNotification(1, 42)
+        repository.refreshMentions(0)
+
+        assertEquals(false, repository.reconcileWithServerMentionCount(1))
+        assertEquals(1, repository.getUnreadSnapshot().unreadCount)
+    }
+
+    @Test
+    fun clearTopicUnreadUpTo_readOnOtherDeviceClearsOverrideAndBadge() = runTest {
+        // WS READ-событие по теме (прочитано на др. устройстве): messageId = «прочитано до поста включительно».
+        every { mentionsApi.getMentions(0) } answers {
+            MentionsData().apply { items.add(mention(1, 42, MentionItem.STATE_READ)) }
+        }
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.markMentionUnreadFromNotification(1, 42)
+        repository.refreshMentions(0)
+        assertEquals(1, repository.getUnreadSnapshot().unreadCount)
+
+        val (changed, snapshot) = repository.clearTopicUnreadUpTo(1, 42)
+
+        assertEquals(true, changed)
+        assertEquals(0, snapshot.unreadCount)
+        assertEquals(listOf(true), repository.refreshMentions(0).items.map { it.isRead })
+    }
+
+    @Test
+    fun clearTopicUnreadUpTo_keepsMentionAfterReadBoundary() = runTest {
+        // Прочитано до поста 42, а упоминание в посте 50 (ниже границы) — должно остаться жирным.
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.markMentionUnreadFromNotification(1, 50)
+        val (changed, snapshot) = repository.clearTopicUnreadUpTo(1, 42)
+
+        assertEquals(false, changed)
+        assertEquals(1, snapshot.unreadCount)
+    }
+
+    @Test
+    fun clearTopicUnreadUpTo_unknownBoundaryClearsWholeTopicOnly() = runTest {
+        val repository = MentionsRepository(mentionsApi)
+
+        repository.markMentionUnreadFromNotification(1, 42)
+        repository.markMentionUnreadFromNotification(2, 77)
+        val (changed, snapshot) = repository.clearTopicUnreadUpTo(1, 0)
+
+        assertEquals(true, changed)
+        // Чужая тема не задета.
+        assertEquals(1, snapshot.unreadCount)
+        assertEquals(listOf(77), snapshot.topicPostIds)
+    }
+
+    @Test
+    fun serverUnreadRow_survivesRepositoryReinitViaPrefs() = runTest {
+        // GET act=mentions гасит unread-класс на сервере, поэтому непрочитанность строки должна
+        // переживать рестарт процесса локально (иначе после воркера/рестарта строка серая при бейдже).
+        val preferences = InMemorySharedPreferences()
+        val firstApi = mockk<MentionsApi> {
+            every { getMentions(0) } returns MentionsData().apply {
+                items.add(mention(1, 42, MentionItem.STATE_UNREAD))
+            }
+        }
+        val firstRepository = MentionsRepository(firstApi, preferences)
+        firstRepository.refreshMentions(0)
+        assertEquals(1, firstRepository.getUnreadSnapshot().unreadCount)
+
+        // «Рестарт»: новый инстанс, сервер уже отдаёт строку прочитанной (её погасил прошлый GET).
+        val secondApi = mockk<MentionsApi> {
+            every { getMentions(0) } returns MentionsData().apply {
+                items.add(mention(1, 42, MentionItem.STATE_READ))
+            }
+        }
+        val secondRepository = MentionsRepository(secondApi, preferences)
+        val afterRestart = secondRepository.refreshMentions(0)
+
+        assertEquals(listOf(false), afterRestart.items.map { it.isRead })
+        assertEquals(1, secondRepository.getUnreadSnapshot().unreadCount)
+    }
+
+    @Test
+    fun clearAllLocalState_wipesKeysCacheAndPrefs() = runTest {
+        val preferences = InMemorySharedPreferences()
+        val api = mockk<MentionsApi> {
+            every { getMentions(0) } returns MentionsData().apply {
+                items.add(mention(1, 42, MentionItem.STATE_UNREAD))
+            }
+        }
+        val repository = MentionsRepository(api, preferences)
+        repository.refreshMentions(0)
+        repository.markMentionUnreadFromNotification(1, 43)
+        assertEquals(2, repository.getUnreadSnapshot().unreadCount)
+
+        repository.clearAllLocalState()
+
+        assertEquals(0, repository.getUnreadSnapshot().unreadCount)
+        // Новый инстанс поверх тех же prefs ничего не восстанавливает.
+        val fresh = MentionsRepository(mockk {
+            every { getMentions(0) } returns MentionsData()
+        }, preferences)
+        assertEquals(0, fresh.getUnreadSnapshot().unreadCount)
+    }
+
     private fun pagination(current: Int, all: Int) = forpdateam.ru.forpda.entity.remote.others.pagination.Pagination().apply {
         this.current = current
         this.all = all

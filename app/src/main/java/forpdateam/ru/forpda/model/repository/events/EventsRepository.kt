@@ -232,6 +232,23 @@ class EventsRepository(
     private val webSocketController = WebSocketController(webClient, controllerListener)
 
     init {
+        // Когда шапка форума (index_header) авторитетно сообщает «упоминаний 0», гасим устаревшие
+        // локальные override'ы: иначе «осиротевший» ключ (прочитано на др. устройстве/сайте, READ-
+        // событие не дошло; либо пост совпал не по тому id) вечно держал бейдж «Ответы» на 1, хотя
+        // всё прочитано — локальный пересчёт перебивал корректный серверный 0. Колбэк приходит из
+        // Client.getCounts на потоке OkHttp; сам reconcile — на IO.
+        countersHolder.indexHeaderMentionsListener = { serverMentions ->
+            if (serverMentions == 0) {
+                repoScope.launch(ioDispatcher) {
+                    val cleared = runCatching { mentionsRepository.reconcileWithServerMentionCount(serverMentions) }
+                            .onFailure { Timber.e(it, "reconcileWithServerMentionCount failed") }
+                            .getOrDefault(false)
+                    if (cleared) {
+                        countersHolder.setMentions(0, source = "mentions_server_reconcile")
+                    }
+                }
+            }
+        }
         repoScope.launch {
             var lastNet = networkStateProvider.getState()
             networkStateProvider.observeState().collect { s ->
@@ -601,17 +618,28 @@ class EventsRepository(
     }
 
     /**
-     * READ-событие по упоминанию (например, прочитано на другом устройстве) — снимаем override
-     * «жирной» строки, чтобы список «Ответы» не держал упоминание непрочитанным после факта прочтения.
+     * READ-событие по теме (прочитано на другом устройстве/сайте) — снимаем локальные «жирные»
+     * override'ы упоминаний этой темы, чтобы список и бейдж «Ответы» не держали их непрочитанными
+     * после факта прочтения.
+     *
+     * ВАЖНО: событие здесь имеет type=READ, НЕ MENTION (у [NotificationEvent] один enum-тип) —
+     * старый гейт `!event.isMention` делал метод мёртвым кодом, и прочтение на другом устройстве
+     * никогда не гасило override; бейдж залипал. Семантика messageId у READ — «прочитано ДО этого
+     * поста включительно» (ровно так его сравнивает [checkOldEvent]: `messageId >= old.messageId`),
+     * поэтому чистим ключи темы с postId <= messageId, а не только точное совпадение.
      */
     private fun clearMentionUnreadOverride(event: NotificationEvent) {
-        if (!event.fromTheme() || !event.isMention) return
+        if (!event.fromTheme() || !event.isRead) return
         val topicId = event.sourceId
-        val postId = event.messageId
-        if (topicId <= 0 || postId <= 0) return
+        if (topicId <= 0) return
+        val upToPostId = event.messageId
         repoScope.launch(ioDispatcher) {
-            runCatching { mentionsRepository.removeUnreadFromEvent(topicId, postId) }
-                    .onFailure { Timber.e(it, "clearMentionUnreadOverride failed") }
+            runCatching {
+                val (changed, snapshot) = mentionsRepository.clearTopicUnreadUpTo(topicId, upToPostId)
+                if (changed) {
+                    countersHolder.setMentions(snapshot.unreadCount, source = "mention_read_event")
+                }
+            }.onFailure { Timber.e(it, "clearMentionUnreadOverride failed") }
         }
     }
 
