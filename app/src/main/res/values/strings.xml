@@ -63,6 +63,7 @@
     <string name="other_menu_quick_density">Плотность</string>
     <string name="other_menu_quick_pagination">Панель страниц</string>
     <string name="other_menu_quick_blacklist">ЧС</string>
+    <string name="other_menu_quick_notifications">Уведомления</string>
     <string name="other_menu_quick_settings_picker_title">Быстрые настройки</string>
     <string name="other_menu_block_configure">Изменить</string>
     <string name="other_menu_block_hide">Скрыть</string>
