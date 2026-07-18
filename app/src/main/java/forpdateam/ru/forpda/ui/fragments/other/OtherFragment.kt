@@ -32,6 +32,8 @@ import forpdateam.ru.forpda.entity.app.other.QuickSetting
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.ui.FontController
+import forpdateam.ru.forpda.ui.activities.SettingsActivity
+import forpdateam.ru.forpda.ui.fragments.settings.NotificationsSettingsFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.ui.views.dialog.AccentPickerDialog
 import forpdateam.ru.forpda.ui.views.dialog.FontPickerDialog
@@ -330,7 +332,19 @@ class OtherFragment : TabFragment() {
             QuickSetting.DENSITY -> showQuickDensityPicker()
             QuickSetting.PAGINATION -> showQuickPaginationPicker()
             QuickSetting.BLACKLIST -> viewModel.onOpenForumBlackList()
+            QuickSetting.NOTIFICATIONS -> openNotificationsSettings()
         }
+    }
+
+    // «Уведомления» — тот же экран настроек уведомлений, что открывается из основных настроек
+    // (SettingsFragment → open_notifications): SettingsActivity с preference-экраном.
+    private fun openNotificationsSettings() {
+        val intent = Intent(requireContext(), SettingsActivity::class.java)
+        intent.putExtra(
+                SettingsActivity.ARG_NEW_PREFERENCE_SCREEN,
+                NotificationsSettingsFragment.PREFERENCE_SCREEN_NAME
+        )
+        startActivity(intent)
     }
 
     private val blockVisibilityClickListener: (OtherMenuBlock) -> Unit = { block ->
