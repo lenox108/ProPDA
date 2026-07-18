@@ -16,6 +16,7 @@ import android.widget.TextView
 import java.util.ArrayList
 
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.removeAttachmentReferencesFromBody
 import forpdateam.ru.forpda.ui.dp48
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
@@ -410,11 +411,10 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         for (item in ArrayList(deletedItems)) {
             Timber.d("Delete file $item")
             if (item.id > 0) {
+                // Снять ВСЕ формы ссылки на вложение (BBCode/img/url/markdown/голый URL), иначе 4PDA
+                // при сохранении заново отрисует картинку по оставшейся разметке — вложение «не удаляется».
                 messagePanel.setText(
-                        messagePanel.message.replace(
-                                ("\\[attachment=['\"]?" + item.id + ":[^\\]]*?]").toRegex(),
-                                ""
-                        )
+                        removeAttachmentReferencesFromBody(messagePanel.message, item.id)
                 )
             }
             if (item.status == AttachmentItem.STATUS_REMOVED) {
