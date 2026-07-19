@@ -16,7 +16,7 @@ enum class QuickSetting {
     NOTIFICATIONS;
 
     companion object {
-        val DEFAULT = listOf(THEME, PALETTE, FONT)
+        val DEFAULT = listOf(THEME, PALETTE, FONT, NOTIFICATIONS)
 
         /** Маркер осознанно пустого набора: пустая строка означает «настройка не трогалась». */
         private const val EMPTY = "NONE"
