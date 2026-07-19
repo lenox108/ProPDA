@@ -87,6 +87,10 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     @Inject lateinit var mainPreferencesHolder: MainPreferencesHolder
     @Inject lateinit var otherPreferencesHolder: OtherPreferencesHolder
     @Inject lateinit var clipboardHelper: ClipboardHelper
+    @Inject lateinit var postDraftRepository: forpdateam.ru.forpda.model.repository.draft.PostDraftRepository
+
+    /** Дебаунс-сохранение черновика сообщения QMS (ключ qms:<userId>:<themeId>). */
+    private var qmsDraftSaveJob: kotlinx.coroutines.Job? = null
 
     private val pickFileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
@@ -178,7 +182,42 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         _chatBinding = FragmentQmsChatBinding.inflate(inflater, fragmentContent, true)
         messagePanel = MessagePanel(requireContext(), fragmentContainer, messagePanelHost, false, mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder)
         attachmentsPopup = messagePanel.attachmentsPopup
+        messagePanel.messageField.addTextChangedListener(object : forpdateam.ru.forpda.common.simple.SimpleTextWatcher() {
+            override fun afterTextChanged(s: android.text.Editable) { persistQmsDraft(s.toString()) }
+        })
         return viewFragment
+    }
+
+    private fun qmsDraftKey(): String? =
+            if (presenter.themeId > 0) "qms:${presenter.userId}:${presenter.themeId}" else null
+
+    private fun persistQmsDraft(text: String) {
+        val key = qmsDraftKey() ?: return
+        qmsDraftSaveJob?.cancel()
+        qmsDraftSaveJob = viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.delay(600)
+            runCatching { postDraftRepository.save(key, text.trim(), System.currentTimeMillis()) }
+        }
+    }
+
+    private fun clearQmsDraft() {
+        qmsDraftSaveJob?.cancel()
+        qmsDraftKey()?.let { postDraftRepository.clearFireAndForget(it) }
+    }
+
+    /** Восстановить черновик сообщения в пустое поле (после перезапуска / нового открытия чата). */
+    private fun restoreQmsDraftIntoPanel() {
+        val key = qmsDraftKey() ?: return
+        if (!::messagePanel.isInitialized) return
+        if (messagePanel.message.isNotBlank()) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val saved = runCatching { postDraftRepository.load(key) }.getOrNull().orEmpty()
+            if (saved.isEmpty() || view == null) return@launch
+            if (messagePanel.message.isNotBlank()) return@launch
+            messagePanel.setText(saved)
+            messagePanel.moveCursorToEnd()
+            messagePanel.messageField.clearUndoHistory()
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -853,6 +892,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     private fun onNewThemeCreate(data: QmsChatModel) {
         messagePanel.clearMessage()
         messagePanel.clearAttachments()
+        clearQmsDraft()
     }
 
     private fun setMessageRefreshing(isRefreshing: Boolean) {
@@ -870,6 +910,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
             //Empty because result returned from websocket
             messagePanel.clearMessage()
             messagePanel.clearAttachments()
+            clearQmsDraft()
         }
     }
 
