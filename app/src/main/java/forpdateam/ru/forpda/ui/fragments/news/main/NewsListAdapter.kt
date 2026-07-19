@@ -31,6 +31,12 @@ class NewsListAdapter : BaseAdapter<NewsItem, BaseViewHolder<NewsItem>>() {
     private var mItemClickListener: ItemClickListener? = null
     private var mItemDisplayListener: ((NewsItem) -> Unit)? = null
 
+    /**
+     * Колонок в сетке (1 = обычный список). При >1 горизонтальные отступы плашек
+     * отдаются [NewsGridSpacingDecoration], иначе колонки получают двойной зазор.
+     */
+    var gridSpanCount: Int = 1
+
     fun setOnClickListener(onClickListener: ItemClickListener) {
         this.mItemClickListener = onClickListener
     }
@@ -135,8 +141,8 @@ class NewsListAdapter : BaseAdapter<NewsItem, BaseViewHolder<NewsItem>>() {
             val gap = res.getDimensionPixelSize(R.dimen.list_plate_group_gap_vertical)
             binding.root.applyListRowPlate(
                     ListPlateSegment.SINGLE,
-                    inset,
-                    gapBeforeGroupPx = if (position == 0) gap else 0,
+                    if (gridSpanCount > 1) 0 else inset,
+                    gapBeforeGroupPx = if (position < gridSpanCount) gap else 0,
                     gapAfterGroupPx = gap,
                     ensureSelectableForeground = false,
             )
@@ -186,7 +192,7 @@ class NewsListAdapter : BaseAdapter<NewsItem, BaseViewHolder<NewsItem>>() {
             val gap = res.getDimensionPixelSize(R.dimen.list_plate_group_gap_vertical)
             binding.root.applyListRowPlate(
                     ListPlateSegment.SINGLE,
-                    inset,
+                    if (gridSpanCount > 1) 0 else inset,
                     gapBeforeGroupPx = if (position == 0) gap else 0,
                     gapAfterGroupPx = gap,
                     ensureSelectableForeground = false,
