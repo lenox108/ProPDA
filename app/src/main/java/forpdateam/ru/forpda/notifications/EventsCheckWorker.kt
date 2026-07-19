@@ -204,14 +204,21 @@ class EventsCheckWorker @AssistedInject constructor(
 
         val mutedIds: Set<Int> = if (source == NotificationEvent.Source.THEME) prefs.getMutedTopics() else emptySet()
         val onlyImportant = source == NotificationEvent.Source.THEME && prefs.getFavOnlyImportant()
-        val finalEvents = newEvents
-                .filterNot { it.sourceId in mutedIds }
-                .filter { !onlyImportant || it.isImportant }
+        val afterMute = newEvents.filterNot { it.sourceId in mutedIds }
+        val mutedCount = newEvents.size - afterMute.size
+        val finalEvents = afterMute.filter { !onlyImportant || it.isImportant }
+        val notImportantCount = afterMute.size - finalEvents.size
 
         for (event in finalEvents) {
             NotificationPublisher.publish(appContext, prefs, event)
         }
-        NotifDiagLog.log(appContext, "${source.name}: total=${current.size} new=${newEvents.size} published=${finalEvents.size}")
+        // Разбивка фильтров: published=0 при new>0 иначе не объясняет себя. Теперь видно, что
+        // именно съело события — заглушённые темы (muted) или «Только закреплённые» (notImportant).
+        val filterDetail = buildString {
+            if (mutedCount > 0) append(" muted=$mutedCount")
+            if (notImportantCount > 0) append(" notImportant=$notImportantCount")
+        }
+        NotifDiagLog.log(appContext, "${source.name}: total=${current.size} new=${newEvents.size} published=${finalEvents.size}$filterDetail")
 
         // Страховка от затирания базы сравнения: пустой ответ при непустом снапшоте пишем,
         // только если авторизация всё ещё жива (ответ мог разлогинить — saveFromResponse
