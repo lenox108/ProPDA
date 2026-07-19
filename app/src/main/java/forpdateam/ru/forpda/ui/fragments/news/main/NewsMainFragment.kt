@@ -7,8 +7,11 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.appcompat.widget.PopupMenu
+import android.content.res.Configuration
+import android.graphics.Rect
 import androidx.fragment.app.viewModels
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.getVecDrawable
@@ -44,6 +47,7 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
     private var hadFirstResult = false
     private val dialogMenu = DynamicDialogMenu<NewsMainFragment, NewsItem>()
     private lateinit var categories: List<NewsCategoryUi>
+    private var gridDecoration: RecyclerView.ItemDecoration? = null
 
     private val presenter: ArticlesListViewModel by viewModels()
 
@@ -60,12 +64,19 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
         setListsBackground()
         pinStaticOpaqueToolbar()
         refreshLayout.setOnRefreshListener { presenter.refreshArticles() }
-        recyclerView.layoutManager = LinearLayoutManager(context)
-        //recyclerView.addItemDecoration(new DevicesFragment.SpacingItemDecoration(dp8, true));
+        val layoutManager = GridLayoutManager(context, newsSpanCount())
+        layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int {
+                // Строка «Загрузить ещё» всегда во всю ширину.
+                return if (position == adapter.itemCount - 1) layoutManager.spanCount else 1
+            }
+        }
+        recyclerView.layoutManager = layoutManager
         adapter = NewsListAdapter()
         adapter.setOnClickListener(this)
         adapter.setOnItemDisplayListener { presenter.onItemDisplayed(it) }
         recyclerView.adapter = adapter
+        applyNewsGridLayout()
 
         skeleton = forpdateam.ru.forpda.ui.views.SkeletonListView(requireContext()).apply {
             style = forpdateam.ru.forpda.ui.views.SkeletonListView.Style.CARD
@@ -95,6 +106,53 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
 
     override fun onDestroyView() {
         super.onDestroyView()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // MainActivity обрабатывает orientation сама (configChanges), фрагмент не пересоздаётся —
+        // перестраиваем сетку вручную.
+        if (view != null) applyNewsGridLayout()
+    }
+
+    /** Колонок по доступной ширине: телефон-портрет 1, альбомная 2, широкий планшет 3. */
+    private fun newsSpanCount(): Int =
+            (resources.configuration.screenWidthDp / MIN_COLUMN_WIDTH_DP).coerceIn(1, MAX_NEWS_COLUMNS)
+
+    private fun applyNewsGridLayout() {
+        val span = newsSpanCount()
+        val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return
+        val changed = layoutManager.spanCount != span || adapter.gridSpanCount != span
+        layoutManager.spanCount = span
+        adapter.gridSpanCount = span
+        gridDecoration?.let { recyclerView.removeItemDecoration(it) }
+        gridDecoration = if (span > 1) {
+            NewsGridSpacingDecoration(resources.getDimensionPixelSize(R.dimen.list_plate_horizontal_inset))
+                    .also { recyclerView.addItemDecoration(it) }
+        } else {
+            null
+        }
+        if (changed) adapter.notifyDataSetChanged()
+    }
+
+    /**
+     * Равные горизонтальные зазоры сетки: у краёв экрана и между колонками ровно [spacing],
+     * при этом все ячейки остаются одинаковой ширины. Полноширинные строки (spanSize == spanCount)
+     * получают обычные боковые отступы.
+     */
+    private class NewsGridSpacingDecoration(private val spacing: Int) : RecyclerView.ItemDecoration() {
+        override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
+            val lp = view.layoutParams as? GridLayoutManager.LayoutParams ?: return
+            val span = (parent.layoutManager as? GridLayoutManager)?.spanCount ?: return
+            if (lp.spanSize >= span) {
+                outRect.left = spacing
+                outRect.right = spacing
+                return
+            }
+            val column = lp.spanIndex
+            outRect.left = spacing - column * spacing / span
+            outRect.right = (column + 1) * spacing / span
+        }
     }
 
     override fun addBaseToolbarMenu(menu: Menu) {
@@ -333,5 +391,7 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
 
     private companion object {
         private const val MENU_SUBCATEGORY_PREFIX = "  "
+        private const val MIN_COLUMN_WIDTH_DP = 340
+        private const val MAX_NEWS_COLUMNS = 3
     }
 }
