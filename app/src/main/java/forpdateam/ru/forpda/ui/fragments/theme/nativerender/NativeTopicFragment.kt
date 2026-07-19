@@ -1104,6 +1104,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     messagePanelDraftMirror = data.message.orEmpty()
                     showMessagePanel(showKeyboard = false)
                     messagePanel?.setText(data.message)
+                    // Программная загрузка — не в историю undo, иначе первое undo стёрло бы весь текст.
+                    messagePanel?.messageField?.clearUndoHistory()
                     data.attachments?.let { attachmentsPopup?.setAttachments(it) }
                     messagePanel?.messageField?.let { field ->
                         val len = field.text?.length ?: 0
@@ -2600,6 +2602,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             val panel = messagePanel ?: return@launch
             panel.setText(form.message)
             panel.moveCursorToEnd()
+            panel.messageField.clearUndoHistory()
             messagePanelDraftMirror = form.message.orEmpty()
             // Всегда переустанавливаем список: иначе вложения предыдущего черновика/правки остаются в
             // панели и уезжают в `file-list` чужого поста.
