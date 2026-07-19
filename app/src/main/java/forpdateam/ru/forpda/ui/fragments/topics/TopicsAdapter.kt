@@ -257,14 +257,20 @@ class TopicsAdapter : BaseSectionedAdapter<TopicItem, BaseSectionedViewHolder<To
                 if (item.isPoll) append(binding.root.context.getString(R.string.topic_poll_status))
                 if (metadataText.isNotBlank()) append(metadataText).append(". ")
             }
-            binding.root.contentDescription = binding.root.context.getString(
-                    R.string.topic_row_desc,
-                    item.title.orEmpty(),
-                    statusText,
-                    item.desc?.takeIf { it.isNotBlank() }?.let { "$it. " }.orEmpty(),
-                    item.lastUserNick.orEmpty(),
-                    dateText
-            )
+            // Форматирование contentDescription не должно ронять раскладку списка:
+            // это лишь accessibility-текст. У пользователя прилетал
+            // UnknownFormatConversionException 'U' (String.format в Resources.getString)
+            // при биндинге строки тем — падал весь onLayout. Деградируем до заголовка.
+            binding.root.contentDescription = runCatching {
+                binding.root.context.getString(
+                        R.string.topic_row_desc,
+                        item.title.orEmpty(),
+                        statusText,
+                        item.desc?.takeIf { it.isNotBlank() }?.let { "$it. " }.orEmpty(),
+                        item.lastUserNick.orEmpty(),
+                        dateText
+                )
+            }.getOrElse { item.title.orEmpty() }
         }
 
         override fun onClick(view: View) {
