@@ -2599,6 +2599,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             editingForm = form
             val panel = messagePanel ?: return@launch
             panel.setText(form.message)
+            panel.moveCursorToEnd()
             messagePanelDraftMirror = form.message.orEmpty()
             // Всегда переустанавливаем список: иначе вложения предыдущего черновика/правки остаются в
             // панели и уезжают в `file-list` чужого поста.
