@@ -2363,6 +2363,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // onViewCreated already issued: the navigator echoes the initial open right after onViewCreated,
             // and loading page 1 there is exactly what caused the visible «page 1 → jump to unread» flash.
             val resolved = resolveNavigatorOpenUrl(url, sourceScreen, openIntent, listHints)
+            android.util.Log.i("FPDA_SPIN", "loadThemeUrlFromNavigator src=$sourceScreen intent=$openIntent resolved=$resolved lastRequested=$lastRequestedUrl loadInFlight=$loadInFlight willLoad=${resolved != lastRequestedUrl || !loadInFlight}")
             // Дедуп ТОЛЬКО против летящего эха первого открытия (тот же URL, запрос ещё в полёте).
             // Совпавший URL при ЗАВЕРШЁННОЙ загрузке = настоящее повторное открытие (реюз живого таба
             // из списка) — обязаны перезагрузить: иначе свежие посты не тянутся, пока юзер не дёрнет
@@ -2426,6 +2427,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // onViewCreated issues its resolved (getnewpost) load, while loadedUrl is still null — checking
         // loadedUrl here fired a redundant bare page-1 load in parallel (the «page 1 → jump» flash). Also
         // resolve the open target so this safety-net path never lands on page 1 either.
+        android.util.Log.i("FPDA_SPIN", "onTabStackBecameCurrent lastRequestedUrl=$lastRequestedUrl view=${view != null}")
         if (lastRequestedUrl == null && view != null) {
             loadTopic(resolveInitialOpenUrl())
         }
@@ -3758,6 +3760,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     private fun loadTopic(url: String, preserveRefreshIntent: Boolean = false) {
+        android.util.Log.i("FPDA_SPIN", "loadTopic url=$url preserve=$preserveRefreshIntent armed=$boundaryResumeArmed epoch(before)=$loadEpoch loadInFlight=$loadInFlight")
         if (url.isBlank()) {
             setRefreshing(false)
             return
@@ -3814,7 +3817,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // here) and also catches a superseding reload of the SAME url. The nested reload
             // (maybeResumeToReadBoundary) starts FROM onSuccess after this guard and bumps the epoch
             // itself, so it stays the latest.
-            if (epoch != loadEpoch) return@launch
+            if (epoch != loadEpoch) {
+                android.util.Log.i("FPDA_SPIN", "loadTopic DROPPED epoch=$epoch != loadEpoch=$loadEpoch url=$url (indicator NOT cleared)")
+                return@launch
+            }
             // Этот запрос — актуальный и завершился (успехом или ошибкой): полёт окончен. Вложенные
             // перезагрузки (boundary-резюм, шаг на след. страницу) сами взведут флаг заново в loadTopic.
             loadInFlight = false
@@ -3845,7 +3851,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // самого дальнего реально-виденного поста, перезагрузиться findpost'ом на границу (иначе
                 // проскочим непрочитанное — walk-down 4PDA). Фаер один раз за открытие; findpost-резюм не
                 // рендерим здесь — return, дальше отработает вложенная загрузка.
-                if (maybeResumeToReadBoundary(url, page)) return@onSuccess // keep the indicator; the nested findpost reload owns it
+                if (maybeResumeToReadBoundary(url, page)) {
+                    android.util.Log.i("FPDA_SPIN", "onSuccess → resume-boundary took over (indicator kept), url=$url")
+                    return@onSuccess // keep the indicator; the nested findpost reload owns it
+                }
                 // Дошли до реального рендера этой загрузки — fallback резюма (если взводился) больше не нужен.
                 resumeFallbackPage = null
                 resumeFallbackUrl = null

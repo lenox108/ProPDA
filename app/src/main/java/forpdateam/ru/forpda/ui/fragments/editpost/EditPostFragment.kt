@@ -99,6 +99,10 @@ class EditPostFragment : TabFragment() {
     /** После первой успешной [showForm] для TYPE_EDIT_POST — для сравнения «грязности». */
     private var editBaselineEstablished = false
     private var baselineEditMessage: String = ""
+    /** Черновик правки наложен на форму один раз — чтобы повторные ShowForm не перетирали ввод. */
+    private var editDraftRestoredOnce = false
+    /** Текст формы правки применён к панелям — повторные ShowForm (дозагрузка вложений) текст не трогают. */
+    private var editMessageAppliedOnce = false
     private var baselineAttachmentSignature: String = ""
     private var initialSelectionRange: IntArray? = null
     private var initialBodyFromArgs: String = ""
@@ -520,8 +524,13 @@ class EditPostFragment : TabFragment() {
         setAttachmentsToPanels(
                 mergeEditorAttachments(form.attachments, currentAttachmentsPopup()?.getAttachments().orEmpty())
         )
-        setDraftToPanels(messageForPanels)
-        applyInitialSelectionToPanels(messageForPanels.length)
+        // Текст правки применяем ОДИН раз: повторный ShowForm (после дозагрузки вложений) иначе
+        // перетёр бы уже начатые правки/наложенный черновик серверным текстом. Вложения обновляем всегда.
+        val applyMessage = formType != EditPostForm.TYPE_EDIT_POST || !editMessageAppliedOnce
+        if (applyMessage) {
+            setDraftToPanels(messageForPanels)
+            applyInitialSelectionToPanels(messageForPanels.length)
+        }
         (currentPanel()?.messageField as? CodeEditor)?.updateHighlighting()
 
         // Однократный авто-фокус + IME при первом открытии полноэкранного редактора
@@ -540,6 +549,22 @@ class EditPostFragment : TabFragment() {
         }
 
         captureEditBaselineFromUiOnce()
+
+        if (applyMessage) {
+            // Восстановленный черновик правки показываем ПОСЛЕ захвата baseline (baseline = чистый
+            // серверный текст), поэтому форма корректно помечается «грязной» и «назад» спросит про
+            // сохранение/сброс. Не перетираем, если пользователь уже начал править это открытие.
+            form.restoredEditDraft?.takeIf { it.isNotBlank() }?.let { draft ->
+                if (!editDraftRestoredOnce && currentMessageNormalized() == baselineEditMessage) {
+                    editDraftRestoredOnce = true
+                    setDraftToPanels(draft)
+                    fullPanel.moveCursorToEnd()
+                    compactPanel.moveCursorToEnd()
+                    (currentPanel()?.messageField as? CodeEditor)?.updateHighlighting()
+                }
+            }
+            if (formType == EditPostForm.TYPE_EDIT_POST) editMessageAppliedOnce = true
+        }
     }
 
     private fun resolveMessageForShowForm(form: EditPostForm): String {
@@ -1433,6 +1458,9 @@ class EditPostFragment : TabFragment() {
                         runCatching {
                             presenter.discardTransientUploads(allAttachmentsSnapshot())
                         }
+                        // «Сбросить» правку = вернуться к серверной версии: снимаем и персистентный
+                        // черновик правки (в отличие от нового ответа, который ждёт в теме).
+                        presenter.clearPersistedDraft()
                         uploadQueue.clear()
                         uploadInProgress = false
                         exitedCleanly = true

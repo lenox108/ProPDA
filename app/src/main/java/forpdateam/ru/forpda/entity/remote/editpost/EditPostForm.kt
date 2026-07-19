@@ -19,6 +19,13 @@ class EditPostForm {
     var postId = 0
     var st = 0
 
+    /**
+     * Восстановленный пользовательский черновик правки (TYPE_EDIT_POST), отличный от чистого
+     * серверного текста ([message]). Транзиентное поле: заполняется ViewModel из БД, показывается
+     * поверх [message], тогда как baseline «грязности» остаётся на [message]. null — черновика нет.
+     */
+    var restoredEditDraft: String? = null
+
     fun addAttachment(item: AttachmentItem) {
         attachments.add(item)
     }
