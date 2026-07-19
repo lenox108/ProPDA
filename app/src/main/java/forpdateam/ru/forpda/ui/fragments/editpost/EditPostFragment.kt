@@ -104,6 +104,7 @@ class EditPostFragment : TabFragment() {
     private var initialBodyFromArgs: String = ""
     private var pendingInitialMessage: String? = null
     private var clearEditorTextDialog: AlertDialog? = null
+    private var reasonDialog: AlertDialog? = null
     // Однократный авто-фокус и показ IME при первом отображении формы
     // (фрагмент сразу открывается полноэкранным; без этого клавиатура не появлялась).
     // Сохраняется в instance state, чтобы при пересоздании процесса не «угонять»
@@ -317,6 +318,8 @@ class EditPostFragment : TabFragment() {
         restoreFullscreenImeWindowMode()
         clearEditorTextDialog?.dismiss()
         clearEditorTextDialog = null
+        reasonDialog?.dismiss()
+        reasonDialog = null
         presenter.attachMessageSource(null)
         super.onDestroyView()
     }
@@ -540,24 +543,23 @@ class EditPostFragment : TabFragment() {
     }
 
     private fun resolveMessageForShowForm(form: EditPostForm): String {
-        if (formType != EditPostForm.TYPE_NEW_POST || form.message.isNotEmpty()) {
-            if (form.message.isNotEmpty()) pendingInitialMessage = null
+        if (formType != EditPostForm.TYPE_NEW_POST) {
             return form.message
         }
+        // NEW_POST: живой текст панели/зеркала — самый свежий источник (восстановление из instance
+        // state, текущий набор). Он приоритетнее form.message, которым может быть слегка отставшая
+        // (до 600 мс дебаунса) копия из БД. Иначе ShowForm перетирал бы более новый текст старым.
         val currentDraft = currentDraftForPreservation()
-        val preserved = currentDraft.ifEmpty { pendingInitialMessage.orEmpty() }
-        return if (preserved.isNotEmpty()) {
-            Timber.d(
-                "showForm.preserveInitial emptyForm=true" +
-                    " currentLen=${currentDraft.length}" +
-                    " pendingLen=${pendingInitialMessage?.length ?: 0}" +
-                    " preservedLen=${preserved.length}"
-            )
-            pendingInitialMessage = null
-            preserved
-        } else {
-            ""
-        }
+        val preserved = currentDraft.ifEmpty { form.message.ifEmpty { pendingInitialMessage.orEmpty() } }
+        if (BuildConfig.DEBUG) Timber.d(
+            "showForm.resolveNewPost" +
+                " currentLen=${currentDraft.length}" +
+                " formLen=${form.message.length}" +
+                " pendingLen=${pendingInitialMessage?.length ?: 0}" +
+                " preservedLen=${preserved.length}"
+        )
+        if (preserved.isNotEmpty()) pendingInitialMessage = null
+        return preserved
     }
 
     private fun currentDraftForPreservation(): String {
@@ -628,8 +630,11 @@ class EditPostFragment : TabFragment() {
     }
 
     private fun sendMessage() {
-        val panel = currentPanel()
-        panel?.let { presenter.sendMessage(it.message, it.attachments) }
+        val panel = currentPanel() ?: return
+        // Фолбэк на зеркало: на части OEM-прошивок буфер поля может кратковременно читаться пустым —
+        // тогда без фолбэка ушёл бы пустой пост. Зеркало держит последнюю известную редакцию.
+        val message = panel.message.ifEmpty { draftContentMirror }
+        presenter.sendMessage(message, panel.attachments)
     }
 
     private fun onPostSend(page: ThemePage, form: EditPostForm) {
@@ -1396,11 +1401,13 @@ class EditPostFragment : TabFragment() {
     }
 
     private fun showReasonDialog(form: EditPostForm) {
+        // Защита от двойного тапа «Отправить»: не стекуем два диалога причины правки.
+        if (reasonDialog?.isShowing == true) return
         val view = View.inflate(requireContext(), R.layout.edit_post_reason, null)
         val editText = view.findViewById<EditText>(R.id.edit_post_reason_field) ?: throw IllegalStateException("editText not found")
         editText.setText(form.editReason)
 
-        MaterialAlertDialogBuilder(requireContext())
+        reasonDialog = MaterialAlertDialogBuilder(requireContext())
                 .setTitle(R.string.editpost_reason)
                 .setView(view)
                 .setPositiveButton(R.string.send) { _, _ ->
@@ -1408,6 +1415,11 @@ class EditPostFragment : TabFragment() {
                 }
                 .setNegativeButton(R.string.cancel, null)
                 .showWithStyledButtons()
+                .also { dialog ->
+                    dialog.setOnDismissListener {
+                        if (reasonDialog === dialog) reasonDialog = null
+                    }
+                }
     }
 
     private fun showEditUnsavedChangesDialog() {

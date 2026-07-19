@@ -55,15 +55,21 @@ class CodeEditor @JvmOverloads constructor(
     private var insertionActionModeActive: Boolean = false
 
     // --- Undo/redo ---
-    private data class EditOp(val start: Int, val before: CharSequence, val after: CharSequence)
+    private data class EditOp(val start: Int, val before: CharSequence, val after: CharSequence) {
+        val weight: Int get() = before.length + after.length
+    }
     private val undoStack = ArrayDeque<EditOp>()
     private val redoStack = ArrayDeque<EditOp>()
+    /** Суммарный вес операций в стеке undo (before+after), чтобы ограничивать память, а не только число операций. */
+    private var undoStackChars = 0
     /** Пока true — правки от undo()/redo() не пишутся обратно в стек. */
     private var undoRedoInProgress = false
     private var pendingUndoStart = 0
     private var pendingUndoBefore: CharSequence = ""
     /** Последняя правка была посимвольным набором — для склейки подряд идущих вставок в одну операцию. */
     private var lastEditWasTyping = false
+    /** Последняя правка была посимвольным удалением (backspace) — для склейки подряд идущих удалений. */
+    private var lastEditWasDeleting = false
     /** Колбэк для UI (кнопки undo/redo): вызывается при любом изменении доступности истории. */
     var onUndoStateChanged: (() -> Unit)? = null
 
@@ -74,7 +80,9 @@ class CodeEditor @JvmOverloads constructor(
     fun clearUndoHistory() {
         undoStack.clear()
         redoStack.clear()
+        undoStackChars = 0
         lastEditWasTyping = false
+        lastEditWasDeleting = false
         onUndoStateChanged?.invoke()
     }
 
@@ -137,23 +145,50 @@ class CodeEditor @JvmOverloads constructor(
         // Склейка: подряд идущий набор одиночных символов (не перевод строки) — одна операция undo,
         // иначе undo откатывал бы по одной букве.
         val isTyping = before.isEmpty() && after.length == 1 && after[0] != '\n'
+        // Аналогично для удаления одиночных символов (backspace/forward-delete).
+        val isDeleting = after.isEmpty() && before.length == 1
+        var merged = false
         if (isTyping && lastEditWasTyping && last != null &&
             last.before.isEmpty() && last.start + last.after.length == start
         ) {
             undoStack[undoStack.lastIndex] = last.copy(after = last.after.toString() + after)
-        } else {
-            if (undoStack.size >= MAX_UNDO_OPS) undoStack.removeFirst()
+            undoStackChars += after.length
+            merged = true
+        } else if (isDeleting && lastEditWasDeleting && last != null && last.after.isEmpty()) {
+            if (start + before.length == last.start) {
+                // backspace: удалён символ прямо перед предыдущим удалённым — before нового идёт раньше.
+                undoStack[undoStack.lastIndex] =
+                    last.copy(start = start, before = before.toString() + last.before)
+                undoStackChars += before.length
+                merged = true
+            } else if (start == last.start) {
+                // forward-delete: удаляем с той же позиции — before нового идёт позже.
+                undoStack[undoStack.lastIndex] =
+                    last.copy(before = last.before.toString() + before)
+                undoStackChars += before.length
+                merged = true
+            }
+        }
+        if (!merged) {
             undoStack.addLast(EditOp(start, before, after))
+            undoStackChars += before.length + after.length
+        }
+        // Ограничение памяти: вытесняем самые старые операции, пока превышен бюджет символов или число операций.
+        while (undoStack.size > 1 && (undoStackChars > MAX_UNDO_CHARS || undoStack.size > MAX_UNDO_OPS)) {
+            undoStackChars -= undoStack.removeFirst().weight
         }
         lastEditWasTyping = isTyping
+        lastEditWasDeleting = isDeleting
         onUndoStateChanged?.invoke()
     }
 
     fun undo() {
         val op = undoStack.removeLastOrNull() ?: return
+        undoStackChars -= op.weight
         applyUndoRedo(op.start, op.after.length, op.before)
         redoStack.addLast(op)
         lastEditWasTyping = false
+        lastEditWasDeleting = false
         onUndoStateChanged?.invoke()
         updateHighlighting()
     }
@@ -162,7 +197,9 @@ class CodeEditor @JvmOverloads constructor(
         val op = redoStack.removeLastOrNull() ?: return
         applyUndoRedo(op.start, op.before.length, op.after)
         undoStack.addLast(op)
+        undoStackChars += op.weight
         lastEditWasTyping = false
+        lastEditWasDeleting = false
         onUndoStateChanged?.invoke()
         updateHighlighting()
     }
@@ -406,6 +443,8 @@ class CodeEditor @JvmOverloads constructor(
     companion object {
         private const val FULL_BB_HIGHLIGHT_MAX_CHARS = 16384
         private const val MAX_UNDO_OPS = 200
+        /** Бюджет памяти истории undo по суммарным символам (before+after всех операций). */
+        private const val MAX_UNDO_CHARS = 512 * 1024
 
         private fun clearSpans(e: Editable, start: Int, end: Int) {
             val s = start.coerceIn(0, e.length)
