@@ -301,7 +301,7 @@
     <string name="emoji_cat_activity">Активность</string>
     <string name="emoji_cat_objects">Вещи</string>
     <string name="emoji_cat_symbols">Символы</string>
-    <string name="codes_title">Оформление</string>
+    <string name="codes_title">BBCode</string>
     <string name="codes_text_size">Размер текста</string>
     <string name="codes_text_size_item_Size" formatted="false">Размер %s</string>
     <string name="codes_link">Ссылка</string>

@@ -891,8 +891,13 @@
         <item name="fontFamily">?fontFamily</item>
         <item name="android:fontFamily">?android:fontFamily</item>
         <item name="android:textColor">?attr/colorOnSurface</item>
+        <!-- Меньше кегль + без переносов: кнопки undo/redo сузили TabLayout, «Смайлы/Эмодзи»
+             при 14sp переносились в две строки. 12sp + textAllCaps=false умещают ярлыки в строку. -->
+        <item name="android:textSize">12sp</item>
         <item name="android:maxLines">1</item>
         <item name="android:ellipsize">end</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="textAllCaps">false</item>
     </style>
 
     <style name="ShapeAppearance.ForPDA.Small" parent="ShapeAppearance.Material3.SmallComponent">
