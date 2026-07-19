@@ -2443,6 +2443,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         super.onResume()
         messagePanel?.onResume()
         healOrphanedLoadingIndicator() // clear a spinner stranded by a superseded/interrupted open
+        // Метка «эта тема сейчас на экране»: пуш о читаемой прямо сейчас теме — шум, и
+        // EventsRepository/EventsCheckWorker глушат его по этой метке. Снимается в onPause.
+        if (pageTopicId > 0) eventsRepository.setViewedTopic(pageTopicId)
     }
 
     /**
@@ -2471,6 +2474,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     override fun onPause() {
         super.onPause()
         messagePanel?.onPause()
+        // Снимаем метку «тема на экране» (сворачивание/переключение вкладки) — иначе гейт
+        // глушил бы пуши о теме, которую уже никто не смотрит.
+        if (pageTopicId > 0) eventsRepository.clearViewedTopic(pageTopicId)
         // Страховка на выход из темы (back/сворачивание): если юзер долистал ровно до конца, но
         // финальный кадр onScrolled/IDLE-settle не успел зафиксировать «низ виден» до ухода — метим
         // прочитанной здесь. Полностью защищено собственными гейтами maybeMarkTopicReadAtEnd
@@ -3921,6 +3927,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         loadedUrl = url
         pageForumId = page.forumId
         pageTopicId = page.id
+        // pageTopicId становится известен только после загрузки — onResume мог пройти раньше
+        // с нулём. Обновляем метку «тема на экране» здесь, если вкладка сейчас видима.
+        if (isResumed && pageTopicId > 0) eventsRepository.setViewedTopic(pageTopicId)
         pageSt = page.st
         pageIsInFavorite = page.isInFavorite
         pageFavId = page.favId

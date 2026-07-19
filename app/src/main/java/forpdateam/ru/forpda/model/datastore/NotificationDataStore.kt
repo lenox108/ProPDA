@@ -37,6 +37,8 @@ class NotificationDataStore(private val context: Context) {
         private const val KEY_BG_CHECK_INTERVAL_MIN = "notifications.bg.interval_min"
         // Опция «Постоянное соединение»: держать WebSocket и в фоне (FGS). По умолчанию ВЫКЛ.
         private const val KEY_BG_PERSISTENT_WS = "notifications.bg.persistent_ws"
+        // Опция «Реже проверять ночью»: 00:00–07:00 фоновая проверка раз в час. По умолчанию ВЫКЛ.
+        private const val KEY_BG_NIGHT_SLOWDOWN = "notifications.bg.night_slowdown"
         // Самодиагностика: отметки последнего запуска воркера и момента планирования.
         private const val KEY_BG_LAST_WORKER_RUN_AT = "notifications.bg.last_worker_run_at"
         private const val KEY_BG_SCHEDULED_AT = "notifications.bg.scheduled_at"
@@ -181,6 +183,8 @@ class NotificationDataStore(private val context: Context) {
     fun bgPersistentWsFlow(): Flow<Boolean> = bgPersistentWsFlow.asStateFlow()
 
     fun getBgPersistentWsSync(): Boolean = prefs.getBoolean(KEY_BG_PERSISTENT_WS, false)
+
+    fun getBgNightSlowdownSync(): Boolean = prefs.getBoolean(KEY_BG_NIGHT_SLOWDOWN, false)
 
     // --- Самодиагностика фоновых проверок ---
     fun getLastWorkerRunAtSync(): Long = prefs.getLong(KEY_BG_LAST_WORKER_RUN_AT, 0L)
