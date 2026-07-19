@@ -137,6 +137,14 @@ class EventsCheckWorker @AssistedInject constructor(
                     NotifDiagLog.log(applicationContext, "MENTIONS: error ${it.javaClass.simpleName}")
                 }
 
+        // Самовосстановление alarm-цепи: перевзвод живёт в ресивере будильника, но force-stop
+        // снимает будильники, и цепь мертва до следующего запуска приложения. Каждый запуск
+        // периодического воркера перевзводит будильник заново — пока жив хоть один контур,
+        // второй восстанавливается сам. Дёшево: AlarmManager.set — локальный вызов.
+        if (prefs.getBgCheckEnabled() && prefs.wantsPushNotifications()) {
+            EventsCheckAlarmScheduler.schedule(applicationContext, prefs.getBgCheckIntervalMin())
+        }
+
         Result.success()
     }
 
@@ -186,9 +194,12 @@ class EventsCheckWorker @AssistedInject constructor(
 
         // Найти новые события по timeStamp ДО того, как перезапишем снимок: иначе падение
         // между сохранением и публикацией потеряло бы события навсегда.
+        // Равный timeStamp при выросшем msgCount — тоже новое: секундная гранулярность
+        // инспектора иначе молча теряла бы второе сообщение, пришедшее в ту же секунду.
         val newEvents = current.filter { loaded ->
             val sameSaved = savedEvents.firstOrNull { it.sourceId == loaded.sourceId }
-            sameSaved == null || loaded.timeStamp > sameSaved.timeStamp
+            sameSaved == null || loaded.timeStamp > sameSaved.timeStamp ||
+                    (loaded.timeStamp == sameSaved.timeStamp && loaded.msgCount > sameSaved.msgCount)
         }
 
         val mutedIds: Set<Int> = if (source == NotificationEvent.Source.THEME) prefs.getMutedTopics() else emptySet()

@@ -1158,7 +1158,10 @@ class EventsRepository(
         for (loaded in loadedEvents) {
             var isNew = true
             for (saved in savedEvents) {
-                if (loaded.sourceId == saved.sourceId && loaded.timeStamp <= saved.timeStamp) {
+                // Зеркало фильтра EventsCheckWorker.checkSource: равный timeStamp при
+                // выросшем msgCount — новое событие (секундная гранулярность инспектора).
+                if (loaded.sourceId == saved.sourceId && (loaded.timeStamp < saved.timeStamp ||
+                                (loaded.timeStamp == saved.timeStamp && loaded.msgCount <= saved.msgCount))) {
                     isNew = false
                     break
                 }
