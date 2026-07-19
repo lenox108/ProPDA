@@ -126,6 +126,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     @Inject
     lateinit var notificationPreferencesHolder: forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 
+    @Inject
+    lateinit var postDraftRepository: forpdateam.ru.forpda.model.repository.draft.PostDraftRepository
+
+    /** Дебаунс-сохранение черновика ответа в теме (ключ topic:<id>, общий с полноэкранным редактором). */
+    private var topicDraftSaveJob: kotlinx.coroutines.Job? = null
+
     // topicPreferencesHolder is provided by the TabFragment supertype.
 
     private val mapper = NativePostMapper()
@@ -881,7 +887,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // keyboard (matches the WebView fragment's disableBehavior()).
         panel.disableBehavior()
         panel.messageField.addTextChangedListener(object : SimpleTextWatcher() {
-            override fun afterTextChanged(s: Editable) { messagePanelDraftMirror = s.toString() }
+            override fun afterTextChanged(s: Editable) {
+                messagePanelDraftMirror = s.toString()
+                // Персистим только черновик нового ответа (не правку загруженного поста).
+                if (editingForm == null) persistTopicDraft(s.toString())
+            }
         })
         panel.addSendOnClickListener { sendMessage() }
         panel.setClearMessageClickListener { confirmClearMessage() }
@@ -1073,6 +1083,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         } else {
             editingForm = null
             showMessagePanel(showKeyboard = true)
+            restoreTopicDraftIntoPanel()
         }
     }
 
@@ -3465,6 +3476,47 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         return if (field.isNotEmpty()) field else messagePanelDraftMirror
     }
 
+    private fun topicDraftKey(): String? =
+            if (pageTopicId > 0) forpdateam.ru.forpda.model.repository.draft.PostDraftRepository.topicKey(pageTopicId) else null
+
+    /** Дебаунс-сохранение черновика нового ответа (ключ общий с полноэкранным редактором). */
+    private fun persistTopicDraft(text: String) {
+        val key = topicDraftKey() ?: return
+        topicDraftSaveJob?.cancel()
+        topicDraftSaveJob = viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.delay(600)
+            runCatching { postDraftRepository.save(key, text.trim(), System.currentTimeMillis()) }
+        }
+    }
+
+    /** Снять персистентный черновик темы (после успешной отправки нового ответа). */
+    private fun clearTopicDraft() {
+        topicDraftSaveJob?.cancel()
+        topicDraftKey()?.let { postDraftRepository.clearFireAndForget(it) }
+    }
+
+    /**
+     * Восстановление черновика нового ответа при открытии пустого редактора (после перезапуска
+     * приложения / нового открытия темы). Загружаем асинхронно и вставляем только если поле всё ещё
+     * пустое и пользователь не начал править существующий пост.
+     */
+    private fun restoreTopicDraftIntoPanel() {
+        val key = topicDraftKey() ?: return
+        val panel = messagePanel ?: return
+        if (editingForm != null) return
+        if (resolveMessagePanelDraft().isNotBlank()) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val saved = runCatching { postDraftRepository.load(key) }.getOrNull().orEmpty()
+            if (saved.isEmpty()) return@launch
+            if (view == null || editingForm != null) return@launch
+            if (resolveMessagePanelDraft().isNotBlank()) return@launch
+            panel.setText(saved)
+            panel.moveCursorToEnd()
+            panel.messageField.clearUndoHistory()
+            messagePanelDraftMirror = saved
+        }
+    }
+
     /**
      * The editor «крестик» (clear-all) wipes the whole draft — an easy accidental tap. Confirm first so a
      * misfire doesn't lose a long message. Nothing to confirm on an empty field → just clear silently.
@@ -3517,6 +3569,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 panel.clearMessage()
                 panel.clearAttachments()
                 messagePanelDraftMirror = ""
+                if (isNewReply) clearTopicDraft()
                 editingForm = null
                 hideMessagePanel()
                 Toast.makeText(requireContext(), "Отправлено", Toast.LENGTH_SHORT).show()
