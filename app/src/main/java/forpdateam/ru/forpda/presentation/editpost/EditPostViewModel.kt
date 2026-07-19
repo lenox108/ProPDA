@@ -178,7 +178,9 @@ class EditPostViewModel @Inject constructor(
     fun clearPersistedDraft() {
         val key = draftKey() ?: return
         draftSaveJob?.cancel()
-        scope.launch { runCatching { postDraftRepository.clear(key) } }
+        // Fire-and-forget на scope репозитория: VM.scope отменяется сразу за router.exit(),
+        // и удаление на нём не успевало выполниться (черновик воскресал при повторном открытии).
+        postDraftRepository.clearFireAndForget(key)
     }
 
     override fun onCleared() {
