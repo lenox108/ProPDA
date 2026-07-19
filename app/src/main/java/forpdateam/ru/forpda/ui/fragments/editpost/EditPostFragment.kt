@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.editpost
 import timber.log.Timber
+import forpdateam.ru.forpda.BuildConfig
 
 import android.app.Activity
 import android.content.Context
@@ -109,6 +110,11 @@ class EditPostFragment : TabFragment() {
     // фокус повторно после восстановления состояния пользователем.
     private var autoFocusedOnOpen = false
 
+    /** Черновик, восстановленный из instance state после смерти процесса (переживает пересоздание). */
+    private var restoredDraftText: String? = null
+    private var restoredDraftSelStart: Int = -1
+    private var restoredDraftSelEnd: Int = -1
+
     private val presenter: EditPostViewModel by viewModels()
 
     override fun topBarSurfaceColorAttr(): Int = R.attr.main_toolbar_accent_surface
@@ -117,6 +123,9 @@ class EditPostFragment : TabFragment() {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) {
             autoFocusedOnOpen = savedInstanceState.getBoolean(STATE_AUTO_FOCUSED_ON_OPEN, false)
+            savedInstanceState.getString(STATE_DRAFT_TEXT, null)?.let { restoredDraftText = it }
+            restoredDraftSelStart = savedInstanceState.getInt(STATE_DRAFT_SEL_START, -1)
+            restoredDraftSelEnd = savedInstanceState.getInt(STATE_DRAFT_SEL_END, -1)
         }
         arguments?.apply {
             val postForm = EditPostForm()
@@ -193,6 +202,20 @@ class EditPostFragment : TabFragment() {
             setDraftToPanels(message)
             applyInitialSelectionToPanels(message.length)
             pendingInitialMessage = null
+        }
+        // Восстановление черновика после смерти процесса имеет приоритет над текстом из args:
+        // это последняя редакция пользователя. Ставим до presenter.start(), чтобы merge формы
+        // редактирования (messageFromView) и preserve нового поста увидели актуальный текст.
+        restoredDraftText?.let { restored ->
+            setDraftToPanels(restored)
+            val len = restored.length
+            val s = restoredDraftSelStart.takeIf { it in 0..len } ?: len
+            val e = restoredDraftSelEnd.takeIf { it in 0..len } ?: len
+            fullPanel.messageField.setSelection(minOf(s, e), maxOf(s, e))
+            compactPanel.messageField.setSelection(minOf(s, e), maxOf(s, e))
+            pendingFullscreenSelection = intArrayOf(minOf(s, e), maxOf(s, e))
+            pendingInitialMessage = null
+            restoredDraftText = null
         }
         arguments?.apply {
             val title = getString(ARG_THEME_NAME, "")
@@ -301,6 +324,19 @@ class EditPostFragment : TabFragment() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(STATE_AUTO_FOCUSED_ON_OPEN, autoFocusedOnOpen)
+        // Переживание смерти процесса: сохраняем актуальный текст + каретку, иначе onCreate заново
+        // прочитает исходный текст из args и всё, что пользователь дописал, потеряется.
+        if (::fullPanel.isInitialized || ::compactPanel.isInitialized) {
+            val panel = currentPanel()
+            val text = panel?.messageField?.text?.toString()?.ifEmpty { draftContentMirror } ?: draftContentMirror
+            if (text.isNotEmpty()) {
+                outState.putString(STATE_DRAFT_TEXT, text)
+                panel?.messageField?.let {
+                    outState.putInt(STATE_DRAFT_SEL_START, it.selectionStart)
+                    outState.putInt(STATE_DRAFT_SEL_END, it.selectionEnd)
+                }
+            }
+        }
     }
 
     override fun onResumeOrShow() {
@@ -415,6 +451,7 @@ class EditPostFragment : TabFragment() {
             is EditPostUiEvent.OnAttachmentDeleteProgressFinished -> onAttachmentDeleteProgressFinished()
             is EditPostUiEvent.ShowReasonDialog -> showReasonDialog(event.form)
             is EditPostUiEvent.SendMessage -> sendMessage()
+            is EditPostUiEvent.SetSendProgress -> setSendRefreshing(event.active)
         }
     }
 
@@ -738,6 +775,9 @@ class EditPostFragment : TabFragment() {
             "copyState fromCompact=${from === compactPanel} toFull=${to === fullPanel} fieldLen=${fieldText.length} appliedLen=${text.length} hasOverride=${messageTextOverride != null}"
         )
         to.setText(text)
+        // Перенос текста между панелями — программный, не событие пользователя: чистим историю
+        // целевого поля, чтобы undo не откатывал к прежнему (пустому) содержимому панели.
+        (to.messageField as? CodeEditor)?.clearUndoHistory()
         val len = text.length
         var selStart = from.messageField.selectionStart
         var selEnd = from.messageField.selectionEnd
@@ -798,7 +838,10 @@ class EditPostFragment : TabFragment() {
         if (expandingToFull) {
             syncDraftCompactToFull()
         } else {
-            copyMessageEditorState(from, to)
+            // Симметрично expand-направлению: текст берём из зеркала-источника-правды, а не из
+            // сырого поля, которое IME/restartInput могут кратковременно опустошить в момент клика.
+            val resolved = fullPanel.message.ifEmpty { draftContentMirror }
+            copyMessageEditorState(from, to, resolved)
         }
         to.attachmentsPopup?.setAttachments(from.attachmentsPopup?.getAttachments() ?: emptyList())
 
@@ -918,7 +961,7 @@ class EditPostFragment : TabFragment() {
                 (field.hasWindowFocus() || fullPanel.hasWindowFocus() || view?.hasWindowFocus() == true)
 
         val keyboardShowBefore = dimensionsProvider.getDimensions().isKeyboardShow()
-        Timber.d("retry.enter" +
+        if (BuildConfig.DEBUG) Timber.d("retry.enter" +
                 " attempt=$attempt" +
                 " requestId=$requestId" +
                 " readyForIme=$readyForIme" +
@@ -943,7 +986,7 @@ class EditPostFragment : TabFragment() {
             showFullscreenIme(field, useSyntheticTap)
             applyPendingFullscreenSelection(field, length)
             applyFullPanelImeFix()
-            Timber.d("retry.afterShow" +
+            if (BuildConfig.DEBUG) Timber.d("retry.afterShow" +
                     " attempt=$attempt" +
                     " syntheticTap=$useSyntheticTap" +
                     " field.isFocused=${field.isFocused}" +
@@ -1019,8 +1062,10 @@ class EditPostFragment : TabFragment() {
         ViewCompat.getWindowInsetsController(field)?.show(WindowInsetsCompat.Type.ime())
         val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
         imm?.restartInput(field)
+        // SHOW_FORCED (deprecated) на новых Android либо игнорируется, либо оставляет клавиатуру
+        // «прилипшей» после ухода из приложения. SHOW_IMPLICIT + WindowInsetsController достаточно;
+        // повторные попытки обеспечивает retry-цикл requestFullscreenImeAfterExpand().
         imm?.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT)
-        imm?.showSoftInput(field, InputMethodManager.SHOW_FORCED)
     }
 
     private fun dispatchSyntheticEditorTap(field: CodeEditor) {
@@ -1185,6 +1230,10 @@ class EditPostFragment : TabFragment() {
         draftContentMirror = text
         fullPanel.setText(text)
         compactPanel.setText(text)
+        // Программная загрузка черновика/формы — не должна попадать в историю undo,
+        // иначе первое же undo стёрло бы весь загруженный текст.
+        (fullPanel.messageField as? CodeEditor)?.clearUndoHistory()
+        (compactPanel.messageField as? CodeEditor)?.clearUndoHistory()
         Timber.d(
             "destFull len=${fullPanel.message.length}" +
                 " destCompact len=${compactPanel.message.length}" +
@@ -1193,7 +1242,15 @@ class EditPostFragment : TabFragment() {
     }
 
     private fun applyInitialSelectionToPanels(length: Int) {
-        val pending = initialSelectionRange ?: return
+        val pending = initialSelectionRange
+        if (pending == null) {
+            // Явного диапазона нет (типичный кейс — открытие своего поста на правку):
+            // ставим курсор в конец текста, так удобнее продолжать печатать.
+            fullPanel.messageField.setSelection(length)
+            compactPanel.messageField.setSelection(length)
+            pendingFullscreenSelection = intArrayOf(length, length)
+            return
+        }
         var start = pending[0].coerceIn(0, length)
         var end = pending[1].coerceIn(0, length)
         if (end < start) end = start
@@ -1205,7 +1262,10 @@ class EditPostFragment : TabFragment() {
     private fun installDraftMirrorWatchers() {
         val watcher = object : SimpleTextWatcher() {
             override fun afterTextChanged(s: Editable) {
-                draftContentMirror = s.toString()
+                val text = s.toString()
+                draftContentMirror = text
+                // Персистентный черновик ответа (дебаунс в ViewModel; no-op вне TYPE_NEW_POST).
+                presenter.persistDraft(text)
             }
         }
         fullPanel.messageField.addTextChangedListener(watcher)
@@ -1306,14 +1366,22 @@ class EditPostFragment : TabFragment() {
 
     private fun mergeEditorAttachments(primary: List<AttachmentItem>, secondary: List<AttachmentItem>): List<AttachmentItem> {
         val seenIds = mutableSetOf<Int>()
+        val seenMd5 = mutableSetOf<String>()
         val seenTransientPtr = mutableSetOf<Int>()
         val out = ArrayList<AttachmentItem>()
         fun consider(item: AttachmentItem) {
             if (item.id > 0) {
                 if (!seenIds.add(item.id)) return
             } else {
-                val ptr = System.identityHashCode(item)
-                if (!seenTransientPtr.add(ptr)) return
+                // Стабильный ключ по md5, если он уже известен (устойчив к копированию списка между
+                // панелями); identityHashCode — фолбэк для ещё не загруженных элементов без md5.
+                val md5 = item.md5
+                if (!md5.isNullOrEmpty()) {
+                    if (!seenMd5.add(md5)) return
+                } else {
+                    val ptr = System.identityHashCode(item)
+                    if (!seenTransientPtr.add(ptr)) return
+                }
             }
             out.add(item)
         }
@@ -1410,6 +1478,9 @@ class EditPostFragment : TabFragment() {
         private const val FULLSCREEN_IME_SYNTHETIC_TAP_ATTEMPT = 2
         private val FULLSCREEN_IME_RETRY_DELAYS_MS = longArrayOf(80L, 120L, 180L, 220L, 200L)
         private const val STATE_AUTO_FOCUSED_ON_OPEN = "edit_post_auto_focused_on_open"
+        private const val STATE_DRAFT_TEXT = "edit_post_draft_text"
+        private const val STATE_DRAFT_SEL_START = "edit_post_draft_sel_start"
+        private const val STATE_DRAFT_SEL_END = "edit_post_draft_sel_end"
 
         fun fillArguments(
             args: Bundle,

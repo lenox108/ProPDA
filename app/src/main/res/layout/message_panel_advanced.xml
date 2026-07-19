@@ -34,7 +34,7 @@
             android:layout_width="match_parent"
             android:layout_height="@dimen/dp48"
             android:layout_toEndOf="@+id/sheet_keyboard_button"
-            android:layout_toStartOf="@+id/delete_button"
+            android:layout_toStartOf="@+id/undo_button"
             android:background="@android:color/transparent"
             android:clipToPadding="true"
             app:layout_collapseMode="pin"
@@ -46,6 +46,24 @@
             app:tabSelectedTextColor="?attr/colorOnSurface"
             app:tabTextAppearance="@style/MessagePanelAdvancedTabText"
             app:tabTextColor="?attr/colorOnSurfaceVariant"/>
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/undo_button"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp48"
+            android:layout_toStartOf="@+id/redo_button"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/msg_panel_undo"
+            app:srcCompat="@drawable/ic_editor_undo" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/redo_button"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp48"
+            android:layout_toStartOf="@+id/delete_button"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/msg_panel_redo"
+            app:srcCompat="@drawable/ic_editor_redo" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/delete_button"

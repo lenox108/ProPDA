@@ -29,6 +29,9 @@ import forpdateam.ru.forpda.entity.db.qms.QmsThemeDao
 import forpdateam.ru.forpda.entity.db.qms.QmsThemesDao
 import forpdateam.ru.forpda.entity.db.readboundary.TopicReadBoundaryDao
 import forpdateam.ru.forpda.entity.db.readboundary.TopicReadBoundaryDatabase
+import forpdateam.ru.forpda.entity.db.draft.PostDraftDao
+import forpdateam.ru.forpda.entity.db.draft.PostDraftDatabase
+import forpdateam.ru.forpda.model.repository.draft.PostDraftRepository
 import androidx.room.Room
 import forpdateam.ru.forpda.model.data.providers.UserSourceProvider
 import forpdateam.ru.forpda.model.data.remote.IWebClient
@@ -124,6 +127,22 @@ object DataModule {
     @Provides @Singleton
     fun provideTopicReadBoundaryDao(database: TopicReadBoundaryDatabase): TopicReadBoundaryDao =
         database.topicReadBoundaryDao()
+
+    @Provides @Singleton
+    fun providePostDraftDatabase(@ApplicationContext context: Context): PostDraftDatabase {
+        return Room.databaseBuilder(
+            context,
+            PostDraftDatabase::class.java,
+            "post_draft_database"
+        ).build()
+    }
+
+    @Provides @Singleton
+    fun providePostDraftDao(database: PostDraftDatabase): PostDraftDao =
+        database.postDraftDao()
+
+    @Provides @Singleton
+    fun providePostDraftRepository(dao: PostDraftDao) = PostDraftRepository(dao)
 
     @Provides @Singleton
     fun provideNoteItemDao(database: AppDatabase): NoteItemDao = database.noteItemDao()

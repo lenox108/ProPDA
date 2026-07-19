@@ -212,6 +212,8 @@
     <string name="msg_panel_advanced_bbcode_desc">BBCode и смайлы: теги как при цитировании</string>
     <string name="msg_panel_clear_message">Очистить текст</string>
     <string name="msg_panel_delete_last_char">Удалить последний символ</string>
+    <string name="msg_panel_undo">Отменить</string>
+    <string name="msg_panel_redo">Повторить</string>
     <string name="msg_panel_preview">Предпросмотр</string>
     <string name="msg_panel_preview_empty">Введите текст для предпросмотра</string>
     <string name="msg_panel_preview_note">Локальный предпросмотр: часть редких BBCode может отличаться от сайта.</string>

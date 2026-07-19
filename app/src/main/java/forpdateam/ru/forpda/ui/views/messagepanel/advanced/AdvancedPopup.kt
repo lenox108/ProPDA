@@ -84,6 +84,25 @@ class AdvancedPopup(
             }
         }
 
+        // Undo/redo редактора: доступность кнопок отражает наличие истории.
+        val updateUndoRedoEnabled = {
+            val field = messagePanel.messageField
+            binding.undoButton.isEnabled = field.canUndo()
+            binding.undoButton.alpha = if (field.canUndo()) 1f else 0.4f
+            binding.redoButton.isEnabled = field.canRedo()
+            binding.redoButton.alpha = if (field.canRedo()) 1f else 0.4f
+        }
+        binding.undoButton.setOnClickListener {
+            messagePanel.messageField.undo()
+            updateUndoRedoEnabled()
+        }
+        binding.redoButton.setOnClickListener {
+            messagePanel.messageField.redo()
+            updateUndoRedoEnabled()
+        }
+        messagePanel.messageField.onUndoStateChanged = { updateUndoRedoEnabled() }
+        updateUndoRedoEnabled()
+
         binding.deleteButton.setOnClickListener {
             val messageField = messagePanel.messageField
             val selectionStart = messageField?.selectionStart ?: 0
@@ -734,6 +753,7 @@ class AdvancedPopup(
 
     fun onDestroy() {
         hidePopup()
+        messagePanel.messageField.onUndoStateChanged = null
         scope.cancel()
         // Cancel all pending postDelayed/post Runnables (keyboard retry, compact open retry, etc.)
         messagePanel.handler?.removeCallbacksAndMessages(null)
