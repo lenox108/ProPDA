@@ -70,6 +70,7 @@ class ContentController(
     }
 
     fun startRefreshing() {
+        android.util.Log.i("FPDA_SPIN", "CC.start firstLoad=$firstLoad", Throwable("startTrace"))
         if (firstLoad) {
             mainContent?.visibility = View.INVISIBLE
             additionalRefresh?.visibility = View.VISIBLE
@@ -79,6 +80,7 @@ class ContentController(
     }
 
     fun stopRefreshing() {
+        android.util.Log.i("FPDA_SPIN", "CC.stop firstLoad=$firstLoad", Throwable("stopTrace"))
         if (firstLoad) {
             mainContent?.visibility = View.VISIBLE
             additionalRefresh?.visibility = View.GONE
