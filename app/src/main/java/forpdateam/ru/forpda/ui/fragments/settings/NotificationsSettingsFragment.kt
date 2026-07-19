@@ -208,11 +208,37 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     private fun configureChannelLink(key: String, channelId: String) {
         val preference = preferenceScreen.findPreference<Preference>(key) ?: return
         preference.isVisible = true
-        preference.summary = getString(R.string.pref_summary_channel_settings)
+        preference.summary = channelSummary(channelId)
         preference.setOnPreferenceClickListener {
             openAndroidChannelSettings(channelId)
             true
         }
+    }
+
+    /**
+     * Выключенный в Android канал — тихая потеря: notify() на него молча ничего не показывает.
+     * Показываем это прямо в строке канала, чтобы «не приходят уведомления» находилось глазами.
+     */
+    private fun channelSummary(channelId: String): String {
+        val context = context ?: return getString(R.string.pref_summary_channel_settings)
+        val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        val channel = manager?.getNotificationChannel(channelId)
+        return if (channel != null && channel.importance == android.app.NotificationManager.IMPORTANCE_NONE) {
+            getString(R.string.pref_summary_channel_disabled)
+        } else {
+            getString(R.string.pref_summary_channel_settings)
+        }
+    }
+
+    private fun updateChannelSummaries() {
+        preferenceScreen.findPreference<Preference>("notifications.system.channel.qms")
+                ?.summary = channelSummary(NotificationsService.CHANNEL_QMS_ID)
+        preferenceScreen.findPreference<Preference>("notifications.system.channel.mentions")
+                ?.summary = channelSummary(NotificationsService.CHANNEL_MENTION_ID)
+        preferenceScreen.findPreference<Preference>("notifications.system.channel.favorites")
+                ?.summary = channelSummary(NotificationsService.CHANNEL_FAV_ID)
+        preferenceScreen.findPreference<Preference>("notifications.system.channel.downloads")
+                ?.summary = channelSummary(DownloadNotifications.CHANNEL_ID)
     }
 
     private fun updateVersionAwareUi() {
@@ -220,6 +246,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         updatePermissionWarning()
         updateBatteryOptimizationSummary()
         updateBgStalledWarning()
+        updateChannelSummaries()
     }
 
     private var bgStalledWarningPreference: Preference? = null

@@ -991,6 +991,7 @@
     <string name="pref_summary_post_notifications_denied">Разрешите уведомления в системных настройках Android, иначе QMS, ответы и избранное не появятся в шторке.</string>
     <string name="notification_foreground_channel_name">Служебный канал</string>
     <string name="pref_summary_channel_settings">Звук, вибрация, важность и показ на экране</string>
+    <string name="pref_summary_channel_disabled">⚠ Канал выключен в Android — уведомления этого типа не показываются. Нажмите и включите.</string>
     <string name="pref_title_channel_qms">Канал: QMS</string>
     <string name="pref_title_channel_mentions">Канал: ответы и упоминания</string>
     <string name="pref_title_channel_favorites">Канал: избранное</string>

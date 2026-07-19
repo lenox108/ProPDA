@@ -85,6 +85,7 @@ object NotificationPublisher {
         NotificationActions.apply(context, builder, event)
 
         if (!canNotify(context, event.notificationLogCategory())) return null
+        logIfChannelDisabled(context, channelId)
         val manager = NotificationManagerCompat.from(context)
         val notifyId = event.notifyId()
         manager.notify(notifyId, builder.build())
@@ -134,6 +135,7 @@ object NotificationPublisher {
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
 
         if (!canNotify(context, "stacked")) return null
+        logIfChannelDisabled(context, channelId)
         val manager = NotificationManagerCompat.from(context)
         manager.notify(notifyId, builder.build())
         Log.i(NOTIFICATIONS_LOG_TAG, "Published stacked ${first.notificationLogCategory()} notification, count=${events.size}")
@@ -145,13 +147,30 @@ object NotificationPublisher {
                 context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                 != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             Log.w(NOTIFICATIONS_LOG_TAG, "Skip $category notification: POST_NOTIFICATIONS denied")
+            NotifDiagLog.log(context, "publish blocked: no POST_NOTIFICATIONS permission")
             return false
         }
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
             Log.w(NOTIFICATIONS_LOG_TAG, "Skip $category notification: disabled by system")
+            NotifDiagLog.log(context, "publish blocked: notifications disabled in Android")
             return false
         }
         return true
+    }
+
+    /**
+     * Канал, выключенный пользователем в системных настройках, — самая коварная потеря:
+     * notify() на него МОЛЧА не показывает ничего, и наша диагностика рапортовала
+     * «published=N» как успех. Ловим и пишем в журнал; уведомление всё равно публикуем —
+     * если пользователь включит канал обратно, часть уведомлений ещё может быть жива.
+     */
+    private fun logIfChannelDisabled(context: Context, channelId: String) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val channel = manager.getNotificationChannel(channelId) ?: return
+        if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
+            Log.w(NOTIFICATIONS_LOG_TAG, "Channel $channelId is disabled by user")
+            NotifDiagLog.log(context, "publish blocked: channel $channelId disabled in Android")
+        }
     }
 
     fun cancel(context: Context, event: NotificationEvent) {
