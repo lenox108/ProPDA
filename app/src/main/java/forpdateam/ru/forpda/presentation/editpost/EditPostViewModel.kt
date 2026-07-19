@@ -16,6 +16,7 @@ import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.entity.app.profile.IUserHolder
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
+import forpdateam.ru.forpda.model.repository.draft.PostDraftRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.posteditor.PostEditorRepository
 import forpdateam.ru.forpda.presentation.IErrorHandler
@@ -39,6 +40,8 @@ private const val EDIT_POST_DIAG = "ForPDA.EditPost"
 
 private const val EDIT_LOAD_SAFETY_MS = 72_000L
 
+private const val DRAFT_SAVE_DEBOUNCE_MS = 600L
+
 private class EditLoadState {
     var form: EditPostForm? = null
     var formDone = false
@@ -51,6 +54,7 @@ class EditPostViewModel @Inject constructor(
         private val editorRepository: PostEditorRepository,
         private val themeTemplate: ThemeTemplate,
         private val router: TabRouter,
+        private val postDraftRepository: PostDraftRepository,
         private val favoritesRepository: FavoritesRepository,
         private val authHolder: AuthHolder,
         private val userHolder: IUserHolder,
@@ -69,6 +73,12 @@ class EditPostViewModel @Inject constructor(
     private var editSessionBaselineAttachmentIds: Set<Int>? = null
 
     private var uploadJob: Job? = null
+
+    /** In-flight отправка поста. Пока Job активен — повторные клики «Отправить» игнорируются (защита от дубля поста). */
+    private var sendJob: Job? = null
+
+    /** Дебаунс-сохранение персистентного черновика (только TYPE_NEW_POST). */
+    private var draftSaveJob: Job? = null
 
     private var messageFromView: (() -> String)? = null
 
@@ -132,8 +142,43 @@ class EditPostViewModel @Inject constructor(
             }
             loadForm(keepWarmPrefill = snap != null)
         } else {
-            scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
+            scope.launch {
+                // Восстановление персистентного черновика: только если из темы не пришёл явный текст
+                // (цитата/ответ). Ключ по topicId — «недописанный ответ» переживает перезапуск приложения.
+                if (postForm.message.isEmpty()) {
+                    draftKey()?.let { key ->
+                        runCatching { postDraftRepository.load(key) }.getOrNull()?.let { saved ->
+                            postForm.message = saved
+                        }
+                    }
+                }
+                emitEvent(EditPostUiEvent.ShowForm(postForm))
+            }
         }
+    }
+
+    private fun draftKey(): String? =
+        if (postForm.type == EditPostForm.TYPE_NEW_POST && postForm.topicId > 0) {
+            PostDraftRepository.topicKey(postForm.topicId)
+        } else {
+            null
+        }
+
+    /** Дебаунс-сохранение черновика (вызывается из View на каждое изменение текста). */
+    fun persistDraft(message: String) {
+        val key = draftKey() ?: return
+        draftSaveJob?.cancel()
+        draftSaveJob = scope.launch {
+            kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
+            runCatching { postDraftRepository.save(key, message.trim(), System.currentTimeMillis()) }
+        }
+    }
+
+    /** Убрать персистентный черновик (после успешной отправки / осознанного выхода / синка в тему). */
+    fun clearPersistedDraft() {
+        val key = draftKey() ?: return
+        draftSaveJob?.cancel()
+        scope.launch { runCatching { postDraftRepository.clear(key) } }
     }
 
     override fun onCleared() {
@@ -165,12 +210,19 @@ class EditPostViewModel @Inject constructor(
     }
 
     fun sendMessage(message: String, attachments: List<AttachmentItem>) {
+        // Защита от повторной отправки: на медленной сети пользователь не видит реакции и жмёт
+        // «Отправить» повторно — без гарда каждый клик уходил отдельным sendPost и IPB создавал дубль.
+        if (sendJob?.isActive == true) {
+            Timber.d("sendMessage ignored: send already in progress")
+            return
+        }
         postForm.message = message
         postForm.attachments.clear()
         for (item in attachments) {
             postForm.addAttachment(item)
         }
-        scope.launch {
+        sendJob = scope.launch {
+            scope.launch { emitEvent(EditPostUiEvent.SetSendProgress(true)) }
             val sentAtMillis = System.currentTimeMillis()
             runCatching {
                 val page = editorRepository.sendPost(postForm)
@@ -200,8 +252,12 @@ class EditPostViewModel @Inject constructor(
                     mapped.anchorPostId = postForm.postId.toString()
                     themeTemplate.mapEntity(mapped)
                 }
+                clearPersistedDraft()
                 scope.launch { emitEvent(EditPostUiEvent.OnPostSend(mapped, postForm)) }
             }.onFailure {
+                // Ошибка отправки — снимаем прогресс и разблокируем кнопку для повторной попытки.
+                // (При успехе экран закрывается через OnPostSend, отдельно прогресс гасить не нужно.)
+                scope.launch { emitEvent(EditPostUiEvent.SetSendProgress(false)) }
                 errorHandler.handle(it)
             }
         }
@@ -377,6 +433,10 @@ class EditPostViewModel @Inject constructor(
     }
 
     fun exit() {
+        // Осознанный выход (в т.ч. discard непустого черновика) — убираем персистентную копию.
+        // Синк обратно в тему (exitWithSync) НЕ чистит: текст остаётся жить в панели темы,
+        // а БД служит бэкапом на случай последующего аварийного завершения.
+        clearPersistedDraft()
         router.exit()
     }
 
@@ -405,4 +465,5 @@ sealed class EditPostUiEvent {
     object OnAttachmentDeleteProgressFinished : EditPostUiEvent()
     data class ShowReasonDialog(val form: EditPostForm) : EditPostUiEvent()
     object SendMessage : EditPostUiEvent()
+    data class SetSendProgress(val active: Boolean) : EditPostUiEvent()
 }

@@ -13,6 +13,7 @@ import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.view.ActionMode
+import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
@@ -52,6 +53,30 @@ class CodeEditor @JvmOverloads constructor(
     private var initialPosition: Int = 0
     private val newCheck: Int = 100
     private var insertionActionModeActive: Boolean = false
+
+    // --- Undo/redo ---
+    private data class EditOp(val start: Int, val before: CharSequence, val after: CharSequence)
+    private val undoStack = ArrayDeque<EditOp>()
+    private val redoStack = ArrayDeque<EditOp>()
+    /** Пока true — правки от undo()/redo() не пишутся обратно в стек. */
+    private var undoRedoInProgress = false
+    private var pendingUndoStart = 0
+    private var pendingUndoBefore: CharSequence = ""
+    /** Последняя правка была посимвольным набором — для склейки подряд идущих вставок в одну операцию. */
+    private var lastEditWasTyping = false
+    /** Колбэк для UI (кнопки undo/redo): вызывается при любом изменении доступности истории. */
+    var onUndoStateChanged: (() -> Unit)? = null
+
+    fun canUndo(): Boolean = undoStack.isNotEmpty()
+    fun canRedo(): Boolean = redoStack.isNotEmpty()
+
+    /** Сбросить историю (после программной загрузки черновика — чтобы undo не стирал весь текст). */
+    fun clearUndoHistory() {
+        undoStack.clear()
+        redoStack.clear()
+        lastEditWasTyping = false
+        onUndoStateChanged?.invoke()
+    }
 
     private val insertionActionModeCallback = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
@@ -105,6 +130,58 @@ class CodeEditor @JvmOverloads constructor(
         highlightWithoutChange(text ?: return)
     }
 
+    private fun recordEdit(start: Int, before: CharSequence, after: CharSequence) {
+        if (before.isEmpty() && after.isEmpty()) return
+        redoStack.clear()
+        val last = undoStack.lastOrNull()
+        // Склейка: подряд идущий набор одиночных символов (не перевод строки) — одна операция undo,
+        // иначе undo откатывал бы по одной букве.
+        val isTyping = before.isEmpty() && after.length == 1 && after[0] != '\n'
+        if (isTyping && lastEditWasTyping && last != null &&
+            last.before.isEmpty() && last.start + last.after.length == start
+        ) {
+            undoStack[undoStack.lastIndex] = last.copy(after = last.after.toString() + after)
+        } else {
+            if (undoStack.size >= MAX_UNDO_OPS) undoStack.removeFirst()
+            undoStack.addLast(EditOp(start, before, after))
+        }
+        lastEditWasTyping = isTyping
+        onUndoStateChanged?.invoke()
+    }
+
+    fun undo() {
+        val op = undoStack.removeLastOrNull() ?: return
+        applyUndoRedo(op.start, op.after.length, op.before)
+        redoStack.addLast(op)
+        lastEditWasTyping = false
+        onUndoStateChanged?.invoke()
+        updateHighlighting()
+    }
+
+    fun redo() {
+        val op = redoStack.removeLastOrNull() ?: return
+        applyUndoRedo(op.start, op.before.length, op.after)
+        undoStack.addLast(op)
+        lastEditWasTyping = false
+        onUndoStateChanged?.invoke()
+        updateHighlighting()
+    }
+
+    /** Заменяет [replaceLen] символов начиная с [start] на [replacement], не записывая правку в историю. */
+    private fun applyUndoRedo(start: Int, replaceLen: Int, replacement: CharSequence) {
+        val e = text ?: return
+        val s = start.coerceIn(0, e.length)
+        val end = (start + replaceLen).coerceIn(s, e.length)
+        undoRedoInProgress = true
+        try {
+            e.replace(s, end, replacement)
+            setSelection((s + replacement.length).coerceIn(0, text?.length ?: 0))
+        } catch (_: Throwable) {
+        } finally {
+            undoRedoInProgress = false
+        }
+    }
+
     fun restartCursorBlink() {
         if (!isAttachedToWindow) return
         if (!isFocused) return
@@ -130,6 +207,24 @@ class CodeEditor @JvmOverloads constructor(
             }
         })
 
+        // Отдельный watcher для истории undo/redo: захватывает заменённый фрагмент (before) и
+        // вставленный (after). Правки от самих undo()/redo() пропускаются (undoRedoInProgress).
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {
+                if (undoRedoInProgress) return
+                pendingUndoStart = start
+                pendingUndoBefore = if (count > 0) s.subSequence(start, start + count).toString() else ""
+            }
+
+            override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+                if (undoRedoInProgress) return
+                val after = if (count > 0) s.subSequence(start, start + count).toString() else ""
+                recordEdit(pendingUndoStart, pendingUndoBefore, after)
+            }
+
+            override fun afterTextChanged(e: Editable) {}
+        })
+
         setSyntaxColors()
         setUpdateDelay(500)
         customInsertionActionModeCallback = insertionActionModeCallback
@@ -139,7 +234,15 @@ class CodeEditor @JvmOverloads constructor(
     private fun smartUpdateHighlighting() {
         cancelUpdate()
         if (!modified) return
-        updateHandler.postDelayed(updateRunnable, updateDelay.toLong())
+        // Адаптивный дебаунс: на коротком тексте подсветка почти мгновенная, на длинном — реже,
+        // чтобы регекс-проход не дёргался на каждый символ. updateDelay остаётся потолком.
+        val len = text?.length ?: 0
+        val delay = when {
+            len < 2000 -> 120L
+            len < 8000 -> 300L
+            else -> updateDelay.toLong()
+        }
+        updateHandler.postDelayed(updateRunnable, delay)
     }
 
     private fun setSyntaxColors() {
@@ -162,12 +265,13 @@ class CodeEditor @JvmOverloads constructor(
     private fun highlight(e: Editable): Editable {
         val time = System.currentTimeMillis()
         try {
-            clearSpans(e)
+            if (e.isEmpty()) {
+                clearSpans(e, 0, 0)
+                return e
+            }
 
-            if (e.isEmpty()) return e
-
-            val visibleStart: Int
-            val visibleEnd: Int
+            var visibleStart: Int
+            var visibleEnd: Int
             if (scrollView == null || e.length <= FULL_BB_HIGHLIGHT_MAX_CHARS) {
                 visibleStart = 0
                 visibleEnd = e.length
@@ -176,7 +280,19 @@ class CodeEditor @JvmOverloads constructor(
                 val scrollViewHeight = scrollView!!.height
                 visibleStart = getOffsetForPosition(0f, scrollY.toFloat())
                 visibleEnd = getOffsetForPosition(0f, (scrollY + scrollViewHeight).toFloat())
+                // Расширяем окно до границ строк: иначе BBCode-тег на кромке окна красится наполовину.
+                layout?.let { l ->
+                    visibleStart = l.getLineStart(l.getLineForOffset(visibleStart.coerceIn(0, e.length)))
+                    visibleEnd = l.getLineEnd(l.getLineForOffset(visibleEnd.coerceIn(0, e.length)))
+                }
+                visibleStart = visibleStart.coerceIn(0, e.length)
+                visibleEnd = visibleEnd.coerceIn(visibleStart, e.length)
             }
+
+            // Снимаем спаны ТОЛЬКО в перекрашиваемом окне: при частичной подсветке (длинный текст)
+            // полный clearSpans гасил offscreen-подсветку, и она исчезала после первой правки,
+            // возвращаясь лишь после остановки скролла. Для короткого текста окно = весь текст.
+            clearSpans(e, visibleStart, visibleEnd)
 
             val hlText = e.subSequence(visibleStart, visibleEnd)
 
@@ -270,14 +386,34 @@ class CodeEditor @JvmOverloads constructor(
         return e
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Аппаратная/BT-клавиатура: Ctrl+Z — undo, Ctrl+Y или Ctrl+Shift+Z — redo.
+        if (event.isCtrlPressed) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_Z -> {
+                    if (event.isShiftPressed) redo() else undo()
+                    return true
+                }
+                KeyEvent.KEYCODE_Y -> {
+                    redo()
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     companion object {
         private const val FULL_BB_HIGHLIGHT_MAX_CHARS = 16384
+        private const val MAX_UNDO_OPS = 200
 
-        private fun clearSpans(e: Editable) {
-            e.getSpans(0, e.length, ForegroundColorSpan::class.java).forEach { span ->
+        private fun clearSpans(e: Editable, start: Int, end: Int) {
+            val s = start.coerceIn(0, e.length)
+            val en = end.coerceIn(s, e.length)
+            e.getSpans(s, en, ForegroundColorSpan::class.java).forEach { span ->
                 e.removeSpan(span)
             }
-            e.getSpans(0, e.length, BackgroundColorSpan::class.java).forEach { span ->
+            e.getSpans(s, en, BackgroundColorSpan::class.java).forEach { span ->
                 e.removeSpan(span)
             }
         }

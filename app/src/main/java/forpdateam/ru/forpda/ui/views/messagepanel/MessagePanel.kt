@@ -42,7 +42,6 @@ import forpdateam.ru.forpda.ui.views.CodeEditor
 import forpdateam.ru.forpda.ui.views.messagepanel.advanced.AdvancedPopup
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
 import forpdateam.ru.forpda.common.bbcode.BbcodePreviewRenderer
-import forpdateam.ru.forpda.common.bbcode.BbcodeWrap
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -426,6 +425,11 @@ class MessagePanel(
     fun setText(text: String?) {
         messageField?.setText(text)
     }
+
+    /** Помещает курсор в конец текста — удобно при открытии поста на правку. */
+    fun moveCursorToEnd() {
+        messageField?.let { it.setSelection(it.text?.length ?: 0) }
+    }
     
     fun insertText(text: String): Boolean = insertText(text, null)
     
@@ -468,23 +472,38 @@ class MessagePanel(
         show()
         val field = messageField
         val editable = field.text ?: return false
-        val currentText = editable.toString()
+        val len = editable.length
 
-        val result = BbcodeWrap.wrap(
-            text = currentText,
-            selectionStart = selectionStart,
-            selectionEnd = selectionEnd,
-            open = startText,
-            close = endText.orEmpty(),
-            keepSelection = endText != null,
-            placeCursorInsideIfEmpty = selectionInside
-        )
+        // Точечная вставка вместо editable.replace(0, length, wholeText): на длинном посте полная
+        // замена буфера = полный re-layout, сброс composing-состояния IME и лишний прогон подсветки.
+        // Логика совпадает с BbcodeWrap.wrap (её оставляем как pure-функцию для юнит-тестов).
+        var s = selectionStart.coerceIn(0, len)
+        var e = selectionEnd.coerceIn(0, len)
+        if (e < s) {
+            val t = s; s = e; e = t
+        }
+        val close = endText.orEmpty()
+        val hasSelection = s != e
 
         field.requestFocus()
-        editable.replace(0, editable.length, result.text)
-        field.setSelection(result.selectionStart, result.selectionEnd)
+        if (!hasSelection) {
+            editable.insert(s, startText + close)
+            val cursor = if (selectionInside) s + startText.length else s + startText.length + close.length
+            field.setSelection(cursor.coerceIn(0, editable.length))
+            return false
+        }
 
-        return endText != null && selectionStart != selectionEnd
+        // Вставляем закрывающий тег первым (по большему индексу), чтобы не сдвинуть позицию открывающего.
+        editable.insert(e, close)
+        editable.insert(s, startText)
+        if (endText != null) {
+            // keepSelection: держим выделение на исходном тексте, сдвинутом на длину открывающего тега.
+            field.setSelection(s + startText.length, e + startText.length)
+        } else {
+            val cursor = e + startText.length + close.length
+            field.setSelection(cursor.coerceIn(0, editable.length))
+        }
+        return endText != null
     }
     
     fun getSelectedText(): String {
@@ -598,7 +617,7 @@ class MessagePanel(
     
     fun showKeyboard() {
         val gen = ++keyboardShowGeneration
-        Timber.d(
+        if (BuildConfig.DEBUG) Timber.d(
             IME_TAG,
             "panel.showKeyboard.enter" +
                 " fullForm=$fullForm" +
@@ -644,7 +663,7 @@ class MessagePanel(
 
     private fun requestKeyboard(stage: String = "?") {
         if (!isAttachedToWindow || !messageField.isAttachedToWindow) {
-            Timber.d(
+            if (BuildConfig.DEBUG) Timber.d(
                 IME_TAG,
                 "panel.requestKeyboard.skip" +
                     " stage=$stage" +
@@ -665,7 +684,7 @@ class MessagePanel(
         } catch (t: Throwable) {
             insetsErr = "${t.javaClass.simpleName}: ${t.message}"
         }
-        Timber.d(
+        if (BuildConfig.DEBUG) Timber.d(
             IME_TAG,
             "panel.requestKeyboard" +
                 " stage=$stage" +
