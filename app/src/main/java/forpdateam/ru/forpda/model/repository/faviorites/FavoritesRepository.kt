@@ -479,6 +479,15 @@ class FavoritesRepository(
                     mergeReason = result.reason
             )
             FavoriteReadStateMerge.applyTo(item, result)
+            // Сетевые items парсер создаёт с нулевыми маркерами локального прочтения, а merge переносит
+            // только read-state. Без переноса маркеров из кэша saveFavorites затирал их на КАЖДОМ
+            // сетевом рефреше, и защита от повторного зажигания ([localReadDefeatsStaleInspector],
+            // «cached_read_over_inspector») слепла: следующий пересчёт по устаревшему (CDN-кэш)
+            // инспектору снова метил только что прочитанную тему непрочитанной.
+            if (cached != null && item.localReadPostId <= 0) {
+                item.localReadPostId = cached.localReadPostId
+                item.localReadPostDateMillis = cached.localReadPostDateMillis
+            }
             if (item.readState == FavoriteReadState.UNREAD && inspectorUnread) {
                 val hint = ev?.inspectorUnreadHint() ?: 0
                 if (hint > 0) {
