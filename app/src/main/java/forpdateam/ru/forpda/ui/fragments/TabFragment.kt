@@ -403,6 +403,19 @@ open class TabFragment : Fragment() {
         // view.post: к моменту выполнения фрагмент мог быть уничтожен (_binding=null
         // в onDestroyView) → доступ к fragmentContainer (binding!!) ронял NPE.
         view.post { _binding?.fragmentContainer?.let { ViewCompat.requestApplyInsets(it) } }
+
+        // MainActivity объявляет configChanges="orientation|screenSize", поэтому при повороте
+        // фрагменты не пересоздаются. Горизонтальные инсеты (боковой navbar в landscape при
+        // 3-кнопочной навигации) применялись только в updateDimens по эмиссии dimensionsFlow —
+        // а к моменту поворота dimensionsFlow уже не переэмитит с новыми insets, и справа/слева
+        // остаётся «залипшая» цветная полоса шириной с бывший боковой navbar. Слушатель прямо на
+        // fragmentContainer переприменяет L/R padding из СВЕЖИХ insets при каждом их изменении
+        // (в т.ч. повороте). Подклассы со своим слушателем на fragmentContainer (NativeTopic/EditPost)
+        // вызывают super.onViewCreated раньше и штатно переопределяют этот listener.
+        ViewCompat.setOnApplyWindowInsetsListener(fragmentContainer) { _, insets ->
+            applyHorizontalInsets(insets)
+            insets
+        }
         syncToolbarSpinnerEndSpacer()
     }
 
@@ -451,6 +464,28 @@ open class TabFragment : Fragment() {
             messagePanelHelper?.updateImeInsets(dimensions, messagePanelBaseBottomMargin())
         } else {
             messagePanelHelper?.resetImeInsets()
+        }
+    }
+
+    /**
+     * Боковые (L/R) отступы под системные бары и вырез экрана. Вынесено, чтобы
+     * OnApplyWindowInsetsListener на [fragmentContainer] и [updateDimens] применяли одну и ту же
+     * формулу из одних и тех же insets. Верхний padding fragmentContainer всегда 0 (верхний inset
+     * задаёт activity), поэтому сохраняем текущий top/bottom как есть.
+     */
+    private fun applyHorizontalInsets(insets: WindowInsetsCompat?) {
+        if (_binding == null) return
+        val sys = insets?.getInsets(WindowInsetsCompat.Type.systemBars())
+        val cut = insets?.getInsets(WindowInsetsCompat.Type.displayCutout())
+        val left = max(sys?.left ?: 0, cut?.left ?: 0)
+        val right = max(sys?.right ?: 0, cut?.right ?: 0)
+        if (fragmentContainer.paddingLeft != left || fragmentContainer.paddingRight != right) {
+            fragmentContainer.setPadding(
+                left,
+                fragmentContainer.paddingTop,
+                right,
+                fragmentContainer.paddingBottom
+            )
         }
     }
 
