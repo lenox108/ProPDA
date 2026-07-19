@@ -835,6 +835,66 @@ class FavoritesRepositoryTest {
     }
 
     @Test
+    fun `network refresh preserves local read markers so stale inspector cannot relight`() = runTest {
+        // Жалоба «тема не отмечается прочитанной, пока не зайти второй раз»: сетевые items парсера
+        // приходят с нулевыми localRead*-маркерами, и saveFavorites затирал их на каждом рефреше.
+        // После затирания защита localReadDefeatsStaleInspector слепла, и следующий синтетический
+        // пересчёт по устаревшему (CDN-кэш) инспектору заново зажигал только что прочитанную тему.
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = false).apply {
+                            localReadPostId = 42
+                            localReadPostDateMillis = 300_000L // прочитана локально в t=300s
+                        }
+                )
+        )
+        val sorting = Sorting()
+        val favoritesApi = mockk<FavoritesApi> {
+            // Свежая fav-страница уже отдаёт тему без bold/+N (сервер обработал mark-read GET).
+            every { getFavorites(0, false, sorting, true) } returns favData(
+                    favoriteTopic(favId = 1, topicId = 42, isNew = false, readState = FavoriteReadState.READ)
+            )
+        }
+        val eventsApi = mockk<NotificationEventsApi>(relaxed = true) {
+            every { invalidateFavoritesInspectorCache() } just Runs
+            every { getFavoritesEvents() } returns emptyList()
+        }
+        val repository = createRepository(favoritesCache, favoritesApi = favoritesApi, eventsApi = eventsApi)
+
+        repository.loadFavorites(0, all = false, sorting = sorting, forceRefresh = true)
+
+        val refreshed = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(42, refreshed.localReadPostId)
+        assertEquals(300_000L, refreshed.localReadPostDateMillis)
+
+        // Устаревший инспектор (last_post_ts=200 < localRead=300s) не должен зажечь тему заново.
+        val staleInspector = TabNotification(
+                source = NotificationEvent.Source.THEME,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(NotificationEvent.Type.NEW, NotificationEvent.Source.THEME).apply {
+                    sourceId = -1
+                },
+                isWebSocket = false,
+                loadedEvents = listOf(
+                        themeEvent(
+                                type = NotificationEvent.Type.NEW,
+                                topicId = 42,
+                                msgCount = 1,
+                                timeStamp = 200,
+                                lastTimeStamp = 100
+                        )
+                )
+        )
+        val counter = repository.handleEvent(staleInspector)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(false, item.isNew)
+        assertEquals(FavoriteReadState.READ, item.readState)
+        assertEquals(0, counter)
+    }
+
+    @Test
     fun `inspector recompute still relights a read favorite on genuinely newer activity`() = runTest {
         // Обратная сторона защиты: если inspector показывает пост НОВЕЕ момента локального прочтения
         // (last_post_ts=400 > localRead=300s), тема реально получила новое сообщение — зажигаем.
