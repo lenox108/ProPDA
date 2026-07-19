@@ -247,6 +247,30 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         updateBatteryOptimizationSummary()
         updateBgStalledWarning()
         updateChannelSummaries()
+        updateRealtimeStatus()
+    }
+
+    /**
+     * Честный статус «мгновенного канала» (WebSocket). Полевые кейсы: у части пользователей
+     * сеть/VPN режет ws-соединение — уведомления при этом ДОХОДЯТ (резервный опрос), но с
+     * задержкой, и люди считают «не работает». Теперь приложение объясняет это само.
+     */
+    private fun updateRealtimeStatus() {
+        val preference = preferenceScreen.findPreference<Preference>("notifications.bg.realtime_status") ?: return
+        val repo = (activity?.application as? forpdateam.ru.forpda.App)?.eventsRepository
+        if (repo == null) {
+            preference.isVisible = false
+            return
+        }
+        val sp = preferenceScreen.sharedPreferences
+        val intervalMin = (sp?.getString("notifications.bg.interval_min", null)?.toLongOrNull() ?: 30L)
+                .coerceAtLeast(15L)
+        preference.summary = when {
+            repo.isWebSocketConnected() -> getString(R.string.realtime_status_connected)
+            repo.isWsCoolingDown() -> getString(
+                    R.string.realtime_status_blocked, intervalMin, repo.wsCooldownRemainingMin())
+            else -> getString(R.string.realtime_status_connecting)
+        }
     }
 
     private var bgStalledWarningPreference: Preference? = null

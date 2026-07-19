@@ -107,42 +107,61 @@ class EventsCheckWorker @AssistedInject constructor(
 
         // Дедуп двух триггеров (periodic WorkManager + точный будильник): реальный сетевой
         // проход делает максимум один из них за полуинтервал — иначе двойные пробуждения
-        // удвоили бы сетевые запросы, а событий чаще не становится.
+        // удвоили бы сетевые запросы, а событий чаще не становится. Интервал — эффективный:
+        // «Реже проверять ночью» растягивает его до часа в 00:00–07:00.
         val now = System.currentTimeMillis()
-        val minGapMs = prefs.getBgCheckIntervalMin() * 60_000L / 2
-        val sinceLastCheck = now - prefs.getLastCheckAt()
+        val hourOfDay = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val effectiveIntervalMin = prefs.getEffectiveBgIntervalMin(hourOfDay)
+        val minGapMs = effectiveIntervalMin * 60_000L / 2
+        val prevCheckAt = prefs.getLastCheckAt()
+        val sinceLastCheck = now - prevCheckAt
         if (sinceLastCheck in 0 until minGapMs) {
             Timber.d("EventsCheckWorker: checked ${sinceLastCheck / 1000}s ago, skip")
             NotifDiagLog.log(applicationContext, "worker: skip (checked ${sinceLastCheck / 1000}s ago)")
             return@withContext Result.success()
         }
+        // Слот резервируем сразу (иначе параллельный триггер задвоил бы сеть), но при полном
+        // сетевом фейле вернём назад — см. ниже.
         prefs.setLastCheckAt(now)
 
         NotifDiagLog.log(applicationContext, "worker: run start")
+        // A-фикс: моргнувшая сеть не должна стоить полного интервала тишины. Если НИ ОДИН
+        // сетевой источник не прошёл и хотя бы один упал сетевой ошибкой — возвращаем слот
+        // дедупа и просим WorkManager повторить (экспоненциальный backoff от 30с).
+        var anyNetworkSuccess = false
+        var anyNetworkError = false
+        fun trackFailure(tag: String, e: Throwable) {
+            Timber.e(e, "EventsCheckWorker $tag failed")
+            NotifDiagLog.log(applicationContext, "$tag: error ${e.javaClass.simpleName}")
+            if (e is java.io.IOException) anyNetworkError = true
+        }
         runCatching { checkSource(NotificationEvent.Source.QMS) }
-                .onFailure {
-                    Timber.e(it, "EventsCheckWorker QMS failed")
-                    NotifDiagLog.log(applicationContext, "QMS: error ${it.javaClass.simpleName}")
-                }
+                .onSuccess { touchedNetwork -> if (touchedNetwork) anyNetworkSuccess = true }
+                .onFailure { trackFailure("QMS", it) }
         runCatching { checkSource(NotificationEvent.Source.THEME) }
-                .onFailure {
-                    Timber.e(it, "EventsCheckWorker THEME failed")
-                    NotifDiagLog.log(applicationContext, "THEME: error ${it.javaClass.simpleName}")
-                }
+                .onSuccess { touchedNetwork -> if (touchedNetwork) anyNetworkSuccess = true }
+                .onFailure { trackFailure("THEME", it) }
         runCatching { checkHatVersions() }
                 .onFailure { Timber.e(it, "EventsCheckWorker HAT failed") }
         runCatching { checkMentions() }
-                .onFailure {
-                    Timber.e(it, "EventsCheckWorker mentions failed")
-                    NotifDiagLog.log(applicationContext, "MENTIONS: error ${it.javaClass.simpleName}")
-                }
+                .onSuccess { touchedNetwork -> if (touchedNetwork) anyNetworkSuccess = true }
+                .onFailure { trackFailure("MENTIONS", it) }
 
         // Самовосстановление alarm-цепи: перевзвод живёт в ресивере будильника, но force-stop
         // снимает будильники, и цепь мертва до следующего запуска приложения. Каждый запуск
         // периодического воркера перевзводит будильник заново — пока жив хоть один контур,
         // второй восстанавливается сам. Дёшево: AlarmManager.set — локальный вызов.
         if (prefs.getBgCheckEnabled() && prefs.wantsPushNotifications()) {
-            EventsCheckAlarmScheduler.schedule(applicationContext, prefs.getBgCheckIntervalMin())
+            EventsCheckAlarmScheduler.schedule(applicationContext, effectiveIntervalMin)
+        }
+
+        if (!anyNetworkSuccess && anyNetworkError) {
+            prefs.setLastCheckAt(prevCheckAt)
+            if (runAttemptCount < MAX_NETWORK_RETRY_ATTEMPTS) {
+                NotifDiagLog.log(applicationContext, "worker: network error -> retry (attempt=${runAttemptCount + 1})")
+                return@withContext Result.retry()
+            }
+            NotifDiagLog.log(applicationContext, "worker: network error, giving up until next window")
         }
 
         Result.success()
@@ -163,7 +182,8 @@ class EventsCheckWorker @AssistedInject constructor(
         }
     }
 
-    private fun checkSource(source: NotificationEvent.Source) {
+    /** @return true, если реально сходили в сеть (для A-фикса «retry при сетевом фейле»). */
+    private fun checkSource(source: NotificationEvent.Source): Boolean {
         val channelEnabled = when (source) {
             NotificationEvent.Source.QMS -> prefs.getQmsEnabled()
             NotificationEvent.Source.THEME -> prefs.getFavEnabled()
@@ -171,7 +191,7 @@ class EventsCheckWorker @AssistedInject constructor(
         }
         if (!channelEnabled) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${source.name} background check: category preference disabled")
-            return
+            return false
         }
 
         val saved = when (source) {
@@ -183,13 +203,13 @@ class EventsCheckWorker @AssistedInject constructor(
         val savedEvents = when (source) {
             NotificationEvent.Source.QMS -> eventsApi.getQmsEvents(savedResponse)
             NotificationEvent.Source.THEME -> eventsApi.getFavoritesEvents(savedResponse)
-            else -> return
+            else -> return false
         }
 
         val current = when (source) {
             NotificationEvent.Source.QMS -> eventsApi.getQmsEvents()
             NotificationEvent.Source.THEME -> eventsApi.getFavoritesEvents()
-            else -> return
+            else -> return false
         }
 
         // Найти новые события по timeStamp ДО того, как перезапишем снимок: иначе падение
@@ -210,6 +230,12 @@ class EventsCheckWorker @AssistedInject constructor(
         val notImportantCount = afterMute.size - finalEvents.size
 
         for (event in finalEvents) {
+            // Тема прямо сейчас на экране (foreground с мёртвым сокетом — воркер работает и там):
+            // пуш о том, что пользователь читает в этот момент, — шум.
+            if (source == NotificationEvent.Source.THEME && eventsRepository.isTopicOnScreen(event.sourceId)) {
+                NotifDiagLog.log(appContext, "THEME: skip topic on screen (${event.sourceId})")
+                continue
+            }
             NotificationPublisher.publish(appContext, prefs, event)
         }
         // Разбивка фильтров: published=0 при new>0 иначе не объясняет себя. Теперь видно, что
@@ -227,7 +253,7 @@ class EventsCheckWorker @AssistedInject constructor(
         if (current.isEmpty() && saved.isNotEmpty() && authHolder.get().state != AuthState.AUTH) {
             Timber.w("EventsCheckWorker: empty ${source.name} response while deauthorized, keep snapshot")
             NotifDiagLog.log(appContext, "${source.name}: deauthorized mid-run, snapshot kept")
-            return
+            return true
         }
         val savedSet = current.map { it.sourceEventText.orEmpty() }.toSet()
         when (source) {
@@ -235,12 +261,14 @@ class EventsCheckWorker @AssistedInject constructor(
             NotificationEvent.Source.THEME -> prefs.setDataFavoritesEvents(savedSet)
             else -> Unit
         }
+        return true
     }
 
-    private suspend fun checkMentions() {
+    /** @return true, если реально сходили в сеть (для A-фикса «retry при сетевом фейле»). */
+    private suspend fun checkMentions(): Boolean {
         if (!prefs.getMentionsEnabled()) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip mentions background check: category preference disabled")
-            return
+            return false
         }
 
         val items = mentionsRepository.getMentions(FIRST_PAGE_ST).items
@@ -253,6 +281,11 @@ class EventsCheckWorker @AssistedInject constructor(
 
         for (item in decision.toNotify) {
             val event = MentionNotificationMapper.toNotificationEvent(item) ?: continue
+            // Упоминание в теме, открытой на экране прямо сейчас, — шум (юзер его видит).
+            if (event.fromTheme() && eventsRepository.isTopicOnScreen(event.sourceId)) {
+                NotifDiagLog.log(appContext, "MENTIONS: skip topic on screen (${event.sourceId})")
+                continue
+            }
             NotificationPublisher.publish(
                     appContext,
                     prefs,
@@ -268,6 +301,7 @@ class EventsCheckWorker @AssistedInject constructor(
                 Log.i(NOTIFICATIONS_LOG_TAG, "Seeded ${decision.keysToPersist.size} mention keys without notifying")
             }
         }
+        return true
     }
 
     companion object {
@@ -276,6 +310,8 @@ class EventsCheckWorker @AssistedInject constructor(
         private const val FIRST_PAGE_ST = 0
         /** Щедрый потолок ожидания гидрации куки: Keystore+AES на холодном старте медленных устройств. */
         private const val COOKIE_HYDRATION_TIMEOUT_MS = 10_000L
+        /** Сколько раз повторяем цикл при полном сетевом фейле, прежде чем сдаться до следующего окна. */
+        private const val MAX_NETWORK_RETRY_ATTEMPTS = 2
         const val UNIQUE_NAME = "events_check_periodic"
     }
 }

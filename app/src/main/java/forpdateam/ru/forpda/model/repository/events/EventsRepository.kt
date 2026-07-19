@@ -87,8 +87,11 @@ class EventsRepository(
         /** Столько подряд неудачных WS-подключений — и уходим в кулдаун вместо шторма реконнектов. */
         private const val WS_FAILURE_COOLDOWN_THRESHOLD = 4
 
-        /** Длина кулдауна: одна попытка в 10 минут вместо каждых ~40-70с. Доставку держит воркер. */
-        private const val WS_COOLDOWN_MS = 10 * 60_000L
+        /** Базовый кулдаун; каждый следующий раунд удваивается до потолка. Доставку держит воркер. */
+        private const val WS_COOLDOWN_BASE_MS = 10 * 60_000L
+
+        /** Потолок прогрессивного кулдауна: у вечно заблокированного эндпоинта — попытка в час. */
+        private const val WS_COOLDOWN_MAX_MS = 60 * 60_000L
     }
 
     private val timerPeriod = NOTIFICATION_AGGREGATION_PERIOD_MS
@@ -114,6 +117,33 @@ class EventsRepository(
     private var wsReconnectSuppressedUntil = 0L
     @Volatile
     private var cooldownReconnectScheduled = false
+    /** Номер раунда кулдауна: каждый следующий вдвое длиннее (10→20→40→60 мин, потолок). */
+    @Volatile
+    private var wsCooldownRounds = 0
+
+    /**
+     * Тема, открытая на экране прямо сейчас (0 — никакая). Ведёт [NativeTopicFragment]
+     * (onResume/onPause). Пуш о теме, которую пользователь читает в этот момент, — шум:
+     * и repository-путь (sendNotification), и фоновый воркер глушат такие уведомления.
+     */
+    @Volatile
+    private var viewedTopicId = 0
+
+    fun setViewedTopic(topicId: Int) {
+        if (topicId > 0) viewedTopicId = topicId
+    }
+
+    fun clearViewedTopic(topicId: Int) {
+        if (viewedTopicId == topicId) viewedTopicId = 0
+    }
+
+    fun isTopicOnScreen(topicId: Int): Boolean = topicId > 0 && viewedTopicId == topicId
+
+    // --- Статус «мгновенного канала» для экрана настроек ---
+    fun isWsCoolingDown(): Boolean = SystemClock.elapsedRealtime() < wsReconnectSuppressedUntil
+
+    fun wsCooldownRemainingMin(): Long =
+            ((wsReconnectSuppressedUntil - SystemClock.elapsedRealtime()).coerceAtLeast(0L) + 59_999L) / 60_000L
 
     // Idle-disconnect state (foreground WS). idleDisconnected=true означает, что WS сознательно
     // закрыт из-за бездействия, хотя foregroundRealtimeEnabled ещё true — реконнект делает только
@@ -204,6 +234,7 @@ class EventsRepository(
                 // Реальное подключение состоялось — снимаем circuit breaker.
                 consecutiveWsFailures = 0
                 wsReconnectSuppressedUntil = 0L
+                wsCooldownRounds = 0
                 webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
                 webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
                 // Соединение живо — запускаем/перезапускаем idle-таймер относительно него.
@@ -252,9 +283,15 @@ class EventsRepository(
                 // армим кулдаун: эндпоинт явно недоступен (сеть/DPI/VPN), долбить его бессмысленно.
                 consecutiveWsFailures++
                 if (consecutiveWsFailures == WS_FAILURE_COOLDOWN_THRESHOLD) {
-                    wsReconnectSuppressedUntil = SystemClock.elapsedRealtime() + WS_COOLDOWN_MS
+                    // Прогрессивный кулдаун: 10 → 20 → 40 → 60 (потолок) минут. Счётчик фейлов
+                    // обнуляем — после кулдауна новый раунд считается заново.
+                    val cooldownMs = (WS_COOLDOWN_BASE_MS shl wsCooldownRounds.coerceAtMost(3))
+                            .coerceAtMost(WS_COOLDOWN_MAX_MS)
+                    wsCooldownRounds++
+                    consecutiveWsFailures = 0
+                    wsReconnectSuppressedUntil = SystemClock.elapsedRealtime() + cooldownMs
                     forpdateam.ru.forpda.notifications.NotifDiagLog.log(
-                            application, "ws: cooldown ${WS_COOLDOWN_MS / 60_000}min after $consecutiveWsFailures fails")
+                            application, "ws: cooldown ${cooldownMs / 60_000}min (round=$wsCooldownRounds)")
                 }
                 if (BuildConfig.DEBUG) Timber.d("start onDisconnected")
                 start(checkEvents = false, force = false)
@@ -349,6 +386,7 @@ class EventsRepository(
         // блокировки/выключил VPN), и сокет заслуживает немедленной попытки, а не досиживания кулдауна.
         consecutiveWsFailures = 0
         wsReconnectSuppressedUntil = 0L
+        wsCooldownRounds = 0
         setForegroundRealtimeEnabled(true, "process_start")
     }
 
@@ -833,6 +871,12 @@ class EventsRepository(
         // Per-topic mute (только для тем избранного). Mention из темы тоже глушим.
         if (event.fromTheme() && notificationPreferencesHolder.isTopicMuted(event.sourceId)) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: topic muted")
+            return
+        }
+        // Тема прямо сейчас на экране: пуш о том, что пользователь читает в этот момент, — шум.
+        // fragment снимает метку в onPause, так что сворачивание приложения гейт не задевает.
+        if (event.fromTheme() && isTopicOnScreen(event.sourceId)) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: topic on screen")
             return
         }
         feedMentionUnreadFromEvent(event)

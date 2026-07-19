@@ -433,6 +433,13 @@ class App : Application(), androidx.work.Configuration.Provider {
         // Нижняя граница задана в NotificationDataStore и уже применена геттером; здесь
         // просто читаем, чтобы UI-список и планировщик не расходились.
         val intervalMin = notificationPreferencesHolder.getBgCheckIntervalMin()
+        // Экономия пробуждений: основной точный контур — будильник (пробивает Doze и ходит по
+        // интервалу настроек), а периодический WorkManager — СТРАХОВОЧНЫЙ, на удвоенном
+        // интервале. Раньше оба стояли на одном интервале — два пробуждения процесса за цикл
+        // впустую (сеть и так дедупится по last_check_at, но каждое пробуждение — расход).
+        // Если alarm-цепь порвана (force-stop), периодик её перевзводит в конце doWork —
+        // худший случай задержки 2×интервал разово, дальше цепь чинится.
+        val safetyNetIntervalMin = (intervalMin * 2).coerceAtLeast(30L)
         // Только сеть: батарею намеренно НЕ ограничиваем — при низком заряде проверка
         // всё равно должна идти, иначе уведомления молча пропадают именно тогда, когда
         // пользователь дольше всего не подходит к зарядке.
@@ -440,7 +447,7 @@ class App : Application(), androidx.work.Configuration.Provider {
                 .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
                 .build()
         val req = androidx.work.PeriodicWorkRequestBuilder<forpdateam.ru.forpda.notifications.EventsCheckWorker>(
-                intervalMin, TimeUnit.MINUTES
+                safetyNetIntervalMin, TimeUnit.MINUTES
         )
                 .setConstraints(constraints)
                 .setBackoffCriteria(
@@ -454,13 +461,15 @@ class App : Application(), androidx.work.Configuration.Provider {
                 androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
                 req
         )
-        // Второй контур: точный будильник пробивает Doze там, где OEM откладывает WorkManager.
-        forpdateam.ru.forpda.notifications.EventsCheckAlarmScheduler.schedule(this, intervalMin)
+        // Основной контур: точный будильник по эффективному интервалу (ночной режим учтён).
+        val hourOfDay = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val alarmIntervalMin = notificationPreferencesHolder.getEffectiveBgIntervalMin(hourOfDay)
+        forpdateam.ru.forpda.notifications.EventsCheckAlarmScheduler.schedule(this, alarmIntervalMin)
         // Отметка для самодиагностики в настройках: «работа запланирована с этого момента».
         notificationPreferencesHolder.setBgScheduledAt(System.currentTimeMillis())
-        Timber.d("EventsCheckWorker: scheduled every $intervalMin min")
-        BatteryDebugLogger.logState("EventsCheckWorker", "scheduled", "intervalMin=$intervalMin batteryNotLow=false")
-        forpdateam.ru.forpda.notifications.NotifDiagLog.log(this, "scheduler: scheduled every $intervalMin min (+alarm)")
+        Timber.d("EventsCheckWorker: alarm every $alarmIntervalMin min, safety-net every $safetyNetIntervalMin min")
+        BatteryDebugLogger.logState("EventsCheckWorker", "scheduled", "alarm=$alarmIntervalMin safetyNet=$safetyNetIntervalMin")
+        forpdateam.ru.forpda.notifications.NotifDiagLog.log(this, "scheduler: alarm every $alarmIntervalMin min + safety-net $safetyNetIntervalMin min")
     }
 
     private fun setupAppUpdateCheck() {
