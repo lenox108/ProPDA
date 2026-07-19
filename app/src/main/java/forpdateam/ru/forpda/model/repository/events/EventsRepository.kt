@@ -305,7 +305,8 @@ class EventsRepository(
                 }
                 lastAuth = now
                 if (now && foregroundRealtimeEnabled) {
-                    if (webSocketController.isConnected()) {
+                    // hasActiveSocket: снимаем и «в полёте» попытку со старой авторизацией.
+                    if (webSocketController.hasActiveSocket()) {
                         stop("auth_changed")
                     }
                     if (BuildConfig.DEBUG) Timber.d("start authHolder.observe")
@@ -738,7 +739,9 @@ class EventsRepository(
                 if (webSocketController.isConnected()) {
                     stop("notifications_disabled")
                 }
-            } else if (!webSocketController.isConnected()) {
+            } else if (!webSocketController.hasActiveSocket()) {
+                // hasActiveSocket, а не isConnected: «в полёте» попытку не перезапускаем (иначе
+                // каждый сетевой триггер рвал бы недоподключённый сокет и начинал заново).
                 // Circuit breaker: пока активен кулдаун — не пытаемся подключаться (гасит и backoff,
                 // и force-попытки от флапа сети/рестарта сервиса). Одну попытку планируем на конец
                 // кулдауна, без дублей. Сбрасывается выходом приложения на передний план.
@@ -750,7 +753,7 @@ class EventsRepository(
                         repoScope.launch {
                             delay(wait)
                             cooldownReconnectScheduled = false
-                            if (!webSocketController.isConnected() && foregroundRealtimeEnabled) {
+                            if (!webSocketController.hasActiveSocket() && foregroundRealtimeEnabled) {
                                 start(checkEvents = false, force = true)
                             }
                         }
@@ -762,7 +765,7 @@ class EventsRepository(
                     BatteryDebugLogger.logState("EventsRepository", "reconnectBackoff", "attempt=$reconnectAttempts delayMs=$delayMs")
                     repoScope.launch {
                         delay(delayMs)
-                        if (!webSocketController.isConnected()) {
+                        if (!webSocketController.hasActiveSocket()) {
                             start(checkEvents = false, force = true)
                         }
                     }
