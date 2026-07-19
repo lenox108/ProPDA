@@ -41,8 +41,8 @@
             app:tabGravity="fill"
             app:tabIndicatorColor="?attr/colorAccent"
             app:tabMode="fixed"
-            app:tabPaddingEnd="@dimen/content_spacing"
-            app:tabPaddingStart="@dimen/content_spacing"
+            app:tabPaddingEnd="@dimen/dp2"
+            app:tabPaddingStart="@dimen/dp2"
             app:tabSelectedTextColor="?attr/colorOnSurface"
             app:tabTextAppearance="@style/MessagePanelAdvancedTabText"
             app:tabTextColor="?attr/colorOnSurfaceVariant"/>
