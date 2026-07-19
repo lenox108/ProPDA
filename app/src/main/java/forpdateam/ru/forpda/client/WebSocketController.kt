@@ -100,7 +100,13 @@ class WebSocketController(
         disconnectAll()
         val newId = (1000..16384).random()
         val newWebSocket = webClient.createWebSocketConnection(webSocketListener)
-        val newWebSocketState = WebSocketState(newId, newWebSocket, true)
+        // connected=false до реального onOpen. Раньше здесь стояло true — и isConnected() врал
+        // всё время, пока попытка «в полёте»: при недоступном эндпоинте (DPI/VPN режет ws,
+        // SocketTimeout каждые ~40-70с) сокет считался живым БОЛЬШУЮ ЧАСТЬ времени, хотя не
+        // открылся ни разу. Фоновый воркер верил и скипал проверку — уведомления молча
+        // пропадали (полевой лог: «skip (foreground websocket)» на фоне вечных таймаутов).
+        // Роль «попытка уже идёт, вторую не начинать» теперь играет [hasActiveSocket].
+        val newWebSocketState = WebSocketState(newId, newWebSocket, false)
         synchronized(lock) {
             currentId = newId
             webSockets.add(newWebSocketState)
@@ -134,6 +140,13 @@ class WebSocketController(
             }
         }
     }
+
+    /**
+     * Есть ли текущий сокет вообще — открытый ИЛИ ещё подключающийся. Гейт для
+     * повторного connect(): пока попытка в полёте, вторую не начинаем. В отличие от
+     * [isConnected] (строго после onOpen), ничего не говорит о реальной доставке.
+     */
+    fun hasActiveSocket(): Boolean = synchronized(lock) { currentId != NO_ID }
 
     fun getCurrentId() = synchronized(lock) { currentId }
 
