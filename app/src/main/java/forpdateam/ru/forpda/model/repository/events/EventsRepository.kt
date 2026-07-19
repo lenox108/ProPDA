@@ -83,6 +83,12 @@ class EventsRepository(
          * ([requestRealtimeForScreen]/[isRealtimeScreenActive]) и idle-паузу не получают.
          */
         private const val FOREGROUND_IDLE_TIMEOUT_MS = 5 * 60_000L
+
+        /** Столько подряд неудачных WS-подключений — и уходим в кулдаун вместо шторма реконнектов. */
+        private const val WS_FAILURE_COOLDOWN_THRESHOLD = 4
+
+        /** Длина кулдауна: одна попытка в 10 минут вместо каждых ~40-70с. Доставку держит воркер. */
+        private const val WS_COOLDOWN_MS = 10 * 60_000L
     }
 
     private val timerPeriod = NOTIFICATION_AGGREGATION_PERIOD_MS
@@ -96,6 +102,18 @@ class EventsRepository(
     @Volatile
     private var realtimeScreenRefCount = 0
     private var reconnectAttempts = 0
+
+    // Circuit breaker для недоступного WS-эндпоинта. Полевой лог: SocketTimeoutException каждые
+    // ~40-70с СУТКАМИ, без единого onConnected — сеть/DPI/VPN режет wss://app.4pda.to/ws/, а
+    // приложение зря долбит реконнект (бэкофф сбрасывался флапом сети). Считаем подряд неудачные
+    // подключения (сброс только при реальном onConnected) и после порога уходим в длинный кулдаун —
+    // доставку в это время держит фоновый воркер. Сбрасывается при выходе приложения на передний план.
+    @Volatile
+    private var consecutiveWsFailures = 0
+    @Volatile
+    private var wsReconnectSuppressedUntil = 0L
+    @Volatile
+    private var cooldownReconnectScheduled = false
 
     // Idle-disconnect state (foreground WS). idleDisconnected=true означает, что WS сознательно
     // закрыт из-за бездействия, хотя foregroundRealtimeEnabled ещё true — реконнект делает только
@@ -183,6 +201,9 @@ class EventsRepository(
                 // Без сброса бэкофф рос через весь сеанс: после пары обрывов даже первый сбой
                 // на здоровой сети ждал бы пять минут до переподключения.
                 reconnectAttempts = 0
+                // Реальное подключение состоялось — снимаем circuit breaker.
+                consecutiveWsFailures = 0
+                wsReconnectSuppressedUntil = 0L
                 webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
                 webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
                 // Соединение живо — запускаем/перезапускаем idle-таймер относительно него.
@@ -224,12 +245,19 @@ class EventsRepository(
             }
             // Переподключаемся на ЛЮБОМ обрыве, а не только по таймауту: штатный close-фрейм
             // сервера и обычные для мобильной сети IOException раньше молча убивали realtime
-            // до конца сеанса. Бэкофф и гейт по foreground не дают этому стать штормом.
+            // до конца сеанса. Бэкофф, circuit breaker и гейт по foreground не дают этому стать штормом.
             repoScope.launch {
-                if (foregroundRealtimeEnabled) {
-                    if (BuildConfig.DEBUG) Timber.d("start onDisconnected")
-                    start(checkEvents = false, force = false)
+                if (!foregroundRealtimeEnabled) return@launch
+                // Считаем подряд неудачные подключения (сброс — только в onConnected). После порога
+                // армим кулдаун: эндпоинт явно недоступен (сеть/DPI/VPN), долбить его бессмысленно.
+                consecutiveWsFailures++
+                if (consecutiveWsFailures == WS_FAILURE_COOLDOWN_THRESHOLD) {
+                    wsReconnectSuppressedUntil = SystemClock.elapsedRealtime() + WS_COOLDOWN_MS
+                    forpdateam.ru.forpda.notifications.NotifDiagLog.log(
+                            application, "ws: cooldown ${WS_COOLDOWN_MS / 60_000}min after $consecutiveWsFailures fails")
                 }
+                if (BuildConfig.DEBUG) Timber.d("start onDisconnected")
+                start(checkEvents = false, force = false)
             }
         }
     }
@@ -316,6 +344,10 @@ class EventsRepository(
     fun onAppForegrounded() {
         backgroundGraceJob?.cancel()
         backgroundGraceJob = null
+        // Свежий foreground-сеанс — снимаем circuit breaker: сеть могла смениться (ушёл из зоны
+        // блокировки/выключил VPN), и сокет заслуживает немедленной попытки, а не досиживания кулдауна.
+        consecutiveWsFailures = 0
+        wsReconnectSuppressedUntil = 0L
         setForegroundRealtimeEnabled(true, "process_start")
     }
 
@@ -707,6 +739,24 @@ class EventsRepository(
                     stop("notifications_disabled")
                 }
             } else if (!webSocketController.isConnected()) {
+                // Circuit breaker: пока активен кулдаун — не пытаемся подключаться (гасит и backoff,
+                // и force-попытки от флапа сети/рестарта сервиса). Одну попытку планируем на конец
+                // кулдауна, без дублей. Сбрасывается выходом приложения на передний план.
+                val nowElapsed = SystemClock.elapsedRealtime()
+                if (nowElapsed < wsReconnectSuppressedUntil) {
+                    if (!cooldownReconnectScheduled) {
+                        cooldownReconnectScheduled = true
+                        val wait = wsReconnectSuppressedUntil - nowElapsed
+                        repoScope.launch {
+                            delay(wait)
+                            cooldownReconnectScheduled = false
+                            if (!webSocketController.isConnected() && foregroundRealtimeEnabled) {
+                                start(checkEvents = false, force = true)
+                            }
+                        }
+                    }
+                    return
+                }
                 if (!force && reconnectAttempts > 0) {
                     val delayMs = reconnectBackoffMs()
                     BatteryDebugLogger.logState("EventsRepository", "reconnectBackoff", "attempt=$reconnectAttempts delayMs=$delayMs")
