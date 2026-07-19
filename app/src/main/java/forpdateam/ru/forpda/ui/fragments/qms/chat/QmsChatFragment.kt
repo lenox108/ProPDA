@@ -263,6 +263,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
         messagePanel.addSendOnClickListener { presenter.onSendClick() }
         messagePanel.setClearMessageClickListener { requestClearMessagePanelText() }
+        restoreQmsDraftIntoPanel()
 
         messagePanel.heightChangeListener = MessagePanel.HeightChangeListener {
             keepListPinnedToBottomAfterRelayout()
@@ -881,6 +882,9 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         refreshToolbarMenuItems(true)
         setTitles(data.title.orEmpty(), data.nick.orEmpty())
         updateLoadingIndicator()
+        // themeId к этому моменту гарантированно известен — восстанавливаем черновик, если onViewCreated
+        // сработал раньше его установки (идемпотентно: не перетирает начатый ввод).
+        restoreQmsDraftIntoPanel()
     }
 
     private fun setTitles(title: String, nick: String) {

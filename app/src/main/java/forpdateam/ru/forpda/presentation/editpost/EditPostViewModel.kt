@@ -157,20 +157,33 @@ class EditPostViewModel @Inject constructor(
         }
     }
 
-    private fun draftKey(): String? =
-        if (postForm.type == EditPostForm.TYPE_NEW_POST && postForm.topicId > 0) {
+    /** Чистый серверный текст правки (baseline «грязности»); черновик, равный ему, не сохраняем. */
+    private var editCleanBaseline: String? = null
+
+    /** Загруженный из БД черновик правки — грузим один раз за сессию редактирования. */
+    private var restoredEditDraftLoaded = false
+    private var restoredEditDraft: String? = null
+
+    private fun draftKey(): String? = when {
+        postForm.type == EditPostForm.TYPE_NEW_POST && postForm.topicId > 0 ->
             PostDraftRepository.topicKey(postForm.topicId)
-        } else {
-            null
-        }
+        postForm.type == EditPostForm.TYPE_EDIT_POST && postForm.postId > 0 ->
+            PostDraftRepository.postKey(postForm.postId)
+        else -> null
+    }
 
     /** Дебаунс-сохранение черновика (вызывается из View на каждое изменение текста). */
     fun persistDraft(message: String) {
         val key = draftKey() ?: return
+        // Для правки не храним черновик, равный чистому серверному тексту — иначе в БД оседают
+        // «пустые» правки, которые потом ложно воскресали бы при повторном открытии.
+        val effective = if (postForm.type == EditPostForm.TYPE_EDIT_POST &&
+            message.trim() == editCleanBaseline?.trim()
+        ) "" else message
         draftSaveJob?.cancel()
         draftSaveJob = scope.launch {
             kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
-            runCatching { postDraftRepository.save(key, message.trim(), System.currentTimeMillis()) }
+            runCatching { postDraftRepository.save(key, effective.trim(), System.currentTimeMillis()) }
         }
     }
 
@@ -275,6 +288,9 @@ class EditPostViewModel @Inject constructor(
             try {
                 val form = editorRepository.loadForm(postForm.postId)
                 cancelEditLoadSafetyTimeout()
+                // До первого merge подгружаем сохранённый черновик правки, чтобы он показался
+                // поверх чистого текста уже на первом ShowForm.
+                loadRestoredEditDraftOnce()
                 try {
                     editLoadState.form = form
                     editLoadState.formDone = true
@@ -333,16 +349,24 @@ class EditPostViewModel @Inject constructor(
         val serverAttachments = if (state.attachDone) state.attachments.orEmpty() else emptyList()
 
         postForm.errorCode = EditPostForm.ERROR_NONE
-        val localDraft = messageFromView?.invoke()?.takeIf { it.isNotBlank() } ?: postForm.message
-        val mergedMessage = mergeEditPostMessage(form.message, localDraft)
+        val isEdit = postForm.type == EditPostForm.TYPE_EDIT_POST
+        val mergedMessage = if (isEdit && editCleanBaseline != null) {
+            // Baseline уже зафиксирован (первый merge). Не перемешиваем повторно с полем: туда мог
+            // попасть восстановленный черновик, и он «просочился» бы в чистый серверный текст.
+            editCleanBaseline!!
+        } else {
+            val localDraft = messageFromView?.invoke()?.takeIf { it.isNotBlank() } ?: postForm.message
+            mergeEditPostMessage(form.message, localDraft)
+        }
+        if (isEdit) editCleanBaseline = mergedMessage
         if (state.attachDone) {
             Timber.d(
-                    "loadForm ok postId=%d serverLen=%d prefilledLen=%d mergedLen=%d attachCount=%d mergedPreview=%s",
+                    "loadForm ok postId=%d serverLen=%d mergedLen=%d attachCount=%d restoredDraft=%b mergedPreview=%s",
                     postForm.postId,
                     form.message.length,
-                    localDraft.length,
                     mergedMessage.length,
                     serverAttachments.size,
+                    !restoredEditDraft.isNullOrBlank(),
                     mergedMessage.replace("\r\n", "\n").replace("\n", "↵").take(200)
             )
         }
@@ -360,7 +384,23 @@ class EditPostViewModel @Inject constructor(
             editSessionBaselineAttachmentIds =
                     postForm.attachments.mapNotNull { it.id.takeIf { id -> id > 0 } }.toSet()
         }
+        // Восстановленный из БД черновик правки показываем поверх чистого текста, но только если он
+        // РЕАЛЬНО отличается — иначе ложно пометили бы форму «грязной». baseline остаётся на mergedMessage.
+        postForm.restoredEditDraft = if (isEdit) {
+            restoredEditDraft?.takeIf { it.isNotBlank() && it.trim() != mergedMessage.trim() }
+        } else {
+            null
+        }
         scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
+    }
+
+    /** Один раз за сессию правки грузим сохранённый черновик правки из БД. */
+    private suspend fun loadRestoredEditDraftOnce() {
+        if (restoredEditDraftLoaded) return
+        restoredEditDraftLoaded = true
+        val key = draftKey() ?: return
+        if (postForm.type != EditPostForm.TYPE_EDIT_POST) return
+        restoredEditDraft = runCatching { postDraftRepository.load(key) }.getOrNull()
     }
 
     fun uploadFiles(files: List<RequestFile>, pending: List<AttachmentItem>) {

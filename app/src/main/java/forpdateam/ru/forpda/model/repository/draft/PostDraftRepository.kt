@@ -42,5 +42,6 @@ class PostDraftRepository(
 
     companion object {
         fun topicKey(topicId: Int): String = "topic:$topicId"
+        fun postKey(postId: Int): String = "post:$postId"
     }
 }
