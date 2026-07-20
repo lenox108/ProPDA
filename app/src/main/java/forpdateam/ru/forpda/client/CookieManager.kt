@@ -108,6 +108,14 @@ class CookieManager(
                 userId = userId
             )
         } else {
+            // Диагностика фоновой авторизации: почему воркер видит «not authorized». Если
+            // secureFallback=true — зашифрованное хранилище не открылось (KeyStore), и auth-куки
+            // «пропали» в холодном фоне, хотя пользователь залогинен (полевой лог).
+            forpdateam.ru.forpda.notifications.NotifDiagLog.log(
+                context,
+                "auth: SKIP secureFallback=${SecureCookiesPreferences.getInstance(context).isUsingFallback}" +
+                    " memberId=${memberId != null} passHash=${passHash != null}"
+            )
             authData.copy(
                 state = AuthState.SKIP,
                 userId = 0
