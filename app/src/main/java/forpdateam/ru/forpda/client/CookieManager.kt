@@ -164,6 +164,14 @@ class CookieManager(
                             securePrefs.remove(key)
                         }
                         clientCookies.remove(cookie.name)
+                        // Серверное протухание сессии: 4PDA присылает member_id=deleted. Раньше
+                        // authHolder не сбрасывался → split-brain: приложение считает себя
+                        // залогиненным без ключевой куки, воркер/сервис ведут себя как «авторизован»,
+                        // а запросы уходят гостевыми. Синхронизируем состояние с фактом.
+                        if (cookie.name == "member_id") {
+                            editor.remove("member_id")
+                            authHolder.set(authHolder.get().copy(userId = AuthData.NO_ID, state = AuthState.NO_AUTH))
+                        }
                     } else {
                         val encoded = cookieToPref(url.toString(), cookie)
                         // Skip the AES roundtrip if we already wrote the same value last time.

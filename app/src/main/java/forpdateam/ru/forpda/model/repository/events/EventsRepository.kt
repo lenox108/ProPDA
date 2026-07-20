@@ -409,7 +409,8 @@ class EventsRepository(
                 if (s && foregroundRealtimeEnabled) {
                     if (BuildConfig.DEBUG) Timber.d("start networkStateProvider.observeState")
                     // Реальная смена сети (могли выйти из зоны блокировки) — одна проба сквозь кулдаун.
-                    probeThroughCooldownOnce = true
+                    // Ставим флаг только в активном кулдауне, иначе он протухнет и ослабит breaker.
+                    if (isWsInCooldown()) probeThroughCooldownOnce = true
                     start(checkEvents = true, force = true)
                 } else if (!s) {
                     stop("network_lost")
@@ -469,8 +470,20 @@ class EventsRepository(
         // НЕ сбрасываем кулдаун (баг из code-review: foreground обнулял защиту, раунд не рос, и
         // мёртвый endpoint долбился заново). Даём лишь ОДНУ пробную попытку сквозь кулдаун — сеть
         // могла смениться / VPN выключили; упадёт — кулдаун продолжится с текущего раунда.
-        probeThroughCooldownOnce = true
-        setForegroundRealtimeEnabled(true, "process_start")
+        // Флаг ставим только если кулдаун реально активен — иначе он «протух бы» до следующего
+        // арминга кулдауна и бесплатно ослабил бы circuit breaker на одну попытку.
+        if (isWsInCooldown()) probeThroughCooldownOnce = true
+        // Realtime уже «включён», но спит по idle-паузе (5 мин без касаний): setForegroundRealtime
+        // вышел бы по early-return (enabled не меняется) и НЕ поднял бы WS до первого касания —
+        // всё это время push шёл бы только через фоновый воркер. Будим соединение явно.
+        if (foregroundRealtimeEnabled && idleDisconnected) {
+            idleDisconnected = false
+            lastInteractionAt = SystemClock.elapsedRealtime()
+            start(checkEvents = true, force = true)
+            armIdleTimer()
+        } else {
+            setForegroundRealtimeEnabled(true, "process_start")
+        }
     }
 
     /**
@@ -907,7 +920,11 @@ class EventsRepository(
     private fun scheduleReconnect(delayMs: Long) {
         reconnectJob?.cancel()
         reconnectJob = repoScope.launch {
-            delay(delayMs.coerceAtLeast(0L))
+            // Верхний clamp WS_COOLDOWN_MAX_MS: дельта кулдауна считается по wall-clock
+            // (System.currentTimeMillis), и перевод системных часов назад мог дать гигантский
+            // delay → realtime не поднялся бы «никогда». Ни один легитимный delay (кулдаун ≤60м,
+            // бэкофф ≤5м) этот потолок не превышает.
+            delay(delayMs.coerceIn(0L, WS_COOLDOWN_MAX_MS))
             if (foregroundRealtimeEnabled && !webSocketController.hasActiveSocket()) {
                 start(checkEvents = false, force = true)
             }

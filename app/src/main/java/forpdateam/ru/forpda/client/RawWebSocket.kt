@@ -77,6 +77,14 @@ class RawWebSocket(
             // прервёт даже зависшую попытку подключения.
             socket = s
             s.connect(InetSocketAddress(host, port), connectTimeoutMs)
+            // Гонка connect ↔ cancel/close: пока connect() блокировал поток, контроллер мог
+            // вызвать cancel() ДО того, как socket=s стал виден (или сразу после). Без этой
+            // проверки поток достроил бы живой сокет, выстрелил onOpen и запустил пингер —
+            // «призрачное» соединение, про которое контроллер уже забыл (утечка сокета+потоков).
+            if (terminated.get()) {
+                runCatching { s.close() }
+                return
+            }
             s.tcpNoDelay = true
             // Пассивный детектор мёртвого соединения: мы шлём ping каждые pingIntervalMs,
             // сервер отвечает pong — если 2 интервала подряд ни байта, сокет мёртв.
@@ -111,7 +119,9 @@ class RawWebSocket(
                 length = 0L
                 for (b in ext) length = (length shl 8) or (b.toLong() and 0xFF)
             }
-            if (length > MAX_MESSAGE_BYTES) throw IOException("inbound frame too big: $length")
+            // length<0 ловит 64-битное поле с установленным старшим битом (иначе toInt() ниже
+            // дал бы отрицательный размер массива); >MAX — защита от чрезмерной аллокации.
+            if (length < 0 || length > MAX_MESSAGE_BYTES) throw IOException("bad inbound frame length: $length")
             val maskKey = if (masked) input.readExact(4) else null
             val payload = input.readExact(length.toInt())
             if (maskKey != null) {
@@ -262,6 +272,9 @@ class RawWebSocket(
     override fun close(code: Int, reason: String?): Boolean {
         if (!open) return false
         open = false
+        // Тот же resolveter гонки, что и в cancel(): гасим будущий onFailure от рвущегося readLoop
+        // и закрываем окно с не стартовавшим runSocket.
+        terminated.set(true)
         val reasonBytes = reason?.toByteArray(Charsets.UTF_8) ?: EMPTY
         val payload = ByteArray(2 + reasonBytes.size)
         payload[0] = (code shr 8).toByte()
@@ -278,8 +291,10 @@ class RawWebSocket(
 
     override fun cancel() {
         open = false
-        // Закрытие сокета будит readLoop/зависший connect → failOnce(SocketException);
-        // контроллер к этому моменту уже снял сокет с учёта, коллбек уйдёт в пустоту.
+        // terminated ДО закрытия сокета: закрывает окно гонки с ещё не стартовавшим runSocket
+        // (см. проверку terminated после connect) и гасит лишний onFailure — контроллер к этому
+        // моменту уже снял сокет с учёта, коллбек всё равно уйдёт в пустоту.
+        terminated.set(true)
         runCatching { socket?.close() }
         runCatching { writeExecutor.shutdown() }
         pingThread?.interrupt()
