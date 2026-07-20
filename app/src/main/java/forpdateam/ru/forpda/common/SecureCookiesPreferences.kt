@@ -33,6 +33,11 @@ class SecureCookiesPreferences private constructor(context: Context) {
     var isUsingFallback: Boolean = false
         private set
 
+    /** Сколько auth-куки подобрано из fallback-файла при старте (диагностика split-brain). */
+    @Volatile
+    var recoveredFromFallbackCount: Int = 0
+        private set
+
     private val encryptedPrefs: SharedPreferences = createEncryptedPrefsWithRetry(context)
         ?: context.getSharedPreferences("secure_cookies_fallback", Context.MODE_PRIVATE).also {
             isUsingFallback = true
@@ -110,6 +115,7 @@ class SecureCookiesPreferences private constructor(context: Context) {
             if (recovered > 0) {
                 editor.apply()
                 fallback.edit().apply { cookieKeys.forEach { remove(it) } }.apply()
+                recoveredFromFallbackCount = recovered
                 Timber.i("Recovered %d cookie(s) stranded in fallback store", recovered)
             }
         } catch (e: Exception) {
