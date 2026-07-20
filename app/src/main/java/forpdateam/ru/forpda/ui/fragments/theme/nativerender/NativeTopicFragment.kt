@@ -366,6 +366,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var userScrollGestureThisSession: Boolean = false
 
     /**
+     * Момент ([android.os.SystemClock.elapsedRealtime]) последнего первичного рендера темы — начало
+     * текущей сессии просмотра. Питает dwell-гейт [TopicNoGestureDwellReadPolicy]: сессия без жеста
+     * считается дочиткой только если пользователь провёл на экране заметное время.
+     */
+    private var sessionRenderedAtMs: Long = 0L
+
+    /**
      * Мостик того же гейта через findpost-резюм на границу прочитанного ([maybeResumeToReadBoundary]):
      * страница вложенной findpost-перезагрузки несёт hasUnreadTarget=false (парсер размечает unread
      * только для getnewpost), поэтому сам guard по ней не сработал бы — а резюм по построению сажает
@@ -2492,6 +2499,27 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Снимаем метку «тема на экране» (сворачивание/переключение вкладки) — иначе гейт
         // глушил бы пуши о теме, которую уже никто не смотрит.
         if (pageTopicId > 0) eventsRepository.clearViewedTopic(pageTopicId)
+        // Разрыв цикла «открыл-глянул-закрыл»: unread-посадка без единого жеста, но весь остаток темы
+        // был целиком виден и юзер задержался на экране (dwell) — считаем дочиткой: снимаем гейт
+        // мгновенного mark-read и пишем границу по вьюпорту, чтобы переоткрытие не резюмило вечно на
+        // те же «старые» посты (сервер уже пометил страницу прочитанной самим GET этого открытия, и
+        // без этого его all-read-редирект перебивался бы findpost-резюмом на застывшую границу).
+        if (view != null && loadedItems.isNotEmpty() &&
+                forpdateam.ru.forpda.presentation.theme.TopicNoGestureDwellReadPolicy.shouldTreatVisibleTailAsRead(
+                        suppressEndMarkReadActive = suppressEndMarkReadUntilUserScroll,
+                        hadUserGesture = userScrollGestureThisSession,
+                        dwellMs = android.os.SystemClock.elapsedRealtime() - sessionRenderedAtMs,
+                        hasNextPage = pagination.hasNextPage(),
+                        lastItemFullyVisible = (recyclerView.layoutManager as? LinearLayoutManager)
+                                ?.findLastCompletelyVisibleItemPosition() == headerOffset() + loadedItems.size - 1,
+                )) {
+            if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                android.util.Log.i("FPDA_READ_BOUNDARY", "dwell_read_no_gesture topic=$pageTopicId " +
+                        "dwellMs=${android.os.SystemClock.elapsedRealtime() - sessionRenderedAtMs}")
+            }
+            suppressEndMarkReadUntilUserScroll = false
+            recordReadBoundaryAtRest()
+        }
         // Страховка на выход из темы (back/сворачивание) для ГРАНИЦЫ прочитанного: выход во время
         // инерции скролла съедает финальный IDLE, и recordReadBoundaryAtRest не фиксирует последнюю
         // точку покоя — граница отстаёт, следующее открытие резюмит на уже прочитанные посты. Пишем
@@ -4011,6 +4039,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         mentionScannedPostIds.clear()
         markedTopicReadAtEnd = false
         userScrollGestureThisSession = false // новая сессия просмотра — жестов ещё не было
+        sessionRenderedAtMs = android.os.SystemClock.elapsedRealtime()
         topicHasUnread = page.hasUnreadTarget // drives «К непрочитанному» in the smart-nav menu
         // Порт WebView-guard'а (ThemeUseCase.onPrimaryThemeLoaded → shouldSuppressMarkReadForSession,
         // куда натив не ходит): подлинное открытие на первом непрочитанном, севшее выше низа
