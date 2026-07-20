@@ -119,9 +119,11 @@ class CookieManager(
                 if (anonymous != null) "anonymous" else null,
                 if (clearance != null) "cf_clearance" else null
             )
+            val secure = SecureCookiesPreferences.getInstance(context)
             forpdateam.ru.forpda.notifications.NotifDiagLog.log(
                 context,
-                "auth: SKIP secureFallback=${SecureCookiesPreferences.getInstance(context).isUsingFallback}" +
+                "auth: SKIP secureFallback=${secure.isUsingFallback}" +
+                    " recovered=${secure.recoveredFromFallbackCount}" +
                     " keys=[${presentKeys.joinToString(",")}]"
             )
             authData.copy(
