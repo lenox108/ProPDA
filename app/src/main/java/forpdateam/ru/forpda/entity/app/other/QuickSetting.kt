@@ -13,10 +13,11 @@ enum class QuickSetting {
     DENSITY,
     PAGINATION,
     BLACKLIST,
-    NOTIFICATIONS;
+    NOTIFICATIONS,
+    UPDATE;
 
     companion object {
-        val DEFAULT = listOf(THEME, PALETTE, FONT, NOTIFICATIONS)
+        val DEFAULT = listOf(THEME, PALETTE, FONT, NOTIFICATIONS, UPDATE)
 
         /** Маркер осознанно пустого набора: пустая строка означает «настройка не трогалась». */
         private const val EMPTY = "NONE"
