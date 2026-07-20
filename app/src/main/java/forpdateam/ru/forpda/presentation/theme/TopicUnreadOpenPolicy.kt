@@ -460,17 +460,44 @@ object TopicUnreadOpenPolicy {
      * Caller clears [page.anchors] before applying the result.
      */
     fun resolveGetNewPostAnchor(ctx: GetNewPostAnchorContext): AnchorResolution {
+        val redirectHashId = ctx.redirectHashId
+        val entryIds = ctx.entryIds
+        val hatSkip = ctx.hatEntryIdToSkip ?: inferPrependedHatEntryId(entryIds, redirectHashId)
+
         var unreadId = ThemeApi.findUnreadPostEntryIdForGetNewPost(ctx.html, null)
         if (ctx.hatEntryIdToSkip != null && unreadId == ctx.hatEntryIdToSkip) {
             unreadId = ThemeApi.findUnreadPostEntryIdForGetNewPost(ctx.html, ctx.hatEntryIdToSkip)
         }
-        unreadId?.let {
-            return AnchorResolution("entry$it", hasUnreadTarget = true, reason = "html_unread_marker")
+        unreadId?.let { marker ->
+            // Device report (topic 1103268): the anchor sometimes lands NOTICEABLY BELOW the real
+            // first-unread post on a list-unread getnewpost open. The HTML unread-marker heuristic can
+            // match a post further down the page than the server's own getnewpost redirect target
+            // (`#entry`), which is authoritative for "first unread". Never let the marker push the
+            // anchor DOWN past that redirect: when a trusted redirect hash sits ABOVE the marker in
+            // document order (and is not a top/bottom last-read bookmark), prefer it. This can only
+            // move the anchor UP toward the first unread — it still reports hasUnreadTarget=true, so it
+            // cannot strand a topic as "stuck unread".
+            val markerPos = entryIds.indexOf(marker)
+            val redirectAboveMarker = redirectHashId
+                    ?.takeIf { it > 0 && it != hatSkip && it != marker }
+                    ?.takeIf { markerPos > 0 }
+                    ?.takeIf { hashId ->
+                        val redirectPos = entryIds.indexOf(hashId)
+                        redirectPos in 0 until markerPos
+                    }
+                    ?.takeIf { hashId ->
+                        !ThemeApi.isLikelyLastReadPageTopHint(hashId, entryIds, hatSkip) &&
+                                !rejectsBottomHash(hashId, entryIds, hatSkip, ctx.listUnreadHint)
+                    }
+            if (redirectAboveMarker != null) {
+                return AnchorResolution(
+                        anchorEntry = "entry$redirectAboveMarker",
+                        hasUnreadTarget = true,
+                        reason = "redirect_hash_above_marker"
+                )
+            }
+            return AnchorResolution("entry$marker", hasUnreadTarget = true, reason = "html_unread_marker")
         }
-
-        val redirectHashId = ctx.redirectHashId
-        val entryIds = ctx.entryIds
-        val hatSkip = ctx.hatEntryIdToSkip ?: inferPrependedHatEntryId(entryIds, redirectHashId)
 
         if (ctx.onLastTopicPage &&
                 ThemeApi.isLikelyAllReadGetNewPostBottomRedirect(redirectHashId, entryIds)

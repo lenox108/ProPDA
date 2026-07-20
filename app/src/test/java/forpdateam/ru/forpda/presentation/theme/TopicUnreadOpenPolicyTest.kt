@@ -654,6 +654,53 @@ class TopicUnreadOpenPolicyTest {
     }
 
     @Test
+    fun anchor_htmlMarkerBelowServerRedirect_prefersRedirect() {
+        // Device report (1103268): the HTML unread-marker heuristic matched a post BELOW the server's
+        // getnewpost redirect target, so the anchor landed noticeably below the real first unread. The
+        // trusted redirect hash (mid-page, above the marker) must win.
+        val html = """
+            <script>var topic_id = parseInt(1);</script>
+            <a name="entry100"></a><div class="post_container read">read</div>
+            <a name="entry101"></a><div class="post_container">first unread (server)</div>
+            <div class="post_wrap unread"><a name="entry102"></a></div>
+            <a name="entry103"></a><div class="post_container">newest</div>
+        """.trimIndent()
+        val resolution = anchor(
+                html = html,
+                finalUrl = "${base}1&st=20#entry101",
+                entryIds = listOf(100, 101, 102, 103),
+                redirectHashId = 101,
+                listUnreadHint = true,
+                onLastTopicPage = false,
+        )
+        assertEquals("entry101", resolution.anchorEntry)
+        assertEquals("redirect_hash_above_marker", resolution.reason)
+        assertTrue(resolution.hasUnreadTarget)
+    }
+
+    @Test
+    fun anchor_htmlMarkerAboveRedirect_keepsMarker() {
+        // The guard must only ever move the anchor UP: when the marker is already at/above the redirect,
+        // it stays authoritative (never dragged down to the redirect).
+        val html = """
+            <script>var topic_id = parseInt(1);</script>
+            <a name="entry100"></a><div class="post_container read">read</div>
+            <div class="post_wrap unread"><a name="entry101"></a></div>
+            <a name="entry102"></a><div class="post_container">later</div>
+        """.trimIndent()
+        val resolution = anchor(
+                html = html,
+                finalUrl = "${base}1&st=20#entry102",
+                entryIds = listOf(100, 101, 102),
+                redirectHashId = 102,
+                listUnreadHint = true,
+                onLastTopicPage = false,
+        )
+        assertEquals("entry101", resolution.anchorEntry)
+        assertEquals("html_unread_marker", resolution.reason)
+    }
+
+    @Test
     fun buildListHints_readRowWithGetNewPostInHref_upgradesToGetLastPost() {
         val hints = TopicUnreadOpenPolicy.buildListHints(
                 topicId = 789,
