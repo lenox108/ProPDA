@@ -6,7 +6,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
@@ -89,8 +91,17 @@ class EventsCheckAlarmReceiver : BroadcastReceiver() {
         }
         // Expedited-работа запускается и в Doze; сам ресивер сетью не занимается —
         // у BroadcastReceiver жёсткий бюджет времени.
+        // NetworkType.CONNECTED — как у периодика (App.rescheduleEventsCheckWorker): без него
+        // будильник в Doze-без-сети запускал воркер вхолостую, тот ловил IOException и жёг
+        // Result.retry()-попытки/батарею. С констрейнтом WorkManager дождётся сети (и комментарий
+        // в EventsCheckWorker «сеть гарантирована констрейнтом» становится верен и для alarm-пути).
         val request = OneTimeWorkRequestBuilder<EventsCheckWorker>()
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .setConstraints(
+                        Constraints.Builder()
+                                .setRequiredNetworkType(NetworkType.CONNECTED)
+                                .build()
+                )
                 .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
                 EventsCheckAlarmScheduler.ALARM_WORK_NAME,

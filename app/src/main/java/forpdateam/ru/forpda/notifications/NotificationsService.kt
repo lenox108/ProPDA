@@ -160,17 +160,24 @@ class NotificationsService : Service() {
         Timber.i("onStartCommand args$flags : $startId : $intent")
         BatteryDebugLogger.logState("NotificationsService", "startCommand", "action=${intent?.action}")
 
+        // Стартовали как FGS (startForegroundService из фона)? Тогда Android ОБЯЗЫВАЕТ вызвать
+        // startForeground в течение 5 сек, иначе ForegroundServiceDidNotStartInTimeException
+        // (краш процесса) — даже если мы тут же захотим bail. Поэтому ранние гейты ниже, если
+        // стартовали как FGS, сперва выполняют контракт (короткий startForeground → сразу снять),
+        // и только потом останавливаются.
+        val startedAsFgs = intent?.getBooleanExtra(EXTRA_STARTED_AS_FGS, false) == true
+
         // wantsPushNotifications, а не getMainEnabled: при пустых push-семействах
         // и включённых загрузках FGS поднимать не нужно.
         if (!notificationPreferencesHolder.wantsPushNotifications()) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip service start: no push families enabled")
-            stopSelf(startId)
+            bailStart(startId, startedAsFgs)
             return START_NOT_STICKY
         }
         // Без авторизации уведомления о событиях форума нам слать неоткуда.
         if (!authHolder.get().isAuth()) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip service start: user not authenticated")
-            stopSelf(startId)
+            bailStart(startId, startedAsFgs)
             return START_NOT_STICKY
         }
 
@@ -181,8 +188,9 @@ class NotificationsService : Service() {
         // WS живёт без FGS, и уведомление в шторке не показывается. Скрыть уведомление
         // запущенного FGS на API 26+ нельзя — поэтому единственный способ его не показывать
         // в обычном режиме — не быть foreground-сервисом, пока приложение видимо.
-        if (intent?.getBooleanExtra(EXTRA_STARTED_AS_FGS, false) == true) {
-            promoteToForegroundIfNeeded()
+        if (startedAsFgs) {
+            runCatching { promoteToForegroundIfNeeded() }
+                    .onFailure { Timber.w(it, "promote FGS on FGS-start failed") }
         }
 
         // Возврат приложения на передний план: FGS больше не нужен (процесс держит UI),
@@ -216,7 +224,11 @@ class NotificationsService : Service() {
         val wsUsable = eventsRepository.isWebSocketConnected() || !eventsRepository.isWsCoolingDown()
         if (notificationPreferencesHolder.getBgPersistentWs() && !uiForeground && authHolder.get().isAuth()) {
             if (wsUsable) {
-                promoteToForegroundIfNeeded()
+                // runCatching: воскрешение по START_STICKY (intent=null, свежий процесс, фон)
+                // может нарваться на ForegroundServiceStartNotAllowedException — не роняем сервис
+                // (симметрично observer'у ниже).
+                runCatching { promoteToForegroundIfNeeded() }
+                        .onFailure { Timber.w(it, "promote persistent FGS failed") }
                 if (!eventsRepository.isForegroundRealtimeActive()) {
                     BatteryDebugLogger.logState("NotificationsService", "persistentRestart")
                     NotifDiagLog.log(this, "service: persistent realtime (re)start")
@@ -243,6 +255,23 @@ class NotificationsService : Service() {
     }
 
     internal var foregroundPromoted = false
+
+    /**
+     * Остановка сервиса из раннего гейта. Если стартовали как FGS (startForegroundService),
+     * Android требует startForeground в течение 5 сек — иначе краш «did not start in time»,
+     * даже при немедленной остановке. Поэтому сперва выполняем контракт (поднять FGS и тут же
+     * снять), и только затем stopSelf. runCatching — на случай, если старт FGS уже не разрешён:
+     * молчаливая деградация лучше падения.
+     */
+    private fun bailStart(startId: Int, startedAsFgs: Boolean) {
+        if (startedAsFgs) {
+            runCatching {
+                promoteToForegroundIfNeeded()
+                detachForegroundIfPromoted("fgs_bail")
+            }.onFailure { Timber.w(it, "bailStart FGS contract failed") }
+        }
+        stopSelf(startId)
+    }
 
     private fun detachForegroundIfPromoted(reason: String) {
         if (!foregroundPromoted) return
