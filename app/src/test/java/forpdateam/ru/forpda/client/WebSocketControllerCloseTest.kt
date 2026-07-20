@@ -59,8 +59,18 @@ class WebSocketControllerCloseTest {
     }
 
     @Test
-    fun connect_reportsConnected() {
-        assertTrue(Fixture().controller.isConnected())
+    fun connect_reportsConnectingUntilOnOpen() {
+        val f = Fixture()
+        // isConnected() строго ПОСЛЕ onOpen — сразу после connect() сокет ещё «в полёте»,
+        // и раньше флаг connected=true здесь врал: фоновый воркер считал realtime живым и
+        // скипал проверку, хотя сокет не открылся (полевой лог «skip (foreground websocket)»
+        // при вечных SocketTimeout). Роль «попытка идёт» теперь у hasActiveSocket().
+        assertFalse("до onOpen сокет не считается подключённым", f.controller.isConnected())
+        assertTrue("но попытка уже в полёте", f.controller.hasActiveSocket())
+
+        f.wsListener.onOpen(f.socket, mockk(relaxed = true))
+
+        assertTrue("после onOpen — подключён", f.controller.isConnected())
     }
 
     @Test
@@ -98,6 +108,9 @@ class WebSocketControllerCloseTest {
     @Test
     fun terminationOfStaleSocket_doesNotNotify() {
         val f = Fixture()
+        // Открываем текущий сокет, иначе isConnected()==false ещё до всякого stale-обрыва
+        // (новая семантика: connected только после onOpen).
+        f.wsListener.onOpen(f.socket, mockk(relaxed = true))
         val stale: WebSocket = mockk(relaxed = true)
 
         f.wsListener.onFailure(stale, java.io.IOException("stale"), null)
