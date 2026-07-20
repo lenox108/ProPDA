@@ -355,6 +355,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var suppressEndMarkReadUntilUserScroll: Boolean = false
 
     /**
+     * Был ли в ТЕКУЩЕЙ сессии просмотра темы (с последнего первичного рендера) хотя бы один жест
+     * скролла (drag/fling/FAB — см. [onScrollStateChanged]). Гейтит страховочную запись границы
+     * прочитанного из [onPause]: граница пишется только по устоявшемуся вьюпорту ([recordReadBoundaryAtRest]
+     * на IDLE), но выход из темы ВО ВРЕМЯ инерции (back/сворачивание, пока список settling) съедал
+     * финальный IDLE — граница отставала на экран-полтора, и следующее открытие резюмило на уже
+     * прочитанные посты. Писать из onPause БЕЗ жеста нельзя: «открыл-глянул-закрыл» записал бы
+     * вьюпорт, который юзер, возможно, не читал (это отдельно решает dwell-гейт).
+     */
+    private var userScrollGestureThisSession: Boolean = false
+
+    /**
      * Мостик того же гейта через findpost-резюм на границу прочитанного ([maybeResumeToReadBoundary]):
      * страница вложенной findpost-перезагрузки несёт hasUnreadTarget=false (парсер размечает unread
      * только для getnewpost), поэтому сам guard по ней не сработал бы — а резюм по построению сажает
@@ -564,6 +575,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // → mark-read-в-конце снова разрешён: теперь «низ виден» = юзер сам туда пришёл.
                 if (newState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
                     suppressEndMarkReadUntilUserScroll = false
+                    userScrollGestureThisSession = true
                 }
                 // Границу прочитанного двигаем ТОЛЬКО по устоявшемуся вьюпорту: покадровая запись из
                 // onScrolled на флинге «вниз глянуть и назад» монотонно сжигала всё до самой глубокой
@@ -2480,6 +2492,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Снимаем метку «тема на экране» (сворачивание/переключение вкладки) — иначе гейт
         // глушил бы пуши о теме, которую уже никто не смотрит.
         if (pageTopicId > 0) eventsRepository.clearViewedTopic(pageTopicId)
+        // Страховка на выход из темы (back/сворачивание) для ГРАНИЦЫ прочитанного: выход во время
+        // инерции скролла съедает финальный IDLE, и recordReadBoundaryAtRest не фиксирует последнюю
+        // точку покоя — граница отстаёт, следующее открытие резюмит на уже прочитанные посты. Пишем
+        // здесь по текущему вьюпорту, но ТОЛЬКО если в сессии был реальный жест: без жеста вьюпорт —
+        // не доказательство чтения («открыл-глянул-закрыл»). Запись монотонна — назад не откатывает.
+        if (userScrollGestureThisSession) recordReadBoundaryAtRest()
         // Страховка на выход из темы (back/сворачивание): если юзер долистал ровно до конца, но
         // финальный кадр onScrolled/IDLE-settle не успел зафиксировать «низ виден» до ухода — метим
         // прочитанной здесь. Полностью защищено собственными гейтами maybeMarkTopicReadAtEnd
@@ -3992,6 +4010,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         loadedItems.addAll(items)
         mentionScannedPostIds.clear()
         markedTopicReadAtEnd = false
+        userScrollGestureThisSession = false // новая сессия просмотра — жестов ещё не было
         topicHasUnread = page.hasUnreadTarget // drives «К непрочитанному» in the smart-nav menu
         // Порт WebView-guard'а (ThemeUseCase.onPrimaryThemeLoaded → shouldSuppressMarkReadForSession,
         // куда натив не ходит): подлинное открытие на первом непрочитанном, севшее выше низа
