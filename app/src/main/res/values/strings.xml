@@ -972,6 +972,8 @@
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
     <string name="pref_title_battery_optimization">Разрешить работу в фоне без ограничений</string>
     <string name="pref_title_realtime_status">Мгновенный канал</string>
+    <string name="realtime_probe_title">Проверка мгновенного канала</string>
+    <string name="realtime_probe_running">Проверяю соединение…</string>
     <string name="realtime_status_connected">Работает — события приходят мгновенно</string>
     <string name="realtime_status_blocked">Недоступен: сеть блокирует соединение с форумом (например VPN или оператор). Уведомления приходят через резервную проверку раз в %1$d мин</string>
     <string name="realtime_status_connecting">Подключается…</string>

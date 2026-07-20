@@ -12,6 +12,8 @@ import android.os.PowerManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.preference.Preference.OnPreferenceChangeListener
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
@@ -289,6 +291,40 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
             repo.isWsLikelyBlocked() || repo.isWsCoolingDown() ->
                 getString(R.string.realtime_status_blocked, intervalMin)
             else -> getString(R.string.realtime_status_connecting)
+        }
+        // Тап по строке — сетевая диагностика канала: DNS → HTTPS → WS-хендшейк → вердикт
+        // (провайдер/VPN/Private DNS/недоступность хоста). Результат — диалог + журнал.
+        preference.setOnPreferenceClickListener {
+            runRealtimeChannelProbe()
+            true
+        }
+    }
+
+    private var probeInProgress = false
+
+    private fun runRealtimeChannelProbe() {
+        if (probeInProgress) return
+        probeInProgress = true
+        val appContext = context?.applicationContext ?: return
+        android.widget.Toast.makeText(appContext, R.string.realtime_probe_running, android.widget.Toast.LENGTH_SHORT).show()
+        viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val report = runCatching { forpdateam.ru.forpda.notifications.RealtimeChannelProbe.run() }
+                    .getOrElse {
+                        forpdateam.ru.forpda.notifications.RealtimeChannelProbe.ProbeReport(
+                                listOf("probe error: ${it.javaClass.simpleName}"), it.message ?: "Ошибка проверки")
+                    }
+            // В журнал — каждой строкой: следующий полевой лог принесёт вердикт вместе с историей.
+            report.lines.forEach { forpdateam.ru.forpda.notifications.NotifDiagLog.log(appContext, "probe: $it") }
+            forpdateam.ru.forpda.notifications.NotifDiagLog.log(appContext, "probe: verdict: ${report.verdict}")
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                probeInProgress = false
+                val ctx = context ?: return@withContext
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                        .setTitle(R.string.realtime_probe_title)
+                        .setMessage(report.lines.joinToString("\n") + "\n\n" + report.verdict)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+            }
         }
     }
 
