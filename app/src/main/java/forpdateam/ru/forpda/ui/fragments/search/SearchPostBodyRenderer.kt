@@ -202,7 +202,8 @@ class SearchPostBodyRenderer(
             setPadding(0, dp(ctx, 8f), 0, 0)
         }
         chevron.rotation = if (block.initiallyOpen) 90f else 0f
-        header.setOnClickListener {
+        // Whole card toggles (parity with the topic renderer) — the header row alone is too small a touch target.
+        card.setOnClickListener {
             val open = inner.visibility == View.VISIBLE
             inner.visibility = if (open) View.GONE else View.VISIBLE
             chevron.rotation = if (open) 0f else 90f
