@@ -1424,10 +1424,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 })
             }
             add("Открыть в браузере" to {
-                runCatching {
-                    startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://4pda.to/forum/index.php?showtopic=$pageTopicId")))
-                }
+                // Через ExternalBrowserLauncher, а не сырой ACTION_VIEW: на MIUI/HyperOS неявный
+                // VIEW-интент показывает системный тост «Браузер по умолчанию не найден». Лаунчер
+                // строит явный интент к найденному браузеру и имеет фолбэк на системный резолвер.
+                forpdateam.ru.forpda.common.ExternalBrowserLauncher.open(
+                        ctx,
+                        "https://4pda.to/forum/index.php?showtopic=$pageTopicId"
+                )
             })
         }
         val dm = resources.displayMetrics
