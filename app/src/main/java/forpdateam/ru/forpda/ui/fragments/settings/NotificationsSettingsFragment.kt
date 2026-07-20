@@ -92,7 +92,9 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
      */
     private fun configureBgCheckDiagnostics() {
         preferenceScreen.findPreference<Preference>("notifications.bg.diagnostics")?.setOnPreferenceClickListener {
-            showDiagnosticsDialog()
+            // Страховка на гонку: тик гасит пункт раз в 3 с, но между выключением уведомлений и
+            // тиком тап ещё проходит — сетевую пробу при выключенных уведомлениях не запускаем.
+            if (notificationsActive()) showDiagnosticsDialog()
             true
         }
     }
@@ -337,9 +339,32 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         }
     }
 
-    /** Живой статус канала выносим в summary пункта диагностики (обновляется тиком, пока экран открыт). */
+    /**
+     * Уведомления включены (мастер-тумблер + хотя бы одно семейство push). Совпадает с
+     * wantsPushNotifications() в коде доставки: именно при этом условии живёт WS/воркер.
+     */
+    private fun notificationsActive(): Boolean {
+        val sp = preferenceScreen.sharedPreferences ?: return true
+        if (!sp.getBoolean("notifications.main.enabled", true)) return false
+        return sp.getBoolean("notifications.fav.enabled", true) ||
+                sp.getBoolean("notifications.qms.enabled", true) ||
+                sp.getBoolean("notifications.mentions.enabled", true) ||
+                sp.getBoolean("notifications.hat.enabled", true)
+    }
+
+    /**
+     * Живой статус канала выносим в summary пункта диагностики (обновляется тиком, пока экран
+     * открыт). Когда уведомления выключены — пункт гасим и НЕ опрашиваем состояние WS: диагностике
+     * нечего показывать (канал не поднят), а лишний опрос раз в 3 с — впустую жёг бы батарею.
+     */
     private fun updateDiagnosticsSummary() {
         val preference = preferenceScreen.findPreference<Preference>("notifications.bg.diagnostics") ?: return
+        if (!notificationsActive()) {
+            preference.isEnabled = false
+            preference.summary = getString(R.string.pref_summary_diagnostics_disabled)
+            return
+        }
+        preference.isEnabled = true
         preference.summary = realtimeStatusText() ?: getString(R.string.pref_summary_bg_check_diagnostics)
     }
 
