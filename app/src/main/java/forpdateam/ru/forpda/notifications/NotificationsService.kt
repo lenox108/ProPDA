@@ -296,10 +296,18 @@ class NotificationsService : Service() {
             setLockscreenVisibility(Notification.VISIBILITY_SECRET)
         }
         getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        // Тап по «служебному» уведомлению открывает приложение (полевая жалоба: «никак не
+        // реагирует на нажатие»). Раньше contentIntent не было — тап молча ничего не делал.
+        val contentIntent = packageManager.getLaunchIntentForPackage(packageName)?.let {
+            PendingIntent.getActivity(
+                    this, 0, it,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        }
         val notification = NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notify_favorites)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText(getString(R.string.notification_foreground_channel_name))
+                .setContentIntent(contentIntent)
                 // Без ongoing/без ongoing-summary: пользователь может смахнуть, и на
                 // многих оболочках уведомление вообще не появится в шторке.
                 .setOngoing(false)
