@@ -82,6 +82,14 @@ class BodyBlockViewFactory(
     class RenderScope(val scopeId: Int, val allowQuoteSelection: Boolean = false) {
         var spoilerSeq: Int = 0
 
+        /** 1-based-ish counter of quotes within the body, in document order (incl. nested) —
+         *  keys the collapse state of long quotes in [spoilerStates] as `"scopeId:q<seq>"`. */
+        var quoteSeq: Int = 0
+
+        /** How many quote cards enclose the block being rendered — feeds the pre-measure width
+         *  estimate that decides whether a long quote collapses. */
+        var quoteDepth: Int = 0
+
         /**
          * The colour of the surface the CURRENT block's text is drawn on, used to judge which inline
          * server colours are invisible and how bright a link must be. `null` = the default post-card
@@ -149,8 +157,9 @@ class BodyBlockViewFactory(
      *  the static behaviour). Playback needs API 28+ — below that the flag silently degrades. */
     var animatedSmiles: Boolean = false
 
-    /** «Плоские посты»: drop the hairline stroke on quote and spoiler blocks (fill+radius stay).
-     *  Applies only to quotes/spoilers — code/attachment/fallback blocks keep their outline. */
+    /** «Плоские посты»: drop the hairline stroke on spoiler blocks (fill+radius stay).
+     *  Quotes carry no stroke at all since the Telegram-style redesign, so the toggle only
+     *  affects spoilers — code/attachment/fallback blocks keep their outline. */
     var flatBlocks: Boolean = false
 
     /**
@@ -203,6 +212,27 @@ class BodyBlockViewFactory(
         val card = readingSurfaceColor(ctx)
         val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         return androidx.core.graphics.ColorUtils.blendARGB(card, onSurface, BLOCK_FILL_TONAL_STEP)
+    }
+
+    /**
+     * Fill for a quote card: the accent washed over the surface the quote sits on (Telegram-style
+     * tint), so quoted speech reads as a DIFFERENT voice, not just a nested block — and the delta
+     * from the card is guaranteed on every palette, including the dark/AMOLED skins that pin all
+     * surface roles to one value. A nested quote washes one more step over its parent's fill, which
+     * doubles as the depth cue.
+     *
+     * The wash strength is chosen by the SURFACE luminance, not a flat alpha: the same alpha reads
+     * far weaker on a light card than on a dark one (accent over near-white barely shifts, so a day
+     * skin — Material You included, where the accent is the dynamic wallpaper primary — looked plain
+     * grey; user report). On a light surface we tint harder so the colour actually shows; on a dark
+     * one the subtle wash already reads, so we keep it low and avoid washing the card out.
+     */
+    private fun quoteFillColor(ctx: Context, scope: RenderScope): Int {
+        val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+        val surface = currentSurface(ctx, scope)
+        val lightSurface = androidx.core.graphics.ColorUtils.calculateLuminance(surface) > 0.5
+        val fraction = if (lightSurface) QUOTE_TINT_FRACTION_LIGHT else QUOTE_TINT_FRACTION_DARK
+        return androidx.core.graphics.ColorUtils.blendARGB(surface, accent, fraction)
     }
 
     /**
@@ -297,46 +327,174 @@ class BodyBlockViewFactory(
     }
 
     /**
-     * Native quote: a tonal M3 card with a tappable "author · date" header (jumps to the source post
-     * via the app) and the recursively-rendered quoted content — nested quotes included.
+     * Native quote, Telegram-style: an accent-tinted rounded card ([quoteFillColor]) with a 3dp
+     * leading accent bar and a trailing «❞» mark, a tappable "author · date" header (jumps to the
+     * source post via the app) and the recursively-rendered quoted content — nested quotes included.
+     *
+     * A quote taller than [QUOTE_COLLAPSE_TRIGGER_DP] (pre-measured at its real column width, so the
+     * decision is made AT BIND TIME and the card never re-sizes under the scroll anchor) collapses to
+     * [QUOTE_COLLAPSED_HEIGHT_DP] with a bottom fade + chevron; tapping the card or the chevron
+     * expands it. Expand state survives recycling via [spoilerStates] under the `"scopeId:q<seq>"`
+     * key (spoilers use plain numeric keys, so the namespaces never collide).
      */
     private fun quoteView(ctx: Context, block: BodyBlock.Quote, scope: RenderScope): View {
         val dm = ctx.resources.displayMetrics
+        fun dp(v: Float): Int = (v * dm.density).toInt()
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-        // M3 quote: a rounded tonal card (surfaceContainerHigh + hairline outline). The tonal fill and
-        // the accent-coloured author header are the quote signifiers — no extra leading colour bar.
-        val content = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((10 * dm.density).toInt())
-            layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+        val fill = quoteFillColor(ctx, scope)
+        val key = "${scope.scopeId}:q${scope.quoteSeq++}"
+
+        val author = block.author?.takeIf { it.isNotBlank() }
+        val date = block.date?.takeIf { it.isNotBlank() }
+        // Author bold in full accent, the date appended muted (accent at ~60%, regular weight) — the
+        // old single-style header read as one long label and buried the name.
+        val headerText = SpannableStringBuilder(author ?: "Цитата").apply {
+            setSpan(
+                    android.text.style.StyleSpan(Typeface.BOLD),
+                    0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
             )
+            if (date != null) {
+                val start = length
+                append(" · ").append(date)
+                setSpan(
+                        android.text.style.ForegroundColorSpan(
+                                androidx.core.graphics.ColorUtils.setAlphaComponent(accent, QUOTE_DATE_ALPHA)),
+                        start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+            }
         }
-        val headerText = listOfNotNull(
-                block.author?.takeIf { it.isNotBlank() },
-                block.date?.takeIf { it.isNotBlank() },
-        ).joinToString(" · ").ifBlank { "Цитата" }
         val header = TextView(ctx).apply {
             text = headerText
             textSize = scaledSp(13f)
-            setTypeface(typeface, Typeface.BOLD)
             setTextColor(accent)
+            // End padding clears the «❞» mark overlaying the card's top-right corner.
+            setPadding(0, 0, dp(18f), dp(2f))
             val src = block.sourceUrl?.takeIf { it.isNotBlank() }
             if (src != null) setOnClickListener { linkHandler.handle(src, null) }
         }
-        content.addView(header)
-        renderBlocksOnSurface(ctx, content, block.inner, scope, blockFillColor(ctx))
-        return LinearLayout(ctx).apply {
+        val content = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            background = m3BlockBackground(ctx, flat = flatBlocks)
+            setPadding(dp(12f), dp(8f), dp(10f), dp(8f))
+        }
+        content.addView(header)
+        scope.quoteDepth++
+        try {
+            renderBlocksOnSurface(ctx, content, block.inner, scope, fill)
+        } finally {
+            scope.quoteDepth--
+        }
+
+        // Collapse decision: measure the finished content at the width the card will actually get
+        // (post column or QMS bubble cap, minus the chrome of every enclosing quote level).
+        val baseWidth = if (textBlockMaxWidthPx > 0) textBlockMaxWidthPx else dm.widthPixels - dp(40f)
+        val cardWidth = (baseWidth - scope.quoteDepth * dp(QUOTE_LEVEL_CHROME_DP)).coerceAtLeast(dp(60f))
+        content.measure(
+                View.MeasureSpec.makeMeasureSpec(cardWidth, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        val collapsible = content.measuredHeight > dp(QUOTE_COLLAPSE_TRIGGER_DP)
+
+        val column = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+        val card = android.widget.FrameLayout(ctx).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = QUOTE_CORNER_DP * dm.density
+                setColor(fill)
+            }
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (6 * dm.density).toInt() }
-            addView(content)
+            ).apply { topMargin = dp(6f) }
         }
+        // The leading accent bar: a plain strip clipped to the card's rounded outline.
+        val bar = View(ctx).apply {
+            setBackgroundColor(accent)
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                    dp(QUOTE_BAR_WIDTH_DP),
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+        }
+        val mark = TextView(ctx).apply {
+            text = "❞"
+            textSize = scaledSp(14f)
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, QUOTE_MARK_ALPHA))
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                    android.view.Gravity.TOP or android.view.Gravity.END,
+            ).apply { topMargin = dp(2f); marginEnd = dp(8f) }
+        }
+
+        if (!collapsible) {
+            column.addView(content)
+        } else {
+            var open = spoilerStates[key] ?: false
+            // Fixed-height frame clipping the overflowing content; the fade dissolves the cut line
+            // into the card fill so the clip reads as "continues below", not a rendering bug.
+            val clip = android.widget.FrameLayout(ctx)
+            clip.addView(content, android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            ))
+            val fade = View(ctx).apply {
+                background = android.graphics.drawable.GradientDrawable(
+                        android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                        intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(fill, 0), fill),
+                )
+                layoutParams = android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        dp(QUOTE_FADE_HEIGHT_DP),
+                        android.view.Gravity.BOTTOM,
+                )
+            }
+            clip.addView(fade)
+            val chevron = TextView(ctx).apply {
+                textSize = scaledSp(13f)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(accent)
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                setPadding(0, 0, 0, dp(4f))
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                )
+            }
+            column.addView(clip, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+            ))
+            column.addView(chevron)
+            fun applyState() {
+                clip.layoutParams = clip.layoutParams.apply {
+                    height = if (open) LinearLayout.LayoutParams.WRAP_CONTENT
+                    else dp(QUOTE_COLLAPSED_HEIGHT_DP)
+                }
+                fade.visibility = if (open) View.GONE else View.VISIBLE
+                chevron.text = if (open) "▴" else "▾"
+            }
+            applyState()
+            val toggle = View.OnClickListener {
+                open = !open
+                spoilerStates[key] = open
+                applyState()
+            }
+            // Whole-card toggle (spoiler parity): inner links/selectable text consume their own
+            // touches, so only the chevron, header gaps and card padding flip the state.
+            chevron.setOnClickListener(toggle)
+            card.setOnClickListener(toggle)
+        }
+
+        card.addView(column)
+        card.addView(bar)
+        card.addView(mark)
+        return card
     }
 
     /**
@@ -979,5 +1137,38 @@ class BodyBlockViewFactory(
          *  (see [blockFillColor]). Small enough to stay a subtle M3 tonal step, large enough to keep
          *  quotes/spoilers visibly distinct on skins that pin all surface roles to one value. */
         const val BLOCK_FILL_TONAL_STEP = 0.07f
+
+        /** How far a quote card's fill is blended from the surface toward the accent, on a DARK
+         *  surface — subtle, since accent-over-dark already reads clearly (see [quoteFillColor]). */
+        const val QUOTE_TINT_FRACTION_DARK = 0.12f
+
+        /** Same, on a LIGHT surface — stronger, because the same blend fraction reads far weaker
+         *  over near-white, so a subtle wash looked plain grey (user report). */
+        const val QUOTE_TINT_FRACTION_LIGHT = 0.20f
+
+        /** Alpha of the decorative «❞» mark in the quote's top-right corner (~50% accent). */
+        const val QUOTE_MARK_ALPHA = 128
+
+        /** Alpha of the date part of the quote header (~60% accent) — present but quieter than
+         *  the bold author name. */
+        const val QUOTE_DATE_ALPHA = 153
+
+        const val QUOTE_BAR_WIDTH_DP = 3f
+        const val QUOTE_CORNER_DP = 8f
+
+        /** A quote whose content pre-measures taller than this collapses. Deliberately above
+         *  [QUOTE_COLLAPSED_HEIGHT_DP] (hysteresis): expanding must always reveal meaningfully
+         *  more, and a barely-over quote is cheaper shown whole than behind a chevron. */
+        const val QUOTE_COLLAPSE_TRIGGER_DP = 150f
+
+        /** Visible content height of a collapsed quote (~5 lines of quoted text). */
+        const val QUOTE_COLLAPSED_HEIGHT_DP = 100f
+
+        /** Height of the bottom fade dissolving clipped content into the card fill. */
+        const val QUOTE_FADE_HEIGHT_DP = 28f
+
+        /** Horizontal chrome one quote level adds around its content (bar + paddings), used by the
+         *  pre-measure width estimate for NESTED quotes. */
+        const val QUOTE_LEVEL_CHROME_DP = 25f
     }
 }
