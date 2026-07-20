@@ -988,6 +988,7 @@
     <string name="pref_summary_bg_stalled_warning">Последняя проверка была %1$d мин назад при интервале %2$d мин. Нажмите и разрешите работу в фоне; на прошивках с автозапуском включите и его.</string>
     <string name="pref_title_bg_check_diagnostics">Диагностика уведомлений</string>
     <string name="pref_summary_bg_check_diagnostics">Состояние мгновенного канала, проверка сети и журнал фоновых проверок — здесь видно, почему не приходят уведомления</string>
+    <string name="pref_summary_diagnostics_disabled">Недоступно, пока уведомления выключены</string>
     <string name="bg_check_diagnostics_empty">Журнал пуст. Записи появятся после первого запуска фоновой проверки.</string>
     <string name="bg_check_diagnostics_copy">Копировать</string>
     <string name="bg_check_diagnostics_clear">Очистить</string>
