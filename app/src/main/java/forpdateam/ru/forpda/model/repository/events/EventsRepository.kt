@@ -89,6 +89,9 @@ class EventsRepository(
 
         /** Персист счётчика неудач WS для статуса «Мгновенный канал» (переживает рестарт процесса). */
         private const val KEY_WS_ATTEMPTS_SINCE_SUCCESS = "events.ws_attempts_since_success"
+        /** Персист кулдауна circuit breaker (wall-clock дедлайн + раунд) — переживает рестарт/ребут. */
+        private const val KEY_WS_COOLDOWN_UNTIL = "events.ws_cooldown_until"
+        private const val KEY_WS_COOLDOWN_ROUND = "events.ws_cooldown_round"
 
         /** Базовый кулдаун; каждый следующий раунд удваивается до потолка. Доставку держит воркер. */
         private const val WS_COOLDOWN_BASE_MS = 10 * 60_000L
@@ -110,19 +113,31 @@ class EventsRepository(
     private var reconnectAttempts = 0
 
     // Circuit breaker для недоступного WS-эндпоинта. Полевой лог: SocketTimeoutException каждые
-    // ~40-70с СУТКАМИ, без единого onConnected — сеть/DPI/VPN режет wss://app.4pda.to/ws/, а
-    // приложение зря долбит реконнект (бэкофф сбрасывался флапом сети). Считаем подряд неудачные
-    // подключения (сброс только при реальном onConnected) и после порога уходим в длинный кулдаун —
-    // доставку в это время держит фоновый воркер. Сбрасывается при выходе приложения на передний план.
+    // ~40-70с СУТКАМИ, без единого onConnected — сеть/DPI/VPN режет endpoint, а приложение зря
+    // долбит реконнект. Считаем подряд неудачные подключения и после порога уходим в длинный
+    // кулдаун — доставку в это время держит фоновый воркер.
     @Volatile
     private var consecutiveWsFailures = 0
+    /**
+     * Дедлайн кулдауна в WALL-CLOCK (System.currentTimeMillis), а не elapsedRealtime — чтобы
+     * ПЕРЕЖИВАЛ рестарт процесса и ребут (полевой лог: foreground обнулял кулдаун, раунд не рос).
+     * Полный сброс — ТОЛЬКО onConnected; foreground/сеть дают одну probe-попытку, не стирая историю.
+     */
     @Volatile
-    private var wsReconnectSuppressedUntil = 0L
+    private var wsCooldownUntilWallClock = 0L
+    /** Номер раунда кулдауна: каждый следующий вдвое длиннее (10→20→40→60 мин, потолок). Персистится. */
     @Volatile
-    private var cooldownReconnectScheduled = false
-    /** Номер раунда кулдауна: каждый следующий вдвое длиннее (10→20→40→60 мин, потолок). */
+    private var wsCooldownRound = 0
+    /** Единственная запланированная reconnect-job: перед новой отменяем старую (P1 GPT). */
     @Volatile
-    private var wsCooldownRounds = 0
+    private var reconnectJob: kotlinx.coroutines.Job? = null
+    /**
+     * Разрешить ОДНУ попытку подключения сквозь активный кулдаун — взводится при реальной смене
+     * сети или выходе на передний план (сеть могла смениться / VPN выключили). Если проба упадёт,
+     * кулдаун продолжится с текущего раунда, а не сбросится на round=1.
+     */
+    @Volatile
+    private var probeThroughCooldownOnce = false
 
     /**
      * Неудачные подключения с момента последнего реального onConnected. В отличие от
@@ -146,6 +161,17 @@ class EventsRepository(
         runCatching { wsStatsPrefs.edit().putInt(KEY_WS_ATTEMPTS_SINCE_SUCCESS, wsAttemptsSinceSuccess).apply() }
     }
 
+    private fun persistCooldown() {
+        runCatching {
+            wsStatsPrefs.edit()
+                    .putLong(KEY_WS_COOLDOWN_UNTIL, wsCooldownUntilWallClock)
+                    .putInt(KEY_WS_COOLDOWN_ROUND, wsCooldownRound)
+                    .apply()
+        }
+    }
+
+    private fun isWsInCooldown(): Boolean = System.currentTimeMillis() < wsCooldownUntilWallClock
+
     /**
      * Тема, открытая на экране прямо сейчас (0 — никакая). Ведёт [NativeTopicFragment]
      * (onResume/onPause). Пуш о теме, которую пользователь читает в этот момент, — шум:
@@ -165,10 +191,10 @@ class EventsRepository(
     fun isTopicOnScreen(topicId: Int): Boolean = topicId > 0 && viewedTopicId == topicId
 
     // --- Статус «мгновенного канала» для экрана настроек ---
-    fun isWsCoolingDown(): Boolean = SystemClock.elapsedRealtime() < wsReconnectSuppressedUntil
+    fun isWsCoolingDown(): Boolean = isWsInCooldown()
 
     fun wsCooldownRemainingMin(): Long =
-            ((wsReconnectSuppressedUntil - SystemClock.elapsedRealtime()).coerceAtLeast(0L) + 59_999L) / 60_000L
+            ((wsCooldownUntilWallClock - System.currentTimeMillis()).coerceAtLeast(0L) + 59_999L) / 60_000L
 
     /**
      * Сокет давно не может подключиться (сеть/VPN режет) — для статуса в настройках. Работает и
@@ -264,12 +290,19 @@ class EventsRepository(
                 // Без сброса бэкофф рос через весь сеанс: после пары обрывов даже первый сбой
                 // на здоровой сети ждал бы пять минут до переподключения.
                 reconnectAttempts = 0
-                // Реальное подключение состоялось — снимаем circuit breaker и счётчик статуса.
+                // Реальное подключение состоялось — ПОЛНЫЙ сброс breaker'а (единственная точка).
                 consecutiveWsFailures = 0
-                wsReconnectSuppressedUntil = 0L
-                wsCooldownRounds = 0
+                wsCooldownUntilWallClock = 0L
+                wsCooldownRound = 0
                 wsAttemptsSinceSuccess = 0
+                probeThroughCooldownOnce = false
+                reconnectJob?.cancel()
+                reconnectJob = null
                 persistWsAttempts()
+                persistCooldown()
+                // Сигнал сервису: сокет ожил — если персистентный фон, снова держать FGS
+                // (после кулдауна FGS мог быть отпущен ради экономии батареи).
+                foregroundRealtimeFlow.tryEmit(ForegroundRealtimeChange(true, "ws_connected"))
                 webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
                 webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
                 // Соединение живо — запускаем/перезапускаем idle-таймер относительно него.
@@ -322,16 +355,17 @@ class EventsRepository(
                 // даже пока приложение открыто и circuit breaker сброшен.
                 wsAttemptsSinceSuccess++
                 persistWsAttempts()
-                if (consecutiveWsFailures == WS_FAILURE_COOLDOWN_THRESHOLD) {
+                if (consecutiveWsFailures >= WS_FAILURE_COOLDOWN_THRESHOLD) {
                     // Прогрессивный кулдаун: 10 → 20 → 40 → 60 (потолок) минут. Счётчик фейлов
-                    // обнуляем — после кулдауна новый раунд считается заново.
-                    val cooldownMs = (WS_COOLDOWN_BASE_MS shl wsCooldownRounds.coerceAtMost(3))
+                    // обнуляем — после кулдауна новый раунд считается заново. Wall-clock + персист.
+                    val cooldownMs = (WS_COOLDOWN_BASE_MS shl wsCooldownRound.coerceAtMost(3))
                             .coerceAtMost(WS_COOLDOWN_MAX_MS)
-                    wsCooldownRounds++
+                    wsCooldownRound++
                     consecutiveWsFailures = 0
-                    wsReconnectSuppressedUntil = SystemClock.elapsedRealtime() + cooldownMs
+                    wsCooldownUntilWallClock = System.currentTimeMillis() + cooldownMs
+                    persistCooldown()
                     forpdateam.ru.forpda.notifications.NotifDiagLog.log(
-                            application, "ws: cooldown ${cooldownMs / 60_000}min (round=$wsCooldownRounds)")
+                            application, "ws: cooldown ${cooldownMs / 60_000}min (round=$wsCooldownRound)")
                 }
                 if (BuildConfig.DEBUG) Timber.d("start onDisconnected")
                 start(checkEvents = false, force = false)
@@ -346,6 +380,10 @@ class EventsRepository(
         // на свежем процессе ~2 минуты не мог отличить «подключается» от «заблокирован».
         wsAttemptsSinceSuccess = runCatching { wsStatsPrefs.getInt(KEY_WS_ATTEMPTS_SINCE_SUCCESS, 0) }
                 .getOrDefault(0)
+        // Кулдаун (wall-clock) и раунд переживают рестарт/ребут: иначе холодный старт стирал
+        // защиту и мёртвый endpoint снова долбился с round=1.
+        wsCooldownUntilWallClock = runCatching { wsStatsPrefs.getLong(KEY_WS_COOLDOWN_UNTIL, 0L) }.getOrDefault(0L)
+        wsCooldownRound = runCatching { wsStatsPrefs.getInt(KEY_WS_COOLDOWN_ROUND, 0) }.getOrDefault(0)
         // Когда шапка форума (index_header) авторитетно сообщает «упоминаний 0», гасим устаревшие
         // локальные override'ы: иначе «осиротевший» ключ (прочитано на др. устройстве/сайте, READ-
         // событие не дошло; либо пост совпал не по тому id) вечно держал бейдж «Ответы» на 1, хотя
@@ -370,6 +408,8 @@ class EventsRepository(
                 lastNet = s
                 if (s && foregroundRealtimeEnabled) {
                     if (BuildConfig.DEBUG) Timber.d("start networkStateProvider.observeState")
+                    // Реальная смена сети (могли выйти из зоны блокировки) — одна проба сквозь кулдаун.
+                    probeThroughCooldownOnce = true
                     start(checkEvents = true, force = true)
                 } else if (!s) {
                     stop("network_lost")
@@ -426,11 +466,10 @@ class EventsRepository(
     fun onAppForegrounded() {
         backgroundGraceJob?.cancel()
         backgroundGraceJob = null
-        // Свежий foreground-сеанс — снимаем circuit breaker: сеть могла смениться (ушёл из зоны
-        // блокировки/выключил VPN), и сокет заслуживает немедленной попытки, а не досиживания кулдауна.
-        consecutiveWsFailures = 0
-        wsReconnectSuppressedUntil = 0L
-        wsCooldownRounds = 0
+        // НЕ сбрасываем кулдаун (баг из code-review: foreground обнулял защиту, раунд не рос, и
+        // мёртвый endpoint долбился заново). Даём лишь ОДНУ пробную попытку сквозь кулдаун — сеть
+        // могла смениться / VPN выключили; упадёт — кулдаун продолжится с текущего раунда.
+        probeThroughCooldownOnce = true
         setForegroundRealtimeEnabled(true, "process_start")
     }
 
@@ -822,35 +861,25 @@ class EventsRepository(
                     stop("notifications_disabled")
                 }
             } else if (!webSocketController.hasActiveSocket()) {
-                // hasActiveSocket, а не isConnected: «в полёте» попытку не перезапускаем (иначе
-                // каждый сетевой триггер рвал бы недоподключённый сокет и начинал заново).
-                // Circuit breaker: пока активен кулдаун — не пытаемся подключаться (гасит и backoff,
-                // и force-попытки от флапа сети/рестарта сервиса). Одну попытку планируем на конец
-                // кулдауна, без дублей. Сбрасывается выходом приложения на передний план.
-                val nowElapsed = SystemClock.elapsedRealtime()
-                if (nowElapsed < wsReconnectSuppressedUntil) {
-                    if (!cooldownReconnectScheduled) {
-                        cooldownReconnectScheduled = true
-                        val wait = wsReconnectSuppressedUntil - nowElapsed
-                        repoScope.launch {
-                            delay(wait)
-                            cooldownReconnectScheduled = false
-                            if (!webSocketController.hasActiveSocket() && foregroundRealtimeEnabled) {
-                                start(checkEvents = false, force = true)
-                            }
-                        }
+                // hasActiveSocket, а не isConnected: «в полёте» попытку не перезапускаем.
+                // Circuit breaker: пока активен кулдаун — не подключаемся. ОДНА проба сквозь кулдаун
+                // (probeThroughCooldownOnce) разрешена при смене сети/foreground, НЕ стирая кулдаун:
+                // упадёт — onDisconnected продолжит кулдаун с текущего раунда. Иначе планируем
+                // единственную reconnect-job на конец кулдауна.
+                if (isWsInCooldown()) {
+                    if (probeThroughCooldownOnce) {
+                        probeThroughCooldownOnce = false
+                        BatteryDebugLogger.logState("EventsRepository", "webSocketProbe", "through cooldown")
+                        webSocketController.connect()
+                    } else {
+                        scheduleReconnect(wsCooldownUntilWallClock - System.currentTimeMillis())
                     }
                     return
                 }
                 if (!force && reconnectAttempts > 0) {
                     val delayMs = reconnectBackoffMs()
                     BatteryDebugLogger.logState("EventsRepository", "reconnectBackoff", "attempt=$reconnectAttempts delayMs=$delayMs")
-                    repoScope.launch {
-                        delay(delayMs)
-                        if (!webSocketController.hasActiveSocket()) {
-                            start(checkEvents = false, force = true)
-                        }
-                    }
+                    scheduleReconnect(delayMs)
                     reconnectAttempts++
                     return
                 }
@@ -870,12 +899,29 @@ class EventsRepository(
         }
     }
 
+    /**
+     * Единственная запланированная reconnect-попытка: перед новой отменяем предыдущую (P1 GPT —
+     * иначе накопленные delayed-jobs позже просыпались и все звали start()). После delay повторно
+     * проверяем foreground и отсутствие живого сокета.
+     */
+    private fun scheduleReconnect(delayMs: Long) {
+        reconnectJob?.cancel()
+        reconnectJob = repoScope.launch {
+            delay(delayMs.coerceAtLeast(0L))
+            if (foregroundRealtimeEnabled && !webSocketController.hasActiveSocket()) {
+                start(checkEvents = false, force = true)
+            }
+        }
+    }
+
     private fun stop(reason: String) {
         if (BuildConfig.DEBUG) Timber.d("stop")
         BatteryDebugLogger.logState("EventsRepository", "stopRealtime", reason)
         if (!reason.startsWith("reconnect")) {
             reconnectAttempts = 0
         }
+        reconnectJob?.cancel()
+        reconnectJob = null
         cancelTimer()
         webSocketController.disconnectAll()
     }

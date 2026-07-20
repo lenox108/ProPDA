@@ -52,16 +52,14 @@ class HatVersionWatcher @Inject constructor(
         if (!prefs.getHatEnabled()) return false
         if (!prefs.isHatWatched(topicId)) return false
 
-        val page = runCatching {
-            themeApi.getTheme(
-                    "https://4pda.to/forum/index.php?showtopic=$topicId&st=0",
-                    /* hatOpen = */ true,
-                    /* pollOpen = */ false
-            )
-        }.getOrElse {
-            Timber.e(it, "HatVersionWatcher: load topic $topicId failed")
-            return false
-        }
+        // getTheme НЕ оборачиваем в глушащий runCatching: сетевая ошибка должна ВЫЙТИ наружу,
+        // чтобы EventsCheckWorker.checkHatVersions поймал IOException и включил retry (раньше
+        // ошибка глоталась здесь → «HAT в retry» не работал, code-review P1).
+        val page = themeApi.getTheme(
+                "https://4pda.to/forum/index.php?showtopic=$topicId&st=0",
+                /* hatOpen = */ true,
+                /* pollOpen = */ false
+        )
 
         // Строго «только в шапке»: пост №1 первой страницы (fallback — первый пост).
         val hatPost = page.posts.firstOrNull { it.number == 1 } ?: page.posts.firstOrNull() ?: return false
@@ -70,23 +68,36 @@ class HatVersionWatcher @Inject constructor(
 
         val hadSnapshot = prefs.hasHatApkSnapshot(topicId)
         val saved = prefs.getHatApkSnapshot(topicId)
-        // Всегда обновляем снимок актуальным состоянием.
-        prefs.setHatApkSnapshot(topicId, currentIds)
 
         // Первый заход = только эталон, без пуша.
-        if (!hadSnapshot) return false
+        if (!hadSnapshot) {
+            prefs.setHatApkSnapshot(topicId, currentIds)
+            return false
+        }
 
         val newIds = currentIds - saved
-        if (newIds.isEmpty()) return false
+        if (newIds.isEmpty()) {
+            // Нового apk нет — снимок можно обновить (старые могли исчезнуть), потери нет.
+            prefs.setHatApkSnapshot(topicId, currentIds)
+            return false
+        }
 
         val newNames = currentApks.filter { it.id in newIds }.map { it.name }
-        publish(topicId, page.title, newNames)
-        return true
+        // Снапшот двигаем ТОЛЬКО после подтверждённой публикации (code-review P1): иначе при
+        // запрете уведомлений apk молча отметился бы «известным» и не показался.
+        val delivered = publish(topicId, page.title, newNames)
+        if (delivered) {
+            prefs.setHatApkSnapshot(topicId, currentIds)
+        } else {
+            Timber.w("HatVersionWatcher: publish blocked for $topicId, snapshot kept")
+        }
+        return delivered
     }
 
+    /** @return true, если уведомление реально показано (иначе снапшот не двигаем). */
     @SuppressLint("MissingPermission")
-    private fun publish(topicId: Int, topicTitle: String?, newApkNames: List<String>) {
-        if (!prefs.getMainEnabled() || !prefs.getHatEnabled()) return
+    private fun publish(topicId: Int, topicTitle: String?, newApkNames: List<String>): Boolean {
+        if (!prefs.getMainEnabled() || !prefs.getHatEnabled()) return false
 
         ensureChannel()
 
@@ -124,16 +135,25 @@ class HatVersionWatcher @Inject constructor(
             if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
                 Timber.w("HatVersionWatcher: POST_NOTIFICATIONS denied, skip")
-                return
+                return false
             }
         }
         val nm = NotificationManagerCompat.from(context)
         if (!nm.areNotificationsEnabled()) {
             Timber.w("HatVersionWatcher: notifications disabled by system, skip")
-            return
+            return false
+        }
+        // Канал HAT выключен пользователем (importance NONE) — notify() молча теряет. Возвращаем
+        // false, чтобы снапшот apk не двинулся и версия показалась после включения канала (audit BUG-1).
+        val hatChannel = context.getSystemService(NotificationManager::class.java)
+                ?.getNotificationChannel(NotificationsService.CHANNEL_HAT_ID)
+        if (hatChannel != null && hatChannel.importance == NotificationManager.IMPORTANCE_NONE) {
+            Timber.w("HatVersionWatcher: HAT channel disabled by user, skip")
+            return false
         }
         nm.notify(notifyId, builder.build())
         Timber.i("HatVersionWatcher: published new-version notification for topic $topicId")
+        return true
     }
 
     private fun ensureChannel() {

@@ -71,6 +71,15 @@ interface IWebClient {
     suspend fun awaitAuthCookiesHydrated(timeoutMs: Long): Boolean = true
 
     /**
+     * Перечитать auth-куки из хранилища с повторной попыткой открыть encrypted (обратный
+     * split-brain). Зовёт фоновый воркер при «not authorized» в fallback-режиме.
+     */
+    fun reinitAuthCookies() {}
+
+    /** Хранилище auth-куки сейчас в деградированном plain-fallback режиме (KeyStore не открылся). */
+    fun isSecureCookieStoreFallback(): Boolean = false
+
+    /**
      * Функциональный интерфейс для отслеживания прогресса загрузки.
      * В Kotlin можно использовать лямбду: { percent -> ... }
      */

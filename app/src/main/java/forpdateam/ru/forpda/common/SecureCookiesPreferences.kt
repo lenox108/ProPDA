@@ -38,10 +38,30 @@ class SecureCookiesPreferences private constructor(context: Context) {
     var recoveredFromFallbackCount: Int = 0
         private set
 
-    private val encryptedPrefs: SharedPreferences = createEncryptedPrefsWithRetry(context)
+    @Volatile
+    private var encryptedPrefs: SharedPreferences = createEncryptedPrefsWithRetry(context)
         ?: context.getSharedPreferences("secure_cookies_fallback", Context.MODE_PRIVATE).also {
             isUsingFallback = true
         }
+
+    /**
+     * Повторная попытка открыть зашифрованное хранилище, если сейчас мы в fallback-режиме
+     * (KeyStore не открылся при старте процесса). Закрывает ОБРАТНЫЙ split-brain (audit HIGH):
+     * куки могли быть записаны в encrypted здоровым процессом, а этот процесс упал в fallback и
+     * их не видит → залогиненный юзер = «not authorized» без шанса восстановиться в этом процессе.
+     * При успехе переключаемся на encrypted и подтягиваем застрявшее из fallback-файла.
+     * @return true, если хранилище теперь зашифрованное (свежее или уже было).
+     */
+    @Synchronized
+    fun retryEncryptedUpgrade(): Boolean {
+        if (!isUsingFallback) return true
+        val enc = createEncryptedPrefsWithRetry(appContext) ?: return false
+        encryptedPrefs = enc
+        isUsingFallback = false
+        recoverStrandedCookiesFromFallback()
+        Timber.i("SecureCookiesPreferences: upgraded fallback -> encrypted store")
+        return true
+    }
 
     private val migrationKey = "cookies_migrated_to_encrypted"
 
