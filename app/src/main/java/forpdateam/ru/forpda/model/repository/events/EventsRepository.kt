@@ -87,6 +87,9 @@ class EventsRepository(
         /** Столько подряд неудачных WS-подключений — и уходим в кулдаун вместо шторма реконнектов. */
         private const val WS_FAILURE_COOLDOWN_THRESHOLD = 4
 
+        /** Персист счётчика неудач WS для статуса «Мгновенный канал» (переживает рестарт процесса). */
+        private const val KEY_WS_ATTEMPTS_SINCE_SUCCESS = "events.ws_attempts_since_success"
+
         /** Базовый кулдаун; каждый следующий раунд удваивается до потолка. Доставку держит воркер. */
         private const val WS_COOLDOWN_BASE_MS = 10 * 60_000L
 
@@ -126,9 +129,22 @@ class EventsRepository(
      * [consecutiveWsFailures] НЕ сбрасывается ни foreground'ом, ни кулдауном — только успехом.
      * Нужен статусу «Мгновенный канал» в настройках: честно отличает «реально подключается сейчас»
      * от «давно не может подключиться» (сеть/VPN режет), даже пока приложение открыто.
+     *
+     * ПЕРСИСТИТСЯ между запусками процесса: иначе каждый старт обнулял счётчик, и до порога
+     * [isWsLikelyBlocked] нужно было ~2 минуты сидеть на экране (2 таймаута по ~40-70с) —
+     * статус «висел на Подключается и не менялся» (полевой репорт). С персистом история
+     * неудач известна сразу, и «Недоступен» показывается с первого открытия настроек.
      */
     @Volatile
     private var wsAttemptsSinceSuccess = 0
+
+    private val wsStatsPrefs by lazy {
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(application)
+    }
+
+    private fun persistWsAttempts() {
+        runCatching { wsStatsPrefs.edit().putInt(KEY_WS_ATTEMPTS_SINCE_SUCCESS, wsAttemptsSinceSuccess).apply() }
+    }
 
     /**
      * Тема, открытая на экране прямо сейчас (0 — никакая). Ведёт [NativeTopicFragment]
@@ -253,6 +269,7 @@ class EventsRepository(
                 wsReconnectSuppressedUntil = 0L
                 wsCooldownRounds = 0
                 wsAttemptsSinceSuccess = 0
+                persistWsAttempts()
                 webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
                 webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
                 // Соединение живо — запускаем/перезапускаем idle-таймер относительно него.
@@ -304,6 +321,7 @@ class EventsRepository(
                 // (не foreground'ом, не кулдауном), поэтому честно отражает «сокет давно не поднимался»,
                 // даже пока приложение открыто и circuit breaker сброшен.
                 wsAttemptsSinceSuccess++
+                persistWsAttempts()
                 if (consecutiveWsFailures == WS_FAILURE_COOLDOWN_THRESHOLD) {
                     // Прогрессивный кулдаун: 10 → 20 → 40 → 60 (потолок) минут. Счётчик фейлов
                     // обнуляем — после кулдауна новый раунд считается заново.
@@ -324,6 +342,10 @@ class EventsRepository(
     private val webSocketController = WebSocketController(webClient, controllerListener)
 
     init {
+        // История неудач WS переживает рестарт процесса — иначе статус «Мгновенный канал»
+        // на свежем процессе ~2 минуты не мог отличить «подключается» от «заблокирован».
+        wsAttemptsSinceSuccess = runCatching { wsStatsPrefs.getInt(KEY_WS_ATTEMPTS_SINCE_SUCCESS, 0) }
+                .getOrDefault(0)
         // Когда шапка форума (index_header) авторитетно сообщает «упоминаний 0», гасим устаревшие
         // локальные override'ы: иначе «осиротевший» ключ (прочитано на др. устройстве/сайте, READ-
         // событие не дошло; либо пост совпал не по тому id) вечно держал бейдж «Ответы» на 1, хотя
