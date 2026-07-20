@@ -26,6 +26,8 @@ import timber.log.Timber
 object NotificationPublisher {
 
     private const val NOTIFICATIONS_LOG_TAG = "Notifications"
+    /** Помечает интент открытия темы из шторки — MainActivity даёт ему «доверие непрочитанного». */
+    const val EXTRA_FROM_NOTIFICATION_TOPIC = "forpda_from_notification_topic"
     const val NOTIFY_STACKED_QMS_ID = -123
     const val NOTIFY_STACKED_FAV_ID = -234
     private const val STACKED_MAX = 4
@@ -57,6 +59,13 @@ object NotificationPublisher {
         val notifyIntent = Intent(Intent.ACTION_VIEW, Uri.parse(intentUrl))
                 .setClass(context, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Открытие темы из шторки — авторитетный сигнал «здесь есть непрочитанное». Помечаем его,
+        // чтобы тема открылась с тем же доверием к getnewpost, что и открытие из Избранного, и
+        // пометилась прочитанной по дочтению (иначе suppress-гейт не снимался без физ. скролла, и
+        // короткий «новый ответ» на экран не помечался прочитанным — полевой репорт).
+        if (event.fromTheme() && !event.isMention) {
+            notifyIntent.putExtra(EXTRA_FROM_NOTIFICATION_TOPIC, true)
+        }
         val pi = PendingIntent.getActivity(
                 context,
                 event.notifyId(),
