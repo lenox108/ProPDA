@@ -139,12 +139,9 @@ class EventsCheckWorker @AssistedInject constructor(
 
         // Дедуп двух триггеров (periodic WorkManager + точный будильник): реальный сетевой
         // проход делает максимум один из них за полуинтервал — иначе двойные пробуждения
-        // удвоили бы сетевые запросы, а событий чаще не становится. Интервал — эффективный:
-        // «Реже проверять ночью» растягивает его до часа в 00:00–07:00.
+        // удвоили бы сетевые запросы, а событий чаще не становится.
         val now = System.currentTimeMillis()
-        val hourOfDay = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        val effectiveIntervalMin = prefs.getEffectiveBgIntervalMin(hourOfDay)
-        val minGapMs = effectiveIntervalMin * 60_000L / 2
+        val minGapMs = prefs.getBgCheckIntervalMin() * 60_000L / 2
         val prevCheckAt = prefs.getLastCheckAt()
         val sinceLastCheck = now - prevCheckAt
         if (sinceLastCheck in 0 until minGapMs) {
@@ -182,7 +179,7 @@ class EventsCheckWorker @AssistedInject constructor(
         // периодического воркера перевзводит будильник заново — пока жив хоть один контур,
         // второй восстанавливается сам. Дёшево: AlarmManager.set — локальный вызов.
         if (prefs.getBgCheckEnabled() && prefs.wantsPushNotifications()) {
-            EventsCheckAlarmScheduler.schedule(applicationContext, effectiveIntervalMin)
+            EventsCheckAlarmScheduler.schedule(applicationContext, prefs.getBgCheckIntervalMin())
         }
 
         if (anyNetworkError) {

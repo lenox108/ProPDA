@@ -41,7 +41,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     private val realtimeStatusHandler = Handler(Looper.getMainLooper())
     private val realtimeStatusTick = object : Runnable {
         override fun run() {
-            updateRealtimeStatus()
+            updateDiagnosticsSummary()
             // Живое обновление, пока экран открыт: статус «Подключается» → «Недоступен» иначе
             // не переключился бы, ведь строка — снимок. Лёгкое: только чтение volatile + summary.
             realtimeStatusHandler.postDelayed(this, REALTIME_STATUS_REFRESH_MS)
@@ -85,38 +85,85 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         }
     }
 
-    /** Журнал фоновых проверок ([forpdateam.ru.forpda.notifications.NotifDiagLog]) — работает и в release. */
+    /**
+     * Объединённая «Диагностика уведомлений»: статус мгновенного канала + проверка сети канала
+     * + журнал фоновых проверок ([forpdateam.ru.forpda.notifications.NotifDiagLog]) — всё в одном
+     * диалоге, работает и в release. Раньше это были два отдельных пункта.
+     */
     private fun configureBgCheckDiagnostics() {
         preferenceScreen.findPreference<Preference>("notifications.bg.diagnostics")?.setOnPreferenceClickListener {
-            showBgCheckDiagnosticsDialog()
+            showDiagnosticsDialog()
             true
         }
     }
 
-    private fun showBgCheckDiagnosticsDialog() {
+    private fun showDiagnosticsDialog() {
         val context = context ?: return
-        val log = forpdateam.ru.forpda.notifications.NotifDiagLog.read(context)
-                .ifBlank { getString(R.string.bg_check_diagnostics_empty) }
-        val textView = android.widget.TextView(context).apply {
-            text = log
+        val density = resources.displayMetrics.density
+        val pad = (density * 16).toInt()
+
+        // Строка 1: статус мгновенного канала (тот же текст, что был в отдельном пункте).
+        val statusText = android.widget.TextView(context).apply {
+            text = getString(R.string.diagnostics_section_channel) + ": " +
+                    (realtimeStatusText() ?: getString(R.string.realtime_status_connecting))
+            setPadding(pad, pad / 2, pad, pad / 2)
+        }
+        // Кнопка запуска сетевой пробы (DNS → TCP → ping/pong → вердикт).
+        val checkButton = android.widget.Button(context).apply {
+            text = getString(R.string.diagnostics_check_network)
+        }
+        val logLabel = android.widget.TextView(context).apply {
+            text = getString(R.string.diagnostics_section_log)
+            setPadding(pad, pad, pad, pad / 4)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
+        val logText = android.widget.TextView(context).apply {
             typeface = android.graphics.Typeface.MONOSPACE
             textSize = 12f
             setTextIsSelectable(true)
-            val pad = (resources.displayMetrics.density * 16).toInt()
-            setPadding(pad, pad / 2, pad, pad / 2)
+            setPadding(pad, 0, pad, pad / 2)
+            text = forpdateam.ru.forpda.notifications.NotifDiagLog.read(context)
+                    .ifBlank { getString(R.string.bg_check_diagnostics_empty) }
         }
-        val scroll = android.widget.ScrollView(context).apply {
-            addView(textView)
-            // Свежие записи в конце — мотаем вниз после раскладки.
+        val logScroll = android.widget.ScrollView(context).apply {
+            addView(logText)
             post { fullScroll(android.view.View.FOCUS_DOWN) }
         }
+        val content = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            addView(statusText)
+            addView(checkButton, android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { marginStart = pad; marginEnd = pad })
+            addView(logLabel)
+            // Журнал занимает оставшуюся высоту, но не выталкивает статус/кнопку за экран.
+            addView(logScroll, android.widget.LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+
+        checkButton.setOnClickListener {
+            checkButton.isEnabled = false
+            statusText.text = getString(R.string.diagnostics_section_channel) + ": " +
+                    getString(R.string.realtime_probe_running)
+            runRealtimeChannelProbe { report ->
+                val ctx = this.context ?: return@runRealtimeChannelProbe
+                statusText.text = getString(R.string.diagnostics_section_channel) + ":\n" + report.verdict
+                logText.text = forpdateam.ru.forpda.notifications.NotifDiagLog.read(ctx)
+                        .ifBlank { getString(R.string.bg_check_diagnostics_empty) }
+                logScroll.post { logScroll.fullScroll(android.view.View.FOCUS_DOWN) }
+                checkButton.isEnabled = true
+            }
+        }
+
         com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
                 .setTitle(R.string.pref_title_bg_check_diagnostics)
-                .setView(scroll)
+                .setView(content)
                 .setPositiveButton(android.R.string.ok, null)
                 .setNeutralButton(R.string.bg_check_diagnostics_copy) { _, _ ->
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("notif_diag", log))
+                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(
+                            "notif_diag", forpdateam.ru.forpda.notifications.NotifDiagLog.read(context)))
                     android.widget.Toast.makeText(context, R.string.bg_check_diagnostics_copied, android.widget.Toast.LENGTH_SHORT).show()
                 }
                 .setNegativeButton(R.string.bg_check_diagnostics_clear) { _, _ ->
@@ -265,25 +312,21 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         updateBatteryOptimizationSummary()
         updateBgStalledWarning()
         updateChannelSummaries()
-        updateRealtimeStatus()
+        updateDiagnosticsSummary()
     }
 
     /**
-     * Честный статус «мгновенного канала» (WebSocket). Полевые кейсы: у части пользователей
-     * сеть/VPN режет ws-соединение — уведомления при этом ДОХОДЯТ (резервный опрос), но с
-     * задержкой, и люди считают «не работает». Теперь приложение объясняет это само.
+     * Честный статус «мгновенного канала» (WebSocket) для summary объединённого пункта
+     * «Диагностика уведомлений». Полевые кейсы: у части пользователей сеть/VPN режет
+     * ws-соединение — уведомления при этом ДОХОДЯТ (резервный опрос), но с задержкой, и люди
+     * считают «не работает». Приложение объясняет это само. null — репозиторий недоступен.
      */
-    private fun updateRealtimeStatus() {
-        val preference = preferenceScreen.findPreference<Preference>("notifications.bg.realtime_status") ?: return
-        val repo = (activity?.application as? forpdateam.ru.forpda.App)?.eventsRepository
-        if (repo == null) {
-            preference.isVisible = false
-            return
-        }
+    private fun realtimeStatusText(): String? {
+        val repo = (activity?.application as? forpdateam.ru.forpda.App)?.eventsRepository ?: return null
         val sp = preferenceScreen.sharedPreferences
         val intervalMin = (sp?.getString("notifications.bg.interval_min", null)?.toLongOrNull() ?: 30L)
                 .coerceAtLeast(15L)
-        preference.summary = when {
+        return when {
             repo.isWebSocketConnected() -> getString(R.string.realtime_status_connected)
             // isWsLikelyBlocked / isWsCoolingDown вместо только кулдауна: открытый экран настроек
             // держит приложение в foreground и сбрасывает кулдаун, поэтому «Недоступен» надо
@@ -292,21 +335,25 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                 getString(R.string.realtime_status_blocked, intervalMin)
             else -> getString(R.string.realtime_status_connecting)
         }
-        // Тап по строке — сетевая диагностика канала: DNS → HTTPS → WS-хендшейк → вердикт
-        // (провайдер/VPN/Private DNS/недоступность хоста). Результат — диалог + журнал.
-        preference.setOnPreferenceClickListener {
-            runRealtimeChannelProbe()
-            true
-        }
+    }
+
+    /** Живой статус канала выносим в summary пункта диагностики (обновляется тиком, пока экран открыт). */
+    private fun updateDiagnosticsSummary() {
+        val preference = preferenceScreen.findPreference<Preference>("notifications.bg.diagnostics") ?: return
+        preference.summary = realtimeStatusText() ?: getString(R.string.pref_summary_bg_check_diagnostics)
     }
 
     private var probeInProgress = false
 
-    private fun runRealtimeChannelProbe() {
+    /**
+     * Сетевая проба мгновенного канала: DNS → TCP :993 → raw-WS ping/pong → вердикт. Результат
+     * пишется в журнал построчно и отдаётся в [onDone] (на Main) — вызывающий диалог обновляет
+     * свои поля. Повторный запуск, пока идёт проверка, игнорируется.
+     */
+    private fun runRealtimeChannelProbe(onDone: (forpdateam.ru.forpda.notifications.RealtimeChannelProbe.ProbeReport) -> Unit) {
         if (probeInProgress) return
         probeInProgress = true
         val appContext = context?.applicationContext ?: return
-        android.widget.Toast.makeText(appContext, R.string.realtime_probe_running, android.widget.Toast.LENGTH_SHORT).show()
         viewLifecycleOwner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val report = runCatching { forpdateam.ru.forpda.notifications.RealtimeChannelProbe.run() }
                     .getOrElse {
@@ -318,12 +365,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
             forpdateam.ru.forpda.notifications.NotifDiagLog.log(appContext, "probe: verdict: ${report.verdict}")
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                 probeInProgress = false
-                val ctx = context ?: return@withContext
-                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
-                        .setTitle(R.string.realtime_probe_title)
-                        .setMessage(report.lines.joinToString("\n") + "\n\n" + report.verdict)
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show()
+                onDone(report)
             }
         }
     }

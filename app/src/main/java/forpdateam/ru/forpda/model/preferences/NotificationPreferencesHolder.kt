@@ -51,18 +51,6 @@ class NotificationPreferencesHolder(
 
     fun getBgPersistentWs(): Boolean = dataStore.getBgPersistentWsSync()
 
-    fun getBgNightSlowdown(): Boolean = dataStore.getBgNightSlowdownSync()
-
-    /**
-     * Интервал с учётом «Реже проверять ночью»: с 00:00 до 07:00 — не чаще раза в час.
-     * Планировщик будильника и дедуп воркера обязаны сходиться в этот метод.
-     */
-    fun getEffectiveBgIntervalMin(hourOfDay: Int): Long {
-        val base = getBgCheckIntervalMin()
-        if (!getBgNightSlowdown()) return base
-        return if (hourOfDay in 0..6) maxOf(base, 60L) else base
-    }
-
     // --- Самодиагностика фоновых проверок ---
     fun getLastWorkerRunAt(): Long = dataStore.getLastWorkerRunAtSync()
 
