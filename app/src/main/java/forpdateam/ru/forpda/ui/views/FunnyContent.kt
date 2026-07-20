@@ -50,6 +50,12 @@ class FunnyContent(context: Context) : RelativeLayout(context) {
         binding.funnyDesc.visibility = VISIBLE
     }
 
+    /** Описание произвольным текстом — например, реальная причина ошибки из ErrorHandler. */
+    fun setDesc(text: CharSequence): FunnyContent = apply {
+        binding.funnyDesc.text = text
+        binding.funnyDesc.visibility = VISIBLE
+    }
+
     fun addAction(@StringRes textResId: Int, listener: View.OnClickListener): FunnyContent = apply {
         val button = MaterialButton(context, null, MaterialR.attr.materialButtonOutlinedStyle).apply {
             setText(textResId)

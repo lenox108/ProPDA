@@ -42,18 +42,9 @@ class FavoritesApi(
         }
 
         val url = uriBuilder.build().toString()
-        val response = if (bypassCache) {
-            webClient.request(
-                    NetworkRequest.Builder()
-                            .url(url)
-                            .addHeader("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate")
-                            .addHeader("Pragma", "no-cache")
-                            .build()
-            )
-        } else {
-            webClient.get(url)
-        }
-        val body = response.body
+        // Список избранного может занимать несколько страниц (см. цикл `all` ниже). Каждый
+        // GET устойчив к анти-флуду 4pda: при 429/5xx/IO повторяем с бэкоффом.
+        val body = requestFavoritesPageBody(url, bypassCache)
         val htmlMeta = FpdaDebugLog.classifyHtml(body)
         FavoritesUnreadTrace.htmlReceived(
                 source = if (bypassCache) "network_refresh" else "network",
@@ -67,6 +58,9 @@ class FavoritesApi(
                 if (data.pagination.current >= data.pagination.all) {
                     break
                 }
+                // Пауза между страницами: без неё многостраничный список уходит одним burst'ом,
+                // и 4pda отвечает 429 («Слишком много запросов»). Держим щадящую очередь (~3 req/s).
+                sleepQuietly(PAGE_THROTTLE_MS)
                 val favData = getFavorites(data.pagination.getPage(data.pagination.current), false, sorting, bypassCache)
                 data.pagination = favData.pagination
                 if (favData.items.isEmpty()) {
@@ -80,6 +74,55 @@ class FavoritesApi(
         FavoritesSort.apply(data.items, data.sorting, unreadTop = false)
 
         return data
+    }
+
+    /**
+     * Один GET страницы избранного с повтором при анти-флуде/временных сбоях 4pda.
+     * Блокирующий (метод вызывается на [Dispatchers.IO] из репозитория).
+     */
+    private fun requestFavoritesPageBody(url: String, bypassCache: Boolean): String {
+        var attempt = 0
+        while (true) {
+            try {
+                val response = if (bypassCache) {
+                    webClient.request(
+                            NetworkRequest.Builder()
+                                    .url(url)
+                                    .addHeader("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate")
+                                    .addHeader("Pragma", "no-cache")
+                                    .build()
+                    )
+                } else {
+                    webClient.get(url)
+                }
+                return response.body
+            } catch (e: Exception) {
+                if (!shouldRetryListRequest(e, attempt)) throw e
+                sleepQuietly(listBackoffMillis(attempt))
+                attempt++
+            }
+        }
+    }
+
+    private fun shouldRetryListRequest(e: Exception, attempt: Int): Boolean {
+        if (attempt >= LIST_MAX_ATTEMPTS - 1) return false
+        if (e is OkHttpResponseException && e.code == 429) return true
+        if (e is OkHttpResponseException && e.code in 500..599) return true
+        if (e is java.io.IOException) return true
+        return false
+    }
+
+    private fun listBackoffMillis(attemptIndex: Int): Long =
+            min(LIST_BACKOFF_BASE_MS * (1L shl attemptIndex), LIST_BACKOFF_CAP_MS)
+
+    /** Блокирующая пауза на IO-потоке; проглатывает interrupt, чтобы не рвать обход страниц. */
+    private fun sleepQuietly(millis: Long) {
+        if (millis <= 0L) return
+        try {
+            Thread.sleep(millis)
+        } catch (ie: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
     }
 
     fun editSubscribeType(type: String?, favId: Int): Boolean {
@@ -179,6 +222,12 @@ class FavoritesApi(
 
         /** Пауза между запросами к форуму: действие массовое, но очередь остаётся щадящей. */
         private const val DELAY_MS_BETWEEN_SERVER_CALLS = 300L
+        /** Пауза между запросами страниц списка избранного: гасим 429 от анти-флуда 4pda. */
+        private const val PAGE_THROTTLE_MS = 300L
+        /** Повторы при загрузке страницы списка (429/5xx/IO). Короче, чем для mark-read, — путь на UI. */
+        private const val LIST_MAX_ATTEMPTS = 3
+        private const val LIST_BACKOFF_BASE_MS = 1_500L
+        private const val LIST_BACKOFF_CAP_MS = 6_000L
         /** Повторы при любых сетевых/серверных ошибках (429, 5xx, 404, IO). */
         private const val READ_MAX_ATTEMPTS = 6
         private const val READ_BACKOFF_BASE_MS = 2_500L

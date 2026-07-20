@@ -520,6 +520,9 @@ class FavoritesFragment : RecyclerFragment() {
             contentController.showContent(ContentController.TAG_NO_DATA)
         } else {
             contentController.hideContent(ContentController.TAG_NO_DATA)
+            // Пришли реальные строки — гасим оверлей ошибки, иначе он ляжет поверх списка
+            // (ContentController.showContent не прячет mainContent). См. showLoadError.
+            contentController.hideContent(ContentController.TAG_ERROR)
         }
         // Delay bindItems to prevent RecyclerView crash during layout
         recyclerView.post {
@@ -533,21 +536,26 @@ class FavoritesFragment : RecyclerFragment() {
         hadFirstResult = true
         contentController.hideContent(tagSkeleton)
         if (adapter.itemCount > 0) {
+            // Список уже показан (кэш) — не перекрываем его плейсхолдером, только снекбар.
             showSnackbar(message ?: getString(R.string.error_occurred))
             return
         }
         contentController.hideContent(ContentController.TAG_NO_DATA)
-        if (!contentController.contains(ContentController.TAG_ERROR)) {
-            val funnyContent = FunnyContent(requireContext())
-                    .setImage(R.drawable.ic_toolbar_refresh)
-                    .setTitle(R.string.funny_favorites_error_title)
-                    .setDesc(R.string.funny_favorites_error_desc)
-                    .addAction(R.string.retry) { presenter.refresh() }
-            contentController.addContent(funnyContent, ContentController.TAG_ERROR)
-        }
+        // Пересобираем плейсхолдер каждый раз: описание должно отражать РЕАЛЬНУЮ причину
+        // (напр. 429/анти-флуд 4pda), а не всегда generic «проверьте подключение».
+        contentController.removeContent(ContentController.TAG_ERROR)
+        val reason: String = message?.takeIf { it.isNotBlank() }
+                ?: getString(R.string.funny_favorites_error_desc)
+        val funnyContent = FunnyContent(requireContext())
+                .setImage(R.drawable.ic_toolbar_refresh)
+                .setTitle(R.string.funny_favorites_error_title)
+                .setDesc(reason)
+                .addAction(R.string.retry) { presenter.refresh() }
+        contentController.addContent(funnyContent, ContentController.TAG_ERROR)
         contentController.showContent(ContentController.TAG_ERROR)
+        // Плейсхолдер — оверлей поверх списка (ContentController не прячет mainContent),
+        // поэтому явно очищаем список, иначе текст ошибки ляжет на старые строки.
         recyclerView.post { adapter.bindItems(emptyList()) }
-        message?.let { showSnackbar(it) }
     }
 
     override fun onBackPressed(): Boolean {

@@ -69,6 +69,11 @@ class ContentController(
         // mainContent?.visibility = View.VISIBLE
     }
 
+    /** Полностью убирает вьюху из контейнера (не просто прячет), чтобы её можно было пересобрать. */
+    fun removeContent(tag: Any) {
+        contents.remove(tag)?.let { additionalContent.removeView(it) }
+    }
+
     fun startRefreshing() {
         if (firstLoad) {
             mainContent?.visibility = View.INVISIBLE
