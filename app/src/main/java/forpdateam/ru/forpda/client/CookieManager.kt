@@ -108,13 +108,21 @@ class CookieManager(
                 userId = userId
             )
         } else {
-            // Диагностика фоновой авторизации: почему воркер видит «not authorized». Если
-            // secureFallback=true — зашифрованное хранилище не открылось (KeyStore), и auth-куки
-            // «пропали» в холодном фоне, хотя пользователь залогинен (полевой лог).
+            // Диагностика фоновой авторизации: почему воркер видит «not authorized». Показываем
+            // ВСЕ присутствующие auth-ключи — так видно, пусто хранилище совсем (нужен ре-логин /
+            // потеря куки) или есть session_id без member_id/pass_hash (истёк persistent-логин).
+            // secureFallback=true — хранилище не открылось (KeyStore); false — цело, но куки нет.
+            val presentKeys = listOfNotNull(
+                if (memberId != null) "member_id" else null,
+                if (passHash != null) "pass_hash" else null,
+                if (sessionId != null) "session_id" else null,
+                if (anonymous != null) "anonymous" else null,
+                if (clearance != null) "cf_clearance" else null
+            )
             forpdateam.ru.forpda.notifications.NotifDiagLog.log(
                 context,
                 "auth: SKIP secureFallback=${SecureCookiesPreferences.getInstance(context).isUsingFallback}" +
-                    " memberId=${memberId != null} passHash=${passHash != null}"
+                    " keys=[${presentKeys.joinToString(",")}]"
             )
             authData.copy(
                 state = AuthState.SKIP,

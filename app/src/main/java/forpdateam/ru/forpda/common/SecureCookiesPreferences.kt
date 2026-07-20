@@ -75,6 +75,46 @@ class SecureCookiesPreferences private constructor(context: Context) {
 
     init {
         migrateFromOldPrefs()
+        recoverStrandedCookiesFromFallback()
+    }
+
+    /**
+     * Восстановление auth-куки, застрявших в plain-fallback файле. Путь потери: если ПЕРВЫЙ
+     * запуск версии с шифрованием пришёлся на transient-сбой KeyStore, [migrateFromOldPrefs]
+     * перенёс cookie_* в fallback-файл и выставил флаг миграции ТАМ же; на следующем запуске
+     * зашифрованное хранилище открылось, флаг в нём отсутствует, миграция прошла снова — но
+     * старые prefs уже пусты, и куки «пропали», оставшись в fallback-файле. Полевой лог:
+     * secureFallback=false memberId=false — хранилище цело, а куки отсутствуют.
+     *
+     * Копируем из fallback то, чего нет в зашифрованном (свежее не перезаписываем), и чистим
+     * fallback, чтобы не восстановить повторно устаревшим. Безопасно: no-op, если восстанавливать
+     * нечего или мы сами в fallback-режиме.
+     */
+    private fun recoverStrandedCookiesFromFallback() {
+        if (isUsingFallback) return
+        try {
+            val fallback = appContext.getSharedPreferences("secure_cookies_fallback", Context.MODE_PRIVATE)
+            val cookieKeys = listOf(
+                "cookie_member_id", "cookie_pass_hash", "cookie_session_id",
+                "cookie_anonymous", "cookie_cf_clearance"
+            )
+            val editor = encryptedPrefs.edit()
+            var recovered = 0
+            for (key in cookieKeys) {
+                val fromFallback = fallback.getString(key, null) ?: continue
+                if (encryptedPrefs.getString(key, null) == null) {
+                    editor.putString(key, fromFallback)
+                    recovered++
+                }
+            }
+            if (recovered > 0) {
+                editor.apply()
+                fallback.edit().apply { cookieKeys.forEach { remove(it) } }.apply()
+                Timber.i("Recovered %d cookie(s) stranded in fallback store", recovered)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "recoverStrandedCookiesFromFallback failed")
+        }
     }
 
     /**
