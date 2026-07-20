@@ -93,7 +93,16 @@ class Client(
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         private const val MOBILE_COOKIE_NAME = "ngx_mb"
         private const val DESKTOP_MOBILE_COOKIE_VALUE = "0"
-        private const val EVENT_WS_URL = "wss://app.4pda.to/ws/"
+        // Realtime-эндпоинт 4PDA: app.4pda.to:993 — НЕСТАНДАРТНЫЙ WebSocket: голый TCP,
+        // БЕЗ TLS и БЕЗ HTTP-рукопожатия, сырые WS-фреймы сразу (сервер отвечает pong на ping
+        // и `[0,2]` на текст; проверено 20.07.2026). Порты 80/443 мертвы (timeout). Поэтому
+        // сюда нельзя ходить OkHttp'ом (он начинает с upgrade/TLS → вечный
+        // SSLHandshakeException у всех, на любой сети) — используется [RawWebSocket].
+        // Установлено декомпиляцией офф-клиента ru.fourpda.client 1.9.43 + живыми пробами.
+        private const val EVENT_WS_HOST = "app.4pda.to"
+        private const val EVENT_WS_PORT = 993
+        // Синтетический URL только для okhttp3.Request (диагностика/логи), не для запросов.
+        private const val EVENT_WS_URL = "http://app.4pda.to:993/ws/"
 
         /**
          * Foreground WebSocket ping interval. Raised 30s → 45s → 60s as a low-risk
@@ -154,8 +163,6 @@ class Client(
             .build()
     }
 
-    private val sharedConnectionPool: ConnectionPool get() = client.connectionPool
-
     private val desktopClient: OkHttpClient by lazy {
         client.newBuilder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -185,19 +192,6 @@ class Client(
             .build()
     }
 
-    private val webSocketClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .pingInterval(WEBSOCKET_PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
-            .connectionPool(sharedConnectionPool)
-            .cookieJar(cookieJar)
-            .addInterceptor(BlocklistInterceptor(authHolder, userHolder, blocklistGuard))
-            .addInterceptor(AuthInterceptor())
-            .build()
-    }
     // endregion
 
     // region IWebClient Implementation
@@ -332,10 +326,18 @@ class Client(
     }
 
     override fun createWebSocketConnection(webSocketListener: WebSocketListener): WebSocket {
+        // Request чисто синтетический — рукопожатия нет, заголовки серверу не уходят.
         val request = Request.Builder()
             .url(EVENT_WS_URL)
             .build()
-        return webSocketClient.newWebSocket(request, webSocketListener)
+        return RawWebSocket(
+                host = EVENT_WS_HOST,
+                port = EVENT_WS_PORT,
+                originalRequest = request,
+                listener = webSocketListener,
+                connectTimeoutMs = 30_000,
+                pingIntervalMs = WEBSOCKET_PING_INTERVAL_SECONDS * 1000L
+        ).also { it.connect() }
     }
     // endregion
 
