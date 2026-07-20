@@ -173,6 +173,29 @@ object NotificationPublisher {
         }
     }
 
+    /**
+     * Можно ли СЕЙЧАС доставить уведомление на данный канал: разрешение POST_NOTIFICATIONS,
+     * глобальный тумблер Android и конкретный канал не выключены. Нужно фоновому воркеру, чтобы
+     * НЕ двигать снапшот сравнения, пока доставка заблокирована системой — иначе событие
+     * «съедается» безвозвратно (P1 из code review): publish() вернул null, а снапшот уехал, и
+     * после выдачи разрешения событие уже не покажется. Каналы создаются заранее
+     * ([NotificationsService.createEventChannels]); отсутствующий канал считаем доставляемым
+     * (создастся при публикации).
+     */
+    fun canDeliver(context: Context, channelId: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            return false
+        }
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            return false
+        }
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return true
+        val channel = manager.getNotificationChannel(channelId) ?: return true
+        return channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
     fun cancel(context: Context, event: NotificationEvent) {
         NotificationManagerCompat.from(context).cancel(event.notifyId())
     }

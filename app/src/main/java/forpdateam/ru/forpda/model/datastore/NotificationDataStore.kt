@@ -56,6 +56,11 @@ class NotificationDataStore(private val context: Context) {
         // Первый фоновый проход только запоминает непрочитанные упоминания, не уведомляя о них:
         // иначе включение фичи высыпало бы в шторку всю накопленную историю.
         private const val KEY_MENTION_KEYS_SEEDED = "notifications.mention_keys_seeded"
+        // То же для тем/QMS: первый проход воркера на пустом снапшоте только запоминает базу,
+        // не уведомляя, иначе вся накопленная непрочитанка вываливается пачкой (полевой лог:
+        // THEME new=28 published=25). Отдельные флаги — снапшоты у источников разные.
+        private const val KEY_FAV_EVENTS_SEEDED = "notifications.fav_events_seeded"
+        private const val KEY_QMS_EVENTS_SEEDED = "notifications.qms_events_seeded"
 
         /**
          * Нижняя граница фоновой проверки. 15 минут — минимум AOSP для PeriodicWorkRequest:
@@ -301,6 +306,18 @@ class NotificationDataStore(private val context: Context) {
 
     fun setMentionKeysSeededSync(value: Boolean) {
         prefs.edit().putBoolean(KEY_MENTION_KEYS_SEEDED, value).apply()
+    }
+
+    fun getFavEventsSeededSync(): Boolean = prefs.getBoolean(KEY_FAV_EVENTS_SEEDED, false)
+
+    fun setFavEventsSeededSync(value: Boolean) {
+        prefs.edit().putBoolean(KEY_FAV_EVENTS_SEEDED, value).apply()
+    }
+
+    fun getQmsEventsSeededSync(): Boolean = prefs.getBoolean(KEY_QMS_EVENTS_SEEDED, false)
+
+    fun setQmsEventsSeededSync(value: Boolean) {
+        prefs.edit().putBoolean(KEY_QMS_EVENTS_SEEDED, value).apply()
     }
 
     fun getMainEnabledSync(): Boolean = prefs.getBoolean(KEY_MAIN_ENABLED, true)

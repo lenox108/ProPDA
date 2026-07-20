@@ -19,6 +19,7 @@ import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
 import forpdateam.ru.forpda.model.repository.mentions.MentionsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
@@ -49,6 +50,24 @@ class EventsCheckWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        // Атомарная защита от одновременного прохода двух контуров (periodic + alarm имеют разные
+        // unique-work имена и МОГУТ выполниться параллельно в одном процессе; дедуп по lastCheckAt
+        // сам по себе не атомарен — оба воркера прочитали бы старое значение, P1 code review).
+        // Оба живут в одном процессе, поэтому process-level Mutex сериализует их: второй просто
+        // выходит, пока первый держит проверку, — без двойной сети и гонки снапшота.
+        if (!workLock.tryLock()) {
+            Timber.d("EventsCheckWorker: another run in progress, skip")
+            NotifDiagLog.log(applicationContext, "worker: skip (another run in progress)")
+            return@withContext Result.success()
+        }
+        try {
+            runGuarded()
+        } finally {
+            workLock.unlock()
+        }
+    }
+
+    private suspend fun runGuarded(): Result = withContext(Dispatchers.IO) {
         // Отметка «нас вообще запускали» — пишется ДО любых скипов: самодиагностика в настройках
         // по ней отличает «система не запускает воркер» от «воркер запускается, но выходит пустым».
         prefs.setLastWorkerRunAt(System.currentTimeMillis())
@@ -125,10 +144,10 @@ class EventsCheckWorker @AssistedInject constructor(
         prefs.setLastCheckAt(now)
 
         NotifDiagLog.log(applicationContext, "worker: run start")
-        // A-фикс: моргнувшая сеть не должна стоить полного интервала тишины. Если НИ ОДИН
-        // сетевой источник не прошёл и хотя бы один упал сетевой ошибкой — возвращаем слот
-        // дедупа и просим WorkManager повторить (экспоненциальный backoff от 30с).
-        var anyNetworkSuccess = false
+        // Retry при сетевом сбое ЛЮБОГО источника, а не только когда упали все (P1 code review:
+        // раньше успех QMS «прятал» падение упоминаний — их events ждали бы полного интервала).
+        // Источник, бросивший ошибку, снапшот НЕ двигает (checkSource бросает до saveSnapshot),
+        // поэтому на retry успешные источники просто пере-детектят пустоту, а упавший — доберёт.
         var anyNetworkError = false
         fun trackFailure(tag: String, e: Throwable) {
             Timber.e(e, "EventsCheckWorker $tag failed")
@@ -136,15 +155,12 @@ class EventsCheckWorker @AssistedInject constructor(
             if (e is java.io.IOException) anyNetworkError = true
         }
         runCatching { checkSource(NotificationEvent.Source.QMS) }
-                .onSuccess { touchedNetwork -> if (touchedNetwork) anyNetworkSuccess = true }
                 .onFailure { trackFailure("QMS", it) }
         runCatching { checkSource(NotificationEvent.Source.THEME) }
-                .onSuccess { touchedNetwork -> if (touchedNetwork) anyNetworkSuccess = true }
                 .onFailure { trackFailure("THEME", it) }
         runCatching { checkHatVersions() }
                 .onFailure { Timber.e(it, "EventsCheckWorker HAT failed") }
         runCatching { checkMentions() }
-                .onSuccess { touchedNetwork -> if (touchedNetwork) anyNetworkSuccess = true }
                 .onFailure { trackFailure("MENTIONS", it) }
 
         // Самовосстановление alarm-цепи: перевзвод живёт в ресивере будильника, но force-stop
@@ -155,7 +171,10 @@ class EventsCheckWorker @AssistedInject constructor(
             EventsCheckAlarmScheduler.schedule(applicationContext, effectiveIntervalMin)
         }
 
-        if (!anyNetworkSuccess && anyNetworkError) {
+        if (anyNetworkError) {
+            // Возвращаем слот дедупа, чтобы retry реально перезапустил проверку, а не упёрся в
+            // «checked Ns ago». Успевшие источники уже сохранили снапшот — на retry они пере-
+            // детектят пустоту без дублей; упавший доберёт свои события.
             prefs.setLastCheckAt(prevCheckAt)
             if (runAttemptCount < MAX_NETWORK_RETRY_ATTEMPTS) {
                 NotifDiagLog.log(applicationContext, "worker: network error -> retry (attempt=${runAttemptCount + 1})")
@@ -194,6 +213,21 @@ class EventsCheckWorker @AssistedInject constructor(
             return false
         }
 
+        // Доставка заблокирована системой (нет POST_NOTIFICATIONS / уведомления или канал выключены
+        // в Android)? Тогда НЕ ходим в сеть и, главное, НЕ двигаем снапшот — иначе событие «съелось»
+        // бы: publish вернул бы null, а база сравнения уехала, и после разблокировки уведомление
+        // уже не показалось бы (P1 code review). Снапшот остаётся прежним → после разблокировки
+        // события пере-детектятся относительно старой базы.
+        val channelId = when (source) {
+            NotificationEvent.Source.QMS -> NotificationsService.CHANNEL_QMS_ID
+            NotificationEvent.Source.THEME -> NotificationsService.CHANNEL_FAV_ID
+            else -> null
+        }
+        if (channelId != null && !NotificationPublisher.canDeliver(appContext, channelId)) {
+            NotifDiagLog.log(appContext, "${source.name}: skip (delivery blocked by system), snapshot kept")
+            return false
+        }
+
         val saved = when (source) {
             NotificationEvent.Source.QMS -> prefs.getDataQmsEvents()
             NotificationEvent.Source.THEME -> prefs.getDataFavoritesEvents()
@@ -210,6 +244,27 @@ class EventsCheckWorker @AssistedInject constructor(
             NotificationEvent.Source.QMS -> eventsApi.getQmsEvents()
             NotificationEvent.Source.THEME -> eventsApi.getFavoritesEvents()
             else -> return false
+        }
+
+        // Seed первого прохода (как у упоминаний): на пустом снапшоте нельзя отличить «новое с
+        // прошлой проверки» от «просто накопленная непрочитанка» — без базы всё сочтётся новым и
+        // вывалится пачкой (полевой лог THEME new=28 published=25). Первый проход ТОЛЬКО запоминает
+        // базу, не уведомляя. Флаг, а не «saved.isEmpty()»: пустой снапшот бывает и легитимно
+        // (в прошлый раз непрочитанного не было — тогда одно новое событие ДОЛЖНО уведомить).
+        val seeded = when (source) {
+            NotificationEvent.Source.QMS -> prefs.getQmsEventsSeeded()
+            NotificationEvent.Source.THEME -> prefs.getFavEventsSeeded()
+            else -> true
+        }
+        if (!seeded) {
+            saveSnapshot(source, current)
+            when (source) {
+                NotificationEvent.Source.QMS -> prefs.setQmsEventsSeeded(true)
+                NotificationEvent.Source.THEME -> prefs.setFavEventsSeeded(true)
+                else -> Unit
+            }
+            NotifDiagLog.log(appContext, "${source.name}: seeded ${current.size} without notifying")
+            return true
         }
 
         // Найти новые события по timeStamp ДО того, как перезапишем снимок: иначе падение
@@ -229,22 +284,30 @@ class EventsCheckWorker @AssistedInject constructor(
         val finalEvents = afterMute.filter { !onlyImportant || it.isImportant }
         val notImportantCount = afterMute.size - finalEvents.size
 
-        for (event in finalEvents) {
-            // Тема прямо сейчас на экране (foreground с мёртвым сокетом — воркер работает и там):
-            // пуш о том, что пользователь читает в этот момент, — шум.
-            if (source == NotificationEvent.Source.THEME && eventsRepository.isTopicOnScreen(event.sourceId)) {
-                NotifDiagLog.log(appContext, "THEME: skip topic on screen (${event.sourceId})")
-                continue
+        // Тема прямо сейчас на экране (foreground с мёртвым сокетом — воркер работает и там):
+        // пуш о том, что пользователь читает в этот момент, — шум.
+        val toPublish = finalEvents.filterNot {
+            source == NotificationEvent.Source.THEME && eventsRepository.isTopicOnScreen(it.sourceId)
+        }
+        val onScreenSkipped = finalEvents.size - toPublish.size
+        // Стопкой при большой пачке (как foreground-путь): иначе долгое отсутствие = десятки
+        // отдельных уведомлений в шторке (полевой лог: 25 разом). Порог зеркалит STACKED_MAX.
+        if (toPublish.size > STACKED_MAX) {
+            NotificationPublisher.publishStacked(appContext, prefs, toPublish)
+        } else {
+            for (event in toPublish) {
+                NotificationPublisher.publish(appContext, prefs, event)
             }
-            NotificationPublisher.publish(appContext, prefs, event)
         }
         // Разбивка фильтров: published=0 при new>0 иначе не объясняет себя. Теперь видно, что
         // именно съело события — заглушённые темы (muted) или «Только закреплённые» (notImportant).
         val filterDetail = buildString {
             if (mutedCount > 0) append(" muted=$mutedCount")
             if (notImportantCount > 0) append(" notImportant=$notImportantCount")
+            if (onScreenSkipped > 0) append(" onScreen=$onScreenSkipped")
+            if (toPublish.size > STACKED_MAX) append(" stacked")
         }
-        NotifDiagLog.log(appContext, "${source.name}: total=${current.size} new=${newEvents.size} published=${finalEvents.size}$filterDetail")
+        NotifDiagLog.log(appContext, "${source.name}: total=${current.size} new=${newEvents.size} published=${toPublish.size}$filterDetail")
 
         // Страховка от затирания базы сравнения: пустой ответ при непустом снапшоте пишем,
         // только если авторизация всё ещё жива (ответ мог разлогинить — saveFromResponse
@@ -255,19 +318,29 @@ class EventsCheckWorker @AssistedInject constructor(
             NotifDiagLog.log(appContext, "${source.name}: deauthorized mid-run, snapshot kept")
             return true
         }
+        saveSnapshot(source, current)
+        return true
+    }
+
+    private fun saveSnapshot(source: NotificationEvent.Source, current: List<NotificationEvent>) {
         val savedSet = current.map { it.sourceEventText.orEmpty() }.toSet()
         when (source) {
             NotificationEvent.Source.QMS -> prefs.setDataQmsEvents(savedSet)
             NotificationEvent.Source.THEME -> prefs.setDataFavoritesEvents(savedSet)
             else -> Unit
         }
-        return true
     }
 
     /** @return true, если реально сходили в сеть (для A-фикса «retry при сетевом фейле»). */
     private suspend fun checkMentions(): Boolean {
         if (!prefs.getMentionsEnabled()) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip mentions background check: category preference disabled")
+            return false
+        }
+        // Доставка заблокирована системой → не двигаем персист notifiedMentionKeys (P1 code review):
+        // иначе упоминание отметилось бы «уже уведомлённым» и после разблокировки не показалось.
+        if (!NotificationPublisher.canDeliver(appContext, NotificationsService.CHANNEL_MENTION_ID)) {
+            NotifDiagLog.log(appContext, "MENTIONS: skip (delivery blocked by system), keys kept")
             return false
         }
 
@@ -312,6 +385,14 @@ class EventsCheckWorker @AssistedInject constructor(
         private const val COOKIE_HYDRATION_TIMEOUT_MS = 10_000L
         /** Сколько раз повторяем цикл при полном сетевом фейле, прежде чем сдаться до следующего окна. */
         private const val MAX_NETWORK_RETRY_ATTEMPTS = 2
+        /** Больше этого числа новых событий за раз — публикуем стопкой, а не по одному. Зеркалит foreground. */
+        private const val STACKED_MAX = 4
+        /**
+         * Process-level замок: periodic и alarm-воркеры живут в одном процессе, и Mutex сериализует
+         * их проход, делая дедуп по lastCheckAt атомарным (P1 code review). tryLock → второй просто
+         * выходит, не дожидаясь первого.
+         */
+        private val workLock = Mutex()
         const val UNIQUE_NAME = "events_check_periodic"
     }
 }
