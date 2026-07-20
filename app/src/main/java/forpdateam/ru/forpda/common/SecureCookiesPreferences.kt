@@ -23,10 +23,37 @@ class SecureCookiesPreferences private constructor(context: Context) {
      * app keeps working instead of crashing on startup; cookies are simply not
      * encrypted at rest in that degraded mode.
      */
-    private val encryptedPrefs: SharedPreferences = createEncryptedPrefs(context)
-        ?: context.getSharedPreferences("secure_cookies_fallback", Context.MODE_PRIVATE)
+    /**
+     * true, если зашифрованное хранилище создать не удалось и мы в деградированном режиме
+     * (пустой plain-fallback). Полевой лог показал, что в холодном фоновом процессе это роняло
+     * авторизацию: worker: skip (not authorized), хотя пользователь залогинен. Флаг — для
+     * диагностики в журнале уведомлений.
+     */
+    @Volatile
+    var isUsingFallback: Boolean = false
+        private set
+
+    private val encryptedPrefs: SharedPreferences = createEncryptedPrefsWithRetry(context)
+        ?: context.getSharedPreferences("secure_cookies_fallback", Context.MODE_PRIVATE).also {
+            isUsingFallback = true
+        }
 
     private val migrationKey = "cookies_migrated_to_encrypted"
+
+    /**
+     * AndroidKeyStore нередко «не готов» в первые мгновения холодного/фонового старта, и
+     * одна попытка отдавала пустой fallback → потеря auth-куки в фоне. Несколько попыток с
+     * короткой паузой вытягивают transient-сбой, не теряя доступ к уже сохранённым кукам.
+     */
+    private fun createEncryptedPrefsWithRetry(context: Context): SharedPreferences? {
+        repeat(ENCRYPTED_CREATE_ATTEMPTS) { attempt ->
+            createEncryptedPrefs(context)?.let { return it }
+            if (attempt < ENCRYPTED_CREATE_ATTEMPTS - 1) {
+                runCatching { Thread.sleep(ENCRYPTED_CREATE_RETRY_MS) }
+            }
+        }
+        return null
+    }
 
     private fun createEncryptedPrefs(context: Context): SharedPreferences? {
         return try {
@@ -116,6 +143,10 @@ class SecureCookiesPreferences private constructor(context: Context) {
     }
 
     companion object {
+        /** Попыток создать зашифрованное хранилище до fallback (KeyStore transient на cold start). */
+        private const val ENCRYPTED_CREATE_ATTEMPTS = 3
+        private const val ENCRYPTED_CREATE_RETRY_MS = 120L
+
         @Volatile
         private var instance: SecureCookiesPreferences? = null
 
