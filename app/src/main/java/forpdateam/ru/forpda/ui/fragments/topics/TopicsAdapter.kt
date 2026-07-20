@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.ui.fragments.topics
 import android.graphics.Typeface
 import android.view.LayoutInflater
 import android.view.View
+import timber.log.Timber
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
@@ -270,7 +271,14 @@ class TopicsAdapter : BaseSectionedAdapter<TopicItem, BaseSectionedViewHolder<To
                         item.lastUserNick.orEmpty(),
                         dateText
                 )
-            }.getOrElse { item.title.orEmpty() }
+            }.getOrElse { e ->
+                // Диагностика: источник UnknownFormatConversionException 'U' статически не
+                // найден (ресурс topic_row_desc чист, форум-контент идёт аргументами).
+                // Логируем сырые поля — если повторится на логируемой сборке, увидим виновника.
+                Timber.w(e, "topic_row_desc format failed; title=%s status=%s desc=%s nick=%s date=%s",
+                        item.title, statusText, item.desc, item.lastUserNick, dateText)
+                item.title.orEmpty()
+            }
         }
 
         override fun onClick(view: View) {
