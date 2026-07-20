@@ -36,9 +36,25 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         (activity as? SettingsActivity)?.supportActionBar?.title = preferenceScreen.title
     }
 
+    private val realtimeStatusHandler = Handler(Looper.getMainLooper())
+    private val realtimeStatusTick = object : Runnable {
+        override fun run() {
+            updateRealtimeStatus()
+            // Живое обновление, пока экран открыт: статус «Подключается» → «Недоступен» иначе
+            // не переключился бы, ведь строка — снимок. Лёгкое: только чтение volatile + summary.
+            realtimeStatusHandler.postDelayed(this, REALTIME_STATUS_REFRESH_MS)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         updateVersionAwareUi()
+        realtimeStatusHandler.postDelayed(realtimeStatusTick, REALTIME_STATUS_REFRESH_MS)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        realtimeStatusHandler.removeCallbacks(realtimeStatusTick)
     }
 
     private fun configureAndroidNotificationSettings() {
@@ -267,8 +283,11 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                 .coerceAtLeast(15L)
         preference.summary = when {
             repo.isWebSocketConnected() -> getString(R.string.realtime_status_connected)
-            repo.isWsCoolingDown() -> getString(
-                    R.string.realtime_status_blocked, intervalMin, repo.wsCooldownRemainingMin())
+            // isWsLikelyBlocked / isWsCoolingDown вместо только кулдауна: открытый экран настроек
+            // держит приложение в foreground и сбрасывает кулдаун, поэтому «Недоступен» надо
+            // определять и по счётчику неудач, иначе строка вечно висит «Подключается».
+            repo.isWsLikelyBlocked() || repo.isWsCoolingDown() ->
+                getString(R.string.realtime_status_blocked, intervalMin)
             else -> getString(R.string.realtime_status_connecting)
         }
     }
@@ -383,5 +402,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
 
     companion object {
         const val PREFERENCE_SCREEN_NAME = "notifications"
+        /** Период живого обновления статуса «Мгновенный канал», пока экран открыт. */
+        private const val REALTIME_STATUS_REFRESH_MS = 3_000L
     }
 }

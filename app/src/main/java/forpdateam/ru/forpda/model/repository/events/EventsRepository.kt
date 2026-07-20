@@ -122,6 +122,15 @@ class EventsRepository(
     private var wsCooldownRounds = 0
 
     /**
+     * Неудачные подключения с момента последнего реального onConnected. В отличие от
+     * [consecutiveWsFailures] НЕ сбрасывается ни foreground'ом, ни кулдауном — только успехом.
+     * Нужен статусу «Мгновенный канал» в настройках: честно отличает «реально подключается сейчас»
+     * от «давно не может подключиться» (сеть/VPN режет), даже пока приложение открыто.
+     */
+    @Volatile
+    private var wsAttemptsSinceSuccess = 0
+
+    /**
      * Тема, открытая на экране прямо сейчас (0 — никакая). Ведёт [NativeTopicFragment]
      * (onResume/onPause). Пуш о теме, которую пользователь читает в этот момент, — шум:
      * и repository-путь (sendNotification), и фоновый воркер глушат такие уведомления.
@@ -144,6 +153,14 @@ class EventsRepository(
 
     fun wsCooldownRemainingMin(): Long =
             ((wsReconnectSuppressedUntil - SystemClock.elapsedRealtime()).coerceAtLeast(0L) + 59_999L) / 60_000L
+
+    /**
+     * Сокет давно не может подключиться (сеть/VPN режет) — для статуса в настройках. Работает и
+     * когда приложение открыто: считает попытки, не сбрасываемые foreground'ом. Порог 2 — после
+     * пары неудач подряд (это уже ~1.5-2 мин без успеха) уверенно говорим «недоступен», а не
+     * держим обтекаемое «подключается».
+     */
+    fun isWsLikelyBlocked(): Boolean = !isWebSocketConnected() && wsAttemptsSinceSuccess >= 2
 
     // Idle-disconnect state (foreground WS). idleDisconnected=true означает, что WS сознательно
     // закрыт из-за бездействия, хотя foregroundRealtimeEnabled ещё true — реконнект делает только
@@ -231,10 +248,11 @@ class EventsRepository(
                 // Без сброса бэкофф рос через весь сеанс: после пары обрывов даже первый сбой
                 // на здоровой сети ждал бы пять минут до переподключения.
                 reconnectAttempts = 0
-                // Реальное подключение состоялось — снимаем circuit breaker.
+                // Реальное подключение состоялось — снимаем circuit breaker и счётчик статуса.
                 consecutiveWsFailures = 0
                 wsReconnectSuppressedUntil = 0L
                 wsCooldownRounds = 0
+                wsAttemptsSinceSuccess = 0
                 webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
                 webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
                 // Соединение живо — запускаем/перезапускаем idle-таймер относительно него.
@@ -282,6 +300,10 @@ class EventsRepository(
                 // Считаем подряд неудачные подключения (сброс — только в onConnected). После порога
                 // армим кулдаун: эндпоинт явно недоступен (сеть/DPI/VPN), долбить его бессмысленно.
                 consecutiveWsFailures++
+                // Отдельный счётчик для СТАТУСА в настройках: сбрасывается ТОЛЬКО реальным onConnected
+                // (не foreground'ом, не кулдауном), поэтому честно отражает «сокет давно не поднимался»,
+                // даже пока приложение открыто и circuit breaker сброшен.
+                wsAttemptsSinceSuccess++
                 if (consecutiveWsFailures == WS_FAILURE_COOLDOWN_THRESHOLD) {
                     // Прогрессивный кулдаун: 10 → 20 → 40 → 60 (потолок) минут. Счётчик фейлов
                     // обнуляем — после кулдауна новый раунд считается заново.
@@ -1131,15 +1153,19 @@ class EventsRepository(
         }
 
         repoScope.launch(ioDispatcher) {
-            val loadedEvents = runCatching<List<NotificationEvent>> {
+            val loadedResult = runCatching<List<NotificationEvent>> {
                 if (NotificationEvent.fromQms(source)) {
                     eventsApi.getQmsEvents()
                 } else {
                     eventsApi.getFavoritesEvents()
                 }
-            }.getOrElse { e ->
-                Timber.e(e, "Favorites events error")
-                emptyList()
+            }
+            // Ошибка (в т.ч. гость/challenge — inspector теперь бросает вместо пустого списка):
+            // НЕ затираем снапшот пустотой, иначе после восстановления вся непрочитанка сочлась бы
+            // новой и вывалилась пачкой. Просто выходим — следующий проход сравнит с прежней базой.
+            val loadedEvents = loadedResult.getOrElse { e ->
+                Timber.e(e, "Favorites events error; keeping snapshot")
+                return@launch
             }
 
             val savedEvents = getSavedEvents(source)
