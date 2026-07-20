@@ -566,7 +566,15 @@ open class TabFragment : Fragment() {
         // Align with settings / grouped lists: page tint = background_base, elevated rows = cards_background (plates).
         // ChromeCanvas: под Material You полотно страницы тонируется обоями (единый тон с шапкой/низом);
         // вне MY fallback = colorSurfaceContainerLowest — прежнее поведение без изменений.
-        view.setBackgroundColor(requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        val canvas = requireContext().chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest)
+        view.setBackgroundColor(canvas)
+        // fragment_container виден ТОЛЬКО в боковых inset-полосах (landscape + 3-кнопочная навигация:
+        // coordinator внутри его L/R padding не достаёт до края). Держим его ровно в тон полотна,
+        // иначе там торчит полоса: акцент (?colorPrimary из XML) или чистый Lowest-белый вместо
+        // тонированного обоями кремового ChromeCanvas в светлой Material You.
+        if (_binding != null && view !== fragmentContainer) {
+            fragmentContainer.setBackgroundColor(canvas)
+        }
     }
 
     @JvmOverloads
