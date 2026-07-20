@@ -159,7 +159,8 @@ class EventsCheckWorker @AssistedInject constructor(
         runCatching { checkSource(NotificationEvent.Source.THEME) }
                 .onFailure { trackFailure("THEME", it) }
         runCatching { checkHatVersions() }
-                .onFailure { Timber.e(it, "EventsCheckWorker HAT failed") }
+                .onSuccess { hadNetError -> if (hadNetError) anyNetworkError = true }
+                .onFailure { trackFailure("HAT", it) }
         runCatching { checkMentions() }
                 .onFailure { trackFailure("MENTIONS", it) }
 
@@ -191,14 +192,20 @@ class EventsCheckWorker @AssistedInject constructor(
      * пушит, если появился новый apk. В фоне это единственный источник сигнала о новой версии
      * (инспектор избранного смену шапки не сообщает).
      */
-    private fun checkHatVersions() {
-        if (!prefs.getHatEnabled()) return
+    /** @return true, если хотя бы одна проверка шапки упала СЕТЕВОЙ ошибкой (для участия в retry). */
+    private fun checkHatVersions(): Boolean {
+        if (!prefs.getHatEnabled()) return false
         val topics = prefs.getHatWatchTopics()
-        if (topics.isEmpty()) return
+        if (topics.isEmpty()) return false
+        var networkError = false
         for (topicId in topics) {
             runCatching { hatWatcher.check(topicId) }
-                    .onFailure { Timber.e(it, "EventsCheckWorker hat check $topicId failed") }
+                    .onFailure { e ->
+                        Timber.e(e, "EventsCheckWorker hat check $topicId failed")
+                        if (e is java.io.IOException) networkError = true
+                    }
         }
+        return networkError
     }
 
     /** @return true, если реально сходили в сеть (для A-фикса «retry при сетевом фейле»). */
@@ -292,11 +299,15 @@ class EventsCheckWorker @AssistedInject constructor(
         val onScreenSkipped = finalEvents.size - toPublish.size
         // Стопкой при большой пачке (как foreground-путь): иначе долгое отсутствие = десятки
         // отдельных уведомлений в шторке (полевой лог: 25 разом). Порог зеркалит STACKED_MAX.
+        // Отслеживаем ФАКТ публикации (publish/publishStacked → null, если система заблокировала
+        // доставку в окне между canDeliver и notify): если событие НЕ показалось — снапшот не
+        // двигаем, оно переиграет (полностью закрывает P1 из code-review, а не только предпроверкой).
+        var publishBlocked = false
         if (toPublish.size > STACKED_MAX) {
-            NotificationPublisher.publishStacked(appContext, prefs, toPublish)
+            if (NotificationPublisher.publishStacked(appContext, prefs, toPublish) == null) publishBlocked = true
         } else {
             for (event in toPublish) {
-                NotificationPublisher.publish(appContext, prefs, event)
+                if (NotificationPublisher.publish(appContext, prefs, event) == null) publishBlocked = true
             }
         }
         // Разбивка фильтров: published=0 при new>0 иначе не объясняет себя. Теперь видно, что
@@ -316,6 +327,12 @@ class EventsCheckWorker @AssistedInject constructor(
         if (current.isEmpty() && saved.isNotEmpty() && authHolder.get().state != AuthState.AUTH) {
             Timber.w("EventsCheckWorker: empty ${source.name} response while deauthorized, keep snapshot")
             NotifDiagLog.log(appContext, "${source.name}: deauthorized mid-run, snapshot kept")
+            return true
+        }
+        // Публикация была заблокирована системой в момент показа — снапшот НЕ двигаем, чтобы
+        // событие пере-детектилось и показалось, когда доставка разблокируется.
+        if (publishBlocked) {
+            NotifDiagLog.log(appContext, "${source.name}: publish blocked mid-run, snapshot kept")
             return true
         }
         saveSnapshot(source, current)
