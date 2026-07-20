@@ -95,6 +95,14 @@ class NotificationPreferencesHolder(
 
     fun setMentionKeysSeeded(value: Boolean) = dataStore.setMentionKeysSeededSync(value)
 
+    fun getFavEventsSeeded(): Boolean = dataStore.getFavEventsSeededSync()
+
+    fun setFavEventsSeeded(value: Boolean) = dataStore.setFavEventsSeededSync(value)
+
+    fun getQmsEventsSeeded(): Boolean = dataStore.getQmsEventsSeededSync()
+
+    fun setQmsEventsSeeded(value: Boolean) = dataStore.setQmsEventsSeededSync(value)
+
     // --- Синхронные геттеры/сеттеры ---
     fun setDataQmsEvents(value: Set<String>) = dataStore.setDataQmsEventsSync(value)
 

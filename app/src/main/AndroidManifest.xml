@@ -35,6 +35,9 @@
         android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Перевзвод будильника фоновой проверки после перезагрузки/обновления (иначе alarm-цепь
+         молчит до первого срабатывания страховочного периодика — до получаса). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Постоянное соединение (опция): FGS без 6-часового лимита dataSync (Android 15). -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
@@ -157,6 +160,18 @@
         <receiver
             android:name=".notifications.EventsCheckAlarmReceiver"
             android:exported="false" />
+
+        <!-- Перевзвод будильника после перезагрузки устройства и обновления приложения. -->
+        <receiver
+            android:name=".notifications.EventsCheckBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- WorkManager foreground downloads require explicit type on Android 14+ -->
         <service

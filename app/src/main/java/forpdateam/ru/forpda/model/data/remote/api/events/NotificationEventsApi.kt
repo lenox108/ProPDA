@@ -87,6 +87,13 @@ class NotificationEventsApi(private val webClient: IWebClient) {
                 // с «&s=»). Без него фоновый опрос мог получать стейл-ответ «ничего нового».
                 val response: NetworkResponse = webClient.get("$url&s=${System.currentTimeMillis()}")
                 val parsed = parse(response.body)
+                // Пустой список + признаки НЕ-inspector-страницы (login/Cloudflare/HTML) = не
+                // «событий нет», а гость/защита/сменившийся формат. Бросаем, чтобы воркер НЕ затёр
+                // снапшот пустотой и повторил позже (P1 code review). Валидный inspector-ответ —
+                // плоский текст без HTML-документа, поэтому маркер <html/<!doctype его не встретит.
+                if (parsed.isEmpty() && looksLikeNonInspectorPage(response.body)) {
+                    throw java.io.IOException("inspector returned a non-data page (guest/challenge/login)")
+                }
                 synchronized(lock) {
                     cached = ArrayList(parsed)
                     cachedAtMs = System.currentTimeMillis()
@@ -106,6 +113,21 @@ class NotificationEventsApi(private val webClient: IWebClient) {
 
     private val favInspectorCache = InspectorCache(FAV_INSPECTOR_URL) { getFavoritesEvents(it) }
     private val qmsInspectorCache = InspectorCache(QMS_INSPECTOR_URL) { getQmsEvents(it) }
+
+    /**
+     * Похоже ли тело на страницу, а не на данные inspector'а. Валидный ответ — плоские строки
+     * `id "title" ...`, без HTML-документа и без разметки challenge/login. Проверяем только при
+     * пустом парсе, поэтому ложные срабатывания на заголовках тем исключены (мы уже знаем, что
+     * совпадений с regex нет). Сигнатуры широкие, но специфичные для страниц-заглушек.
+     */
+    private fun looksLikeNonInspectorPage(body: String): Boolean {
+        if (body.isBlank()) return false // пустое тело = легитимное «событий нет»
+        val lower = body.take(4096).lowercase()
+        return lower.contains("<!doctype") || lower.contains("<html") ||
+                lower.contains("cf-browser-verification") || lower.contains("challenge-platform") ||
+                lower.contains("just a moment") || lower.contains("attention required") ||
+                lower.contains("name=\"login\"") || lower.contains("act=login")
+    }
 
     fun invalidateFavoritesInspectorCache() {
         favInspectorCache.invalidate()
