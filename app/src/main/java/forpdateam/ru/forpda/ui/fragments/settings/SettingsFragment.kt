@@ -17,7 +17,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import android.view.View
 import android.widget.SeekBar
 import android.widget.TextView
-import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import forpdateam.ru.forpda.common.makeSnackbarAboveSystemBars
@@ -40,9 +39,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import android.content.SharedPreferences
 import forpdateam.ru.forpda.model.AuthHolder
-import forpdateam.ru.forpda.appupdates.DownloadLink
 import forpdateam.ru.forpda.appupdates.AppUpdatePreferences
 import forpdateam.ru.forpda.appupdates.AppUpdateRepository
+import forpdateam.ru.forpda.appupdates.runManualAppUpdateCheck
 import forpdateam.ru.forpda.appupdates.AppUpdateScheduler
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.ui.AppFontMode
@@ -1054,156 +1053,12 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun checkAppUpdateNow() {
-        showSnackbarAboveSystemBars(R.string.app_update_checking)
-        Log.i(AppUpdateRepository.LOG_TAG, "manual UI start enabled=${appUpdatePreferences.isCheckEnabled()}")
-        Timber.tag(AppUpdateRepository.LOG_TAG).i("manual UI start enabled=%s", appUpdatePreferences.isCheckEnabled())
-        viewLifecycleOwner.lifecycleScope.launch {
-            runCatching { appUpdateRepository.check(manual = true) }
-                .onSuccess { result ->
-                    when (result) {
-                        is AppUpdateRepository.CheckResult.UpdateAvailable -> {
-                            val preferred = appUpdateRepository.pickPreferredDownload(result.downloads)
-                            Log.i(
-                                AppUpdateRepository.LOG_TAG,
-                                "manual UI result update_available version=${result.version} topicUrl=${result.topicUrl} downloads=${result.downloads.size} preferredUrl=${preferred?.url} openActionRegistered=true openActionFired=false"
-                            )
-                            Timber.tag(AppUpdateRepository.LOG_TAG).i(
-                                "manual UI result update_available version=%s topicUrl=%s downloads=%d preferredUrl=%s openActionRegistered=true openActionFired=false",
-                                result.version,
-                                result.topicUrl,
-                                result.downloads.size,
-                                preferred?.url
-                            )
-                            showAppUpdateAvailableSnackbar(result)
-                        }
-                        is AppUpdateRepository.CheckResult.UpToDate -> {
-                            Log.i(
-                                AppUpdateRepository.LOG_TAG,
-                                "manual UI result up_to_date latest=${result.latestVersion} current=${BuildConfig.VERSION_NAME}"
-                            )
-                            Timber.tag(AppUpdateRepository.LOG_TAG).i(
-                                "manual UI result up_to_date latest=%s current=%s",
-                                result.latestVersion,
-                                BuildConfig.VERSION_NAME
-                            )
-                            showSnackbarAboveSystemBars(getString(R.string.app_update_up_to_date, BuildConfig.VERSION_NAME))
-                        }
-                    }
-                }
-                .onFailure { error ->
-                    Log.w(AppUpdateRepository.LOG_TAG, "manual UI failed", error)
-                    Timber.tag(AppUpdateRepository.LOG_TAG).w(error, "manual UI failed")
-                    showSnackbarAboveSystemBars(appUpdateCheckErrorMessage(error))
-                }
-        }
-    }
-
-    private fun showAppUpdateAvailableSnackbar(result: AppUpdateRepository.CheckResult.UpdateAvailable) {
-        // Раньше уведомление о новой версии показывалось Snackbar'ом с кнопкой-действием
-        // «Скачать». Но на Android 14+/16 инфляция Snackbar$SnackbarLayout падает
-        // (в контексте темы не разрешается colorOnSurface, см. SnackbarHelper), и показ
-        // деградировал до Toast — а у Toast НЕТ кнопки-действия, поэтому «Скачать»
-        // пропадала и обновление было не скачать («пишет что версия есть, скачать не даёт»).
-        // Диалог этой проблемы не имеет (materialAlertDialogTheme → ThemeOverlay) и кнопку
-        // потерять невозможно.
-        if (!isAdded) return
-        val preferred = appUpdateRepository.pickPreferredDownload(result.downloads)
-        val title = getString(R.string.app_update_available, result.version.toString())
-        val notes = result.description?.takeIf { it.isNotBlank() }
-
-        Log.i(
-            AppUpdateRepository.LOG_TAG,
-            "manual UI dialog shown version=${result.version} downloads=${result.downloads.size} preferredUrl=${preferred?.url}"
-        )
-        Timber.tag(AppUpdateRepository.LOG_TAG).i(
-            "manual UI dialog shown version=%s downloads=%d preferredUrl=%s",
-            result.version,
-            result.downloads.size,
-            preferred?.url
-        )
-
-        runCatching {
-            val builder = MaterialAlertDialogBuilder(requireActivity())
-                .setTitle(title)
-            if (notes != null) builder.setMessage(notes)
-
-            if (preferred != null) {
-                // Есть прямая ссылка на APK — основное действие «Скачать», запасное «Открыть тему».
-                builder.setPositiveButton(R.string.app_update_action_download) { _, _ ->
-                    Log.i(
-                        AppUpdateRepository.LOG_TAG,
-                        "manual UI download action fired version=${result.version} url=${preferred.url}"
-                    )
-                    Timber.tag(AppUpdateRepository.LOG_TAG).i(
-                        "manual UI download action fired version=%s url=%s",
-                        result.version,
-                        preferred.url
-                    )
-                    startApkDownload(preferred)
-                }
-                builder.setNeutralButton(R.string.app_update_action_open_topic) { _, _ ->
-                    openAppUpdateTopicUrl(result.topicUrl)
-                }
-            } else {
-                // Прямой ссылки нет (например, версия отдана из кэша) — единственное
-                // действие «Открыть тему».
-                builder.setPositiveButton(R.string.app_update_action_open_topic) { _, _ ->
-                    Log.i(
-                        AppUpdateRepository.LOG_TAG,
-                        "manual UI open topic action fired version=${result.version} url=${result.topicUrl}"
-                    )
-                    Timber.tag(AppUpdateRepository.LOG_TAG).i(
-                        "manual UI open topic action fired version=%s url=%s",
-                        result.version,
-                        result.topicUrl
-                    )
-                    openAppUpdateTopicUrl(result.topicUrl)
-                }
-            }
-            builder.setNegativeButton(R.string.close, null)
-            builder.showWithStyledButtons()
-        }.onFailure { e ->
-            // Даже диалог не построился (крайне маловероятно) — не роняем настройки,
-            // показываем хотя бы текст. Toast без кнопки — деградация, но лучше вылета.
-            Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "update-available dialog failed; toast fallback")
-            runCatching { Toast.makeText(requireContext(), title, Toast.LENGTH_LONG).show() }
-        }
-    }
-
-    private fun startApkDownload(link: DownloadLink) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link.url)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { startActivity(intent) }
-            .onFailure {
-                showSnackbarAboveSystemBars(
-                    getString(R.string.app_update_check_failed_unknown)
-                )
-            }
-    }
-
-    private fun openAppUpdateTopicUrl(url: String) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            setClass(requireContext(), MainActivity::class.java)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        }
-        startActivity(intent)
-    }
-
-    private fun appUpdateCheckErrorMessage(error: Throwable): String {
-        val reason = (error as? AppUpdateRepository.CheckException)?.reason
-        val reasonText = when (reason) {
-            AppUpdateRepository.FailureReason.Network -> getString(R.string.app_update_check_failed_network)
-            AppUpdateRepository.FailureReason.RateLimited -> getString(R.string.app_update_check_failed_rate_limited)
-            AppUpdateRepository.FailureReason.Forbidden,
-            AppUpdateRepository.FailureReason.Captcha -> getString(R.string.app_update_check_failed_forbidden)
-            AppUpdateRepository.FailureReason.NotFound -> getString(R.string.app_update_check_failed_not_found)
-            AppUpdateRepository.FailureReason.Parse -> getString(R.string.app_update_check_failed_parse)
-            AppUpdateRepository.FailureReason.Server -> getString(R.string.app_update_check_failed_server)
-            else -> error.message?.takeIf { it.isNotBlank() }?.take(80)
-                ?: getString(R.string.app_update_check_failed_unknown)
-        }
-        return getString(R.string.app_update_check_failed_with_reason, reasonText)
+        // Весь сценарий (снекбар «Проверяем…», диалог «Скачать»/«Открыть тему», ошибки) живёт в
+        // общем хелпере — та же кнопка есть в «Быстрых настройках» меню, и поведение не должно
+        // расходиться между двумя точками входа.
+        Timber.tag(AppUpdateRepository.LOG_TAG)
+            .i("manual UI start enabled=%s", appUpdatePreferences.isCheckEnabled())
+        runManualAppUpdateCheck(appUpdateRepository)
     }
 
     private fun showSupportAuthorDialog() {

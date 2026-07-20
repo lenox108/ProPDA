@@ -30,6 +30,8 @@ import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.entity.app.other.OtherMenuBlock
 import forpdateam.ru.forpda.entity.app.other.QuickSetting
 import forpdateam.ru.forpda.common.Preferences
+import forpdateam.ru.forpda.appupdates.AppUpdateRepository
+import forpdateam.ru.forpda.appupdates.runManualAppUpdateCheck
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.ui.FontController
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
@@ -74,6 +76,8 @@ class OtherFragment : TabFragment() {
     }
 
     @Inject lateinit var mainPreferencesHolder: MainPreferencesHolder
+
+    @Inject lateinit var appUpdateRepository: AppUpdateRepository
 
     private var listScrollY = 0
     private var listBaseBottomPadding = 0
@@ -333,6 +337,7 @@ class OtherFragment : TabFragment() {
             QuickSetting.PAGINATION -> showQuickPaginationPicker()
             QuickSetting.BLACKLIST -> viewModel.onOpenForumBlackList()
             QuickSetting.NOTIFICATIONS -> openNotificationsSettings()
+            QuickSetting.UPDATE -> runManualAppUpdateCheck(appUpdateRepository)
         }
     }
 
