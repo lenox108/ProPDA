@@ -567,7 +567,9 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         }
         val url: String = intent.data?.toString().orEmpty()
         if (BuildConfig.DEBUG) Timber.d("[INTENT] checkIntent: opening url")
-        presenter.openLink(url)
+        val fromNotificationTopic = intent.getBooleanExtra(
+                forpdateam.ru.forpda.notifications.NotificationPublisher.EXTRA_FROM_NOTIFICATION_TOPIC, false)
+        presenter.openLink(url, fromNotificationTopic)
         setIntent(null)
     }
 

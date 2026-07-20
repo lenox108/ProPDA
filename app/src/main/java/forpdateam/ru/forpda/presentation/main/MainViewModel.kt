@@ -108,8 +108,16 @@ class MainViewModel @Inject constructor(
         Preferences.Main.StartupScreen.MENU -> Screen.OtherMenu()
     }
 
-    fun openLink(url: String) {
-        linkHandler.handle(url, router)
+    fun openLink(url: String, fromNotificationTopic: Boolean = false) {
+        if (fromNotificationTopic) {
+            // Открытие темы из шторки: доверенный источник непрочитанного — тема пометится
+            // прочитанной по дочтению так же, как открытие из Избранного.
+            linkHandler.handle(url, router, mapOf(
+                    Screen.Theme.ARG_TOPIC_OPEN_SOURCE to "notification"
+            ))
+        } else {
+            linkHandler.handle(url, router)
+        }
     }
 
     fun onActivityResume() {

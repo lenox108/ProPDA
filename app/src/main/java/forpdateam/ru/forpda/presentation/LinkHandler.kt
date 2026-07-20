@@ -149,12 +149,16 @@ class LinkHandler(
             val themeUrl = uri.toString()
             val openIntent = args[Screen.Theme.ARG_TOPIC_OPEN_INTENT]
                     ?: if (isExplicitTopicPostUrl(themeUrl)) "explicit_post" else "fresh"
+            val source = args[Screen.Theme.ARG_TOPIC_OPEN_SOURCE] ?: "link"
             navigateTo(Screen.Theme().apply {
                 this.themeUrl = themeUrl
-                topicOpenSource = args[Screen.Theme.ARG_TOPIC_OPEN_SOURCE] ?: "link"
+                topicOpenSource = source
                 topicOpenIntent = openIntent
                 unreadUrlFromList = args[Screen.Theme.ARG_UNREAD_URL_FROM_LIST]
                 unreadPostIdFromList = args[Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST]?.toIntOrNull() ?: 0
+                // Открытие из шторки — доверенный сигнал непрочитанного (как Избранное): даёт
+                // trust к getnewpost-редиректу, чтобы тема пометилась прочитанной по дочтению.
+                if (source == "notification") listTopicMarkedUnread = true
             }, router, args)
             return true
         }
