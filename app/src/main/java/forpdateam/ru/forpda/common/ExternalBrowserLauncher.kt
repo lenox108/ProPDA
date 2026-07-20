@@ -37,6 +37,20 @@ object ExternalBrowserLauncher {
     fun open(context: Context, url: String): Boolean {
         val uri = Uri.parse(url)
         val baseIntent = createBrowserViewIntent(uri)
+
+        // 1) Приоритет — ЯВНО открыть браузер по умолчанию (роль BROWSER). Это ровно то, что
+        //    ожидает пользователь («открой в моём браузере»), и явный интент не перехватывается
+        //    оболочкой (на MIUI/HyperOS неявный VIEW даёт системный тост «Браузер по умолчанию
+        //    не найден»). resolveActivity(MATCH_DEFAULT_ONLY) — ОТДЕЛЬНЫЙ механизм резолва от
+        //    queryIntentActivities ниже: если один на конкретной прошивке капризничает, срабатывает
+        //    другой. Браузеры без CATEGORY_DEFAULT (Soul) сюда не попадут — их подхватит перечисление.
+        resolveDefaultBrowserIntent(context, baseIntent)?.let { defaultIntent ->
+            if (launchExplicit(context, defaultIntent)) {
+                Log.i(LOG_TAG, "opened default browser ${defaultIntent.component?.packageName}")
+                return true
+            }
+        }
+
         val candidates = queryExternalBrowserIntents(context, baseIntent)
         // ACTION_CHOOSER needs EXTRA_INTENT (primary target); EXTRA_INTENTS alone is ignored on many devices.
         // createChooser(primary, …) also re-resolves the URL and duplicates implicit browser handlers.
@@ -54,6 +68,14 @@ object ExternalBrowserLauncher {
         Log.i(LOG_TAG, "url=$uri candidates=${candidates.describeComponents()} selected=$selectedPackage")
 
         if (launchIntent == null) {
+            // Перечисление браузеров вернуло пусто — это не обязательно значит, что браузера нет.
+            // На нестандартных прошивках (MIUI/HyperOS, рабочий профиль, кастомные лаунчеры-браузеры)
+            // host-проба может не сматчить дефолтный браузер, хотя система его знает. Прежде чем
+            // показывать тост «не найдено», отдаём ссылку системе обычным неявным VIEW —
+            // Android сам откроет браузер по умолчанию.
+            if (launchViaSystemDefault(context, baseIntent)) {
+                return true
+            }
             Toast.makeText(context, R.string.external_browser_not_found, Toast.LENGTH_SHORT).show()
             return false
         }
@@ -72,6 +94,64 @@ object ExternalBrowserLauncher {
             }
             context.startActivity(fallback)
             return true
+        }
+    }
+
+    /**
+     * Резолвит браузер по умолчанию (роль BROWSER) через resolveActivity(MATCH_DEFAULT_ONLY) и
+     * возвращает ЯВНЫЙ интент на него. null, если дефолт не задан (система вернула ResolverActivity)
+     * либо резолв указал на не-браузер / наш пакет.
+     */
+    private fun resolveDefaultBrowserIntent(context: Context, baseIntent: Intent): Intent? {
+        val packageManager = context.packageManager
+        for (probe in BROWSER_PROBE_URIS) {
+            val probeIntent = createBrowserViewIntent(Uri.parse(probe))
+            val resolved = packageManager.resolveActivity(probeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            val info = resolved?.activityInfo ?: continue
+            val pkg = info.packageName
+            // "android"/ResolverActivity = дефолт не выбран, система показала бы свой выбор — пропускаем.
+            if (pkg.isNullOrEmpty() || pkg == "android") continue
+            if (info.name?.contains("ResolverActivity", ignoreCase = true) == true) continue
+            if (pkg == context.packageName || pkg == BASE_PACKAGE_NAME) continue
+            if (info.name?.startsWith("$BASE_PACKAGE_NAME.") == true) continue
+            Log.i(LOG_TAG, "default browser resolved: $pkg/${info.name}")
+            return info.toExplicitBrowserIntent(baseIntent)
+        }
+        return null
+    }
+
+    private fun launchExplicit(context: Context, intent: Intent): Boolean {
+        if (context !is Activity) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            context.startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            Log.w(LOG_TAG, "explicit launch failed for ${intent.component?.packageName}", e)
+            false
+        }
+    }
+
+    /**
+     * Последний рубеж: неявный VIEW-интент без явного компонента. Пусть система сама разрешит
+     * браузер по умолчанию. Используется, только когда наше перечисление вернуло пусто.
+     */
+    private fun launchViaSystemDefault(context: Context, baseIntent: Intent): Boolean {
+        val systemIntent = Intent(baseIntent).apply {
+            component = null
+            `package` = null
+            if (context !is Activity) {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        return try {
+            context.startActivity(systemIntent)
+            Log.i(LOG_TAG, "opened via system default resolver")
+            true
+        } catch (e: ActivityNotFoundException) {
+            Log.w(LOG_TAG, "system default resolver found no browser", e)
+            false
         }
     }
 
