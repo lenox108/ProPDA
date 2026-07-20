@@ -5,7 +5,7 @@
     android:id="@+id/fragment_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?colorPrimary">
+    android:background="?attr/colorSurfaceContainerLowest">
 
     <!-- Панель ввода вынесена из coordinator: иначе при IME WRAP_CONTENT + ScrollingViewBehavior + WebView даёт нулевую/невидимую панель. -->
     <androidx.coordinatorlayout.widget.CoordinatorLayout
