@@ -175,3 +175,4 @@ icon_white_129.png
 .vscode/
 # Отладочные bugreport-архивы с устройства/эмулятора (adb bugreport)
 bugreport-*
+.kotlin/
