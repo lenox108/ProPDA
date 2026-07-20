@@ -108,8 +108,7 @@ class EventsCheckAlarmReceiver : BroadcastReceiver() {
                 ExistingWorkPolicy.KEEP,
                 request
         )
-        // Перевзводим цепочку на следующий интервал (эффективный: ночью может быть длиннее).
-        val hourOfDay = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        EventsCheckAlarmScheduler.schedule(context, prefs.getEffectiveBgIntervalMin(hourOfDay))
+        // Перевзводим цепочку на следующий интервал.
+        EventsCheckAlarmScheduler.schedule(context, prefs.getBgCheckIntervalMin())
     }
 }

@@ -64,6 +64,7 @@
     <string name="other_menu_quick_pagination">Панель страниц</string>
     <string name="other_menu_quick_blacklist">ЧС</string>
     <string name="other_menu_quick_notifications">Уведомления</string>
+    <string name="other_menu_quick_update">Обновления</string>
     <string name="other_menu_quick_settings_picker_title">Быстрые настройки</string>
     <string name="other_menu_block_configure">Изменить</string>
     <string name="other_menu_block_hide">Скрыть</string>
@@ -971,22 +972,22 @@
     <string name="pref_summary_bg_check">Выключено: приложение ничего не делает, пока закрыто. Уведомления приходят, только когда оно открыто.</string>
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
     <string name="pref_title_battery_optimization">Разрешить работу в фоне без ограничений</string>
-    <string name="pref_title_realtime_status">Мгновенный канал</string>
-    <string name="realtime_probe_title">Проверка мгновенного канала</string>
     <string name="realtime_probe_running">Проверяю соединение…</string>
     <string name="realtime_status_connected">Работает — события приходят мгновенно</string>
     <string name="realtime_status_blocked">Недоступен: сеть блокирует соединение с форумом (например VPN или оператор). Уведомления приходят через резервную проверку раз в %1$d мин</string>
     <string name="realtime_status_connecting">Подключается…</string>
-    <string name="pref_title_night_slowdown">Реже проверять ночью</string>
-    <string name="pref_summary_night_slowdown">С 00:00 до 07:00 фоновая проверка выполняется раз в час — экономит батарею</string>
+    <!-- Объединённая диагностика уведомлений -->
+    <string name="diagnostics_section_channel">Мгновенный канал</string>
+    <string name="diagnostics_check_network">Проверить сеть канала</string>
+    <string name="diagnostics_section_log">Журнал фоновых проверок</string>
     <string name="pref_title_oem_autostart">Автозапуск (настройки производителя)</string>
     <string name="pref_summary_oem_autostart">На этой прошивке есть отдельный список автозапуска: без разрешения система не будит приложение в фоне, даже с исключением из оптимизации батареи</string>
     <string name="pref_title_persistent_ws">Постоянное соединение</string>
     <string name="pref_summary_persistent_ws">Мгновенные уведомления через непрерывное соединение с форумом (как у мессенджеров). Заметно расходует батарею и держит значок в шторке. Работает надёжнее вместе с «Разрешить работу в фоне без ограничений»</string>
     <string name="pref_title_bg_stalled_warning">Фоновые проверки блокируются системой</string>
     <string name="pref_summary_bg_stalled_warning">Последняя проверка была %1$d мин назад при интервале %2$d мин. Нажмите и разрешите работу в фоне; на прошивках с автозапуском включите и его.</string>
-    <string name="pref_title_bg_check_diagnostics">Диагностика фоновых проверок</string>
-    <string name="pref_summary_bg_check_diagnostics">Журнал запусков фоновой проверки: помогает понять, почему не приходят уведомления</string>
+    <string name="pref_title_bg_check_diagnostics">Диагностика уведомлений</string>
+    <string name="pref_summary_bg_check_diagnostics">Состояние мгновенного канала, проверка сети и журнал фоновых проверок — здесь видно, почему не приходят уведомления</string>
     <string name="bg_check_diagnostics_empty">Журнал пуст. Записи появятся после первого запуска фоновой проверки.</string>
     <string name="bg_check_diagnostics_copy">Копировать</string>
     <string name="bg_check_diagnostics_clear">Очистить</string>

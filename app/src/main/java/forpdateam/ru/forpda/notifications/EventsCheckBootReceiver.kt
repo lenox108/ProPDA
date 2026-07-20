@@ -33,9 +33,8 @@ class EventsCheckBootReceiver : BroadcastReceiver() {
                         prefs.wantsPushNotifications()
                 NotifDiagLog.log(context, "boot: ${intent.action?.substringAfterLast('.')} enabled=$enabled")
                 if (!enabled) return
-                val hourOfDay = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
                 runCatching {
-                    EventsCheckAlarmScheduler.schedule(context, prefs.getEffectiveBgIntervalMin(hourOfDay))
+                    EventsCheckAlarmScheduler.schedule(context, prefs.getBgCheckIntervalMin())
                 }.onFailure { Timber.w(it, "boot: alarm reschedule failed") }
             }
         }

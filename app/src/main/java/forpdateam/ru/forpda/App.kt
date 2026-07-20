@@ -461,9 +461,8 @@ class App : Application(), androidx.work.Configuration.Provider {
                 androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
                 req
         )
-        // Основной контур: точный будильник по эффективному интервалу (ночной режим учтён).
-        val hourOfDay = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        val alarmIntervalMin = notificationPreferencesHolder.getEffectiveBgIntervalMin(hourOfDay)
+        // Основной контур: точный будильник по интервалу проверки.
+        val alarmIntervalMin = notificationPreferencesHolder.getBgCheckIntervalMin()
         forpdateam.ru.forpda.notifications.EventsCheckAlarmScheduler.schedule(this, alarmIntervalMin)
         // Отметка для самодиагностики в настройках: «работа запланирована с этого момента».
         notificationPreferencesHolder.setBgScheduledAt(System.currentTimeMillis())
