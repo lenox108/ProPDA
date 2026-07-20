@@ -113,6 +113,11 @@ class Client(
     override suspend fun awaitAuthCookiesHydrated(timeoutMs: Long): Boolean =
             cookieManager.awaitHydration(timeoutMs)
 
+    override fun reinitAuthCookies() = cookieManager.reinitializeCookies()
+
+    override fun isSecureCookieStoreFallback(): Boolean =
+            forpdateam.ru.forpda.common.SecureCookiesPreferences.getInstance(context).isUsingFallback
+
     // region Initialization
     init {
         // Загружаем auth_key

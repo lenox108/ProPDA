@@ -88,9 +88,22 @@ class CookieManager(
         } ?: false
     }
 
+    /**
+     * Принудительно перечитать auth-куки из хранилища (с повторной попыткой открыть encrypted,
+     * если процесс в fallback-режиме). Зовёт фоновый воркер при «not authorized», чтобы закрыть
+     * обратный split-brain: KeyStore мог стать доступен, куки в encrypted есть.
+     */
+    fun reinitializeCookies() {
+        runCatching { initializeCookies() }
+                .onFailure { Timber.w(it, "CookieManager.reinitializeCookies failed") }
+    }
+
     private fun initializeCookies() {
-        val authData = authHolder.get()
         val securePrefs = SecureCookiesPreferences.getInstance(context)
+        // Обратный split-brain: если хранилище в fallback-режиме, пробуем ещё раз открыть
+        // зашифрованное — куки могли записаться туда здоровым процессом.
+        if (securePrefs.isUsingFallback) securePrefs.retryEncryptedUpgrade()
+        val authData = authHolder.get()
         val preferences = PreferenceManager.getDefaultSharedPreferences(context)
 
         val memberId = securePrefs.getString("cookie_member_id", null)

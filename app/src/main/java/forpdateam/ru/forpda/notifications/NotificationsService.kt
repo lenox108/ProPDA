@@ -140,6 +140,15 @@ class NotificationsService : Service() {
                     // foreground, если он почему-то был поднят (фолбэк-старт из фона).
                     if (!change.enabled && change.reason.contains("process_stop")) {
                         detachForegroundIfPromoted(change.reason)
+                    } else if (change.reason == "ws_connected") {
+                        // Сокет ожил после кулдауна — если персистентный фон, снова держим FGS
+                        // (мы отпускали его на время кулдауна). Только в фоне и при живой авторизации.
+                        val bg = !androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentState
+                                .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+                        if (notificationPreferencesHolder.getBgPersistentWs() && bg && authHolder.get().isAuth()) {
+                            runCatching { promoteToForegroundIfNeeded() }
+                                    .onFailure { Timber.w(it, "re-promote FGS after ws_connected failed") }
+                        }
                     }
                 }
             }
@@ -201,26 +210,36 @@ class NotificationsService : Service() {
         // Режим «Постоянное соединение» в фоне: держим FGS и живой realtime. Ветка покрывает
         // и воскрешение по START_STICKY после убийства процесса (intent=null, extra потерян,
         // а в свежем процессе foregroundRealtime по умолчанию выключен — включаем явно).
+        // НО: если WS в кулдауне circuit breaker'а и не подключён — держать FGS ради мёртвого
+        // сокета бессмысленно (audit: до 60 мин foreground впустую). Доставку берёт воркер;
+        // при успешном реконнекте (onConnected → «ws_connected») FGS поднимется снова.
+        val wsUsable = eventsRepository.isWebSocketConnected() || !eventsRepository.isWsCoolingDown()
         if (notificationPreferencesHolder.getBgPersistentWs() && !uiForeground && authHolder.get().isAuth()) {
-            promoteToForegroundIfNeeded()
-            if (!eventsRepository.isForegroundRealtimeActive()) {
-                BatteryDebugLogger.logState("NotificationsService", "persistentRestart")
-                NotifDiagLog.log(this, "service: persistent realtime (re)start")
-                eventsRepository.setForegroundRealtimeEnabled(true, "persistent_restart")
+            if (wsUsable) {
+                promoteToForegroundIfNeeded()
+                if (!eventsRepository.isForegroundRealtimeActive()) {
+                    BatteryDebugLogger.logState("NotificationsService", "persistentRestart")
+                    NotifDiagLog.log(this, "service: persistent realtime (re)start")
+                    eventsRepository.setForegroundRealtimeEnabled(true, "persistent_restart")
+                }
+            } else {
+                NotifDiagLog.log(this, "service: persistent FGS dropped (ws cooldown), worker covers")
             }
         }
 
         // externalStart в фоне не делает ничего: WebSocket поднимается только при
         // foregroundRealtime. Если мы при этом успели подняться как FGS (фолбэк-старт),
         // то держали бы уведомление в шторке и foreground-приоритет процесса впустую —
-        // и снять его было бы уже некому, т.к. process_stop давно прошёл.
-        if (!eventsRepository.isForegroundRealtimeActive()) {
+        // и снять его было бы уже некому, т.к. process_stop давно прошёл. В кулдауне персистента
+        // тоже снимаем — не жжём батарею на неподключающийся сокет.
+        if (!eventsRepository.isForegroundRealtimeActive() ||
+                (notificationPreferencesHolder.getBgPersistentWs() && !uiForeground && !wsUsable)) {
             detachForegroundIfPromoted("no_realtime_work")
         }
-        // Режим «Постоянное соединение»: сервис обязан пережить смерть UI-задачи,
-        // иначе OEM-очистка Recents убьёт и сокет. START_STICKY просит систему
-        // перезапустить нас после убийства процесса.
-        return if (notificationPreferencesHolder.getBgPersistentWs()) START_STICKY else START_NOT_STICKY
+        // «Постоянное соединение»: сервис переживает смерть UI-задачи (START_STICKY), но ТОЛЬКО
+        // пока сокет полезен. В кулдауне — START_NOT_STICKY: убьют → не воскрешаем ради мёртвого
+        // сокета (иначе churn: рестарт → кулдаун → детач → смерть → рестарт…). Воркер держит доставку.
+        return if (notificationPreferencesHolder.getBgPersistentWs() && wsUsable) START_STICKY else START_NOT_STICKY
     }
 
     internal var foregroundPromoted = false
@@ -575,7 +594,11 @@ class NotificationsService : Service() {
                     intent.putExtra(EXTRA_STARTED_AS_FGS, true)
                     context.startForegroundService(intent)
                 }
-            } catch (ignore: Exception) {
+            } catch (e: Exception) {
+                // Финальный отказ старта (в т.ч. ForegroundServiceStartNotAllowedException /
+                // FGS-timeout из FGS-ветки) раньше глотался молча и не попадал в диагностику.
+                Timber.w(e, "startAndCheckNoBind failed to start service")
+                BatteryDebugLogger.logState("NotificationsService", "startAndCheckNoBind failed: ${e.javaClass.simpleName}")
             }
         }
 

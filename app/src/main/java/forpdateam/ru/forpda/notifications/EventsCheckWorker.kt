@@ -117,11 +117,24 @@ class EventsCheckWorker @AssistedInject constructor(
             return@withContext Result.retry()
         }
         if (authHolder.get().state != AuthState.AUTH) {
-            // Пользователь не авторизован — гостю inspector ничего не отдаст.
-            // Снапшоты НЕ трогаем: после логина сравнение продолжится с прежней базы.
-            Timber.d("EventsCheckWorker: not authorized, skip")
-            NotifDiagLog.log(applicationContext, "worker: skip (not authorized)")
-            return@withContext Result.success()
+            // Обратный split-brain (audit HIGH): если хранилище куки в fallback-режиме, SKIP,
+            // скорее всего, ЛОЖНЫЙ — KeyStore не открылся, а куки лежат в encrypted. Форсим
+            // перечитывание (retry encrypted upgrade) и перепроверяем.
+            if (webClient.isSecureCookieStoreFallback()) {
+                NotifDiagLog.log(applicationContext, "worker: not authorized + secure fallback -> reinit")
+                webClient.reinitAuthCookies()
+            }
+            if (authHolder.get().state != AuthState.AUTH) {
+                // Всё ещё гость. Если хранилище ВСЁ ЕЩЁ в fallback — просим WorkManager повторить:
+                // следующий процесс/попытка может открыть encrypted. Снапшоты НЕ трогаем.
+                if (webClient.isSecureCookieStoreFallback() && runAttemptCount < MAX_NETWORK_RETRY_ATTEMPTS) {
+                    NotifDiagLog.log(applicationContext, "worker: still fallback -> retry")
+                    return@withContext Result.retry()
+                }
+                Timber.d("EventsCheckWorker: not authorized, skip")
+                NotifDiagLog.log(applicationContext, "worker: skip (not authorized)")
+                return@withContext Result.success()
+            }
         }
 
         // Дедуп двух триггеров (periodic WorkManager + точный будильник): реальный сетевой
@@ -264,14 +277,25 @@ class EventsCheckWorker @AssistedInject constructor(
             else -> true
         }
         if (!seeded) {
-            saveSnapshot(source, current)
-            when (source) {
+            fun markSeeded() = when (source) {
                 NotificationEvent.Source.QMS -> prefs.setQmsEventsSeeded(true)
                 NotificationEvent.Source.THEME -> prefs.setFavEventsSeeded(true)
                 else -> Unit
             }
-            NotifDiagLog.log(appContext, "${source.name}: seeded ${current.size} without notifying")
-            return true
+            // Миграция (code-review P2): если старый снапшот УЖЕ есть (обновление с версии до
+            // seed-флагов), он — валидная база. НЕ re-seed'им (иначе события с последней проверки
+            // старой версии молча потерялись бы) — помечаем seeded и идём в обычное сравнение.
+            if (saved.isNotEmpty()) {
+                markSeeded()
+                NotifDiagLog.log(appContext, "${source.name}: seed-flag migrated (existing snapshot kept)")
+                // не return — падаем в нормальный путь сравнения ниже
+            } else {
+                // Реально первый проход (свежая установка/очистка) — только эталон, без пуша.
+                saveSnapshot(source, current)
+                markSeeded()
+                NotifDiagLog.log(appContext, "${source.name}: seeded ${current.size} without notifying")
+                return true
+            }
         }
 
         // Найти новые события по timeStamp ДО того, как перезапишем снимок: иначе падение
@@ -369,21 +393,30 @@ class EventsCheckWorker @AssistedInject constructor(
                 mutedTopicIds = prefs.getMutedTopics()
         )
 
+        var publishBlocked = false
         for (item in decision.toNotify) {
             val event = MentionNotificationMapper.toNotificationEvent(item) ?: continue
-            // Упоминание в теме, открытой на экране прямо сейчас, — шум (юзер его видит).
+            // Упоминание в теме, открытой на экране прямо сейчас, — ОСОЗНАННЫЙ фильтр (юзер видит),
+            // ключ можно двигать. А publish==null — это блокировка доставки: тогда ключи не двигаем.
             if (event.fromTheme() && eventsRepository.isTopicOnScreen(event.sourceId)) {
                 NotifDiagLog.log(appContext, "MENTIONS: skip topic on screen (${event.sourceId})")
                 continue
             }
-            NotificationPublisher.publish(
+            val published = NotificationPublisher.publish(
                     appContext,
                     prefs,
                     event,
                     intentUrlOverride = MentionNotificationMapper.intentUrl(item, event)
             )
+            if (published == null) publishBlocked = true
         }
 
+        // Ключ помечаем «уведомлённым» только по факту публикации (code-review P1): при блокировке
+        // системой в окне между canDeliver и notify упоминание переиграет, а не потеряется.
+        if (publishBlocked) {
+            NotifDiagLog.log(appContext, "MENTIONS: publish blocked mid-run, keys kept")
+            return true
+        }
         prefs.setNotifiedMentionKeys(decision.keysToPersist)
         if (decision.markSeeded) {
             prefs.setMentionKeysSeeded(true)
