@@ -278,13 +278,16 @@ class BodyBlockViewFactory(
         }
         renderBlocksOnSurface(ctx, bodyContainer, block.inner, scope, blockFillColor(ctx))
         applyState()
-        header.setOnClickListener {
+        // Toggle on the whole card, not just the header row — a collapsed spoiler is a thin strip and
+        // the title alone is too small a touch target. When open, inner links/selectable text consume
+        // their own touches, so only the header and card padding collapse it back.
+        card.setOnClickListener {
             open = !open
             spoilerStates[key] = open
             applyState()
         }
-        // Long-press the spoiler title → copy a deep link to it (parity with the WebView copySpoilerLink).
-        header.setOnLongClickListener {
+        // Long-press the spoiler card → copy a deep link to it (parity with the WebView copySpoilerLink).
+        card.setOnLongClickListener {
             callbacks.onSpoilerCopyLink(scope.scopeId, spoilNumber)
             true
         }
