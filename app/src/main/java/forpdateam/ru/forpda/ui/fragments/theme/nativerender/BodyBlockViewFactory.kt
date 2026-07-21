@@ -163,6 +163,16 @@ class BodyBlockViewFactory(
     var flatBlocks: Boolean = false
 
     /**
+     * Top margin (dp) between a block-level segment (quote / spoiler / code / table / image / edit-note /
+     * fallback) and whatever precedes it. Follows the post-density setting so block spacing tightens in the
+     * same step as the card padding/gap (Комфортная 10 · Компактная 6 · Сверхкомпактная 3) — otherwise
+     * super-compact left big 10dp gaps between spoilers while the rest of the post was packed tight
+     * (user question). The host sets it per bind pass; QMS/other hosts that never set it keep the default
+     * comfortable spacing. See [BLOCK_SPACING_DP].
+     */
+    var blockSpacingDp: Float = BLOCK_SPACING_DP
+
+    /**
      * The colour of the surface the text is read ON, used to decide which inline server colours are
      * invisible and how bright a link has to be. Defaults to the app-wide content-card fill (what a
      * post card uses); the QMS chat overrides it per bubble, since an own bubble is accent-tinted.
@@ -275,7 +285,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (BLOCK_SPACING_DP * dm.density).toInt() }
+            ).apply { topMargin = (blockSpacingDp * dm.density).toInt() }
         }
         val label = block.title?.takeIf { it.isNotBlank() } ?: "Спойлер"
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
@@ -411,7 +421,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(BLOCK_SPACING_DP) }
+            ).apply { topMargin = dp(blockSpacingDp) }
         }
         // The leading accent bar: a plain strip clipped to the card's rounded outline.
         val bar = View(ctx).apply {
@@ -618,7 +628,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (BLOCK_SPACING_DP * dm.density).toInt() }
+            ).apply { topMargin = (blockSpacingDp * dm.density).toInt() }
             setOnClickListener { callbacks.onDownloadLinkTap(block.url, block.name) }
             setOnLongClickListener {
                 callbacks.onDownloadLinkLongPress(block.url, block.name)
@@ -641,7 +651,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (BLOCK_SPACING_DP * dm.density).toInt() }
+            ).apply { topMargin = (blockSpacingDp * dm.density).toInt() }
         }
         val copyBtn = TextView(ctx).apply {
             text = block.title?.takeIf { it.isNotBlank() }?.let { "$it · Копировать" } ?: "Копировать"
@@ -719,7 +729,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (BLOCK_SPACING_DP * dm.density).toInt() }
+            ).apply { topMargin = (blockSpacingDp * dm.density).toInt() }
         }
     }
 
@@ -781,7 +791,7 @@ class BodyBlockViewFactory(
         val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = (BLOCK_SPACING_DP * ctx.resources.displayMetrics.density).toInt() }
+        ).apply { topMargin = (blockSpacingDp * ctx.resources.displayMetrics.density).toInt() }
         panel.layoutParams = lp
         return panel
     }
@@ -821,7 +831,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (BLOCK_SPACING_DP * ctx.resources.displayMetrics.density).toInt() }
+            ).apply { topMargin = (blockSpacingDp * ctx.resources.displayMetrics.density).toInt() }
         }
     }
 
@@ -1184,11 +1194,12 @@ class BodyBlockViewFactory(
         const val DEFAULT_IMAGE_RATIO = 0.66f
 
         /**
-         * Top margin (dp) that separates a block-level segment (quote / spoiler / code / table / image /
-         * edit-note / web-fallback) from whatever precedes it. Applied uniformly so block-to-block spacing
-         * is consistent regardless of whether the author put a stray `<br>` around the block — those edge
-         * breaks are stripped in [PostBodyRenderer.flushInline], so this margin is the ONLY thing spacing
-         * blocks now, hence a touch more air than the old 6dp (user report: after the trim blocks sat too tight).
+         * DEFAULT (Комфортная density) top margin (dp) between block-level segments. Applied uniformly so
+         * block-to-block spacing is consistent regardless of whether the author put a stray `<br>` around the
+         * block — those edge breaks are stripped in [PostBodyRenderer.flushInline], so this margin is the ONLY
+         * thing spacing blocks now (a touch more air than the old 6dp; user report: after the trim blocks sat
+         * too tight). The topic host overrides it per density via [blockSpacingDp]; hosts that don't set it
+         * (QMS chat) keep this comfortable value.
          */
         const val BLOCK_SPACING_DP = 10f
 
