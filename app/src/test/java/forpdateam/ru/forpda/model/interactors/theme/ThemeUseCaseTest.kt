@@ -106,9 +106,24 @@ class ThemeUseCaseTest {
         }
 
         themeUseCase.onPrimaryThemeLoaded(page)
+        dispatcher.scheduler.advanceUntilIdle()
 
         verify(exactly = 1) { crossScreenInteractor.onLoadTopic(903891) }
         verify(exactly = 1) { eventsRepository.onTopicRead(903891) }
+        coVerify(atLeast = 1) { favoritesRepository.markRead(903891) }
+    }
+
+    @Test
+    fun `mark topic read updates favorites cache without a favorites screen collector`() = runTest {
+        val topicId = 1_106_099
+
+        themeUseCase.markTopicRead(topicId, reason = "last_page_bottom_reached", source = "native")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // Regression: the only old local path was a replay=0 CrossScreenInteractor event consumed
+        // by FavoritesViewModel.  Marking from onPause could race with screen navigation and vanish.
+        coVerify(exactly = 1) { favoritesRepository.markRead(topicId) }
+        verify(exactly = 1) { crossScreenInteractor.onLoadTopic(topicId) }
     }
 
     @Test

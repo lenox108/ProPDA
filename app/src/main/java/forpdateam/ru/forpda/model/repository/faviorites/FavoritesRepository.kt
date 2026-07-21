@@ -292,6 +292,17 @@ class FavoritesRepository(
         if (event.isWebSocket && event.event.isNew) {
             val newFavItems = favItems.toMutableList()
             newFavItems.find { it.topicId == event.event.sourceId && !it.isForum && it.topicId > 0 }?.also { fav ->
+                // WS-«новое» может быть ЗАДЕРЖАННЫМ событием о посте, который мы только что открыли и
+                // прочитали (гонка доставки WS и нашего markRead) → не зажигаем обратно. Точной метки
+                // времени у WS-события нет (parseWebSocketEvent их не заполняет), поэтому гейтим по
+                // свежести локального прочтения. Настоящий новый пост позже окна честно зажжёт тему
+                // (через inspector/полный рефреш).
+                val recentlyReadLocally = fav.readState == FavoriteReadState.READ &&
+                        !fav.isNew &&
+                        fav.localReadPostId > 0 &&
+                        fav.localReadPostDateMillis > 0L &&
+                        System.currentTimeMillis() - fav.localReadPostDateMillis < RECENT_LOCAL_READ_WS_GUARD_MS
+                if (recentlyReadLocally) return@also
                 if (!fav.isNew) {
                     fav.isNew = true
                     fav.readState = FavoriteReadState.UNREAD
@@ -355,7 +366,13 @@ class FavoritesRepository(
                 newCount = countUnreadFavoriteTopics(newFavItems)
             } else {
                 newFavItems.find { it.topicId == topicId }?.also { fav ->
-                    if (fav.lastUserId != authHolder.get().userId) {
+                    // Не зажигаем обратно тему, которую мы только что прочитали локально, если пост не
+                    // новее момента прочтения (устаревший инспектор/лаг). Раньше эта ветка (в отличие от
+                    // батч-ветки выше) не проверяла localReadDefeatsStaleInspector — из-за чего свежая
+                    // одиночная inspector-нотификация зажигала прочитанную тему («не засчитывает с
+                    // первого раза»). Настоящий новый пост даёт timeStamp > localRead → зажжёт как надо.
+                    if (fav.lastUserId != authHolder.get().userId &&
+                            !localReadDefeatsStaleInspector(fav, loadedEvent)) {
                         fav.isNew = true
                         fav.readState = FavoriteReadState.UNREAD
                     }
@@ -700,3 +717,6 @@ data class FavoriteMarkReadResult(
 }
 
 private const val INSPECTOR_UNREAD_COUNT_MAX = 199
+
+/** Окно после локального markRead, в котором задержанное WS-«new» об уже прочитанном посте игнорируется. */
+private const val RECENT_LOCAL_READ_WS_GUARD_MS = 20_000L

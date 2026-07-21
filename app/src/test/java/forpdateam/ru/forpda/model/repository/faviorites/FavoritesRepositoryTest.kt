@@ -270,6 +270,37 @@ class FavoritesRepositoryTest {
     }
 
     @Test
+    fun `delayed websocket event cannot relight a topic just read locally`() = runTest {
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = false).apply {
+                            readState = FavoriteReadState.READ
+                            localReadPostId = 42
+                            localReadPostDateMillis = System.currentTimeMillis()
+                        }
+                )
+        )
+        val repository = createRepository(favoritesCache)
+        val delayedWsEvent = TabNotification(
+                source = NotificationEvent.Source.THEME,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(NotificationEvent.Type.NEW, NotificationEvent.Source.THEME).apply {
+                    sourceId = 42
+                },
+                isWebSocket = true,
+        )
+
+        val counter = repository.handleEvent(delayedWsEvent)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(false, item.isNew)
+        assertEquals(FavoriteReadState.READ, item.readState)
+        assertEquals(0, item.unreadPostCount)
+        assertEquals(0, counter)
+    }
+
+    @Test
     fun `refresh preserves html unread when inspector reports read`() = runTest {
         val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
         val sorting = Sorting()
