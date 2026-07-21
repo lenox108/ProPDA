@@ -275,7 +275,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (6 * dm.density).toInt() }
+            ).apply { topMargin = (BLOCK_SPACING_DP * dm.density).toInt() }
         }
         val label = block.title?.takeIf { it.isNotBlank() } ?: "Спойлер"
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
@@ -411,7 +411,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(6f) }
+            ).apply { topMargin = dp(BLOCK_SPACING_DP) }
         }
         // The leading accent bar: a plain strip clipped to the card's rounded outline.
         val bar = View(ctx).apply {
@@ -618,7 +618,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (6 * dm.density).toInt() }
+            ).apply { topMargin = (BLOCK_SPACING_DP * dm.density).toInt() }
             setOnClickListener { callbacks.onDownloadLinkTap(block.url, block.name) }
             setOnLongClickListener {
                 callbacks.onDownloadLinkLongPress(block.url, block.name)
@@ -641,7 +641,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (6 * dm.density).toInt() }
+            ).apply { topMargin = (BLOCK_SPACING_DP * dm.density).toInt() }
         }
         val copyBtn = TextView(ctx).apply {
             text = block.title?.takeIf { it.isNotBlank() }?.let { "$it · Копировать" } ?: "Копировать"
@@ -719,7 +719,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (6 * dm.density).toInt() }
+            ).apply { topMargin = (BLOCK_SPACING_DP * dm.density).toInt() }
         }
     }
 
@@ -781,7 +781,7 @@ class BodyBlockViewFactory(
         val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
+        ).apply { topMargin = (BLOCK_SPACING_DP * ctx.resources.displayMetrics.density).toInt() }
         panel.layoutParams = lp
         return panel
     }
@@ -821,7 +821,7 @@ class BodyBlockViewFactory(
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
+            ).apply { topMargin = (BLOCK_SPACING_DP * ctx.resources.displayMetrics.density).toInt() }
         }
     }
 
@@ -1182,6 +1182,15 @@ class BodyBlockViewFactory(
                 Pattern.compile("""https?://4pda\.(?:to|ru)/forum/dl/post/\d+/(.+\.([^./?#]+))(?:[?#]|$)""")
 
         const val DEFAULT_IMAGE_RATIO = 0.66f
+
+        /**
+         * Top margin (dp) that separates a block-level segment (quote / spoiler / code / table / image /
+         * edit-note / web-fallback) from whatever precedes it. Applied uniformly so block-to-block spacing
+         * is consistent regardless of whether the author put a stray `<br>` around the block — those edge
+         * breaks are stripped in [PostBodyRenderer.flushInline], so this margin is the ONLY thing spacing
+         * blocks now, hence a touch more air than the old 6dp (user report: after the trim blocks sat too tight).
+         */
+        const val BLOCK_SPACING_DP = 10f
 
         /** Comfortable rendered height (dp) for a small linked «UPDATE / СКАЧАТЬ» button gif: at its
          *  intrinsic size it is only a few dp tall — too small to read or reliably tap. */
