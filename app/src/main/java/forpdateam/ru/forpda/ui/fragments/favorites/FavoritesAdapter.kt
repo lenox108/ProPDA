@@ -71,6 +71,7 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
                 readState = item.readState,
                 isPoll = item.isPoll,
                 isClosed = item.isClosed,
+                isNotifyMuted = item.isNotifyMuted,
                 unreadPostCount = item.unreadPostCount,
                 pages = item.pages
         )
@@ -91,6 +92,7 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
             val readState: FavoriteReadState,
             val isPoll: Boolean,
             val isClosed: Boolean,
+            val isNotifyMuted: Boolean,
             val unreadPostCount: Int,
             val pages: Int
     )
@@ -461,6 +463,8 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
             }
             FavoritesUnreadTrace.uiBound(item, showUnreadIndicators, showDot)
             binding.topicItemForumIcon.visibility = if (item.isForum) View.VISIBLE else View.GONE
+            // Пометка «уведомления для темы отключены» (локальный mute) — только у тем, не у форумов.
+            binding.topicItemMuteIcon.visibility = if (item.isNotifyMuted) View.VISIBLE else View.GONE
 
             if (item.isForum) {
                 binding.topicItemLockIcon.visibility = View.GONE

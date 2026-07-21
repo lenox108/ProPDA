@@ -27,6 +27,8 @@ class FavItem : IFavItem {
     var inspectorMarkedUnread: Boolean = false
     /** Locally hidden from the main favorites list (routed into the collapsible "Скрытое" section). Not persisted on the item. */
     var isHidden: Boolean = false
+    /** Notifications for this topic are muted locally (device-side mute set). Transient UI flag, not persisted. */
+    var isNotifyMuted: Boolean = false
     override var desc: String? = null
     override var curatorNick: String? = null
     override var subType: String? = null
@@ -67,6 +69,7 @@ class FavItem : IFavItem {
         listingHref = (item as? FavItem)?.listingHref
         inspectorMarkedUnread = (item as? FavItem)?.inspectorMarkedUnread == true
         isHidden = (item as? FavItem)?.isHidden == true
+        isNotifyMuted = (item as? FavItem)?.isNotifyMuted == true
         desc = item.desc
         curatorNick = item.curatorNick
         subType = item.subType
