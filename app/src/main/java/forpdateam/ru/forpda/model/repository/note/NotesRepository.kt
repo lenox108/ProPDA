@@ -98,24 +98,79 @@ class NotesRepository(
     }
 
     suspend fun importNotesFromJsonString(jsonSource: String) = withContext(ioDispatcher) {
-        val jsonBody = JSONArray(jsonSource)
+        // Формат v2 — объект { folders, notes } с сохранением папок; старый формат (голый
+        // массив заметок) поддерживается для обратной совместимости — там папок нет, все
+        // заметки уходят в «Без папки», как и раньше.
+        val trimmed = jsonSource.trim()
+        if (trimmed.startsWith("{")) {
+            importObjectFormat(JSONObject(trimmed))
+        } else {
+            importLegacyArray(JSONArray(trimmed))
+        }
+    }
+
+    private suspend fun importObjectFormat(root: JSONObject) {
+        // Пересоздаём папки и строим отображение старый id -> id в текущей БД. id из файла
+        // не переносим напрямую (могут конфликтовать с существующими папками); совпадающие
+        // по имени папки переиспользуем, чтобы импорт не плодил дубликаты.
+        val folderIdMap = HashMap<Long, Long>()
+        val existingByName = notesCacheRoom.getFolders()
+            .associateBy { it.name.trim().lowercase(Locale.getDefault()) }
+        root.optJSONArray("folders")?.let { foldersJson ->
+            for (i in 0 until foldersJson.length()) {
+                try {
+                    val folderJson = foldersJson.getJSONObject(i)
+                    val oldId = folderJson.getLong("id")
+                    val name = folderJson.getString("name")
+                    val key = name.trim().lowercase(Locale.getDefault())
+                    val newId = existingByName[key]?.id ?: notesCacheRoom.createFolder(name).id
+                    folderIdMap[oldId] = newId
+                } catch (e: JSONException) {
+                    Timber.e(e, "Notes folder parse error")
+                }
+            }
+        }
+
+        val notesJson = root.optJSONArray("notes") ?: JSONArray()
+        val noteItems = parseNotes(notesJson) { oldFolderId ->
+            oldFolderId?.let { folderIdMap[it] }
+        }
+        notesCacheRoom.add(noteItems)
+    }
+
+    private suspend fun importLegacyArray(jsonBody: JSONArray) {
+        val noteItems = parseNotes(jsonBody) { null }
+        notesCacheRoom.add(noteItems)
+    }
+
+    private inline fun parseNotes(
+        jsonBody: JSONArray,
+        remapFolderId: (Long?) -> Long?
+    ): List<NoteItem> {
         val noteItems = mutableListOf<NoteItem>()
         for (i in 0 until jsonBody.length()) {
             try {
                 val jsonItem = jsonBody.getJSONObject(i)
+                val rawFolderId = if (jsonItem.has("folderId") && !jsonItem.isNull("folderId")) {
+                    jsonItem.getLong("folderId")
+                } else {
+                    null
+                }
                 noteItems.add(NoteItem().apply {
                     id = jsonItem.getLong("id")
                     title = jsonItem.getString("title")
                     link = jsonItem.getString("link")
                     content = jsonItem.getString("content")
+                    folderId = remapFolderId(rawFolderId)
                     createdAt = jsonItem.optLong("createdAt", id)
                     updatedAt = jsonItem.optLong("updatedAt", createdAt)
+                    sortOrder = jsonItem.optLong("sortOrder", 0)
                 })
             } catch (e: JSONException) {
                 Timber.e(e, "Notes parse error")
             }
         }
-        notesCacheRoom.add(noteItems)
+        return noteItems
     }
 
     suspend fun exportNotes(outputStream: OutputStream) = withContext(ioDispatcher) {
@@ -130,20 +185,48 @@ class NotesRepository(
         return "ForPDA_Notes_$date.json"
     }
 
-    private suspend fun createExportJson(): JSONArray {
-        val jsonBody = JSONArray()
+    private suspend fun createExportJson(): JSONObject {
+        val root = JSONObject()
+        root.put("version", EXPORT_FORMAT_VERSION)
+
+        val foldersJson = JSONArray()
+        notesCacheRoom.getFolders().forEach {
+            try {
+                foldersJson.put(JSONObject().apply {
+                    put("id", it.id)
+                    put("name", it.name)
+                    put("sortOrder", it.sortOrder)
+                    put("createdAt", it.createdAt)
+                    put("updatedAt", it.updatedAt)
+                })
+            } catch (e: JSONException) {
+                Timber.e(e, "Notes folder save error")
+            }
+        }
+        root.put("folders", foldersJson)
+
+        val notesJson = JSONArray()
         notesCacheRoom.getAllItemsForExport().forEach {
             try {
-                jsonBody.put(JSONObject().apply {
+                notesJson.put(JSONObject().apply {
                     put("id", it.id)
                     put("title", it.title)
                     put("link", it.link)
                     put("content", it.content)
+                    it.folderId?.let { folderId -> put("folderId", folderId) }
+                    put("createdAt", it.createdAt)
+                    put("updatedAt", it.updatedAt)
+                    put("sortOrder", it.sortOrder)
                 })
             } catch (e: JSONException) {
                 Timber.e(e, "Notes save error")
             }
         }
-        return jsonBody
+        root.put("notes", notesJson)
+        return root
+    }
+
+    private companion object {
+        const val EXPORT_FORMAT_VERSION = 2
     }
 }
