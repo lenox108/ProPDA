@@ -108,13 +108,17 @@ def rounded_mask(size):
 def web_squircle(image, size):
     """Export a standalone app-icon tile with transparent outer corners."""
     tile = image.resize((size, size), Image.Resampling.LANCZOS)
-    mask = Image.new("L", (size, size), 0)
-    # 22% corner radius closely matches the Android rounded-square silhouette.
+    # Draw the silhouette at 8x resolution and downsample it. Drawing the
+    # rounded rectangle directly at 129 px produces visibly uneven stair-steps.
+    scale = 8
+    mask = Image.new("L", (size * scale, size * scale), 0)
+    inset = scale
     ImageDraw.Draw(mask).rounded_rectangle(
-        (1, 1, size - 2, size - 2),
-        radius=round(size * .22),
+        (inset, inset, size * scale - inset - 1, size * scale - inset - 1),
+        radius=round(size * scale * .22),
         fill=255,
     )
+    mask = mask.resize((size, size), Image.Resampling.LANCZOS)
     tile.putalpha(mask)
     return tile
 
@@ -142,10 +146,24 @@ def main():
 
     web = HERE / "web"
     web.mkdir(parents=True, exist_ok=True)
-    web_1024 = web_squircle(light, 1024)
-    web_1024.save(web / "propda-app-icon-1024.png", optimize=True)
-    web_squircle(light, 512).save(web / "propda-app-icon-512.png", optimize=True)
-    web_1024.save(web / "propda-app-icon-1024.webp", format="WEBP", lossless=True, quality=100)
+    web_512 = web_squircle(light, 512)
+    web_512.save(web / "propda-icon-light-ios-512.png", optimize=True)
+    web_squircle(dark, 512).save(web / "propda-icon-night-ios-512.png", optimize=True)
+    web_squircle(monet, 512).save(web / "propda-icon-monet-blue-512.png", optimize=True)
+    # Compatibility names retained for existing site references.
+    web_512.save(web / "propda-app-icon-512.png", optimize=True)
+    web_512.save(web / "propda-icon-light-ios-512.webp", format="WEBP", lossless=True, quality=100)
+    web_squircle(dark, 512).save(web / "propda-icon-night-ios-512.webp", format="WEBP", lossless=True, quality=100)
+    web_squircle(monet, 512).save(web / "propda-icon-monet-blue-512.webp", format="WEBP", lossless=True, quality=100)
+    web_512.save(web / "propda-app-icon-512.webp", format="WEBP", lossless=True, quality=100)
+
+    web_129 = web_squircle(light, 129)
+    web_129.save(web / "propda-icon-light-ios-129.png", optimize=True)
+    web_squircle(dark, 129).save(web / "propda-icon-night-ios-129.png", optimize=True)
+    web_squircle(monet, 129).save(web / "propda-icon-monet-blue-129.png", optimize=True)
+    web_129.save(web / "propda-icon-light-ios-129.webp", format="WEBP", lossless=True, quality=100)
+    web_squircle(dark, 129).save(web / "propda-icon-night-ios-129.webp", format="WEBP", lossless=True, quality=100)
+    web_squircle(monet, 129).save(web / "propda-icon-monet-blue-129.webp", format="WEBP", lossless=True, quality=100)
 
     for density, size in SIZES.items():
         for night, image in ((False, light), (True, dark)):
