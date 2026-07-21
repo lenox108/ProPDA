@@ -2575,11 +2575,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // здесь по текущему вьюпорту, но ТОЛЬКО если в сессии был реальный жест: без жеста вьюпорт —
         // не доказательство чтения («открыл-глянул-закрыл»). Запись монотонна — назад не откатывает.
         if (userScrollGestureThisSession) recordReadBoundaryAtRest()
+        // Выход из темы, физически стоя в САМОМ НИЗУ последней страницы, = дочитал до конца, даже без
+        // жеста и без 4-сек dwell: тема часто открывается прямо на последнем (новом) посте — юзер его
+        // увидел и вышел. Сервер уже пометил её прочитанной самим GET открытия, синхронизируем и локально,
+        // сняв anti-glance suppress (иначе «глянул последний пост и быстро вышел» оставлял тему жирной в
+        // избранном — воспроизведено на эмуляторе). НЕ трогаем сессионный путь: там «низ виден при рендере»
+        // намеренно ≠ дочитал, иначе тема метилась бы прочитанной в момент открытия.
+        if (view != null && pageTopicId > 0 && !pagination.hasNextPage() &&
+                !recyclerView.canScrollVertically(1)) {
+            suppressEndMarkReadUntilUserScroll = false
+        }
         // Страховка на выход из темы (back/сворачивание): если юзер долистал ровно до конца, но
         // финальный кадр onScrolled/IDLE-settle не успел зафиксировать «низ виден» до ухода — метим
         // прочитанной здесь. Полностью защищено собственными гейтами maybeMarkTopicReadAtEnd
-        // (последний пост на экране, нет след. страницы, был жест пользователя), поэтому вызвать в
-        // onPause безопасно: тема пометится прочитанной ТОЛЬКО если её действительно дочитали до конца.
+        // (последний пост на экране, нет след. страницы, был жест пользователя ИЛИ мы у абсолютного
+        // низа — см. выше), поэтому вызвать в onPause безопасно.
         maybeMarkTopicReadAtEnd()
     }
 
@@ -3337,7 +3347,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         is BodyBlock.WebFallback -> android.text.Html.fromHtml(block.html, android.text.Html.FROM_HTML_MODE_COMPACT).toString()
         is BodyBlock.Image -> ""
         is BodyBlock.EditNote -> "" // system meta line — not searchable content
-        is BodyBlock.Offtop -> android.text.Html.fromHtml(block.html, android.text.Html.FROM_HTML_MODE_COMPACT).toString()
     }
 
     /**

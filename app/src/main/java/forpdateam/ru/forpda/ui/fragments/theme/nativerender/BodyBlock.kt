@@ -33,16 +33,6 @@ sealed interface BodyBlock {
     data class EditNote(val html: String) : BodyBlock
 
     /**
-     * An `[offtop]` aside. 4pda serves it as a `.post-block.spoil` whose toggle is the 🤔 thinking-face
-     * marker and whose body is the classic small-grey offtop font (`<font style="font-size:9px;color:gray;">`),
-     * i.e. a COLLAPSIBLE spoiler wrapper — but semantically offtop is not hidden content, it is a small,
-     * always-visible "by the way" note. [PostBodyRenderer] detects that shape and emits this instead of a
-     * [Spoiler] so the view renders the [html] (the body's inner content) as small muted always-visible text,
-     * never a tap-to-open card. Carries raw inline HTML like [Text]; the size/colour are applied at view time.
-     */
-    data class Offtop(val html: String) : BodyBlock
-
-    /**
      * A native inline image (attachment picture), peeled out of the fallback in Фаза 2.
      * [displayWidthPx]/[displayHeightPx] come from the server markup (img width/height attrs),
      * so the view can reserve the correct aspect ratio BEFORE the bitmap loads — this is the
