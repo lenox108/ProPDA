@@ -56,6 +56,13 @@ class BodyBlockViewFactory(
         fun onQuoteSelection(scopeId: Int, selectedText: String) = Unit
 
         /**
+         * The user long-pressed a body and chose «Удалить сообщение» from the selection toolbar.
+         * Enabled only for scopes with [RenderScope.allowDeleteSelection] (QMS chat bubbles). Text
+         * stays selectable (copy/share still work); this adds a delete action next to «Цитировать».
+         */
+        fun onDeleteScope(scopeId: Int) = Unit
+
+        /**
          * Long-press on a downloadable file link → the host shows a chooser
          * (Скачать / Открыть в браузере).
          */
@@ -87,7 +94,12 @@ class BodyBlockViewFactory(
      * [scopeId] keys the spoiler state and identifies the owner in [Callbacks].
      * [allowQuoteSelection] enables the «Цитировать» selection action (posts the user may quote).
      */
-    class RenderScope(val scopeId: Int, val allowQuoteSelection: Boolean = false) {
+    class RenderScope(
+            val scopeId: Int,
+            val allowQuoteSelection: Boolean = false,
+            /** Adds «Удалить сообщение» to the text-selection toolbar (QMS chat only). */
+            val allowDeleteSelection: Boolean = false,
+    ) {
         var spoilerSeq: Int = 0
 
         /** 1-based-ish counter of quotes within the body, in document order (incl. nested) —
@@ -901,6 +913,7 @@ class BodyBlockViewFactory(
             // not be selected/copied at all — long-press did nothing.
             setTextIsSelectable(true)
             installQuoteSelectionAction(this, scope)
+            installDeleteSelectionAction(this, scope)
             if (hasLinks) {
                 // A selection-aware movement method: keeps the ArrowKeyMovementMethod selection
                 // behaviour that setTextIsSelectable installs (long-press → ActionMode, drag →
@@ -1073,6 +1086,64 @@ class BodyBlockViewFactory(
         }
     }
 
+    /**
+     * Adds «Удалить сообщение» to the text-selection toolbar for QMS chat bubbles, while keeping the
+     * text selectable (native Copy/Share still work). Same MIUI/HyperOS hardening as «Цитировать»:
+     * forced to the primary row and pulled to the front, so on Xiaomi it does NOT get buried in the
+     * floating toolbar's «⋮» overflow (where the earlier version was invisible). Skipped when the scope
+     * already allows quoting, so the quote callback keeps the single ActionMode slot for forum posts.
+     */
+    private fun installDeleteSelectionAction(tv: TextView, scope: RenderScope) {
+        if (!scope.allowDeleteSelection || scope.allowQuoteSelection) return
+        tv.customSelectionActionModeCallback = object : android.view.ActionMode.Callback {
+            fun addDeleteItem(menu: android.view.Menu) {
+                menu.add(0, DELETE_MENU_ID, 0, "Удалить сообщение")
+                        .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
+            }
+            fun ensureDeleteItem(menu: android.view.Menu): Boolean {
+                if (menu.findItem(DELETE_MENU_ID) != null) return false
+                addDeleteItem(menu)
+                return true
+            }
+            fun reorderDeleteFirst(menu: android.view.Menu): Boolean {
+                if (menu.size() > 0 && menu.getItem(0).itemId == DELETE_MENU_ID) return false
+                return try {
+                    val others = ArrayList<Array<Any?>>(menu.size())
+                    for (i in 0 until menu.size()) {
+                        val mi = menu.getItem(i)
+                        if (mi.itemId == DELETE_MENU_ID) continue
+                        others.add(arrayOf(mi.groupId, mi.itemId, mi.order, mi.title, mi.intent))
+                    }
+                    menu.clear()
+                    addDeleteItem(menu)
+                    for (o in others) {
+                        val re = menu.add(o[0] as Int, o[1] as Int, o[2] as Int, o[3] as CharSequence?)
+                                .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
+                        (o[4] as? android.content.Intent)?.let { re.intent = it }
+                    }
+                    true
+                } catch (t: Throwable) {
+                    ensureDeleteItem(menu)
+                }
+            }
+            override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
+                ensureDeleteItem(menu)
+                return true
+            }
+            override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) =
+                    reorderDeleteFirst(menu)
+            override fun onActionItemClicked(mode: android.view.ActionMode, menuItem: android.view.MenuItem): Boolean {
+                if (menuItem.itemId == DELETE_MENU_ID) {
+                    callbacks.onDeleteScope(scope.scopeId)
+                    mode.finish()
+                    return true
+                }
+                return false
+            }
+            override fun onDestroyActionMode(mode: android.view.ActionMode) {}
+        }
+    }
+
     /** Wrap each case-insensitive [searchQuery] match in [text] with a highlight background span. */
     private fun highlightSearchMatches(ctx: Context, text: CharSequence): CharSequence {
         val q = searchQuery
@@ -1195,6 +1266,7 @@ class BodyBlockViewFactory(
         const val BUTTON_GIF_HEIGHT_DP = 40f
         const val SMILE_SIZE_SP = 18f
         const val QUOTE_MENU_ID = 0x71_0716
+        const val DELETE_MENU_ID = 0x71_0717
 
         // Below this WCAG contrast ratio against the reading surface, an inline server text colour is
         // treated as invisible and dropped so the text falls back to colorOnSurface. ~2.5 keeps readable

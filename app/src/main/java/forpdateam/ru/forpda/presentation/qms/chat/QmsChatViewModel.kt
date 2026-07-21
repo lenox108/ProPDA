@@ -50,7 +50,12 @@ class QmsChatViewModel @Inject constructor(
     companion object {
         const val MODE_CHAT = "chat"
         const val MODE_CREATING = "creating"
-        private const val WS_POLL_SUPPRESS_MS = 120_000L
+        /**
+         * A WS event for the open thread within this window means the realtime channel is actually
+         * delivering, so the open-dialog safety-net poll skips that tick. Kept a bit above the poll
+         * cadence so exactly one tick is skipped right after a live update (no redundant re-fetch).
+         */
+        private const val WS_EVENT_FRESHNESS_MS = 25_000L
         /**
          * If the in-memory QMS chat cache is fresher than this, a second open of the same dialog
          * within the [QmsChatMemoryCache.MAX_AGE_MS] window skips the background network refresh
@@ -682,6 +687,33 @@ class QmsChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Удаляет одно сообщение из открытого треда. Удаление на 4pda одностороннее — убирает
+     * сообщение только из нашей копии диалога, у собеседника оно остаётся (проверено вживую).
+     * После успешного запроса убираем сообщение из [currentData] и перепубликуем окно, чтобы
+     * оно исчезло из списка сразу, без перезагрузки чата.
+     */
+    fun deleteMessage(messageId: Int) {
+        if (userId == QmsChatModel.NOT_CREATED || themeId == QmsChatModel.NOT_CREATED) {
+            return
+        }
+        scope.launch {
+            try {
+                _messageRefreshing.value = true
+                qmsInteractor.deleteMessages(userId, themeId, listOf(messageId))
+                currentData?.let { data ->
+                    val removed = data.messages.removeAll { it.id == messageId }
+                    if (removed) publishVisibleMessages(scrollToBottom = false)
+                }
+                _uiEvents.emit(QmsChatUiEvent.OnMessagesDeleted(1))
+            } catch (e: Throwable) {
+                errorHandler.handle(e)
+            } finally {
+                _messageRefreshing.value = false
+            }
+        }
+    }
+
     fun blockUser() {
         currentData?.nick?.let { n ->
             scope.launch {
@@ -717,9 +749,16 @@ class QmsChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * P2: the open-dialog safety-net poll should be skipped ONLY when the realtime socket has actually
+     * delivered a message for THIS thread very recently — not merely because the socket reports
+     * «connected». `isWebSocketConnected()` is true right after onOpen and says nothing about real
+     * delivery: a technically-open-but-silent socket used to suppress polling AND back it off to
+     * minutes, so an open dialog received nothing until the user exited and re-entered. Gating on
+     * WS-event freshness instead means: socket delivering → skip; socket silent/half-dead → poll.
+     */
     fun shouldSkipAutoRefreshPoll(): Boolean =
-            eventsRepository.isWebSocketConnected() ||
-                    System.currentTimeMillis() - lastRealtimeMessageAtMs < WS_POLL_SUPPRESS_MS
+            System.currentTimeMillis() - lastRealtimeMessageAtMs < WS_EVENT_FRESHNESS_MS
 
     private fun markRealtimeMessageActivity() {
         lastRealtimeMessageAtMs = System.currentTimeMillis()
@@ -920,6 +959,7 @@ sealed class QmsChatUiEvent {
     data class ShowChat(val chat: QmsChatModel) : QmsChatUiEvent()
     data class OnNewThemeCreate(val chat: QmsChatModel) : QmsChatUiEvent()
     data class OnSentMessage(val messages: List<QmsMessage>) : QmsChatUiEvent()
+    data class OnMessagesDeleted(val count: Int) : QmsChatUiEvent()
     data class OnBlockUser(val isBlocked: Boolean) : QmsChatUiEvent()
     data class ShowAvatar(val url: String) : QmsChatUiEvent()
     data class OnUploadFiles(val files: List<AttachmentItem>) : QmsChatUiEvent()

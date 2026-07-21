@@ -530,9 +530,10 @@ class EventsRepository(
             BatteryDebugLogger.logState("EventsRepository", "foregroundRealtimeUnchanged", "enabled=$enabled reason=$reason")
             return
         }
-        // При выключенных уведомлениях realtime-WS не нужен: пинги каждые 30с держат
-        // радио в активном состоянии. Никогда не поднимаем WS, если уведомления выключены.
-        if (enabled && !notificationPreferencesHolder.wantsPushNotifications()) {
+        // При выключенных уведомлениях realtime-WS обычно не нужен: пинги каждые 30с держат
+        // радио в активном состоянии. Исключение (P1) — открытый realtime-экран (QMS-чат): ему
+        // нужен живой сокет для мгновенной доставки даже при выключенных уведомлениях.
+        if (enabled && !realtimeWantedForPolicy()) {
             foregroundRealtimeEnabled = false
             BatteryDebugLogger.logState("EventsRepository", "skipForeground", "notifications disabled reason=$reason")
             cancelIdle()
@@ -635,25 +636,57 @@ class EventsRepository(
      * foreground + network + auth. Парный вызов — [releaseRealtimeForScreen].
      */
     fun requestRealtimeForScreen(owner: String) {
-        synchronized(realtimeScreenOwners) {
+        val newlyActive = synchronized(realtimeScreenOwners) {
             val added = realtimeScreenOwners.add(owner)
             realtimeScreenRefCount = realtimeScreenOwners.size
             if (added) {
                 BatteryDebugLogger.logState("EventsRepository", "screenAcquireRealtime", "owner=$owner count=$realtimeScreenRefCount")
             }
+            added && realtimeScreenRefCount == 1
         }
-    }
-
-    fun releaseRealtimeForScreen(owner: String) {
-        synchronized(realtimeScreenOwners) {
-            if (realtimeScreenOwners.remove(owner)) {
-                realtimeScreenRefCount = realtimeScreenOwners.size
-                BatteryDebugLogger.logState("EventsRepository", "screenReleaseRealtime", "owner=$owner count=$realtimeScreenRefCount")
+        // P1: a newly-active realtime screen (open QMS chat) needs a live socket NOW — drive it open
+        // even when push notifications are off ([realtimeWantedForPolicy] relaxes the notification gate)
+        // or when the socket went idle. A visible chat implies foreground, so mirroring the
+        // foreground-realtime path is correct; the socket is closed again in [releaseRealtimeForScreen]
+        // / the idle timer once no realtime screen remains.
+        if (newlyActive) {
+            lastInteractionAt = SystemClock.elapsedRealtime()
+            if (!foregroundRealtimeEnabled) {
+                setForegroundRealtimeEnabled(true, "realtime_screen:$owner")
+            } else {
+                idleDisconnected = false
+                start(checkEvents = true, force = true)
+                armIdleTimer()
             }
         }
     }
 
+    fun releaseRealtimeForScreen(owner: String) {
+        val nowInactive = synchronized(realtimeScreenOwners) {
+            val removed = realtimeScreenOwners.remove(owner)
+            realtimeScreenRefCount = realtimeScreenOwners.size
+            if (removed) {
+                BatteryDebugLogger.logState("EventsRepository", "screenReleaseRealtime", "owner=$owner count=$realtimeScreenRefCount")
+            }
+            removed && realtimeScreenRefCount == 0
+        }
+        // If the socket was up ONLY because this screen needed it (push notifications off), close it now
+        // that no realtime screen remains — otherwise the idle timer / normal foreground policy keep it.
+        if (nowInactive && !notificationPreferencesHolder.wantsPushNotifications()) {
+            setForegroundRealtimeEnabled(false, "realtime_screen_release:$owner")
+        }
+    }
+
     fun isRealtimeScreenActive(): Boolean = realtimeScreenRefCount > 0
+
+    /**
+     * Realtime is allowed either because the user wants push notifications, OR because a foreground
+     * screen (an open QMS chat) explicitly needs a live socket for message delivery (P1). The screen
+     * override is bounded: it holds only while [isRealtimeScreenActive], and the socket is torn down
+     * on release / idle.
+     */
+    private fun realtimeWantedForPolicy(): Boolean =
+            notificationPreferencesHolder.wantsPushNotifications() || isRealtimeScreenActive()
 
     fun updateEvents(source: NotificationEvent.Source) {
         hardHandleEvent(source)
@@ -843,8 +876,9 @@ class EventsRepository(
         }
         // Единственная точка, через которую открывается WS и уходят inspector-запросы, поэтому
         // проверку «а нужны ли вообще push» держим здесь. Иначе подписки на сеть и авторизацию
-        // в init воскрешали соединение после того, как пользователь всё выключил.
-        if (!notificationPreferencesHolder.wantsPushNotifications()) {
+        // в init воскрешали соединение после того, как пользователь всё выключил. Открытый
+        // realtime-экран (QMS-чат) — законное исключение (P1), см. [realtimeWantedForPolicy].
+        if (!realtimeWantedForPolicy()) {
             BatteryDebugLogger.logState("EventsRepository", "skipStart", "notifications disabled")
             stop("notifications_disabled")
             return
@@ -867,6 +901,7 @@ class EventsRepository(
                     networkAvailable = networkStateProvider.getState(),
                     authorized = authHolder.get().isAuth(),
                     wantsPushNotifications = notificationPreferencesHolder.wantsPushNotifications(),
+                    realtimeScreenActive = isRealtimeScreenActive(),
             )
             if (!wantsRealtime) {
                 BatteryDebugLogger.logState("EventsRepository", "skipWebSocket", "notifications disabled")

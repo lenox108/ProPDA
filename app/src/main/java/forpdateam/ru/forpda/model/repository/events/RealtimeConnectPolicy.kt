@@ -21,12 +21,18 @@ object RealtimeConnectPolicy {
      * @param authorized         the user is logged in (an anonymous socket receives nothing)
      * @param wantsPushNotifications the master notification toggle AND at least one event family
      *        (see `NotificationDataStore.wantsPushNotificationsSync`); realtime exists to feed
-     *        notifications, so with none of them wanted the socket is pure battery cost.
+     *        notifications, so with none of them wanted the socket is normally pure battery cost.
+     * @param realtimeScreenActive a foreground screen (an open QMS chat) explicitly needs a live
+     *        socket for message delivery — this overrides [wantsPushNotifications]: a user reading a
+     *        dialog must get new messages instantly even with notifications turned off. Bounded: the
+     *        idle timer / [releaseRealtimeForScreen] close the socket again once no such screen remains.
      */
     fun shouldOpenWebSocket(
             foregroundRealtime: Boolean,
             networkAvailable: Boolean,
             authorized: Boolean,
             wantsPushNotifications: Boolean,
-    ): Boolean = foregroundRealtime && networkAvailable && authorized && wantsPushNotifications
+            realtimeScreenActive: Boolean = false,
+    ): Boolean = foregroundRealtime && networkAvailable && authorized &&
+            (wantsPushNotifications || realtimeScreenActive)
 }

@@ -367,6 +367,9 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                     override fun onMessageLongClick(anchor: View, item: QmsChatItem.Message) =
                             showMessageMenu(anchor, item)
 
+                    override fun onMessageDeleteRequested(messageId: Int) =
+                            confirmDeleteMessage(messageId)
+
                     override fun onDownloadLinkTap(url: String, fileName: String?) {
                         systemLinkHandler.handleDownload(url, fileName, requireContext())
                     }
@@ -589,15 +592,17 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                     }
                 }
                 launch {
-                    var pollIntervalMs = QMS_AUTO_REFRESH_INTERVAL_MS
+                    // Open-dialog safety net (P2): a FIXED short tick while the chat is on screen
+                    // (this loop only runs in the STARTED lifecycle). Each tick fetches new messages
+                    // unless the realtime socket delivered one for this thread very recently
+                    // (shouldSkipAutoRefreshPoll = WS-event freshness). No exponential back-off: an
+                    // idle-but-connected socket no longer balloons the interval to minutes, so worst-case
+                    // staleness stays ~one tick instead of «выйти и зайти». Bounded to a visible chat;
+                    // when the socket is actively delivering, nearly every tick is skipped.
                     while (isActive) {
-                        delay(pollIntervalMs)
+                        delay(QMS_AUTO_REFRESH_FAST_MS)
                         if (!isActive || !networkState.getState()) continue
-                        if (presenter.shouldSkipAutoRefreshPoll()) {
-                            pollIntervalMs = (pollIntervalMs * 2).coerceAtMost(QMS_AUTO_REFRESH_MAX_INTERVAL_MS)
-                            continue
-                        }
-                        pollIntervalMs = QMS_AUTO_REFRESH_INTERVAL_MS
+                        if (presenter.shouldSkipAutoRefreshPoll()) continue
                         presenter.checkNewMessagesSilently()
                     }
                 }
@@ -651,18 +656,35 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                 .startActivity(requireContext(), ArrayList(galleryUrls), start)
     }
 
-    /** Long-press a bubble → copy its plain text (the WebView offered only the system text selection). */
+    /** Long-press a bubble → copy its plain text or delete the message (one-sided, our copy only). */
     private fun showMessageMenu(anchor: View, item: QmsChatItem.Message) {
         val popup = android.widget.PopupMenu(requireContext(), anchor)
         popup.menu.add(0, MENU_COPY_MESSAGE, 0, R.string.copy)
+        popup.menu.add(0, MENU_DELETE_MESSAGE, 1, R.string.delete)
         popup.setOnMenuItemClickListener { menuItem ->
-            if (menuItem.itemId == MENU_COPY_MESSAGE) {
-                clipboardHelper.copyToClipboard(plainTextOf(item))
-                showSnackbar(R.string.copied)
+            when (menuItem.itemId) {
+                MENU_COPY_MESSAGE -> {
+                    clipboardHelper.copyToClipboard(plainTextOf(item))
+                    showSnackbar(R.string.copied)
+                }
+                MENU_DELETE_MESSAGE -> confirmDeleteMessage(item.id)
             }
             true
         }
         popup.show()
+    }
+
+    /**
+     * Удаление сообщения необратимо — спрашиваем подтверждение и честно предупреждаем, что оно
+     * пропадёт только у нас (у собеседника останется: удаление на 4pda одностороннее).
+     */
+    private fun confirmDeleteMessage(messageId: Int) {
+        if (!isAdded || view == null) return
+        MaterialAlertDialogBuilder(requireContext())
+                .setMessage(R.string.qms_delete_message_confirm)
+                .setPositiveButton(R.string.delete) { _, _ -> presenter.deleteMessage(messageId) }
+                .setNegativeButton(R.string.cancel, null)
+                .showWithStyledButtons()
     }
 
     private fun plainTextOf(item: QmsChatItem.Message): String = runCatching {
@@ -681,6 +703,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
             is QmsChatUiEvent.ShowChat -> showChat(event.chat)
             is QmsChatUiEvent.OnNewThemeCreate -> onNewThemeCreate(event.chat)
             is QmsChatUiEvent.OnSentMessage -> onSentMessage(event.messages)
+            is QmsChatUiEvent.OnMessagesDeleted -> showSnackbar(R.string.qms_message_deleted)
             is QmsChatUiEvent.OnBlockUser -> onBlockUser(event.isBlocked)
             is QmsChatUiEvent.ShowAvatar -> showAvatar(event.url)
             is QmsChatUiEvent.OnUploadFiles -> onUploadFiles(event.files)
@@ -796,6 +819,19 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
+        // QmsChat — «одиночная» (isAlone) вкладка, поэтому TabFragment НЕ рисует верхнюю
+        // стрелку «назад/закрыть», которую ставит обычным вкладкам (ветка !isToggle). Добавляем
+        // её явно — как NativeTopicFragment делает для темы, — чтобы из чата была видимая стрелка
+        // к списку диалогов. Клик идёт через штатный back-handling (гард несохранённого текста →
+        // возврат к списку тем). contentInsetStartWithNavigation=0 — прижать аватар к стрелке,
+        // как на не-alone экране списка тем.
+        toolbar.setNavigationIcon(R.drawable.ic_toolbar_arrow_back)
+        toolbar.navigationContentDescription = getString(R.string.close_tab)
+        toolbar.contentInsetStartWithNavigation = 0
+        toolbar.setNavigationOnClickListener {
+            requireActivity().onBackPressedDispatcher.onBackPressed()
+        }
+        tintToolbarIcons()
         refreshMenuItem = menu
                 .add(Menu.NONE, R.id.action_qms_chat_refresh, Menu.NONE, R.string.refresh)
                 .setIcon(R.drawable.ic_toolbar_refresh)
@@ -1077,9 +1113,10 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     companion object {
         private const val TAG_QMS_EMPTY = "QMS_EMPTY"
         private const val TAG_QMS_ERROR = "QMS_ERROR"
-        private const val QMS_AUTO_REFRESH_INTERVAL_MS = 60_000L
-        private const val QMS_AUTO_REFRESH_MAX_INTERVAL_MS = 240_000L
+        /** Open-dialog safety-net poll cadence while the chat is on screen (P2). */
+        private const val QMS_AUTO_REFRESH_FAST_MS = 15_000L
         private const val MENU_COPY_MESSAGE = 1
+        private const val MENU_DELETE_MESSAGE = 2
 
         /** Font-size pref value that maps to textScale 1.0 (matches the native topic renderer). */
         private const val REFERENCE_FONT_SIZE = 16f

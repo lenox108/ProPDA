@@ -69,6 +69,15 @@ class QmsInteractor(
     suspend fun getChat(userId: Int, themeId: Int): QmsChatModel = qmsRepository.getChat(userId, themeId)
 
     /**
+     * Удаляет сообщения из открытого треда и инвалидирует in-memory кэш чата, чтобы повторное
+     * открытие диалога не воскресило удалённые сообщения из кэша (сеть вернёт уже актуальный список).
+     */
+    suspend fun deleteMessages(userId: Int, themeId: Int, messageIds: List<Int>) {
+        qmsRepository.deleteMessages(userId, themeId, messageIds)
+        QmsChatMemoryCache.invalidate(userId, themeId)
+    }
+
+    /**
      * Диалог прочитан в приложении: обнуляем локальный счётчик непрочитанных и снимаем уведомления
      * этого треда из шторки.
      */
