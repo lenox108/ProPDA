@@ -161,7 +161,13 @@ class EventsCheckWorker @AssistedInject constructor(
         var anyNetworkError = false
         fun trackFailure(tag: String, e: Throwable) {
             Timber.e(e, "EventsCheckWorker $tag failed")
-            NotifDiagLog.log(applicationContext, "$tag: error ${e.javaClass.simpleName}")
+            // В release имя класса обфусцировано (полевой лог показывал бесполезное «error tD»).
+            // Логируем причину: для HTTP — код (Cloudflare/rate-limit сразу видно), иначе message.
+            val detail = when (e) {
+                is forpdateam.ru.forpda.client.OkHttpResponseException -> "http ${e.code}"
+                else -> e.message?.take(120) ?: e.javaClass.simpleName
+            }
+            NotifDiagLog.log(applicationContext, "$tag: error $detail")
             if (e is java.io.IOException) anyNetworkError = true
         }
         runCatching { checkSource(NotificationEvent.Source.QMS) }
