@@ -2544,6 +2544,26 @@ body#topic .poll > a.btn.title.aec > .icon:before {
         // палитра: когда выбрана читающая палитра, её AMOLED-вариант авторитетен
         // целиком, generic-слой не нужен и только протекает. Отдаём оформление ей.
         if (isSepiaReading() || isSepiaBlue() || isMinimalReader() || isNewReadingPalette()) return ""
+        // Динамический акцент (Material You / курируемый seed) для HTML-контента.
+        // AMOLED — это «палитра на чистом чёрном», ОРТОГОНАЛЬНАЯ выбору акцента
+        // (см. [[amoled-mode-orthogonal-to-palette]]): поверхности остаются чёрными,
+        // но ссылки/кнопки/иконки действий должны следовать ЖИВОМУ акценту, а не
+        // статическому серому. getForumSurfaceOverrideCss() тут делает ранний return
+        // (он ещё и красит поверхности, чего в AMOLED нельзя), поэтому акцент мостим
+        // здесь. resolveDynamicAccentHex() уже корректно считает MY-primary для
+        // Android 12–13 и 14+ и M3-primary курируемого seed; isAmoled() ⇒ night, так
+        // что берётся тёмная (светлотоновая) роль — читаемая на #000. NEUTRAL без MY
+        // → null: сохраняем прежний нейтральный серый (ссылки — дефолт базовой css).
+        val accentHex = resolveDynamicAccentHex()
+        val surfaceAccent = accentHex ?: "#9E9E9E"
+        val accentLinkRules = if (accentHex != null) {
+            "a { color: var(--surface-accent) !important; }\n" +
+                    "button, .btn { color: var(--surface-accent) !important; }\n"
+        } else ""
+        // Filled-CTA новостей: на тёмной палитре акцент светлый (тон ~80), поэтому
+        // текст на нём чёрный (аналог onPrimary), иначе — прежний синий/белый.
+        val newsCtaCss = if (accentHex != null) newsArticleCtaButtonOverrideCss(accentHex, "#000000")
+                else newsArticleCtaButtonOverrideCss("#2980b9", "#ffffff")
         // Посты делаем чистым чёрным (#000), пространство между постами — серым (#1a1a1a),
         // чтобы в AMOLED был выражен контраст и разделители были видны.
         val css = """
@@ -2555,7 +2575,7 @@ body#topic .poll > a.btn.title.aec > .icon:before {
     --surface-text-primary: #ffffff;
     --surface-text-secondary: #b2b2b2;
     --surface-icon: #b2b2b2;
-    --surface-accent: #9E9E9E;
+    --surface-accent: $surfaceAccent;
     --surface-control: rgba(255, 255, 255, 0.08);
     --surface-control-active: rgba(255, 255, 255, 0.14);
     --topic-action-icon-color: var(--surface-accent);
@@ -2564,7 +2584,7 @@ body#topic .poll > a.btn.title.aec > .icon:before {
     --surface-radius-large: 0.875rem;
 }
 html, body { background: #000000 !important; }
-.post_container { background: #000000 !important; }
+$accentLinkRules.post_container { background: #000000 !important; }
 .search_post, .search_post_container, .search_result_block, .bad-search-result { background: #000000 !important; }
 .news_item, .news_block, .news_container, .news_post { background: #000000 !important; }
 .news-comments-entry { background: #000000 !important; }
@@ -2601,7 +2621,7 @@ html, body { background: #000000 !important; }
     background: #ffffff !important;
     color: #000000 !important;
 }
-${newsArticleCtaButtonOverrideCss("#2980b9", "#ffffff")}
+$newsCtaCss
 .poll.poll_overlay_host.open > .body::-webkit-scrollbar,
 .poll.poll_overlay_host.open > .body::-webkit-scrollbar-track,
 .poll.poll_overlay_host.open > .body::-webkit-scrollbar-corner {
