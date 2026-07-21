@@ -102,5 +102,10 @@
     <color name="fpda_unread_bg">#24FBBF24</color>
     <color name="fpda_unread_outline">#FFD75E</color>
 
-    <color name="ic_launcher_background">#FF1F1F1F</color>
+    <!-- Dark launcher variant. The monochrome layer is tinted by the launcher. -->
+    <color name="ic_launcher_background">#FF000000</color>
+    <color name="ic_launcher_foreground">#FFF5F5F5</color>
+    <color name="ic_launcher_node_fill">#FF000000</color>
+    <color name="ic_launcher_pro">#FF626973</color>
+    <color name="ic_launcher_background_original">#FF1F1F1F</color>
 </resources>
