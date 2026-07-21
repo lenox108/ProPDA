@@ -64,26 +64,35 @@ class PostBodyRendererTest {
     }
 
     @Test
-    fun offtop_isMutedOfftopBlock_notCollapsibleSpoiler() {
-        // 4pda serves [offtop] AS a `.post-block.spoil` (🤔 toggle + small-grey `<font>` body). It must be
-        // peeled to a muted, always-visible Offtop — never a collapsible Spoiler (user request).
+    fun offtopFont_inlineInFlow_becomesSmallGreyText_notASeparateBlock() {
+        // 4pda renders [offtop] as an INLINE `<font style="font-size:9px;color:gray;">` in the message flow
+        // (not a spoiler/block). It must stay inline text — but rewritten to <small> so Html.fromHtml renders
+        // it de-emphasised (it ignores the CSS font-size), keeping the muted grey.
         val blocks = renderer.render(fixture("offtop_basic.html"))
-        assertTrue("offtop must not surface as a Spoiler", blocks.none { it is BodyBlock.Spoiler })
-        val offtop = blocks.filterIsInstance<BodyBlock.Offtop>().single()
-        assertTrue(offtop.html.contains("оффтоп"))
-        // The trailing sibling text survives as its own native block.
-        assertTrue(blocks.any { it is BodyBlock.Text && it.html.contains("обычный текст после оффтопа") })
+        val text = blocks.filterIsInstance<BodyBlock.Text>().single()
+        // font-size:9px is dropped (Html.fromHtml can't apply it) and the font became a <small>.
+        assertFalse("CSS font-size must be gone", text.html.contains("font-size"))
+        assertTrue("offtop wrapped in <small> so it renders small", text.html.contains("<small"))
+        // Named `gray` isn't parsed by Html.fromHtml's USE_CSS_COLORS → we emit a hex muted grey instead.
+        assertTrue("muted grey preserved as hex", text.html.contains("color:#808080"))
+        assertFalse("named gray replaced", text.html.contains("color:gray"))
+        // Content (incl. nested bold) and the surrounding prose all survive in the one native text block.
+        assertTrue(text.html.contains("оффтоп"))
+        assertTrue(text.html.contains("<b>жирный внутри</b>"))
+        assertTrue(text.html.contains("обычный текст"))
     }
 
     @Test
-    fun userSpoilerWithThinkingTitle_staysSpoiler_notOfftop() {
-        // Guard against over-matching: a real user spoiler whose title happens to be 🤔 but whose body is
-        // ordinary content (no offtop grey `<font>`) must remain a collapsible Spoiler.
-        val html = "<div class=\"post-block spoil close\"><div class=\"block-title\">🤔</div>" +
-                "<div class=\"block-body\">обычное содержимое спойлера</div></div>"
+    fun offtopFont_insideUserSpoiler_keepsSpoiler_bodyRenderedSmall() {
+        // A user spoiler that CONTAINS an offtop must stay a collapsible Spoiler (we must NOT unwrap it); the
+        // offtop font inside is still normalised to small grey.
+        val html = "<div class=\"post-block spoil close\"><div class=\"block-title\">заголовок</div>" +
+                "<div class=\"block-body\">до <font style=\"font-size:9px;color:gray;\">офф</font> после</div></div>"
         val blocks = renderer.render(html)
-        assertTrue(blocks.none { it is BodyBlock.Offtop })
-        assertEquals(1, blocks.filterIsInstance<BodyBlock.Spoiler>().size)
+        val spoiler = blocks.filterIsInstance<BodyBlock.Spoiler>().single()
+        val inner = spoiler.inner.filterIsInstance<BodyBlock.Text>().single()
+        assertTrue(inner.html.contains("<small"))
+        assertFalse(inner.html.contains("font-size"))
     }
 
     @Test
@@ -292,7 +301,6 @@ class PostBodyRendererTest {
             when (it) {
                 is BodyBlock.Text -> it.html
                 is BodyBlock.EditNote -> it.html
-                is BodyBlock.Offtop -> it.html
                 is BodyBlock.WebFallback -> it.html
                 is BodyBlock.Image -> it.imageUrl
                 is BodyBlock.Quote -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }

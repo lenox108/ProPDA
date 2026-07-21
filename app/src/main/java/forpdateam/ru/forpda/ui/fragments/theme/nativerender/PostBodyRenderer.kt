@@ -57,6 +57,7 @@ class PostBodyRenderer {
         // call leaks as a visible caption under the image (user report, QMS chat). Neither <script> nor
         // <style> carries body content, so strip both up-front before segmentation.
         body.select("script, style").forEach { it.remove() }
+        normalizeOfftopFonts(body)
         serviceIconSrcs = body.select("img").asSequence()
                 .filter { it.attr("alt").trim() == "*" }
                 .map { it.attr("src").trim() }
@@ -64,6 +65,37 @@ class PostBodyRenderer {
                 .toSet()
         linkReplyToNicks(body)
         return renderNodes(body.childNodes())
+    }
+
+    /**
+     * `[offtop]` on 4pda is an INLINE `<font style="font-size:9px;color:gray;">…</font>` — a small, muted
+     * "by the way" aside (confirmed on the BB-code reference and live posts; it is NOT a spoiler/block). The
+     * native text path renders via [android.text.Html.fromHtml], which honours inline `color` (USE_CSS_COLORS)
+     * but IGNORES inline `font-size` — so the aside came out at full body size, indistinguishable from normal
+     * text (user report «тег оффтоп не применяется»). Rewrite the offtop font to a `<small>` — which
+     * Html.fromHtml DOES render at 0.8× — keeping the muted grey, so the aside reads small + de-emphasised
+     * wherever it sits: bare in the flow, or nested inside a quote/spoiler (this runs on the whole body before
+     * segmentation, so every path — Text, native quote/spoiler inner, WebView fallback — gets the transform).
+     */
+    private fun normalizeOfftopFonts(root: Element) {
+        for (el in root.select("[style]")) {
+            val style = el.attr("style").replace(" ", "").lowercase()
+            // 9px is 4pda's offtop size marker (size=1 is 8pt, a different span); pair it with the grey to be
+            // sure this is the offtop font and not some other inline sizing.
+            if (!(style.contains("font-size:9px") && style.contains("color:gray"))) continue
+            // Wrap as <small><span style="color:#hex">…</span></small>:
+            //  • <small> → Html.fromHtml renders 0.8× (it IGNORES the CSS font-size, so the aside came out
+            //    full-size — the reported «тег оффтоп не применяется»).
+            //  • inner <span style> → the muted grey. Html.fromHtml applies a style `color` on <span>/block
+            //    tags but NOT on <small>, and its USE_CSS_COLORS does NOT parse the NAMED colour `gray` (only
+            //    #hex) — hence the explicit #808080 (keeps >2.5 contrast on light AND dark, so the
+            //    low-contrast filter never strips it).
+            el.tagName("span")
+            el.attr("style", "color:#808080")
+            val small = org.jsoup.nodes.Element("small")
+            el.replaceWith(small)
+            small.appendChild(el)
+        }
     }
 
     /**
@@ -267,12 +299,7 @@ class PostBodyRenderer {
             BodyBlock.WebFallback.Kind.QUOTE ->
                 if (element.hasClass("quote")) listOf(extractQuote(element)) else null
             BodyBlock.WebFallback.Kind.SPOILER ->
-                if (element.hasClass("spoil")) {
-                    // 4pda renders `[offtop]` AS a spoiler (thinking-face toggle + small-grey body), but it is
-                    // a small always-visible aside, not hidden content — peel it to a muted [Offtop] instead of
-                    // a collapsible [Spoiler] so it reads as plain small grey text (user request).
-                    listOf(if (isOfftopBlock(element)) extractOfftop(element) else extractSpoiler(element))
-                } else null
+                if (element.hasClass("spoil")) listOf(extractSpoiler(element)) else null
             BodyBlock.WebFallback.Kind.CODE ->
                 if (element.hasClass("code")) listOf(extractCode(element)) else null
             BodyBlock.WebFallback.Kind.TABLE -> {
@@ -328,34 +355,6 @@ class PostBodyRenderer {
             initiallyOpen = element.hasClass("open"),
             inner = inner,
         )
-    }
-
-    /**
-     * True if this `.post-block.spoil` is really an `[offtop]` aside rather than a user spoiler. 4pda
-     * renders `[offtop]X[/offtop]` as a spoiler whose body is the fixed offtop font
-     * `<font style="font-size:9px;color:gray;">X</font>` (confirmed on the BB-code reference and live posts),
-     * with a 🤔 thinking-face toggle. That exact server-generated font is the reliable signal — a real user
-     * spoiler never contains it — so we key on the body font and treat the 🤔 title as corroboration only
-     * (matching on the title alone would wrongly unwrap a user's `[spoiler=🤔]…`).
-     */
-    private fun isOfftopBlock(element: Element): Boolean {
-        val body = element.selectFirst("> .block-body") ?: return false
-        return body.select("font[style]").any { it.attr("style").isOfftopFontStyle() }
-    }
-
-    private fun String.isOfftopFontStyle(): Boolean {
-        val s = replace(" ", "").lowercase()
-        return s.contains("font-size:9px") && s.contains("color:gray")
-    }
-
-    /**
-     * Builds a muted [BodyBlock.Offtop] from an offtop spoiler ([isOfftopBlock]). The `.block-body` holds the
-     * offtop text wrapped in the small-grey `<font>`; we carry its inner HTML verbatim (links/smiles/bold
-     * survive) and let the view render it small + muted, always visible — no collapsible toggle.
-     */
-    private fun extractOfftop(element: Element): BodyBlock.Offtop {
-        val body = element.selectFirst("> .block-body")
-        return BodyBlock.Offtop(html = body?.html().orEmpty())
     }
 
     /**
