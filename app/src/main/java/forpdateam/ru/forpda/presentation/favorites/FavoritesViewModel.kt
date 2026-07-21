@@ -76,6 +76,8 @@ class FavoritesViewModel @Inject constructor(
     private var clientPerPage = listsPreferencesHolder.getFavPerPage()
     private var hiddenTopicIds: Set<Int> = listsPreferencesHolder.getHiddenTopicIds()
     private var hiddenForumIds: Set<Int> = listsPreferencesHolder.getHiddenForumIds()
+    // Темы с локально заглушёнными уведомлениями (device-side). Драйвит иконку «уведомления отключены» в строке.
+    private var mutedTopicIds: Set<Int> = notificationPreferencesHolder.getMutedTopics()
     private var loadAll = listsPreferencesHolder.getFavLoadAll()
     private var unreadTop = listsPreferencesHolder.getUnreadTop()
     private var sorting: Sorting = Sorting(
@@ -140,6 +142,15 @@ class FavoritesViewModel @Inject constructor(
         scope.launch {
             listsPreferencesHolder.observeHiddenForumIdsFlow().collect {
                 hiddenForumIds = it
+                publishDisplayed()
+            }
+        }
+
+        scope.launch {
+            // Живо обновляем иконку «уведомления отключены» при заглушении/разглушении
+            // темы из любого места (Избранное, экран темы и т.п.).
+            notificationPreferencesHolder.mutedTopicsFlow().collect {
+                mutedTopicIds = it
                 publishDisplayed()
             }
         }
@@ -572,10 +583,11 @@ class FavoritesViewModel @Inject constructor(
         st = 0
     }
 
-    /** Проставляет транзиентный флаг [FavItem.isHidden] по текущему набору скрытых id. */
+    /** Проставляет транзиентные флаги [FavItem.isHidden] и [FavItem.isNotifyMuted] по текущим наборам id. */
     private fun applyHiddenFlags(list: List<FavItem>): List<FavItem> {
         for (item in list) {
             item.isHidden = isItemHidden(item)
+            item.isNotifyMuted = !item.isForum && item.topicId > 0 && mutedTopicIds.contains(item.topicId)
         }
         return list
     }

@@ -51,6 +51,14 @@
             app:srcCompat="@drawable/ic_forum" />
 
         <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/topic_item_mute_icon"
+            android:layout_width="@dimen/list_topic_icon_size"
+            android:layout_height="@dimen/list_topic_icon_size"
+            android:contentDescription="@string/fav_notifications_muted"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_notifications_off" />
+
+        <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/topic_item_lock_icon"
             android:layout_width="@dimen/list_topic_icon_size"
             android:layout_height="@dimen/list_topic_icon_size"
