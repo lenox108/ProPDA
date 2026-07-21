@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Alpha mask of the same P2 artwork; Android supplies the Monet tint. -->
+    <!-- Exact approved P2 artwork, centred in the adaptive-icon safe zone. -->
     <item>
         <bitmap
             android:gravity="fill"
-            android:src="@drawable/ic_launcher_monochrome_art" />
+            android:src="@drawable/ic_launcher_foreground_art" />
     </item>
 </layer-list>
