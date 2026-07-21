@@ -64,6 +64,29 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun offtop_isMutedOfftopBlock_notCollapsibleSpoiler() {
+        // 4pda serves [offtop] AS a `.post-block.spoil` (🤔 toggle + small-grey `<font>` body). It must be
+        // peeled to a muted, always-visible Offtop — never a collapsible Spoiler (user request).
+        val blocks = renderer.render(fixture("offtop_basic.html"))
+        assertTrue("offtop must not surface as a Spoiler", blocks.none { it is BodyBlock.Spoiler })
+        val offtop = blocks.filterIsInstance<BodyBlock.Offtop>().single()
+        assertTrue(offtop.html.contains("оффтоп"))
+        // The trailing sibling text survives as its own native block.
+        assertTrue(blocks.any { it is BodyBlock.Text && it.html.contains("обычный текст после оффтопа") })
+    }
+
+    @Test
+    fun userSpoilerWithThinkingTitle_staysSpoiler_notOfftop() {
+        // Guard against over-matching: a real user spoiler whose title happens to be 🤔 but whose body is
+        // ordinary content (no offtop grey `<font>`) must remain a collapsible Spoiler.
+        val html = "<div class=\"post-block spoil close\"><div class=\"block-title\">🤔</div>" +
+                "<div class=\"block-body\">обычное содержимое спойлера</div></div>"
+        val blocks = renderer.render(html)
+        assertTrue(blocks.none { it is BodyBlock.Offtop })
+        assertEquals(1, blocks.filterIsInstance<BodyBlock.Spoiler>().size)
+    }
+
+    @Test
     fun code_isNativeCode_withDecodedTextAndLineBreaks() {
         val blocks = renderer.render(fixture("code_block.html"))
         val code = blocks.filterIsInstance<BodyBlock.Code>().single()
@@ -141,6 +164,24 @@ class PostBodyRendererTest {
         assertEquals("all 4 download gifs render as images", 4, gifs.size)
         assertTrue("gif image points at the gif", gifs.all { it.imageUrl == gif })
         assertTrue("gif tap downloads the file", gifs.all { it.linkUrl?.contains("/dl/post/") == true })
+        // Marked so the view layer can size at load time: keep a wide «СКАЧАТЬ» banner, hide a tiny mime glyph.
+        assertTrue("attach-file inner img flagged as attachmentButton", gifs.all { it.attachmentButton })
+    }
+
+    @Test
+    fun attachFileMimeGlyph_isFlaggedAttachmentButton_soViewCanHideIt() {
+        // A PLAIN file attachment (PDF): 4pda wraps a tiny square file-type mime glyph inside the download
+        // link. The legacy WebView hid it (`.ipb-attach.attach-file img{display:none}`); the native renderer
+        // must flag it attachmentButton so the view layer collapses it, leaving only the file chip.
+        val glyph = "https://4pda.to/forum/style_images/mime_types/pdf.png"
+        val html = "<a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/55221/4PDA-1.pdf\">" +
+                "<img src=\"$glyph\">4PDA-1.pdf</a> ( 1.34 МБ )"
+        val blocks = renderer.render(html)
+        val chip = blocks.filterIsInstance<BodyBlock.FileAttachment>().single()
+        assertEquals("4PDA-1.pdf", chip.name)
+        val img = blocks.filterIsInstance<BodyBlock.Image>().single()
+        assertEquals(glyph, img.imageUrl)
+        assertTrue("mime glyph flagged attachmentButton", img.attachmentButton)
     }
 
     @Test
@@ -251,6 +292,7 @@ class PostBodyRendererTest {
             when (it) {
                 is BodyBlock.Text -> it.html
                 is BodyBlock.EditNote -> it.html
+                is BodyBlock.Offtop -> it.html
                 is BodyBlock.WebFallback -> it.html
                 is BodyBlock.Image -> it.imageUrl
                 is BodyBlock.Quote -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
@@ -385,6 +427,37 @@ class PostBodyRendererTest {
         val text = blocks.filterIsInstance<BodyBlock.Text>().single()
         assertTrue(text.html.contains("&lt;br&gt;")) // stays escaped → shown literally, no phantom line break
         assertTrue(blocks.none { it is BodyBlock.Image })
+    }
+
+    // --- Uniform block spacing: strip the stray <br>/newline authors put around quote/spoiler blocks ---
+
+    @Test
+    fun brBetweenTwoBlocks_isDropped_soSpacingIsUniform() {
+        // Репорт: между блоками спойлер/цитирование иногда лишний интервал — автор ставит блок с новой
+        // строки/через <br>, и эта «пустая строка» ложится ПОВЕРХ собственного отступа блока. Голый <br>
+        // между двумя блоками не должен превращаться в Text-блок с фантомной пустой строкой.
+        val spoiler = { title: String, body: String ->
+            "<div class=\"post-block spoil close\"><div class=\"block-title\">$title</div>" +
+                    "<div class=\"block-body\">$body</div></div>"
+        }
+        val blocks = renderer.render(spoiler("A", "aaa") + "<br>\n" + spoiler("B", "bbb"))
+        assertEquals("два спойлера и НИ одного пустого Text между ними", 2, blocks.size)
+        assertTrue(blocks.all { it is BodyBlock.Spoiler })
+    }
+
+    @Test
+    fun brAtEdgesOfInlineRun_isTrimmed_butInnerBrKept() {
+        // Ведущий/замыкающий <br> вокруг прозы у границы блока убираются (это отступ автора), а <br>
+        // ВНУТРИ абзаца — намеренный перенос строки — сохраняется.
+        val blocks = renderer.render(
+                "<br><br>абзац один<br>абзац два<br> " +
+                        "<div class=\"post-block quote\"><div class=\"block-title\">Кто-то</div>" +
+                        "<div class=\"block-body\">цитата</div></div>"
+        )
+        val text = blocks.filterIsInstance<BodyBlock.Text>().single()
+        // Ведущие и замыкающие <br> сняты; внутренний перенос между абзацами сохранён.
+        assertEquals("абзац один<br>абзац два", text.html)
+        assertEquals(1, blocks.filterIsInstance<BodyBlock.Quote>().size)
     }
 
     @Test
