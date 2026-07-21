@@ -445,7 +445,11 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
             )
             binding.topicItemTitle.setTextColor(if (isUnread) titleColorNew else titleColor)
             when {
-                !showDot || !showUnreadIndicators || !isUnread -> binding.topicItemUnreadDot.visibility = View.GONE
+                // Точка/счётчик в избранном зависят ТОЛЬКО от «Индикатора новых сообщений»
+                // (show_dot) — паритет с «Историей». Настройка «Показывать счётчики
+                // непрочитанного в избранном» (show_unread_badge / showUnreadIndicators)
+                // управляет лишь бейджем в меню/шторке, а не строками списка.
+                !showDot || !isUnread -> binding.topicItemUnreadDot.visibility = View.GONE
                 item.unreadPostCount > 1 -> {
                     binding.topicItemUnreadDot.visibility = View.VISIBLE
                     binding.topicItemUnreadDot.text = item.unreadPostCount.toString()
