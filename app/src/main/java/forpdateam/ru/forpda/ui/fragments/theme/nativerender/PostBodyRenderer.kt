@@ -78,8 +78,16 @@ class PostBodyRenderer {
             // Content <img> were already peeled into Image blocks, so any <img> left in the inline flow is a
             // decorative service/smiley glyph. Html.fromHtml has no ImageGetter → it would render an ugly
             // placeholder box (the reported little green square). Drop them.
-            val html = SERVICE_IMG.replace(inlineBuffer.toString(), "")
+            var html = SERVICE_IMG.replace(inlineBuffer.toString(), "")
             inlineBuffer.setLength(0)
+            // Authors are inconsistent about putting a <br>/newline right before or after a quote/spoiler/code
+            // block. That stray break lands at the START or END of this inline run and renders as a phantom
+            // blank line ON TOP OF the block's own 6dp margin, so the very same two blocks show a bigger gap in
+            // one post than in another (user report: «после блоков спойлер/цитирование иногда лишний отступ»).
+            // Trim breaks at the run edges so every block boundary spaces uniformly; a <br> WITHIN the prose is
+            // a deliberate line break and is left untouched. A run that was ONLY edge-breaks collapses to blank
+            // and is dropped by the isNotBlank guard below (same as the pure-whitespace case it already handled).
+            html = EDGE_BREAKS.replace(html, "")
             // Skip runs that are only whitespace / stray newlines between blocks.
             if (html.isNotBlank()) {
                 blocks.add(BodyBlock.Text(html))
@@ -259,7 +267,12 @@ class PostBodyRenderer {
             BodyBlock.WebFallback.Kind.QUOTE ->
                 if (element.hasClass("quote")) listOf(extractQuote(element)) else null
             BodyBlock.WebFallback.Kind.SPOILER ->
-                if (element.hasClass("spoil")) listOf(extractSpoiler(element)) else null
+                if (element.hasClass("spoil")) {
+                    // 4pda renders `[offtop]` AS a spoiler (thinking-face toggle + small-grey body), but it is
+                    // a small always-visible aside, not hidden content — peel it to a muted [Offtop] instead of
+                    // a collapsible [Spoiler] so it reads as plain small grey text (user request).
+                    listOf(if (isOfftopBlock(element)) extractOfftop(element) else extractSpoiler(element))
+                } else null
             BodyBlock.WebFallback.Kind.CODE ->
                 if (element.hasClass("code")) listOf(extractCode(element)) else null
             BodyBlock.WebFallback.Kind.TABLE -> {
@@ -315,6 +328,34 @@ class PostBodyRenderer {
             initiallyOpen = element.hasClass("open"),
             inner = inner,
         )
+    }
+
+    /**
+     * True if this `.post-block.spoil` is really an `[offtop]` aside rather than a user spoiler. 4pda
+     * renders `[offtop]X[/offtop]` as a spoiler whose body is the fixed offtop font
+     * `<font style="font-size:9px;color:gray;">X</font>` (confirmed on the BB-code reference and live posts),
+     * with a 🤔 thinking-face toggle. That exact server-generated font is the reliable signal — a real user
+     * spoiler never contains it — so we key on the body font and treat the 🤔 title as corroboration only
+     * (matching on the title alone would wrongly unwrap a user's `[spoiler=🤔]…`).
+     */
+    private fun isOfftopBlock(element: Element): Boolean {
+        val body = element.selectFirst("> .block-body") ?: return false
+        return body.select("font[style]").any { it.attr("style").isOfftopFontStyle() }
+    }
+
+    private fun String.isOfftopFontStyle(): Boolean {
+        val s = replace(" ", "").lowercase()
+        return s.contains("font-size:9px") && s.contains("color:gray")
+    }
+
+    /**
+     * Builds a muted [BodyBlock.Offtop] from an offtop spoiler ([isOfftopBlock]). The `.block-body` holds the
+     * offtop text wrapped in the small-grey `<font>`; we carry its inner HTML verbatim (links/smiles/bold
+     * survive) and let the view render it small + muted, always visible — no collapsible toggle.
+     */
+    private fun extractOfftop(element: Element): BodyBlock.Offtop {
+        val body = element.selectFirst("> .block-body")
+        return BodyBlock.Offtop(html = body?.html().orEmpty())
     }
 
     /**
@@ -403,6 +444,9 @@ class PostBodyRenderer {
                         displayWidthPx = img.attr("width").toIntOrZero(),
                         displayHeightPx = img.attr("height").toIntOrZero(),
                         inline = true,
+                        // A wide «СКАЧАТЬ» banner stays; a tiny square file-type mime glyph is hidden at
+                        // load time (the chip below already names the file) — see BodyBlock.Image.attachmentButton.
+                        attachmentButton = true,
                     )
                 )
             }
@@ -492,5 +536,14 @@ class PostBodyRenderer {
         /** Any `<img …>` tag — used to strip decorative service/smiley glyphs from inline text (they can't
          *  render via Html.fromHtml and would leave a placeholder box). Content images are peeled out first. */
         val SERVICE_IMG = Regex("<img\\b[^>]*>", RegexOption.IGNORE_CASE)
+
+        /**
+         * Leading OR trailing run of whitespace and `<br>` tags at the edge of an inline text run. Stripped in
+         * [flushInline] so a stray line break an author put right before/after a quote/spoiler block does not
+         * add a phantom blank line on top of the block's margin (uniform block spacing). Both alternatives are
+         * edge-anchored (`^…` / `…$`), so a single [Regex.replace] trims both ends and never touches a `<br>`
+         * that sits between words (a deliberate in-paragraph line break).
+         */
+        val EDGE_BREAKS = Regex("^(?:\\s|<br\\s*/?>)+|(?:\\s|<br\\s*/?>)+$", RegexOption.IGNORE_CASE)
     }
 }
