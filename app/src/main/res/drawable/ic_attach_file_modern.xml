@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="24dp"
+        android:height="24dp"
+        android:viewportWidth="24.0"
+        android:viewportHeight="24.0">
+    <!-- Modern outlined "document" glyph for the native file-attachment chip (replaces the 📎 emoji).
+         Fill is themed via ?icon_base; the chip overrides the tint to colorAccent to match its label. -->
+    <path
+        android:fillColor="?icon_base"
+        android:pathData="M14,2H6C4.9,2 4,2.9 4,4v16c0,1.1 0.89,2 1.99,2H18c1.1,0 2,-0.9 2,-2V8L14,2zM18,20H6V4h7v5h5V20zM8,15h8v2H8V15zM8,11h8v2H8V11z"/>
+</vector>
