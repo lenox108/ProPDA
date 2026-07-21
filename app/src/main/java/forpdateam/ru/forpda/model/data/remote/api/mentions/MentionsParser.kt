@@ -133,13 +133,19 @@ class MentionsParser(
                     val primaryHref = matcher.group(3).orEmpty()
                     var link = preferMentionPostUrl(rowHtml, primaryHref)
                     link = patchMentionLinkIfTopicOnly(link, rowHtml)
-                    val title = matcher.group(4).fromHtml()
+                    // Текст якоря — это целиком название темы. Ранее паттерн резал его по первой
+                    // запятой (группа 4 = до запятой, группа 5 = хвост), из-за чего заголовки с
+                    // запятой обрезались: хвост уходил в desc, а desc в списке всегда скрыт.
+                    // Собираем заголовок обратно, если хвост всё же захвачен (старый/серверный паттерн).
+                    val titleHead = matcher.group(4).orEmpty()
+                    val titleTail = matcher.group(5).orEmpty()
+                    val title = (if (titleTail.isNotEmpty()) "$titleHead, $titleTail" else titleHead).fromHtml()
                     data.items.add(MentionItem().apply {
                         state = if (matcher.group(1) == "read") MentionItem.STATE_READ else MentionItem.STATE_UNREAD
                         type = if (matcher.group(2).equals("Форум", ignoreCase = true)) MentionItem.TYPE_TOPIC else MentionItem.TYPE_NEWS
                         this.link = link
                         this.title = title
-                        desc = matcher.group(5).fromHtml()
+                        desc = ""
                         date = matcher.group(6)
                         nick = decodeMentionNickIfBase64(matcher.group(7).fromHtml())
                     })
