@@ -72,6 +72,11 @@ class QmsRepository(
         qmsCache.getThemes(data.userId)
     }
 
+    suspend fun deleteMessages(userId: Int, themeId: Int, messageIds: List<Int>): String =
+            withContext(Dispatchers.IO) {
+                withTimeout(30_000L) { qmsApi.deleteMessages(userId, themeId, messageIds) }
+            }
+
     suspend fun getChat(userId: Int, themeId: Int): QmsChatModel = withContext(Dispatchers.IO) {
         withTimeout(45_000L) { qmsApi.getChat(userId, themeId) }
     }

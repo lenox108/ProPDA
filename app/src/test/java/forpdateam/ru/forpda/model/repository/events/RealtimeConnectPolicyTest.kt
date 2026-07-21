@@ -11,7 +11,8 @@ class RealtimeConnectPolicyTest {
             network: Boolean = true,
             auth: Boolean = true,
             wantsPush: Boolean = true,
-    ) = RealtimeConnectPolicy.shouldOpenWebSocket(foreground, network, auth, wantsPush)
+            realtimeScreen: Boolean = false,
+    ) = RealtimeConnectPolicy.shouldOpenWebSocket(foreground, network, auth, wantsPush, realtimeScreen)
 
     @Test
     fun `opens only when foreground, online, authorized and notifications wanted`() {
@@ -52,5 +53,21 @@ class RealtimeConnectPolicyTest {
                 }
             }
         }
+    }
+
+    /**
+     * P1: an open QMS chat (a foreground realtime screen) needs a live socket for instant message
+     * delivery even with push notifications disabled — the screen override beats the push toggle.
+     */
+    @Test
+    fun `an active realtime screen opens the socket even with push disabled`() {
+        assertTrue(open(wantsPush = false, realtimeScreen = true))
+    }
+
+    @Test
+    fun `the realtime-screen override still respects foreground, network and auth`() {
+        assertFalse(open(foreground = false, wantsPush = false, realtimeScreen = true))
+        assertFalse(open(network = false, wantsPush = false, realtimeScreen = true))
+        assertFalse(open(auth = false, wantsPush = false, realtimeScreen = true))
     }
 }

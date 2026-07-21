@@ -129,6 +129,25 @@ class QmsApi(
         return qmsParser.parseThemes(response.body, id)
     }
 
+    /**
+     * Deletes one or more messages from a thread. Mirrors the site's «Действия → Удалить сообщения»
+     * (same endpoint shape as [deleteTheme]): a POST to the thread's xhr=body page with
+     * `action=delete-messages` and one `message-id[$id]=$id` pair per message.
+     *
+     * NB: on 4pda this deletion is ONE-SIDED — it removes the message only from the current
+     * account's copy of the thread; the interlocutor still sees it. Verified live 2026-07-21.
+     */
+    fun deleteMessages(userId: Int, themeId: Int, messageIds: List<Int>): String {
+        val builder = NetworkRequest.Builder()
+                .url("https://4pda.to/forum/index.php?act=qms&mid=$userId&t=$themeId&xhr=body&do=1")
+                .formHeader("xhr", "body")
+                .formHeader("action", "delete-messages")
+        messageIds.forEach { id ->
+            builder.formHeader("message-id[$id]", id.toString())
+        }
+        return webClient.request(builder.build()).body
+    }
+
     suspend fun fetchChat(userId: Int, themeId: Int): NetworkResponse {
         if (userId == 0) {
             return fetchSystemAlertsChat(themeId)
