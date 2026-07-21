@@ -433,6 +433,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private val themeBackStack = ArrayDeque<ThemeBackEntry>()
 
     /**
+     * Post id whose in-content hyperlink the user just tapped, set from [onContentLinkTap] right before
+     * the tap is routed to navigation. [captureThemeBackEntry] prefers it over the topmost-visible post
+     * so «Назад» returns to the SOURCE post (the one holding the link): a link sitting low in a post makes
+     * findFirstVisibleItemPosition() report an EARLIER post peeking at the top, and Back would land above
+     * the source (reported: tap link in post A → back lands on the post before A). Consumed (read + reset)
+     * by the next [captureThemeBackEntry]; 0 = no pending link tap.
+     */
+    private var lastContentLinkSourcePostId: Int = 0
+
+    /**
      * Post id the open anchored to the BOTTOM (last post of an already-read topic). The async metadata
      * enrichment (post counts / reputation) grows posts AFTER the anchor is applied, which would push the
      * last post's action buttons back below the fold — so [enrichLoadedPage] re-bottom-anchors while the
@@ -1706,6 +1716,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         LinkActionsMenu.show(requireContext(), url, systemLinkHandler, clipboardHelper)
     }
 
+    /**
+     * Tap on an in-content hyperlink, fired just before it is routed to the link handler. Remember the
+     * owning post so the in-tab Back history anchors to it rather than the topmost-visible post — see
+     * [lastContentLinkSourcePostId] / [captureThemeBackEntry].
+     */
+    override fun onContentLinkTap(sourcePostId: Int, url: String) {
+        if (sourcePostId > 0) lastContentLinkSourcePostId = sourcePostId
+    }
+
     override fun onDownloadLinkLongPress(url: String, fileName: String?) {
         val ctx = requireContext()
         // Параллельно со скачиванием/открытием даём «Поделиться» и «Скопировать ссылку» — паритет
@@ -2479,11 +2498,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun isExternalListOpenSource(sourceScreen: String): Boolean =
             sourceScreen.trim().lowercase() in EXTERNAL_LIST_OPEN_SOURCES
 
-    /** Snapshot the current url + first-visible scroll anchor for the in-tab Back history. */
+    /** Snapshot the current url + scroll anchor for the in-tab Back history. */
     private fun captureThemeBackEntry(): ThemeBackEntry? {
         val url = loadedUrl ?: return null
-        if (view == null) return ThemeBackEntry(url, 0, 0)
-        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return ThemeBackEntry(url, 0, 0)
+        // Prefer the post whose in-content link was just tapped over the topmost-visible post: a link
+        // low in a post makes findFirstVisibleItemPosition() report an EARLIER post peeking at the top,
+        // so Back would land above the source. Consume the flag regardless so it never leaks forward.
+        val tappedSource = lastContentLinkSourcePostId.also { lastContentLinkSourcePostId = 0 }
+        if (view == null) return ThemeBackEntry(url, tappedSource.coerceAtLeast(0), 0)
+        val lm = recyclerView.layoutManager as? LinearLayoutManager
+                ?: return ThemeBackEntry(url, tappedSource.coerceAtLeast(0), 0)
+        if (tappedSource > 0) {
+            val idx = loadedItems.indexOfFirst { it.postId == tappedSource }
+            if (idx >= 0) {
+                // The source post's own on-screen top → restore re-aligns to exactly where the link was
+                // tapped. If it is not the first-visible post, `top` is positive (it sits below the edge).
+                val top = lm.findViewByPosition(idx + headerOffset())?.top ?: 0
+                return ThemeBackEntry(url, tappedSource, top)
+            }
+        }
         val firstPos = lm.findFirstVisibleItemPosition()
         if (firstPos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return ThemeBackEntry(url, 0, 0)
         val item = loadedItems.getOrNull(firstPos - headerOffset())
