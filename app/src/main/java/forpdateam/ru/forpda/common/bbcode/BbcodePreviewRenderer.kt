@@ -12,16 +12,22 @@ object BbcodePreviewRenderer {
         "url",
         "quote",
         "spoiler",
+        "offtop",
+        "hide",
         "code",
         "snapback",
         "mergetime",
         "br",
         "size",
         "color",
+        "background",
         "font",
         "left",
         "center",
         "right",
+        "sub",
+        "sup",
+        "cur",
         "list",
         "*"
     )
@@ -95,13 +101,18 @@ object BbcodePreviewRenderer {
                 "url" -> renderUrl(tag)
                 "quote" -> renderQuote(tag)
                 "spoiler" -> renderSpoiler(tag)
+                "offtop" -> renderOfftop()
+                "hide" -> renderHide()
                 "code" -> renderCode()
                 "snapback", "mergetime" -> hideContent(tag.name)
                 "br" -> "<br>"
                 "size" -> renderSize(tag)
                 "color" -> renderColor(tag)
+                "background" -> parseUntil(tag.name)
                 "font" -> parseUntil(tag.name)
                 "left", "center", "right" -> renderAligned(tag)
+                "sub", "sup" -> wrap(tag.name, parseUntil(tag.name))
+                "cur" -> parseUntil(tag.name)
                 "list" -> parseUntil("list")
                 "*" -> "<br>&bull; "
                 else -> ""
@@ -144,6 +155,25 @@ object BbcodePreviewRenderer {
                 append(content)
                 append("</blockquote>")
             }
+        }
+
+        /**
+         * `[offtop]` on 4pda renders as de-emphasised small grey text (always visible, no
+         * header/box). Reproduce that look so the preview matches the posted result instead of
+         * leaking the raw brackets.
+         */
+        private fun renderOfftop(): String {
+            val content = parseUntil("offtop")
+            return """<small><font color="#888888">$content</font></small>"""
+        }
+
+        /**
+         * `[hide]` gates its body behind a reply on the live forum; there is nothing to gate in a
+         * local preview, so we surface the content in a labelled block (mirrors [renderSpoiler]).
+         */
+        private fun renderHide(): String {
+            val content = parseUntil("hide")
+            return "<b>Hide</b><br><blockquote>$content</blockquote>"
         }
 
         private fun renderCode(): String {

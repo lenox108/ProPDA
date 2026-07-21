@@ -66,6 +66,7 @@ class SearchPostBodyRenderer(
             val view: View = when (block) {
                 is BodyBlock.Text -> textView(ctx, spanned(ctx, block.html))
                 is BodyBlock.EditNote -> editNoteView(ctx, block.html)
+                is BodyBlock.Offtop -> editNoteView(ctx, block.html)
                 is BodyBlock.Image -> imageView(ctx, block, gallery)
                 is BodyBlock.Quote -> quoteView(ctx, block, gallery, depth)
                 is BodyBlock.Spoiler -> spoilerView(ctx, block, gallery, depth)

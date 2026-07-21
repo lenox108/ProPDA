@@ -51,6 +51,38 @@ class BbcodePreviewRendererTest {
     }
 
     @Test
+    fun renderToHtml_offtopTag_rendersDeEmphasisedBlockNotRawBrackets() {
+        val html = BbcodePreviewRenderer.renderToHtml("before [offtop]side [b]note[/b][/offtop] after")
+
+        assertEquals(
+            """before <small><font color="#888888">side <b>note</b></font></small> after""",
+            html
+        )
+        assertFalse(html.contains("offtop", ignoreCase = true))
+        assertFalse(html.contains("["))
+        assertNoRawSupportedTags(html)
+    }
+
+    @Test
+    fun renderToHtml_hideTag_rendersLabelledBlock() {
+        val html = BbcodePreviewRenderer.renderToHtml("[hide]secret[/hide]")
+
+        assertEquals("<b>Hide</b><br><blockquote>secret</blockquote>", html)
+        assertFalse(html.contains("[hide", ignoreCase = true))
+        assertNoRawSupportedTags(html)
+    }
+
+    @Test
+    fun renderToHtml_subSupBackgroundCurTags_renderOrStripBbcode() {
+        val html = BbcodePreviewRenderer.renderToHtml(
+            "H[sub]2[/sub]O x[sup]2[/sup] [background=yellow]bg[/background] [cur]curator[/cur]"
+        )
+
+        assertEquals("H<sub>2</sub>O x<sup>2</sup> bg curator", html)
+        assertFalse(html.contains("["))
+    }
+
+    @Test
     fun renderToHtml_codeBlock_escapesContentAndDoesNotRenderNestedBbcode() {
         val html = BbcodePreviewRenderer.renderToHtml("[code]<tag>[b]raw[/b]</tag>[/code]")
 
@@ -92,7 +124,7 @@ class BbcodePreviewRendererTest {
     private fun assertNoRawSupportedTags(html: String) {
         assertFalse(
             html.contains(
-                Regex("""(?i)\[/?(?:b|i|u|s|strike|url|quote|spoiler|code|snapback|mergetime|size|color|font|left|center|right|list|\*)(?:[=\]\s])""")
+                Regex("""(?i)\[/?(?:b|i|u|s|strike|url|quote|spoiler|offtop|hide|code|snapback|mergetime|size|color|background|font|left|center|right|sub|sup|cur|list|\*)(?:[=\]\s])""")
             )
         )
         assertTrue(html.isNotBlank())
