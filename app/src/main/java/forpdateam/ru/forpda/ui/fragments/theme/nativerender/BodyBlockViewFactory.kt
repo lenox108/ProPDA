@@ -72,6 +72,14 @@ class BodyBlockViewFactory(
         /** Long-press on an in-text hyperlink → the host shows a chooser (открыть в браузере /
          *  поделиться / скопировать ссылку). */
         fun onLinkLongClick(url: String) = Unit
+
+        /**
+         * Tap on an in-content hyperlink, fired BEFORE the tap is routed to the link handler.
+         * [sourcePostId] is the post/message that owns the tapped link. The host records it as the
+         * in-tab Back anchor so «Назад» returns to the SOURCE post rather than the topmost-visible
+         * one (a link low in a post makes that an EARLIER post peeking at the top).
+         */
+        fun onContentLinkTap(sourcePostId: Int, url: String) = Unit
     }
 
     /**
@@ -205,7 +213,7 @@ class BodyBlockViewFactory(
                 is BodyBlock.Code -> codeView(ctx, block)
                 is BodyBlock.FileAttachment -> fileAttachmentView(ctx, block)
                 is BodyBlock.Table -> tableView(ctx, block)
-                is BodyBlock.WebFallback -> bindFallback(ctx, block)
+                is BodyBlock.WebFallback -> bindFallback(ctx, block, scope)
             }
             // Uniform spacing at EVERY block boundary. The per-block factories only ever set a TOP margin, so
             // a plain paragraph (Text/Offtop carry none) that FOLLOWS a spoiler/quote hugged its bottom edge —
@@ -747,7 +755,7 @@ class BodyBlockViewFactory(
     }
 
     /** Фаза-1 degraded native preview for a complex block. Single swap point for the future WebView. */
-    private fun bindFallback(ctx: Context, block: BodyBlock.WebFallback): View {
+    private fun bindFallback(ctx: Context, block: BodyBlock.WebFallback, scope: RenderScope): View {
         val panel = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((10 * resources.displayMetrics.density).toInt())
@@ -785,6 +793,7 @@ class BodyBlockViewFactory(
                             callbacks.onDownloadLinkTap(url, fileName)
                             return true
                         }
+                        callbacks.onContentLinkTap(scope.scopeId, url)
                         return linkHandler.handle(url, null)
                     }
 
@@ -898,7 +907,10 @@ class BodyBlockViewFactory(
                 // extend) AND routes link tap/long-press in-app. Must be set AFTER
                 // setTextIsSelectable, which itself installs ArrowKeyMovementMethod.
                 movementMethod = SelectableLinkMovementMethod(object : LinkMovementMethod.ClickListener {
-                    override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
+                    override fun onClick(url: String): Boolean {
+                        callbacks.onContentLinkTap(scope.scopeId, url)
+                        return linkHandler.handle(url, null)
+                    }
                     override fun onLongClick(url: String): Boolean {
                         callbacks.onLinkLongClick(url)
                         return true

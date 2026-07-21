@@ -63,6 +63,9 @@ class TopicPostsAdapter(
         fun onDownloadLinkTap(url: String, fileName: String?)
         /** Long-press on an in-text hyperlink → chooser (open in browser / share / copy link). */
         fun onLinkLongClick(url: String)
+        /** Tap on an in-content hyperlink (fired before navigation). [sourcePostId] owns the tapped
+         *  link; the host records it as the in-tab Back anchor so «Назад» returns to the source post. */
+        fun onContentLinkTap(sourcePostId: Int, url: String)
     }
 
     /**
@@ -304,6 +307,9 @@ class TopicPostsAdapter(
 
                     override fun onLinkLongClick(url: String) =
                             actionListener.onLinkLongClick(url)
+
+                    override fun onContentLinkTap(sourcePostId: Int, url: String) =
+                            actionListener.onContentLinkTap(sourcePostId, url)
                 },
         )
 
