@@ -383,6 +383,19 @@ class FavoritesFragment : RecyclerFragment() {
                         adapter.setSorting(sorting)
                     }
                 }
+                // Флаги отображения — StateFlow, а не одноразовые события: адаптер
+                // пересоздаётся в каждом onViewCreated, поэтому свежую подписку нужно
+                // засеять текущим значением (иначе точки/счётчики в избранном пропадают
+                // после поворота/смены вкладки). См. FavoritesViewModel.showDotFlow.
+                launch {
+                    presenter.showDotFlow.collect { adapter.setShowDot(it) }
+                }
+                launch {
+                    presenter.showUnreadIndicatorsFlow.collect { adapter.setShowUnreadIndicators(it) }
+                }
+                launch {
+                    presenter.unreadTopFlow.collect { adapter.setUnreadTop(it) }
+                }
                 launch {
                     presenter.pagination.collect { pagination ->
                         pagination?.let { paginationHelper.updatePagination(it) }
@@ -410,9 +423,6 @@ class FavoritesFragment : RecyclerFragment() {
                 currentSorting = event.sorting
                 adapter.setSorting(event.sorting)
             }
-            is FavoritesUiEvent.SetShowDot -> adapter.setShowDot(event.show)
-            is FavoritesUiEvent.SetShowUnreadIndicators -> adapter.setShowUnreadIndicators(event.show)
-            is FavoritesUiEvent.SetUnreadTop -> adapter.setUnreadTop(event.unreadTop)
             is FavoritesUiEvent.OnShowFavorite -> Unit
             is FavoritesUiEvent.OnLoadFavorites -> onLoadFavorites(event.data)
             is FavoritesUiEvent.OnMarkAllReadProgress -> onMarkAllReadProgress(event.progress.processed, event.progress.total)

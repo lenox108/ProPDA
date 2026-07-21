@@ -101,6 +101,22 @@ class FavoritesViewModel @Inject constructor(
     private val _pagination = MutableStateFlow<Pagination?>(null)
     val pagination: StateFlow<Pagination?> = _pagination.asStateFlow()
 
+    // Флаги отображения строк (точка/счётчик непрочитанного, «непрочитанные вверху»).
+    // ОБЯЗАТЕЛЬНО StateFlow, а не одноразовые события _uiEvents (replay=0): адаптер
+    // пересоздаётся в каждом onViewCreated со значениями по умолчанию (showDot=false),
+    // а start() отрабатывает один раз (subscriptionsStarted) и DataStore-поток без изменения
+    // значения повторно не эмитит — одноразовое событие терялось бы при пересоздании view
+    // (поворот, переключение вкладок), и точки в избранном пропадали навсегда. StateFlow
+    // всегда переиграет текущее значение свежей подписке (паритет с sortingFlow/Историей).
+    private val _showDot = MutableStateFlow(listsPreferencesHolder.getShowDot())
+    val showDotFlow: StateFlow<Boolean> = _showDot.asStateFlow()
+
+    private val _showUnreadIndicators = MutableStateFlow(listsPreferencesHolder.getFavShowUnreadBadge())
+    val showUnreadIndicatorsFlow: StateFlow<Boolean> = _showUnreadIndicators.asStateFlow()
+
+    private val _unreadTopFlow = MutableStateFlow(listsPreferencesHolder.getUnreadTop())
+    val unreadTopFlow: StateFlow<Boolean> = _unreadTopFlow.asStateFlow()
+
     fun start() {
         if (subscriptionsStarted) return
         subscriptionsStarted = true
@@ -130,20 +146,20 @@ class FavoritesViewModel @Inject constructor(
 
         scope.launch {
             listsPreferencesHolder.observeShowDotFlow().collect {
-                scope.launch { _uiEvents.emit(FavoritesUiEvent.SetShowDot(it)) }
+                _showDot.value = it
             }
         }
 
         scope.launch {
             listsPreferencesHolder.observeFavShowUnreadBadgeFlow().collect {
-                scope.launch { _uiEvents.emit(FavoritesUiEvent.SetShowUnreadIndicators(it)) }
+                _showUnreadIndicators.value = it
             }
         }
 
         scope.launch {
             listsPreferencesHolder.observeUnreadTopFlow().collect {
                 unreadTop = it
-                scope.launch { _uiEvents.emit(FavoritesUiEvent.SetUnreadTop(it)) }
+                _unreadTopFlow.value = it
             }
         }
 
@@ -619,9 +635,6 @@ class FavoritesViewModel @Inject constructor(
 
 sealed class FavoritesUiEvent {
     data class InitSorting(val sorting: Sorting) : FavoritesUiEvent()
-    data class SetShowDot(val show: Boolean) : FavoritesUiEvent()
-    data class SetShowUnreadIndicators(val show: Boolean) : FavoritesUiEvent()
-    data class SetUnreadTop(val unreadTop: Boolean) : FavoritesUiEvent()
     data class OnShowFavorite(val list: List<FavItem>) : FavoritesUiEvent()
     data class OnLoadFavorites(val data: FavData) : FavoritesUiEvent()
     data class OnMarkAllReadProgress(val progress: FavoriteMarkReadProgress) : FavoritesUiEvent()

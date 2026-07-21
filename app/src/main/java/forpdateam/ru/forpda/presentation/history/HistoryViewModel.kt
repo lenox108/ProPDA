@@ -49,20 +49,19 @@ class HistoryViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
-    // Темы истории с новыми ответами по read-only harvest флага «+» из списков разделов (не-избранные).
-    private val _harvestUnread = MutableStateFlow<Set<Int>>(emptySet())
     private var refreshJob: Job? = null
     private var harvestJob: Job? = null
 
     init {
         // Сшиваем историю со статусом Избранного, harvest'ом «+» и настройкой «Индикатор новых сообщений».
-        // Реактивно: прочитал тему → FavoritesRepository обновляет кэш → History пере-сошьёт → точка гаснет.
-        // Порядок строк (по времени визита) НЕ трогаем — обогащение только проставляет флаги.
+        // Реактивно: прочитал тему → у избранной FavoritesRepository обновляет кэш, у не-избранной
+        // harvester.markOpened гасит её в unread → History пере-сошьёт → точка гаснет. Порядок строк
+        // (по времени визита) НЕ трогаем — обогащение только проставляет флаги.
         scope.launch {
             combine(
                     historyRepository.observeItems(),
                     favoritesCache.observeItems(),
-                    _harvestUnread,
+                    historyUnreadHarvester.unread,
                     listsPrefs.observeShowDotFlow(),
             ) { history, favs, harvestUnread, showDot -> enrich(history, favs, harvestUnread) to showDot }
                     .catch { e -> errorHandler.handle(e) }
@@ -125,13 +124,12 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    /** Фоновый read-only harvest флага «+» для не-избранных тем; результат вливается через _harvestUnread. */
+    /** Фоновый read-only harvest флага «+» для не-избранных тем; результат публикуется в harvester.unread. */
     private fun launchHarvest(topicIds: List<Int>) {
         harvestJob?.cancel()
         harvestJob = scope.launch {
-            runCatching { historyUnreadHarvester.harvest(topicIds) }
-                    .onSuccess { _harvestUnread.value = it }
-            // onFailure: намеренно тихо — оставляем прежние точки, ошибку сети в Историю не выносим.
+            // markOpened + refresh пишут в один StateFlow; ошибку сети в Историю не выносим.
+            runCatching { historyUnreadHarvester.refresh(topicIds) }
         }
     }
 

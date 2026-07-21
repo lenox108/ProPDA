@@ -64,6 +64,7 @@ class ThemeUseCase @Inject constructor(
         private val topicPreferencesHolder: TopicPreferencesHolder,
         private val mainPreferencesHolder: MainPreferencesHolder,
         private val topicForumStore: forpdateam.ru.forpda.model.repository.theme.TopicForumStore,
+        private val historyUnreadHarvester: forpdateam.ru.forpda.model.repository.history.HistoryUnreadHarvester,
         private val prefetchService: ThemePrefetchService? = null,
         @AppScope private val appScope: CoroutineScope,
 ) {
@@ -172,6 +173,10 @@ class ThemeUseCase @Inject constructor(
         // списка раздела). Заход в тему уже пометил её прочитанной на сервере, поэтому последующее
         // «+» в разделе = именно новые ответы с момента визита.
         topicForumStore.put(topicId, page.forumId)
+        // И сразу гасим harvest-точку этой темы в Истории: раз открыли — сервер её пометил прочитанной,
+        // «+» в разделе снят. Иначе точка висела бы до следующего refresh/TTL (у не-избранных тем нет
+        // живого сигнала прочтения, в отличие от избранных).
+        historyUnreadHarvester.markOpened(topicId)
     }
 
     private fun pageMetadataSnapshot(page: ThemePage): String =
