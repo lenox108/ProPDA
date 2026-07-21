@@ -188,6 +188,7 @@ class BodyBlockViewFactory(
             val child = when (block) {
                 is BodyBlock.Text -> textView(ctx, spanned(ctx, block.html), scope)
                 is BodyBlock.EditNote -> editNoteView(ctx, block)
+                is BodyBlock.Offtop -> offtopView(ctx, block, scope)
                 is BodyBlock.Image -> imageView(ctx, block, scope)
                 is BodyBlock.Quote -> quoteView(ctx, block, scope)
                 is BodyBlock.Spoiler -> spoilerView(ctx, block, scope)
@@ -546,16 +547,34 @@ class BodyBlockViewFactory(
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
             setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
-            if (isButtonGif) {
+            // The inner <img> of an attach-file link (attachmentButton) and a linked inline gif (isButtonGif)
+            // both need a post-load size check: 4pda serves them without width/height attrs, so only the
+            // decoded bitmap tells a WIDE «СКАЧАТЬ» banner apart from a tiny square file-type mime glyph.
+            if (isButtonGif || block.attachmentButton) {
                 ForPdaCoil.loadInto(this, block.imageUrl) { w, h ->
-                    // Bump to a comfortable tap height ONLY for a genuinely WIDE, SHORT button graphic
-                    // («UPDATE» ≈ 5:1); leave tiny square icons (arrows, file-type glyphs) at intrinsic size.
                     val targetH = (BUTTON_GIF_HEIGHT_DP * dm.density).toInt()
-                    if (w > 0 && h in 1 until targetH && w.toFloat() / h >= 2.5f) {
-                        (layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
-                            lp.height = targetH
-                            lp.width = LinearLayout.LayoutParams.WRAP_CONTENT
-                            layoutParams = lp
+                    val wideBanner = w > 0 && h > 0 && w.toFloat() / h >= 2.5f
+                    when {
+                        // WIDE, SHORT button graphic («UPDATE» ≈ 5:1): bump to a comfortable tap height.
+                        wideBanner && h < targetH ->
+                            (layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                                lp.height = targetH
+                                lp.width = LinearLayout.LayoutParams.WRAP_CONTENT
+                                layoutParams = lp
+                            }
+                        // Tall/large banner: already big enough — leave at intrinsic size.
+                        wideBanner -> Unit
+                        // A small square glyph INSIDE an attach-file link is a decorative file-type icon:
+                        // hide it (legacy `.ipb-attach.attach-file img{display:none}` parity) — the file chip
+                        // below already names the file. Non-attach linked gifs (isButtonGif only) stay as-is.
+                        block.attachmentButton -> {
+                            visibility = View.GONE
+                            (layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                                lp.height = 0
+                                lp.width = 0
+                                lp.topMargin = 0
+                                layoutParams = lp
+                            }
                         }
                     }
                 }
@@ -577,14 +596,22 @@ class BodyBlockViewFactory(
         }
     }
 
-    /** Native file attachment chip: "📎 filename" on a panel, tap → download via the app. */
+    /** Native file attachment chip: a modern file glyph + filename on a panel, tap → download via the app. */
     private fun fileAttachmentView(ctx: Context, block: BodyBlock.FileAttachment): View {
         val dm = ctx.resources.displayMetrics
         val pad = (10 * dm.density).toInt()
+        val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
         return TextView(ctx).apply {
-            text = "📎 ${block.name}"
+            text = block.name
             textSize = scaledSp(14f)
-            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
+            setTextColor(accent)
+            // Modern vector file icon (replaces the old 📎 emoji), tinted to match the label and sized to the text.
+            val iconPx = (20 * dm.density).toInt()
+            val icon = androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.ic_attach_file_modern)
+                    ?.mutate()?.apply { setBounds(0, 0, iconPx, iconPx) }
+            setCompoundDrawablesRelative(icon, null, null, null)
+            compoundDrawablePadding = (8 * dm.density).toInt()
+            androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(this, android.content.res.ColorStateList.valueOf(accent))
             setPadding(pad, pad, pad, pad)
             background = m3BlockBackground(ctx)
             clipToOutline = true
@@ -795,6 +822,43 @@ class BodyBlockViewFactory(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = (6 * ctx.resources.displayMetrics.density).toInt() }
+        }
+    }
+
+    /**
+     * An `[offtop]` aside ([BodyBlock.Offtop]). 4pda wraps offtop in a collapsible spoiler, but it is a small
+     * always-visible "by the way" note — [PostBodyRenderer] already unwrapped it, so here we just render the
+     * body as small, muted, always-visible text (never a tap-to-open card). Smaller than the edit note (~0.75
+     * of the body) to echo 4pda's 9px offtop font; links inside stay tappable and the text is selectable.
+     */
+    private fun offtopView(ctx: Context, block: BodyBlock.Offtop, scope: RenderScope): View {
+        val muted = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+        val surface = currentSurface(ctx, scope)
+        val text = neutralizeLowContrastColors(surface, stripLinkColors(spanned(ctx, block.html)))
+        return TextView(ctx).apply {
+            setText(text)
+            SmileProvider.startAnimations(this)
+            textSize = scaledSp(12f) // small aside (~0.75 of the 16sp body); offtop is de-emphasised text
+            setTextColor(muted)
+            setLinkTextColor(contrastSafeLinkColor(ctx, surface))
+            setLineSpacing(0f, 1.15f)
+            setTextIsSelectable(true)
+            installQuoteSelectionAction(this, scope)
+            val hasLinks = text is Spanned &&
+                    text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
+            if (hasLinks) {
+                movementMethod = SelectableLinkMovementMethod(object : LinkMovementMethod.ClickListener {
+                    override fun onClick(url: String): Boolean = linkHandler.handle(url, null)
+                    override fun onLongClick(url: String): Boolean {
+                        callbacks.onLinkLongClick(url)
+                        return true
+                    }
+                })
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
         }
     }
 
@@ -1079,6 +1143,7 @@ class BodyBlockViewFactory(
             for (block in blocks) when (block) {
                 is BodyBlock.Text -> prewarmHtml(block.html)
                 is BodyBlock.EditNote -> prewarmHtml(block.html)
+                is BodyBlock.Offtop -> prewarmHtml(block.html)
                 is BodyBlock.WebFallback -> prewarmHtml(block.html)
                 is BodyBlock.Quote -> prewarm(block.inner)
                 is BodyBlock.Spoiler -> prewarm(block.inner)
