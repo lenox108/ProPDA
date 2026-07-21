@@ -41,6 +41,28 @@ internal object FavoriteReadStateMerge {
         } == true
         val cachedCount = cached?.unreadPostCount ?: 0
 
+        // Универсальная защита от ПЕРЕ-ЗАЖИГАНИЯ только что прочитанной темы устаревшим серверным
+        // «unread». Симптом: тема с 1 новым постом «не засчитывается прочитанной с первого раза, только
+        // со второго». Причина: сразу после открытия темы сервер ещё какое-то время (CDN/лаг) отдаёт и
+        // «+» в HTML списка избранного, и unread в инспекторе для поста, который мы УЖЕ прочитали. Ниже
+        // защита `cached_read_over_inspector` применяется только при !htmlSaysUnread, поэтому пока висит
+        // «+», полный рефреш зажигал тему обратно.
+        // Держим READ строго когда: тема свежо прочитана ЛОКАЛЬНО (есть маркер), нет реально более
+        // нового контента, чем в кэше (дата/автор/страницы не изменились — [hasNewerContentThanCache]),
+        // и — если инспектор дал метку времени — новейший пост НЕ новее момента прочтения. Настоящий
+        // новый пост меняет дату/автора ИЛИ даёт inspectorTimeStamp > localReadTime → сюда не попадёт и
+        // честно зажжёт тему. Читанное в ДРУГОМ клиенте сюда тоже не попадёт (localReadPostId==0).
+        if (cached != null &&
+                cached.readState == FavoriteReadState.READ &&
+                !cached.isNew &&
+                cached.localReadPostId > 0 &&
+                localReadTimeSeconds > 0L &&
+                !hasNewerContentThanCache &&
+                (inspectorTimeStampSeconds <= 0L || inspectorTimeStampSeconds <= localReadTimeSeconds)
+        ) {
+            return Result(FavoriteReadState.READ, 0, "local_read_over_stale_unread")
+        }
+
         if (inspectorPresent) {
             if (inspectorUnread) {
                 val htmlSaysUnread = network == FavoriteReadState.UNREAD ||

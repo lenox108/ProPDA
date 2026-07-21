@@ -338,6 +338,19 @@ class ThemeUseCase @Inject constructor(
         // "stuck on stale already-read post"). This is the single chokepoint covering every mark-read
         // reason (last_page_loaded / last_page_bottom_reached / after_end).
         returnPositionStore.markRead(topicId)
+        // Update Favorites through its repository as part of the read operation itself.  The old
+        // path relied exclusively on CrossScreenInteractor's replay=0 SharedFlow and on a live
+        // FavoritesViewModel collector.  A short one-post tail is commonly marked from
+        // NativeTopicFragment.onPause, exactly while navigation is switching back to Favorites;
+        // if that collector is not active for this frame, the event is lost and the row stays bold
+        // until a refresh/second open lets the server state catch up.  The repository owns the
+        // process-wide Room-backed cache, so applying READ here is durable and immediately reaches
+        // any current or subsequently recreated Favorites screen.  markRead is idempotent; the
+        // legacy cross-screen notification below remains for the Topics screen and older callers.
+        appScope.launch(Dispatchers.IO) {
+            runCatching { favoritesRepository.markRead(topicId) }
+                    .onFailure { errorHandler.handle(it) }
+        }
         crossScreenInteractor.onLoadTopic(topicId)
         // Тема открыта напрямую из приложения и дошли до последней страницы —
         // снимаем «висящие» уведомления из шторки для этой темы.

@@ -9,6 +9,53 @@ import org.junit.Test
 class FavoriteReadStateMergeTest {
 
     @Test
+    fun `stale html plus one and inspector cannot relight a just-read one-post tail`() {
+        val cached = fav(readState = FavoriteReadState.READ, isNew = false).apply {
+            localReadPostId = topicId
+            localReadPostDateMillis = 300_000L
+        }
+
+        val result = FavoriteReadStateMerge.merge(
+                network = FavoriteReadState.UNREAD,
+                networkUnreadCount = 1,
+                networkLegacyIsNew = true,
+                cached = cached,
+                inspectorUnread = true,
+                inspectorPresent = true,
+                hasNewerContentThanCache = false,
+                inspectorTimeStampSeconds = 200L,
+                localReadTimeSeconds = 300L,
+        )
+
+        assertEquals(FavoriteReadState.READ, result.readState)
+        assertEquals(0, result.unreadPostCount)
+        assertEquals("local_read_over_stale_unread", result.reason)
+    }
+
+    @Test
+    fun `html plus one still relights when inspector post is newer than local read`() {
+        val cached = fav(readState = FavoriteReadState.READ, isNew = false).apply {
+            localReadPostId = topicId
+            localReadPostDateMillis = 300_000L
+        }
+
+        val result = FavoriteReadStateMerge.merge(
+                network = FavoriteReadState.UNREAD,
+                networkUnreadCount = 1,
+                networkLegacyIsNew = true,
+                cached = cached,
+                inspectorUnread = true,
+                inspectorPresent = true,
+                hasNewerContentThanCache = true,
+                inspectorTimeStampSeconds = 400L,
+                localReadTimeSeconds = 300L,
+        )
+
+        assertEquals(FavoriteReadState.UNREAD, result.readState)
+        assertEquals(1, result.unreadPostCount)
+    }
+
+    @Test
     fun networkUnreadWinsOverCachedRead() {
         val cached = fav(readState = FavoriteReadState.READ, isNew = false)
         val result = FavoriteReadStateMerge.merge(
@@ -283,6 +330,11 @@ class FavoriteReadStateMergeTest {
         // Regression for the opposite of 1103268: the user just opened the topic (local read
         // moment is *newer* than the inspector's last activity), so the cached READ is
         // genuinely fresh and must NOT be flipped to UNREAD by a lagging inspector.
+        //
+        // This is now intercepted earlier by the universal `local_read_over_stale_unread`
+        // guard (fresh local read + no newer content + inspector timestamp not newer than the
+        // read moment). The resulting state is identical (READ, 0) — only the diagnostic reason
+        // changed from the old inspector-branch label `cached_read_over_inspector`.
         val cached = fav(readState = FavoriteReadState.READ, isNew = false).apply {
             localReadPostId = 1103268
             localReadPostDateMillis = 1_782_232_500_000L
@@ -300,7 +352,7 @@ class FavoriteReadStateMergeTest {
 
         assertEquals(FavoriteReadState.READ, result.readState)
         assertEquals(0, result.unreadPostCount)
-        assertEquals("cached_read_over_inspector", result.reason)
+        assertEquals("local_read_over_stale_unread", result.reason)
     }
 
     @Test
