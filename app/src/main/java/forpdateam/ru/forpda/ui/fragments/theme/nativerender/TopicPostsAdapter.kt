@@ -857,6 +857,13 @@ class TopicPostsAdapter(
             blockFactory.searchQuery = searchQuery
             blockFactory.animatedSmiles = settings.animatedSmiles
             blockFactory.flatBlocks = settings.flatBlocks
+            // Block spacing follows the post-density step so gaps between spoilers/quotes tighten together
+            // with the card padding — otherwise super-compact kept roomy 10dp gaps inside a packed post.
+            blockFactory.blockSpacingDp = when (settings.density) {
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT -> 3f
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMPACT -> 6f
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMFORTABLE -> BodyBlockViewFactory.BLOCK_SPACING_DP
+            }
             blockFactory.render(
                     body,
                     item.blocks,
