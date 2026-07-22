@@ -89,6 +89,18 @@ sealed interface BodyBlock {
     ) : BodyBlock
 
     /**
+     * A native "hidden text" block (`.post-block.hidden`) — 4pda's «Скрытый текст», content the server
+     * reveals only to registered users (guests receive an EMPTY `.block-body`). Structurally it mirrors a
+     * [Spoiler] (`.block-title` + `.block-body`) but is NOT collapsible on the site — it is simply shown
+     * with a header. [inner] is the recursively-rendered body, so an attachment image / table placed inside
+     * it renders NATIVELY instead of being flattened by the WebView fallback — whose `Html.fromHtml` has no
+     * ImageGetter and silently DROPPED the picture, leaving an empty box (user report: спойлер с картинкой /
+     * таблицей внутри не отображается). A distinct type from [Spoiler] so hidden blocks never offset the
+     * spoiler copy-link numbering.
+     */
+    data class Hidden(val inner: List<BodyBlock>) : BodyBlock
+
+    /**
      * A native file attachment (`a.ipb-attach.attach-file`) — a downloadable file link (apk/zip/…).
      * [name] is the filename, [url] the dl/post download link. 4pda emits the file's size «( N МБ )»
      * and an optional «скачиваний: N» download count as SIBLING nodes right after the link; those are
@@ -131,6 +143,8 @@ sealed interface BodyBlock {
             ATTACHMENT,
             POLL,
             TABLE,
+            /** 4pda «Скрытый текст» (`.post-block.hidden`) → peeled into [BodyBlock.Hidden]. */
+            HIDDEN,
             /** Contains a complex descendant but not one of the recognised kinds. */
             UNKNOWN,
         }

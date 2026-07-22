@@ -349,6 +349,8 @@ class PostBodyRenderer {
                 if (element.hasClass("quote")) listOf(extractQuote(element)) else null
             BodyBlock.WebFallback.Kind.SPOILER ->
                 if (element.hasClass("spoil")) listOf(extractSpoiler(element)) else null
+            BodyBlock.WebFallback.Kind.HIDDEN ->
+                if (element.hasClass("hidden")) listOf(extractHidden(element)) else null
             BodyBlock.WebFallback.Kind.CODE ->
                 if (element.hasClass("code")) listOf(extractCode(element)) else null
             BodyBlock.WebFallback.Kind.TABLE -> {
@@ -404,6 +406,18 @@ class PostBodyRenderer {
             initiallyOpen = element.hasClass("open"),
             inner = inner,
         )
+    }
+
+    /**
+     * Builds a native [BodyBlock.Hidden] from a `.post-block.hidden` («Скрытый текст»): its `.block-body`
+     * is rendered RECURSIVELY (same pass as spoiler/quote) so an attachment image / table nested inside it
+     * becomes a native [BodyBlock.Image]/[BodyBlock.Table] — instead of the whole block falling to the
+     * WebView text fallback, whose Html.fromHtml drops the image and leaves an empty box (user report).
+     */
+    private fun extractHidden(element: Element): BodyBlock.Hidden {
+        val body = element.selectFirst("> .block-body")
+        val inner = if (body != null) renderNodes(body.childNodes()) else emptyList()
+        return BodyBlock.Hidden(inner = inner)
     }
 
     /**
@@ -561,6 +575,7 @@ class PostBodyRenderer {
                 el.hasClass("quote") -> BodyBlock.WebFallback.Kind.QUOTE
                 el.hasClass("spoil") -> BodyBlock.WebFallback.Kind.SPOILER
                 el.hasClass("code") -> BodyBlock.WebFallback.Kind.CODE
+                el.hasClass("hidden") -> BodyBlock.WebFallback.Kind.HIDDEN
                 else -> BodyBlock.WebFallback.Kind.UNKNOWN
             }
         }
