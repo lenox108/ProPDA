@@ -188,6 +188,7 @@
     <string name="qms_refresh_failed_keep_cached">Не удалось обновить, показаны сохранённые сообщения</string>
     <string name="qms_delete_message_confirm">Удалить сообщение? Оно исчезнет только у вас, у собеседника останется.</string>
     <string name="qms_message_deleted">Сообщение удалено</string>
+    <string name="qms_select_text">Выделить текст</string>
     <string name="qms_cache_age_minutes">данные %d мин назад</string>
     <string name="group">Группа</string>
     <string name="menu">Меню</string>

@@ -32,11 +32,8 @@ class QmsMessagesAdapter(
         /** Long-press on an attachment image → actions menu (save / open in browser / copy link). */
         fun onImageLongClick(imageUrl: String)
 
-        /** Long-press on a bubble → the message actions menu (copy). */
+        /** Long-press on a bubble → the message actions menu (Копировать / Выделить текст / Удалить). */
         fun onMessageLongClick(anchor: View, item: QmsChatItem.Message)
-
-        /** «Удалить сообщение» chosen from a bubble's text-selection toolbar ([messageId] = its id). */
-        fun onMessageDeleteRequested(messageId: Int)
 
         /** Tap on a file-attachment link → download it (host passes an Activity context so the
          *  «Способ загрузки → Спрашивать каждый раз» chooser can appear). */
@@ -64,9 +61,6 @@ class QmsMessagesAdapter(
 
                 override fun onLinkLongClick(url: String) =
                         listener.onLinkLongClick(url)
-
-                override fun onDeleteScope(scopeId: Int) =
-                        listener.onMessageDeleteRequested(scopeId)
             },
     )
 
@@ -189,12 +183,13 @@ class QmsMessagesAdapter(
             bubbleBg.setStroke((1f * dm.density).toInt().coerceAtLeast(1), bubbleBorderColor(fill))
 
             body.removeAllViews()
-            // Text stays selectable (native Copy/Share); allowDeleteSelection adds «Удалить сообщение»
-            // to that same selection toolbar (long-press → выделение + Копировать/Удалить сообщение).
+            // selectableText = false: long-press does NOT start native text selection (which awkwardly
+            // selected text + showed Copy next to Delete). Instead it falls through to the bubble's own
+            // Telegram-style actions menu (Копировать / Выделить текст / Удалить). Links stay tappable.
             blockFactory.render(
                     body,
                     item.blocks,
-                    BodyBlockViewFactory.RenderScope(item.id, allowDeleteSelection = true),
+                    BodyBlockViewFactory.RenderScope(item.id, selectableText = false),
             )
 
             time.text = item.time

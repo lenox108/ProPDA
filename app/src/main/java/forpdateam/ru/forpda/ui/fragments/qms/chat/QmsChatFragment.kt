@@ -367,9 +367,6 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                     override fun onMessageLongClick(anchor: View, item: QmsChatItem.Message) =
                             showMessageMenu(anchor, item)
 
-                    override fun onMessageDeleteRequested(messageId: Int) =
-                            confirmDeleteMessage(messageId)
-
                     override fun onDownloadLinkTap(url: String, fileName: String?) {
                         systemLinkHandler.handleDownload(url, fileName, requireContext())
                     }
@@ -656,22 +653,68 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                 .startActivity(requireContext(), ArrayList(galleryUrls), start)
     }
 
-    /** Long-press a bubble → copy its plain text or delete the message (one-sided, our copy only). */
+    /**
+     * Telegram-style long-press: a clean actions menu instead of the native text-selection toolbar
+     * (which awkwardly selected text AND showed Copy right next to Delete). «Копировать» yanks the whole
+     * message; «Выделить текст» re-enables native selection on demand for a partial copy; «Удалить»
+     * removes the message (one-sided, our copy only).
+     */
     private fun showMessageMenu(anchor: View, item: QmsChatItem.Message) {
         val popup = android.widget.PopupMenu(requireContext(), anchor)
         popup.menu.add(0, MENU_COPY_MESSAGE, 0, R.string.copy)
-        popup.menu.add(0, MENU_DELETE_MESSAGE, 1, R.string.delete)
+        popup.menu.add(0, MENU_SELECT_TEXT, 1, R.string.qms_select_text)
+        popup.menu.add(0, MENU_DELETE_MESSAGE, 2, R.string.delete)
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 MENU_COPY_MESSAGE -> {
                     clipboardHelper.copyToClipboard(plainTextOf(item))
                     showSnackbar(R.string.copied)
                 }
+                MENU_SELECT_TEXT -> startTextSelection(anchor)
                 MENU_DELETE_MESSAGE -> confirmDeleteMessage(item.id)
             }
             true
         }
         popup.show()
+    }
+
+    /**
+     * «Выделить текст»: bubbles render with non-selectable text (so long-press opens the menu above), so
+     * to allow a partial copy we re-enable selection on this bubble's text block on demand and kick off
+     * the native selection ActionMode — the user then drags the handles. Transient: the row rebinds
+     * non-selectable on recycle. Picks the largest text block (the message body, not a tiny footer).
+     */
+    private fun startTextSelection(anchor: View) {
+        val target = largestTextView(anchor) ?: return
+        target.setTextIsSelectable(true)
+        target.isFocusableInTouchMode = true
+        target.requestFocus()
+        target.post {
+            if (!isAdded || view == null) return@post
+            runCatching {
+                val text = target.text
+                if (target.isAttachedToWindow && text is android.text.Spannable && text.isNotEmpty()) {
+                    android.text.Selection.setSelection(text, 0, text.length)
+                }
+                // On a selectable TextView a long-click starts the floating selection toolbar.
+                target.performLongClick()
+            }
+        }
+    }
+
+    /** Deepest-first search for the widest non-blank TextView under [v] (the message body block). */
+    private fun largestTextView(v: View): android.widget.TextView? {
+        var best: android.widget.TextView? = null
+        fun walk(node: View) {
+            if (node is android.widget.TextView && !node.text.isNullOrBlank()) {
+                if (best == null || node.width > best!!.width) best = node
+            }
+            if (node is android.view.ViewGroup) {
+                for (i in 0 until node.childCount) walk(node.getChildAt(i))
+            }
+        }
+        walk(v)
+        return best
     }
 
     /**
@@ -1117,6 +1160,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         private const val QMS_AUTO_REFRESH_FAST_MS = 15_000L
         private const val MENU_COPY_MESSAGE = 1
         private const val MENU_DELETE_MESSAGE = 2
+        private const val MENU_SELECT_TEXT = 3
 
         /** Font-size pref value that maps to textScale 1.0 (matches the native topic renderer). */
         private const val REFERENCE_FONT_SIZE = 16f
