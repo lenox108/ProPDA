@@ -688,24 +688,27 @@ class QmsChatViewModel @Inject constructor(
     }
 
     /**
-     * Удаляет одно сообщение из открытого треда. Удаление на 4pda одностороннее — убирает
-     * сообщение только из нашей копии диалога, у собеседника оно остаётся (проверено вживую).
-     * После успешного запроса убираем сообщение из [currentData] и перепубликуем окно, чтобы
-     * оно исчезло из списка сразу, без перезагрузки чата.
+     * Удаляет выбранные сообщения из открытого треда (режим «Удалить сообщения»). Удаление на 4pda
+     * одностороннее — убирает сообщения только из нашей копии диалога, у собеседника они остаются
+     * (проверено вживую). После успешного запроса убираем их из [currentData] и перепубликуем окно,
+     * чтобы они исчезли из списка сразу, без перезагрузки чата.
      */
-    fun deleteMessage(messageId: Int) {
+    fun deleteMessages(messageIds: List<Int>) {
         if (userId == QmsChatModel.NOT_CREATED || themeId == QmsChatModel.NOT_CREATED) {
             return
         }
+        val ids = messageIds.distinct().filter { it > 0 }
+        if (ids.isEmpty()) return
         scope.launch {
             try {
                 _messageRefreshing.value = true
-                qmsInteractor.deleteMessages(userId, themeId, listOf(messageId))
+                qmsInteractor.deleteMessages(userId, themeId, ids)
                 currentData?.let { data ->
-                    val removed = data.messages.removeAll { it.id == messageId }
+                    val idSet = ids.toHashSet()
+                    val removed = data.messages.removeAll { it.id in idSet }
                     if (removed) publishVisibleMessages(scrollToBottom = false)
                 }
-                _uiEvents.emit(QmsChatUiEvent.OnMessagesDeleted(1))
+                _uiEvents.emit(QmsChatUiEvent.OnMessagesDeleted(ids.size))
             } catch (e: Throwable) {
                 errorHandler.handle(e)
             } finally {
