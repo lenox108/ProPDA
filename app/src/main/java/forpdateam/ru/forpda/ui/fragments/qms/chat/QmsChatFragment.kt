@@ -102,6 +102,12 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     private lateinit var noteMenuItem: MenuItem
     private lateinit var toDialogsMenuItem: MenuItem
     private lateinit var refreshMenuItem: MenuItem
+    private var deleteMessagesMenuItem: MenuItem? = null
+    private var selectionDeleteMenuItem: MenuItem? = null
+
+    /** «Удалить сообщения» selection mode (analogous to Notes multi-select): pick messages → delete. */
+    private var isSelectionMode = false
+    private val selectedMessageIds = linkedSetOf<Int>()
     private var themeCreator: ChatThemeCreator? = null
     private var _chatBinding: FragmentQmsChatBinding? = null
     private val chatBinding get() = checkNotNull(_chatBinding) { "Binding accessed after onDestroyView" }
@@ -366,6 +372,10 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
                     override fun onMessageLongClick(anchor: View, item: QmsChatItem.Message) =
                             showMessageMenu(anchor, item)
+
+                    override fun onMessageTap(item: QmsChatItem.Message) {
+                        if (isSelectionMode) toggleMessageSelection(item.id)
+                    }
 
                     override fun onDownloadLinkTap(url: String, fileName: String?) {
                         systemLinkHandler.handleDownload(url, fileName, requireContext())
@@ -653,25 +663,18 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                 .startActivity(requireContext(), ArrayList(galleryUrls), start)
     }
 
-    /**
-     * Telegram-style long-press: a clean actions menu instead of the native text-selection toolbar
-     * (which awkwardly selected text AND showed Copy right next to Delete). «Копировать» yanks the whole
-     * message; «Выделить текст» re-enables native selection on demand for a partial copy; «Удалить»
-     * removes the message (one-sided, our copy only).
-     */
+    /** Long-press a bubble → copy its plain text (deletion moved to the toolbar «Удалить сообщения» mode). */
     private fun showMessageMenu(anchor: View, item: QmsChatItem.Message) {
+        if (isSelectionMode) {
+            toggleMessageSelection(item.id)
+            return
+        }
         val popup = android.widget.PopupMenu(requireContext(), anchor)
         popup.menu.add(0, MENU_COPY_MESSAGE, 0, R.string.copy)
-        popup.menu.add(0, MENU_SELECT_TEXT, 1, R.string.qms_select_text)
-        popup.menu.add(0, MENU_DELETE_MESSAGE, 2, R.string.delete)
         popup.setOnMenuItemClickListener { menuItem ->
-            when (menuItem.itemId) {
-                MENU_COPY_MESSAGE -> {
-                    clipboardHelper.copyToClipboard(plainTextOf(item))
-                    showSnackbar(R.string.copied)
-                }
-                MENU_SELECT_TEXT -> startTextSelection(anchor)
-                MENU_DELETE_MESSAGE -> confirmDeleteMessage(item.id)
+            if (menuItem.itemId == MENU_COPY_MESSAGE) {
+                clipboardHelper.copyToClipboard(plainTextOf(item))
+                showSnackbar(R.string.copied)
             }
             true
         }
@@ -679,53 +682,20 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     }
 
     /**
-     * «Выделить текст»: bubbles render with non-selectable text (so long-press opens the menu above), so
-     * to allow a partial copy we re-enable selection on this bubble's text block on demand and kick off
-     * the native selection ActionMode — the user then drags the handles. Transient: the row rebinds
-     * non-selectable on recycle. Picks the largest text block (the message body, not a tiny footer).
+     * Удаление необратимо — подтверждаем и честно предупреждаем, что сообщения пропадут только у нас
+     * (у собеседника останутся: удаление на 4pda одностороннее). По подтверждению — batch-удаление и
+     * выход из режима выбора.
      */
-    private fun startTextSelection(anchor: View) {
-        val target = largestTextView(anchor) ?: return
-        target.setTextIsSelectable(true)
-        target.isFocusableInTouchMode = true
-        target.requestFocus()
-        target.post {
-            if (!isAdded || view == null) return@post
-            runCatching {
-                val text = target.text
-                if (target.isAttachedToWindow && text is android.text.Spannable && text.isNotEmpty()) {
-                    android.text.Selection.setSelection(text, 0, text.length)
-                }
-                // On a selectable TextView a long-click starts the floating selection toolbar.
-                target.performLongClick()
-            }
-        }
-    }
-
-    /** Deepest-first search for the widest non-blank TextView under [v] (the message body block). */
-    private fun largestTextView(v: View): android.widget.TextView? {
-        var best: android.widget.TextView? = null
-        fun walk(node: View) {
-            if (node is android.widget.TextView && !node.text.isNullOrBlank()) {
-                if (best == null || node.width > best!!.width) best = node
-            }
-            if (node is android.view.ViewGroup) {
-                for (i in 0 until node.childCount) walk(node.getChildAt(i))
-            }
-        }
-        walk(v)
-        return best
-    }
-
-    /**
-     * Удаление сообщения необратимо — спрашиваем подтверждение и честно предупреждаем, что оно
-     * пропадёт только у нас (у собеседника останется: удаление на 4pda одностороннее).
-     */
-    private fun confirmDeleteMessage(messageId: Int) {
+    private fun confirmDeleteSelectedMessages() {
         if (!isAdded || view == null) return
+        val ids = selectedMessageIds.toList()
+        if (ids.isEmpty()) return
         MaterialAlertDialogBuilder(requireContext())
                 .setMessage(R.string.qms_delete_message_confirm)
-                .setPositiveButton(R.string.delete) { _, _ -> presenter.deleteMessage(messageId) }
+                .setPositiveButton(R.string.delete) { _, _ ->
+                    presenter.deleteMessages(ids)
+                    exitSelectionMode()
+                }
                 .setNegativeButton(R.string.cancel, null)
                 .showWithStyledButtons()
     }
@@ -901,7 +871,25 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                     presenter.openDialogs()
                     true
                 }
+        // ⋮ → «Удалить сообщения»: входит в режим выбора (чекбокс-подсветка сообщений + кнопка «Удалить»
+        // на тулбаре), по аналогии с мультивыбором заметок.
+        deleteMessagesMenuItem = menu
+                .add(R.string.qms_delete_messages)
+                .setOnMenuItemClickListener {
+                    enterSelectionMode()
+                    true
+                }
+        // Видима только в режиме выбора: иконка-корзина на тулбаре удаляет выбранные сообщения.
+        selectionDeleteMenuItem = menu
+                .add(R.string.delete)
+                .setIcon(R.drawable.ic_toolbar_delete)
+                .setOnMenuItemClickListener {
+                    confirmDeleteSelectedMessages()
+                    true
+                }
+        selectionDeleteMenuItem?.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
         refreshToolbarMenuItems(false)
+        updateSelectionUi()
     }
 
     override fun refreshToolbarMenuItems(enable: Boolean) {
@@ -1159,8 +1147,6 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         /** Open-dialog safety-net poll cadence while the chat is on screen (P2). */
         private const val QMS_AUTO_REFRESH_FAST_MS = 15_000L
         private const val MENU_COPY_MESSAGE = 1
-        private const val MENU_DELETE_MESSAGE = 2
-        private const val MENU_SELECT_TEXT = 3
 
         /** Font-size pref value that maps to textScale 1.0 (matches the native topic renderer). */
         private const val REFERENCE_FONT_SIZE = 16f
