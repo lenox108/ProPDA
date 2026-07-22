@@ -41,8 +41,8 @@ import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.diagnostic.ColdStartTracer
 import forpdateam.ru.forpda.notifications.NotificationsService
 import forpdateam.ru.forpda.ui.fragments.TabFragment
-import io.appmetrica.analytics.AppMetrica
-import io.appmetrica.analytics.AppMetricaConfig
+import forpdateam.ru.forpda.analytics.Analytics
+import forpdateam.ru.forpda.analytics.FlavorAnalytics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -232,38 +232,11 @@ class App : Application(), androidx.work.Configuration.Provider {
     }
 
     private fun setupAppMetrica() {
-        // Аналитика включена только в store-флейворе (тот, что публикуется на Google Play).
-        // В dev/beta/parallel/stable — отключаем, чтобы лишний исходящий трафик
-        // и periodic-пакеты AppMetrica не жгли батарею.
-        val flavor = BuildConfig.FLAVOR
-        if (flavor != "store") {
-            if (BuildConfig.DEBUG) Timber.d("AppMetrica disabled: flavor=$flavor")
-            return
-        }
-        // Тяжёлая инициализация AppMetrica (I/O по сети, чтение конфига) уходим
-        // с главного потока, чтобы cold start не блокировался аналитикой.
-        // Установка UncaughtExceptionHandler должна быть как можно раньше — её
-        // оставляем на main (она дешёвая и нужна в первые мгновения).
-        val defaultUncaught = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, ex ->
-            try {
-                ex?.let {
-                    AppMetrica.reportError("uncaught:${thread.name}:${it.message}", it)
-                }
-            } catch (_: Throwable) {
-                // ignore
-            }
-            defaultUncaught?.uncaughtException(thread, ex)
-        }
-        appScope.launch(Dispatchers.IO) {
-            try {
-                val config = AppMetricaConfig.newConfigBuilder(BuildConfig.APPMETRICA_API_KEY).build()
-                AppMetrica.activate(applicationContext, config)
-                AppMetrica.enableActivityAutoTracking(this@App)
-            } catch (t: Throwable) {
-                Timber.w(t, "AppMetrica async init failed")
-            }
-        }
+        // Аналитика живёт только во флейворе `store` (публикация в Google Play).
+        // FlavorAnalytics — no-op в stable/parallel, при этом библиотека AppMetrica
+        // туда даже не пакуется (зависимость `storeImplementation`). Вся инициализация
+        // и UncaughtExceptionHandler инкапсулированы во flavor-специфичной реализации.
+        FlavorAnalytics.setup(this, appScope)
     }
     
     
