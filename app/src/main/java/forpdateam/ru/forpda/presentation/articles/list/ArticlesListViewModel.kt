@@ -35,6 +35,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 @HiltViewModel
@@ -84,18 +86,23 @@ class ArticlesListViewModel @Inject constructor(
     }
 
     private var loadJob: Job? = null
+    /** A cancelled coroutine cannot interrupt IWebClient's synchronous call; serialize list GETs anyway. */
+    private val listLoadMutex = Mutex()
 
     private fun loadArticles(page: Int, withClear: Boolean, bypassCache: Boolean = false) {
         loadJob?.cancel()
         currentPage = page
+        val category = selectedCategoryId
         loadJob = scope.launch {
             try {
                 _refreshing.value = true
-                val items = newsRepository.getNews(
-                        selectedCategoryId,
-                        currentPage,
-                        bypassCache = bypassCache
-                )
+                val items = listLoadMutex.withLock {
+                    newsRepository.getNews(
+                            category,
+                            page,
+                            bypassCache = bypassCache
+                    )
+                }
                 if (withClear) {
                     currentItems.clear()
                 }
@@ -185,9 +192,8 @@ class ArticlesListViewModel @Inject constructor(
     }
 
     fun onItemClick(item: NewsItem) {
-        // Keep warm-up for the tapped row; cancel only competing prefetches for other ids.
-        articlePrefetchService.cancelPrefetch(exceptArticleId = item.id)
-        articlePrefetchService.prefetchArticle(item.id)
+        // Promote the tapped row immediately; speculative visible-row warm-up has a debounce.
+        articlePrefetchService.prefetchArticleNow(item.id)
         router.navigateTo(Screen.ArticleDetail().apply {
             articleId = item.id
             articleTitle = item.title
