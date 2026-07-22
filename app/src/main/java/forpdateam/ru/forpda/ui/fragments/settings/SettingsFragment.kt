@@ -1023,9 +1023,10 @@ class SettingsFragment : BaseSettingFragment() {
         )
     }
 
-    private fun updateTopicHeaderInitialStateEnabled(target: Preferences.Main.TopicOpenTarget) {
-        findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)?.isEnabled =
-                target == Preferences.Main.TopicOpenTarget.FIRST_PAGE
+    private fun updateTopicHeaderInitialStateEnabled(@Suppress("UNUSED_PARAMETER") target: Preferences.Main.TopicOpenTarget) {
+        // Настройка «Шапка темы при открытии» активна при любом «при открытии темы»: даже при «Первое
+        // непрочитанное» шапка страницы 1 (доступная прокруткой вверх / в гибриде) учитывает это значение.
+        findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)?.isEnabled = true
     }
 
     private fun updateDownloadMethodSummary(method: Preferences.Main.DownloadMethod) {
