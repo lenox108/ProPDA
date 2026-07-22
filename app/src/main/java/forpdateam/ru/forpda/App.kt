@@ -281,7 +281,7 @@ class App : Application(), androidx.work.Configuration.Provider {
                 }.onFailure { ex ->
                     Timber.e(ex, "Version history error")
                     if (!BuildConfig.DEBUG) {
-                        runCatching { AppMetrica.reportError("VERSIONS_HISTORY", ex) }
+                        runCatching { Analytics.reportError("VERSIONS_HISTORY", ex) }
                     }
                 }
             }

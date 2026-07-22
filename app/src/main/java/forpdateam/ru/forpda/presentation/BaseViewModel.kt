@@ -2,7 +2,7 @@ package forpdateam.ru.forpda.presentation
 
 import androidx.lifecycle.ViewModel
 import forpdateam.ru.forpda.BuildConfig
-import io.appmetrica.analytics.AppMetrica
+import forpdateam.ru.forpda.analytics.Analytics
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +28,7 @@ abstract class BaseViewModel : ViewModel() {
             Timber.e(throwable, "Unhandled coroutine exception in ${this::class.java.simpleName}")
             if (!BuildConfig.DEBUG) {
                 runCatching {
-                    AppMetrica.reportError(
+                    Analytics.reportError(
                         "vm_launch:${this::class.java.simpleName}:${throwable.message}",
                         throwable
                     )

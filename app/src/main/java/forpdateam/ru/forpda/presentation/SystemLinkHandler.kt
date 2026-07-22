@@ -10,7 +10,7 @@ import android.provider.Browser
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import timber.log.Timber
 import android.widget.Toast
-import io.appmetrica.analytics.AppMetrica
+import forpdateam.ru.forpda.analytics.Analytics
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.DownloadFileName
@@ -66,7 +66,7 @@ class SystemLinkHandler(
         try {
             ExternalBrowserLauncher.open(context, safeUrl)
         } catch (e: Exception) {
-            AppMetrica.reportError(e.message.orEmpty(), e)
+            Analytics.reportError(e.message.orEmpty(), e)
             Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
             //ACRA.getErrorReporter().handleException(e)
         }
@@ -84,7 +84,7 @@ class SystemLinkHandler(
         try {
             ExternalBrowserLauncher.openPreferringApp(context, safeUrl)
         } catch (e: Exception) {
-            AppMetrica.reportError(e.message.orEmpty(), e)
+            Analytics.reportError(e.message.orEmpty(), e)
             Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
         }
     }
@@ -163,7 +163,7 @@ class SystemLinkHandler(
                         val mime = MimeTypeUtil.getType(fileName)
                         dispatchDownloadMethod(method, fileName, safeDownloadUrl, url, mime, uiContext)
                     } catch (ex: Exception) {
-                        AppMetrica.reportError(ex.message.orEmpty(), ex)
+                        Analytics.reportError(ex.message.orEmpty(), ex)
                         //ACRA.getErrorReporter().handleException(ex)
                     }
                 }
@@ -253,7 +253,7 @@ class SystemLinkHandler(
             val intent = createExternalDownloadIntent(fileName, url, originalUrl, mime)
             context.startActivity(Intent.createChooser(intent, context.getString(R.string.load_with)).addFlags(FLAG_ACTIVITY_NEW_TASK))
         } catch (e: ActivityNotFoundException) {
-            AppMetrica.reportError(e.message.orEmpty(), e)
+            Analytics.reportError(e.message.orEmpty(), e)
             Toast.makeText(context, R.string.download_external_not_found, Toast.LENGTH_SHORT).show()
             openInBrowser(url)
             //ACRA.getErrorReporter().handleException(e)
@@ -304,7 +304,7 @@ class SystemLinkHandler(
         try {
             ExternalBrowserLauncher.open(context, safeUrl)
         } catch (e: Exception) {
-            AppMetrica.reportError(e.message.orEmpty(), e)
+            Analytics.reportError(e.message.orEmpty(), e)
             Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
         }
     }
