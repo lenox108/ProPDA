@@ -476,6 +476,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private var deepLinkAnchorExtraBottomPad = 0
 
+    /**
+     * Explicit findpost target whose first positioning happened before the deferred metadata merge.
+     * [enrichLoadedPage] can change the height of every card above it, so the adapter commit must
+     * top-align this post once more. Cleared on the first user scroll to avoid pulling the reader back.
+     */
+    private var pendingDeepLinkReanchorPostId: Int? = null
+
     /** Whether the loaded content still has an unread anchor — drives the «К непрочитанному» menu item. */
     private var topicHasUnread: Boolean = false
 
@@ -603,6 +610,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_DRAGGING) {
                     if (forpdateam.ru.forpda.BuildConfig.DEBUG && anchoredBottomPostId != null) android.util.Log.i("FPDA_CLEAR", "anchor CLEARED (user drag)")
                     anchoredBottomPostId = null
+                    pendingDeepLinkReanchorPostId = null
                     // The user is scrolling away from a deep-link/quote landing → give back the transient
                     // top-align bottom room so the topic end no longer carries phantom empty space.
                     if (deepLinkAnchorExtraBottomPad != 0) {
@@ -4203,7 +4211,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 recyclerView.postDelayed({ if (view != null) maybeLoadNextPage() }, 350)
             }
         }
-        enrichLoadedPage(page)
+        enrichLoadedPage(page, reanchorInitialDeepLink = true)
     }
 
     /**
@@ -4212,7 +4220,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * which runs AFTER first paint. Re-maps the affected posts and patches them in [loadedItems] by
      * post id (safe even if infinite scroll grew the list meanwhile).
      */
-    private fun enrichLoadedPage(page: forpdateam.ru.forpda.entity.remote.theme.ThemePage) {
+    private fun enrichLoadedPage(
+            page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
+            reanchorInitialDeepLink: Boolean = false,
+    ) {
         viewLifecycleOwner.lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { themeApi.enrichPageMetadata(page, page.url.orEmpty()) }
@@ -4231,8 +4242,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     changed = true
                 }
             }
-            if (changed) submitPosts { reanchorBottomAfterGrowth() }
+            if (changed) submitPosts {
+                if (reanchorInitialDeepLink) reanchorDeepLinkAfterGrowth()
+                reanchorBottomAfterGrowth()
+            }
         }
+    }
+
+    /** Restore a deliberate findpost landing after deferred card enrichment changed list geometry. */
+    private fun reanchorDeepLinkAfterGrowth() {
+        val postId = pendingDeepLinkReanchorPostId ?: return
+        pendingDeepLinkReanchorPostId = null
+        if (view == null || userScrollGestureThisSession || userDraggedListThisSession) return
+        val index = loadedItems.indexOfFirst { it.postId == postId }
+        if (index < 0) return
+        anchorPost(index + headerOffset(), isLast = false, topAlign = true)
     }
 
     /**
@@ -4650,6 +4674,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             hasUnreadTarget: Boolean,
             items: List<NativePostItem>,
     ) {
+        pendingDeepLinkReanchorPostId = null
         // Drop any deep-link top-align bottom room reserved by a PREVIOUS anchor so this fresh landing
         // measures against the real content end (a stale reservation would leave phantom space at the bottom).
         if (deepLinkAnchorExtraBottomPad != 0) {
@@ -4764,6 +4789,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     else -> anchorPost(target, isLast = false,
                             topAlign = request is AnchorRequest.Post &&
                                     request.reason == AnchorRequest.Post.Reason.FIND_POST)
+                }
+                if (request is AnchorRequest.Post &&
+                        request.reason == AnchorRequest.Post.Reason.FIND_POST &&
+                        !isLastPost) {
+                    pendingDeepLinkReanchorPostId = request.postId
                 }
                 // Flash the resolved post once so the user sees where a link/find/unread open landed. The
                 // first-unread landing — and the AUTOMATIC read-boundary resume, which arrives as FIND_POST
