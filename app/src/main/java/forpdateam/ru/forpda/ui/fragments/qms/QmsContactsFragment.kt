@@ -13,11 +13,13 @@ import android.view.ViewGroup
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.qms.QmsContact
@@ -115,11 +117,16 @@ class QmsContactsFragment : RecyclerFragment() {
         val composeView = ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
+                val circleAvatars by topicPreferencesHolder.observeCircleAvatarsFlow()
+                        .collectAsStateWithLifecycle(
+                                initialValue = topicPreferencesHolder.getCircleAvatars(),
+                        )
                 ForpdaTheme {
                     QmsContactsScreen(
                             viewModel = viewModel,
                             onItemClick = { viewModel.onItemClick(it) },
                             onItemLongClick = { showContactMenu(it) },
+                            circleAvatars = circleAvatars,
                             bottomPadding = bottomPaddingDp.dp,
                     )
                 }

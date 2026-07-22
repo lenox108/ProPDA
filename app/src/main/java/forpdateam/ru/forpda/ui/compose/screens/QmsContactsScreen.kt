@@ -72,6 +72,7 @@ fun QmsContactsScreen(
         viewModel: QmsContactsViewModel,
         onItemClick: (QmsContact) -> Unit,
         onItemLongClick: (QmsContact) -> Unit,
+        circleAvatars: Boolean,
         modifier: Modifier = Modifier,
         bottomPadding: Dp = 0.dp,
 ) {
@@ -143,6 +144,7 @@ fun QmsContactsScreen(
                     itemsIndexed(items = state.contacts, key = { _, c -> c.id }) { index, contact ->
                         QmsContactRow(
                                 contact = contact,
+                                circleAvatars = circleAvatars,
                                 segment = listPlateSegment(
                                         prevInGroup = index > 0,
                                         nextInGroup = index < state.contacts.lastIndex,
@@ -170,6 +172,7 @@ fun QmsContactsScreen(
 @Composable
 private fun QmsContactRow(
         contact: QmsContact,
+        circleAvatars: Boolean,
         segment: ListPlateSegment,
         onClick: () -> Unit,
         onLongClick: () -> Unit,
@@ -223,10 +226,11 @@ private fun QmsContactRow(
                 horizontalArrangement = Arrangement.Start,
         ) {
             AndroidView(
-                    factory = { ctx ->
-                        ShapeableImageView(ctx).apply { applyForumAvatarShape(false) }
+                    factory = { ctx -> ShapeableImageView(ctx) },
+                    update = { iv ->
+                        iv.applyForumAvatarShape(circleAvatars)
+                        ForPdaCoil.loadInto(iv, contact.avatar)
                     },
-                    update = { iv -> ForPdaCoil.loadInto(iv, contact.avatar) },
                     modifier = Modifier.size(44.dp),
             )
             Spacer(Modifier.width(12.dp))
