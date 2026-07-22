@@ -32,8 +32,11 @@ class QmsMessagesAdapter(
         /** Long-press on an attachment image → actions menu (save / open in browser / copy link). */
         fun onImageLongClick(imageUrl: String)
 
-        /** Long-press on a bubble → the message actions menu (Копировать / Выделить текст / Удалить). */
+        /** Long-press on a bubble → «Копировать» (or toggles selection while in delete-selection mode). */
         fun onMessageLongClick(anchor: View, item: QmsChatItem.Message)
+
+        /** Tap on a message row — toggles its selection while in the «Удалить сообщения» mode. */
+        fun onMessageTap(item: QmsChatItem.Message)
 
         /** Tap on a file-attachment link → download it (host passes an Activity context so the
          *  «Способ загрузки → Спрашивать каждый раз» chooser can appear). */
@@ -87,6 +90,17 @@ class QmsMessagesAdapter(
             field = value
             notifyDataSetChanged()
         }
+
+    /** «Удалить сообщения» selection mode: rows show a highlight and a tap toggles selection. */
+    private var selectionMode: Boolean = false
+    private var selectedIds: Set<Int> = emptySet()
+
+    fun setSelection(mode: Boolean, ids: Set<Int>) {
+        if (mode == selectionMode && ids == selectedIds) return
+        selectionMode = mode
+        selectedIds = ids
+        notifyDataSetChanged()
+    }
 
     override fun getItemViewType(position: Int): Int = when (getItem(position)) {
         is QmsChatItem.DateDivider -> TYPE_DATE
@@ -182,24 +196,50 @@ class QmsMessagesAdapter(
             bubbleBg.setColor(fill)
             bubbleBg.setStroke((1f * dm.density).toInt().coerceAtLeast(1), bubbleBorderColor(fill))
 
+            val inSelection = selectionMode
+            val selected = inSelection && selectedIds.contains(item.id)
+
             body.removeAllViews()
-            // selectableText = false: long-press does NOT start native text selection (which awkwardly
-            // selected text + showed Copy next to Delete). Instead it falls through to the bubble's own
-            // Telegram-style actions menu (Копировать / Выделить текст / Удалить). Links stay tappable.
+            // In selection mode text is NON-selectable so a tap on the bubble toggles selection; otherwise
+            // it stays selectable (native Copy/Share as before) and long-press offers «Копировать».
             blockFactory.render(
                     body,
                     item.blocks,
-                    BodyBlockViewFactory.RenderScope(item.id, selectableText = false),
+                    BodyBlockViewFactory.RenderScope(item.id, selectableText = !inSelection),
             )
 
             time.text = item.time
             time.textSize = 12f * textScale
             status.visibility = if (item.isUnread) View.VISIBLE else View.GONE
 
-            bubble.setOnLongClickListener {
-                listener.onMessageLongClick(bubble, item)
-                true
+            // Whole-row highlight for a selected message (Notes/Favourites parity: a tinted row bg).
+            itemView.setBackgroundColor(if (selected) selectionRowColor(ctx) else android.graphics.Color.TRANSPARENT)
+
+            if (inSelection) {
+                val toggle = View.OnClickListener { listener.onMessageTap(item) }
+                itemView.setOnClickListener(toggle)
+                bubble.setOnClickListener(toggle)
+                bubble.setOnLongClickListener {
+                    listener.onMessageTap(item)
+                    true
+                }
+            } else {
+                itemView.setOnClickListener(null)
+                itemView.isClickable = false
+                bubble.setOnClickListener(null)
+                bubble.isClickable = false
+                bubble.setOnLongClickListener {
+                    listener.onMessageLongClick(bubble, item)
+                    true
+                }
             }
+        }
+
+        /** Tinted row background for a selected message — accent blended into the reading surface. */
+        private fun selectionRowColor(ctx: android.content.Context): Int {
+            val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurface)
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+            return androidx.core.graphics.ColorUtils.blendARGB(surface, accent, 0.22f)
         }
 
         /**
