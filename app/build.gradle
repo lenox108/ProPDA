@@ -326,7 +326,9 @@ dependencies {
     implementation libs.androidx.compose.ui.graphics
     implementation libs.androidx.compose.ui.tooling.preview
     implementation libs.androidx.compose.material3
-    implementation libs.androidx.compose.material.icons.extended
+    // Only the core curated icon set (Add/Delete/Edit/MoreVert used in NotesScreen).
+    // material-icons-extended pulled in the full ~1k-icon artifact for 4 glyphs.
+    implementation libs.androidx.compose.material.icons.core
     implementation libs.androidx.activity.compose
     implementation libs.androidx.lifecycle.viewmodel.compose
     implementation libs.androidx.lifecycle.runtime.compose

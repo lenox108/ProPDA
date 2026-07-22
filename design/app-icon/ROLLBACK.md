@@ -1,6 +1,6 @@
 # Откат иконки ProPDA
 
-Новая AMOLED-иконка подключена в `AndroidManifest.xml` как
+Новая P4DA-иконка (Paper White / AMOLED / Monet) подключена в `AndroidManifest.xml` как
 `@mipmap/ic_launcher`.
 
 Старый комплект сохранён в Android-ресурсах под именем
@@ -14,3 +14,6 @@ android:roundIcon="@mipmap/ic_launcher_original"
 
 Исходные файлы старой иконки дополнительно сохранены без изменений в каталоге
 `design/app-icon/rollback-original/`.
+
+Генератор активного комплекта:
+`design/app-icon/generate_p4da_final_icon.py`.

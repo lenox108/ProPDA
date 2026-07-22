@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Alpha mask of the same P2 artwork; Android supplies the Monet tint. -->
+    <!-- Alpha mask of P4DA; Android supplies the Material You / Monet tint. -->
     <item>
         <bitmap
             android:gravity="fill"

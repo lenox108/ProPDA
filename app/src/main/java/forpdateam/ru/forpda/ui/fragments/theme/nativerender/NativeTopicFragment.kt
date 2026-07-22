@@ -3895,9 +3895,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /**
      * Применить страницу после РЕДАКТИРОВАНИЯ к списку на месте: заменить содержимое совпавших постов по
-     * id — DiffUtil перебиндит только изменившиеся карточки, пост обновляется «под ногами» без прыжка
-     * скролла и без полного reload'а с пустым экраном. false — поста нет в загруженном окне (не должно
-     * случаться при правке из контекст-меню), нужен фолбэк-reload.
+     * id — DiffUtil перебиндит только изменившиеся карточки, без полного reload'а с пустым экраном. После
+     * подмены выравниваем отредактированный пост по ВЕРХУ, чтобы он был полностью виден (тот же [anchorPost]
+     * с topAlign, что у deep-link/quote-открытия): правка меняет высоту карточки, и без якоря пост мог бы
+     * оказаться частично за кромкой. false — поста нет в загруженном окне (не должно случаться при правке из
+     * контекст-меню), нужен фолбэк-reload.
      */
     private fun applyEditedPostInPlace(
             page: forpdateam.ru.forpda.entity.remote.theme.ThemePage,
@@ -3919,9 +3921,28 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 changed = true
             }
         }
-        if (changed) submitPosts()
         postsAdapter.requestHighlight(editedPostId) // короткая вспышка = «сохранилось», parity с reload-путём
+        // Выровнять отредактированный пост по верху ПОСЛЕ того, как DiffUtil перебиндит карточку с новой
+        // высотой (commit-колбэк submitPosts), иначе якорь замерил бы старую геометрию.
+        submitPosts { anchorEditedPost(editedPostId) }
+        // Панель редактора только что свёрнута (hideMessagePanel) — viewport ещё дорастает; ранний замер мог
+        // бы оставить пост под кромкой. Отложенный повтор в покое, как ре-якори reply-пути.
+        recyclerView.postDelayed({
+            if (view != null &&
+                    recyclerView.scrollState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
+                anchorEditedPost(editedPostId)
+            }
+        }, 400)
         return true
+    }
+
+    /** Выровнять отредактированный пост [editedPostId] по верху, полностью в видимости (см. [anchorPost]). */
+    private fun anchorEditedPost(editedPostId: Int) {
+        if (view == null) return
+        val idx = loadedItems.indexOfFirst { it.postId == editedPostId }
+        if (idx < 0) return
+        val isLast = idx == loadedItems.size - 1
+        anchorPost(idx + headerOffset(), isLast, topAlign = true)
     }
 
     // endregion
