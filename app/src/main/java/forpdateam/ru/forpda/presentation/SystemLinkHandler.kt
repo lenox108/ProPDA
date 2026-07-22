@@ -72,6 +72,23 @@ class SystemLinkHandler(
         }
     }
 
+    override fun openExternal(url: String) {
+        val safeUrl = when (val decision = UrlPolicy.classify(url)) {
+            UrlDecision.Blocked -> {
+                Timber.w("Blocked unsafe system URL")
+                return
+            }
+            is UrlDecision.Internal -> decision.normalizedUrl
+            is UrlDecision.External -> decision.normalizedUrl
+        }
+        try {
+            ExternalBrowserLauncher.openPreferringApp(context, safeUrl)
+        } catch (e: Exception) {
+            AppMetrica.reportError(e.message.orEmpty(), e)
+            Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun handleDownload(url: String, inputFileName: String?, uiContext: Context?, contentDisposition: String?) {
         val safeUrl = when (val decision = UrlPolicy.classify(url)) {
             UrlDecision.Blocked -> {

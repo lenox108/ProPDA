@@ -34,6 +34,76 @@ object ExternalBrowserLauncher {
             "com.yandex.browser"
     )
 
+    /**
+     * Открыть ссылку «как ожидает пользователь при обычном тапе»: СНАЧАЛА нативным приложением,
+     * которое выбрано/верифицировано для этого хоста (App Links / «Открывать поддерживаемые ссылки»),
+     * и только если такого приложения нет — в браузере через [open].
+     *
+     * Отличие от [open]: [open] всегда целится в БРАУЗЕР (роль BROWSER + перечисление браузеров) и
+     * применяется для явного пункта меню «Открыть в браузере». Обычный же тап по внешней ссылке
+     * (например, `https://ali.click/…` → AliExpress) должен уходить в профильное приложение, если оно
+     * назначено обработчиком таких ссылок. Раньше и тап уходил в [open] → всегда браузер.
+     */
+    fun openPreferringApp(context: Context, url: String): Boolean {
+        val uri = Uri.parse(url)
+        val scheme = uri.scheme?.lowercase()
+        // Только http/https конкурируют с браузером за обработку. Прочие схемы (mailto:, tel:,
+        // intent:, market: и т.п.) не «браузерные» — отдаём их системе как есть.
+        if (scheme == "http" || scheme == "https") {
+            resolveNativeAppIntent(context, uri)?.let { appIntent ->
+                if (launchExplicit(context, appIntent)) {
+                    Log.i(LOG_TAG, "opened native app ${appIntent.component?.packageName} for $uri")
+                    return true
+                }
+            }
+        }
+        return open(context, url)
+    }
+
+    /**
+     * Если для этого КОНКРЕТНОГО URL выбран (или верифицирован через App Links) нативный обработчик
+     * — не браузер и не мы, — вернуть явный интент на него. Иначе null (→ откат в браузер).
+     *
+     * resolveActivity(MATCH_DEFAULT_ONLY) уважает пользовательский выбор «Открывать по умолчанию»:
+     *  • верифицированный App Links-обработчик хоста имеет приоритет над браузером по умолчанию;
+     *  • пользовательский дефолт для домена возвращается тоже;
+     *  • если дефолт не задан — вернётся браузер по умолчанию (его отсекаем) либо ResolverActivity.
+     * Так «в первую очередь своё приложение, если оно выбрано, иначе браузер» соблюдается точно.
+     */
+    private fun resolveNativeAppIntent(context: Context, uri: Uri): Intent? {
+        val packageManager = context.packageManager
+        val realIntent = createBrowserViewIntent(uri)
+        val resolved = packageManager
+                .resolveActivity(realIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo
+                ?: return null
+        if (!resolved.isLaunchableNativeApp(context, collectBrowserPackages(context))) return null
+        Log.i(LOG_TAG, "native handler for $uri: ${resolved.packageName}/${resolved.name}")
+        return resolved.toExplicitBrowserIntent(realIntent)
+    }
+
+    /** Пакеты, которые отвечают на нейтральную браузер-пробу = настоящие браузеры (их исключаем). */
+    private fun collectBrowserPackages(context: Context): Set<String> {
+        val packageManager = context.packageManager
+        val browsers = HashSet<String>(KNOWN_BROWSER_PACKAGES)
+        for (probe in BROWSER_PROBE_URIS) {
+            val probeIntent = createBrowserViewIntent(Uri.parse(probe))
+            packageManager.queryIntentActivities(probeIntent, PackageManager.MATCH_ALL)
+                    .mapNotNull { it.activityInfo?.packageName }
+                    .forEach { browsers.add(it) }
+        }
+        return browsers
+    }
+
+    private fun ActivityInfo.isLaunchableNativeApp(context: Context, browserPackages: Set<String>): Boolean {
+        if (packageName.isNullOrEmpty()) return false
+        if (packageName == "android") return false // ResolverActivity — дефолт не выбран
+        if (name?.contains("ResolverActivity", ignoreCase = true) == true) return false
+        if (packageName == context.packageName || packageName == BASE_PACKAGE_NAME) return false
+        if (name?.startsWith("$BASE_PACKAGE_NAME.") == true) return false
+        return packageName !in browserPackages
+    }
+
     fun open(context: Context, url: String): Boolean {
         val uri = Uri.parse(url)
         val baseIntent = createBrowserViewIntent(uri)
