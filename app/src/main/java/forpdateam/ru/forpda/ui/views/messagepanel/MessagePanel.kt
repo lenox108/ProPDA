@@ -574,7 +574,13 @@ class MessagePanel(
         val previewText = if (rawMessage.isBlank()) {
             context.getString(R.string.msg_panel_preview_empty)
         } else {
-            Html.fromHtml(BbcodePreviewRenderer.renderToHtml(rawMessage), Html.FROM_HTML_MODE_LEGACY)
+            // USE_CSS_COLORS is required for the converter to resolve any colour (see HtmlToSpannedConverter
+            // .getHtmlColor): without it every `<font color>` (offtop grey, [color=…]) falls back to
+            // TRANSPARENT → opaque black → invisible on dark themes. The preview builds colours as `<font>`.
+            Html.fromHtml(
+                BbcodePreviewRenderer.renderToHtml(rawMessage),
+                Html.FROM_HTML_MODE_LEGACY or Html.FROM_HTML_OPTION_USE_CSS_COLORS,
+            )
         }
 
         val previewView = TextView(context).apply {
