@@ -700,6 +700,57 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                 .showWithStyledButtons()
     }
 
+    private fun enterSelectionMode() {
+        if (isSelectionMode) return
+        isSelectionMode = true
+        selectedMessageIds.clear()
+        applySelectionState()
+    }
+
+    private fun exitSelectionMode() {
+        if (!isSelectionMode && selectedMessageIds.isEmpty()) return
+        isSelectionMode = false
+        selectedMessageIds.clear()
+        applySelectionState()
+    }
+
+    private fun toggleMessageSelection(messageId: Int) {
+        if (!isSelectionMode) return
+        if (!selectedMessageIds.add(messageId)) selectedMessageIds.remove(messageId)
+        applySelectionState()
+    }
+
+    private fun applySelectionState() {
+        if (::messagesAdapter.isInitialized) {
+            messagesAdapter.setSelection(isSelectionMode, selectedMessageIds.toSet())
+        }
+        updateSelectionUi()
+    }
+
+    /** Toggles the normal vs. selection toolbar (like Notes multi-select) and the «Выбрано N» title. */
+    private fun updateSelectionUi() {
+        val inSelection = isSelectionMode
+        deleteMessagesMenuItem?.isVisible = !inSelection
+        if (::blackListMenuItem.isInitialized) blackListMenuItem.isVisible = !inSelection
+        if (::noteMenuItem.isInitialized) noteMenuItem.isVisible = !inSelection
+        if (::toDialogsMenuItem.isInitialized) toDialogsMenuItem.isVisible = !inSelection
+        if (::refreshMenuItem.isInitialized) refreshMenuItem.isVisible = !inSelection
+        selectionDeleteMenuItem?.isVisible = inSelection
+        selectionDeleteMenuItem?.isEnabled = inSelection && selectedMessageIds.isNotEmpty()
+        if (inSelection) {
+            setTitle(
+                    if (selectedMessageIds.isEmpty()) {
+                        getString(R.string.qms_select_messages)
+                    } else {
+                        getString(R.string.qms_selected_count, selectedMessageIds.size)
+                    }
+            )
+            setSubtitle(null)
+        } else {
+            setTitles(presenter.title.orEmpty(), presenter.nick.orEmpty())
+        }
+    }
+
     private fun plainTextOf(item: QmsChatItem.Message): String = runCatching {
         forpdateam.ru.forpda.common.Html
                 .fromHtml(item.contentHtml, forpdateam.ru.forpda.common.Html.FROM_HTML_MODE_COMPACT, null, null)
@@ -899,6 +950,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         noteMenuItem.isEnabled = enable
         toDialogsMenuItem.isEnabled = enable
         refreshMenuItem.isEnabled = enable
+        deleteMessagesMenuItem?.isEnabled = enable
     }
 
     override fun setRefreshing(isRefreshing: Boolean) {
@@ -1080,6 +1132,11 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
     override fun onBackPressed(): Boolean {
         super.onBackPressed()
+        // «Назад» сначала выходит из режима выбора сообщений (как в мультивыборе заметок).
+        if (isSelectionMode) {
+            exitSelectionMode()
+            return true
+        }
         if (::messagePanel.isInitialized && messagePanel.onBackPressed()) {
             return true
         }
