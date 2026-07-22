@@ -226,8 +226,8 @@ def main() -> None:
 
     # Full approved renders are intentional foregrounds: this is the only way
     # to keep their gradients, highlights and typography exactly unchanged.
-    light.save(RES / "drawable-nodpi/ic_launcher_foreground_art.png", optimize=True)
-    dark.save(RES / "drawable-night-nodpi/ic_launcher_foreground_art.png", optimize=True)
+    light.save(RES / "drawable-nodpi/ic_launcher_foreground_art.webp", format="WEBP", quality=90, method=6)
+    dark.save(RES / "drawable-night-nodpi/ic_launcher_foreground_art.webp", format="WEBP", quality=90, method=6)
     mono.save(RES / "drawable-nodpi/ic_launcher_monochrome_art.png", optimize=True)
     mono.save(OUT / "orange-p4da-monochrome-1080.png", optimize=True)
 
@@ -236,6 +236,16 @@ def main() -> None:
         approved(AMOLED_MASTER, size).save(RES / f"mipmap-night-{density}/ic_launcher.png", optimize=True)
 
     tinted(mono, "#D9E3FF", "#33426B").save(OUT / "orange-p4da-monet-preview-1080.png", optimize=True)
+    preview_dir = OUT / "preview-129"
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    previews = {
+        "orange-p4da-light-129.png": light,
+        "orange-p4da-amoled-129.png": dark,
+        "orange-p4da-monet-129.png": tinted(mono, "#D9E3FF", "#33426B"),
+        "orange-p4da-monochrome-129.png": tinted(mono, "#F4F4F4", "#171717"),
+    }
+    for name, image in previews.items():
+        image.resize((129, 129), Image.Resampling.LANCZOS).save(preview_dir / name, optimize=True)
     save_review(light, dark, mono)
 
 
