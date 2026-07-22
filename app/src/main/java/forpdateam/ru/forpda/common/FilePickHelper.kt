@@ -10,7 +10,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
-import io.appmetrica.analytics.AppMetrica
+import forpdateam.ru.forpda.analytics.Analytics
 import java.io.File
 import java.io.FileInputStream
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
@@ -148,7 +148,7 @@ object FilePickHelper {
             }
             RequestFile(name, mimeType ?: "", streamProvider(), fileSize, streamProvider)
         } catch (e: Exception) {
-            AppMetrica.reportError(e.message.orEmpty(), e)
+            Analytics.reportError(e.message.orEmpty(), e)
             null
         }
     }

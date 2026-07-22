@@ -173,6 +173,22 @@ android {
                 signingConfig signingConfigs.debug
             }
         }
+        store {
+            dimension "channel"
+            // store: канал публикации в Google Play (оригинальный пакет ru.forpdateam.forpda).
+            // ТОЛЬКО здесь подключается AppMetrica (см. storeImplementation ниже) — во всех
+            // остальных каналах библиотека не пакуется в APK.
+            applicationId 'ru.forpdateam.forpda'
+            // Публичный (клиентский) API-ключ AppMetrica — только для store; в defaultConfig
+            // он пуст, чтобы случайное использование в других каналах было заметно в логах.
+            buildConfigField "String", 'APPMETRICA_API_KEY', '"a94d9236-cdf3-4a5e-af30-d6dbffaea362"'
+            // Оригинальный пакет Play подписывается upstream-ключом (keystore.properties).
+            if (hasUpstreamReleaseKeystore) {
+                signingConfig signingConfigs.upstreamRelease
+            } else {
+                signingConfig signingConfigs.debug
+            }
+        }
     }
 
     buildFeatures {
@@ -356,7 +372,10 @@ dependencies {
     implementation libs.navigation.cicerone
     implementation libs.adapterdelegates
 
-    implementation libs.appmetrica
+    // Аналитика подключается ТОЛЬКО во флейворе store (Google Play). В stable/parallel
+    // библиотека не попадает в APK — код в main работает через фасад analytics.Analytics,
+    // реальная реализация живёт в app/src/store, no-op — в app/src/stable.
+    storeImplementation libs.appmetrica
 
     implementation libs.roundedImageview
     implementation libs.timber
