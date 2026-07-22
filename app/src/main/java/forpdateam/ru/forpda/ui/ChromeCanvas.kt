@@ -28,13 +28,15 @@ import forpdateam.ru.forpda.common.getColorFromAttr
  * уже несёт оттенок обоев (lStar-пин поверх системного слота, 93aacd5), и
  * полотно обязано оставаться ТЕМНЕЕ карточек — примесь контейнера это ломала.
  *
- * Гейт — атрибут-флаг [R.attr.chrome_canvas_dynamic], который ставит ТОЛЬКО
+ * Гейт — атрибут-флаг [R.attr.chrome_canvas_dynamic], который ставят
  * `ThemeOverlay.ForPDA.MaterialYouSurface` (Material You, палитра SYSTEM,
- * светлая/тёмная). Everywhere else (15 статических палитр, AMOLED, MY off,
- * API < 31) флаг не разрешается → [chromeCanvasColor] возвращает ровно
- * `fallbackAttr`, т.е. в точности прежний цвет — статика не может измениться
- * by construction. AMOLED под MY идёт по ACCENT_ONLY-пути без Surface-оверлея
- * и сохраняет чистый #000000 (смысл режима — минимум свечения).
+ * светлая/тёмная) И `ThemeOverlay.ForPDA.MaterialYouAmoled` (AMOLED под MY).
+ * Everywhere else (15 статических палитр, MY off, API < 31) флаг не разрешается
+ * → [chromeCanvasColor] возвращает ровно `fallbackAttr`, т.е. в точности прежний
+ * цвет — статика не может измениться by construction. Под AMOLED дополнительно
+ * ставится [R.attr.chrome_canvas_amoled] → полотно тонируется скромной примесью
+ * ([AMOLED_BLEND]) поверх чёрной базы, вытягивая оттенок обоев в шапку/низ/фон,
+ * тогда как карточки контента остаются чёрными (они на amoled_card_background).
  *
  * Почему флаг в теме, а не чтение префов: тема — единственный источник правды о
  * том, какие оверлеи РЕАЛЬНО наложились на активити (см. MaterialYouApplier);
@@ -58,9 +60,26 @@ object ChromeCanvas {
     const val LIGHT_BLEND = 0.42f
     const val DARK_BLEND = 0f
 
-    fun isDynamic(context: Context): Boolean {
+    /**
+     * Доля примеси `colorPrimaryContainer` в ЧЁРНУЮ AMOLED-базу (#000000).
+     * Здесь база не несёт никакого оттенка сама (в отличие от тёмного DarkFloor,
+     * где [DARK_BLEND] = 0), поэтому единственный способ вытянуть тон обоев в
+     * полотно (шапка / нижний таббар / фон страниц / пагинация) — подмешать
+     * контейнер. Держим примесь скромной, чтобы полотно оставалось «почти
+     * чёрным» (смысл AMOLED — минимум свечения): на акценте #B6C6ED контейнер
+     * тона ~30 даёт очень тёмный синеватый тон. Карточки контента не затрагивает
+     * — они на amoled_card_background (#000000), а не на полотне.
+     */
+    const val AMOLED_BLEND = 0.22f
+
+    fun isDynamic(context: Context): Boolean = readBoolFlag(context, R.attr.chrome_canvas_dynamic)
+
+    /** true, если полотно тонируется поверх чисто чёрной AMOLED-базы (см. [AMOLED_BLEND]). */
+    fun isAmoledCanvas(context: Context): Boolean = readBoolFlag(context, R.attr.chrome_canvas_amoled)
+
+    private fun readBoolFlag(context: Context, attr: Int): Boolean {
         val tv = TypedValue()
-        return context.theme.resolveAttribute(R.attr.chrome_canvas_dynamic, tv, true) &&
+        return context.theme.resolveAttribute(attr, tv, true) &&
                 tv.type >= TypedValue.TYPE_FIRST_INT && tv.type <= TypedValue.TYPE_LAST_INT &&
                 tv.data != 0
     }
@@ -77,7 +96,11 @@ object ChromeCanvas {
                 com.google.android.material.R.attr.colorSurfaceContainerLowest)
         val tint = context.getColorFromAttr(
                 com.google.android.material.R.attr.colorPrimaryContainer)
-        val fraction = if (ColorUtils.calculateLuminance(base) > 0.5) LIGHT_BLEND else DARK_BLEND
+        val fraction = when {
+            isAmoledCanvas(context) -> AMOLED_BLEND
+            ColorUtils.calculateLuminance(base) > 0.5 -> LIGHT_BLEND
+            else -> DARK_BLEND
+        }
         val result = ColorUtils.blendARGB(base, tint, fraction)
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             timber.log.Timber.tag("ChromeCanvas").d(

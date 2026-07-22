@@ -18,7 +18,7 @@ import org.robolectric.annotation.Config
  * Контракт [ChromeCanvas] — единого источника цвета «полотна» хрома
  * (статус-бар / шапка / фон страниц / нижний таббар).
  *
- * 1. БЕЗ Material You-оверлея (все статические палитры, AMOLED, MY off) флаг
+ * 1. БЕЗ Material You-оверлея (все статические палитры, MY off) флаг
  *    `chrome_canvas_dynamic` не разрешается → [ChromeCanvas.color] возвращает
  *    В ТОЧНОСТИ цвет fallback-атрибута. Это гарантия «статика не изменилась»
  *    by construction — регрессия здесь означала бы перекраску всех 15 палитр.
@@ -27,6 +27,11 @@ import org.robolectric.annotation.Config
  *    SYSTEM light/dark из MaterialYouApplier) флаг = true → полотно =
  *    blendARGB(colorSurfaceContainerLowest, colorPrimaryContainer, k) —
  *    детерминированная формула тонирования обоями.
+ *
+ * 3. С наложенным [R.style.ThemeOverlay_ForPDA_MaterialYouAmoled] (путь AMOLED)
+ *    флаги dynamic И amoled = true → полотно тонируется примесью
+ *    [ChromeCanvas.AMOLED_BLEND] поверх чёрной базы и ОТЛИЧАЕТСЯ от чёрного
+ *    (в AMOLED раньше из обоев менялся только акцент — жалоба).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = android.app.Application::class)
@@ -83,6 +88,40 @@ class ChromeCanvasTest {
             // бленд вообще включён.
             assertNotEquals(
                     "under MY the canvas must actually differ from the untinted base",
+                    base,
+                    actual,
+            )
+        }
+    }
+
+    @Test
+    fun `MaterialYouAmoled overlay - canvas is tinted above black, not pure black`() {
+        val activity = themedActivity()
+        activity.theme.applyStyle(R.style.ThemeOverlay_ForPDA_MaterialYouAmoled, true)
+        assertTrue(
+                "MaterialYouAmoled overlay must set chrome_canvas_dynamic=true",
+                ChromeCanvas.isDynamic(activity),
+        )
+        assertTrue(
+                "MaterialYouAmoled overlay must set chrome_canvas_amoled=true",
+                ChromeCanvas.isAmoledCanvas(activity),
+        )
+        val base = activity.getColorFromAttr(
+                com.google.android.material.R.attr.colorSurfaceContainerLowest)
+        val tint = activity.getColorFromAttr(
+                com.google.android.material.R.attr.colorPrimaryContainer)
+        val expected = ColorUtils.blendARGB(base, tint, ChromeCanvas.AMOLED_BLEND)
+        val actual = ChromeCanvas.color(activity, R.attr.main_toolbar_accent_surface)
+        assertEquals(
+                "AMOLED canvas must use the AMOLED_BLEND fraction over the black base",
+                expected,
+                actual,
+        )
+        // Смысл фикса: хром больше НЕ равен чистой чёрной базе (если контейнер
+        // обоев вообще отличается от базы — на реальных обоях так и есть).
+        if (tint != base) {
+            assertNotEquals(
+                    "AMOLED canvas must differ from the pure-black base once tinted",
                     base,
                     actual,
             )
