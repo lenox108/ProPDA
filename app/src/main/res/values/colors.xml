@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ProPDA launcher icon: warm ivory surface and a restrained graphite mark. -->
-    <color name="ic_launcher_background">#FFF4F5F7</color>
-    <color name="ic_launcher_foreground">#FF17191D</color>
-    <color name="ic_launcher_node_fill">#FFFFFFFF</color>
-    <color name="ic_launcher_pro">#FFDED8CB</color>
-    <!-- Preserved pre-redesign launcher icon; switch Manifest to
-         @mipmap/ic_launcher_original for an instant rollback. -->
-    <color name="ic_launcher_background_original">#FFFFFFFF</color>
+    <!-- Orange P4DA launcher, light theme. -->
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+    <color name="ic_launcher_foreground">#FF24201E</color>
+    <color name="ic_launcher_node_fill">#FF202020</color>
+    <color name="ic_launcher_pro">#FFFF6A00</color>
     <color name="white">#ffffff</color>
     <!--
         Toolbar title color, выбирается автоматически по day/night.

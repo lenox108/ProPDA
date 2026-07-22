@@ -1,6 +1,3 @@
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient
-        android:angle="270"
-        android:startColor="#FF17191D"
-        android:endColor="#FF000000" />
+    <solid android:color="@color/ic_launcher_background" />
 </shape>
