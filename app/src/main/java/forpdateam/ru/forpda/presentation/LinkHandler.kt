@@ -47,7 +47,10 @@ class LinkHandler(
 
     private fun externalIntent(url: String) {
         runCatching {
-            systemLinkHandler.handle(url)
+            // Обычный тап по внешней ссылке: сначала пытаемся открыть в назначенном нативном
+            // приложении (например, ali.click → AliExpress), затем — в браузере. Явный пункт
+            // «Открыть в браузере» по-прежнему зовёт systemLinkHandler.handle() напрямую.
+            systemLinkHandler.openExternal(url)
         }.onFailure { e ->
             if (e is ActivityNotFoundException) {
                 Timber.w("No activity found for external URL")
