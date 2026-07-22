@@ -61,12 +61,30 @@ class FunnyContent(context: Context) : RelativeLayout(context) {
             setText(textResId)
             setOnClickListener(listener)
         }
-        val params = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-            addRule(BELOW, binding.funnyDesc.id)
-            addRule(CENTER_HORIZONTAL)
-            topMargin = resources.getDimensionPixelSize(R.dimen.dp24)
+        binding.funnyActions.addView(button)
+    }
+
+    /** Compact circular refresh action for error placeholders; it stays directly below the message. */
+    fun addIconAction(
+        @DrawableRes iconResId: Int,
+        @StringRes contentDescriptionResId: Int,
+        listener: View.OnClickListener,
+    ): FunnyContent = apply {
+        val size = resources.getDimensionPixelSize(R.dimen.dp48)
+        val button = MaterialButton(context, null, MaterialR.attr.materialButtonStyle).apply {
+            icon = AppCompatResources.getDrawable(context, iconResId)
+            iconPadding = 0
+            text = null
+            contentDescription = context.getString(contentDescriptionResId)
+            cornerRadius = size / 2
+            insetTop = 0
+            insetBottom = 0
+            minWidth = size
+            minHeight = size
+            setPadding(0, 0, 0, 0)
+            setOnClickListener(listener)
         }
-        addView(button, params)
+        binding.funnyActions.addView(button, android.widget.LinearLayout.LayoutParams(size, size))
     }
 
     /*
