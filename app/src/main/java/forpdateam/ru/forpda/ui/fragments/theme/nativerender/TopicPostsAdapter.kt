@@ -494,9 +494,10 @@ class TopicPostsAdapter(
         private fun applyDensity() {
             val dm = itemView.resources.displayMetrics
             // Steps spread wide enough to be clearly distinguishable (user: «не вижу разницы между
-            // компактной и супер компактной»): SUPER packs cards flush (gap 0, minimal inner pad).
+            // компактной и супер компактной»). SUPER keeps a small 4dp total gap between adjacent
+            // cards: tighter than COMPACT's 6dp, but enough to stop their rounded surfaces merging.
             val (vPadDp, gapDp) = when (settings.density) {
-                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT -> 1f to 0f
+                forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT -> 1f to 2f
                 forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMPACT -> 6f to 3f
                 forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMFORTABLE -> 12f to 5f
             }
@@ -528,6 +529,19 @@ class TopicPostsAdapter(
             menuInline.visibility = if (modern) View.VISIBLE else View.GONE
             val superCompact =
                     settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
+            // In the modern header the 24dp glyph is centred inside a narrow 30dp view. In COMPACT
+            // density that made the visible dots sit noticeably closer to the card edge than in the
+            // comfortable header. Keep the compact layout tight vertically, but restore the same
+            // optical right inset for the post menu.
+            (menuInline.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+                val end =
+                        if (settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMPACT) {
+                            (4 * dm.density).toInt()
+                        } else {
+                            0
+                        }
+                if (lp.marginEnd != end) { lp.marginEnd = end; menuInline.layoutParams = lp }
+            }
             val avatarPx = ((if (superCompact) 32f else 48f) * dm.density).toInt()
             avatar.layoutParams = avatar.layoutParams.apply { width = avatarPx; height = avatarPx }
             (header as? LinearLayout)?.gravity =
