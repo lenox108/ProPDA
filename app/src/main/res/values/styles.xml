@@ -169,11 +169,12 @@
             Маркер динамического полотна хрома. Сами цвета полотна вычисляются в
             рантайме (ChromeCanvas.kt: база Lowest + примесь динамического
             colorPrimaryContainer) — в XML их положить нельзя, поэтому оверлей
-            ставит только ФЛАГ. Ставится ТОЛЬКО здесь (SURFACE-режим = SYSTEM
+            ставит только ФЛАГ. Ставится здесь (SURFACE-режим = SYSTEM
             light/dark): DarkFloor накладывается ПОВЕРХ и флаг не снимает (тёмная
-            получает тонированное полотно поверх статичной базы #121212);
-            MaterialYouAmoled идёт по ACCENT_ONLY-пути БЕЗ этого оверлея — AMOLED
-            остаётся чисто чёрным; статические палитры атрибут не задают вовсе.
+            получает тонированное полотно поверх статичной базы #121212).
+            MaterialYouAmoled ставит этот же флаг ПЛЮС chrome_canvas_amoled
+            (полотно тонируется поверх чёрной базы, карточки остаются чёрными).
+            Статические палитры атрибут не задают вовсе.
         -->
         <item name="chrome_canvas_dynamic">true</item>
 
@@ -243,6 +244,19 @@
         <item name="colorSurfaceContainer">@color/amoled_card_background</item>
         <item name="colorSurfaceContainerHigh">@color/amoled_card_background</item>
         <item name="colorSurfaceContainerHighest">@color/amoled_card_background</item>
+        <!--
+            Полотно хрома (шапка / нижний таббар / фон страниц / ряды пагинации)
+            под Material You тонируется оттенком обоев ПОВЕРХ чёрной базы: раньше
+            AMOLED шёл БЕЗ этого флага и весь хром оставался #000000 — из обоев
+            менялся только акцент (жалоба «в AMOLED табы/тулбары не наследуют MY»).
+            Теперь ChromeCanvas подмешивает colorPrimaryContainer в чёрный
+            (ChromeCanvas.AMOLED_BLEND). КАРТОЧКИ КОНТЕНТА при этом остаются
+            чёрными — они на amoled_card_background (пины colorSurface* выше), а
+            не на полотне. chrome_canvas_amoled отличает эту чёрную базу от
+            тёмного DarkFloor (где база уже тонирована и blend обязан быть 0).
+        -->
+        <item name="chrome_canvas_dynamic">true</item>
+        <item name="chrome_canvas_amoled">true</item>
     </style>
 
     <!--

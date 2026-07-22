@@ -25,10 +25,17 @@
     <!-- Primary section top toolbar plate: soft accent-tinted surface, separate from popups/dialogs/bottom chrome. -->
     <attr name="main_toolbar_accent_surface" extension="reference" format="color" />
     <!-- Material You: маркер «полотно хрома (шапка/низ/фон страниц/статус-бар) вычисляется
-         динамически из обоев». Ставится ТОЛЬКО оверлеем ThemeOverlay.ForPDA.MaterialYouSurface
-         (SYSTEM light/dark); статические палитры и AMOLED атрибут не задают (unresolved => false),
-         поэтому их полотно математически не может измениться. Читается через ChromeCanvas.kt. -->
+         динамически из обоев». Ставят оверлеи ThemeOverlay.ForPDA.MaterialYouSurface
+         (SYSTEM light/dark) И ThemeOverlay.ForPDA.MaterialYouAmoled (AMOLED); статические
+         палитры атрибут не задают (unresolved => false), поэтому их полотно математически
+         не может измениться. Читается через ChromeCanvas.kt. -->
     <attr name="chrome_canvas_dynamic" format="boolean" />
+    <!-- Material You: маркер «полотно тонируется поверх ЧИСТО ЧЁРНОЙ AMOLED-базы».
+         Ставит ТОЛЬКО ThemeOverlay.ForPDA.MaterialYouAmoled. Отличает AMOLED (база
+         #000000, нужен ненулевой blend чтобы вытянуть оттенок обоев в шапку/низ/фон,
+         карточки остаются чёрными) от тёмного DarkFloor (база уже несёт оттенок обоев,
+         blend обязан быть 0 — см. ChromeCanvas.DARK_BLEND). Читается через ChromeCanvas.kt. -->
+    <attr name="chrome_canvas_amoled" format="boolean" />
     <!-- Optional outline for primary section top toolbar plates; keeps dark/AMOLED rounded corners readable. -->
     <attr name="main_toolbar_stroke_width" format="dimension" />
     <attr name="main_toolbar_stroke_color" extension="reference" format="color" />
