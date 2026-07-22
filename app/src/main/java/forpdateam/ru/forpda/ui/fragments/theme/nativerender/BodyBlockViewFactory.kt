@@ -56,13 +56,6 @@ class BodyBlockViewFactory(
         fun onQuoteSelection(scopeId: Int, selectedText: String) = Unit
 
         /**
-         * The user long-pressed a body and chose «Удалить сообщение» from the selection toolbar.
-         * Enabled only for scopes with [RenderScope.allowDeleteSelection] (QMS chat bubbles). Text
-         * stays selectable (copy/share still work); this adds a delete action next to «Цитировать».
-         */
-        fun onDeleteScope(scopeId: Int) = Unit
-
-        /**
          * Long-press on a downloadable file link → the host shows a chooser
          * (Скачать / Открыть в браузере).
          */
@@ -97,8 +90,13 @@ class BodyBlockViewFactory(
     class RenderScope(
             val scopeId: Int,
             val allowQuoteSelection: Boolean = false,
-            /** Adds «Удалить сообщение» to the text-selection toolbar (QMS chat only). */
-            val allowDeleteSelection: Boolean = false,
+            /**
+             * Whether body text auto-selects on long-press. `true` for forum posts (long-press → native
+             * text selection + «Цитировать»). QMS chat bubbles pass `false` so a long-press falls through
+             * to the bubble's own Telegram-style actions menu instead of the awkward native selection;
+             * the menu's «Выделить текст» re-enables selection on demand.
+             */
+            val selectableText: Boolean = true,
     ) {
         var spoilerSeq: Int = 0
 
@@ -238,7 +236,16 @@ class BodyBlockViewFactory(
                             LinearLayout.LayoutParams.MATCH_PARENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT,
                     )
-            lp.topMargin = if (index == 0) 0 else spacingPx
+            // A run of download files (Скачать: … .zip / …apk / …) stacks as one tight Telegram-style
+            // group: consecutive FileAttachment rows hug with a hairline gap instead of the full block
+            // spacing, so a multi-file post reads as a single compact block rather than sprawling.
+            val tightToPrev = index > 0 &&
+                    block is BodyBlock.FileAttachment && blocks[index - 1] is BodyBlock.FileAttachment
+            lp.topMargin = when {
+                index == 0 -> 0
+                tightToPrev -> (2 * ctx.resources.displayMetrics.density).toInt()
+                else -> spacingPx
+            }
             child.layoutParams = lp
             container.addView(child)
         }
@@ -640,34 +647,82 @@ class BodyBlockViewFactory(
     }
 
     /** Native file attachment chip: a modern file glyph + filename on a panel, tap → download via the app. */
+    /**
+     * A downloadable file, drawn as ONE compact Telegram-style row: a circular accent badge with a white
+     * file glyph, then the filename over a muted «size · скачиваний» subtitle. Replaces the old full-width
+     * name-only chip that left the size/count to spill onto separate body lines below it — «не аккуратно и
+     * размашисто» (user). The size/count are folded onto the block by [PostBodyRenderer.foldAttachmentMeta];
+     * when both are absent the row is a single name line. Consecutive files are grouped tightly by the
+     * spacing rule in [renderBlocksInto].
+     */
     private fun fileAttachmentView(ctx: Context, block: BodyBlock.FileAttachment): View {
         val dm = ctx.resources.displayMetrics
-        val pad = (10 * dm.density).toInt()
+        fun dp(v: Float): Int = (v * dm.density).toInt()
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-        return TextView(ctx).apply {
-            text = block.name
-            textSize = scaledSp(14f)
-            setTextColor(accent)
-            // Modern vector file icon (replaces the old 📎 emoji), tinted to match the label and sized to the text.
-            val iconPx = (20 * dm.density).toInt()
-            val icon = androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.ic_attach_file_modern)
-                    ?.mutate()?.apply { setBounds(0, 0, iconPx, iconPx) }
-            setCompoundDrawablesRelative(icon, null, null, null)
-            compoundDrawablePadding = (8 * dm.density).toInt()
-            androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(this, android.content.res.ColorStateList.valueOf(accent))
-            setPadding(pad, pad, pad, pad)
+        val muted = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(8f), dp(8f), dp(12f), dp(8f))
             background = m3BlockBackground(ctx)
             clipToOutline = true
             layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = (blockSpacingDp * dm.density).toInt() }
+            isClickable = true
             setOnClickListener { callbacks.onDownloadLinkTap(block.url, block.name) }
             setOnLongClickListener {
                 callbacks.onDownloadLinkLongPress(block.url, block.name)
                 true
             }
         }
+
+        // Circular accent badge with a contrast-picked file glyph (white on a dark accent, black on a light
+        // one — luminance-based so it stays legible on any palette/AMOLED accent, not tied to colorOnPrimary).
+        val badgePx = dp(38f)
+        val iconInset = dp(9f)
+        val onAccent = if (androidx.core.graphics.ColorUtils.calculateLuminance(accent) > 0.5) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+        val badge = ImageView(ctx).apply {
+            setImageDrawable(androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.ic_attach_file_modern)?.mutate())
+            imageTintList = android.content.res.ColorStateList.valueOf(onAccent)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(iconInset, iconInset, iconInset, iconInset)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(accent)
+            }
+            layoutParams = LinearLayout.LayoutParams(badgePx, badgePx)
+        }
+
+        val texts = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { marginStart = dp(12f) }
+        }
+        texts.addView(TextView(ctx).apply {
+            text = block.name
+            textSize = scaledSp(14f)
+            setTextColor(accent)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        val subtitle = listOfNotNull(block.size, block.desc).joinToString("  ·  ")
+        if (subtitle.isNotBlank()) {
+            texts.addView(TextView(ctx).apply {
+                text = subtitle
+                textSize = scaledSp(12f)
+                setTextColor(muted)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, dp(1f), 0, 0)
+            })
+        }
+
+        row.addView(badge)
+        row.addView(texts)
+        return row
     }
 
     /**
@@ -907,28 +962,37 @@ class BodyBlockViewFactory(
             setLineSpacing(0f, 1.1f)
             val hasLinks = text is Spanned &&
                     text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
-            // Selectable in BOTH cases: native Copy/Share plus a custom «Цитировать» that wraps the
-            // selection in a [quote …] for the reply editor (§4 selection→quote). Previously a block
-            // with ANY link (e.g. a clickable @mention nick) fell into a link-only branch and could
-            // not be selected/copied at all — long-press did nothing.
-            setTextIsSelectable(true)
-            installQuoteSelectionAction(this, scope)
-            installDeleteSelectionAction(this, scope)
-            if (hasLinks) {
-                // A selection-aware movement method: keeps the ArrowKeyMovementMethod selection
-                // behaviour that setTextIsSelectable installs (long-press → ActionMode, drag →
-                // extend) AND routes link tap/long-press in-app. Must be set AFTER
-                // setTextIsSelectable, which itself installs ArrowKeyMovementMethod.
-                movementMethod = SelectableLinkMovementMethod(object : LinkMovementMethod.ClickListener {
-                    override fun onClick(url: String): Boolean {
-                        callbacks.onContentLinkTap(scope.scopeId, url)
-                        return linkHandler.handle(url, null)
-                    }
-                    override fun onLongClick(url: String): Boolean {
-                        callbacks.onLinkLongClick(url)
-                        return true
-                    }
-                })
+            val linkClicks = object : LinkMovementMethod.ClickListener {
+                override fun onClick(url: String): Boolean {
+                    callbacks.onContentLinkTap(scope.scopeId, url)
+                    return linkHandler.handle(url, null)
+                }
+                override fun onLongClick(url: String): Boolean {
+                    callbacks.onLinkLongClick(url)
+                    return true
+                }
+            }
+            if (scope.selectableText) {
+                // Selectable: native Copy/Share plus a custom «Цитировать» that wraps the selection in a
+                // [quote …] for the reply editor (§4 selection→quote). Previously a block with ANY link
+                // (e.g. a clickable @mention nick) fell into a link-only branch and could not be
+                // selected/copied at all — long-press did nothing.
+                setTextIsSelectable(true)
+                installQuoteSelectionAction(this, scope)
+                if (hasLinks) {
+                    // A selection-aware movement method: keeps the ArrowKeyMovementMethod selection
+                    // behaviour that setTextIsSelectable installs AND routes link tap/long-press in-app.
+                    movementMethod = SelectableLinkMovementMethod(linkClicks)
+                }
+            } else {
+                // Non-selectable (QMS chat bubbles): a selectable TextView claims the long-press for its
+                // text-selection ActionMode (the awkward «текст выделяется + Копировать рядом с Удалить»).
+                // Here the long-press falls through to the bubble's own Telegram-style actions menu
+                // (Копировать / Выделить текст / Удалить); «Выделить текст» re-enables selection on demand.
+                // Link tap/long-press still route in-app via the plain link-only movement.
+                if (hasLinks) {
+                    movementMethod = LinkMovementMethod(linkClicks)
+                }
             }
         }
     }
@@ -1017,6 +1081,23 @@ class BodyBlockViewFactory(
         return c
     }
 
+    /**
+     * True if the selection toolbar carries framework «smart text» (assist) actions — e.g. the
+     * «Открыть» item Android injects when the selection is a URL/email/phone. Those items dispatch
+     * through a click-listener the framework keeps keyed by the ORIGINAL MenuItem instance
+     * (`Editor.mAssistClickHandlers`), NOT through a plain `intent`. So a menu.clear()+re-add
+     * reorder (used to pull «Цитировать»/«Удалить» to the front on MIUI) silently strips their
+     * handler and the item becomes a dead no-op. When such items are present we must NOT rebuild
+     * the menu — our own item still shows via SHOW_AS_ACTION_ALWAYS, just not forced to the front.
+     */
+    private fun menuHasAssistActions(menu: android.view.Menu): Boolean {
+        for (i in 0 until menu.size()) {
+            val mi = menu.getItem(i)
+            if (mi.groupId == android.R.id.textAssist || mi.itemId == android.R.id.textAssist) return true
+        }
+        return false
+    }
+
     /** Adds a «Цитировать» item to the text-selection action bar → quotes the selection into the editor. */
     private fun installQuoteSelectionAction(tv: TextView, scope: RenderScope) {
         if (!scope.allowQuoteSelection) return
@@ -1044,6 +1125,9 @@ class BodyBlockViewFactory(
              */
             fun reorderQuoteFirst(menu: android.view.Menu): Boolean {
                 if (menu.size() > 0 && menu.getItem(0).itemId == QUOTE_MENU_ID) return false
+                // Never rebuild a menu that holds framework smart-text actions (e.g. «Открыть» for a
+                // selected URL): the rebuild would strip their click handler and kill the action.
+                if (menuHasAssistActions(menu)) return ensureQuoteItem(menu)
                 return try {
                     val others = ArrayList<Array<Any?>>(menu.size())
                     for (i in 0 until menu.size()) {
@@ -1077,64 +1161,6 @@ class BodyBlockViewFactory(
                     val s = tv.selectionStart.coerceAtLeast(0)
                     val e = tv.selectionEnd.coerceAtLeast(0)
                     if (e > s) callbacks.onQuoteSelection(scope.scopeId, tv.text.subSequence(s, e).toString())
-                    mode.finish()
-                    return true
-                }
-                return false
-            }
-            override fun onDestroyActionMode(mode: android.view.ActionMode) {}
-        }
-    }
-
-    /**
-     * Adds «Удалить сообщение» to the text-selection toolbar for QMS chat bubbles, while keeping the
-     * text selectable (native Copy/Share still work). Same MIUI/HyperOS hardening as «Цитировать»:
-     * forced to the primary row and pulled to the front, so on Xiaomi it does NOT get buried in the
-     * floating toolbar's «⋮» overflow (where the earlier version was invisible). Skipped when the scope
-     * already allows quoting, so the quote callback keeps the single ActionMode slot for forum posts.
-     */
-    private fun installDeleteSelectionAction(tv: TextView, scope: RenderScope) {
-        if (!scope.allowDeleteSelection || scope.allowQuoteSelection) return
-        tv.customSelectionActionModeCallback = object : android.view.ActionMode.Callback {
-            fun addDeleteItem(menu: android.view.Menu) {
-                menu.add(0, DELETE_MENU_ID, 0, "Удалить сообщение")
-                        .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-            }
-            fun ensureDeleteItem(menu: android.view.Menu): Boolean {
-                if (menu.findItem(DELETE_MENU_ID) != null) return false
-                addDeleteItem(menu)
-                return true
-            }
-            fun reorderDeleteFirst(menu: android.view.Menu): Boolean {
-                if (menu.size() > 0 && menu.getItem(0).itemId == DELETE_MENU_ID) return false
-                return try {
-                    val others = ArrayList<Array<Any?>>(menu.size())
-                    for (i in 0 until menu.size()) {
-                        val mi = menu.getItem(i)
-                        if (mi.itemId == DELETE_MENU_ID) continue
-                        others.add(arrayOf(mi.groupId, mi.itemId, mi.order, mi.title, mi.intent))
-                    }
-                    menu.clear()
-                    addDeleteItem(menu)
-                    for (o in others) {
-                        val re = menu.add(o[0] as Int, o[1] as Int, o[2] as Int, o[3] as CharSequence?)
-                                .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
-                        (o[4] as? android.content.Intent)?.let { re.intent = it }
-                    }
-                    true
-                } catch (t: Throwable) {
-                    ensureDeleteItem(menu)
-                }
-            }
-            override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
-                ensureDeleteItem(menu)
-                return true
-            }
-            override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) =
-                    reorderDeleteFirst(menu)
-            override fun onActionItemClicked(mode: android.view.ActionMode, menuItem: android.view.MenuItem): Boolean {
-                if (menuItem.itemId == DELETE_MENU_ID) {
-                    callbacks.onDeleteScope(scope.scopeId)
                     mode.finish()
                     return true
                 }
@@ -1266,7 +1292,6 @@ class BodyBlockViewFactory(
         const val BUTTON_GIF_HEIGHT_DP = 40f
         const val SMILE_SIZE_SP = 18f
         const val QUOTE_MENU_ID = 0x71_0716
-        const val DELETE_MENU_ID = 0x71_0717
 
         // Below this WCAG contrast ratio against the reading surface, an inline server text colour is
         // treated as invisible and dropped so the text falls back to colorOnSurface. ~2.5 keeps readable

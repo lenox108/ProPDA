@@ -147,6 +147,12 @@ class PostBodyRendererTest {
         val file = blocks.filterIsInstance<BodyBlock.FileAttachment>().single()
         assertEquals("firmware.zip", file.name)
         assertTrue(file.url.contains("/forum/dl/post/"))
+        // The «( 12,3 МБ )» size and «.desc» download-count siblings are folded onto the chip (so the view
+        // draws one compact row) and no longer leak into a separate Text block below it.
+        assertEquals("12,3 МБ", file.size)
+        assertEquals("скачиваний: 421", file.desc)
+        val leakedSize = blocks.filterIsInstance<BodyBlock.Text>().any { it.html.contains("МБ") }
+        assertTrue("size must not remain as a separate text block", !leakedSize)
     }
 
     @Test
@@ -188,9 +194,33 @@ class PostBodyRendererTest {
         val blocks = renderer.render(html)
         val chip = blocks.filterIsInstance<BodyBlock.FileAttachment>().single()
         assertEquals("4PDA-1.pdf", chip.name)
+        assertEquals("size folded onto the chip", "1.34 МБ", chip.size)
         val img = blocks.filterIsInstance<BodyBlock.Image>().single()
         assertEquals(glyph, img.imageUrl)
         assertTrue("mime glyph flagged attachmentButton", img.attachmentButton)
+    }
+
+    @Test
+    fun attachmentSize_foldedButProseAfterItSurvives() {
+        // Only the leading «( N МБ )» is folded onto the chip; prose that follows in the SAME text node
+        // («— смотрите инструкцию») must remain as body text, not be swallowed with the size.
+        val html = "<a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/9/rom.zip\">rom.zip</a>" +
+                " (188.33 МБ) — смотрите инструкцию ниже"
+        val blocks = renderer.render(html)
+        val chip = blocks.filterIsInstance<BodyBlock.FileAttachment>().single()
+        assertEquals("188.33 МБ", chip.size)
+        val prose = blocks.filterIsInstance<BodyBlock.Text>().joinToString(" ") { it.html }
+        assertTrue("trailing prose preserved", prose.contains("смотрите инструкцию"))
+        assertTrue("folded size not duplicated in prose", !prose.contains("188.33"))
+    }
+
+    @Test
+    fun midSentenceParens_notMistakenForSize() {
+        // A «(…)» that is NOT a size and NOT at the start of the following text must be left untouched.
+        val html = "<a class=\"ipb-attach attach-file\" href=\"https://4pda.to/forum/dl/post/9/rom.zip\">rom.zip</a>" +
+                " это прошивка (стабильная версия)"
+        val chip = renderer.render(html).filterIsInstance<BodyBlock.FileAttachment>().single()
+        assertEquals(null, chip.size)
     }
 
     @Test

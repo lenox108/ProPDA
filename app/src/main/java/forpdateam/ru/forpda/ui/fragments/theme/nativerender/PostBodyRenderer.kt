@@ -58,6 +58,7 @@ class PostBodyRenderer {
         // <style> carries body content, so strip both up-front before segmentation.
         body.select("script, style").forEach { it.remove() }
         normalizeOfftopFonts(body)
+        foldAttachmentMeta(body)
         serviceIconSrcs = body.select("img").asSequence()
                 .filter { it.attr("alt").trim() == "*" }
                 .map { it.attr("src").trim() }
@@ -95,6 +96,54 @@ class PostBodyRenderer {
             val small = org.jsoup.nodes.Element("small")
             el.replaceWith(small)
             small.appendChild(el)
+        }
+    }
+
+    /**
+     * 4pda renders a download link as `…<a class="ipb-attach attach-file">name.zip</a>&nbsp;( 12,3 МБ )
+     * <span class="desc">скачиваний: 421</span><br>`. The size and download-count live in SIBLING
+     * nodes, so natively they land in a separate [BodyBlock.Text] BELOW the chip — the name, size and
+     * count spread across three stacked lines («не аккуратно и размашисто», user report). Fold that
+     * metadata INTO the anchor as data-attrs the chip reads, and REMOVE the consumed siblings so the
+     * view draws one compact Telegram-style row. Runs on the whole body BEFORE segmentation, so the
+     * child-list mutation never races the [renderNodes] iteration.
+     *
+     * Conservative on both edges: only a size at the very START of the following text is consumed (any
+     * prose before it means the "(…)" is not this file's size and is left alone); if prose FOLLOWS the
+     * size in the same text node, only the size substring is stripped and the prose survives.
+     */
+    private fun foldAttachmentMeta(root: Element) {
+        for (link in root.select("a.ipb-attach.attach-file, a.ipb-attach:not(.attach-img):not(.attach-image)")) {
+            var size: String? = null
+            var desc: String? = null
+            var sib = link.nextSibling()
+            while (sib != null) {
+                val next = sib.nextSibling()
+                when {
+                    sib is TextNode -> {
+                        if (sib.isBlank) { sib.remove(); sib = next; continue }
+                        val raw = sib.wholeText
+                        val m = ATTACH_SIZE.find(raw)
+                        if (size == null && m != null && raw.substring(0, m.range.first).isBlank()) {
+                            size = m.groupValues[1].replace(Regex("\\s+"), " ").trim()
+                            val rest = raw.substring(m.range.last + 1)
+                            if (rest.isBlank()) { sib.remove() } else { sib.text(rest); break }
+                            sib = next
+                            continue
+                        }
+                        break // real prose — stop, leave it as body text
+                    }
+                    sib is Element && sib.hasClass("desc") -> {
+                        desc = sib.text().trim().ifBlank { null }
+                        sib.remove()
+                        sib = next
+                        continue
+                    }
+                    else -> break // <br>, another block, etc.
+                }
+            }
+            if (size != null) link.attr(ATTACH_SIZE_ATTR, size)
+            if (desc != null) link.attr(ATTACH_DESC_ATTR, desc)
         }
     }
 
@@ -449,7 +498,15 @@ class PostBodyRenderer {
                     )
                 )
             }
-            out.add(BodyBlock.FileAttachment(name = link.text().trim().ifBlank { "Файл" }, url = url))
+            out.add(
+                BodyBlock.FileAttachment(
+                    name = link.text().trim().ifBlank { "Файл" },
+                    url = url,
+                    // Folded from the trailing «( N МБ )» / «.desc» siblings by foldAttachmentMeta.
+                    size = link.attr(ATTACH_SIZE_ATTR).takeIf { it.isNotBlank() },
+                    desc = link.attr(ATTACH_DESC_ATTR).takeIf { it.isNotBlank() },
+                )
+            )
             out
         }
     }
@@ -544,5 +601,20 @@ class PostBodyRenderer {
          * that sits between words (a deliberate in-paragraph line break).
          */
         val EDGE_BREAKS = Regex("^(?:\\s|<br\\s*/?>)+|(?:\\s|<br\\s*/?>)+$", RegexOption.IGNORE_CASE)
+
+        /**
+         * A parenthesised file size right after a download link: «( 12,3 МБ )», «(188.33 МБ)», «(500 Б)».
+         * Group 1 is the size WITHOUT the parens. Units are the Cyrillic Б/КБ/МБ/ГБ/ТБ 4pda emits (also the
+         * Latin B/KB/… as a courtesy). Anchored by [foldAttachmentMeta] to the START of the sibling text so a
+         * stray "(…)" mid-sentence is never mistaken for a size. See [foldAttachmentMeta].
+         */
+        val ATTACH_SIZE = Regex(
+            "\\(\\s*([0-9][0-9.,]*\\s*(?:[ТГМК]?Б|[TGMK]?i?B|байт))\\s*\\)",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /** data-attr keys foldAttachmentMeta stows the folded size / download-count on, read by extractDownloadButtons. */
+        const val ATTACH_SIZE_ATTR = "data-native-size"
+        const val ATTACH_DESC_ATTR = "data-native-desc"
     }
 }
