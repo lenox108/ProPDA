@@ -2364,6 +2364,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val hatId = processHatForPage(page)
                 if (hatId != null) {
                     topicHatPostId = hatId
+                    // Hybrid: a deep-page open that scrolls UP to page 1 brings the real hat in through this
+                    // prepend path, not renderTopicPage — so apply «Шапка темы при открытии» here too, else the
+                    // setting would only ever take effect in classic mode (where page 1 always renders directly).
+                    applyInitialHatCollapsedState(hatId)
                     postsAdapter.setTopicHat(hatId, hatCollapsed)
                 }
                 // Prepending page 1 also brings the poll into view — cache it so the toolbar «Опрос» button
