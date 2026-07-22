@@ -3,6 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?attr/colorSurfaceContainerLowest"
     android:gravity="center_vertical"
     android:orientation="vertical"
     android:padding="@dimen/dp24">
@@ -39,5 +40,18 @@
         android:text="@string/contacts_list_empty"
         android:textSize="@dimen/empty_state_subtitle_text_size"
         android:visibility="gone"/>
+
+    <!-- Keep actions in the XML dependency chain so RelativeLayout centres the complete empty-state
+         group. Dynamically attaching a button directly BELOW funny_desc could leave it near the top
+         edge, detached from the centred title/description, and overlapping content behind the overlay. -->
+    <LinearLayout
+        android:id="@+id/funny_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/funny_desc"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="@dimen/dp24"
+        android:gravity="center"
+        android:orientation="horizontal"/>
 
 </RelativeLayout>
