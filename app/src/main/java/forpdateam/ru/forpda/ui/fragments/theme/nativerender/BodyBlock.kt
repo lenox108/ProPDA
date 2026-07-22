@@ -90,10 +90,18 @@ sealed interface BodyBlock {
 
     /**
      * A native file attachment (`a.ipb-attach.attach-file`) — a downloadable file link (apk/zip/…).
-     * [name] is the filename, [url] the dl/post download link. Фаза 2. (The size "( N МБ )" stays as
-     * the adjacent text run — 4pda emits it as a sibling text node, not part of the link.)
+     * [name] is the filename, [url] the dl/post download link. 4pda emits the file's size «( N МБ )»
+     * and an optional «скачиваний: N» download count as SIBLING nodes right after the link; those are
+     * folded here into [size] / [desc] (and the siblings removed) so the view can draw one compact
+     * Telegram-style row — icon · name / size — instead of the name, size and count spilling onto
+     * three stacked lines (user report). Both are null when the markup omitted them. Фаза 2.
      */
-    data class FileAttachment(val name: String, val url: String) : BodyBlock
+    data class FileAttachment(
+        val name: String,
+        val url: String,
+        val size: String? = null,
+        val desc: String? = null,
+    ) : BodyBlock
 
     /**
      * A native code block (`.post-block.code`), peeled out of the fallback in Фаза 2. [text] is the
