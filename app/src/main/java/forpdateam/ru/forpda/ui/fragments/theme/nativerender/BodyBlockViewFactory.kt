@@ -220,6 +220,7 @@ class BodyBlockViewFactory(
                 is BodyBlock.Image -> imageView(ctx, block, scope)
                 is BodyBlock.Quote -> quoteView(ctx, block, scope)
                 is BodyBlock.Spoiler -> spoilerView(ctx, block, scope)
+                is BodyBlock.Hidden -> hiddenView(ctx, block, scope)
                 is BodyBlock.Code -> codeView(ctx, block)
                 is BodyBlock.FileAttachment -> fileAttachmentView(ctx, block)
                 is BodyBlock.Table -> tableView(ctx, block)
@@ -372,6 +373,39 @@ class BodyBlockViewFactory(
             callbacks.onSpoilerCopyLink(scope.scopeId, spoilNumber)
             true
         }
+        card.addView(header)
+        card.addView(bodyContainer)
+        return card
+    }
+
+    /**
+     * Native «Скрытый текст» block (`.post-block.hidden`): a labeled M3 container whose recursively-rendered
+     * inner content is ALWAYS shown — unlike a spoiler it does not collapse on the site, it is just gated to
+     * registered users (guests get an empty body). Rendering the body natively (not via the WebView text
+     * fallback) is what makes an attachment image / table inside it appear: the fallback's Html.fromHtml has
+     * no ImageGetter and silently dropped the picture, leaving an empty box (user report). Deliberately does
+     * NOT touch [RenderScope.spoilerSeq], so hidden blocks never offset the spoiler copy-link numbering.
+     */
+    private fun hiddenView(ctx: Context, block: BodyBlock.Hidden, scope: RenderScope): View {
+        val dm = ctx.resources.displayMetrics
+        val card = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((10 * dm.density).toInt())
+            background = m3BlockBackground(ctx, flat = flatBlocks)
+            clipToOutline = true
+        }
+        val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+        val header = TextView(ctx).apply {
+            text = "Скрытый текст"
+            setTypeface(typeface, Typeface.BOLD)
+            textSize = scaledSp(14f)
+            setTextColor(accent)
+        }
+        val bodyContainer = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, (8 * dm.density).toInt(), 0, 0)
+        }
+        renderBlocksOnSurface(ctx, bodyContainer, block.inner, scope, blockFillColor(ctx))
         card.addView(header)
         card.addView(bodyContainer)
         return card
@@ -1241,6 +1275,7 @@ class BodyBlockViewFactory(
                 is BodyBlock.WebFallback -> prewarmHtml(block.html)
                 is BodyBlock.Quote -> prewarm(block.inner)
                 is BodyBlock.Spoiler -> prewarm(block.inner)
+                is BodyBlock.Hidden -> prewarm(block.inner)
                 is BodyBlock.Table -> block.rows.forEach { row -> row.forEach(::prewarmHtml) }
                 is BodyBlock.Image, is BodyBlock.Code, is BodyBlock.FileAttachment -> Unit
             }

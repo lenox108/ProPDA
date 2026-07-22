@@ -69,6 +69,7 @@ class SearchPostBodyRenderer(
                 is BodyBlock.Image -> imageView(ctx, block, gallery)
                 is BodyBlock.Quote -> quoteView(ctx, block, gallery, depth)
                 is BodyBlock.Spoiler -> spoilerView(ctx, block, gallery, depth)
+                is BodyBlock.Hidden -> hiddenView(ctx, block, gallery, depth)
                 is BodyBlock.Code -> codeView(ctx, block)
                 is BodyBlock.FileAttachment -> fileAttachmentView(ctx, block)
                 is BodyBlock.Table -> textView(ctx, spanned(ctx, tableToHtml(block)))
@@ -207,6 +208,35 @@ class SearchPostBodyRenderer(
             val open = inner.visibility == View.VISIBLE
             inner.visibility = if (open) View.GONE else View.VISIBLE
             chevron.rotation = if (open) 0f else 90f
+        }
+        if (depth < MAX_NEST) renderBlocks(inner, block.inner, gallery, depth + 1)
+        card.addView(header)
+        card.addView(inner)
+        return card
+    }
+
+    /**
+     * Native «Скрытый текст» block (`.post-block.hidden`): a labeled M3 container with its recursively
+     * rendered body always visible (it does not collapse on the site). Rendering the body natively — not as
+     * a WebView text fallback — is what makes a nested attachment image / table show instead of vanishing.
+     */
+    private fun hiddenView(ctx: Context, block: BodyBlock.Hidden, gallery: ArrayList<String>, depth: Int): View {
+        val card = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(ctx, 10f), dp(ctx, 10f), dp(ctx, 10f), dp(ctx, 10f))
+            background = m3BlockBackground(ctx)
+            clipToOutline = true
+        }
+        val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+        val header = TextView(ctx).apply {
+            text = "Скрытый текст"
+            textSize = 14f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(accent)
+        }
+        val inner = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(ctx, 8f), 0, 0)
         }
         if (depth < MAX_NEST) renderBlocks(inner, block.inner, gallery, depth + 1)
         card.addView(header)

@@ -142,6 +142,37 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun hiddenBlockInsideSpoiler_withAttachImage_rendersNativeImage_notEmpty() {
+        // EXACT live structure of topic 1103268 / p144360304 («Изображение под спойлер»): a collapsed
+        // spoiler whose body holds a `.post-block.hidden` («Скрытый текст», registered-only) that in turn
+        // wraps an ipb-attach image table. The whole hidden block used to fall to the WebView text fallback,
+        // whose Html.fromHtml dropped the <img> → the opened spoiler showed an EMPTY box (user report).
+        val html =
+                "Может в шапку ? <div class=\"post-block spoil close\"><div class=\"block-title\" title=\"x\"></div>" +
+                "<div class=\"block-body\"><div class=\"post-block hidden\"><div class=\"block-title\"></div>" +
+                "<div class=\"block-body\"><table style=\"width:auto;display:inline;\" id=\"ipb-attach-table-35859249-bb\" " +
+                "data-attach-img-data=\"[&quot;1630&quot;,&quot;727&quot;,&quot;188.28 КБ&quot;]\"><tr><td>" +
+                "<div id=\"ipb-attach-div-35859249-bb\"><a rel=\"nofollow\" id=\"ipb-attach-url-35859249-bb\" " +
+                "href=\"https://4pda.to/forum/dl/post/35859249/4obqtzj.png\" target=\"_blank\">" +
+                "<img loading=\"lazy\" src=\"https://4pda.to/s/Zy0hImD0gOhDQUOEz1evhYf1z2FsTbPswj6Zhlke96Osf.png\" " +
+                "id=\"ipb-attach-img-35859249-bb\" class=\"attach\" width=\"500\" height=\"223\" " +
+                "alt=\"Прикрепленное изображение\" /></a></div></td></tr></table></div></div></div></div>"
+        val blocks = renderer.render(html)
+        val spoiler = blocks.filterIsInstance<BodyBlock.Spoiler>().single()
+        // The hidden block is a distinct native container (NOT a spoiler → never offsets copy-link numbering).
+        val hidden = spoiler.inner.filterIsInstance<BodyBlock.Hidden>().single()
+        // Its attach image is peeled to a native Image — the whole point of the fix.
+        val image = hidden.inner.filterIsInstance<BodyBlock.Image>().single()
+        assertTrue(image.imageUrl.startsWith("https://4pda.to/s/"))
+        assertEquals(500, image.displayWidthPx)
+        assertEquals(223, image.displayHeightPx)
+        assertTrue(image.linkUrl?.contains("/forum/dl/post/35859249/") == true)
+        // No WebFallback anywhere (the empty-box symptom).
+        assertFalse("hidden block must not degrade to a WebView fallback",
+                spoiler.inner.any { it is BodyBlock.WebFallback })
+    }
+
+    @Test
     fun attachmentFilePlain_isNativeFileAttachment() {
         val blocks = renderer.render(fixture("attachment_file_plain.html"))
         val file = blocks.filterIsInstance<BodyBlock.FileAttachment>().single()
@@ -335,6 +366,7 @@ class PostBodyRendererTest {
                 is BodyBlock.Image -> it.imageUrl
                 is BodyBlock.Quote -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
                 is BodyBlock.Spoiler -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
+                is BodyBlock.Hidden -> it.inner.filterIsInstance<BodyBlock.Text>().joinToString("") { t -> t.html }
                 is BodyBlock.Code -> it.text
                 is BodyBlock.FileAttachment -> it.name
                 is BodyBlock.Table -> it.rows.joinToString(" ") { row -> row.joinToString(" ") }
