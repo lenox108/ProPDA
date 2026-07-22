@@ -711,7 +711,18 @@ body#topic .post_container .post_footer .post_actions_row .btn.rep_down > .rep-a
                 card = hex(android.R.color.system_neutral1_10)
                 text = hex(android.R.color.system_neutral1_900)
             }
-            root.append("    --forum-bg: $bg;\n    --forum-card: $card;\n    --forum-text: $text;\n")
+            // News inline comments consume the shared `--surface-*` contract directly,
+            // unlike the older article/forum containers selected below. Bridge the
+            // dynamic roles into that contract as well, otherwise comment cards keep
+            // the static light/dark palette while the surrounding article follows MY.
+            root.append(
+                    "    --forum-bg: $bg;\n" +
+                            "    --forum-card: $card;\n" +
+                            "    --forum-text: $text;\n" +
+                            "    --surface-background: $bg;\n" +
+                            "    --surface-card: $card;\n" +
+                            "    --surface-text-primary: $text;\n"
+            )
             rules.append("""
 html, body {
     background: var(--forum-bg) !important;
