@@ -342,4 +342,5 @@
     <color name="ic_launcher_metal_4_background">#FFC9CDD1</color>
     <color name="ic_launcher_holo_4_background">#FF0B0D32</color>
     <color name="ic_launcher_droid_4_background">#FFF9F9F9</color>
+    <color name="ic_launcher_pixel_4_background">#FFFDFDFD</color>
 </resources>

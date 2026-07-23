@@ -611,6 +611,8 @@
     <string name="app_icon_matrix_4_desc">Matrix four PRO; same for both themes.</string>
     <string name="app_icon_droid_4">Droid</string>
     <string name="app_icon_droid_4_desc">Green droid four; white and black themes.</string>
+    <string name="app_icon_pixel_4">Pixel</string>
+    <string name="app_icon_pixel_4_desc">Dissolving pixel four; white and black themes.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>

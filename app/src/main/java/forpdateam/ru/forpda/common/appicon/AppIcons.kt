@@ -123,6 +123,14 @@ object AppIcons {
                     iconRes = R.mipmap.ic_launcher_droid_4,
                     splashThemeRes = R.style.Theme_ForPDA_Splash_Droid4,
             ),
+            AppIconVariant(
+                    id = "pixel_4",
+                    alias = "forpdateam.ru.forpda.Launcher.Pixel4",
+                    titleRes = R.string.app_icon_pixel_4,
+                    subtitleRes = R.string.app_icon_pixel_4_desc,
+                    iconRes = R.mipmap.ic_launcher_pixel_4,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_Pixel4,
+            ),
             // app-icon-variants:registry — не удалять, сюда дописывает add_alt_icon.py
     )
 
