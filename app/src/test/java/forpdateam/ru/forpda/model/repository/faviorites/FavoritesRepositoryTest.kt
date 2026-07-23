@@ -301,6 +301,156 @@ class FavoritesRepositoryTest {
     }
 
     @Test
+    fun `websocket event minutes after local read defers to inspector instead of relighting`() = runTest {
+        // Регресс прежнего 20-секундного окна: эхо, доставленное на idle-reconnect через минуты
+        // после локального прочтения, перезажигало тему. Теперь «слепое» WS-событие по недавно
+        // прочитанной строке ждёт follow-up inspector, а не зажигает само.
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = false).apply {
+                            readState = FavoriteReadState.READ
+                            localReadPostId = 42
+                            localReadPostDateMillis = System.currentTimeMillis() - 5 * 60_000L
+                        }
+                )
+        )
+        val repository = createRepository(favoritesCache)
+        val delayedWsEvent = TabNotification(
+                source = NotificationEvent.Source.THEME,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(NotificationEvent.Type.NEW, NotificationEvent.Source.THEME).apply {
+                    sourceId = 42
+                },
+                isWebSocket = true,
+        )
+
+        repository.handleEvent(delayedWsEvent)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(false, item.isNew)
+        assertEquals(FavoriteReadState.READ, item.readState)
+    }
+
+    @Test
+    fun `websocket event still lights a topic read long ago`() = runTest {
+        // За горизонтом дефера (час) WS-эхо уже неправдоподобно — новый пост по давно прочитанной
+        // теме должен зажигать строку мгновенно, не дожидаясь inspector.
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = false).apply {
+                            readState = FavoriteReadState.READ
+                            localReadPostId = 42
+                            localReadPostDateMillis = System.currentTimeMillis() - 2 * 60 * 60_000L
+                        }
+                )
+        )
+        val repository = createRepository(favoritesCache)
+        val wsEvent = TabNotification(
+                source = NotificationEvent.Source.THEME,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(NotificationEvent.Type.NEW, NotificationEvent.Source.THEME).apply {
+                    sourceId = 42
+                },
+                isWebSocket = true,
+        )
+
+        repository.handleEvent(wsEvent)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(true, item.isNew)
+        assertEquals(FavoriteReadState.UNREAD, item.readState)
+    }
+
+    @Test
+    fun `lagging device clock cannot relight a just-read topic via inspector recompute`() = runTest {
+        // Часы устройства отстают: последний пост «в будущем» относительно System.currentTimeMillis.
+        // Watermark markRead якорится по времени последнего поста строки (favItem.date), поэтому
+        // inspector с timestamp этого же поста не должен перезажечь тему.
+        val lastPostMillis = System.currentTimeMillis() + 5 * 60_000L
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = true, unreadPostCount = 1).apply {
+                            date = forpdateam.ru.forpda.common.Utils.getForumDateTime(java.util.Date(lastPostMillis))
+                        }
+                )
+        )
+        val repository = createRepository(favoritesCache)
+
+        repository.markRead(42)
+        val marked = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(FavoriteReadState.READ, marked.readState)
+        assertEquals(true, marked.localReadPostDateMillis >= lastPostMillis)
+
+        val recompute = tabNotification(
+                event = themeEvent(NotificationEvent.Type.NEW, topicId = -1),
+                loadedEvents = listOf(
+                        themeEvent(
+                                type = NotificationEvent.Type.NEW,
+                                topicId = 42,
+                                timeStamp = lastPostMillis / 1000L,
+                                lastTimeStamp = 0
+                        )
+                )
+        )
+        repository.handleEvent(recompute)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(false, item.isNew)
+        assertEquals(FavoriteReadState.READ, item.readState)
+    }
+
+    @Test
+    fun `mark read before topic is cached applies on next favorites load`() = runTest {
+        // Cache-miss в markRead больше не роняет отметку молча: она откладывается и применяется,
+        // когда строка приходит с сети (и последний пост не новее момента прочтения).
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        val sorting = Sorting()
+        val favoritesApi = mockk<FavoritesApi> {
+            every { getFavorites(0, false, sorting, false) } returns favData(
+                    favoriteTopic(favId = 1, topicId = 42, isNew = true, unreadPostCount = 2)
+            )
+        }
+        val repository = createRepository(favoritesCache, favoritesApi = favoritesApi)
+
+        repository.markRead(42) // кэш пуст — отметка уходит в pending
+
+        repository.loadFavorites(0, all = false, sorting = sorting, forceRefresh = false)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(false, item.isNew)
+        assertEquals(FavoriteReadState.READ, item.readState)
+        assertEquals(0, item.unreadPostCount)
+        assertEquals(true, item.localReadPostDateMillis > 0L)
+    }
+
+    @Test
+    fun `pending local read is dropped when a newer post arrived before the load`() = runTest {
+        // Пост новее момента прочтения — отложенная отметка устарела и НЕ должна гасить строку.
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        val sorting = Sorting()
+        val newerPostMillis = System.currentTimeMillis() + 10 * 60_000L
+        val favoritesApi = mockk<FavoritesApi> {
+            every { getFavorites(0, false, sorting, false) } returns favData(
+                    favoriteTopic(favId = 1, topicId = 42, isNew = true, unreadPostCount = 2).apply {
+                        date = forpdateam.ru.forpda.common.Utils.getForumDateTime(java.util.Date(newerPostMillis))
+                    }
+            )
+        }
+        val repository = createRepository(favoritesCache, favoritesApi = favoritesApi)
+
+        repository.markRead(42)
+
+        repository.loadFavorites(0, all = false, sorting = sorting, forceRefresh = false)
+
+        val item = favoritesCache.getItemByTopicId(42)!!
+        assertEquals(true, item.isNew)
+        assertEquals(FavoriteReadState.UNREAD, item.readState)
+    }
+
+    @Test
     fun `refresh preserves html unread when inspector reports read`() = runTest {
         val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
         val sorting = Sorting()
