@@ -742,8 +742,14 @@ class BodyBlockViewFactory(
             setTypeface(typeface, Typeface.BOLD)
             textSize = scaledSp(15f)
             setTextColor(accent)
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
+            // Filenames are the whole point of the row — wrap onto as many lines as needed instead of
+            // clipping with «…» at two lines (a mod APK name easily runs past 60 chars and the version /
+            // ABI that distinguish two attachments live at the very end).
+            setSingleLine(false)
+            maxLines = Integer.MAX_VALUE
+            ellipsize = null
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
         })
         val subtitle = listOfNotNull(block.size, block.desc).joinToString("  ·  ")
         if (subtitle.isNotBlank()) {
