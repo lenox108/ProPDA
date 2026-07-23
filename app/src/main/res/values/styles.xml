@@ -236,27 +236,53 @@
         TYPE_ATTRIBUTE-цепочек, ломающих инфляцию — см. KDoc MaterialYouSurface).
     -->
     <style name="ThemeOverlay.ForPDA.MaterialYouAmoled" parent="ThemeOverlay.ForPDA.MaterialYouAccent">
-        <item name="android:colorBackground">@color/amoled_background_base</item>
-        <item name="colorSurface">@color/amoled_card_background</item>
-        <item name="colorSurfaceVariant">@color/amoled_card_background</item>
-        <item name="colorSurfaceContainerLowest">@color/amoled_background_base</item>
-        <item name="colorSurfaceContainerLow">@color/amoled_card_background</item>
-        <item name="colorSurfaceContainer">@color/amoled_card_background</item>
-        <item name="colorSurfaceContainerHigh">@color/amoled_card_background</item>
-        <item name="colorSurfaceContainerHighest">@color/amoled_card_background</item>
         <!--
-            Полотно хрома (шапка / нижний таббар / фон страниц / ряды пагинации)
-            под Material You тонируется оттенком обоев ПОВЕРХ чёрной базы: раньше
-            AMOLED шёл БЕЗ этого флага и весь хром оставался #000000 — из обоев
-            менялся только акцент (жалоба «в AMOLED табы/тулбары не наследуют MY»).
-            Теперь ChromeCanvas подмешивает colorPrimaryContainer в чёрный
-            (ChromeCanvas.AMOLED_BLEND). КАРТОЧКИ КОНТЕНТА при этом остаются
-            чёрными — они на amoled_card_background (пины colorSurface* выше), а
-            не на полотне. chrome_canvas_amoled отличает эту чёрную базу от
-            тёмного DarkFloor (где база уже тонирована и blend обязан быть 0).
+            22.07.2026 — surface-роли ПЕРЕВЕДЕНЫ с amoled-чёрного на тонированные
+            обоями lStar-селекторы. Раньше здесь стоял набор @color/amoled_*, из-за
+            чего под Material You из обоев менялся ТОЛЬКО акцент, а весь UI (фон,
+            карточки, шапка, таббар) оставался #000000 — жалоба «в MD3 AMOLED
+            табы/тулбары не наследуют MY, меняется лишь цвет шрифта и иконок».
+
+            Почему роли пинятся ЯВНО, а не «отдаются DynamicColors»: базовая
+            AmoledAppTheme (values-night) сама пинит surface-роли в amoled-чёрный, а
+            DynamicColors перекрывает НЕ всё — colorPrimaryContainer он подменяет
+            (в логах tint=#425274), а colorSurfaceContainerLowest оставляет как есть.
+            Просто убрать наши пины оказалось НЕДОСТАТОЧНО: полотно осталось
+            #000000 (проверено на эмуляторе). Поэтому роли пинятся на lStar-селекторы
+            с оттенком обоев — тот же механизм, что у MaterialYouDarkFloor, но на
+            более цветном слоте system_accent2 (на AMOLED-светлотах бесцветный
+            neutral2 не читается — см. material_you_amoled_base.xml).
+
+            Осознанный размен: чистого #000000 под Material You больше нет. AMOLED
+            БЕЗ Material You (базовая AmoledAppTheme) остаётся чистым чёрным.
         -->
-        <item name="chrome_canvas_dynamic">true</item>
-        <item name="chrome_canvas_amoled">true</item>
+        <!--
+            БАЗА остаётся чистым amoled-чёрным: фон страниц, полотно хрома (шапка,
+            нижний таббар, ряды пагинации), окно. Это и есть смысл AMOLED —
+            «минимум свечения», и именно так выглядит эталон из другого приложения,
+            который принёс пользователь: чёрный фон + тонированные карточки.
+        -->
+        <item name="android:colorBackground">@color/amoled_background_base</item>
+        <item name="colorSurfaceContainerLowest">@color/amoled_background_base</item>
+        <item name="colorSurfaceContainerLow">@color/amoled_background_base</item>
+        <!--
+            КАРТОЧКИ / приподнятые поверхности (посты, плашки списков, диалоги,
+            пузыри QMS, content_card_surface -> colorSurfaceContainerHigh) —
+            тонированы оттенком обоев. Именно здесь Material You становится
+            виден, оставаясь на тёмной светлоте.
+        -->
+        <item name="colorSurface">@color/material_you_amoled_card</item>
+        <item name="colorSurfaceVariant">@color/material_you_amoled_card</item>
+        <item name="colorSurfaceContainer">@color/material_you_amoled_card</item>
+        <item name="colorSurfaceContainerHigh">@color/material_you_amoled_card</item>
+        <item name="colorSurfaceContainerHighest">@color/material_you_amoled_card</item>
+        <!--
+            chrome_canvas_dynamic ЗДЕСЬ НЕ СТАВИТСЯ намеренно: полотно хрома
+            (шапка / нижний таббар / фон страниц / ряды пагинации) должно остаться
+            чистым чёрным, поэтому ChromeCanvas идёт по статическому пути и
+            возвращает ровно fallback-атрибут (amoled-чёрный). Тонировка полотна
+            пробовалась и была отклонена как «фон перестал быть чёрным».
+        -->
     </style>
 
     <!--
@@ -432,6 +458,26 @@
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="postSplashScreenTheme">@style/DayNightAppTheme.NoActionBar</item>
     </style>
+
+    <!--
+        Splash-темы вариантов иконки: наследники перекрывают только сам значок,
+        фон и postSplashScreenTheme берутся у родителя (в т.ч. его night-версии).
+        Применяет MainActivity по выбранной иконке; дописывает add_alt_icon.py.
+    -->
+
+    <style name="Theme.ForPDA.Splash.FourDark" parent="Theme.ForPDA.Splash">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_four_dark</item>
+    </style>
+
+    <style name="Theme.ForPDA.Splash.FourBlue" parent="Theme.ForPDA.Splash">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_four_blue</item>
+    </style>
+
+    <style name="Theme.ForPDA.Splash.Puzzle" parent="Theme.ForPDA.Splash">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_puzzle</item>
+    </style>
+
+    <!-- app-icon-variants:splash — не удалять, сюда дописывает add_alt_icon.py -->
 
     <!--
         LIGHT THEME

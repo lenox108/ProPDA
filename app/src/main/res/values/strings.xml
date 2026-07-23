@@ -752,6 +752,18 @@
     <string name="pref_summary_accent_active">%1$s · только для палитры «Системный стиль»</string>
     <string name="pref_summary_accent_non_system">Недоступно для палитр чтения — работает только с «Системным стилем»</string>
     <string name="pref_summary_accent_material_you">Перекрыт цветами системы (Material You) — выключите их, чтобы выбрать свой акцент</string>
+    <string name="pref_title_app_icon">Иконка приложения</string>
+    <string name="pref_summary_app_icon">Выберите значок на рабочем столе</string>
+    <string name="app_icon_changed">Иконка сменится, когда вы свернёте приложение</string>
+    <string name="app_icon_default">Стандартная</string>
+    <string name="app_icon_four_dark">Тёмная</string>
+    <string name="app_icon_four_blue">Синяя</string>
+    <string name="app_icon_puzzle">Пазл-4</string>
+    <string name="app_icon_default_desc">Оранжевый знак P4DA на светлой подложке.</string>
+    <string name="app_icon_four_dark_desc">Белая четвёрка на графитовой плашке.</string>
+    <string name="app_icon_four_blue_desc">Синяя четвёрка на белой плашке.</string>
+    <string name="app_icon_puzzle_desc">Цветные пазлы; фон белый, в тёмной теме — чёрный.</string>
+    <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Цвет акцента</string>
     <string name="accent_neutral">Нейтральный</string>
     <string name="accent_blue">Синий</string>

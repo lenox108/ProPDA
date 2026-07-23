@@ -40,6 +40,13 @@
             android:title="@string/pref_title_use_material_you"
             app:iconSpaceReserved="false" />
 
+        <Preference
+            android:key="main.app_icon"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_app_icon"
+            android:title="@string/pref_title_app_icon"
+            app:iconSpaceReserved="false" />
+
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"
             android:key="main.haptic_feedback.enable"

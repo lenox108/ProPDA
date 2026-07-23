@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Four-container launcher, warm light theme. -->
-    <color name="ic_launcher_background">#FFF7F5F0</color>
+    <color name="ic_launcher_background">#FFFEFEFE</color>
     <color name="ic_launcher_foreground">#FF24201E</color>
     <color name="ic_launcher_node_fill">#FF202020</color>
     <color name="ic_launcher_pro">#FFFF6A00</color>
@@ -110,6 +110,10 @@
          оттенком обоев и той же светлотой (lStar). -->
     <color name="material_you_dark_floor_base">@color/dark_background_base</color>
     <color name="material_you_dark_floor_card">@color/dark_card_background</color>
+    <!-- Material You AMOLED: default-алиас для API < 31 (Material You там не
+         применяется). На API 31+ перекрывается color-v31/material_you_amoled_card
+         — селектором с оттенком обоев (system_accent2 + lStar). -->
+    <color name="material_you_amoled_card">@color/amoled_card_background</color>
     <color name="dark_background_for_cards">#242424</color>
     <!-- Как background_base: без «островов» #1C1C1E под списками и экранами вроде поиска. -->
     <color name="dark_background_for_lists">#121212</color>
@@ -330,4 +334,7 @@
     <color name="fpda_unread_bg">#244F7896</color>
     <color name="fpda_unread_outline">#6B95B5</color>
 
+    <color name="ic_launcher_four_dark_background">#FF191919</color>
+    <color name="ic_launcher_four_blue_background">#FFFFFFFF</color>
+    <color name="ic_launcher_puzzle_background">#FFFFFFFF</color>
 </resources>
