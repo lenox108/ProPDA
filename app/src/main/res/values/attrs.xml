@@ -30,12 +30,6 @@
          палитры атрибут не задают (unresolved => false), поэтому их полотно математически
          не может измениться. Читается через ChromeCanvas.kt. -->
     <attr name="chrome_canvas_dynamic" format="boolean" />
-    <!-- Material You: маркер «полотно тонируется поверх ЧИСТО ЧЁРНОЙ AMOLED-базы».
-         Ставит ТОЛЬКО ThemeOverlay.ForPDA.MaterialYouAmoled. Отличает AMOLED (база
-         #000000, нужен ненулевой blend чтобы вытянуть оттенок обоев в шапку/низ/фон,
-         карточки остаются чёрными) от тёмного DarkFloor (база уже несёт оттенок обоев,
-         blend обязан быть 0 — см. ChromeCanvas.DARK_BLEND). Читается через ChromeCanvas.kt. -->
-    <attr name="chrome_canvas_amoled" format="boolean" />
     <!-- Optional outline for primary section top toolbar plates; keeps dark/AMOLED rounded corners readable. -->
     <attr name="main_toolbar_stroke_width" format="dimension" />
     <attr name="main_toolbar_stroke_color" extension="reference" format="color" />

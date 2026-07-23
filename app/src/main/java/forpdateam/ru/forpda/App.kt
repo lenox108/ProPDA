@@ -175,6 +175,11 @@ class App : Application(), androidx.work.Configuration.Provider {
         setupRealtimePushToggle()
         setupAppUpdateCheck()
 
+        // Ярлык обязан существовать при любом старте процесса — даже если процесс
+        // поднял фоновый воркер. Это единственный путь восстановления, когда сборка
+        // потеряла выбранную пользователем иконку (см. AppIconManager).
+        forpdateam.ru.forpda.common.appicon.AppIconManager.ensureLauncherPresent(this)
+
         // Lifecycle observer для очистки ресурсов
         ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
         BatteryDebugLogger.logState("App", "created")
@@ -537,6 +542,9 @@ class App : Application(), androidx.work.Configuration.Provider {
         override fun onStop(owner: LifecycleOwner) {
             BatteryDebugLogger.logState("AppLifecycle", "background")
             eventsRepository.onAppBackgrounded()
+            // Выбранная иконка применяется именно здесь: в фоне уже нечего ронять
+            // (см. AppIconManager — выключение активного псевдонима рушит задачу).
+            forpdateam.ru.forpda.common.appicon.AppIconManager.applyIfNeeded(this@App)
             // Режим «Постоянное соединение»: приложение уходит в фон, а сокет должен жить —
             // поднимаем сервис как FGS (только FGS удержит процесс и соединение вне UI).
             // Окно после ухода с переднего плана позволяет старт FGS из фона.

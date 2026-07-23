@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Material You AMOLED: тон КАРТОЧЕК и приподнятых поверхностей (посты, плашки
+    списков, диалоги, пузыри QMS — всё, что читает colorSurface* /
+    content_card_surface). Фон страниц и полотно хрома при этом остаются чистым
+    #000000 (см. ThemeOverlay.ForPDA.MaterialYouAmoled) — именно так выглядит
+    эталонное поведение MY на AMOLED: чёрный фон, тонированные карточки, яркий
+    акцент.
+
+    Зачем вообще: раньше под Material You в AMOLED из обоев менялся только
+    акцент, а карточки оставались #000000 и сливались с фоном — жалоба «в MD3
+    AMOLED табы/поверхности не наследуют MY, меняется лишь цвет шрифта и
+    иконок». Пинить роль приходится явно: базовая AmoledAppTheme пинит
+    surface-роли в amoled-чёрный, а DynamicColors перекрывает НЕ всё
+    (colorPrimaryContainer — да, colorSurfaceContainer* — нет).
+
+    Почему system_accent2, а не system_neutral2 (как у DARK-floor): neutral2 —
+    почти бесцветный слот, и на тёмных светлотах оттенок обоев на глаз не
+    читается (на этом провалился заход с примесью в чёрное полотно,
+    #000000 -> #0E1219, «не видно»). accent2 несёт заметную цветность.
+
+    Светлота L* = 14 — уровень статичной @color/dark_card_background (#242424):
+    карточка уверенно читается НАД чёрным фоном, оставаясь тёмной.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@android:color/system_accent2_700" android:lStar="14" />
+</selector>

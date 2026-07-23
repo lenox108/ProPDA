@@ -41,9 +41,12 @@ import timber.log.Timber
  *   (`colorAccent`, `link_color`, `colorControlActivated` → `colorPrimary`).
  *   База для остальных оверлеев.
  * - [R.style.ThemeOverlay_ForPDA_MaterialYouAmoled] — акцент (наследует Accent)
- *   + ПИН всех M3-surface-ролей обратно на amoled-чёрный. Используется для
- *   AMOLED: DynamicColors тонирует surface-роли тёмно-серым (не чёрным), а наши
- *   фоны контента их читают — без пина фон вылезал серым вместо чёрного.
+ *   + маркер динамического полотна хрома. С 22.07.2026 пины surface-ролей на
+ *   amoled-чёрный СНЯТЫ: раньше под Material You в AMOLED из обоев менялся
+ *   только акцент, а фон/карточки/шапка/таббар оставались #000000 (жалоба
+ *   «в MD3 AMOLED табы не красятся в MD3-оттенки»). Теперь surface-роли отдаются
+ *   DynamicColors и несут оттенок обоев; AMOLED остаётся самым тёмным режимом,
+ *   т.к. DarkFloor к нему НЕ применяется (гейт `!isAmoled` ниже).
  * - [R.style.ThemeOverlay_ForPDA_MaterialYouSurface] — акцент (наследует
  *   Accent) + динамический базовый фон окна (`android:colorBackground` /
  *   `colorOnBackground` → `colorSurface` / `colorOnSurface`). Используется для
@@ -155,8 +158,9 @@ object MaterialYouApplier {
             }
         }
 
-        // SURFACE (акцент + динамический фон) для light/dark; ACCENT_ONLY для
-        // AMOLED (не поднимаем поверхности с чистого чёрного). Работает и для
+        // SURFACE (акцент + динамический фон) для light/dark; AMOLED-оверлей для
+        // AMOLED. Оба отдают surface-роли динамике обоев — AMOLED-вариант просто
+        // не получает DarkFloor и потому остаётся самым тёмным. Работает и для
         // обоев, и для произвольного seed.
         val isAmoled = MaterialYouPolicy.isAmoledSkin(themeMode, isNight)
         val overlay = if (isAmoled) {
