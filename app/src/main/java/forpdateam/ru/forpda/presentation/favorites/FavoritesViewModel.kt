@@ -187,6 +187,7 @@ class FavoritesViewModel @Inject constructor(
             }.catch { errorHandler.handle(it) }
                     .collect { list ->
                         localItems.replaceWith(list)
+                        syncSearchCatalogReadStates(list)
                         publishDisplayed()
                     }
         }
@@ -601,6 +602,23 @@ class FavoritesViewModel @Inject constructor(
             return localItems.toList()
         }
         return searchCatalogItems ?: localItems.toList()
+    }
+
+    /**
+     * Поисковый каталог — отдельный сетевой снапшот, и markRead его не инвалидирует (перезагрузка
+     * всего списка ради одной строки слишком дорога). Без синхронизации дочитанная тема оставалась
+     * жирной в результатах активного поиска до сброса запроса. Переносим только read-state —
+     * остальные поля каталога живут до обычной инвалидации (сортировка/refresh/правки списка).
+     */
+    private fun syncSearchCatalogReadStates(fresh: List<FavItem>) {
+        val catalog = searchCatalogItems ?: return
+        val byFavId = fresh.associateBy { it.favId }
+        catalog.forEach { item ->
+            val actual = byFavId[item.favId] ?: return@forEach
+            item.isNew = actual.isNew
+            item.readState = actual.readState
+            item.unreadPostCount = actual.unreadPostCount
+        }
     }
 
     private fun invalidateSearchCatalog() {
