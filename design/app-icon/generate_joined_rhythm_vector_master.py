@@ -42,6 +42,26 @@ def fitted(text, max_width, size, weight="Semibold"):
     return font
 
 
+def draw_reference_four(draw, sc, color):
+    """Compact open-top 4 matching the approved reference glyph."""
+    # The reference uses restrained, nearly flat terminals—not round tubes.
+    draw.polygon(
+        [(sc(82.5), sc(87.5)), (sc(104.5), sc(55.5)),
+         (sc(112), sc(60.5)), (sc(90), sc(92.5))],
+        fill=color,
+    )
+    draw.rounded_rectangle(
+        (sc(83), sc(86), sc(125), sc(95)),
+        radius=sc(2.2),
+        fill=color,
+    )
+    draw.rounded_rectangle(
+        (sc(111), sc(74), sc(120), sc(105)),
+        radius=sc(2.2),
+        fill=color,
+    )
+
+
 def render(mode, final_size=1080):
     bg, ink, screen, gold = PALETTES[mode]
     im = Image.new("RGB", (192*S, 192*S), bg)
@@ -57,11 +77,7 @@ def render(mode, final_size=1080):
     d.ellipse((x-r, y-r, x+r, y+r), fill=ink)
     d.rounded_rectangle((sc(28), sc(66), sc(33), sc(113)), radius=sc(2.5), fill=gold)
 
-    four = fitted("4", 52, 67, "Bold")
-    box = d.textbbox((0, 0), "4", font=four)
-    fw, fh = box[2]-box[0], box[3]-box[1]
-    cx, cy = sc(103), sc(79)
-    d.text((cx-fw/2-box[0], cy-fh/2-box[1]-sc(1)), "4", font=four, fill=ink)
+    draw_reference_four(d, sc, ink)
 
     da = fitted("DA", 62, 41, "Semibold")
     box = d.textbbox((0, 0), "DA", font=da)
