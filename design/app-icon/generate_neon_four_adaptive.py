@@ -167,7 +167,7 @@ def open_(mask: Image.Image, width: int) -> Image.Image:
 
 def smooth(mask: Image.Image) -> Image.Image:
     """Take the bead off the contour left by the nodes sitting on the edge."""
-    blurred = mask.filter(ImageFilter.GaussianBlur(radius=4.0))
+    blurred = mask.filter(ImageFilter.GaussianBlur(radius=9.0))
     return blurred.point(lambda v: 255 if v > 128 else 0)
 
 
