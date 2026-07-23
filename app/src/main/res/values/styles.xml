@@ -555,6 +555,10 @@
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_term_4</item>
     </style>
 
+    <style name="Theme.ForPDA.Splash.Circuit4" parent="Theme.ForPDA.Splash">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_circuit_4</item>
+    </style>
+
     <!-- app-icon-variants:splash — не удалять, сюда дописывает add_alt_icon.py -->
 
     <!--
