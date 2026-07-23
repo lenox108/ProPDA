@@ -338,6 +338,5 @@
     <color name="ic_launcher_four_blue_background">#FFFFFFFF</color>
     <color name="ic_launcher_puzzle_background">#FFFFFFFF</color>
     <color name="ic_launcher_four_orange_background">#FFFFFFFF</color>
-    <color name="ic_launcher_neon_four_background">#FFFFFFFF</color>
     <color name="ic_launcher_glass_4_background">#FF628CCC</color>
 </resources>

@@ -527,10 +527,6 @@
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_four_orange</item>
     </style>
 
-    <style name="Theme.ForPDA.Splash.NeonFour" parent="Theme.ForPDA.Splash">
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_neon_four</item>
-    </style>
-
     <style name="Theme.ForPDA.Splash.Glass4" parent="Theme.ForPDA.Splash">
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_glass_4</item>
     </style>

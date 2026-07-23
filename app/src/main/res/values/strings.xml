@@ -765,8 +765,6 @@
     <string name="app_icon_puzzle_desc">Цветные пазлы; фон белый, в тёмной теме — чёрный.</string>
     <string name="app_icon_four_orange">Оранжевая</string>
     <string name="app_icon_four_orange_desc">Оранжевая четвёрка с облаком сообщения.</string>
-    <string name="app_icon_neon_four">Неоновая</string>
-    <string name="app_icon_neon_four_desc">Светящаяся решётчатая четвёрка; фон белый, в тёмной теме — чёрный.</string>
     <string name="app_icon_glass_4">Стекло-4</string>
     <string name="app_icon_glass_4_desc">Стеклянная четвёрка с переливами; синяя в светлой теме, чёрная в тёмной.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
