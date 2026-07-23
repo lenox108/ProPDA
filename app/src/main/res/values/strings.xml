@@ -763,6 +763,8 @@
     <string name="app_icon_four_dark_desc">Белая четвёрка на графитовой плашке.</string>
     <string name="app_icon_four_blue_desc">Синяя четвёрка на белой плашке.</string>
     <string name="app_icon_puzzle_desc">Цветные пазлы; фон белый, в тёмной теме — чёрный.</string>
+    <string name="app_icon_four_orange">Оранжевая</string>
+    <string name="app_icon_four_orange_desc">Оранжевая четвёрка с облаком сообщения.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Цвет акцента</string>
     <string name="accent_neutral">Нейтральный</string>
