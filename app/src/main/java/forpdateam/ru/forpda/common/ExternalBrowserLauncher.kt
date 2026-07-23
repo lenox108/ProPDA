@@ -52,11 +52,18 @@ object ExternalBrowserLauncher {
         val scheme = uri.scheme?.lowercase()
         // Только http/https конкурируют с браузером за обработку. Прочие схемы (mailto:, tel:,
         // intent:, market: и т.п.) не «браузерные» — отдаём их системе как есть.
-        if (scheme == "http" || scheme == "https") {
+        // Ссылки самого 4pda исключены намеренно: их VIEW-фильтры объявляет НАШЕ приложение, и
+        // «открыть в приложении» зарезолвилось бы обратно на нас. Сюда site-ссылка попадает, только
+        // если ни один внутренний обработчик её не разобрал (LinkHandler в конце зовёт externalIntent),
+        // — тогда её должен показать браузер, иначе получим перезапуск приложения по кругу.
+        if ((scheme == "http" || scheme == "https") && !isSelfHandledSiteUri(uri)) {
             if (launchNonBrowserApp(context, uri)) return true
         }
         return open(context, url)
     }
+
+    private fun isSelfHandledSiteUri(uri: Uri): Boolean =
+            runCatching { SiteUrls.isSiteUri(uri) }.getOrDefault(false)
 
     /**
      * Отдать ссылку профильному приложению, если оно есть.

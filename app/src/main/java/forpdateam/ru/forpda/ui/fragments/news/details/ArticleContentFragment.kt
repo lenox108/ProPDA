@@ -2954,7 +2954,9 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     fun openExternalBrowser(url: String) {
         webView.runInUiThread {
             if (!isWebViewReady()) return@runInUiThread
-            openExternalBrowserOnly(url)
+            // Обычный тап по внешней ссылке в статье: сначала профильное приложение, потом браузер
+            // (паритет с тапом по ссылке в теме форума — LinkHandler.externalIntent).
+            openExternalPreferringApp(url)
         }
     }
 
@@ -2984,7 +2986,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             if (youtubeVideoId != null && YouTubeLauncher.openApp(webView.context, youtubeVideoId)) {
                 return@runInUiThread
             }
-            openExternalBrowserOnly(safeUrl)
+            openExternalPreferringApp(safeUrl)
         }
     }
 
@@ -3013,10 +3015,23 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
     }
 
     private fun openExternalBrowserOnly(url: String) {
+        openExternalUrl(url, preferApp = false)
+    }
+
+    /** Тап по внешней ссылке: сначала профильное приложение, затем браузер. */
+    private fun openExternalPreferringApp(url: String) {
+        openExternalUrl(url, preferApp = true)
+    }
+
+    private fun openExternalUrl(url: String, preferApp: Boolean) {
         val context = webView.context
         val safeUrl = NewsArticleUrls.normalizeExternal(url) ?: return
         try {
-            ExternalBrowserLauncher.open(context, safeUrl)
+            if (preferApp) {
+                ExternalBrowserLauncher.openPreferringApp(context, safeUrl)
+            } else {
+                ExternalBrowserLauncher.open(context, safeUrl)
+            }
         } catch (e: Exception) {
             Timber.w(e, "Unable to open external browser for %s", safeUrl)
             Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
