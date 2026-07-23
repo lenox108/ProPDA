@@ -88,7 +88,10 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="10dp"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:clipChildren="false"><!-- lets the ⋮ glyph overflow the nick row (it is drawn
+                     larger than its 0dp-height box, and in COMPACT it is nudged down to match the
+                     comfortable inset); without this the column clipped the bottom dot. -->
 
                 <!-- Nick row. In the CLASSIC header only the nick is visible here and the date lives in
                      the right-hand column. In the MODERN header (theme.modern_post_header) the right
