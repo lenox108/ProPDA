@@ -141,36 +141,60 @@ def centered_text(
     )
 
 
+def centered_symbol_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    center_x: int,
+    center_y: int,
+    size: int,
+    fill: str,
+) -> None:
+    """Center a glyph by its visible bounds, not by the font baseline."""
+    face = font(size, bold=True)
+    box = draw.textbbox((0, 0), text, font=face, stroke_width=0)
+    width = box[2] - box[0]
+    height = box[3] - box[1]
+    draw.text(
+        (
+            center_x * SCALE - width / 2 - box[0],
+            center_y * SCALE - height / 2 - box[1],
+        ),
+        text,
+        font=face,
+        fill=fill,
+    )
+
+
 def draw_chat(draw: ImageDraw.ImageDraw, center_x: int, top: int, ink: str) -> None:
     """A simple forum bubble that survives downsampling to mdpi."""
-    x0, y0, x1, y1 = center_x - 45, top, center_x + 45, top + 65
+    x0, y0, x1, y1 = center_x - 41, top, center_x + 41, top + 56
     width = 8
     draw.rounded_rectangle(
         tuple(value * SCALE for value in (x0, y0, x1, y1)),
-        radius=17 * SCALE,
+        radius=15 * SCALE,
         outline=ink,
         width=width * SCALE,
     )
     draw.line(
         [
-            ((x0 + 17) * SCALE, (y1 - 4) * SCALE),
-            ((x0 + 12) * SCALE, (y1 + 17) * SCALE),
-            ((x0 + 34) * SCALE, (y1 - 2) * SCALE),
+            ((x0 + 16) * SCALE, (y1 - 4) * SCALE),
+            ((x0 + 12) * SCALE, (y1 + 14) * SCALE),
+            ((x0 + 31) * SCALE, (y1 - 2) * SCALE),
         ],
         fill=ink,
         width=width * SCALE,
         joint="curve",
     )
-    dot_r = 6
-    for dx in (-19, 0, 19):
+    dot_r = 5
+    for dx in (-17, 0, 17):
         draw.ellipse(
             tuple(
                 value * SCALE
                 for value in (
                     center_x + dx - dot_r,
-                    top + 28 - dot_r,
+                    top + 25 - dot_r,
                     center_x + dx + dot_r,
-                    top + 28 + dot_r,
+                    top + 25 + dot_r,
                 )
             ),
             fill=ink,
@@ -188,9 +212,10 @@ def render_foreground(ink: str, transparent: bool = True) -> Image.Image:
 
     cutout = (0, 0, 0, 0)
     rail_x = 676
-    centered_text(draw, "P", rail_x, 284, 88, cutout)
-    draw_chat(draw, rail_x, 446, cutout)
-    centered_text(draw, "A", rail_x, 638, 88, cutout)
+    # Equal 182 px rhythm between the visible centres: P → forum → A.
+    centered_symbol_text(draw, "P", rail_x, 320, 88, cutout)
+    draw_chat(draw, rail_x, 468, cutout)
+    centered_symbol_text(draw, "A", rail_x, 684, 88, cutout)
 
     # Tiny terminal cue from the reference, simplified to remain legible.
     centered_text(draw, ">_", 334, 650, 38, cutout)
