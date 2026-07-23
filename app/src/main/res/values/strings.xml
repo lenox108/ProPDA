@@ -767,6 +767,8 @@
     <string name="app_icon_four_orange_desc">Оранжевая четвёрка с облаком сообщения.</string>
     <string name="app_icon_neon_four">Неоновая</string>
     <string name="app_icon_neon_four_desc">Светящаяся решётчатая четвёрка; фон белый, в тёмной теме — чёрный.</string>
+    <string name="app_icon_board_four">Плата</string>
+    <string name="app_icon_board_four_desc">Полигональная четвёрка на синей плате.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Цвет акцента</string>
     <string name="accent_neutral">Нейтральный</string>

@@ -91,6 +91,14 @@ object AppIcons {
                     iconRes = R.mipmap.ic_launcher_neon_four,
                     splashThemeRes = R.style.Theme_ForPDA_Splash_NeonFour,
             ),
+            AppIconVariant(
+                    id = "board_four",
+                    alias = "forpdateam.ru.forpda.Launcher.BoardFour",
+                    titleRes = R.string.app_icon_board_four,
+                    subtitleRes = R.string.app_icon_board_four_desc,
+                    iconRes = R.mipmap.ic_launcher_board_four,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_BoardFour,
+            ),
             // app-icon-variants:registry — не удалять, сюда дописывает add_alt_icon.py
     )
 

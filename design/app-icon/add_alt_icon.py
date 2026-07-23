@@ -231,11 +231,17 @@ def write_mono_png(path: Path, image: Image.Image) -> None:
 
 
 def write_resources(icon_id: str, light: Image.Image, dark: Image.Image,
-                    mono: Image.Image, lossless: bool = False) -> None:
+                    mono: Image.Image, lossless: bool = False,
+                    bg_light: Image.Image | None = None,
+                    bg_dark: Image.Image | None = None) -> None:
     name = f"ic_launcher_{icon_id}"
     write_webp(RES / f"drawable-nodpi/{name}_foreground_art.webp", light, lossless)
     write_webp(RES / f"drawable-night-nodpi/{name}_foreground_art.webp", dark, lossless)
     write_mono_png(RES / f"drawable-nodpi/{name}_monochrome_art.png", mono)
+    if bg_light is not None:
+        write_webp(RES / f"drawable-nodpi/{name}_background_art.webp", bg_light, lossless)
+    if bg_dark is not None:
+        write_webp(RES / f"drawable-night-nodpi/{name}_background_art.webp", bg_dark, lossless)
 
     for layer in ("foreground", "monochrome"):
         write(RES / f"drawable/{name}_{layer}.xml", f"""<?xml version="1.0" encoding="utf-8"?>
@@ -247,7 +253,19 @@ def write_resources(icon_id: str, light: Image.Image, dark: Image.Image,
     </item>
 </layer-list>
 """)
-    write(RES / f"drawable/{name}_background.xml", f"""<?xml version="1.0" encoding="utf-8"?>
+    if bg_light is not None:
+        # Растровая подложка (градиент, текстура) — сплошным цветом такую не задать.
+        write(RES / f"drawable/{name}_background.xml", f"""<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/{name}_background_art" />
+    </item>
+</layer-list>
+""")
+    else:
+        write(RES / f"drawable/{name}_background.xml", f"""<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <solid android:color="@color/{name}_background" />
 </shape>
@@ -395,12 +413,17 @@ def save_review(icon_id: str, light: Image.Image, dark: Image.Image, mono: Image
                 light_bg: str, dark_bg: str) -> None:
     """Лист сверки: каждый слой под кругом, сквирклом и скруглённым квадратом."""
     def tile(art: Image.Image, bg) -> Image.Image:
-        base = Image.new("RGBA", art.size, bg)
+        # bg — либо цвет, либо готовая растровая подложка варианта.
+        if isinstance(bg, Image.Image):
+            base = bg.convert("RGBA").resize(art.size, Image.Resampling.LANCZOS)
+        else:
+            base = Image.new("RGBA", art.size, bg)
         base.alpha_composite(art)
         return base
 
-    def rgb(value: str) -> tuple:
-        return tuple(int(value[i:i + 2], 16) for i in (3, 5, 7))
+    def rgb(value) -> tuple:
+        return value if isinstance(value, Image.Image) else tuple(
+            int(value[i:i + 2], 16) for i in (3, 5, 7))
 
     # Monet: система тонирует монохромный слой — показываем характерную пару.
     monet = tile(_tint(mono, "#33426B"), rgb("#FFD9E3FF"))
@@ -470,6 +493,11 @@ def main() -> None:
     parser.add_argument("--light-bg", help="фон светлой иконки #RRGGBB; по умолчанию — "
                                            "цвет углов мастера")
     parser.add_argument("--dark-bg", help="фон тёмной иконки #RRGGBB")
+    parser.add_argument("--light-bg-image", type=Path,
+                        help="растровая подложка вместо сплошного цвета (градиент, текстура); "
+                             "картинка кладётся во весь холст без обрезки и центровки")
+    parser.add_argument("--dark-bg-image", type=Path,
+                        help="растровая подложка для тёмной темы; по умолчанию = --light-bg-image")
     parser.add_argument("--scale", type=float, default=ART_SCALE,
                         help=f"доля холста под рисунок (по умолчанию {ART_SCALE})")
     parser.add_argument("--as-is", action="store_true",
@@ -492,16 +520,25 @@ def main() -> None:
     for label, layer in (("светлая", light_art), ("AMOLED", dark_art), ("monochrome", mono_art)):
         assert_margins(label, layer)
 
+    bg_light = bg_dark = None
+    if args.light_bg_image:
+        bg_light = Image.open(args.light_bg_image).convert("RGBA").resize(
+            (CANVAS, CANVAS), Image.Resampling.LANCZOS)
+        bg_dark = Image.open(args.dark_bg_image).convert("RGBA").resize(
+            (CANVAS, CANVAS), Image.Resampling.LANCZOS) if args.dark_bg_image else bg_light
+
     light_bg = _normalise_hex(args.light_bg) if args.light_bg else (light_detected or FALLBACK_BG_LIGHT)
     dark_bg = _normalise_hex(args.dark_bg) if args.dark_bg else (dark_detected or FALLBACK_BG_DARK)
-    print(f"  фон: светлый {light_bg}, тёмный {dark_bg}")
+    print(f"  фон: {'растровый ' + args.light_bg_image.name if bg_light is not None else f'светлый {light_bg}, тёмный {dark_bg}'}")
 
     camel = "".join(p.capitalize() for p in args.id.split("_"))
     alias = f"{ALIAS_PREFIX}.{camel}"
     splash_style = f"Theme.ForPDA.Splash.{camel}"
-    write_resources(args.id, light_art, dark_art, mono_art, args.lossless)
-    upsert_color(RES / "values/colors.xml", f"ic_launcher_{args.id}_background", light_bg)
-    upsert_color(RES / "values-night/colors.xml", f"ic_launcher_{args.id}_background", dark_bg)
+    write_resources(args.id, light_art, dark_art, mono_art, args.lossless,
+                    bg_light, bg_dark if bg_dark is not bg_light else None)
+    if bg_light is None:
+        upsert_color(RES / "values/colors.xml", f"ic_launcher_{args.id}_background", light_bg)
+        upsert_color(RES / "values-night/colors.xml", f"ic_launcher_{args.id}_background", dark_bg)
     upsert_string(RES / "values/strings.xml", f"app_icon_{args.id}", args.title_ru)
     upsert_string(RES / "values-en/strings.xml", f"app_icon_{args.id}",
                   args.title_en or args.title_ru)
@@ -512,7 +549,9 @@ def main() -> None:
     upsert_splash_theme(args.id, splash_style)
     upsert_alias(args.id, alias)
     upsert_registry(args.id, alias, splash_style, with_subtitle=bool(args.subtitle_ru))
-    save_review(args.id, light_art, dark_art, mono_art, light_bg, dark_bg)
+    save_review(args.id, light_art, dark_art, mono_art,
+                bg_light if bg_light is not None else light_bg,
+                bg_dark if bg_dark is not None else dark_bg)
     print(f"Готово. Псевдоним: {alias}")
 
 
