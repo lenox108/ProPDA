@@ -75,6 +75,14 @@ object AppIcons {
                     iconRes = R.mipmap.ic_launcher_puzzle,
                     splashThemeRes = R.style.Theme_ForPDA_Splash_Puzzle,
             ),
+            AppIconVariant(
+                    id = "four_orange",
+                    alias = "forpdateam.ru.forpda.Launcher.FourOrange",
+                    titleRes = R.string.app_icon_four_orange,
+                    subtitleRes = R.string.app_icon_four_orange_desc,
+                    iconRes = R.mipmap.ic_launcher_four_orange,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_FourOrange,
+            ),
             // app-icon-variants:registry — не удалять, сюда дописывает add_alt_icon.py
     )
 

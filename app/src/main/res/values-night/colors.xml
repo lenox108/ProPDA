@@ -110,4 +110,5 @@
     <color name="ic_launcher_four_dark_background">#FF191919</color>
     <color name="ic_launcher_four_blue_background">#FFFFFFFF</color>
     <color name="ic_launcher_puzzle_background">#FF000000</color>
+    <color name="ic_launcher_four_orange_background">#FF000000</color>
 </resources>
