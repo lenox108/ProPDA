@@ -543,6 +543,10 @@
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_matrix_4</item>
     </style>
 
+    <style name="Theme.ForPDA.Splash.Droid4" parent="Theme.ForPDA.Splash">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_droid_4</item>
+    </style>
+
     <!-- app-icon-variants:splash — не удалять, сюда дописывает add_alt_icon.py -->
 
     <!--
