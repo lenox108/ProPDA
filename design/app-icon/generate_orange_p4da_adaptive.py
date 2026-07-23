@@ -3,8 +3,12 @@
 The light and AMOLED artwork is never redrawn or colour-adjusted. Android gets
 the approved masters pixel-for-pixel (apart from one high-quality resize).
 Only the one-colour Android 13 themed-icon mask is derived separately.
+
+By default the script renders the review board only. Pass --apply to replace the
+launcher resources, once the board has been approved.
 """
 
+import argparse
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
@@ -220,23 +224,26 @@ def save_review(light: Image.Image, dark: Image.Image, mono: Image.Image) -> Non
     board.save(OUT / "orange-p4da-adaptive-review.png", optimize=True)
 
 
-def main() -> None:
-    light = approved(LIGHT_MASTER)
-    dark = approved(AMOLED_MASTER)
-    mono = themed_mask()
-    validate(light, dark, mono)
-
+def write_android_resources(light: Image.Image, dark: Image.Image, mono: Image.Image) -> None:
+    """Replace the launcher resources. Only ever run after the board is approved."""
     # Full approved renders are intentional foregrounds: this is the only way
     # to keep their gradients, highlights and typography exactly unchanged.
     light.save(RES / "drawable-nodpi/ic_launcher_foreground_art.webp", format="WEBP", quality=90, method=6)
     dark.save(RES / "drawable-night-nodpi/ic_launcher_foreground_art.webp", format="WEBP", quality=90, method=6)
     mono.save(RES / "drawable-nodpi/ic_launcher_monochrome_art.png", optimize=True)
-    mono.save(OUT / "orange-p4da-monochrome-1080.png", optimize=True)
 
     for density, size in DENSITIES.items():
         approved(LIGHT_MASTER, size).save(RES / f"mipmap-{density}/ic_launcher.png", optimize=True)
         approved(AMOLED_MASTER, size).save(RES / f"mipmap-night-{density}/ic_launcher.png", optimize=True)
 
+
+def main(apply: bool = False) -> None:
+    light = approved(LIGHT_MASTER)
+    dark = approved(AMOLED_MASTER)
+    mono = themed_mask()
+    validate(light, dark, mono)
+
+    mono.save(OUT / "orange-p4da-monochrome-1080.png", optimize=True)
     tinted(mono, "#D9E3FF", "#33426B").save(OUT / "orange-p4da-monet-preview-1080.png", optimize=True)
     preview_dir = OUT / "preview-129"
     preview_dir.mkdir(parents=True, exist_ok=True)
@@ -250,6 +257,16 @@ def main() -> None:
         image.resize((129, 129), Image.Resampling.LANCZOS).save(preview_dir / name, optimize=True)
     save_review(light, dark, mono)
 
+    if apply:
+        write_android_resources(light, dark, mono)
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write the launcher resources into app/src/main/res. Without it the "
+        "script only renders the review board for approval.",
+    )
+    main(apply=parser.parse_args().apply)
