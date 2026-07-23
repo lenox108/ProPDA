@@ -7,8 +7,8 @@ OUT = HERE / "joined-rhythm-vector-polish"
 FONT = "/System/Library/Fonts/SFNS.ttf"
 S = 6
 PALETTES = {
-    "light": ("#F7F5F0", "#111317", "#E8E5DF", "#D4AF37"),
-    "amoled": ("#000000", "#F7F5F0", "#090A0C", "#D4AF37"),
+    "light": ("#F7F5F0", "#111317", "#F7F5F0", "#D4AF37"),
+    "amoled": ("#000000", "#F7F5F0", "#000000", "#D4AF37"),
 }
 
 
@@ -63,9 +63,10 @@ def render(mode, final_size=1080):
     cx, cy = sc(103), sc(79)
     d.text((cx-fw/2-box[0], cy-fh/2-box[1]-sc(1)), "4", font=four, fill=ink)
 
-    da = fitted("DA", 69, 45, "Semibold")
+    da = fitted("DA", 62, 41, "Semibold")
     box = d.textbbox((0, 0), "DA", font=da)
-    d.text((sc(78)-box[0], sc(128)-box[1]), "DA", font=da, fill=ink)
+    # Keep a clear optical gap from both the P stem and the lower bowl.
+    d.text((sc(80)-box[0], sc(136)-box[1]), "DA", font=da, fill=ink)
     return im.resize((final_size, final_size), Image.Resampling.LANCZOS)
 
 
