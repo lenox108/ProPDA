@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Orange P4DA launcher, light theme. -->
-    <color name="ic_launcher_background">#FFFFFFFF</color>
+    <!-- Four-container launcher, warm light theme. -->
+    <color name="ic_launcher_background">#FFF7F5F0</color>
     <color name="ic_launcher_foreground">#FF24201E</color>
     <color name="ic_launcher_node_fill">#FF202020</color>
     <color name="ic_launcher_pro">#FFFF6A00</color>
