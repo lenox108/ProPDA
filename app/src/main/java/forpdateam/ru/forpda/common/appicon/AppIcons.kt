@@ -99,6 +99,14 @@ object AppIcons {
                     iconRes = R.mipmap.ic_launcher_metal_4,
                     splashThemeRes = R.style.Theme_ForPDA_Splash_Metal4,
             ),
+            AppIconVariant(
+                    id = "holo_4",
+                    alias = "forpdateam.ru.forpda.Launcher.Holo4",
+                    titleRes = R.string.app_icon_holo_4,
+                    subtitleRes = R.string.app_icon_holo_4_desc,
+                    iconRes = R.mipmap.ic_launcher_holo_4,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_Holo4,
+            ),
             // app-icon-variants:registry — не удалять, сюда дописывает add_alt_icon.py
     )
 
