@@ -8,12 +8,14 @@ aligned and repeatable.
 import argparse
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = ROOT / "design/app-icon"
 OUT = HERE / "four-container-icon"
+REFERENCE = OUT / "reference-original.png"
 RES = ROOT / "app/src/main/res"
 
 CANVAS = 1080
@@ -40,33 +42,83 @@ def font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(str(FONT_BOLD if bold else FONT_REGULAR), size * SCALE)
 
 
-def draw_four(draw: ImageDraw.ImageDraw, ink: str) -> None:
-    """Draw the compact, softly rounded 4 from the supplied reference."""
-    # A tapered diagonal joins the stem below its rounded cap, so there is no
-    # bump or pointed ear at the shoulder.
-    draw.polygon(
-        [
-            (235 * SCALE, 650 * SCALE),
-            (528 * SCALE, 226 * SCALE),
-            (580 * SCALE, 190 * SCALE),
-            (638 * SCALE, 190 * SCALE),
-            (405 * SCALE, 584 * SCALE),
-            (278 * SCALE, 704 * SCALE),
-        ],
-        fill=ink,
-    )
+def connected_components(mask: np.ndarray) -> list[list[tuple[int, int]]]:
+    height, width = mask.shape
+    seen = np.zeros_like(mask, dtype=bool)
+    components: list[list[tuple[int, int]]] = []
+    for y in range(height):
+        for x in range(width):
+            if not mask[y, x] or seen[y, x]:
+                continue
+            stack = [(x, y)]
+            seen[y, x] = True
+            component: list[tuple[int, int]] = []
+            while stack:
+                px, py = stack.pop()
+                component.append((px, py))
+                for nx, ny in ((px - 1, py), (px + 1, py), (px, py - 1), (px, py + 1)):
+                    if (
+                        0 <= nx < width
+                        and 0 <= ny < height
+                        and mask[ny, nx]
+                        and not seen[ny, nx]
+                    ):
+                        seen[ny, nx] = True
+                        stack.append((nx, ny))
+            components.append(component)
+    return components
 
-    # The right stem is deliberately narrower than the old blocky version.
-    draw.rounded_rectangle(
-        tuple(value * SCALE for value in (568, 158, 744, 846)),
-        radius=44 * SCALE,
-        fill=ink,
+
+def traced_four_mask() -> Image.Image:
+    """Trace the actual 4 from the user's reference; do not reinterpret it."""
+    rgb = np.asarray(Image.open(REFERENCE).convert("RGB"))
+    luminance = (
+        0.2126 * rgb[:, :, 0]
+        + 0.7152 * rgb[:, :, 1]
+        + 0.0722 * rgb[:, :, 2]
     )
-    draw.rounded_rectangle(
-        tuple(value * SCALE for value in (220, 584, 657, 716)),
-        radius=55 * SCALE,
-        fill=ink,
-    )
+    dark = luminance < 90
+    body = max(connected_components(dark), key=len)
+    mask = np.zeros_like(dark, dtype=bool)
+    for x, y in body:
+        mask[y, x] = True
+
+    xs = [point[0] for point in body]
+    ys = [point[1] for point in body]
+    left, top, right, bottom = min(xs), min(ys), max(xs), max(ys)
+
+    # Fill the old P/chat/A/terminal cutouts. Preserve only the large triangular
+    # counter, which is part of the numeral itself.
+    crop_inverse = ~mask[top : bottom + 1, left : right + 1]
+    holes = connected_components(crop_inverse)
+    enclosed: list[list[tuple[int, int]]] = []
+    crop_height, crop_width = crop_inverse.shape
+    for component in holes:
+        touches_edge = any(
+            x in (0, crop_width - 1) or y in (0, crop_height - 1)
+            for x, y in component
+        )
+        if not touches_edge:
+            enclosed.append(component)
+    counter = max(enclosed, key=len)
+    for component in enclosed:
+        if component is counter:
+            continue
+        for x, y in component:
+            mask[top + y, left + x] = True
+
+    exact = Image.fromarray((mask[top : bottom + 1, left : right + 1] * 255).astype("uint8"))
+    enlarged = exact.resize((545 * SCALE, 690 * SCALE), Image.Resampling.LANCZOS)
+    enlarged = enlarged.filter(ImageFilter.GaussianBlur(5 * SCALE))
+    return enlarged.point(lambda value: max(0, min(255, round((value - 82) * 255 / 92))))
+
+
+def draw_four(image: Image.Image, ink: str) -> None:
+    alpha = traced_four_mask()
+    layer = Image.new("RGBA", image.size, ink)
+    positioned = Image.new("L", image.size, 0)
+    positioned.paste(alpha, (245 * SCALE, 170 * SCALE))
+    image.paste(layer, (0, 0), positioned)
 
 
 def centered_text(
@@ -131,25 +183,16 @@ def render_foreground(ink: str, transparent: bool = True) -> Image.Image:
 
     # The 4 occupies a 650 px optical square. Its right stem is the stable
     # alignment rail for all three inner symbols.
-    draw_four(draw, ink)
-    # Open triangular counter with the same proportions as the reference.
-    draw.polygon(
-        [
-            (424 * SCALE, 566 * SCALE),
-            (568 * SCALE, 336 * SCALE),
-            (568 * SCALE, 566 * SCALE),
-        ],
-        fill=BG_LIGHT if not transparent else (0, 0, 0, 0),
-    )
+    draw_four(image, ink)
 
     cutout = (0, 0, 0, 0)
-    rail_x = 656
-    centered_text(draw, "P", rail_x, 266, 96, cutout)
-    draw_chat(draw, rail_x, 420, cutout)
-    centered_text(draw, "A", rail_x, 606, 96, cutout)
+    rail_x = 687
+    centered_text(draw, "P", rail_x, 292, 92, cutout)
+    draw_chat(draw, rail_x, 450, cutout)
+    centered_text(draw, "A", rail_x, 642, 92, cutout)
 
     # Tiny terminal cue from the reference, simplified to remain legible.
-    centered_text(draw, ">_", 302, 618, 42, cutout)
+    centered_text(draw, ">_", 347, 652, 40, cutout)
 
     return image.resize((CANVAS, CANVAS), Image.Resampling.LANCZOS)
 
