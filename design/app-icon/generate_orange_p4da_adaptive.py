@@ -16,7 +16,9 @@ OUT = ROOT / "design/app-icon/orange-p4da-adaptive"
 LIGHT_MASTER = OUT / "orange-p4da-light-master.png"
 AMOLED_MASTER = OUT / "orange-p4da-amoled-master.png"
 CANVAS = 1080
-ART_SCALE = 0.87
+# The launcher zooms adaptive foregrounds; 68% matches the visual footprint of
+# the neighbouring 4PDA icon in the emulator's circular mask.
+ART_SCALE = 0.68
 DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 
 
@@ -144,7 +146,7 @@ def themed_mask() -> Image.Image:
     mdy = round((CANVAS - (top + bottom)) / 2)
     final_mask = Image.new("L", (CANVAS, CANVAS), 0)
     final_mask.paste(mask, (mdx, mdy))
-    # Match the 13% breathing-room reduction used by both coloured masters.
+    # Match the breathing-room reduction used by both coloured masters.
     reduced = final_mask.resize(
         (round(CANVAS * ART_SCALE), round(CANVAS * ART_SCALE)),
         Image.Resampling.LANCZOS,
