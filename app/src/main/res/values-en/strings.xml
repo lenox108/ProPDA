@@ -613,6 +613,8 @@
     <string name="app_icon_droid_4_desc">Green droid four; white and black themes.</string>
     <string name="app_icon_pixel_4">Pixel</string>
     <string name="app_icon_pixel_4_desc">Dissolving pixel four; white and black themes.</string>
+    <string name="app_icon_term_4">Terminal</string>
+    <string name="app_icon_term_4_desc">Terminal window with a green four; light and black themes.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>
