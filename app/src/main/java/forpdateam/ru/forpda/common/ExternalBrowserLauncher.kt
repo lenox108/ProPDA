@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import forpdateam.ru.forpda.R
@@ -24,6 +25,8 @@ object ExternalBrowserLauncher {
      * подставляется уже в явный интент запуска.
      */
     private val BROWSER_PROBE_URIS = listOf("https://www.example.com", "http://www.example.com")
+    /** Хост для пробы «тот же путь, но чужой хост» — см. [collectHostAgnosticPackages]. */
+    private const val NEUTRAL_PROBE_HOST = "www.example.com"
     private val KNOWN_BROWSER_PACKAGES = listOf(
             "com.android.chrome",
             "org.mozilla.firefox",
@@ -50,58 +53,116 @@ object ExternalBrowserLauncher {
         // Только http/https конкурируют с браузером за обработку. Прочие схемы (mailto:, tel:,
         // intent:, market: и т.п.) не «браузерные» — отдаём их системе как есть.
         if (scheme == "http" || scheme == "https") {
-            resolveNativeAppIntent(context, uri)?.let { appIntent ->
-                if (launchExplicit(context, appIntent)) {
-                    Log.i(LOG_TAG, "opened native app ${appIntent.component?.packageName} for $uri")
-                    return true
-                }
-            }
+            if (launchNonBrowserApp(context, uri)) return true
         }
         return open(context, url)
     }
 
     /**
-     * Если для этого КОНКРЕТНОГО URL выбран (или верифицирован через App Links) нативный обработчик
-     * — не браузер и не мы, — вернуть явный интент на него. Иначе null (→ откат в браузер).
+     * Отдать ссылку профильному приложению, если оно есть.
      *
-     * resolveActivity(MATCH_DEFAULT_ONLY) уважает пользовательский выбор «Открывать по умолчанию»:
-     *  • верифицированный App Links-обработчик хоста имеет приоритет над браузером по умолчанию;
-     *  • пользовательский дефолт для домена возвращается тоже;
-     *  • если дефолт не задан — вернётся браузер по умолчанию (его отсекаем) либо ResolverActivity.
-     * Так «в первую очередь своё приложение, если оно выбрано, иначе браузер» соблюдается точно.
+     * **Android 11+ (API 30+) — `FLAG_ACTIVITY_REQUIRE_NON_BROWSER`.** Система сама резолвит интент и
+     * бросает ActivityNotFoundException, если ссылку готовы взять ТОЛЬКО браузеры. Это единственный
+     * рабочий путь при package visibility: наш `<queries>` объявляет http/https без хоста, а такая
+     * запись открывает видимость лишь браузерам (проверено: `dumpsys package queries` для нашего
+     * пакета содержит один com.android.chrome). Поэтому хост-специфичные обработчики — YouTube и
+     * подобные — перечислением через PackageManager не находятся в принципе, сколько бы мы ни
+     * фильтровали. У startActivity таких ограничений нет: резолвом занимается система.
+     *
+     * Заодно это уважает выбор пользователя: если он запретил приложению открывать ссылки, оно не
+     * попадёт в кандидаты и мы честно уйдём в браузер. Если кандидатов несколько — система покажет
+     * свой выбор приложений.
+     *
+     * **API < 30** — фильтрации видимости на таких устройствах нет, поэтому работает перечисление.
+     */
+    private fun launchNonBrowserApp(context: Context, uri: Uri): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val intent = createBrowserViewIntent(uri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER)
+                if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            return try {
+                context.startActivity(intent)
+                Log.i(LOG_TAG, "opened non-browser app for $uri")
+                true
+            } catch (e: ActivityNotFoundException) {
+                Log.i(LOG_TAG, "no non-browser app for $uri, falling back to browser")
+                false
+            }
+        }
+        val appIntent = resolveNativeAppIntent(context, uri) ?: return false
+        if (!launchExplicit(context, appIntent)) return false
+        Log.i(LOG_TAG, "opened native app ${appIntent.component?.packageName} for $uri")
+        return true
+    }
+
+    /**
+     * Если этот КОНКРЕТНЫЙ URL умеет открыть профильное нативное приложение (не браузер и не мы) —
+     * вернуть явный интент на него. Иначе null (→ откат в браузер).
+     *
+     * Два шага, потому что одного resolveActivity недостаточно:
+     *  1. resolveActivity(MATCH_DEFAULT_ONLY) — уважает явный пользовательский выбор «Открывать по
+     *     умолчанию» и верифицированные App Links (так открывается, например, ali.click → AliExpress).
+     *  2. Если дефолт не задан, система возвращает ResolverActivity, а не приложение — так ведёт себя
+     *     YouTube: его домены в состоянии `system_configured`, а не `verified`, поэтому шаг 1 даёт
+     *     ResolverActivity и раньше мы просто уходили в браузер. Поэтому берём хост-специфичный
+     *     обработчик напрямую из перечисления (см. [collectHostAgnosticPackages]).
      */
     private fun resolveNativeAppIntent(context: Context, uri: Uri): Intent? {
         val packageManager = context.packageManager
         val realIntent = createBrowserViewIntent(uri)
-        val resolved = packageManager
-                .resolveActivity(realIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        val hostAgnostic = collectHostAgnosticPackages(context, uri)
+
+        packageManager.resolveActivity(realIntent, PackageManager.MATCH_DEFAULT_ONLY)
                 ?.activityInfo
+                ?.takeIf { it.isLaunchableNativeApp(context, hostAgnostic) }
+                ?.let {
+                    Log.i(LOG_TAG, "default handler for $uri: ${it.packageName}/${it.name}")
+                    return it.toExplicitBrowserIntent(realIntent)
+                }
+
+        // Перечисление отсортировано системой по качеству совпадения: обработчик по хосту
+        // (match=0x508000 у YouTube) идёт впереди браузера по схеме (0x208000).
+        val hostSpecific = packageManager
+                .queryIntentActivities(realIntent, PackageManager.MATCH_ALL)
+                .mapNotNull { it.activityInfo }
+                .firstOrNull { it.isLaunchableNativeApp(context, hostAgnostic) }
                 ?: return null
-        if (!resolved.isLaunchableNativeApp(context, collectBrowserPackages(context))) return null
-        Log.i(LOG_TAG, "native handler for $uri: ${resolved.packageName}/${resolved.name}")
-        return resolved.toExplicitBrowserIntent(realIntent)
+        Log.i(LOG_TAG, "host-specific handler for $uri: ${hostSpecific.packageName}/${hostSpecific.name}")
+        return hostSpecific.toExplicitBrowserIntent(realIntent)
     }
 
-    /** Пакеты, которые отвечают на нейтральную браузер-пробу = настоящие браузеры (их исключаем). */
-    private fun collectBrowserPackages(context: Context): Set<String> {
+    /**
+     * Пакеты, которые берут ссылку НЕ из-за её хоста, — их нельзя считать «профильным приложением»:
+     *  • браузеры (заявляют любой https-хост) — ловятся голыми [BROWSER_PROBE_URIS];
+     *  • обработчики по пути/расширению (менеджер загрузок на `*.apk` и т.п.) — ловятся пробой с тем
+     *    же путём/квери, но НЕЙТРАЛЬНЫМ хостом. Без этой пробы тап по прямой файловой ссылке мог бы
+     *    уехать в менеджер загрузок вместо браузера.
+     * Всё, что матчится на реальный URL, но НЕ на эти пробы, заявляет именно хост (YouTube, AliExpress).
+     */
+    private fun collectHostAgnosticPackages(context: Context, uri: Uri): Set<String> {
         val packageManager = context.packageManager
-        val browsers = HashSet<String>(KNOWN_BROWSER_PACKAGES)
-        for (probe in BROWSER_PROBE_URIS) {
-            val probeIntent = createBrowserViewIntent(Uri.parse(probe))
-            packageManager.queryIntentActivities(probeIntent, PackageManager.MATCH_ALL)
+        val result = HashSet<String>(KNOWN_BROWSER_PACKAGES)
+        val probes = BROWSER_PROBE_URIS.mapTo(ArrayList()) { Uri.parse(it) }
+        runCatching { uri.buildUpon().authority(NEUTRAL_PROBE_HOST).build() }
+                .getOrNull()
+                ?.let { probes.add(it) }
+        for (probe in probes) {
+            packageManager
+                    .queryIntentActivities(createBrowserViewIntent(probe), PackageManager.MATCH_ALL)
                     .mapNotNull { it.activityInfo?.packageName }
-                    .forEach { browsers.add(it) }
+                    .forEach { result.add(it) }
         }
-        return browsers
+        return result
     }
 
-    private fun ActivityInfo.isLaunchableNativeApp(context: Context, browserPackages: Set<String>): Boolean {
+    private fun ActivityInfo.isLaunchableNativeApp(context: Context, excludedPackages: Set<String>): Boolean {
         if (packageName.isNullOrEmpty()) return false
         if (packageName == "android") return false // ResolverActivity — дефолт не выбран
         if (name?.contains("ResolverActivity", ignoreCase = true) == true) return false
         if (packageName == context.packageName || packageName == BASE_PACKAGE_NAME) return false
         if (name?.startsWith("$BASE_PACKAGE_NAME.") == true) return false
-        return packageName !in browserPackages
+        return packageName !in excludedPackages
     }
 
     fun open(context: Context, url: String): Boolean {
