@@ -22,6 +22,8 @@ import forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -38,15 +40,74 @@ class FavoritesRepository(
         private val readBoundaryStore: TopicReadBoundaryStore
 ) {
 
+    /**
+     * Сериализует все секции «снапшот кэша → мутация → запись» этого репозитория. Обработчики
+     * событий ([handleEvent]) и сетевой refresh ([loadFavorites]) пишут в кэш ВЕСЬ список из
+     * point-in-time снапшота, а [markRead]/[syncSubmittedTopicLastPost] — одну строку; без общего
+     * лока полная запись по устаревшему снапшоту молча откатывала конкурентный markRead (строка
+     * снова UNREAD) или затирала его localRead*-маркеры, ослепляя анти-relight гейты — «дочитал
+     * тему, вышел, а в избранном висит непрочитанной до refresh». Сетевые вызовы держим ВНЕ лока.
+     */
+    private val cacheMutex = Mutex()
+
+    /**
+     * Локальные markRead по темам, которых не было в кэше в момент отметки (topicId → millis
+     * отметки). Применяются при следующем [loadFavorites], если строка пришла с сети и её
+     * последний пост не новее момента прочтения; протухают по [PENDING_LOCAL_READ_TTL_MS].
+     */
+    private val pendingLocalReadTopics = java.util.concurrent.ConcurrentHashMap<Int, Long>()
+
+    /**
+     * Watermark «прочитано до этого момента» для анти-relight гейтов. Не голые часы устройства:
+     * гейты ([localReadDefeatsStaleInspector], merge в [FavoriteReadStateMerge]) сравнивают его с
+     * СЕРВЕРНЫМИ секундами (inspector last_post_ts), и при отстающих часах свежепрочитанный пост
+     * выглядел «новее» отметки — тема перезажигалась. Якорим по серверному времени последнего
+     * поста строки (favItem.date): всё, что не новее видимого последнего поста, покрыто
+     * независимо от перекоса часов; реально новый пост (timestamp выше) зажигает как раньше.
+     */
+    private fun localReadWatermarkMillis(favItem: FavItem): Long {
+        val lastPostMillis = Utils.parseForumDateTime(favItem.date)?.time ?: 0L
+        return maxOf(
+                System.currentTimeMillis(),
+                lastPostMillis + LAST_POST_MINUTE_RESOLUTION_CUSHION_MS
+        )
+    }
+
+    /** См. [pendingLocalReadTopics]; вызывается под [cacheMutex] перед save в [loadFavorites]. */
+    private fun applyPendingLocalReads(items: List<FavItem>) {
+        if (pendingLocalReadTopics.isEmpty()) return
+        val now = System.currentTimeMillis()
+        pendingLocalReadTopics.entries.removeAll { now - it.value > PENDING_LOCAL_READ_TTL_MS }
+        items.forEach { item ->
+            if (item.isForum || item.topicId <= 0) return@forEach
+            val readAtMillis = pendingLocalReadTopics[item.topicId] ?: return@forEach
+            val lastPostMillis = Utils.parseForumDateTime(item.date)?.time ?: 0L
+            pendingLocalReadTopics.remove(item.topicId)
+            if (lastPostMillis > readAtMillis + LAST_POST_MINUTE_RESOLUTION_CUSHION_MS) {
+                return@forEach // появился пост новее момента прочтения — отметка устарела
+            }
+            item.isNew = false
+            item.readState = FavoriteReadState.READ
+            item.unreadPostCount = 0
+            item.localReadPostId = item.topicId
+            item.localReadPostDateMillis = maxOf(
+                    readAtMillis,
+                    lastPostMillis + LAST_POST_MINUTE_RESOLUTION_CUSHION_MS
+            )
+        }
+    }
+
     fun observeItems(sorting: Sorting? = null, unreadTop: Boolean = listsPreferencesHolder.getUnreadTop()): Flow<List<FavItem>> =
             favoritesCache.observeItems().map { items -> items.sortedForFavorites(sorting, unreadTop) }
 
     suspend fun loadCache(sorting: Sorting? = null, unreadTop: Boolean = listsPreferencesHolder.getUnreadTop()): List<FavItem> = withContext(Dispatchers.IO) {
         FavoritesUnreadTrace.loadStarted(source = "cache", sortUnreadOnTop = unreadTop)
-        val items = favoritesCache.getItems().map(::FavItem).toMutableList()
         val inspectorEvents = loadInspectorEvents()
-        mergeInspectorIntoCachedItems(items, inspectorEvents)
-        persistInspectorReadStateChanges(items)
+        cacheMutex.withLock {
+            val items = favoritesCache.getItems().map(::FavItem).toMutableList()
+            mergeInspectorIntoCachedItems(items, inspectorEvents)
+            persistInspectorReadStateChanges(items)
+        }
         favoritesCache.ensureItemsPublished().sortedForFavorites(sorting, unreadTop).also {
             traceSortedItems(it, unreadTop)
             syncFavoritesCounter(it, source = "favorites_cache", protectFromHeaderInflation = false)
@@ -65,11 +126,14 @@ class FavoritesRepository(
      */
     suspend fun seedFavoritesCounter() = withContext(Dispatchers.IO) {
         if (!authHolder.get().isAuth()) return@withContext
-        val cached = favoritesCache.getItems()
-        if (cached.isEmpty()) return@withContext
-        val items = cached.map(::FavItem).toMutableList()
-        mergeInspectorIntoCachedItems(items, loadInspectorEvents())
-        persistInspectorReadStateChanges(items)
+        if (favoritesCache.getItems().isEmpty()) return@withContext
+        val inspectorEvents = loadInspectorEvents()
+        val items = cacheMutex.withLock {
+            favoritesCache.getItems().map(::FavItem).toMutableList().also {
+                mergeInspectorIntoCachedItems(it, inspectorEvents)
+                persistInspectorReadStateChanges(it)
+            }
+        }
         syncFavoritesCounter(items, source = "favorites_counter_seed", protectFromHeaderInflation = false)
     }
 
@@ -84,9 +148,12 @@ class FavoritesRepository(
         }
         val data = favoritesApi.getFavorites(st, all, sorting, forceRefresh)
         val inspectorEvents = loadInspectorEvents()
-        val cachedByFavId = favoritesCache.getItems().associateBy { it.favId }
-        mergeNetworkFavoriteReadStates(data.items, cachedByFavId, inspectorEvents, networkIsFreshRefresh = forceRefresh)
-        favoritesCache.saveFavorites(data.items)
+        cacheMutex.withLock {
+            val cachedByFavId = favoritesCache.getItems().associateBy { it.favId }
+            mergeNetworkFavoriteReadStates(data.items, cachedByFavId, inspectorEvents, networkIsFreshRefresh = forceRefresh)
+            applyPendingLocalReads(data.items)
+            favoritesCache.saveFavorites(data.items)
+        }
         traceSortedItems(data.items, unreadTop)
         syncFavoritesCounter(data.items, source = "favorites_refresh")
         data
@@ -119,8 +186,17 @@ class FavoritesRepository(
     }
 
     suspend fun markRead(topicId: Int) = withContext(Dispatchers.IO) {
+        cacheMutex.withLock { markReadLocked(topicId) }
+    }
+
+    private suspend fun markReadLocked(topicId: Int) {
         val favItem = favoritesCache.getItemByTopicId(topicId)
         if (favItem == null) {
+            // Тема ещё не в кэше (избранное ни разу не грузили / только что добавлена): не роняем
+            // отметку молча, а откладываем — применится при следующем loadFavorites, если к тому
+            // моменту не появится пост новее. Для не-избранных тем (markTopicRead стреляет по всем)
+            // запись просто истечёт по TTL, в списке она никогда не совпадёт.
+            pendingLocalReadTopics[topicId] = System.currentTimeMillis()
             // Debug #3: cache miss — must be visible in logs, otherwise we silently drop a mark-read.
             ThemePostReadStateDiagnostics.markReadSkipped(
                     topicId = topicId,
@@ -129,7 +205,7 @@ class FavoritesRepository(
                     currentPage = 0,
                     allPages = 0
             )
-            return@withContext
+            return
         }
         val prevIsNew = favItem.isNew
         val prevReadState = favItem.readState
@@ -141,7 +217,8 @@ class FavoritesRepository(
         // Не сбрасываем inspectorMarkedUnread — он должен пересчитываться только в merge на
         // следующем refresh. Иначе теряем бейдж до прихода inspector.
         favItem.localReadPostId = topicId
-        favItem.localReadPostDateMillis = System.currentTimeMillis()
+        favItem.localReadPostDateMillis = localReadWatermarkMillis(favItem)
+        pendingLocalReadTopics.remove(topicId) // строка в кэше — отложенная отметка больше не нужна
         favoritesCache.updateItem(favItem)
         // Тема помечена прочитанной — снимаем клиентскую границу прочитанного, иначе при следующем
         // открытии TopicReadBoundaryPolicy резюмнёт findpost'ом на старую границу (последний реально
@@ -183,26 +260,28 @@ class FavoritesRepository(
         // saveFavorites) перезаписывает date/lastUserNick серверной правдой (merge сохраняет только
         // read-state), так что оверрайд недолговечен и не «затирает более свежие данные».
         if (topicId <= 0 || sentAtMillis <= 0L) return@withContext
-        val favItem = favoritesCache.getItemByTopicId(topicId) ?: return@withContext
-        if (favItem.isForum) return@withContext
-        // Гард: применяем только если наш пост действительно новее уже сохранённого последнего
-        // (на случай, если refresh успел принести ещё более свежую запись).
-        val currentMillis = Utils.parseForumDateTime(favItem.date)?.time ?: Long.MIN_VALUE
-        if (sentAtMillis <= currentMillis) return@withContext
-        favItem.lastUserId = currentUserId
-        if (!currentUserNick.isNullOrBlank()) {
-            favItem.lastUserNick = currentUserNick
+        cacheMutex.withLock {
+            val favItem = favoritesCache.getItemByTopicId(topicId) ?: return@withLock
+            if (favItem.isForum) return@withLock
+            // Гард: применяем только если наш пост действительно новее уже сохранённого последнего
+            // (на случай, если refresh успел принести ещё более свежую запись).
+            val currentMillis = Utils.parseForumDateTime(favItem.date)?.time ?: Long.MIN_VALUE
+            if (sentAtMillis <= currentMillis) return@withLock
+            favItem.lastUserId = currentUserId
+            if (!currentUserNick.isNullOrBlank()) {
+                favItem.lastUserNick = currentUserNick
+            }
+            favItem.date = Utils.getForumDateTime(java.util.Date(sentAtMillis))
+            // Мы только что отписались — тема прочитана до нашего поста.
+            favItem.isNew = false
+            favItem.readState = FavoriteReadState.READ
+            favItem.unreadPostCount = 0
+            favItem.localReadPostId = topicId
+            favItem.localReadPostDateMillis = sentAtMillis
+            page?.pagination?.all?.takeIf { it > favItem.pages }?.let { favItem.pages = it }
+            favoritesCache.updateItem(favItem)
+            syncFavoritesCounter(favoritesCache.getItems(), source = "favorites_submitted_last_post")
         }
-        favItem.date = Utils.getForumDateTime(java.util.Date(sentAtMillis))
-        // Мы только что отписались — тема прочитана до нашего поста.
-        favItem.isNew = false
-        favItem.readState = FavoriteReadState.READ
-        favItem.unreadPostCount = 0
-        favItem.localReadPostId = topicId
-        favItem.localReadPostDateMillis = sentAtMillis
-        page?.pagination?.all?.takeIf { it > favItem.pages }?.let { favItem.pages = it }
-        favoritesCache.updateItem(favItem)
-        syncFavoritesCounter(favoritesCache.getItems(), source = "favorites_submitted_last_post")
     }
 
     /** Все непрочитанные темы в избранном - на форуме и в локальном кэше. */
@@ -242,22 +321,24 @@ class FavoritesRepository(
             // вместо свежих. cold-miss после clear → резюм молчит → серверный getlastpost/getnewpost
             // ведёт на свежак, чего пользователь и ждёт. См. [TopicReadBoundaryStore].
             successTopicIds.forEach { readBoundaryStore.clear(it) }
-            val items = favoritesCache.getItems()
-            items.forEach {
-                if (it.topicId in successTopicIds && it.isNew && !it.isForum) {
-                    it.isNew = false
-                    it.readState = FavoriteReadState.READ
-                    it.unreadPostCount = 0
-                    // Намеренно сбрасываем inspectorMarkedUnread здесь: при markAllFavoritesRead
-                    // пользователь явно потребовал считать тему прочитанной — последующий merge
-                    // не должен заново поднять бейдж до прихода нового инспектора.
-                    it.inspectorMarkedUnread = false
+            cacheMutex.withLock {
+                val items = favoritesCache.getItems()
+                items.forEach {
+                    if (it.topicId in successTopicIds && it.isNew && !it.isForum) {
+                        it.isNew = false
+                        it.readState = FavoriteReadState.READ
+                        it.unreadPostCount = 0
+                        // Намеренно сбрасываем inspectorMarkedUnread здесь: при markAllFavoritesRead
+                        // пользователь явно потребовал считать тему прочитанной — последующий merge
+                        // не должен заново поднять бейдж до прихода нового инспектора.
+                        it.inspectorMarkedUnread = false
+                    }
                 }
+                favoritesCache.saveFavorites(items)
+                countersHolder.set(countersHolder.get().apply {
+                    favorites = countUnreadFavoriteTopics(items)
+                }, source = "favorites_mark_all_read")
             }
-            favoritesCache.saveFavorites(items)
-            countersHolder.set(countersHolder.get().apply {
-                favorites = countUnreadFavoriteTopics(items)
-            }, source = "favorites_mark_all_read")
             eventsApi.invalidateFavoritesInspectorCache()
         }
 
@@ -265,16 +346,21 @@ class FavoritesRepository(
     }
 
     suspend fun handleEvent(event: TabNotification): Int = withContext(Dispatchers.IO) {
-        val favItems = favoritesCache.getItems()
-        val sorting = Sorting(
-                listsPreferencesHolder.getSortingKey(),
-                listsPreferencesHolder.getSortingOrder()
-        )
-        val count = countersHolder.get().favorites
-        handleEventTransaction(favItems, event, sorting, count).also {
-            countersHolder.set(countersHolder.get().apply {
-                favorites = it
-            }, source = "favorites_events")
+        // Снапшот и полная запись списка в handleEventTransaction обязаны быть атомарны
+        // относительно markRead и сетевого refresh — иначе full-save по устаревшему снапшоту
+        // молча откатывает свежую локальную отметку прочитанного.
+        cacheMutex.withLock {
+            val favItems = favoritesCache.getItems()
+            val sorting = Sorting(
+                    listsPreferencesHolder.getSortingKey(),
+                    listsPreferencesHolder.getSortingOrder()
+            )
+            val count = countersHolder.get().favorites
+            handleEventTransaction(favItems, event, sorting, count).also {
+                countersHolder.set(countersHolder.get().apply {
+                    favorites = it
+                }, source = "favorites_events")
+            }
         }
     }
 
@@ -292,17 +378,20 @@ class FavoritesRepository(
         if (event.isWebSocket && event.event.isNew) {
             val newFavItems = favItems.toMutableList()
             newFavItems.find { it.topicId == event.event.sourceId && !it.isForum && it.topicId > 0 }?.also { fav ->
-                // WS-«новое» может быть ЗАДЕРЖАННЫМ событием о посте, который мы только что открыли и
-                // прочитали (гонка доставки WS и нашего markRead) → не зажигаем обратно. Точной метки
-                // времени у WS-события нет (parseWebSocketEvent их не заполняет), поэтому гейтим по
-                // свежести локального прочтения. Настоящий новый пост позже окна честно зажжёт тему
-                // (через inspector/полный рефреш).
-                val recentlyReadLocally = fav.readState == FavoriteReadState.READ &&
+                // WS-«новое» может быть ЗАДЕРЖАННЫМ событием о посте, который мы уже прочитали
+                // (гонка доставки WS и нашего markRead; дренаж очереди на idle-reconnect доставляет
+                // эхо и через минуты). Точной метки времени и автора у WS-события нет
+                // (parseWebSocketEvent их не заполняет), поэтому по недавно прочитанной локально
+                // строке решение откладываем follow-up inspector'у: он приходит через ~2.5с
+                // (NOTIFICATION_AGGREGATION_PERIOD_MS) с серверными timestamp'ами и проходит гейт
+                // localReadDefeatsStaleInspector — настоящий новый пост зажжёт тему, эхо — нет.
+                // Прежнее окно в 20с ловило только мгновенное эхо; отложенное (>20с) перезажигало.
+                val deferToInspector = fav.readState == FavoriteReadState.READ &&
                         !fav.isNew &&
                         fav.localReadPostId > 0 &&
                         fav.localReadPostDateMillis > 0L &&
-                        System.currentTimeMillis() - fav.localReadPostDateMillis < RECENT_LOCAL_READ_WS_GUARD_MS
-                if (recentlyReadLocally) return@also
+                        System.currentTimeMillis() - fav.localReadPostDateMillis < LOCAL_READ_WS_DEFER_TO_INSPECTOR_MS
+                if (deferToInspector) return@also
                 if (!fav.isNew) {
                     fav.isNew = true
                     fav.readState = FavoriteReadState.UNREAD
@@ -718,5 +807,19 @@ data class FavoriteMarkReadResult(
 
 private const val INSPECTOR_UNREAD_COUNT_MAX = 199
 
-/** Окно после локального markRead, в котором задержанное WS-«new» об уже прочитанном посте игнорируется. */
-private const val RECENT_LOCAL_READ_WS_GUARD_MS = 20_000L
+/**
+ * Горизонт после локального markRead, в котором «слепое» WS-«new» (без timestamp/автора) не зажигает
+ * строку само, а ждёт follow-up inspector с серверными метками. Задержанное WS-эхо реалистично
+ * приходит в пределах минут (реконнект после idle); час покрывает с запасом, а свежие посты по
+ * давно прочитанным темам продолжают зажигаться мгновенно.
+ */
+private const val LOCAL_READ_WS_DEFER_TO_INSPECTOR_MS = 60L * 60_000L
+
+/**
+ * Запас к времени последнего поста из fav-строки: parseForumDateTime даёт минутное разрешение,
+ * а серверные timestamp'ы инспектора — секундное.
+ */
+private const val LAST_POST_MINUTE_RESOLUTION_CUSHION_MS = 60_000L
+
+/** TTL отложенных локальных отметок прочитанного для тем, которых не было в кэше на момент markRead. */
+private const val PENDING_LOCAL_READ_TTL_MS = 24L * 60 * 60_000L

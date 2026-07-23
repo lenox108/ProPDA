@@ -6,7 +6,6 @@ import javax.inject.Inject
 
 import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
-import forpdateam.ru.forpda.entity.app.TabNotification
 import forpdateam.ru.forpda.entity.remote.favorites.FavData
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import forpdateam.ru.forpda.entity.remote.others.pagination.Pagination
@@ -38,7 +37,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -174,11 +172,12 @@ class FavoritesViewModel @Inject constructor(
             }
         }
 
-        scope.launch {
-            eventsRepository.observeEventsTab()
-                    .debounce(200L)
-                    .collect { handleEvent(it) }
-        }
+        // Событийный пересчёт избранного здесь НЕ подписываем: им владеет процесс-широкий
+        // FavoritesInteractor (подписан из MainViewModel до создания любого экрана). Вторая
+        // параллельная подписка заставляла каждую TabNotification дважды проходить
+        // handleEventTransaction (два конкурентных снапшота и две полные перезаписи кэша) —
+        // лишняя работа и лишнее окно для гонок с markRead. Список сюда всё равно приходит
+        // через favoritesRepository.observeItems (StateFlow кэша).
 
         scope.launch {
             combine(_sortingFlow, listsPreferencesHolder.observeUnreadTopFlow()) { currentSorting, currentUnreadTop ->
@@ -188,6 +187,7 @@ class FavoritesViewModel @Inject constructor(
             }.catch { errorHandler.handle(it) }
                     .collect { list ->
                         localItems.replaceWith(list)
+                        syncSearchCatalogReadStates(list)
                         publishDisplayed()
                     }
         }
@@ -291,13 +291,6 @@ class FavoritesViewModel @Inject constructor(
             runCatching {
                 favoritesRepository.markRead(topicId)
             }
-                    .onFailure { errorHandler.handle(it) }
-        }
-    }
-
-    private fun handleEvent(event: TabNotification) {
-        scope.launch {
-            runCatching { favoritesRepository.handleEvent(event) }
                     .onFailure { errorHandler.handle(it) }
         }
     }
@@ -609,6 +602,23 @@ class FavoritesViewModel @Inject constructor(
             return localItems.toList()
         }
         return searchCatalogItems ?: localItems.toList()
+    }
+
+    /**
+     * Поисковый каталог — отдельный сетевой снапшот, и markRead его не инвалидирует (перезагрузка
+     * всего списка ради одной строки слишком дорога). Без синхронизации дочитанная тема оставалась
+     * жирной в результатах активного поиска до сброса запроса. Переносим только read-state —
+     * остальные поля каталога живут до обычной инвалидации (сортировка/refresh/правки списка).
+     */
+    private fun syncSearchCatalogReadStates(fresh: List<FavItem>) {
+        val catalog = searchCatalogItems ?: return
+        val byFavId = fresh.associateBy { it.favId }
+        catalog.forEach { item ->
+            val actual = byFavId[item.favId] ?: return@forEach
+            item.isNew = actual.isNew
+            item.readState = actual.readState
+            item.unreadPostCount = actual.unreadPostCount
+        }
     }
 
     private fun invalidateSearchCatalog() {
