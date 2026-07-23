@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 HERE = ROOT / "design/app-icon"
 OUT = HERE / "four-container-icon"
 REFERENCE = OUT / "reference-original.png"
+POLISHED_REFERENCE = OUT / "reference-polished-source.png"
 RES = ROOT / "app/src/main/res"
 
 CANVAS = 1080
@@ -36,10 +37,14 @@ DENSITIES = {
 
 FONT_REGULAR = Path("/System/Library/Fonts/SFNS.ttf")
 FONT_BOLD = Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf")
+FONT_FUTURA = Path("/System/Library/Fonts/Supplemental/Futura.ttc")
+FONT_SYMBOL = Path("/System/Library/Fonts/HelveticaNeue.ttc")
 
 
 def font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(str(FONT_BOLD if bold else FONT_REGULAR), size * SCALE)
+    if bold:
+        return ImageFont.truetype(str(FONT_SYMBOL), size * SCALE, index=10)
+    return ImageFont.truetype(str(FONT_REGULAR), size * SCALE)
 
 
 def connected_components(mask: np.ndarray) -> list[list[tuple[int, int]]]:
@@ -69,36 +74,31 @@ def connected_components(mask: np.ndarray) -> list[list[tuple[int, int]]]:
     return components
 
 
-def traced_four_mask() -> Image.Image:
-    """Trace the actual 4 from the user's reference; do not reinterpret it."""
-    rgb = np.asarray(Image.open(REFERENCE).convert("RGB"))
+def clean_four_mask() -> Image.Image:
+    """Extract the approved smooth silhouette, retaining only its main counter."""
+    rgb = np.asarray(Image.open(POLISHED_REFERENCE).convert("RGB"))
     luminance = (
         0.2126 * rgb[:, :, 0]
         + 0.7152 * rgb[:, :, 1]
         + 0.0722 * rgb[:, :, 2]
     )
-    dark = luminance < 90
+    dark = luminance < 100
     body = max(connected_components(dark), key=len)
     mask = np.zeros_like(dark, dtype=bool)
     for x, y in body:
         mask[y, x] = True
-
     xs = [point[0] for point in body]
     ys = [point[1] for point in body]
     left, top, right, bottom = min(xs), min(ys), max(xs), max(ys)
 
-    # Fill the old P/chat/A/terminal cutouts. Preserve only the large triangular
-    # counter, which is part of the numeral itself.
-    crop_inverse = ~mask[top : bottom + 1, left : right + 1]
-    holes = connected_components(crop_inverse)
+    inverse = ~mask[top : bottom + 1, left : right + 1]
     enclosed: list[list[tuple[int, int]]] = []
-    crop_height, crop_width = crop_inverse.shape
-    for component in holes:
-        touches_edge = any(
+    crop_height, crop_width = inverse.shape
+    for component in connected_components(inverse):
+        if not any(
             x in (0, crop_width - 1) or y in (0, crop_height - 1)
             for x, y in component
-        )
-        if not touches_edge:
+        ):
             enclosed.append(component)
     counter = max(enclosed, key=len)
     for component in enclosed:
@@ -107,17 +107,18 @@ def traced_four_mask() -> Image.Image:
         for x, y in component:
             mask[top + y, left + x] = True
 
-    exact = Image.fromarray((mask[top : bottom + 1, left : right + 1] * 255).astype("uint8"))
-    enlarged = exact.resize((545 * SCALE, 690 * SCALE), Image.Resampling.LANCZOS)
-    enlarged = enlarged.filter(ImageFilter.GaussianBlur(5 * SCALE))
-    return enlarged.point(lambda value: max(0, min(255, round((value - 82) * 255 / 92))))
+    clean = Image.fromarray(
+        (mask[top : bottom + 1, left : right + 1] * 255).astype("uint8")
+    )
+    clean = clean.filter(ImageFilter.GaussianBlur(0.7))
+    return clean.resize((540 * SCALE, 700 * SCALE), Image.Resampling.LANCZOS)
 
 
 def draw_four(image: Image.Image, ink: str) -> None:
-    alpha = traced_four_mask()
+    alpha = clean_four_mask()
     layer = Image.new("RGBA", image.size, ink)
     positioned = Image.new("L", image.size, 0)
-    positioned.paste(alpha, (245 * SCALE, 170 * SCALE))
+    positioned.paste(alpha, (240 * SCALE, 165 * SCALE))
     image.paste(layer, (0, 0), positioned)
 
 
@@ -142,34 +143,34 @@ def centered_text(
 
 def draw_chat(draw: ImageDraw.ImageDraw, center_x: int, top: int, ink: str) -> None:
     """A simple forum bubble that survives downsampling to mdpi."""
-    x0, y0, x1, y1 = center_x - 55, top, center_x + 55, top + 77
-    width = 10
+    x0, y0, x1, y1 = center_x - 45, top, center_x + 45, top + 65
+    width = 8
     draw.rounded_rectangle(
         tuple(value * SCALE for value in (x0, y0, x1, y1)),
-        radius=22 * SCALE,
+        radius=17 * SCALE,
         outline=ink,
         width=width * SCALE,
     )
     draw.line(
         [
-            ((x0 + 20) * SCALE, (y1 - 4) * SCALE),
-            ((x0 + 13) * SCALE, (y1 + 20) * SCALE),
-            ((x0 + 40) * SCALE, (y1 - 2) * SCALE),
+            ((x0 + 17) * SCALE, (y1 - 4) * SCALE),
+            ((x0 + 12) * SCALE, (y1 + 17) * SCALE),
+            ((x0 + 34) * SCALE, (y1 - 2) * SCALE),
         ],
         fill=ink,
         width=width * SCALE,
         joint="curve",
     )
-    dot_r = 7
-    for dx in (-24, 0, 24):
+    dot_r = 6
+    for dx in (-19, 0, 19):
         draw.ellipse(
             tuple(
                 value * SCALE
                 for value in (
                     center_x + dx - dot_r,
-                    top + 32 - dot_r,
+                    top + 28 - dot_r,
                     center_x + dx + dot_r,
-                    top + 32 + dot_r,
+                    top + 28 + dot_r,
                 )
             ),
             fill=ink,
@@ -186,13 +187,13 @@ def render_foreground(ink: str, transparent: bool = True) -> Image.Image:
     draw_four(image, ink)
 
     cutout = (0, 0, 0, 0)
-    rail_x = 687
-    centered_text(draw, "P", rail_x, 292, 92, cutout)
-    draw_chat(draw, rail_x, 450, cutout)
-    centered_text(draw, "A", rail_x, 642, 92, cutout)
+    rail_x = 676
+    centered_text(draw, "P", rail_x, 284, 88, cutout)
+    draw_chat(draw, rail_x, 446, cutout)
+    centered_text(draw, "A", rail_x, 638, 88, cutout)
 
     # Tiny terminal cue from the reference, simplified to remain legible.
-    centered_text(draw, ">_", 347, 652, 40, cutout)
+    centered_text(draw, ">_", 334, 650, 38, cutout)
 
     return image.resize((CANVAS, CANVAS), Image.Resampling.LANCZOS)
 
