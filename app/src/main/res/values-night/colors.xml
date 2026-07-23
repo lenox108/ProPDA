@@ -114,4 +114,5 @@
     <color name="ic_launcher_glass_4_background">#FF000000</color>
     <color name="ic_launcher_metal_4_background">#FF000000</color>
     <color name="ic_launcher_holo_4_background">#FF000000</color>
+    <color name="ic_launcher_droid_4_background">#FF000000</color>
 </resources>
