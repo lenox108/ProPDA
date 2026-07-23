@@ -107,6 +107,14 @@ object AppIcons {
                     iconRes = R.mipmap.ic_launcher_holo_4,
                     splashThemeRes = R.style.Theme_ForPDA_Splash_Holo4,
             ),
+            AppIconVariant(
+                    id = "matrix_4",
+                    alias = "forpdateam.ru.forpda.Launcher.Matrix4",
+                    titleRes = R.string.app_icon_matrix_4,
+                    subtitleRes = R.string.app_icon_matrix_4_desc,
+                    iconRes = R.mipmap.ic_launcher_matrix_4,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_Matrix4,
+            ),
             // app-icon-variants:registry — не удалять, сюда дописывает add_alt_icon.py
     )
 
