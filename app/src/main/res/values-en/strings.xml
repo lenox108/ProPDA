@@ -605,6 +605,8 @@
     <string name="app_icon_glass_4_desc">Iridescent glass four; blue in light theme, black in dark.</string>
     <string name="app_icon_metal_4">Metal</string>
     <string name="app_icon_metal_4_desc">Metal four with a circuit board; grey and black themes.</string>
+    <string name="app_icon_holo_4">Holo Shift</string>
+    <string name="app_icon_holo_4_desc">Glitch neon four; navy and black themes.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>

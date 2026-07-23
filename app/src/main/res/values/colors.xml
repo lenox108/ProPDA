@@ -340,4 +340,5 @@
     <color name="ic_launcher_four_orange_background">#FFFFFFFF</color>
     <color name="ic_launcher_glass_4_background">#FF628CCC</color>
     <color name="ic_launcher_metal_4_background">#FFC9CDD1</color>
+    <color name="ic_launcher_holo_4_background">#FF0B0D32</color>
 </resources>
