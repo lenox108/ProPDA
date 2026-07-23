@@ -102,8 +102,8 @@
     <color name="fpda_unread_bg">#24FBBF24</color>
     <color name="fpda_unread_outline">#FFD75E</color>
 
-    <!-- Orange P4DA launcher, AMOLED theme. The monochrome layer is launcher-tinted. -->
-    <color name="ic_launcher_background">#FF000000</color>
+    <!-- Four-container launcher, AMOLED theme. The monochrome layer is launcher-tinted. -->
+    <color name="ic_launcher_background">#FF0B0C0E</color>
     <color name="ic_launcher_foreground">#FFFFFBF5</color>
     <color name="ic_launcher_node_fill">#FF080808</color>
     <color name="ic_launcher_pro">#FFFF6A00</color>
