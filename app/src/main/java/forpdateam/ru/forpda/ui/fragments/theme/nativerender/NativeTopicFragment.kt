@@ -2260,12 +2260,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     submitPosts {
                         // Chain another prefetch if the appended page still leaves the bottom underfilled
                         // (short pages / tall viewport), so reading forward never stalls at a page seam.
-                        if (view != null) recyclerView.post { maybeLoadNextPage() }
+                        // Also re-evaluate the end-of-topic mark: the append can land while the list is
+                        // already at rest (no further scroll events fire), and the IDLE/onScrolled
+                        // re-checks never run — without this, mark-read hinges on the onPause backstop,
+                        // whose gates fail at a page seam.
+                        if (view != null) recyclerView.post {
+                            maybeLoadNextPage()
+                            maybeMarkTopicReadAtEnd()
+                        }
                     }
                     // Enrich the appended page too (post ratings «ka_p» + 💬 counts live only in desktop
                     // HTML) — WebView parity: it defers a merge for every hybrid-appended page, not just the
                     // first. Without this, ratings/counts appeared only on the initially opened page.
                     enrichLoadedPage(page)
+                } else if (view != null) {
+                    // Duplicate/empty page: content unchanged, but loadedPage may have just reached the
+                    // final page — hasNextPage() flipped false with no scroll event to re-check the end.
+                    recyclerView.post { maybeMarkTopicReadAtEnd() }
                 }
                 updatePaginationBar() // totalPages may have grown
 
