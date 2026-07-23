@@ -775,6 +775,8 @@
     <string name="app_icon_matrix_4_desc">Матричная четвёрка PRO; одна на обе темы.</string>
     <string name="app_icon_droid_4">Дроид</string>
     <string name="app_icon_droid_4_desc">Зелёная четвёрка-дроид; белая и чёрная темы.</string>
+    <string name="app_icon_pixel_4">Пиксель</string>
+    <string name="app_icon_pixel_4_desc">Рассыпающаяся четвёрка; белая и чёрная темы.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Цвет акцента</string>
     <string name="accent_neutral">Нейтральный</string>
