@@ -344,4 +344,5 @@
     <color name="ic_launcher_droid_4_background">#FFF9F9F9</color>
     <color name="ic_launcher_pixel_4_background">#FFFDFDFD</color>
     <color name="ic_launcher_term_4_background">#FFF2F2F4</color>
+    <color name="ic_launcher_circuit_4_background">#FFFAFAFB</color>
 </resources>

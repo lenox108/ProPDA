@@ -779,6 +779,8 @@
     <string name="app_icon_pixel_4_desc">Рассыпающаяся четвёрка; белая и чёрная темы.</string>
     <string name="app_icon_term_4">Терминал</string>
     <string name="app_icon_term_4_desc">Окно терминала с зелёной четвёркой; светлая и чёрная темы.</string>
+    <string name="app_icon_circuit_4">Микросхема</string>
+    <string name="app_icon_circuit_4_desc">Четвёрка из дорожек платы; белая и чёрная темы.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Цвет акцента</string>
     <string name="accent_neutral">Нейтральный</string>
