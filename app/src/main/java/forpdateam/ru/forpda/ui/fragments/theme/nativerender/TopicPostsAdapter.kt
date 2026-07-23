@@ -544,12 +544,13 @@ class TopicPostsAdapter(
             }
             // Same problem vertically: the 24dp glyph is centred on the ~18dp nick row, so it overflows
             // ~3dp ABOVE it, and COMPACT's 6dp card padding (vs 12dp comfortable) left the dots almost
-            // touching the card's top edge. Nudge the icon down — layout stays tight, but the optical top
-            // inset lands near the comfortable one. translationY (not a margin) so nothing re-measures and
-            // the nick/date keep their own alignment. Reset to 0 for the other densities (recycled holders).
+            // touching the card's top edge. Nudge the icon down by exactly the padding difference (12−6dp)
+            // so its optical top inset matches the comfortable header. translationY (not a margin) so nothing
+            // re-measures and the nick/date keep their own alignment. Reset to 0 for the other densities
+            // (recycled holders).
             menuInline.translationY =
                     if (settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.COMPACT) {
-                        4 * dm.density
+                        6 * dm.density
                     } else {
                         0f
                     }
