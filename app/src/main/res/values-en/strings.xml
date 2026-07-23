@@ -603,8 +603,6 @@
     <string name="app_icon_four_orange_desc">Orange four with a message bubble.</string>
     <string name="app_icon_neon_four">Neon</string>
     <string name="app_icon_neon_four_desc">Glowing wireframe four; white background, black in dark theme.</string>
-    <string name="app_icon_glass_glow">Glass Glow</string>
-    <string name="app_icon_glass_glow_desc">Glowing four on frosted blue glass.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>
