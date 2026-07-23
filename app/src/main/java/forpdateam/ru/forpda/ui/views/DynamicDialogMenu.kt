@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textview.MaterialTextView
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.views.dialog.MENU_MIN_WIDTH_DP
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 
 /**
@@ -96,7 +97,7 @@ class DynamicDialogMenu<T, E> {
 
         // Ширину до показа задаёт showWithStyledButtons (сжатие по контенту customPanel ДО show()),
         // поэтому меню сразу появляется в нужной ширине и не «прыгает» вправо с ре-центрированием.
-        dialog = builder.showWithStyledButtons().also { shownDialog ->
+        dialog = builder.showWithStyledButtons(minWidthDp = MENU_MIN_WIDTH_DP).also { shownDialog ->
             shownDialog.setOnDismissListener { dialog = null }
         }
     }
@@ -135,7 +136,9 @@ class DynamicDialogMenu<T, E> {
             // WRAP_CONTENT (not MATCH_PARENT) so the menu is only as wide as its longest row needs,
             // with a sensible floor so short menus don't collapse to a sliver. Paired with the window
             // setLayout(WRAP_CONTENT) in show(), this keeps action menus compact instead of full-width.
-            minimumWidth = dp(240)
+            // Пол держим тот же, что и у окна (MENU_MIN_WIDTH_DP): больший пол здесь просто дорисовывал
+            // пустое поле справа от коротких пунктов, а окно всё равно ужимается по контенту.
+            minimumWidth = dp(MENU_MIN_WIDTH_DP)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -163,6 +166,8 @@ class DynamicDialogMenu<T, E> {
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleLarge)
             setTextColor(resolveColorStateList(context, com.google.android.material.R.attr.colorOnSurface))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, style.titleTextSizeSp)
+            // Must come AFTER setTextAppearance — the M3 appearance carries its own tracking.
+            letterSpacing = 0f
             includeFontPadding = true
             setPadding(dp(24), dp(style.contentVerticalPaddingDp), dp(24), dp(style.titleBottomPaddingDp))
             layoutParams = LinearLayout.LayoutParams(
@@ -183,6 +188,9 @@ class DynamicDialogMenu<T, E> {
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
             setTextColor(resolveColorStateList(context, com.google.android.material.R.attr.colorOnSurface))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, style?.itemTextSizeSp ?: 16f)
+            // BodyLarge ships 0.03125em of tracking, which reads as stretched-out Cyrillic in a menu row
+            // («шрифт растянут», user). Zero it AFTER the appearance so nothing re-applies the M3 value.
+            letterSpacing = 0f
             includeFontPadding = false
             setPadding(dp(24), dp(style?.itemVerticalPaddingDp ?: 8), dp(24), dp(style?.itemVerticalPaddingDp ?: 8))
             setBackgroundResource(rippleAttr.resourceId)

@@ -27,7 +27,10 @@ import timber.log.Timber
  * Тема alertDialogTheme не всегда задаёт контраст кнопок в тёмной теме — красим явно.
  * [android.util.TypedValue.data] для ссылки на цвет — не ARGB; через [android.content.res.TypedArray] цвет резолвится верно.
  */
-fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = true): AlertDialog {
+fun MaterialAlertDialogBuilder.showWithStyledButtons(
+    compact: Boolean = true,
+    minWidthDp: Int = DIALOG_MIN_WIDTH_DP,
+): AlertDialog {
     val dialog = create()
     dialog.applyForPdaSurface()
     // Отключаем системную анимацию окна: свою (плавное появление уже в нужном размере) делаем сами,
@@ -35,11 +38,21 @@ fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = true): A
     if (compact) dialog.window?.setWindowAnimations(0)
     dialog.setOnShowListener {
         dialog.applyForPdaMaterialStyle()
-        if (compact) dialog.applyCompactWidthAnimated()
+        if (compact) dialog.applyCompactWidthAnimated(minWidthDp)
     }
     dialog.show()
     return dialog
 }
+
+/**
+ * Пол ширины по умолчанию: диалог с полем ввода / длинным сообщением уже этого неудобен.
+ * Меню действий передают [MENU_MIN_WIDTH_DP] — им пол в 300dp оставлял пустое поле справа
+ * от коротких пунктов («много пустого места после текста», пользователь). Ноль сюда ставить
+ * нельзя: меню из пары коротких пунктов схлопнулось бы в неудобную для попадания полоску,
+ * поэтому оставляем «воздух» — 150dp, всё ещё заметно выше минимума M3 для меню (112dp).
+ */
+const val DIALOG_MIN_WIDTH_DP = 300
+const val MENU_MIN_WIDTH_DP = 150
 
 /**
  * Компактная ширина БЕЗ «прыжка»: закрепить ширину окна можно только после show() (это неминуемо
@@ -48,10 +61,10 @@ fun MaterialAlertDialogBuilder.showWithStyledButtons(compact: Boolean = true): A
  * плавно проявляем — уже в финальном размере и по центру. Затемнение фона (dim) — атрибут окна,
  * оно живёт отдельно и не мигает. Вызывать в onShow (панели уже построены и измеримы).
  */
-fun AlertDialog.applyCompactWidthAnimated() {
+fun AlertDialog.applyCompactWidthAnimated(minWidthDp: Int = DIALOG_MIN_WIDTH_DP) {
     val decor = window?.decorView ?: return
     decor.alpha = 0f
-    shrinkWidthToContent()
+    shrinkWidthToContent(minWidthDp)
     decor.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
         override fun onGlobalLayout() {
             decor.viewTreeObserver.removeOnGlobalLayoutListener(this)
@@ -68,10 +81,10 @@ fun AlertDialog.applyCompactWidthAnimated() {
  * заголовок (topPanel), кнопки (buttonPanel) и тело — для списков это максимум ширины пунктов адаптера,
  * иначе contentPanel. Всё в UNSPECIFIED, где match_parent ведёт себя как wrap и отдаёт натуральную
  * ширину. Затем ставим окну конкретную ширину в px — фиксированный размер окна перебивает внутренний
- * минимум. Зажимаем в 300dp..92% экрана: не уже удобного для поля ввода и не шире экрана для длинного
- * контента. Если замер невалиден (0) — ширину не трогаем (безопасный фолбэк).
+ * минимум. Зажимаем в [minWidthDp]..92% экрана: не уже удобного для поля ввода и не шире экрана для
+ * длинного контента. Если замер невалиден (0) — ширину не трогаем (безопасный фолбэк).
  */
-private fun AlertDialog.shrinkWidthToContent() {
+private fun AlertDialog.shrinkWidthToContent(minWidthDp: Int = DIALOG_MIN_WIDTH_DP) {
     val w = window ?: return
     val decor = w.decorView
     val dm = context.resources.displayMetrics
@@ -107,7 +120,7 @@ private fun AlertDialog.shrinkWidthToContent() {
 
     val measured = maxOf(titleWidth, buttonsWidth, bodyWidth)
     if (measured <= 0) return
-    val minPx = (300 * dm.density).toInt()
+    val minPx = (minWidthDp * dm.density).toInt()
     val maxPx = (dm.widthPixels * 0.92f).toInt()
     // На узких плотных экранах 300dp может превышать 92% ширины (minPx > maxPx),
     // тогда coerceIn падал «Cannot coerce value to an empty range». Ограничиваем

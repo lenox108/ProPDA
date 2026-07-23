@@ -396,47 +396,93 @@
         <item name="android:fontFamily">@font/forpda_open_sans</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+    <!--
+        Типографика без M3-трекинга. Material 3 задаёт letterSpacing почти во всех
+        ролях (BodyLarge 0.03125em, LabelSmall 0.045em, …) — на кириллице это читается
+        как «растянутый шрифт», особенно в строках меню/диалогов (замечание
+        пользователя по всплывающему меню поста). Обнуляем в одном месте: Base-темы
+        ниже переопределяют textAppearance*-атрибуты на эти стили, а фирменные
+        TextAppearance.ForPDA.* (шрифтовый оверлей ROBOTO) наследуются от них,
+        поэтому режим шрифта на трекинг больше не влияет.
+        Headline*/TitleLarge не дублируем — у них трекинг и так 0.
+    -->
+    <style name="TextAppearance.ForPDA.Flat.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.Flat.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.Flat.BodySmall" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.Flat.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.Flat.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.Flat.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.Flat.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.Flat.LabelMedium" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.Flat.LabelSmall" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.ForPDA.BodyLarge" parent="TextAppearance.ForPDA.Flat.BodyLarge">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+    <style name="TextAppearance.ForPDA.BodyMedium" parent="TextAppearance.ForPDA.Flat.BodyMedium">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.BodySmall" parent="TextAppearance.Material3.BodySmall">
+    <style name="TextAppearance.ForPDA.BodySmall" parent="TextAppearance.ForPDA.Flat.BodySmall">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+    <style name="TextAppearance.ForPDA.TitleLarge" parent="TextAppearance.ForPDA.Flat.TitleLarge">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+    <style name="TextAppearance.ForPDA.TitleMedium" parent="TextAppearance.ForPDA.Flat.TitleMedium">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+    <style name="TextAppearance.ForPDA.TitleSmall" parent="TextAppearance.ForPDA.Flat.TitleSmall">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
+    <style name="TextAppearance.ForPDA.LabelLarge" parent="TextAppearance.ForPDA.Flat.LabelLarge">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.LabelMedium" parent="TextAppearance.Material3.LabelMedium">
+    <style name="TextAppearance.ForPDA.LabelMedium" parent="TextAppearance.ForPDA.Flat.LabelMedium">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
 
-    <style name="TextAppearance.ForPDA.LabelSmall" parent="TextAppearance.Material3.LabelSmall">
+    <style name="TextAppearance.ForPDA.LabelSmall" parent="TextAppearance.ForPDA.Flat.LabelSmall">
         <item name="fontFamily">@font/forpda_roboto</item>
         <item name="android:fontFamily">@font/forpda_roboto</item>
     </style>
@@ -482,7 +528,38 @@
     <!--
         LIGHT THEME
     -->
-    <style name="DayNightAppTheme" parent="Theme.Material3.DayNight">
+    <!--
+        Базовая тема без M3-трекинга: переопределяет роли типографики на
+        TextAppearance.ForPDA.Flat.* (letterSpacing 0). Все корневые темы приложения
+        (светлая/тёмная/AMOLED) наследуются отсюда, чтобы «растянутый» текст не
+        возвращался в отдельных экранах. Диалоги и bottom sheet'ы живут в других
+        ветках Material3 и получают те же переопределения у себя.
+    -->
+    <style name="Base.ForPDA.FlatType" parent="Theme.Material3.DayNight">
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.ForPDA.Flat.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.ForPDA.Flat.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.ForPDA.Flat.BodySmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.ForPDA.Flat.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.ForPDA.Flat.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.ForPDA.Flat.TitleSmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.ForPDA.Flat.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.ForPDA.Flat.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.ForPDA.Flat.LabelSmall</item>
+    </style>
+
+    <style name="Base.ForPDA.FlatType.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.ForPDA.Flat.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.ForPDA.Flat.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.ForPDA.Flat.BodySmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.ForPDA.Flat.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.ForPDA.Flat.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.ForPDA.Flat.TitleSmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.ForPDA.Flat.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.ForPDA.Flat.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.ForPDA.Flat.LabelSmall</item>
+    </style>
+
+    <style name="DayNightAppTheme" parent="Base.ForPDA.FlatType">
         <!-- Base color settings (Material 3 + совместимость с существующими attr) -->
         <item name="colorPrimary">@color/light_colorPrimary</item>
         <item name="colorPrimaryDark">@color/light_colorPrimaryDark</item>
@@ -604,6 +681,16 @@
     <style name="Base.ForPDA.Dialog" parent="Theme.Material3.DayNight.Dialog.Alert">
         <!-- Скругление окна диалога рисует не shapeAppearance, а windowBackground → dialogCornerRadius. -->
         <item name="android:dialogCornerRadius" tools:targetApi="p">28dp</item>
+        <!-- Типографика без трекинга (диалоги — отдельная ветка Material3, Base.ForPDA.FlatType сюда не наследуется). -->
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.ForPDA.Flat.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.ForPDA.Flat.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.ForPDA.Flat.BodySmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.ForPDA.Flat.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.ForPDA.Flat.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.ForPDA.Flat.TitleSmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.ForPDA.Flat.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.ForPDA.Flat.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.ForPDA.Flat.LabelSmall</item>
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.ForPDA.Dialog</item>
         <item name="buttonBarButtonStyle">@style/Widget.ForPDA.DialogButton</item>
         <item name="textInputStyle">@style/DialogTextInputStyle</item>
@@ -662,7 +749,7 @@
         <item name="hintTextColor">@color/dialog_textinput_hint</item>
     </style>
 
-    <style name="DayNightAppTheme.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+    <style name="DayNightAppTheme.BottomSheetDialog" parent="Base.ForPDA.FlatType.BottomSheetDialog">
         <item name="android:colorBackground">@color/light_colorPrimary</item>
         <item name="colorSurface">@color/light_colorPrimary</item>
         <item name="colorOnSurface">@color/light_default_text_color</item>
@@ -934,6 +1021,16 @@
     <style name="ImageViewTheme" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowTranslucentStatus" tools:ignore="NewApi">true</item>
         <item name="android:windowTranslucentNavigation" tools:ignore="NewApi">true</item>
+        <!-- Типографика без трекинга (просмотрщик — отдельная NoActionBar-ветка Material3). -->
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.ForPDA.Flat.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.ForPDA.Flat.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.ForPDA.Flat.BodySmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.ForPDA.Flat.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.ForPDA.Flat.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.ForPDA.Flat.TitleSmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.ForPDA.Flat.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.ForPDA.Flat.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.ForPDA.Flat.LabelSmall</item>
     </style>
 
     <style name="ImageViewTheme.AppBarOverlay" parent="ThemeOverlay.Material3.Dark.ActionBar">
