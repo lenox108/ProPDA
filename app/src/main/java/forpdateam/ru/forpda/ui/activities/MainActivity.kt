@@ -140,11 +140,34 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         super.attachBaseContext(ctx)
     }
 
+    /**
+     * Экран загрузки показывает значок выбранной иконки.
+     *
+     * На Android 12+ splash рисует система по теме из манифеста, поменять её на
+     * лету нельзя — `setSplashScreenTheme` действует со следующего запуска. Это
+     * совпадает с моделью самой смены иконки (применяется при уходе в фон).
+     * На более старых версиях splash рисует androidx-совместимость уже внутри
+     * активити, поэтому там достаточно подменить тему до installSplashScreen().
+     */
+    private fun applySelectedIconSplashTheme() {
+        val theme = forpdateam.ru.forpda.common.appicon.AppIconManager.selected(this).splashThemeRes
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                splashScreen.setSplashScreenTheme(theme)
+            } else {
+                setTheme(theme)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Не удалось применить splash-тему выбранной иконки")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Android 12+ SplashScreen API (backported via androidx.core:core-splashscreen).
         // Должен вызываться ПЕРВЫМ — до super.onCreate() и setContentView.
         // installSplashScreen() сам переключает тему на postSplashScreenTheme;
         // ниже мы всё равно перекрываем её палитро-специфичной mainNoActionBar(...).
+        applySelectedIconSplashTheme()
         installSplashScreen()
         if (BuildConfig.DEBUG) Timber.d("[INTENT] onCreate: hasData=${intent?.data != null}, action=${intent?.action}, hasExtras=${intent?.extras != null}")
         // Get theme settings directly from DataStore before super.onCreate() (DI not available yet)

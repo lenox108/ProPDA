@@ -1,0 +1,91 @@
+package forpdateam.ru.forpda.common.appicon
+
+import android.content.Context
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.annotation.StyleRes
+import forpdateam.ru.forpda.R
+
+/**
+ * Один вариант иконки приложения.
+ *
+ * Каждому варианту в манифесте соответствует свой `activity-alias` на
+ * [forpdateam.ru.forpda.ui.activities.MainActivity]: у самой MainActivity
+ * фильтра MAIN/LAUNCHER нет, иначе включённый псевдоним давал бы второй ярлык.
+ *
+ * Значок ставится не только на ярлык: [previewRes] показывают пикер, экран
+ * загрузки ([splashThemeRes]) и уведомления загрузок.
+ */
+data class AppIconVariant(
+        /** Стабильный id — пишется в настройки. МЕНЯТЬ НЕЛЬЗЯ: сломает выбор у пользователей. */
+        val id: String,
+        /** Полное имя `activity-alias`. МЕНЯТЬ НЕЛЬЗЯ: на него ссылаются ярлыки на рабочем столе. */
+        val alias: String,
+        @StringRes val titleRes: Int,
+        /** Короткое пояснение под названием в пикере; null — только название. */
+        @StringRes val subtitleRes: Int? = null,
+        /** Adaptive-иконка варианта; сама подхватывает день/ночь через `-night` ресурсы. */
+        @DrawableRes val iconRes: Int,
+        /** Splash-тема с этим значком — наследник `Theme.ForPDA.Splash`. */
+        @StyleRes val splashThemeRes: Int,
+)
+
+/**
+ * Реестр иконок. Новые варианты добавляет `design/app-icon/add_alt_icon.py`
+ * — он же кладёт ресурсы, строки и псевдоним в манифест.
+ * Порядок списка = порядок в пикере, первый элемент = значение по умолчанию.
+ */
+object AppIcons {
+
+    const val DEFAULT_ID = "default"
+
+    /** Префикс имён псевдонимов; он же — имя псевдонима иконки по умолчанию. */
+    const val ALIAS_PREFIX = "forpdateam.ru.forpda.Launcher"
+
+    val variants: List<AppIconVariant> = listOf(
+            AppIconVariant(
+                    id = DEFAULT_ID,
+                    alias = ALIAS_PREFIX,
+                    titleRes = R.string.app_icon_default,
+                    subtitleRes = R.string.app_icon_default_desc,
+                    iconRes = R.mipmap.ic_launcher,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash,
+            ),
+            AppIconVariant(
+                    id = "four_dark",
+                    alias = "forpdateam.ru.forpda.Launcher.FourDark",
+                    titleRes = R.string.app_icon_four_dark,
+                    subtitleRes = R.string.app_icon_four_dark_desc,
+                    iconRes = R.mipmap.ic_launcher_four_dark,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_FourDark,
+            ),
+            AppIconVariant(
+                    id = "four_blue",
+                    alias = "forpdateam.ru.forpda.Launcher.FourBlue",
+                    titleRes = R.string.app_icon_four_blue,
+                    subtitleRes = R.string.app_icon_four_blue_desc,
+                    iconRes = R.mipmap.ic_launcher_four_blue,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_FourBlue,
+            ),
+            AppIconVariant(
+                    id = "puzzle",
+                    alias = "forpdateam.ru.forpda.Launcher.Puzzle",
+                    titleRes = R.string.app_icon_puzzle,
+                    subtitleRes = R.string.app_icon_puzzle_desc,
+                    iconRes = R.mipmap.ic_launcher_puzzle,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_Puzzle,
+            ),
+            // app-icon-variants:registry — не удалять, сюда дописывает add_alt_icon.py
+    )
+
+    val default: AppIconVariant get() = variants.first()
+
+    fun byId(id: String?): AppIconVariant = variants.firstOrNull { it.id == id } ?: default
+
+    /**
+     * Значок выбранной иконки для показа внутри приложения (уведомления и пр.).
+     * Ярлык лаунчера сюда не относится — им управляет [AppIconManager].
+     */
+    @DrawableRes
+    fun currentIconRes(context: Context): Int = AppIconManager.selected(context).iconRes
+}

@@ -7,6 +7,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.AppFontMode
 
@@ -59,7 +60,12 @@ internal fun forpdaFontFamily(mode: AppFontMode): FontFamily = when (mode) {
     AppFontMode.ROBOTO_MONO -> FontFamily.Monospace
 }
 
-/** Applies [family] to every role of the M3 baseline [Typography] — mirrors `android:fontFamily` theme-wide override. */
+/**
+ * Applies [family] to every role of the M3 baseline [Typography] — mirrors `android:fontFamily` theme-wide
+ * override. Title/body/label roles also drop the M3 tracking to 0 (parity with `TextAppearance.ForPDA.Flat.*`
+ * in `styles.xml`): the baseline spacing reads as stretched-out Cyrillic. Display/headline roles keep theirs
+ * — M3 already has them at 0 or negative.
+ */
 internal fun forpdaTypography(family: FontFamily): Typography {
     val base = Typography()
     return Typography(
@@ -69,14 +75,14 @@ internal fun forpdaTypography(family: FontFamily): Typography {
             headlineLarge = base.headlineLarge.copy(fontFamily = family),
             headlineMedium = base.headlineMedium.copy(fontFamily = family),
             headlineSmall = base.headlineSmall.copy(fontFamily = family),
-            titleLarge = base.titleLarge.copy(fontFamily = family),
-            titleMedium = base.titleMedium.copy(fontFamily = family),
-            titleSmall = base.titleSmall.copy(fontFamily = family),
-            bodyLarge = base.bodyLarge.copy(fontFamily = family),
-            bodyMedium = base.bodyMedium.copy(fontFamily = family),
-            bodySmall = base.bodySmall.copy(fontFamily = family),
-            labelLarge = base.labelLarge.copy(fontFamily = family),
-            labelMedium = base.labelMedium.copy(fontFamily = family),
-            labelSmall = base.labelSmall.copy(fontFamily = family),
+            titleLarge = base.titleLarge.copy(fontFamily = family, letterSpacing = 0.sp),
+            titleMedium = base.titleMedium.copy(fontFamily = family, letterSpacing = 0.sp),
+            titleSmall = base.titleSmall.copy(fontFamily = family, letterSpacing = 0.sp),
+            bodyLarge = base.bodyLarge.copy(fontFamily = family, letterSpacing = 0.sp),
+            bodyMedium = base.bodyMedium.copy(fontFamily = family, letterSpacing = 0.sp),
+            bodySmall = base.bodySmall.copy(fontFamily = family, letterSpacing = 0.sp),
+            labelLarge = base.labelLarge.copy(fontFamily = family, letterSpacing = 0.sp),
+            labelMedium = base.labelMedium.copy(fontFamily = family, letterSpacing = 0.sp),
+            labelSmall = base.labelSmall.copy(fontFamily = family, letterSpacing = 0.sp),
     )
 }

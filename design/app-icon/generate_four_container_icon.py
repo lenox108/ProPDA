@@ -218,7 +218,7 @@ def render_foreground(ink: str, transparent: bool = True) -> Image.Image:
     centered_symbol_text(draw, "A", rail_x, 684, 88, cutout)
 
     # Tiny terminal cue from the reference, simplified to remain legible.
-    centered_text(draw, ">_", 334, 650, 38, cutout)
+    centered_text(draw, ">_", 338, 638, 56, cutout)
 
     return image.resize((CANVAS, CANVAS), Image.Resampling.LANCZOS)
 

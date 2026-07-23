@@ -78,7 +78,11 @@ internal object DownloadNotifications {
      */
     private fun appLauncherBitmap(context: Context): Bitmap? {
         val d = try {
-            ResourcesCompat.getDrawable(context.resources, R.mipmap.ic_launcher, context.theme)
+            ResourcesCompat.getDrawable(
+                context.resources,
+                forpdateam.ru.forpda.common.appicon.AppIcons.currentIconRes(context),
+                context.theme,
+            )
         } catch (_: Throwable) {
             null
         } ?: return null

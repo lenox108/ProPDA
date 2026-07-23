@@ -95,36 +95,36 @@ class ChromeCanvasTest {
     }
 
     @Test
-    fun `MaterialYouAmoled overlay - canvas is tinted above black, not pure black`() {
+    fun `MaterialYouAmoled overlay - black canvas, wallpaper-tinted cards`() {
         val activity = themedActivity()
         activity.theme.applyStyle(R.style.ThemeOverlay_ForPDA_MaterialYouAmoled, true)
-        assertTrue(
-                "MaterialYouAmoled overlay must set chrome_canvas_dynamic=true",
+        val amoledBlack = activity.resources.getColor(R.color.amoled_background_base, activity.theme)
+
+        // 1. ПОЛОТНО остаётся чёрным: флаг динамики не ставится, поэтому
+        //    ChromeCanvas обязан вернуть ровно fallback-атрибут (статический путь).
+        assertFalse(
+                "MaterialYouAmoled must NOT set chrome_canvas_dynamic — canvas stays pure black",
                 ChromeCanvas.isDynamic(activity),
         )
-        assertTrue(
-                "MaterialYouAmoled overlay must set chrome_canvas_amoled=true",
-                ChromeCanvas.isAmoledCanvas(activity),
-        )
-        val base = activity.getColorFromAttr(
-                com.google.android.material.R.attr.colorSurfaceContainerLowest)
-        val tint = activity.getColorFromAttr(
-                com.google.android.material.R.attr.colorPrimaryContainer)
-        val expected = ColorUtils.blendARGB(base, tint, ChromeCanvas.AMOLED_BLEND)
-        val actual = ChromeCanvas.color(activity, R.attr.main_toolbar_accent_surface)
         assertEquals(
-                "AMOLED canvas must use the AMOLED_BLEND fraction over the black base",
-                expected,
-                actual,
+                "AMOLED canvas must stay the untouched fallback attr (black)",
+                activity.getColorFromAttr(R.attr.main_toolbar_accent_surface),
+                ChromeCanvas.color(activity, R.attr.main_toolbar_accent_surface),
         )
-        // Смысл фикса: хром больше НЕ равен чистой чёрной базе (если контейнер
-        // обоев вообще отличается от базы — на реальных обоях так и есть).
-        if (tint != base) {
-            assertNotEquals(
-                    "AMOLED canvas must differ from the pure-black base once tinted",
-                    base,
-                    actual,
-            )
-        }
+        assertEquals(
+                "page background role must stay amoled black",
+                amoledBlack,
+                activity.getColorFromAttr(
+                        com.google.android.material.R.attr.colorSurfaceContainerLowest),
+        )
+
+        // 2. КАРТОЧКИ тонированы обоями — иначе Material You в AMOLED не виден
+        //    нигде, кроме акцента (исходная жалоба).
+        assertNotEquals(
+                "card surface must be wallpaper-tinted, not amoled black",
+                amoledBlack,
+                activity.getColorFromAttr(
+                        com.google.android.material.R.attr.colorSurfaceContainerHigh),
+        )
     }
 }

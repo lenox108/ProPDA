@@ -32,6 +32,8 @@ import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.DayNightHelper
 import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Preferences
+import forpdateam.ru.forpda.common.appicon.AppIconManager
+import forpdateam.ru.forpda.common.appicon.AppIcons
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
 import androidx.lifecycle.lifecycleScope
@@ -457,6 +459,22 @@ class SettingsFragment : BaseSettingFragment() {
             true
         }
 
+        findPreference<Preference>(Preferences.Main.APP_ICON)?.apply {
+            updateAppIconSummary(this)
+            setOnPreferenceClickListener {
+                forpdateam.ru.forpda.ui.views.dialog.AppIconPickerDialog.show(
+                        requireContext(),
+                        AppIconManager.selected(requireContext()),
+                ) { picked ->
+                    if (!isAdded) return@show
+                    AppIconManager.select(requireContext(), picked)
+                    updateAppIconSummary(this)
+                    showSnackbarAboveSystemBars(R.string.app_icon_changed, Snackbar.LENGTH_LONG)
+                }
+                true
+            }
+        }
+
         findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.apply {
             updateAccentSummary(mainPreferencesHolder.getAccentPalette())
             setOnPreferenceClickListener {
@@ -824,6 +842,15 @@ class SettingsFragment : BaseSettingFragment() {
             AppFontMode.OPEN_SANS -> getString(R.string.pref_summary_app_font_open_sans)
             AppFontMode.ROBOTO_MONO -> "Roboto Mono — моноширинный; применится после возврата из настроек"
         }
+    }
+
+    /**
+     * Пункт виден всегда, даже пока в [AppIcons] один вариант: настройка — часть
+     * интерфейса, а не следствие текущего набора иконок, и прятать её значит
+     * заставлять искать «куда делась смена иконки».
+     */
+    private fun updateAppIconSummary(preference: Preference) {
+        preference.summary = getString(AppIconManager.selected(requireContext()).titleRes)
     }
 
     private fun updateAccentSummary(palette: Preferences.Main.AccentPalette) {

@@ -103,8 +103,11 @@
     <color name="fpda_unread_outline">#FFD75E</color>
 
     <!-- Four-container launcher, AMOLED theme. The monochrome layer is launcher-tinted. -->
-    <color name="ic_launcher_background">#FF0B0C0E</color>
+    <color name="ic_launcher_background">#FF000000</color>
     <color name="ic_launcher_foreground">#FFFFFBF5</color>
     <color name="ic_launcher_node_fill">#FF080808</color>
     <color name="ic_launcher_pro">#FFFF6A00</color>
+    <color name="ic_launcher_four_dark_background">#FF191919</color>
+    <color name="ic_launcher_four_blue_background">#FFFFFFFF</color>
+    <color name="ic_launcher_puzzle_background">#FF000000</color>
 </resources>
