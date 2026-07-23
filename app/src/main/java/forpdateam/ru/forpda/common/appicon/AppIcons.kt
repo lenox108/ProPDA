@@ -84,14 +84,6 @@ object AppIcons {
                     splashThemeRes = R.style.Theme_ForPDA_Splash_FourOrange,
             ),
             AppIconVariant(
-                    id = "neon_four",
-                    alias = "forpdateam.ru.forpda.Launcher.NeonFour",
-                    titleRes = R.string.app_icon_neon_four,
-                    subtitleRes = R.string.app_icon_neon_four_desc,
-                    iconRes = R.mipmap.ic_launcher_neon_four,
-                    splashThemeRes = R.style.Theme_ForPDA_Splash_NeonFour,
-            ),
-            AppIconVariant(
                     id = "glass_4",
                     alias = "forpdateam.ru.forpda.Launcher.Glass4",
                     titleRes = R.string.app_icon_glass_4,
