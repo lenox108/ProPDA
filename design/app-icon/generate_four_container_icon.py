@@ -5,6 +5,7 @@ bitmap: this keeps the 4, the inner P/chat/A stack and every launcher density
 aligned and repeatable.
 """
 
+import argparse
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -40,28 +41,30 @@ def font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
 
 
 def draw_four(draw: ImageDraw.ImageDraw, ink: str) -> None:
-    """Draw a clean 4 from three overlapping high-resolution primitives."""
+    """Draw the compact, softly rounded 4 from the supplied reference."""
+    # A tapered diagonal joins the stem below its rounded cap, so there is no
+    # bump or pointed ear at the shoulder.
     draw.polygon(
         [
-            (242 * SCALE, 650 * SCALE),
-            (526 * SCALE, 278 * SCALE),
-            (615 * SCALE, 225 * SCALE),
-            (677 * SCALE, 225 * SCALE),
-            (404 * SCALE, 602 * SCALE),
-            (662 * SCALE, 602 * SCALE),
-            (662 * SCALE, 710 * SCALE),
-            (270 * SCALE, 710 * SCALE),
+            (235 * SCALE, 650 * SCALE),
+            (528 * SCALE, 226 * SCALE),
+            (580 * SCALE, 190 * SCALE),
+            (638 * SCALE, 190 * SCALE),
+            (405 * SCALE, 584 * SCALE),
+            (278 * SCALE, 704 * SCALE),
         ],
         fill=ink,
     )
+
+    # The right stem is deliberately narrower than the old blocky version.
     draw.rounded_rectangle(
-        tuple(value * SCALE for value in (615, 225, 775, 825)),
-        radius=35 * SCALE,
+        tuple(value * SCALE for value in (568, 158, 744, 846)),
+        radius=44 * SCALE,
         fill=ink,
     )
     draw.rounded_rectangle(
-        tuple(value * SCALE for value in (235, 602, 728, 710)),
-        radius=45 * SCALE,
+        tuple(value * SCALE for value in (220, 584, 657, 716)),
+        radius=55 * SCALE,
         fill=ink,
     )
 
@@ -129,24 +132,24 @@ def render_foreground(ink: str, transparent: bool = True) -> Image.Image:
     # The 4 occupies a 650 px optical square. Its right stem is the stable
     # alignment rail for all three inner symbols.
     draw_four(draw, ink)
-    # Counter: slightly asymmetric for optical centering against the diagonal.
+    # Open triangular counter with the same proportions as the reference.
     draw.polygon(
         [
-            (489 * SCALE, 586 * SCALE),
-            (616 * SCALE, 392 * SCALE),
-            (616 * SCALE, 586 * SCALE),
+            (424 * SCALE, 566 * SCALE),
+            (568 * SCALE, 336 * SCALE),
+            (568 * SCALE, 566 * SCALE),
         ],
         fill=BG_LIGHT if not transparent else (0, 0, 0, 0),
     )
 
     cutout = (0, 0, 0, 0)
-    rail_x = 690
-    centered_text(draw, "P", rail_x, 300, 102, cutout)
-    draw_chat(draw, rail_x, 448, cutout)
-    centered_text(draw, "A", rail_x, 608, 102, cutout)
+    rail_x = 656
+    centered_text(draw, "P", rail_x, 266, 96, cutout)
+    draw_chat(draw, rail_x, 420, cutout)
+    centered_text(draw, "A", rail_x, 606, 96, cutout)
 
     # Tiny terminal cue from the reference, simplified to remain legible.
-    centered_text(draw, ">_", 364, 620, 46, cutout)
+    centered_text(draw, ">_", 302, 618, 42, cutout)
 
     return image.resize((CANVAS, CANVAS), Image.Resampling.LANCZOS)
 
@@ -196,10 +199,18 @@ def save_review(light: Image.Image, dark: Image.Image) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--design-only",
+        action="store_true",
+        help="write review masters without replacing Android resources",
+    )
+    args = parser.parse_args()
     light = render_foreground(INK_LIGHT)
     dark = render_foreground(INK_DARK)
     save_review(light, dark)
-    save_android(light, dark)
+    if not args.design_only:
+        save_android(light, dark)
 
 
 if __name__ == "__main__":
