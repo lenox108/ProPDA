@@ -65,8 +65,9 @@ def render(mode, final_size=1080):
 
     da = fitted("DA", 62, 41, "Semibold")
     box = d.textbbox((0, 0), "DA", font=da)
-    # Keep a clear optical gap from both the P stem and the lower bowl.
-    d.text((sc(80)-box[0], sc(136)-box[1]), "DA", font=da, fill=ink)
+    # Align the visible bottom of DA exactly with the rounded foot of the P.
+    p_bottom = sc(166) + width // 2
+    d.text((sc(80)-box[0], p_bottom-box[3]), "DA", font=da, fill=ink)
     return im.resize((final_size, final_size), Image.Resampling.LANCZOS)
 
 
