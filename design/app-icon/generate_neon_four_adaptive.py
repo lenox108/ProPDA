@@ -21,9 +21,15 @@ OUT = ROOT / "design/app-icon/neon-four-adaptive"
 MASTER = OUT / "neon-four-master.png"
 
 CANVAS = 1080
-# The approved orange P4DA mark measures 0.65 of the canvas on its long side.
-# The spec calls for 0.68; the digit is used at that size in every variant.
-MARK_SCALE = 0.68
+# SPEC.md's 0.68 is measured on the *master square*, not on the mark — that is
+# what add_alt_icon.py applies, and every shipped variant follows it. Their marks
+# fill about 0.60 of their master square, so on the finished canvas they measure
+# 0.41 on the long side (four_dark 0.406, four_blue 0.408, puzzle 0.432).
+# Scaling this mark to 0.68 of the canvas directly made it half again larger than
+# its neighbours, so the same two factors are applied here.
+SPEC_SCALE = 0.68
+MARK_IN_MASTER = 0.60
+MARK_SCALE = SPEC_SCALE * MARK_IN_MASTER
 # Monochrome morphology runs here, not at master size: the filters are O(k²)/px.
 MONO_WORKING_WIDTH = 1080
 # Size and centring are measured on the lattice contour, not on the glow that
