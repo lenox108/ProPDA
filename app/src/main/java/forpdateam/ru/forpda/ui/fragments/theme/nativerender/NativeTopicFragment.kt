@@ -1103,6 +1103,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val contentView = androidx.appcompat.widget.AppCompatTextView(ctx).apply {
             text = topicTitle
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
+            letterSpacing = 0f // no M3 tracking in popups (parity with the action menu)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
             gravity = android.view.Gravity.START
             maxLines = 4

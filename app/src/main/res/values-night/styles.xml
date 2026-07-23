@@ -15,7 +15,7 @@
     <!--
         DARK THEME - Original dark gray theme
     -->
-    <style name="DayNightAppTheme" parent="Theme.Material3.DayNight">
+    <style name="DayNightAppTheme" parent="Base.ForPDA.FlatType">
         <!-- Base color settings -->
         <item name="colorPrimary">@color/dark_colorPrimary</item>
         <item name="colorPrimaryDark">@color/dark_colorPrimaryDark</item>
@@ -157,7 +157,7 @@
         <item name="hintTextColor">@color/dialog_textinput_hint</item>
     </style>
 
-    <style name="DayNightAppTheme.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+    <style name="DayNightAppTheme.BottomSheetDialog" parent="Base.ForPDA.FlatType.BottomSheetDialog">
         <item name="android:colorBackground">@color/dark_colorPrimary</item>
         <item name="colorSurface">@color/dark_colorPrimary</item>
         <item name="colorOnSurface">@color/dark_default_text_color</item>
@@ -179,7 +179,7 @@
     <!--
         AMOLED THEME - Pure black for OLED screens
     -->
-    <style name="AmoledAppTheme" parent="Theme.Material3.DayNight">
+    <style name="AmoledAppTheme" parent="Base.ForPDA.FlatType">
         <!-- Base color settings - AMOLED pure black -->
         <item name="colorPrimary">@color/amoled_colorPrimary</item>
         <item name="colorPrimaryDark">@color/amoled_colorPrimaryDark</item>
@@ -304,7 +304,7 @@
         <item name="android:textColorSecondary">@color/dark_second_text_color</item>
     </style>
 
-    <style name="AmoledAppTheme.BottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+    <style name="AmoledAppTheme.BottomSheetDialog" parent="Base.ForPDA.FlatType.BottomSheetDialog">
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
         <item name="android:colorBackground">@color/amoled_colorPrimary</item>
         <item name="colorSurface">@color/amoled_colorPrimary</item>

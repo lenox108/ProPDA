@@ -737,7 +737,10 @@ class BodyBlockViewFactory(
         }
         texts.addView(TextView(ctx).apply {
             text = block.name
-            textSize = scaledSp(14f)
+            // Bold, one step above the 14sp spoiler header: the plain-weight 14sp name read «совсем
+            // мелко» next to its own badge and the surrounding body text (user).
+            setTypeface(typeface, Typeface.BOLD)
+            textSize = scaledSp(15f)
             setTextColor(accent)
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
