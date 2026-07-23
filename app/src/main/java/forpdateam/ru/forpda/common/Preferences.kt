@@ -57,6 +57,8 @@ object Preferences {
         // Legacy (булев «Насыщенные цвета»); оставлен для миграции в ACCENT_STYLE.
         const val ACCENT_VIBRANT = PREFIX + "accent_vibrant"
         const val ACCENT_STYLE = PREFIX + "accent_style"
+        /** Id варианта иконки запуска из `AppIcons.variants`. */
+        const val APP_ICON = PREFIX + "app_icon"
         const val APP_FONT_MODE = PREFIX + "app_font_mode"
         const val USE_SYSTEM_FONT = PREFIX + "use_system_font"
         const val STARTUP_SCREEN = PREFIX + "startup_screen"

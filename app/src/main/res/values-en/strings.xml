@@ -588,6 +588,18 @@
     <string name="pref_summary_accent_active">%1$s · System palette only</string>
     <string name="pref_summary_accent_non_system">Unavailable for reading palettes — works only with the System style</string>
     <string name="pref_summary_accent_material_you">Overridden by system colors (Material You) — turn them off to pick your own accent</string>
+    <string name="pref_title_app_icon">App icon</string>
+    <string name="pref_summary_app_icon">Pick the icon shown on your home screen</string>
+    <string name="app_icon_changed">The icon will change once you leave the app</string>
+    <string name="app_icon_default">Default</string>
+    <string name="app_icon_four_dark">Dark</string>
+    <string name="app_icon_four_blue">Blue</string>
+    <string name="app_icon_puzzle">Puzzle 4</string>
+    <string name="app_icon_default_desc">Orange P4DA mark on a light surface.</string>
+    <string name="app_icon_four_dark_desc">White four on a graphite plate.</string>
+    <string name="app_icon_four_blue_desc">Blue four on a white plate.</string>
+    <string name="app_icon_puzzle_desc">Colour puzzle pieces; white background, black in dark theme.</string>
+    <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>
     <string name="accent_blue">Blue</string>

@@ -89,11 +89,11 @@
             android:launchMode="singleTask"
             android:theme="@style/Theme.ForPDA.Splash"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
+            <!--
+                Фильтра MAIN/LAUNCHER здесь НЕТ: ярлык даёт включённый activity-alias
+                (см. ниже, «Иконки запуска»). Иначе к выбранной иконке добавлялся бы
+                второй ярлык — от самой MainActivity.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
@@ -118,10 +118,96 @@
             <meta-data
                 android:name="android.max_aspect"
                 android:value="2.1" />
+        </activity>
+
+        <!--
+            Иконки запуска. Один activity-alias на вариант: включён ровно один,
+            переключением занимается AppIconManager. Требования к правкам:
+              * android:name и порядок трогать нельзя — на имена ссылаются ярлыки
+                на рабочем столе, а id варианта хранится в настройках;
+              * shortcuts объявляем на каждом псевдониме: система читает
+                android.app.shortcuts только у компонента с MAIN/LAUNCHER;
+              * новые варианты добавляет design/app-icon/add_alt_icon.py.
+        -->
+        <activity-alias
+            android:name="forpdateam.ru.forpda.Launcher"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:targetActivity=".ui.activities.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
-        </activity>
+        </activity-alias>
+
+
+        <activity-alias
+            android:name="forpdateam.ru.forpda.Launcher.FourDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_four_dark"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_four_dark"
+            android:targetActivity=".ui.activities.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name="forpdateam.ru.forpda.Launcher.FourBlue"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_four_blue"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_four_blue"
+            android:targetActivity=".ui.activities.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name="forpdateam.ru.forpda.Launcher.Puzzle"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_puzzle"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_puzzle"
+            android:targetActivity=".ui.activities.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <!-- app-icon-variants:aliases — не удалять, сюда дописывает add_alt_icon.py -->
+
         <activity
             android:name=".ui.activities.imageviewer.ImageViewerActivity"
             android:configChanges="orientation|keyboardHidden|screenSize"
