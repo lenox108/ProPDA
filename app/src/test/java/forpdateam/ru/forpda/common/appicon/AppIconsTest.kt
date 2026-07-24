@@ -1,12 +1,23 @@
 package forpdateam.ru.forpda.common.appicon
 
+import android.content.ComponentName
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import forpdateam.ru.forpda.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class AppIconsTest {
+
+    private val context: Context = ApplicationProvider.getApplicationContext()
 
     @Test
     fun `pixel four is the default icon and splash`() {
@@ -17,6 +28,21 @@ class AppIconsTest {
         assertEquals("forpdateam.ru.forpda.Launcher.Pixel4", default.alias)
         assertEquals(R.mipmap.ic_launcher_pixel_4, default.iconRes)
         assertEquals(R.style.Theme_ForPDA_Splash_Pixel4, default.splashThemeRes)
+    }
+
+    @Test
+    fun `package and enabled launcher icons match pixel four default`() {
+        val packageManager = context.packageManager
+        val applicationInfo = packageManager.getApplicationInfo(context.packageName, 0)
+        val launcherInfo = packageManager.getActivityInfo(
+                ComponentName(context.packageName, AppIcons.default.alias),
+                0,
+        )
+
+        assertEquals(R.mipmap.ic_launcher_pixel_4, applicationInfo.icon)
+        assertEquals(R.mipmap.ic_launcher_pixel_4, applicationInfo.logo)
+        assertEquals(R.mipmap.ic_launcher_pixel_4, launcherInfo.iconResource)
+        assertTrue(launcherInfo.enabled)
     }
 
     @Test
