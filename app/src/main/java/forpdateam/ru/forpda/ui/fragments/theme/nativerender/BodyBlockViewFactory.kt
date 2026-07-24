@@ -1265,12 +1265,15 @@ class BodyBlockViewFactory(
         return false
     }
 
-    /** Adds a «Цитировать» item to the text-selection action bar → quotes the selection into the editor. */
+    /**
+     * Keeps the parent list from intercepting an active selection and, when allowed, adds a
+     * «Цитировать» item that sends the selected text to the editor.
+     */
     private fun installQuoteSelectionAction(tv: TextView, scope: RenderScope) {
-        if (!scope.allowQuoteSelection) return
         tv.customSelectionActionModeCallback = object : android.view.ActionMode.Callback {
             /** Add the «Цитировать» item (front of the menu, always visible). */
             fun addQuoteItem(menu: android.view.Menu) {
+                if (!scope.allowQuoteSelection) return
                 // ALWAYS (not IF_ROOM): MIUI/HyperOS floating toolbar drops app items that land in the
                 // hidden overflow — forcing the primary row keeps «Цитировать» visible on Xiaomi.
                 menu.add(0, QUOTE_MENU_ID, 0, "Цитировать")
@@ -1278,6 +1281,7 @@ class BodyBlockViewFactory(
             }
             /** Idempotently ensure the «Цитировать» item is present; returns true if it was (re)added. */
             fun ensureQuoteItem(menu: android.view.Menu): Boolean {
+                if (!scope.allowQuoteSelection) return false
                 if (menu.findItem(QUOTE_MENU_ID) != null) return false
                 addQuoteItem(menu)
                 return true
@@ -1291,6 +1295,7 @@ class BodyBlockViewFactory(
              * falls back to merely ensuring the item exists, so the menu is never left broken.
              */
             fun reorderQuoteFirst(menu: android.view.Menu): Boolean {
+                if (!scope.allowQuoteSelection) return false
                 if (menu.size() > 0 && menu.getItem(0).itemId == QUOTE_MENU_ID) return false
                 // Never rebuild a menu that holds framework smart-text actions (e.g. «Открыть» for a
                 // selected URL): the rebuild would strip their click handler and kill the action.
@@ -1315,6 +1320,10 @@ class BodyBlockViewFactory(
                 }
             }
             override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
+                // Once Android has recognised the long-press, keep RecyclerView/SwipeRefreshLayout from
+                // stealing MOVE events used to place the selection handles. The request propagates
+                // through every parent and is released in onDestroyActionMode.
+                tv.parent?.requestDisallowInterceptTouchEvent(true)
                 ensureQuoteItem(menu)
                 return true
             }
@@ -1324,7 +1333,7 @@ class BodyBlockViewFactory(
             override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) =
                     reorderQuoteFirst(menu)
             override fun onActionItemClicked(mode: android.view.ActionMode, menuItem: android.view.MenuItem): Boolean {
-                if (menuItem.itemId == QUOTE_MENU_ID) {
+                if (scope.allowQuoteSelection && menuItem.itemId == QUOTE_MENU_ID) {
                     val s = tv.selectionStart.coerceAtLeast(0)
                     val e = tv.selectionEnd.coerceAtLeast(0)
                     if (e > s) callbacks.onQuoteSelection(scope.scopeId, tv.text.subSequence(s, e).toString())
@@ -1333,7 +1342,9 @@ class BodyBlockViewFactory(
                 }
                 return false
             }
-            override fun onDestroyActionMode(mode: android.view.ActionMode) {}
+            override fun onDestroyActionMode(mode: android.view.ActionMode) {
+                tv.parent?.requestDisallowInterceptTouchEvent(false)
+            }
         }
     }
 

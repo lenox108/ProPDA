@@ -574,7 +574,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         arguments?.getString(TabFragment.ARG_TITLE)?.takeIf { it.isNotBlank() }?.let { setTitle(it) }
-        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        // A selectable TextView requests focus-driven scrolling when its long-press ActionMode starts.
+        // Inside a nested quote that relayout can cancel the just-created selection; suppress only
+        // those focus requests while leaving normal finger/programmatic scrolling untouched.
+        recyclerView.layoutManager = TopicSelectionLayoutManager(requireContext())
         recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(pollHeaderAdapter, postsAdapter)
         // Bottom room for the CLASSIC-mode pagination bar is managed in updatePaginationBar().
         recyclerView.clipToPadding = false
