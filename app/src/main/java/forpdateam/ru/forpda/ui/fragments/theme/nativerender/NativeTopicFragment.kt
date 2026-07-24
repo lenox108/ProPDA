@@ -2725,14 +2725,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
+    /**
+     * Ratings confirmed by the server during this screen session. Desktop metadata enrichment is
+     * deliberately asynchronous and may have started before the vote; without this overlay its stale
+     * response could restore the old value and make a successfully saved vote appear to be lost.
+     */
+    private val confirmedPostRatings = mutableMapOf<Int, String>()
+
     private fun updateRatingOptimistically(postId: Int, delta: Int) {
         val idx = loadedItems.indexOfFirst { it.postId == postId }
         if (idx < 0) return
         val cur = loadedItems[idx]
         val newRating = ((cur.postRating?.replace("+", "")?.trim()?.toIntOrNull() ?: 0) + delta)
+        val displayedRating = newRating.toString()
+        confirmedPostRatings[postId] = displayedRating
         // Voted once → can't vote again on that direction; drop both to avoid a second attempt.
         loadedItems[idx] = cur.copy(
-                postRating = newRating.toString(),
+                postRating = displayedRating,
                 canPlusPostRating = false,
                 canMinusPostRating = false,
         )
@@ -4248,7 +4257,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 val enriched = enrichedById[existing.postId] ?: continue
                 // Freshly-mapped items carry pageNumber=0 (the mapper has no page context) — preserve the
                 // existing page tag so the «Страница N» dividers survive the deferred metadata merge.
-                val updated = enriched.copy(pageNumber = existing.pageNumber)
+                val confirmedRating = confirmedPostRatings[existing.postId]
+                val updated = enriched.copy(
+                        pageNumber = existing.pageNumber,
+                        postRating = confirmedRating ?: enriched.postRating,
+                        canPlusPostRating = if (confirmedRating != null) false else enriched.canPlusPostRating,
+                        canMinusPostRating = if (confirmedRating != null) false else enriched.canMinusPostRating,
+                )
                 if (updated != existing) {
                     loadedItems[i] = updated
                     changed = true
