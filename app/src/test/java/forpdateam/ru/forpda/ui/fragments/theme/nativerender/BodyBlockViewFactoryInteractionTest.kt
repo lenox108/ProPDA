@@ -106,7 +106,7 @@ class BodyBlockViewFactoryInteractionTest {
     }
 
     @Test
-    fun `real long press selects quote text in attached window`() {
+    fun `app fallback selects quote text before the platform long press timeout`() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         val themedContext = ContextThemeWrapper(activity, R.style.DayNightAppTheme)
         val root = LinearLayout(themedContext)
@@ -136,7 +136,7 @@ class BodyBlockViewFactoryInteractionTest {
                 MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, 20f, 20f, 0),
         )
         shadowOf(android.os.Looper.getMainLooper()).idleFor(
-                ViewConfiguration.getLongPressTimeout().toLong() + 100L,
+                ViewConfiguration.getLongPressTimeout().toLong() - 40L,
                 java.util.concurrent.TimeUnit.MILLISECONDS,
         )
 
@@ -193,7 +193,7 @@ class BodyBlockViewFactoryInteractionTest {
         down.recycle()
         assertTrue(root.interceptRequests.last())
 
-        val distance = ViewConfiguration.get(context).scaledTouchSlop * 2f
+        val distance = ViewConfiguration.get(context).scaledTouchSlop * 3f
         val move = MotionEvent.obtain(0L, 20L, MotionEvent.ACTION_MOVE, 5f, 5f + distance, 0)
         quoteText.dispatchTouchEvent(move)
         move.recycle()

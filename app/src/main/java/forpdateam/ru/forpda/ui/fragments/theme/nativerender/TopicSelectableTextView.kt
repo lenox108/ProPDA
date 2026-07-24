@@ -18,15 +18,16 @@ import kotlin.math.min
  *
  * Some Android builds cancel TextView's pending long press when a RecyclerView/refresh parent sees
  * tiny finger drift. Keep ancestors out of the gesture until it either becomes a real scroll or the
- * selection starts. If the platform still has not created a selection shortly after its own
- * long-press timeout, invoke TextView's editor long-click directly.
+ * selection starts. Invoke TextView's editor long-click shortly before the platform timeout: on
+ * affected ROMs waiting until after that timeout is too late because the user has already felt the
+ * long-press interval elapse and lifted the finger, cancelling the delayed fallback.
  */
 internal class TopicSelectableTextView @JvmOverloads constructor(
         context: Context,
         attrs: AttributeSet? = null,
 ) : TextView(context, attrs) {
 
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val longPressSlop = ViewConfiguration.get(context).scaledTouchSlop * 2
     private var reliableSelectionEnabled = false
     private var touchActive = false
     private var movedPastSlop = false
@@ -44,6 +45,9 @@ internal class TopicSelectableTextView @JvmOverloads constructor(
         // super.onTouchEvent received on DOWN. Calling it directly also works on ROMs that cleared
         // View.isLongClickable after installing a movement method.
         isLongClickable = true
+        // We are replacing View's pending long-click for this gesture. Cancel it first so stock
+        // Android does not invoke performLongClick() a second time at the normal timeout.
+        cancelLongPress()
         performLongClick()
     }
 
@@ -66,15 +70,15 @@ internal class TopicSelectableTextView @JvmOverloads constructor(
                     removeCallbacks(selectionFallback)
                     postDelayed(
                             selectionFallback,
-                            ViewConfiguration.getLongPressTimeout().toLong() +
-                                    LONG_PRESS_FALLBACK_DELAY_MS,
+                            (ViewConfiguration.getLongPressTimeout() -
+                                    LONG_PRESS_FALLBACK_EARLY_MS).coerceAtLeast(1).toLong(),
                     )
                 }
 
                 MotionEvent.ACTION_MOVE -> {
                     if (!movedPastSlop &&
-                            (abs(event.x - downX) > touchSlop ||
-                                    abs(event.y - downY) > touchSlop)) {
+                            (abs(event.x - downX) > longPressSlop ||
+                                    abs(event.y - downY) > longPressSlop)) {
                         movedPastSlop = true
                         removeCallbacks(selectionFallback)
                         // This is an intentional scroll, not a long press. Hand ownership back to
@@ -160,6 +164,6 @@ internal class TopicSelectableTextView @JvmOverloads constructor(
     }
 
     private companion object {
-        const val LONG_PRESS_FALLBACK_DELAY_MS = 120L
+        const val LONG_PRESS_FALLBACK_EARLY_MS = 80
     }
 }
