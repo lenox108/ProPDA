@@ -13,8 +13,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 RES = ROOT / "app/src/main/res"
-OUT = Path(__file__).resolve().parent / "all-icons-56-review.png"
-TARGET_SCALE = 0.56
+OUT = Path(__file__).resolve().parent / "all-icons-50-review.png"
+TARGET_SCALE = 0.50
 
 FONT_BOLD = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
 FONT_REGULAR = "/System/Library/Fonts/Supplemental/Arial.ttf"
@@ -119,7 +119,7 @@ def save_review(paths: list[Path]) -> None:
     title = ImageFont.truetype(FONT_BOLD, 28)
     label = ImageFont.truetype(FONT_BOLD, 16)
     note = ImageFont.truetype(FONT_REGULAR, 16)
-    draw.text((24, 20), "Цветные иконки · знак 56% холста", font=title, fill="#202124")
+    draw.text((24, 20), "Цветные иконки · знак 50% холста", font=title, fill="#202124")
     draw.text(
         (24, 58),
         "реальная геометрия adaptive icon (слой ×1,5) · monochrome не изменён",

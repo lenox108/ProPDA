@@ -20,9 +20,9 @@ OUT = ROOT / "design/app-icon/orange-p4da-adaptive"
 LIGHT_MASTER = OUT / "orange-p4da-light-master.png"
 AMOLED_MASTER = OUT / "orange-p4da-amoled-master.png"
 CANVAS = 1080
-# The launcher zooms adaptive foregrounds by about 1.5×. At 56%, the artwork
+# The launcher zooms adaptive foregrounds by about 1.5×. At 50%, the artwork
 # stays inside both the circular launcher mask and the Settings preview.
-ART_SCALE = 0.56
+ART_SCALE = 0.50
 MONO_SCALE = 0.66
 DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 
