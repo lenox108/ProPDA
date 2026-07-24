@@ -1,30 +1,32 @@
 package forpdateam.ru.forpda.ui.views.messagepanel.attachments
 
 import android.content.Context
-import com.google.android.material.bottomsheet.BottomSheetDialog
-import androidx.recyclerview.widget.GridLayoutManager
-import timber.log.Timber
+import android.content.res.ColorStateList
+import android.view.LayoutInflater
+import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageButton
-import android.widget.RelativeLayout
 import android.widget.TextView
-
-import java.util.ArrayList
-
+import androidx.appcompat.widget.PopupMenu
+import androidx.core.content.ContextCompat
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.tabs.TabLayout
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.common.removeAttachmentReferencesFromBody
-import forpdateam.ru.forpda.ui.dp48
+import forpdateam.ru.forpda.databinding.MessagePanelAttachmentsBinding
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.ui.views.messagepanel.AutoFitRecyclerView
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
-import forpdateam.ru.forpda.databinding.MessagePanelAttachmentsBinding
-import android.view.LayoutInflater
+import java.util.ArrayList
+import timber.log.Timber
 
 /**
  * Created by radiationx on 09.01.17.
@@ -38,7 +40,10 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     private val adapter = AttachmentAdapter()
 
     private val noAttachments: TextView = binding.noAttachmentsText
-    private val textControls: RelativeLayout = binding.textControls
+    private val emptyAttachments: TextView = binding.emptyAttachmentsText
+    private val browseControls: View = binding.browseControls
+    private val textControls: ViewGroup = binding.textControls
+    private val selectedCount: TextView = binding.selectedCount
     private val addFile: ImageButton = binding.addFile
     private val deleteFile: ImageButton = binding.deleteFile
     private val retryFailed: ImageButton = binding.retryFailed
@@ -46,6 +51,8 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     private val addToSpoiler: Button = binding.addToSpoiler
     private val addToText: Button = binding.addToText
     private val progressOverlay: FrameLayout = binding.progressOverlay
+    private val selectorTabs: TabLayout = binding.selectorTabLayout
+    private val reverseOrder: MaterialButton = binding.selectorReverse
 
     private var enabledTextControls = true
     private var isLinear = true
@@ -58,6 +65,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
     private var insertAttachmentListener: OnInsertAttachmentListener? = null
     private var retryUploadListener: OnRetryUploadListener? = null
+    private var deleteSelectedListener: (() -> Unit)? = null
 
     /** Для retry: сопоставляем loading item -> исходный файл. */
     private val fileByItem = LinkedHashMap<AttachmentItem, RequestFile>()
@@ -86,18 +94,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         recyclerView.adapter = adapter
 
         dialog.setContentView(binding.root)
-
-        recyclerView.manager.spanSizeLookup = object : androidx.recyclerview.widget.GridLayoutManager.SpanSizeLookup() {
-            override fun getSpanSize(i: Int): Int {
-                return if (isLinear) {
-                    1
-                } else if (i == 0) {
-                    recyclerView.manager.spanCount
-                } else {
-                    1
-                }
-            }
-        }
+        setupViewControls()
 
         /*addFile.setItemClickListener(v -> {
             uploadFiles();
@@ -130,18 +127,16 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
                 adapter.updateItem(item)
             }
         })
-        adapter.setSelectorListener(object : AttachmentAdapter.SelectorListener {
-            override fun onViewTypeChanged(isLinear: Boolean) {
-                this@AttachmentsPopup.isLinear = isLinear
-                recyclerView.setFakeLinear(isLinear)
-                adapter.updateIsLinear(isLinear)
+        adapter.setOnItemActionListener(object : AttachmentAdapter.OnItemActionListener {
+            override fun onInsert(item: AttachmentItem, toSpoiler: Boolean) {
+                if (item.loadState == AttachmentItem.STATE_LOADED) {
+                    insertAttachment(listOf(item), toSpoiler)
+                }
             }
 
-            override fun onReverseClick() {
-                isReverse = !isReverse
-                adapter.updateReverse(isReverse)
-                adapter.clear()
-                adapter.add(attachments)
+            override fun onDelete(item: AttachmentItem) {
+                selectOnly(item)
+                deleteSelectedListener?.invoke()
             }
         })
         onDataChange(0)
@@ -150,6 +145,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         addToSpoiler.setOnClickListener { insertAttachment(selected, true) }
         retryFailed.setOnClickListener { retryAllFailed() }
         clearFailed.setOnClickListener { clearAllFailed() }
+        deleteFile.setOnClickListener { showSelectedActions() }
 
         messagePanel.addAttachmentsOnClickListener {
             if (binding.root.parent != null && binding.root.parent is ViewGroup) {
@@ -170,8 +166,91 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         }*/
     }
 
+    private fun setupViewControls() {
+        val selectedIcon = context.getColorFromAttr(
+            com.google.android.material.R.attr.colorOnSurface
+        )
+        val normalIcon = context.getColorFromAttr(R.attr.icon_base)
+        selectorTabs.tabIconTint = ColorStateList(
+            arrayOf(
+                intArrayOf(android.R.attr.state_selected),
+                intArrayOf()
+            ),
+            intArrayOf(selectedIcon, normalIcon)
+        )
+
+        val gridTab = selectorTabs.newTab()
+            .setIcon(ContextCompat.getDrawable(context, R.drawable.ic_grid))
+            .setContentDescription(R.string.attachments_grid_view)
+        val listTab = selectorTabs.newTab()
+            .setIcon(ContextCompat.getDrawable(context, R.drawable.ic_view_list))
+            .setContentDescription(R.string.attachments_list_view)
+        selectorTabs.addTab(gridTab)
+        selectorTabs.addTab(listTab, true)
+        selectorTabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabReselected(tab: TabLayout.Tab?) = Unit
+            override fun onTabUnselected(tab: TabLayout.Tab?) = Unit
+
+            override fun onTabSelected(tab: TabLayout.Tab?) {
+                isLinear = tab == listTab
+                recyclerView.setFakeLinear(isLinear)
+                adapter.updateIsLinear(isLinear)
+            }
+        })
+
+        reverseOrder.setOnClickListener {
+            isReverse = !isReverse
+            adapter.updateReverse(isReverse)
+            adapter.clear()
+            adapter.add(attachments)
+            reverseOrder.isSelected = isReverse
+            reverseOrder.setText(
+                if (isReverse) {
+                    R.string.attachments_newest_first
+                } else {
+                    R.string.attachments_oldest_first
+                }
+            )
+        }
+    }
+
+    private fun showSelectedActions() {
+        if (selected.isEmpty()) return
+        PopupMenu(context, deleteFile).apply {
+            menu.add(
+                Menu.NONE,
+                R.id.delete_file,
+                Menu.NONE,
+                R.string.delete_selected_attachments
+            )
+            setOnMenuItemClickListener { item ->
+                if (item.itemId == R.id.delete_file) {
+                    deleteSelectedListener?.invoke()
+                    true
+                } else {
+                    false
+                }
+            }
+            show()
+        }
+    }
+
+    private fun selectOnly(item: AttachmentItem) {
+        for (selectedItem in ArrayList(selected)) {
+            if (selectedItem.selected) selectedItem.toggle()
+            adapter.updateItem(selectedItem)
+        }
+        selected.clear()
+        if (!item.selected) item.toggle()
+        selected.add(item)
+        adapter.updateItem(item)
+        onSelectedChange()
+    }
+
     fun setEnabledTextControls(enabled: Boolean) {
         enabledTextControls = enabled
+        adapter.updateTextActionsEnabled(enabled)
+        onSelectedChange()
     }
 
     fun insertAttachment(items: List<AttachmentItem>, toSpoiler: Boolean) {
@@ -222,12 +301,15 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
     private fun onDataChange(count: Int) {
         messagePanel.updateAttachmentsCounter(count)
-        if (count > 0) {
-            noAttachments.text = String.format(context.getString(R.string.attachments_count), count)
-            //dialog.setPeekHeight(App.getKeyboardHeight());
-        } else {
-            noAttachments.setText(R.string.no_attachments)
-            //dialog.setPeekHeight(dp48);
+        emptyAttachments.visibility = if (count == 0) View.VISIBLE else View.GONE
+        recyclerView.visibility = if (count == 0) View.GONE else View.VISIBLE
+        if (selected.isEmpty()) {
+            browseControls.visibility = if (count > 0) View.VISIBLE else View.GONE
+            noAttachments.text = if (count > 0) {
+                context.getString(R.string.attachments_count, count)
+            } else {
+                context.getString(R.string.no_attachments)
+            }
         }
     }
 
@@ -237,26 +319,26 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     private fun onSelectedChange() {
-        val firstGroup = if (selected.size > 0) View.GONE else View.VISIBLE
-        val secondGroup = if (selected.size > 0) View.VISIBLE else View.GONE
-
-        if (!enabledTextControls) {
-            noAttachments.visibility = View.VISIBLE
-        } else if (noAttachments.visibility != firstGroup) {
-            noAttachments.visibility = firstGroup
+        val hasSelection = selected.isNotEmpty()
+        noAttachments.text = if (hasSelection) {
+            context.getString(R.string.attachments_selected, selected.size)
+        } else if (attachments.isNotEmpty()) {
+            context.getString(R.string.attachments_count, attachments.size)
+        } else {
+            context.getString(R.string.no_attachments)
         }
-        if (addFile.visibility != firstGroup)
-            addFile.visibility = firstGroup
+        selectedCount.text = context.getString(R.string.attachments_selected, selected.size)
+        addFile.visibility = if (hasSelection) View.GONE else View.VISIBLE
+        browseControls.visibility = if (!hasSelection && attachments.isNotEmpty()) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         updateRetryVisibility()
-        if (!enabledTextControls) {
-            textControls.visibility = View.GONE
-        } else if (textControls.visibility != secondGroup) {
-            textControls.visibility = secondGroup
-        }
-        if (deleteFile.visibility != secondGroup)
-            deleteFile.visibility = secondGroup
-
-        tryLockControls(!containNotLoaded())
+        textControls.visibility = if (hasSelection) View.VISIBLE else View.GONE
+        addToSpoiler.visibility = if (enabledTextControls) View.VISIBLE else View.GONE
+        addToText.visibility = if (enabledTextControls) View.VISIBLE else View.GONE
+        tryLockControls(true)
     }
 
     private fun updateRetryVisibility() {
@@ -297,8 +379,9 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
     private fun tryLockControls(enable: Boolean) {
         if (textControls.visibility == View.VISIBLE) {
-            addToSpoiler.isEnabled = enable
-            addToText.isEnabled = enable
+            val canInsert = enable && enabledTextControls && !containNotLoaded()
+            addToSpoiler.isEnabled = canInsert
+            addToText.isEnabled = canInsert
             deleteFile.isEnabled = enable
         }
     }
@@ -309,7 +392,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     fun setDeleteOnClickListener(listener: () -> Unit) {
-        deleteFile.setOnClickListener { listener.invoke() }
+        deleteSelectedListener = listener
     }
 
     fun onLoadAttachments(form: EditPostForm) {

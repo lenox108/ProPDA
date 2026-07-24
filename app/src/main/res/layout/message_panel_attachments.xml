@@ -1,100 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="?attr/colorSurfaceContainerLowest">
 
-    <forpdateam.ru.forpda.ui.views.messagepanel.AutoFitRecyclerView xmlns:android="http://schemas.android.com/apk/res/android"
-        android:id="@+id/auto_fit_recycler_view"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@+id/controls"
-        android:padding="@dimen/dp2" />
-
-    <RelativeLayout
-        android:id="@+id/controls"
+    <LinearLayout
+        android:id="@+id/attachment_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?attr/colorSurfaceContainerHigh"
-        android:elevation="@dimen/card_elevation">
+        android:elevation="@dimen/card_elevation"
+        android:orientation="vertical">
 
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/no_attachments_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentStart="true"
-            android:layout_centerVertical="true"
-            android:layout_marginEnd="@dimen/dp48"
-            android:layout_toStartOf="@+id/files_controls"
-            android:paddingStart="@dimen/content_padding_horizontal"
-            android:paddingEnd="@dimen/content_padding_horizontal"
-            android:text="@string/no_attachments"
-            android:textAllCaps="true"
-            android:textStyle="bold" />
-
-        <RelativeLayout
-            android:id="@+id/text_controls"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="@dimen/dp48"
-            android:visibility="gone">
+            android:gravity="center_vertical"
+            android:minHeight="@dimen/dp64"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/dp4">
 
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/add_to_spoiler"
-                android:layout_width="wrap_content"
-                android:layout_height="@dimen/dp48"
-                android:layout_alignEnd="@+id/divider_add_buttons"
-                android:layout_alignParentStart="true"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:text="@string/add_in_spoiler" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
 
-            <View
-                android:id="@+id/divider_add_buttons"
-                android:layout_width="@dimen/divider_thin"
-                android:layout_height="@dimen/list_avatar_compact_size"
-                android:layout_centerInParent="true"
-                android:background="?attr/colorOutlineVariant" />
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/attachments_title"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface" />
 
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/add_to_text"
-                android:layout_width="wrap_content"
-                android:layout_height="@dimen/dp48"
-                android:layout_alignStart="@+id/divider_add_buttons"
-                android:layout_alignParentEnd="true"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:text="@string/insert" />
-
-            <View
-                android:id="@+id/divider_all_buttons"
-                android:layout_width="@dimen/divider_thin"
-                android:layout_height="@dimen/list_avatar_compact_size"
-                android:layout_alignParentEnd="true"
-                android:layout_centerVertical="true"
-                android:background="?attr/colorOutlineVariant" />
-        </RelativeLayout>
-
-
-        <FrameLayout
-            android:id="@+id/files_controls"
-            android:layout_width="@dimen/attachment_toolbar_strip_width"
-            android:layout_height="@dimen/dp48"
-            android:layout_alignParentEnd="true">
-
-            <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/add_file"
-                android:layout_width="@dimen/dp48"
-                android:layout_height="@dimen/dp48"
-                android:layout_gravity="end"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/add_attachment"
-                app:srcCompat="@drawable/ic_toolbar_add" />
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/no_attachments_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/dp2"
+                    android:text="@string/no_attachments"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    tools:text="3 файла" />
+            </LinearLayout>
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/retry_failed"
                 android:layout_width="@dimen/dp48"
                 android:layout_height="@dimen/dp48"
-                android:layout_gravity="start"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/retry"
                 android:visibility="gone"
@@ -104,23 +60,125 @@
                 android:id="@+id/clear_failed"
                 android:layout_width="@dimen/dp48"
                 android:layout_height="@dimen/dp48"
-                android:layout_gravity="center"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/clear_failed"
                 android:visibility="gone"
                 app:srcCompat="@drawable/ic_toolbar_delete" />
 
             <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/add_file"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/add_attachment"
+                app:srcCompat="@drawable/ic_toolbar_add" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/browse_controls"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/dp48"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.tabs.TabLayout
+                android:id="@+id/selector_tab_layout"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/dp48"
+                android:layout_weight="1"
+                app:tabBackground="@android:color/transparent"
+                app:tabIconTint="@color/message_panel_selector_tab_icon"
+                app:tabIndicatorColor="?attr/colorAccent"
+                app:tabIndicatorHeight="@dimen/dp2"
+                app:tabMode="fixed"
+                app:tabSelectedTextColor="?attr/colorOnSurface"
+                app:tabTextColor="?attr/colorOnSurfaceVariant" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/selector_reverse"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/dp48"
+                android:layout_marginEnd="@dimen/dp4"
+                android:contentDescription="@string/sorting_title"
+                android:minWidth="0dp"
+                android:text="@string/attachments_oldest_first"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                app:icon="@drawable/ic_sort"
+                app:iconTint="?attr/colorOnSurfaceVariant"
+                app:rippleColor="?attr/colorAccent" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/text_controls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:minHeight="@dimen/dp56"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/dp4"
+            android:visibility="gone">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/selected_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAppearance="?attr/textAppearanceLabelLarge"
+                android:textColor="?attr/colorOnSurface"
+                tools:text="Выбрано: 2" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/add_to_spoiler"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:text="@string/add_in_spoiler"
+                android:textColor="?attr/colorAccent"
+                app:rippleColor="?attr/colorAccent" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/add_to_text"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/dp4"
+                android:minWidth="0dp"
+                android:text="@string/insert" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/delete_file"
                 android:layout_width="@dimen/dp48"
                 android:layout_height="@dimen/dp48"
-                android:layout_gravity="end"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/delete_selected_attachments"
-                android:visibility="gone"
-                app:srcCompat="@drawable/ic_toolbar_delete" />
-        </FrameLayout>
-    </RelativeLayout>
+                android:contentDescription="@string/more"
+                app:srcCompat="@drawable/ic_more_vert" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <forpdateam.ru.forpda.ui.views.messagepanel.AutoFitRecyclerView
+        android:id="@+id/auto_fit_recycler_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/attachment_header"
+        android:clipToPadding="false"
+        android:paddingStart="@dimen/dp8"
+        android:paddingTop="@dimen/dp8"
+        android:paddingEnd="@dimen/dp8"
+        android:paddingBottom="@dimen/dp16" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/empty_attachments_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/attachment_header"
+        android:gravity="center"
+        android:padding="@dimen/dp32"
+        android:text="@string/no_attachments"
+        android:textAppearance="?attr/textAppearanceBodyLarge"
+        android:textColor="?attr/colorOnSurfaceVariant" />
 
     <FrameLayout
         android:id="@+id/progress_overlay"
@@ -134,6 +192,5 @@
             android:layout_height="@dimen/dp48"
             android:layout_gravity="center" />
     </FrameLayout>
-
 
 </RelativeLayout>

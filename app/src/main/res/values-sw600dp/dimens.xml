@@ -12,7 +12,7 @@
     <!-- Заголовки блоков в bottom sheet и т.п. -->
     <dimen name="content_block_padding_vertical">20dp</dimen>
     <dimen name="auth_form_max_width">560dp</dimen>
-    <dimen name="attachment_grid_column_width">128dp</dimen>
+    <dimen name="attachment_grid_column_width">176dp</dimen>
     <dimen name="news_list_compat_row_height">124dp</dimen>
     <dimen name="news_list_compat_thumb_size">108dp</dimen>
 </resources>
