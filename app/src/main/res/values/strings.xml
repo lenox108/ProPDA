@@ -787,7 +787,7 @@
     <string name="notification_icon_app">Как иконка приложения</string>
     <string name="notification_icon_app_desc">Следует за выбранной иконкой приложения.</string>
     <string name="notification_icon_hint">Android рисует значок в статус-баре одним цветом — различаться будет только форма.</string>
-    <string name="pref_title_notification_card_icon">Иконка слева в карточке</string>
+    <string name="pref_title_notification_card_icon">Иконка уведомлений</string>
     <string name="notification_card_icon_app">Иконка приложения</string>
     <string name="notification_card_icon_status">Как в статус-баре</string>
     <string name="notification_card_icon_hint">Это отдельная настройка. Замена системной иконки слева на значок статус-бара поддерживается начиная с Android API 37; более старые версии оставят иконку приложения.</string>
