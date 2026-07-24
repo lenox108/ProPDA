@@ -175,6 +175,15 @@ object AppIcons {
                     monochromeRes = R.drawable.ic_launcher_circuit_4_monochrome,
                     splashThemeRes = R.style.Theme_ForPDA_Splash_Circuit4,
             ),
+            AppIconVariant(
+                    id = "minimal_4",
+                    alias = "forpdateam.ru.forpda.Launcher.Minimal4",
+                    titleRes = R.string.app_icon_minimal_4,
+                    subtitleRes = R.string.app_icon_minimal_4_desc,
+                    iconRes = R.mipmap.ic_launcher_minimal_4,
+                    monochromeRes = R.drawable.ic_launcher_minimal_4_monochrome,
+                    splashThemeRes = R.style.Theme_ForPDA_Splash_Minimal4,
+            ),
             // app-icon-variants:registry — не удалять, сюда дописывает add_alt_icon.py
     )
 

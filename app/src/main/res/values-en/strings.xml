@@ -627,6 +627,8 @@
     <string name="notification_card_icon_app">App icon</string>
     <string name="notification_card_icon_status">Match status bar icon</string>
     <string name="notification_card_icon_hint">This is a separate setting. Replacing the app icon at the left with the status bar icon is supported from Android API 37; older versions keep the app icon.</string>
+    <string name="app_icon_minimal_4">Minimal 4</string>
+    <string name="app_icon_minimal_4_desc">Clean four with a green dot</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>
