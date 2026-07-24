@@ -131,7 +131,7 @@
         -->
         <activity-alias
             android:name="forpdateam.ru.forpda.Launcher"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
@@ -322,7 +322,7 @@
 
         <activity-alias
             android:name="forpdateam.ru.forpda.Launcher.Pixel4"
-            android:enabled="false"
+            android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_pixel_4"
             android:label="@string/app_name"

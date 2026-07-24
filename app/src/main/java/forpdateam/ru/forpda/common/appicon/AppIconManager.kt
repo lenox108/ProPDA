@@ -1,8 +1,11 @@
 package forpdateam.ru.forpda.common.appicon
 
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.preference.PreferenceManager
 import forpdateam.ru.forpda.common.Preferences
 import timber.log.Timber
@@ -25,11 +28,25 @@ object AppIconManager {
             AppIcons.byId(PreferenceManager.getDefaultSharedPreferences(context)
                     .getString(Preferences.Main.APP_ICON, null))
 
-    /** Запоминает выбор; применится при следующем уходе в фон. */
+    /**
+     * Запоминает выбор; launcher-alias применится при следующем уходе в фон.
+     *
+     * Android 12+ сохраняет системную splash-тему только через
+     * [android.window.SplashScreen.setSplashScreenTheme]. Делаем это сразу при
+     * выборе, чтобы новый splash появился уже на следующем запуске, а не через
+     * один дополнительный запуск.
+     */
     fun select(context: Context, variant: AppIconVariant) {
         PreferenceManager.getDefaultSharedPreferences(context).edit()
                 .putString(Preferences.Main.APP_ICON, variant.id)
                 .apply()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching {
+                context.findActivity()?.splashScreen?.setSplashScreenTheme(variant.splashThemeRes)
+            }.onFailure {
+                Timber.w(it, "Не удалось сохранить splash-тему иконки %s", variant.id)
+            }
+        }
     }
 
     /** Приводит псевдонимы к сохранённому выбору. Ничего не делает, если всё совпадает. */
@@ -107,6 +124,17 @@ object AppIconManager {
             // Иконка просто останется прежней — падать из-за этого нельзя.
             Timber.w(e, "Не удалось переключить псевдоним иконки %s", component.className)
         }
+    }
+
+    private fun Context.findActivity(): Activity? {
+        var current: Context = this
+        while (current is ContextWrapper) {
+            if (current is Activity) return current
+            val base = current.baseContext
+            if (base === current) return null
+            current = base
+        }
+        return current as? Activity
     }
 
     private val AppIconVariant.isDefault: Boolean get() = id == AppIcons.DEFAULT_ID

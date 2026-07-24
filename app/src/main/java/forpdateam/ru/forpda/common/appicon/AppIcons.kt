@@ -33,18 +33,22 @@ data class AppIconVariant(
 /**
  * Реестр иконок. Новые варианты добавляет `design/app-icon/add_alt_icon.py`
  * — он же кладёт ресурсы, строки и псевдоним в манифест.
- * Порядок списка = порядок в пикере, первый элемент = значение по умолчанию.
+ * Порядок списка = порядок в пикере. Значение по умолчанию задаёт [DEFAULT_ID]
+ * (оно же должно быть единственным enabled="true" псевдонимом в манифесте).
  */
 object AppIcons {
 
-    const val DEFAULT_ID = "default"
+    /** Стоковая иконка: рассыпающаяся пиксельная четвёрка. */
+    const val DEFAULT_ID = "pixel_4"
 
     /** Префикс имён псевдонимов; он же — имя псевдонима иконки по умолчанию. */
     const val ALIAS_PREFIX = "forpdateam.ru.forpda.Launcher"
 
     val variants: List<AppIconVariant> = listOf(
             AppIconVariant(
-                    id = DEFAULT_ID,
+                    // id менять нельзя: он уже сохранён в настройках у тех,
+                    // кто выбрал эту иконку, пока она была стоковой.
+                    id = "default",
                     alias = ALIAS_PREFIX,
                     titleRes = R.string.app_icon_default,
                     subtitleRes = R.string.app_icon_default_desc,
@@ -150,7 +154,8 @@ object AppIcons {
             // app-icon-variants:registry — не удалять, сюда дописывает add_alt_icon.py
     )
 
-    val default: AppIconVariant get() = variants.first()
+    val default: AppIconVariant get() =
+            variants.firstOrNull { it.id == DEFAULT_ID } ?: variants.first()
 
     fun byId(id: String?): AppIconVariant = variants.firstOrNull { it.id == id } ?: default
 
