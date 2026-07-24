@@ -2,7 +2,7 @@ package forpdateam.ru.forpda.common
 
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.view.ViewCompat

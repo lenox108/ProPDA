@@ -9,7 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.util.Log
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import forpdateam.ru.forpda.R
 
 object ExternalBrowserLauncher {

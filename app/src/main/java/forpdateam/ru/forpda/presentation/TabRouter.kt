@@ -1,7 +1,7 @@
 package forpdateam.ru.forpda.presentation
 
 import android.content.Context
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.annotation.StringRes
 import com.github.terrakok.cicerone.Router
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi

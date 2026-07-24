@@ -238,7 +238,7 @@ class PollHeaderAdapter(
                     setOnClickListener {
                         val encoded = buildEncodedForm(poll)
                         if (encoded == null) {
-                            android.widget.Toast.makeText(ctx, "Выберите вариант ответа", android.widget.Toast.LENGTH_SHORT).show()
+                            forpdateam.ru.forpda.common.AppToast.makeText(ctx, "Выберите вариант ответа", forpdateam.ru.forpda.common.AppToast.LENGTH_SHORT).show()
                             return@setOnClickListener
                         }
                         val action = poll.formAction?.takeIf { it.isNotBlank() } ?: "https://4pda.to/forum/index.php"

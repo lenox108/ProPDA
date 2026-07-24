@@ -14,7 +14,7 @@ import android.widget.AutoCompleteTextView
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import forpdateam.ru.forpda.common.showSnackbar
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder

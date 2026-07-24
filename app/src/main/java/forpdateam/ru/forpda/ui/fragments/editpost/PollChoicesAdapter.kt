@@ -3,7 +3,7 @@ package forpdateam.ru.forpda.ui.fragments.editpost
 import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.R

@@ -11,7 +11,7 @@ import android.widget.FrameLayout
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.EditText
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels

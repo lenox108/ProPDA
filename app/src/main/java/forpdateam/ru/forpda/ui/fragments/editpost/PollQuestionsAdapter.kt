@@ -4,7 +4,7 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.CompoundButton
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.recyclerview.widget.RecyclerView

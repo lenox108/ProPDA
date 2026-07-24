@@ -2,7 +2,7 @@ package forpdateam.ru.forpda.appupdates
 
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder

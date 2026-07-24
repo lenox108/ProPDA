@@ -6,7 +6,6 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.VectorDrawable
 import android.util.DisplayMetrics
 import android.util.TypedValue
-import android.widget.Toast
 import androidx.annotation.AttrRes
 import androidx.annotation.ColorInt
 import androidx.annotation.DrawableRes

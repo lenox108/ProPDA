@@ -21,7 +21,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.CloseableInfo
 import forpdateam.ru.forpda.entity.app.notes.NoteItem
