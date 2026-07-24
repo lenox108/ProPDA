@@ -207,7 +207,11 @@ object ExternalBrowserLauncher {
             // host-проба может не сматчить дефолтный браузер, хотя система его знает. Прежде чем
             // показывать тост «не найдено», отдаём ссылку системе обычным неявным VIEW —
             // Android сам откроет браузер по умолчанию.
-            if (launchViaSystemDefault(context, baseIntent)) {
+            // Never use an implicit VIEW fallback for a 4PDA URL: our own MainActivity declares
+            // that host, so Android would route «Открыть в браузере» straight back into this app
+            // and the action would look like a no-op. Site URLs must leave through an explicitly
+            // resolved browser candidate/default browser.
+            if (!isSelfHandledSiteUri(uri) && launchViaSystemDefault(context, baseIntent)) {
                 return true
             }
             Toast.makeText(context, R.string.external_browser_not_found, Toast.LENGTH_SHORT).show()
@@ -238,6 +242,18 @@ object ExternalBrowserLauncher {
      * такого флага нет, поэтому сохраняем прежний resolveActivity-based путь.
      */
     internal fun launchSelectedBrowserIfSet(context: Context, baseIntent: Intent): Boolean {
+        val uri = baseIntent.data
+        if (uri != null && isSelfHandledSiteUri(uri)) {
+            // FLAG_ACTIVITY_REQUIRE_DEFAULT resolves the DEFAULT HANDLER FOR THIS URL, not
+            // necessarily the default browser. For 4PDA URLs that handler is this application
+            // itself, producing a self-loop. Resolve the browser role on a neutral host, then put
+            // the real URL into the resulting explicit browser intent.
+            val browserIntent = resolveDefaultBrowserIntent(context, baseIntent) ?: return false
+            if (!launchExplicit(context, browserIntent)) return false
+            Log.i(LOG_TAG, "opened explicit default browser for self-handled site URL")
+            return true
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val selectedBrowserIntent = Intent(baseIntent).apply {
                 component = null
