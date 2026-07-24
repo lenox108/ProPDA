@@ -444,7 +444,17 @@ class PostBodyRenderer {
         }
         val sourceUrl = title?.selectFirst("a[href]")?.attr("href")?.takeIf { it.isNotBlank() }
         val body = element.selectFirst("> .block-body")
-        val inner = if (body != null) renderNodes(body.childNodes()) else emptyList()
+        val renderedInner = if (body != null) renderNodes(body.childNodes()) else emptyList()
+        // 4pda has several generations of attachment markup. Older quoted posts can carry a generic
+        // QuickTime/MIME picture whose link does not expose the real `.mp4` URL, so URL-based filtering
+        // cannot recognise it and the tiny icon becomes a huge native image. The visible section heading
+        // is stable across those variants: quoted attachment sections should keep their file names/rows,
+        // but never repeat image previews inside the quote.
+        val inner = if (body != null && ATTACHMENTS_HEADING.containsMatchIn(body.text())) {
+            renderedInner.filterNot { it is BodyBlock.Image }
+        } else {
+            renderedInner
+        }
         return BodyBlock.Quote(author = author, date = date, sourceUrl = sourceUrl, inner = inner)
     }
 
@@ -645,6 +655,11 @@ class PostBodyRenderer {
         val ATTACH_SIZE = Regex(
             "\\(\\s*([0-9][0-9.,]*\\s*(?:[ТГМК]?Б|[TGMK]?i?B|байт))\\s*\\)",
             RegexOption.IGNORE_CASE,
+        )
+
+        val ATTACHMENTS_HEADING = Regex(
+                """\b(?:Прикрепл[её]нные файлы|Attached files)\b""",
+                RegexOption.IGNORE_CASE,
         )
 
         /** data-attr keys foldAttachmentMeta stows the folded size / download-count on, read by extractDownloadButtons. */
