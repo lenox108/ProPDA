@@ -144,6 +144,76 @@ class BodyBlockViewFactoryInteractionTest {
     }
 
     @Test
+    fun `manual fallback selects text when platform editor ignores long press`() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val textView = NoPlatformSelectionTextView(
+                ContextThemeWrapper(activity, R.style.DayNightAppTheme),
+        ).apply {
+            setText("страница дергается при прокрутке", TextView.BufferType.SPANNABLE)
+            setTextIsSelectable(true)
+            enableReliableSelection()
+        }
+        activity.setContentView(textView)
+        textView.measure(
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.EXACTLY),
+        )
+        textView.layout(0, 0, textView.measuredWidth, textView.measuredHeight)
+        val downTime = SystemClock.uptimeMillis()
+        textView.dispatchTouchEvent(
+                MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, 200f, 40f, 0),
+        )
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(
+                ViewConfiguration.getLongPressTimeout().toLong() + 300L,
+                java.util.concurrent.TimeUnit.MILLISECONDS,
+        )
+
+        assertNotEquals(textView.selectionStart, textView.selectionEnd)
+    }
+
+    @Test
+    fun `manual fallback does not select when long press turns into a scroll`() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val textView = NoPlatformSelectionTextView(
+                ContextThemeWrapper(activity, R.style.DayNightAppTheme),
+        ).apply {
+            setText("страница дергается при прокрутке", TextView.BufferType.SPANNABLE)
+            setTextIsSelectable(true)
+            enableReliableSelection()
+        }
+        activity.setContentView(textView)
+        textView.measure(
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.EXACTLY),
+        )
+        textView.layout(0, 0, textView.measuredWidth, textView.measuredHeight)
+        val downTime = SystemClock.uptimeMillis()
+        textView.dispatchTouchEvent(
+                MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, 200f, 40f, 0),
+        )
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(
+                ViewConfiguration.getLongPressTimeout().toLong() - 40L,
+                java.util.concurrent.TimeUnit.MILLISECONDS,
+        )
+        textView.dispatchTouchEvent(
+                MotionEvent.obtain(
+                        downTime,
+                        SystemClock.uptimeMillis(),
+                        MotionEvent.ACTION_MOVE,
+                        200f,
+                        140f,
+                        0,
+                ),
+        )
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(
+                300L,
+                java.util.concurrent.TimeUnit.MILLISECONDS,
+        )
+
+        assertEquals(textView.selectionStart, textView.selectionEnd)
+    }
+
+    @Test
     fun `quote copy action always writes selected text to clipboard`() {
         val factory = BodyBlockViewFactory(linkHandler, mutableMapOf(), callbacks())
         val root = LinearLayout(context)
@@ -214,6 +284,11 @@ class BodyBlockViewFactoryInteractionTest {
             interceptRequests += disallowIntercept
             super.requestDisallowInterceptTouchEvent(disallowIntercept)
         }
+    }
+
+    private class NoPlatformSelectionTextView(context: Context) :
+            TopicSelectableTextView(context) {
+        override fun invokePlatformLongClick(): Boolean = false
     }
 
     private fun ViewGroup.descendantTextViews(): List<TextView> {
