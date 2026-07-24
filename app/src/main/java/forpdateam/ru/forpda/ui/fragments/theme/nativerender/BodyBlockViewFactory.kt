@@ -1037,6 +1037,7 @@ class BodyBlockViewFactory(
                 // It previously installed a selection-aware movement method for links but never
                 // actually enabled TextView selection, so long-press produced no handles or menu.
                 setTextIsSelectable(true)
+                protectSelectionGestureFromAncestors(this)
                 installQuoteSelectionAction(this, scope)
                 if (hasLinks) movementMethod = SelectableLinkMovementMethod(linkClicks)
             } else if (hasLinks) {
@@ -1145,6 +1146,7 @@ class BodyBlockViewFactory(
                 // (e.g. a clickable @mention nick) fell into a link-only branch and could not be
                 // selected/copied at all — long-press did nothing.
                 setTextIsSelectable(true)
+                protectSelectionGestureFromAncestors(this)
                 installQuoteSelectionAction(this, scope)
                 if (hasLinks) {
                     // A selection-aware movement method: keeps the ArrowKeyMovementMethod selection
@@ -1263,6 +1265,43 @@ class BodyBlockViewFactory(
             if (mi.groupId == android.R.id.textAssist || mi.itemId == android.R.id.textAssist) return true
         }
         return false
+    }
+
+    /**
+     * Gives Android's text editor enough time to recognise a long-press before RecyclerView or
+     * SwipeRefreshLayout can turn tiny finger movement into a scroll and cancel the child gesture.
+     *
+     * The guard does not consume events. A deliberate drag beyond touch slop releases the ancestors
+     * immediately, so scrolling can still start from anywhere in a post. Once selection has begun,
+     * moving a handle keeps the guard active until that gesture ends.
+     */
+    private fun protectSelectionGestureFromAncestors(tv: TextView) {
+        val touchSlop = android.view.ViewConfiguration.get(tv.context).scaledTouchSlop
+        var downX = 0f
+        var downY = 0f
+        tv.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    downX = event.x
+                    downY = event.y
+                    tv.parent?.requestDisallowInterceptTouchEvent(true)
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val selectionActive =
+                            tv.selectionStart >= 0 && tv.selectionEnd >= 0 &&
+                                    tv.selectionStart != tv.selectionEnd
+                    if (!selectionActive &&
+                            (kotlin.math.abs(event.x - downX) > touchSlop ||
+                                    kotlin.math.abs(event.y - downY) > touchSlop)) {
+                        tv.parent?.requestDisallowInterceptTouchEvent(false)
+                    }
+                }
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL ->
+                    tv.parent?.requestDisallowInterceptTouchEvent(false)
+            }
+            false
+        }
     }
 
     /**
