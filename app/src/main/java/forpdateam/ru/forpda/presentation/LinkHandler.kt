@@ -62,6 +62,7 @@ class LinkHandler(
         router?.navigateTo(screen.apply {
             args[Screen.ARG_TITLE]?.let { screen.screenTitle = it }
             args[Screen.ARG_SUBTITLE]?.let { screen.screenSubTitle = it }
+            screen.forceNewTab = args[Screen.ARG_FORCE_NEW_TAB].toBoolean()
         })
     }
 

@@ -4,23 +4,38 @@ import android.content.Context
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
+import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.ISystemLinkHandler
+import forpdateam.ru.forpda.presentation.Screen
+import forpdateam.ru.forpda.presentation.TabRouter
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
 
 /**
  * Контекстное меню действий над текстовой ссылкой — паритет с WebView-меню ссылок из
- * [forpdateam.ru.forpda.common.webview.DialogsHelper] (лонг-тап по ссылке): открыть в браузере /
- * поделиться / скопировать ссылку. Общее для нативной темы форума и QMS-чата.
+ * [forpdateam.ru.forpda.common.webview.DialogsHelper] (лонг-тап по ссылке): открыть в новой вкладке /
+ * открыть в браузере / поделиться / скопировать ссылку. Общее для нативной темы форума и QMS-чата.
  */
 object LinkActionsMenu {
 
     fun show(
             context: Context,
             url: String,
+            linkHandler: ILinkHandler,
+            router: TabRouter,
             systemLinkHandler: ISystemLinkHandler,
             clipboardHelper: ClipboardHelper,
     ) {
         val menu = DynamicDialogMenu<Context, String>()
+        menu.addItem(context.getString(R.string.wv_open_new_tab)) { _, link ->
+            // Passing the router explicitly follows the established WebView context-menu path:
+            // internal 4PDA links become a parallel native app tab instead of replacing the
+            // currently open topic.
+            linkHandler.handle(
+                    link,
+                    router,
+                    mapOf(Screen.ARG_FORCE_NEW_TAB to true.toString()),
+            )
+        }
         menu.addItem(context.getString(R.string.wv_open_in_browser)) { _, link ->
             systemLinkHandler.handle(link)
         }
