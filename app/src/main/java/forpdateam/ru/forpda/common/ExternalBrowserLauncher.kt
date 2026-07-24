@@ -176,17 +176,13 @@ object ExternalBrowserLauncher {
         val uri = Uri.parse(url)
         val baseIntent = createBrowserViewIntent(uri)
 
-        // 1) Приоритет — ЯВНО открыть браузер по умолчанию (роль BROWSER). Это ровно то, что
-        //    ожидает пользователь («открой в моём браузере»), и явный интент не перехватывается
-        //    оболочкой (на MIUI/HyperOS неявный VIEW даёт системный тост «Браузер по умолчанию
-        //    не найден»). resolveActivity(MATCH_DEFAULT_ONLY) — ОТДЕЛЬНЫЙ механизм резолва от
-        //    queryIntentActivities ниже: если один на конкретной прошивке капризничает, срабатывает
-        //    другой. Браузеры без CATEGORY_DEFAULT (Soul) сюда не попадут — их подхватит перечисление.
-        resolveDefaultBrowserIntent(context, baseIntent)?.let { defaultIntent ->
-            if (launchExplicit(context, defaultIntent)) {
-                Log.i(LOG_TAG, "opened default browser ${defaultIntent.component?.packageName}")
-                return true
-            }
+        // Сначала отдаём запуск системе с требованием РЕАЛЬНО назначенного обработчика. На Android
+        // 11+ FLAG_ACTIVITY_REQUIRE_DEFAULT не позволяет OEM-резолверу подставить стоковый браузер,
+        // когда пользователь очистил выбор по умолчанию: startActivity бросит исключение, и ниже мы
+        // покажем chooser из найденных браузеров. Обычный resolveActivity() для этой проверки
+        // ненадёжен — некоторые прошивки возвращают системный fallback вместо ResolverActivity.
+        if (launchSelectedBrowserIfSet(context, baseIntent)) {
+            return true
         }
 
         val candidates = queryExternalBrowserIntents(context, baseIntent)
@@ -236,8 +232,39 @@ object ExternalBrowserLauncher {
     }
 
     /**
-     * Резолвит браузер по умолчанию (роль BROWSER) через resolveActivity(MATCH_DEFAULT_ONLY) и
-     * возвращает ЯВНЫЙ интент на него. null, если дефолт не задан (система вернула ResolverActivity)
+     * Открывает браузер только при наличии настоящего системного выбора по умолчанию.
+     *
+     * На API 30+ это проверяет сама система через FLAG_ACTIVITY_REQUIRE_DEFAULT. На старых версиях
+     * такого флага нет, поэтому сохраняем прежний resolveActivity-based путь.
+     */
+    internal fun launchSelectedBrowserIfSet(context: Context, baseIntent: Intent): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val selectedBrowserIntent = Intent(baseIntent).apply {
+                component = null
+                `package` = null
+                addFlags(Intent.FLAG_ACTIVITY_REQUIRE_DEFAULT)
+                if (context !is Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            return try {
+                context.startActivity(selectedBrowserIntent)
+                Log.i(LOG_TAG, "opened system-selected default browser")
+                true
+            } catch (e: ActivityNotFoundException) {
+                Log.i(LOG_TAG, "default browser is not selected, showing browser chooser")
+                false
+            }
+        }
+
+        val defaultIntent = resolveDefaultBrowserIntent(context, baseIntent) ?: return false
+        if (!launchExplicit(context, defaultIntent)) return false
+        Log.i(LOG_TAG, "opened default browser ${defaultIntent.component?.packageName}")
+        return true
+    }
+
+    /**
+     * Legacy API 26–29 fallback. null, если дефолт не задан (система вернула ResolverActivity)
      * либо резолв указал на не-браузер / наш пакет.
      */
     private fun resolveDefaultBrowserIntent(context: Context, baseIntent: Intent): Intent? {
