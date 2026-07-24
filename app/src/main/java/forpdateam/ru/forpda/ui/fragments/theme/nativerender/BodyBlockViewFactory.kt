@@ -1069,14 +1069,14 @@ class BodyBlockViewFactory(
     }
 
     /**
-     * The server edit note («Сообщение отредактировал … — …», + «Причина редактирования: …») — a
-     * SYSTEM meta line. Rendered smaller and muted (mirrors the WebView `.edit`: 0.875em, #757575) so
-     * it visually separates from the user's own post text. The editor-nick link inside stays tappable.
+     * The compact server edit marker (`✎ HH:mm`, plus an optional edit reason) — a SYSTEM meta line.
+     * Rendered smaller and muted (mirrors the WebView `.edit`: 0.875em, #757575) so it visually separates
+     * from the user's own post text.
      */
     private fun editNoteView(ctx: Context, block: BodyBlock.EditNote): View {
         val muted = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
-        // Системная строка «Сообщение отредактировал N» — это метка, а не действие: ник должен быть
-        // обычным muted-текстом, без гиперссылки и перехода в профиль. Убираем URLSpan целиком.
+        // The compact marker is metadata rather than an action. Edit reasons may still contain server
+        // markup, so remove any links and keep the whole block passive.
         val text = stripLinks(spanned(ctx, block.html))
         return TextView(ctx).apply {
             setText(text)

@@ -439,6 +439,32 @@ class PostBodyRendererTest {
         assertTrue("recognisable text survives", recombined.contains("Незакрытый жирный текст"))
     }
 
+    @Test
+    fun editNote_becomesCompactPencilAndTime() {
+        val html = """
+            <p>Текст сообщения</p>
+            <span class="edit">Сообщение отредактировал <a href="/forum/index.php?showuser=7">Nick</a> - Сегодня, 21:55</span>
+        """.trimIndent()
+
+        val blocks = renderer.render(html)
+
+        assertEquals("""<span class="edit">✎ 21:55</span>""", blocks.filterIsInstance<BodyBlock.EditNote>().single().html)
+    }
+
+    @Test
+    fun editNoteWithDate_keepsOnlyEditTime_butPreservesReason() {
+        val html = """
+            <p>Текст сообщения</p>
+            <span class="edit">Сообщение отредактировал Nick - 01.04.26, 01:55</span>
+            <div class="post-edit-reason">Причина редактирования: уточнение</div>
+        """.trimIndent()
+
+        val notes = renderer.render(html).filterIsInstance<BodyBlock.EditNote>()
+
+        assertEquals("""<span class="edit">✎ 01:55</span>""", notes[0].html)
+        assertTrue(notes[1].html.contains("Причина редактирования: уточнение"))
+    }
+
     private fun assertFallback(block: BodyBlock, kind: Kind) {
         assertTrue("expected WebFallback but was $block", block is BodyBlock.WebFallback)
         assertEquals(kind, (block as BodyBlock.WebFallback).kind)
