@@ -27,7 +27,7 @@ object QuickReplyFailureNotification {
         NotificationsService.createEventChannels(context)
 
         val builder = NotificationCompat.Builder(context, NotificationsService.CHANNEL_QMS_ID)
-                .setSmallIcon(R.drawable.ic_notify_qms)
+                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_qms))
                 .setContentTitle(context.getString(R.string.notification_quick_reply_failed_title))
                 .setContentText(text)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))

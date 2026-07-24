@@ -375,6 +375,7 @@ def upsert_registry(icon_id: str, alias: str, splash_style: str,
                     alias = "{alias}",
                     titleRes = R.string.app_icon_{icon_id},{subtitle}
                     iconRes = R.mipmap.ic_launcher_{icon_id},
+                    monochromeRes = R.drawable.ic_launcher_{icon_id}_monochrome,
                     splashThemeRes = R.style.{splash_style.replace('.', '_')},
             ),"""
     existing = re.compile(

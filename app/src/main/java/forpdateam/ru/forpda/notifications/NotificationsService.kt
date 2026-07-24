@@ -304,7 +304,7 @@ class NotificationsService : Service() {
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
         val notification = NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notify_favorites)
+                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(this, R.drawable.ic_notify_favorites))
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText(getString(R.string.notification_foreground_channel_name))
                 .setContentIntent(contentIntent)

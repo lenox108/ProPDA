@@ -47,6 +47,12 @@
             android:title="@string/pref_title_app_icon"
             app:iconSpaceReserved="false" />
 
+        <Preference
+            android:key="main.notification_icon"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_notification_icon"
+            app:iconSpaceReserved="false" />
+
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"
             android:key="main.haptic_feedback.enable"
