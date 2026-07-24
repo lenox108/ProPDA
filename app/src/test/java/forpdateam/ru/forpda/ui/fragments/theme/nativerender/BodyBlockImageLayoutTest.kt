@@ -46,4 +46,24 @@ class BodyBlockImageLayoutTest {
         assertEquals(900, box.widthPx)
         assertEquals(594, box.heightPx)
     }
+
+    @Test
+    fun `attachment thumbnail inside quote uses compact icon size`() {
+        assertEquals(
+                BodyBlockViewFactory.QUOTED_ATTACHMENT_THUMB_DP,
+                BodyBlockViewFactory.attachmentThumbnailMaxDp(quoteDepth = 1),
+        )
+        assertEquals(
+                BodyBlockViewFactory.QUOTED_ATTACHMENT_THUMB_DP,
+                BodyBlockViewFactory.attachmentThumbnailMaxDp(quoteDepth = 2),
+        )
+    }
+
+    @Test
+    fun `attachment thumbnail outside quote keeps regular gallery size`() {
+        assertEquals(
+                BodyBlockViewFactory.ATTACHMENT_THUMB_DP,
+                BodyBlockViewFactory.attachmentThumbnailMaxDp(quoteDepth = 0),
+        )
+    }
 }
