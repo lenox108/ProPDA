@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.theme.nativerender
 
+import forpdateam.ru.forpda.common.FourPdaImageUrls
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
@@ -322,8 +323,11 @@ class PostBodyRenderer {
 
     private fun Element.toContentImageOrNull(): BodyBlock.Image? {
         if (!isContentImage()) return null
-        val src = firstNonBlank(attr("src"), attr("data-src"), attr("data-preview")) ?: return null
         val link = closest("a[href]")?.attr("href")?.takeIf { it.isNotBlank() }
+        // A loose thumbnail may actually be the server's generic file/video glyph. The old WebView hid
+        // these icons; only real image attachments belong in the image gallery.
+        if (link != null && isNonImageAttachmentUrl(link)) return null
+        val src = firstNonBlank(attr("src"), attr("data-src"), attr("data-preview")) ?: return null
         return BodyBlock.Image(
             imageUrl = src,
             linkUrl = link,
@@ -468,6 +472,9 @@ class PostBodyRenderer {
             // The full-size / download link is the enclosing <a> nearest to this image.
             val linkUrl = (img.closest("a[href]") ?: element.selectFirst("a[href]"))
                     ?.attr("href")?.takeIf { it.isNotBlank() }
+            // Some quoted file/video attachments use the picture-table shape but point the surrounding
+            // link at an mp4/zip/etc. The bitmap is only a decorative MIME preview, not user content.
+            if (linkUrl != null && isNonImageAttachmentUrl(linkUrl)) return@mapNotNull null
             BodyBlock.Image(
                 imageUrl = src,
                 linkUrl = linkUrl,
@@ -491,14 +498,20 @@ class PostBodyRenderer {
         val links = if (element.normalName() == "a" && element.hasClass("ipb-attach")) {
             listOf(element)
         } else {
-            element.select("a.ipb-attach.attach-file, a.ipb-attach:not(.attach-img):not(.attach-image)")
+            element.select(
+                    "a.ipb-attach.attach-file, " +
+                            "a.ipb-attach:not(.attach-img):not(.attach-image), " +
+                            "a[href*=/forum/dl/post/]",
+            ).filter { it.hasClass("ipb-attach") || isNonImageAttachmentUrl(it.attr("href")) }
         }
         return links.flatMap { link ->
             val url = link.attr("href").takeIf { it.isNotBlank() } ?: return@flatMap emptyList<BodyBlock>()
             val out = ArrayList<BodyBlock>(2)
             val img = link.selectFirst("img")
             val gif = img?.let { firstNonBlank(it.attr("data-src"), it.attr("src"), it.attr("data-preview")) }
-            if (gif != null) {
+            // Generic dl/post anchors around video/file MIME previews are not download-button banners.
+            // Their decorative image is intentionally omitted; the compact file row below is sufficient.
+            if (gif != null && link.hasClass("ipb-attach")) {
                 out.add(
                     BodyBlock.Image(
                         imageUrl = gif,
@@ -523,6 +536,12 @@ class PostBodyRenderer {
             )
             out
         }
+    }
+
+    private fun isNonImageAttachmentUrl(url: String): Boolean {
+        val normalized = FourPdaImageUrls.normalizeAbsolute(url)
+        return normalized.contains("/forum/dl/post/", ignoreCase = true) &&
+                !FourPdaImageUrls.isViewableInViewer(normalized)
     }
 
     private fun String.toIntOrZero(): Int = trim().toIntOrNull() ?: 0

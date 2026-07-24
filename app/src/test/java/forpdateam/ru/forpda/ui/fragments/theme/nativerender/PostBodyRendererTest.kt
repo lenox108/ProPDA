@@ -142,6 +142,46 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun quotedVideoAttachment_dropsMimePreviewIcon() {
+        val html =
+                "<div class=\"post-block quote\"><div class=\"block-title\">user @ Сегодня</div>" +
+                        "<div class=\"block-body\">Прикрепленные файлы<br>" +
+                        "<a href=\"https://4pda.to/forum/dl/post/42/7499_Compressed.mp4\">" +
+                        "<img class=\"linked-image\" src=\"https://4pda.to/forum/style_images/mime_types/mp4.png\">" +
+                        "7499_Compressed.mp4</a> ( 4.31 МБ )</div></div>"
+
+        val quote = renderer.render(html).filterIsInstance<BodyBlock.Quote>().single()
+
+        assertFalse(
+                "non-image attachment preview must not become a large quoted image",
+                quote.inner.any { it is BodyBlock.Image },
+        )
+        assertTrue(
+                "file name remains visible after the decorative preview is removed",
+                quote.inner.filterIsInstance<BodyBlock.Text>()
+                        .any { it.html.contains("7499_Compressed.mp4") },
+        )
+    }
+
+    @Test
+    fun quotedVideoAttachmentTable_becomesFileRowWithoutPreviewIcon() {
+        val html =
+                "<div class=\"post-block quote\"><div class=\"block-title\">user @ Сегодня</div>" +
+                        "<div class=\"block-body\"><table id=\"ipb-attach-table-42-bb\"><tr><td>" +
+                        "<a href=\"https://4pda.to/forum/dl/post/42/7499_Compressed.mp4\">" +
+                        "<img class=\"attach\" src=\"https://4pda.to/forum/style_images/mime_types/mp4.png\">" +
+                        "7499_Compressed.mp4</a></td></tr></table></div></div>"
+
+        val quote = renderer.render(html).filterIsInstance<BodyBlock.Quote>().single()
+
+        assertFalse(quote.inner.any { it is BodyBlock.Image })
+        assertEquals(
+                "7499_Compressed.mp4",
+                quote.inner.filterIsInstance<BodyBlock.FileAttachment>().single().name,
+        )
+    }
+
+    @Test
     fun hiddenBlockInsideSpoiler_withAttachImage_rendersNativeImage_notEmpty() {
         // EXACT live structure of topic 1103268 / p144360304 («Изображение под спойлер»): a collapsed
         // spoiler whose body holds a `.post-block.hidden` («Скрытый текст», registered-only) that in turn
