@@ -181,6 +181,12 @@ class BodyBlockViewFactory(
     var flatBlocks: Boolean = false
 
     /**
+     * «Современная дата поста»: use the same relative form in quote headers and merged-post
+     * «Добавлено …» markers as in the owning post header. Left false by shared non-topic hosts (QMS).
+     */
+    var modernPostDates: Boolean = false
+
+    /**
      * Top margin (dp) between a block-level segment (quote / spoiler / code / table / image / edit-note /
      * fallback) and whatever precedes it. Follows the post-density setting so block spacing tightens in the
      * same step as the card padding/gap (Комфортная 10 · Компактная 6 · Сверхкомпактная 3) — otherwise
@@ -430,7 +436,8 @@ class BodyBlockViewFactory(
         val key = "${scope.scopeId}:q${scope.quoteSeq++}"
 
         val author = block.author?.takeIf { it.isNotBlank() }
-        val date = block.date?.takeIf { it.isNotBlank() }
+        val rawDate = block.date?.takeIf { it.isNotBlank() }
+        val date = rawDate?.let { if (modernPostDates) PostDateFormatter.relative(it) else it }
         // Author bold in full accent, the date appended muted (accent at ~60%, regular weight) — the
         // old single-style header read as one long label and buried the name.
         val headerText = SpannableStringBuilder(author ?: "Цитата").apply {
@@ -1120,7 +1127,11 @@ class BodyBlockViewFactory(
                 maxWidth = textBlockMaxWidthPx
             }
             val surface = currentSurface(ctx, scope)
-            setText(highlightSearchMatches(ctx, neutralizeLowContrastColors(surface, stripLinkColors(text))))
+            val displayedText = modernizeMergedPostDates(text)
+            setText(highlightSearchMatches(
+                    ctx,
+                    neutralizeLowContrastColors(surface, stripLinkColors(displayedText)),
+            ))
             SmileProvider.startAnimations(this)
             // Body base = 16sp so at «Размер шрифта в темах» = N (textScale = N/16) the paragraph
             // renders at N sp — matching the news/WebView path, which sets `defaultFontSize = N` px
@@ -1167,6 +1178,21 @@ class BodyBlockViewFactory(
                 if (hasLinks) {
                     movementMethod = LinkMovementMethod(linkClicks)
                 }
+            }
+        }
+    }
+
+    /**
+     * Replace only the timestamp part of system «Добавлено DATE:» markers. Applying replacements to a
+     * [SpannableStringBuilder] from right to left keeps the server's size/style spans around the marker.
+     */
+    private fun modernizeMergedPostDates(text: CharSequence): CharSequence {
+        if (!modernPostDates) return text
+        val replacements = PostDateFormatter.mergedPostDateReplacements(text.toString())
+        if (replacements.isEmpty()) return text
+        return SpannableStringBuilder(text).apply {
+            for (replacement in replacements.asReversed()) {
+                replace(replacement.start, replacement.endExclusive, replacement.value)
             }
         }
     }
