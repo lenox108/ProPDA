@@ -83,12 +83,7 @@ object NotificationPublisher {
                 )
                 .setContentTitle(title)
                 .setContentText(text)
-                .setStyle(
-                        NotificationCompat.BigTextStyle()
-                                .setBigContentTitle(title)
-                                .bigText(text)
-                                .setSummaryText(summary)
-                )
+                .setStyle(styleFor(context, event, title, text, summary, largeIcon))
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -221,6 +216,48 @@ object NotificationPublisher {
         e.fromQms() -> context.getString(R.string.notification_summary_qms)
         e.fromTheme() -> context.getString(R.string.notification_summary_fav)
         else -> context.getString(R.string.notification_summary_comment)
+    }
+
+    /**
+     * QMS с известным собеседником — MessagingStyle: «лицом» уведомления становится
+     * аватар отправителя (как в мессенджерах), а не значок приложения. Это
+     * единственный легальный способ подменить кружок в строке шторки: кружок
+     * рисуется системой из ApplicationInfo и через Notification API не меняется.
+     * Без аватара или ника (и для всех остальных событий) — прежний BigText.
+     */
+    private fun styleFor(
+            context: Context,
+            event: NotificationEvent,
+            title: String,
+            text: String,
+            summary: String?,
+            avatar: android.graphics.Bitmap?,
+    ): NotificationCompat.Style {
+        if (event.fromQms() && avatar != null && event.userNick.isNotEmpty()) {
+            val sender = androidx.core.app.Person.Builder()
+                    .setName(event.userNick)
+                    .setIcon(androidx.core.graphics.drawable.IconCompat.createWithBitmap(avatar))
+                    .build()
+            val me = androidx.core.app.Person.Builder()
+                    .setName(context.getString(R.string.notification_qms_me))
+                    .build()
+            return NotificationCompat.MessagingStyle(me)
+                    // Название диалога QMS; сообщение — счётчик, самого текста в событии нет.
+                    .setConversationTitle(event.sourceTitle.takeIf { it.isNotBlank() })
+                    .addMessage(
+                            context.resources.getQuantityString(
+                                    R.plurals.notification_content_qms_count,
+                                    event.msgCount.coerceAtLeast(1),
+                                    event.msgCount.coerceAtLeast(1),
+                            ),
+                            System.currentTimeMillis(),
+                            sender,
+                    )
+        }
+        return NotificationCompat.BigTextStyle()
+                .setBigContentTitle(title)
+                .bigText(text)
+                .setSummaryText(summary)
     }
 
     fun smallIconFor(e: NotificationEvent): Int = when {

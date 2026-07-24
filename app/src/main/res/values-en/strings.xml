@@ -629,6 +629,7 @@
     <string name="notification_card_icon_app">Match app icon</string>
     <string name="notification_card_icon_app_desc">Follow the selected app icon.</string>
     <string name="notification_card_icon_hint">Choose the coloured card content icon independently from the status bar icon. QMS always keeps the sender avatar. The icon position is controlled by the Android skin.</string>
+    <string name="notification_qms_me">Me</string>
     <string name="app_icon_minimal_4">Minimal 4</string>
     <string name="app_icon_minimal_4_desc">Clean four with a green dot</string>
     <string name="app_icon_bold_4">Bold 4</string>

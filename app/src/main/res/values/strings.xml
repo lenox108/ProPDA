@@ -793,6 +793,7 @@
     <string name="notification_card_icon_app">Как иконка приложения</string>
     <string name="notification_card_icon_app_desc">Следовать за выбранной иконкой приложения.</string>
     <string name="notification_card_icon_hint">Выберите цветную иконку содержимого карточки независимо от значка в статус-баре. QMS всегда сохраняет аватар отправителя. Точное положение иконки определяет оболочка Android.</string>
+    <string name="notification_qms_me">Я</string>
     <string name="app_icon_minimal_4">Минималистичная 4</string>
     <string name="app_icon_minimal_4_desc">Чистая четвёрка с зелёной точкой</string>
     <string name="app_icon_bold_4">Жирная 4</string>
