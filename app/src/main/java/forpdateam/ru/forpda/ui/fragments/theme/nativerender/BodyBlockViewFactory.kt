@@ -649,7 +649,13 @@ class BodyBlockViewFactory(
                 maxHeight = dm.heightPixels
             } else {
                 // ATTACHMENT picture: compact reserved-box THUMBNAIL (a tap opens the viewer).
-                val thumbMaxPx = (150 * dm.density).toInt().coerceAtMost(columnWidthPx)
+                // Quotes have a much narrower visual hierarchy than the post body. Reusing the regular
+                // 150dp attachment preview there made square server-side file/video glyphs dominate the
+                // whole quote (450px on a xxhdpi phone). Keep quoted attachment previews icon-sized while
+                // preserving the existing gallery size in the post itself.
+                val thumbMaxPx = (attachmentThumbnailMaxDp(scope.quoteDepth) * dm.density)
+                        .toInt()
+                        .coerceAtMost(columnWidthPx)
                 val naturalWidth = (block.displayWidthPx * dm.density).toInt()
                 val targetWidth = if (block.displayWidthPx > 0) naturalWidth.coerceIn(1, thumbMaxPx) else thumbMaxPx
                 layoutParams = LinearLayout.LayoutParams(
@@ -1438,6 +1444,9 @@ class BodyBlockViewFactory(
             )
         }
 
+        internal fun attachmentThumbnailMaxDp(quoteDepth: Int): Int =
+                if (quoteDepth > 0) QUOTED_ATTACHMENT_THUMB_DP else ATTACHMENT_THUMB_DP
+
         /**
          * Parse every markup run in [blocks] into [HTML_CACHE] ahead of time. Call OFF the main thread as
          * soon as a page's posts are known: the cache alone only pays off on a RE-bind, while a fast scroll
@@ -1504,6 +1513,8 @@ class BodyBlockViewFactory(
                 Pattern.compile("""https?://4pda\.(?:to|ru)/forum/dl/post/\d+/(.+\.([^./?#]+))(?:[?#]|$)""")
 
         const val DEFAULT_IMAGE_RATIO = 0.66f
+        const val ATTACHMENT_THUMB_DP = 150
+        const val QUOTED_ATTACHMENT_THUMB_DP = 72
 
         /**
          * DEFAULT (Комфортная density) top margin (dp) between block-level segments. Applied uniformly so
