@@ -64,15 +64,17 @@
         </intent>
     </queries>
 
+    <!-- Иконка APK и системной карточки приложения. Держать синхронно с
+         AppIcons.DEFAULT_ID и единственным enabled launcher alias: pixel_4. -->
     <application
         android:name=".App"
         android:allowBackup="true"
         android:fullBackupContent="false"
         android:extractNativeLibs="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_launcher_pixel_4"
         android:label="@string/app_name"
-        android:logo="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:logo="@mipmap/ic_launcher_pixel_4"
+        android:roundIcon="@mipmap/ic_launcher_pixel_4"
         android:supportsRtl="true"
         android:theme="@style/DayNightAppTheme"
         android:enableOnBackInvokedCallback="true"
