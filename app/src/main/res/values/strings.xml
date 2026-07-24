@@ -792,7 +792,7 @@
     <string name="notification_card_icon_auto_desc">Сохранять аватар или штатную иконку события.</string>
     <string name="notification_card_icon_app">Как иконка приложения</string>
     <string name="notification_card_icon_app_desc">Следовать за выбранной иконкой приложения.</string>
-    <string name="notification_card_icon_hint">Выберите цветную иконку содержимого карточки независимо от значка в статус-баре. Её точное положение определяет оболочка Android.</string>
+    <string name="notification_card_icon_hint">Выберите цветную иконку содержимого карточки независимо от значка в статус-баре. QMS всегда сохраняет аватар отправителя. Точное положение иконки определяет оболочка Android.</string>
     <string name="app_icon_minimal_4">Минималистичная 4</string>
     <string name="app_icon_minimal_4_desc">Чистая четвёрка с зелёной точкой</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
