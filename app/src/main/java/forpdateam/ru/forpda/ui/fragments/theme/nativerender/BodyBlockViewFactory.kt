@@ -1037,9 +1037,13 @@ class BodyBlockViewFactory(
                 // It previously installed a selection-aware movement method for links but never
                 // actually enabled TextView selection, so long-press produced no handles or menu.
                 setTextIsSelectable(true)
-                protectSelectionGestureFromAncestors(this)
                 installQuoteSelectionAction(this, scope)
                 if (hasLinks) movementMethod = SelectableLinkMovementMethod(linkClicks)
+                // Text selection and View long-clickability are separate platform flags. AOSP's
+                // Editor may still recognise the gesture when the latter is false, while some OEM
+                // TextView implementations silently do nothing. Apply this AFTER movementMethod
+                // setup because a movement method is allowed to update the long-click flag.
+                isLongClickable = true
             } else if (hasLinks) {
                 movementMethod = LinkMovementMethod(linkClicks)
             }
@@ -1146,13 +1150,15 @@ class BodyBlockViewFactory(
                 // (e.g. a clickable @mention nick) fell into a link-only branch and could not be
                 // selected/copied at all — long-press did nothing.
                 setTextIsSelectable(true)
-                protectSelectionGestureFromAncestors(this)
                 installQuoteSelectionAction(this, scope)
                 if (hasLinks) {
                     // A selection-aware movement method: keeps the ArrowKeyMovementMethod selection
                     // behaviour that setTextIsSelectable installs AND routes link tap/long-press in-app.
                     movementMethod = SelectableLinkMovementMethod(linkClicks)
                 }
+                // See the API/OEM note in bindFallback(): TextView selection and View long-clickability
+                // are separate flags on real devices, even though Robolectric couples them.
+                isLongClickable = true
             } else {
                 // Non-selectable (QMS chat bubbles): a selectable TextView claims the long-press for its
                 // text-selection ActionMode (the awkward «текст выделяется + Копировать рядом с Удалить»).
@@ -1248,43 +1254,6 @@ class BodyBlockViewFactory(
             }
         }
         return c
-    }
-
-    /**
-     * Gives Android's text editor enough time to recognise a long-press before RecyclerView or
-     * SwipeRefreshLayout can turn tiny finger movement into a scroll and cancel the child gesture.
-     *
-     * The guard does not consume events. A deliberate drag beyond touch slop releases the ancestors
-     * immediately, so scrolling can still start from anywhere in a post. Once selection has begun,
-     * moving a handle keeps the guard active until that gesture ends.
-     */
-    private fun protectSelectionGestureFromAncestors(tv: TextView) {
-        val touchSlop = android.view.ViewConfiguration.get(tv.context).scaledTouchSlop
-        var downX = 0f
-        var downY = 0f
-        tv.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    downX = event.x
-                    downY = event.y
-                    tv.parent?.requestDisallowInterceptTouchEvent(true)
-                }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val selectionActive =
-                            tv.selectionStart >= 0 && tv.selectionEnd >= 0 &&
-                                    tv.selectionStart != tv.selectionEnd
-                    if (!selectionActive &&
-                            (kotlin.math.abs(event.x - downX) > touchSlop ||
-                                    kotlin.math.abs(event.y - downY) > touchSlop)) {
-                        tv.parent?.requestDisallowInterceptTouchEvent(false)
-                    }
-                }
-                android.view.MotionEvent.ACTION_UP,
-                android.view.MotionEvent.ACTION_CANCEL ->
-                    tv.parent?.requestDisallowInterceptTouchEvent(false)
-            }
-            false
-        }
     }
 
     /**

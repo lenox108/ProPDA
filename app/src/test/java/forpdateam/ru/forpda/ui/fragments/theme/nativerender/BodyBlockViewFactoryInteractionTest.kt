@@ -71,6 +71,7 @@ class BodyBlockViewFactoryInteractionTest {
         assertTrue(header.performLongClick())
         assertEquals(sourceUrl, longPressedUrl)
         assertTrue(quoteText.isTextSelectable)
+        assertTrue(quoteText.isLongClickable)
     }
 
     @Test
@@ -98,33 +99,6 @@ class BodyBlockViewFactoryInteractionTest {
 
         val fallback = root.descendantTextViews().first { it.text.contains("Сложный текст цитаты") }
         assertTrue(fallback.isTextSelectable)
-    }
-
-    @Test
-    fun `quote text protects long press from parent interception`() {
-        val factory = BodyBlockViewFactory(linkHandler, mutableMapOf(), callbacks())
-        val root = InterceptRecordingLayout(context)
-
-        factory.render(
-                root,
-                listOf(
-                        BodyBlock.Quote(
-                                author = "Автор",
-                                date = null,
-                                sourceUrl = null,
-                                inner = listOf(BodyBlock.Text("Выделяемый текст цитаты")),
-                        ),
-                ),
-                BodyBlockViewFactory.RenderScope(scopeId = 2, allowQuoteSelection = true),
-        )
-
-        val quoteText = root.descendantTextViews()
-                .first { it.text.contains("Выделяемый текст цитаты") }
-        quoteText.dispatchTouchEvent(MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 5f, 5f, 0))
-        assertTrue(root.interceptRequests.last())
-
-        quoteText.dispatchTouchEvent(MotionEvent.obtain(0L, 10L, MotionEvent.ACTION_UP, 5f, 5f, 0))
-        assertEquals(false, root.interceptRequests.last())
     }
 
     @Test
@@ -170,15 +144,6 @@ class BodyBlockViewFactoryInteractionTest {
                 override fun onImageClick(galleryUrls: List<String>, index: Int) = Unit
                 override fun onLinkLongClick(url: String) = longPress(url)
             }
-
-    private class InterceptRecordingLayout(context: Context) : LinearLayout(context) {
-        val interceptRequests = mutableListOf<Boolean>()
-
-        override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
-            interceptRequests += disallowIntercept
-            super.requestDisallowInterceptTouchEvent(disallowIntercept)
-        }
-    }
 
     private fun ViewGroup.descendantTextViews(): List<TextView> {
         val result = ArrayList<TextView>()
