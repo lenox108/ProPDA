@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.text.Selection
 import android.text.Spannable
+import android.text.method.ArrowKeyMovementMethod
 import android.view.ContextThemeWrapper
 import android.view.MotionEvent
 import android.view.View
@@ -144,73 +145,31 @@ class BodyBlockViewFactoryInteractionTest {
     }
 
     @Test
-    fun `manual fallback selects text when platform editor ignores long press`() {
+    fun `attachment rearms selection controller after detached native quote premeasure`() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
-        val textView = NoPlatformSelectionTextView(
+        val movement = SelectionCheckMovementMethod()
+        val textView = TopicSelectableTextView(
                 ContextThemeWrapper(activity, R.style.DayNightAppTheme),
         ).apply {
-            setText("страница дергается при прокрутке", TextView.BufferType.SPANNABLE)
+            text = "страница дергается при прокрутке"
             setTextIsSelectable(true)
+            movementMethod = movement
             enableReliableSelection()
         }
-        activity.setContentView(textView)
+
+        // quoteView() performs this detached measurement to decide whether a quote should collapse.
+        // Android creates the text Layout here while selection handles are not window-supported.
         textView.measure(
-                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
         )
         textView.layout(0, 0, textView.measuredWidth, textView.measuredHeight)
-        val downTime = SystemClock.uptimeMillis()
-        textView.dispatchTouchEvent(
-                MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, 200f, 40f, 0),
-        )
-        shadowOf(android.os.Looper.getMainLooper()).idleFor(
-                ViewConfiguration.getLongPressTimeout().toLong() + 300L,
-                java.util.concurrent.TimeUnit.MILLISECONDS,
-        )
+        val checksBeforeAttachment = movement.selectionChecks
 
-        assertNotEquals(textView.selectionStart, textView.selectionEnd)
-    }
-
-    @Test
-    fun `manual fallback does not select when long press turns into a scroll`() {
-        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
-        val textView = NoPlatformSelectionTextView(
-                ContextThemeWrapper(activity, R.style.DayNightAppTheme),
-        ).apply {
-            setText("страница дергается при прокрутке", TextView.BufferType.SPANNABLE)
-            setTextIsSelectable(true)
-            enableReliableSelection()
-        }
         activity.setContentView(textView)
-        textView.measure(
-                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(200, View.MeasureSpec.EXACTLY),
-        )
-        textView.layout(0, 0, textView.measuredWidth, textView.measuredHeight)
-        val downTime = SystemClock.uptimeMillis()
-        textView.dispatchTouchEvent(
-                MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, 200f, 40f, 0),
-        )
-        shadowOf(android.os.Looper.getMainLooper()).idleFor(
-                ViewConfiguration.getLongPressTimeout().toLong() - 40L,
-                java.util.concurrent.TimeUnit.MILLISECONDS,
-        )
-        textView.dispatchTouchEvent(
-                MotionEvent.obtain(
-                        downTime,
-                        SystemClock.uptimeMillis(),
-                        MotionEvent.ACTION_MOVE,
-                        200f,
-                        140f,
-                        0,
-                ),
-        )
-        shadowOf(android.os.Looper.getMainLooper()).idleFor(
-                300L,
-                java.util.concurrent.TimeUnit.MILLISECONDS,
-        )
 
-        assertEquals(textView.selectionStart, textView.selectionEnd)
+        assertTrue(movement.selectionChecks > checksBeforeAttachment)
+        assertTrue(textView.movementMethod === movement)
     }
 
     @Test
@@ -286,9 +245,13 @@ class BodyBlockViewFactoryInteractionTest {
         }
     }
 
-    private class NoPlatformSelectionTextView(context: Context) :
-            TopicSelectableTextView(context) {
-        override fun invokePlatformLongClick(): Boolean = false
+    private class SelectionCheckMovementMethod : ArrowKeyMovementMethod() {
+        var selectionChecks = 0
+
+        override fun canSelectArbitrarily(): Boolean {
+            selectionChecks++
+            return true
+        }
     }
 
     private fun ViewGroup.descendantTextViews(): List<TextView> {
