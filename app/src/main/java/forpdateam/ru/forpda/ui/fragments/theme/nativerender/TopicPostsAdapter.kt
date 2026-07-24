@@ -88,7 +88,8 @@ class TopicPostsAdapter(
              * of that row) and is shown relative («17 ч.») instead of the server's full string. Off = the
              * classic right-hand column with «20.05.26, 14:55». The two travel together on purpose: a full
              * date inline eats the nick on narrow screens, and a relative date alone leaves the right
-             * column holding five characters.
+             * column holding five characters. The relative form also applies to quote headers and
+             * «Добавлено …» timestamps inside the post body.
              */
             val modernHeader: Boolean = false,
     )
@@ -887,6 +888,7 @@ class TopicPostsAdapter(
             blockFactory.searchQuery = searchQuery
             blockFactory.animatedSmiles = settings.animatedSmiles
             blockFactory.flatBlocks = settings.flatBlocks
+            blockFactory.modernPostDates = settings.modernHeader
             // Block spacing follows the post-density step so gaps between spoilers/quotes tighten together
             // with the card padding — otherwise super-compact kept roomy 10dp gaps inside a packed post.
             blockFactory.blockSpacingDp = when (settings.density) {

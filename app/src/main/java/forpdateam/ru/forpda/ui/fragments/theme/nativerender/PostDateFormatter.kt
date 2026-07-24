@@ -17,6 +17,12 @@ import java.util.Locale
  */
 object PostDateFormatter {
 
+    internal data class TextReplacement(
+            val start: Int,
+            val endExclusive: Int,
+            val value: String,
+    )
+
     private const val MINUTE_MS = 60_000L
     private const val HOUR_MS = 60 * MINUTE_MS
     private const val DAY_MS = 24 * HOUR_MS
@@ -30,6 +36,13 @@ object PostDateFormatter {
     private val ABSOLUTE = Regex("""(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})\D+(\d{1,2}):(\d{2})""")
     /** Время внутри «Сегодня, 14:55» / «Вчера, 8:12». */
     private val TIME_ONLY = Regex("""(\d{1,2}):(\d{2})""")
+    /**
+     * Служебная дата объединённого поста: «Добавлено 24.07.2026, 23:07:».
+     * Ищем только дату после системной метки, чтобы не переписывать даты в обычном тексте автора.
+     */
+    private val MERGED_POST_DATE = Regex(
+            """(?iu)(?:Добавлено|Added)[\s\u00A0]+((?:Сегодня|Вчера|\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4}))[\s\u00A0]*,[\s\u00A0]*\d{1,2}:\d{2})""",
+    )
 
     /**
      * Относительная дата для [raw]; если строку разобрать не удалось (сервер поменял формат, пришёл
@@ -54,6 +67,42 @@ object PostDateFormatter {
             age < DAY_MS -> "${age / HOUR_MS} ч."
             age < ABSOLUTE_AFTER_MS -> "${age / DAY_MS} д."
             else -> absoluteDate(postMillis, zone)
+        }
+    }
+
+    /**
+     * Диапазоны служебных дат «Добавлено …» и их относительные значения. Диапазоны относятся к
+     * исходному тексту и применяются справа налево, чтобы Android-рендерер мог сохранить стили и ссылки.
+     */
+    internal fun mergedPostDateReplacements(
+            raw: String,
+            nowMillis: Long = System.currentTimeMillis(),
+            zone: ZoneId = ZoneId.systemDefault(),
+    ): List<TextReplacement> = MERGED_POST_DATE.findAll(raw).mapNotNull { match ->
+        val date = match.groups[1] ?: return@mapNotNull null
+        TextReplacement(
+                start = date.range.first,
+                endExclusive = date.range.last + 1,
+                value = relative(date.value, nowMillis, zone),
+        )
+    }.toList()
+
+    /** Android-free convenience used by unit tests and non-styled callers. */
+    internal fun relativeMergedPostDates(
+            raw: String,
+            nowMillis: Long = System.currentTimeMillis(),
+            zone: ZoneId = ZoneId.systemDefault(),
+    ): String {
+        val replacements = mergedPostDateReplacements(raw, nowMillis, zone)
+        if (replacements.isEmpty()) return raw
+        return buildString(raw.length) {
+            var cursor = 0
+            for (replacement in replacements) {
+                append(raw, cursor, replacement.start)
+                append(replacement.value)
+                cursor = replacement.endExclusive
+            }
+            append(raw, cursor, raw.length)
         }
     }
 

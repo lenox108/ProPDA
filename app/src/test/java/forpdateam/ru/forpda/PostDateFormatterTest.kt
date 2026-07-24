@@ -42,6 +42,42 @@ class PostDateFormatterTest {
     }
 
     @Test
+    fun `служебная дата добавленной части становится относительной`() {
+        assertEquals(
+                "Добавлено 7 мин.: новая часть",
+                PostDateFormatter.relativeMergedPostDates(
+                        "Добавлено 20.05.2026, 14:48: новая часть",
+                        now,
+                        zone,
+                ),
+        )
+    }
+
+    @Test
+    fun `обычные даты в тексте поста не меняются`() {
+        assertEquals(
+                "Релиз 20.05.2026, 14:48. Добавлено описание без даты.",
+                PostDateFormatter.relativeMergedPostDates(
+                        "Релиз 20.05.2026, 14:48. Добавлено описание без даты.",
+                        now,
+                        zone,
+                ),
+        )
+    }
+
+    @Test
+    fun `в одном посте преобразуются все добавленные части`() {
+        assertEquals(
+                "Добавлено 7 мин.: два\nAdded 5 ч.: three",
+                PostDateFormatter.relativeMergedPostDates(
+                        "Добавлено 20.05.26, 14:48: два\nAdded 20.05.26, 09:30: three",
+                        now,
+                        zone,
+                ),
+        )
+    }
+
+    @Test
     fun `пост из будущего не показывается как «через N ч» (расхождение часов)`() {
         assertEquals("только что", relative("Сегодня, 18:30"))
     }
