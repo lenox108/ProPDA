@@ -28,7 +28,8 @@ sealed interface BodyBlock {
      * The server-appended edit note (`<span class="edit">Сообщение отредактировал … — …</span>` and its
      * optional `.post-edit-reason`) — a SYSTEM meta line, not the user's text. Peeled out so the view can
      * render it smaller and muted (WebView `.edit`: font-size 0.875em, colour #757575) instead of blending
-     * into the post body. Carries the raw span HTML (nick link preserved).
+     * into the post body. For `.edit`, [html] contains the compact `✎ HH:mm` marker; an optional
+     * `.post-edit-reason` remains verbatim so meaningful moderator context is not discarded.
      */
     data class EditNote(val html: String) : BodyBlock
 

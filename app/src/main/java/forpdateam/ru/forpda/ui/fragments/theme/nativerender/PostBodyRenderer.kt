@@ -188,10 +188,16 @@ class PostBodyRenderer {
                 continue
             }
             // The server edit note (`.edit` / `.post-edit-reason`) is a SYSTEM meta line — peel it into
-            // its own block so the view can render it muted/smaller rather than as body text.
+            // its own block so the view can render it muted/smaller rather than as body text. The verbose
+            // «Сообщение отредактировал Nick — Сегодня, 21:55» line is reduced to the same compact marker
+            // used by news comments; an optional explicit edit reason remains intact.
             if (node is Element && (node.hasClass("edit") || node.hasClass("post-edit-reason"))) {
                 flushInline()
-                blocks.add(BodyBlock.EditNote(node.outerHtml()))
+                blocks.add(
+                        BodyBlock.EditNote(
+                                if (node.hasClass("edit")) compactEditNoteHtml(node) else node.outerHtml(),
+                        ),
+                )
                 continue
             }
             val complexKind = complexKindOf(node)
@@ -221,6 +227,12 @@ class PostBodyRenderer {
         flushInline()
 
         return blocks
+    }
+
+    private fun compactEditNoteHtml(node: Element): String {
+        val time = EDIT_TIME.findAll(node.text()).lastOrNull()?.value
+        val label = if (time == null) EDIT_MARKER else "$EDIT_MARKER $time"
+        return """<span class="edit">$label</span>"""
     }
 
     /**
@@ -624,6 +636,9 @@ class PostBodyRenderer {
     }
 
     private companion object {
+        const val EDIT_MARKER = "✎"
+        val EDIT_TIME = Regex("""\b(?:[01]?\d|2[0-3]):[0-5]\d\b""")
+
         /**
          * Jsoup selector matching any complex block that must go to the WebView fallback in
          * Фаза 1. Kept in sync with [selfKind]. `blockquote` is included because a raw
