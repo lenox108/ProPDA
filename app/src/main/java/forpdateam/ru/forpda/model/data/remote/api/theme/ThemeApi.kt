@@ -707,14 +707,14 @@ class ThemeApi(
         val m = Pattern.compile("ok:\\s*?((?:\\+|\\-)?\\d+)").matcher(response.body.orEmpty())
         if (m.find()) {
             when (m.group(1)?.toIntOrNull()) {
-                0 -> result = alreadyVote
+                0 -> throw Exception(alreadyVote)
                 1 -> result = "Репутация поста повышена"
                 -1 -> result = "Репутация поста понижена"
                 else -> {}
             }
         }
         if (response.body == "evote") {
-            result = alreadyVote
+            throw Exception(alreadyVote)
         }
         if (result == null) {
             throw Exception("Ошибка изменения репутации поста")
