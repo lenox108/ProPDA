@@ -621,13 +621,30 @@ class BodyBlockViewFactory(
                 block.imageUrl.substringBefore('?').endsWith(".gif", ignoreCase = true)
         return ImageView(ctx).apply {
             if (block.inline) {
-                // INLINE content image (banner / preview / animated gif peeled from post text): render at
-                // its INTRINSIC size, downscaled to fit the column but NEVER blindly upscaled — otherwise a
-                // small icon / low-res arrow balloons into a blurry block (user report). Crisp, like the browser.
-                layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply { topMargin = topInset }
+                if (isButtonGif || block.attachmentButton) {
+                    // Download/update graphics still need their decoded dimensions to distinguish a wide
+                    // banner from a tiny file glyph. They are small and do not cause the large topic jumps
+                    // that full-size content pictures used to produce.
+                    layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply { topMargin = topInset }
+                } else {
+                    // Reserve the final image box BEFORE Coil completes. WRAP_CONTENT measured these views
+                    // as 0px high and then expanded the post by hundreds of pixels during a fling, visibly
+                    // moving the page. Server dimensions retain the authored aspect ratio; old posts without
+                    // dimensions get a consistent preview ratio. CENTER_INSIDE keeps it uncropped and avoids
+                    // turning a genuinely small source bitmap into a blurry full-width image.
+                    val box = resolveStableInlineImageBox(
+                            displayWidthPx = block.displayWidthPx,
+                            displayHeightPx = block.displayHeightPx,
+                            density = dm.density,
+                            columnWidthPx = columnWidthPx,
+                            maxHeightPx = dm.heightPixels,
+                    )
+                    layoutParams = LinearLayout.LayoutParams(box.widthPx, box.heightPx)
+                            .apply { topMargin = topInset }
+                }
                 maxWidth = columnWidthPx
                 maxHeight = dm.heightPixels
             } else {
@@ -640,7 +657,12 @@ class BodyBlockViewFactory(
                         (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels),
                 ).apply { topMargin = topInset }
             }
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = if (block.inline && !isButtonGif && !block.attachmentButton) {
+                // Keep small source images crisp inside the reserved box; CENTER_INSIDE only scales down.
+                ImageView.ScaleType.CENTER_INSIDE
+            } else {
+                ImageView.ScaleType.FIT_CENTER
+            }
             adjustViewBounds = true
             setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
             // The inner <img> of an attach-file link (attachmentButton) and a linked inline gif (isButtonGif)
@@ -1369,6 +1391,42 @@ class BodyBlockViewFactory(
     }
 
     companion object {
+        internal data class ImageBox(val widthPx: Int, val heightPx: Int)
+
+        /**
+         * Stable layout box for an in-post content image. The returned dimensions never depend on the
+         * asynchronous drawable, so binding the bitmap cannot change a RecyclerView item's height.
+         */
+        internal fun resolveStableInlineImageBox(
+                displayWidthPx: Int,
+                displayHeightPx: Int,
+                density: Float,
+                columnWidthPx: Int,
+                maxHeightPx: Int,
+        ): ImageBox {
+            val safeColumnWidth = columnWidthPx.coerceAtLeast(1)
+            val safeMaxHeight = maxHeightPx.coerceAtLeast(1)
+            if (displayWidthPx <= 0 || displayHeightPx <= 0) {
+                return ImageBox(
+                        widthPx = safeColumnWidth,
+                        heightPx = (safeColumnWidth * DEFAULT_IMAGE_RATIO).toInt()
+                                .coerceIn(1, safeMaxHeight),
+                )
+            }
+
+            val naturalWidth = (displayWidthPx * density).coerceAtLeast(1f)
+            val naturalHeight = (displayHeightPx * density).coerceAtLeast(1f)
+            val scale = minOf(
+                    1f,
+                    safeColumnWidth / naturalWidth,
+                    safeMaxHeight / naturalHeight,
+            )
+            return ImageBox(
+                    widthPx = (naturalWidth * scale).toInt().coerceAtLeast(1),
+                    heightPx = (naturalHeight * scale).toInt().coerceAtLeast(1),
+            )
+        }
+
         /**
          * Parse every markup run in [blocks] into [HTML_CACHE] ahead of time. Call OFF the main thread as
          * soon as a page's posts are known: the cache alone only pays off on a RE-bind, while a fast scroll
