@@ -2,14 +2,14 @@
 
 ## Approved artwork scale
 
-- Use `ART_SCALE = 0.68` on the 1080×1080 adaptive-icon canvas.
-- Apply exactly the same scale to light, AMOLED, Monet and monochrome artwork.
-- Do not let Monet or monochrome use the unscaled source mask.
+- Use `ART_SCALE = 0.56` on the 1080×1080 adaptive-icon canvas.
+- Apply 56% to the coloured light and AMOLED foregrounds.
+- Keep the Android themed/monochrome foreground at its approved 66% scale.
 - Centre the final visible bounds independently after scaling.
 - Allow no more than 2 px difference between opposite margins at 1080×1080.
 
-This scale was approved against the emulator's circular launcher mask. It gives
-the P4DA mark breathing room comparable to the neighbouring 4PDA launcher icon.
+This scale accounts for Android's approximately 1.5× adaptive-foreground zoom.
+It keeps the mark clear of circular launcher and Settings preview masks.
 
 ## Required previews
 

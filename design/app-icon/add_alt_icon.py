@@ -40,10 +40,13 @@ CANVAS = 1080
 # не больше ~288 px даже на xxxhdpi — 1080 в APK не нужен, а весит вчетверо больше.
 EXPORT = 512
 # Масштаб внутреннего знака по orange-p4da-adaptive/SPEC.md: квадрат мастера
-# сжимается до 68% холста adaptive-иконки. Считается ИМЕННО от квадрата мастера,
+# сжимается до 56% холста adaptive-иконки. Считается ИМЕННО от квадрата мастера,
 # а не от обрезанной по контуру марки: тогда все варианты получают одинаковый
 # зазор от границ и одинаковый оптический размер под маской лаунчера.
-ART_SCALE = 0.68
+ART_SCALE = 0.56
+# Тематические иконки Android пользователь попросил не уменьшать вместе с
+# цветными: их прежняя геометрия остаётся на 66% холста.
+MONO_SCALE = 0.66
 # Допуск на разницу противоположных полей итоговой маски (SPEC.md).
 MARGIN_TOLERANCE = 2
 # Ниже этой альфы пиксель не считается частью знака: сглаженные края мастера
@@ -413,13 +416,24 @@ def launcher_mask(size: int, kind: str) -> Image.Image:
 def save_review(icon_id: str, light: Image.Image, dark: Image.Image, mono: Image.Image,
                 light_bg: str, dark_bg: str, scale: float) -> None:
     """Лист сверки: каждый слой под кругом, сквирклом и скруглённым квадратом."""
+    def adaptive_viewport(layer: Image.Image) -> Image.Image:
+        # Android показывает центральные 72 dp слоя 108 dp, визуально увеличивая
+        # foreground примерно в 1.5 раза. Без этого превью скрывало обрезание.
+        layer = layer.convert("RGBA")
+        visible = round(layer.width * 2 / 3)
+        left = (layer.width - visible) // 2
+        top = (layer.height - visible) // 2
+        return layer.crop((left, top, left + visible, top + visible)).resize(
+            layer.size, Image.Resampling.LANCZOS)
+
     def tile(art: Image.Image, bg) -> Image.Image:
         # bg — либо цвет, либо готовая растровая подложка варианта.
         if isinstance(bg, Image.Image):
             base = bg.convert("RGBA").resize(art.size, Image.Resampling.LANCZOS)
         else:
             base = Image.new("RGBA", art.size, bg)
-        base.alpha_composite(art)
+        base = adaptive_viewport(base)
+        base.alpha_composite(adaptive_viewport(art))
         return base
 
     def rgb(value) -> tuple:
@@ -444,7 +458,7 @@ def save_review(icon_id: str, light: Image.Image, dark: Image.Image, mono: Image
     f_l = ImageFont.truetype(FONT_BOLD, 19)
     f_s = ImageFont.truetype(FONT_REGULAR, 17)
     d.text((pad, 22), f"{icon_id} · знак {round(scale * 100)}% холста", font=f_h, fill="#1B1D21")
-    d.text((pad, 60), "все слои одного размера · проверка трёх масок лаунчера",
+    d.text((pad, 60), "adaptive-слой ×1,5 · проверка трёх масок лаунчера",
            font=f_s, fill="#5A6068")
 
     for col, (title, kind) in enumerate(kinds):
@@ -515,8 +529,8 @@ def main() -> None:
     print(f"Иконка «{args.id}»:")
     light_art, light_detected = prepare_art(args.light, args.scale, args.as_is)
     dark_art, dark_detected = prepare_art(dark_master, args.scale, args.as_is)
-    mono_art = to_monochrome(
-        prepare_art(args.mono, args.scale, args.as_is)[0] if args.mono else light_art)
+    mono_master = args.mono or args.light
+    mono_art = to_monochrome(prepare_art(mono_master, MONO_SCALE, args.as_is)[0])
 
     for label, layer in (("светлая", light_art), ("AMOLED", dark_art), ("monochrome", mono_art)):
         assert_margins(label, layer)
