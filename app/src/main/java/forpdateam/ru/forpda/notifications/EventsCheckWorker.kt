@@ -109,7 +109,8 @@ class EventsCheckWorker @AssistedInject constructor(
         // В холодном фоновом процессе auth-куки гидрируются из EncryptedSharedPreferences
         // асинхронно, а loadForRequest ждёт их максимум 500 мс — на медленных устройствах
         // опрос уходил «гостем»: пустые события + затёртый снапшот. Ждём гидрацию явно;
-        // сеть уже гарантирована констрейнтом, ожидание ничего не будит.
+        // Для periodic-пути сеть гарантирована констрейнтом; alarm-путь намеренно immediate,
+        // поэтому возможный сетевой сбой ниже штатно превратится в Result.retry().
         val hydrated = webClient.awaitAuthCookiesHydrated(COOKIE_HYDRATION_TIMEOUT_MS)
         if (!hydrated) {
             Timber.w("EventsCheckWorker: cookie hydration timed out, retry later")
