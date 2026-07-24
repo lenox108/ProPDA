@@ -871,12 +871,10 @@ class TopicPostsAdapter(
 
         // groupColor is "#RRGGBB" or a CSS name; "black" is the default → leave untinted.
         private fun parseColor(raw: String?): Int? {
-            val v = raw?.trim()?.takeIf { it.isNotBlank() && !it.equals("black", ignoreCase = true) } ?: return null
-            return try {
-                android.graphics.Color.parseColor(v)
-            } catch (_: IllegalArgumentException) {
-                null
-            }
+            val night = (itemView.resources.configuration.uiMode and
+                    android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                    android.content.res.Configuration.UI_MODE_NIGHT_YES
+            return GroupColorHarmonizer.parse(raw, night)
         }
 
         private fun renderBody(item: NativePostItem, isHat: Boolean = false, hatCollapsed: Boolean = false) {
