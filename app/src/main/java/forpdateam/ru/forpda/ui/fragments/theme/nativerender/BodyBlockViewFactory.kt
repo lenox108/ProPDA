@@ -995,7 +995,7 @@ class BodyBlockViewFactory(
         // в цвет группы под белый фон (напр. цитата с [member=…]/куратором), становится нечитаемым на
         // светлой карточке Sepia Blue (репорт: ник белым в цитировании) — тот же тракт, что и textView.
         val surface = blockFillColor(ctx)
-        val content = TopicSelectableTextView(ctx).apply {
+        val content = selectableTextView(ctx, scope).apply {
             val text = neutralizeLowContrastColors(surface, stripLinkColors(spanned(ctx, block.html)))
             setText(text)
             SmileProvider.startAnimations(this)
@@ -1039,12 +1039,6 @@ class BodyBlockViewFactory(
                 setTextIsSelectable(true)
                 installQuoteSelectionAction(this, scope)
                 if (hasLinks) movementMethod = SelectableLinkMovementMethod(linkClicks)
-                // Text selection and View long-clickability are separate platform flags. AOSP's
-                // Editor may still recognise the gesture when the latter is false, while some OEM
-                // TextView implementations silently do nothing. Apply this AFTER movementMethod
-                // setup because a movement method is allowed to update the long-click flag.
-                isLongClickable = true
-                enableReliableSelection()
             } else if (hasLinks) {
                 movementMethod = LinkMovementMethod(linkClicks)
             }
@@ -1109,8 +1103,15 @@ class BodyBlockViewFactory(
         return out
     }
 
+    private fun selectableTextView(ctx: Context, scope: RenderScope): TextView =
+            if (scope.selectableText && scope.quoteDepth > 0) {
+                TopicSelectableTextView(ctx)
+            } else {
+                TextView(ctx)
+            }
+
     private fun textView(ctx: Context, text: CharSequence, scope: RenderScope): TextView {
-        return TopicSelectableTextView(ctx).apply {
+        return selectableTextView(ctx, scope).apply {
             if (textBlockMaxWidthPx > 0) {
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1157,10 +1158,6 @@ class BodyBlockViewFactory(
                     // behaviour that setTextIsSelectable installs AND routes link tap/long-press in-app.
                     movementMethod = SelectableLinkMovementMethod(linkClicks)
                 }
-                // See the API/OEM note in bindFallback(): TextView selection and View long-clickability
-                // are separate flags on real devices, even though Robolectric couples them.
-                isLongClickable = true
-                enableReliableSelection()
             } else {
                 // Non-selectable (QMS chat bubbles): a selectable TextView claims the long-press for its
                 // text-selection ActionMode (the awkward «текст выделяется + Копировать рядом с Удалить»).
