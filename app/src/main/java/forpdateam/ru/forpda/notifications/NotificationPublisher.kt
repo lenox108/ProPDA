@@ -74,7 +74,7 @@ object NotificationPublisher {
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(smallIconFor(event))
+                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, smallIconFor(event)))
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(
@@ -132,7 +132,7 @@ object NotificationPublisher {
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(smallIconFor(first))
+                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, smallIconFor(first)))
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(stackedStyle(context, events, title, summary))

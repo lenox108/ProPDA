@@ -475,6 +475,21 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
+        findPreference<Preference>(Preferences.Main.NOTIFICATION_ICON)?.apply {
+            updateNotificationIconSummary(this)
+            setOnPreferenceClickListener {
+                forpdateam.ru.forpda.ui.views.dialog.NotificationIconPickerDialog.show(
+                        requireContext(),
+                        AppIcons.notificationIconValue(requireContext()),
+                ) { picked ->
+                    if (!isAdded) return@show
+                    prefs.edit().putString(Preferences.Main.NOTIFICATION_ICON, picked).apply()
+                    updateNotificationIconSummary(this)
+                }
+                true
+            }
+        }
+
         findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.apply {
             updateAccentSummary(mainPreferencesHolder.getAccentPalette())
             setOnPreferenceClickListener {
@@ -841,6 +856,18 @@ class SettingsFragment : BaseSettingFragment() {
             AppFontMode.SOURCE_SANS_3 -> getString(R.string.pref_summary_app_font_source_sans_3)
             AppFontMode.OPEN_SANS -> getString(R.string.pref_summary_app_font_open_sans)
             AppFontMode.ROBOTO_MONO -> "Roboto Mono — моноширинный; применится после возврата из настроек"
+        }
+    }
+
+    /** Сводка «Иконки уведомлений»: название выбранного режима или варианта. */
+    private fun updateNotificationIconSummary(preference: Preference) {
+        val value = AppIcons.notificationIconValue(requireContext())
+        preference.summary = when (value) {
+            AppIcons.NOTIFICATION_ICON_EVENT -> getString(R.string.notification_icon_event)
+            AppIcons.NOTIFICATION_ICON_APP -> getString(R.string.notification_icon_app)
+            else -> AppIcons.variants.firstOrNull { it.id == value }
+                    ?.let { getString(it.titleRes) }
+                    ?: getString(R.string.notification_icon_event)
         }
     }
 

@@ -59,7 +59,7 @@ class AppUpdateNotifier @Inject constructor(
         val collapsed = content.lineSequence().firstOrNull { it.isNotBlank() } ?: fallback
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notify_mention)
+            .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_mention))
             .setContentTitle(context.getString(R.string.updater_notification_title))
             .setContentText(collapsed)
             .setStyle(

@@ -59,6 +59,11 @@ object Preferences {
         const val ACCENT_STYLE = PREFIX + "accent_style"
         /** Id варианта иконки запуска из `AppIcons.variants`. */
         const val APP_ICON = PREFIX + "app_icon"
+        /**
+         * Значок уведомлений в статус-баре: `event` (глифы по типу события),
+         * `app` (следовать выбранной иконке) или id варианта из `AppIcons.variants`.
+         */
+        const val NOTIFICATION_ICON = PREFIX + "notification_icon"
         const val APP_FONT_MODE = PREFIX + "app_font_mode"
         const val USE_SYSTEM_FONT = PREFIX + "use_system_font"
         const val STARTUP_SCREEN = PREFIX + "startup_screen"

@@ -122,7 +122,7 @@ class HatVersionWatcher @Inject constructor(
         )
 
         val builder = NotificationCompat.Builder(context, NotificationsService.CHANNEL_HAT_ID)
-                .setSmallIcon(R.drawable.ic_notify_favorites)
+                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_favorites))
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(NotificationCompat.BigTextStyle().setBigContentTitle(title).bigText(text))
