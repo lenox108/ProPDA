@@ -182,6 +182,30 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun quotedLegacyAttachmentSection_dropsPreviewEvenWithoutFileUrl() {
+        // Older 4pda markup links the MIME icon through `act=attach` instead of a dl/post URL. The stable
+        // signal is the quoted attachment-section heading, not the icon/link URL.
+        val html =
+                "<div class=\"post-block quote\"><div class=\"block-title\">user @ Сегодня</div>" +
+                        "<div class=\"block-body\">Прикрепленные файлы<br>" +
+                        "<a href=\"https://4pda.to/forum/index.php?act=attach&amp;id=42\">" +
+                        "<img src=\"https://4pda.to/forum/style_images/1/folder_mime_types/quicktime.gif\">" +
+                        "7499_Compressed.mp4</a> ( 4.31 МБ )</div></div>"
+
+        val quote = renderer.render(html).filterIsInstance<BodyBlock.Quote>().single()
+
+        assertFalse(
+                "all previews in a quoted attachment section must be removed",
+                quote.inner.any { it is BodyBlock.Image },
+        )
+        assertTrue(
+                "attachment label remains visible",
+                quote.inner.filterIsInstance<BodyBlock.Text>()
+                        .any { it.html.contains("7499_Compressed.mp4") },
+        )
+    }
+
+    @Test
     fun hiddenBlockInsideSpoiler_withAttachImage_rendersNativeImage_notEmpty() {
         // EXACT live structure of topic 1103268 / p144360304 («Изображение под спойлер»): a collapsed
         // spoiler whose body holds a `.post-block.hidden` («Скрытый текст», registered-only) that in turn
