@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.appicon.AppIcons
+import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
 
 internal object DownloadNotifications {
     // Единый канал для всех уведомлений о загрузках
@@ -48,7 +49,7 @@ internal object DownloadNotifications {
     fun baseBuilder(context: Context): NotificationCompat.Builder {
         ensureChannel(context)
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_download))
+            .applySelectedNotificationIcon(context, R.drawable.ic_notify_download)
             .setLargeIcon(appLauncherBitmap(context))
             .setColor(ContextCompat.getColor(context, R.color.light_link_color))
             .setOnlyAlertOnce(true)
@@ -60,7 +61,7 @@ internal object DownloadNotifications {
     fun completedBuilder(context: Context): NotificationCompat.Builder {
         ensureChannel(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_download))
+            .applySelectedNotificationIcon(context, R.drawable.ic_notify_download)
             .setLargeIcon(appLauncherBitmap(context))
             .setColor(ContextCompat.getColor(context, R.color.light_link_color))
             .setOnlyAlertOnce(false)

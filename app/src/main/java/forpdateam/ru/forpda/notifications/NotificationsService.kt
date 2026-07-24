@@ -22,6 +22,7 @@ import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.BatteryDebugLogger
 import forpdateam.ru.forpda.common.BitmapUtils
 import forpdateam.ru.forpda.common.ForPdaCoil
+import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
@@ -304,7 +305,7 @@ class NotificationsService : Service() {
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         }
         val notification = NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
-                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(this, R.drawable.ic_notify_favorites))
+                .applySelectedNotificationIcon(this, R.drawable.ic_notify_favorites)
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText(getString(R.string.notification_foreground_channel_name))
                 .setContentIntent(contentIntent)

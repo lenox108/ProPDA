@@ -786,7 +786,7 @@
     <string name="notification_icon_event_desc">Свой значок для ответов, QMS, упоминаний и загрузок.</string>
     <string name="notification_icon_app">Как иконка приложения</string>
     <string name="notification_icon_app_desc">Следует за выбранной иконкой приложения.</string>
-    <string name="notification_icon_hint">Android рисует значок в шторке одним цветом — различаться будет только форма.</string>
+    <string name="notification_icon_hint">В статус-баре Android рисует значок одним цветом. На поддерживаемых версиях выбранный силуэт также заменит иконку приложения слева в карточке.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Цвет акцента</string>
     <string name="accent_neutral">Нейтральный</string>

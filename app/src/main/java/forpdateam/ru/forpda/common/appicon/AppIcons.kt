@@ -3,11 +3,13 @@ package forpdateam.ru.forpda.common.appicon
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.Bundle
 import android.util.LruCache
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.annotation.StyleRes
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.app.NotificationCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.IconCompat
 import forpdateam.ru.forpda.R
@@ -268,5 +270,25 @@ object AppIcons {
         val x = (cx - box / 2).coerceIn(0, size - box)
         val y = (cy - box / 2).coerceIn(0, size - box)
         return Bitmap.createBitmap(full, x, y, box, box)
+    }
+}
+
+/**
+ * Ставит выбранный small icon и просит новые версии System UI использовать его
+ * также в левом слоте карточки вместо статической иконки пакета.
+ *
+ * Платформенный ключ появился в API 37, а AndroidX-константа — в Core 1.19.
+ * Проект пока собирается с API 36 / Core 1.13, поэтому используем стабильное
+ * строковое значение напрямую: старые версии Android безопасно игнорируют extra.
+ */
+fun NotificationCompat.Builder.applySelectedNotificationIcon(
+        context: Context,
+        @DrawableRes eventGlyphRes: Int,
+): NotificationCompat.Builder = apply {
+    setSmallIcon(AppIcons.notificationSmallIcon(context, eventGlyphRes))
+    if (AppIcons.notificationIconValue(context) != AppIcons.NOTIFICATION_ICON_EVENT) {
+        addExtras(Bundle(1).apply {
+            putBoolean("android.app.preferSmallIcon", true)
+        })
     }
 }

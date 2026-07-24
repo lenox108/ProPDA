@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.notifications.NotificationsService
@@ -122,7 +123,7 @@ class HatVersionWatcher @Inject constructor(
         )
 
         val builder = NotificationCompat.Builder(context, NotificationsService.CHANNEL_HAT_ID)
-                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_favorites))
+                .applySelectedNotificationIcon(context, R.drawable.ic_notify_favorites)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(NotificationCompat.BigTextStyle().setBigContentTitle(title).bigText(text))
