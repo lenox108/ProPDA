@@ -30,6 +30,7 @@ class NotificationIconSelectionTest {
         preferences.edit()
                 .remove(Preferences.Main.APP_ICON)
                 .remove(Preferences.Main.NOTIFICATION_ICON)
+                .remove(Preferences.Main.NOTIFICATION_CARD_ICON)
                 .commit()
     }
 
@@ -80,16 +81,7 @@ class NotificationIconSelectionTest {
     }
 
     @Test
-    fun `event mode keeps package identity icon in notification card`() {
-        val notification = NotificationCompat.Builder(context, "test")
-                .applySelectedNotificationIcon(context, R.drawable.ic_notify_qms)
-                .build()
-
-        assertFalse(notification.extras.getBoolean("android.app.preferSmallIcon"))
-    }
-
-    @Test
-    fun `custom mode requests selected small icon in notification card`() {
+    fun `card app mode stays independent from custom status icon`() {
         preferences.edit()
                 .putString(Preferences.Main.NOTIFICATION_ICON, "pixel_4")
                 .commit()
@@ -98,6 +90,30 @@ class NotificationIconSelectionTest {
                 .applySelectedNotificationIcon(context, R.drawable.ic_notify_qms)
                 .build()
 
+        assertEquals(
+                AppIcons.NOTIFICATION_CARD_ICON_APP,
+                AppIcons.notificationCardIconValue(context),
+        )
+        assertFalse(notification.extras.getBoolean("android.app.preferSmallIcon"))
+    }
+
+    @Test
+    fun `card status mode requests small icon independently from status selection`() {
+        preferences.edit()
+                .putString(
+                        Preferences.Main.NOTIFICATION_CARD_ICON,
+                        AppIcons.NOTIFICATION_CARD_ICON_STATUS,
+                )
+                .commit()
+
+        val notification = NotificationCompat.Builder(context, "test")
+                .applySelectedNotificationIcon(context, R.drawable.ic_notify_qms)
+                .build()
+
+        assertEquals(
+                AppIcons.NOTIFICATION_ICON_EVENT,
+                AppIcons.notificationIconValue(context),
+        )
         assertTrue(notification.extras.getBoolean("android.app.preferSmallIcon"))
     }
 }

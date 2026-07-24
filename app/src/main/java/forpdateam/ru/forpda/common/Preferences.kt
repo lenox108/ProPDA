@@ -64,6 +64,11 @@ object Preferences {
          * `app` (следовать выбранной иконке) или id варианта из `AppIcons.variants`.
          */
         const val NOTIFICATION_ICON = PREFIX + "notification_icon"
+        /**
+         * Левый слот карточки уведомления: системная иконка пакета (`app`)
+         * или тот же small icon, что выбран для статус-бара (`status`).
+         */
+        const val NOTIFICATION_CARD_ICON = PREFIX + "notification_card_icon"
         const val APP_FONT_MODE = PREFIX + "app_font_mode"
         const val USE_SYSTEM_FONT = PREFIX + "use_system_font"
         const val STARTUP_SCREEN = PREFIX + "startup_screen"

@@ -194,11 +194,21 @@ object AppIcons {
     const val NOTIFICATION_ICON_EVENT = "event"
     /** Значение [Preferences.Main.NOTIFICATION_ICON]: следовать выбранной иконке приложения. */
     const val NOTIFICATION_ICON_APP = "app"
+    /** Значение [Preferences.Main.NOTIFICATION_CARD_ICON]: системная иконка пакета. */
+    const val NOTIFICATION_CARD_ICON_APP = "app"
+    /** Значение [Preferences.Main.NOTIFICATION_CARD_ICON]: повторить small icon статус-бара. */
+    const val NOTIFICATION_CARD_ICON_STATUS = "status"
 
     /** Текущее значение настройки «Иконка уведомлений». */
     fun notificationIconValue(context: Context): String =
             androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
                     .getString(Preferences.Main.NOTIFICATION_ICON, null) ?: NOTIFICATION_ICON_EVENT
+
+    /** Текущее значение независимой настройки левого слота карточки уведомления. */
+    fun notificationCardIconValue(context: Context): String =
+            androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+                    .getString(Preferences.Main.NOTIFICATION_CARD_ICON, null)
+                    ?: NOTIFICATION_CARD_ICON_APP
 
     /**
      * Значок статус-бара для уведомления — по настройке «Иконка уведомлений»
@@ -286,7 +296,7 @@ fun NotificationCompat.Builder.applySelectedNotificationIcon(
         @DrawableRes eventGlyphRes: Int,
 ): NotificationCompat.Builder = apply {
     setSmallIcon(AppIcons.notificationSmallIcon(context, eventGlyphRes))
-    if (AppIcons.notificationIconValue(context) != AppIcons.NOTIFICATION_ICON_EVENT) {
+    if (AppIcons.notificationCardIconValue(context) == AppIcons.NOTIFICATION_CARD_ICON_STATUS) {
         addExtras(Bundle(1).apply {
             putBoolean("android.app.preferSmallIcon", true)
         })
