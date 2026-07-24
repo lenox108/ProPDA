@@ -3,7 +3,6 @@ package forpdateam.ru.forpda.common.appicon
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.os.Bundle
 import android.util.LruCache
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -203,9 +202,11 @@ object AppIcons {
     const val NOTIFICATION_ICON_EVENT = "event"
     /** Значение [Preferences.Main.NOTIFICATION_ICON]: следовать выбранной иконке приложения. */
     const val NOTIFICATION_ICON_APP = "app"
-    /** Значение [Preferences.Main.NOTIFICATION_CARD_ICON]: системная иконка пакета. */
+    /** Значение [Preferences.Main.NOTIFICATION_CARD_ICON]: оставить штатную large icon события. */
+    const val NOTIFICATION_CARD_ICON_AUTO = "auto"
+    /** Значение [Preferences.Main.NOTIFICATION_CARD_ICON]: следовать иконке приложения. */
     const val NOTIFICATION_CARD_ICON_APP = "app"
-    /** Значение [Preferences.Main.NOTIFICATION_CARD_ICON]: повторить small icon статус-бара. */
+    /** Старое значение настройки, оставлено для бесшовной миграции. */
     const val NOTIFICATION_CARD_ICON_STATUS = "status"
 
     /** Текущее значение настройки «Иконка уведомлений». */
@@ -217,7 +218,30 @@ object AppIcons {
     fun notificationCardIconValue(context: Context): String =
             androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
                     .getString(Preferences.Main.NOTIFICATION_CARD_ICON, null)
-                    ?: NOTIFICATION_CARD_ICON_APP
+                    ?: NOTIFICATION_CARD_ICON_AUTO
+
+    /**
+     * Цветная large icon карточки. `null` означает автоматический режим: ранее
+     * установленная иконка события или аватар остаются без изменений.
+     */
+    fun notificationCardLargeIcon(context: Context): Bitmap? {
+        val variant = when (val value = notificationCardIconValue(context)) {
+            NOTIFICATION_CARD_ICON_AUTO -> return null
+            NOTIFICATION_CARD_ICON_APP -> AppIconManager.selected(context)
+            // Миграция старого режима «как в статус-баре».
+            NOTIFICATION_CARD_ICON_STATUS -> when (val status = notificationIconValue(context)) {
+                NOTIFICATION_ICON_APP -> AppIconManager.selected(context)
+                else -> variants.firstOrNull { it.id == status } ?: AppIconManager.selected(context)
+            }
+            else -> variants.firstOrNull { it.id == value } ?: AppIconManager.selected(context)
+        }
+        return synchronized(notificationLargeIconCache) {
+            notificationLargeIconCache.get(variant.iconRes)
+                    ?: renderLargeIcon(context, variant.iconRes).also {
+                        notificationLargeIconCache.put(variant.iconRes, it)
+                    }
+        }
+    }
 
     /**
      * Значок статус-бара для уведомления — по настройке «Иконка уведомлений»
@@ -256,6 +280,19 @@ object AppIcons {
 
     /** Не рендерим и не сканируем один и тот же силуэт при каждом новом уведомлении. */
     private val notificationGlyphCache = LruCache<Int, Bitmap>(8)
+    /** Не рендерим повторно цветные large icon карточек. */
+    private val notificationLargeIconCache = LruCache<Int, Bitmap>(8)
+
+    private fun renderLargeIcon(context: Context, @DrawableRes res: Int): Bitmap {
+        val size = runCatching {
+            context.resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_width)
+        }.getOrDefault(192).coerceAtLeast(96)
+        return createBitmap(size, size).also { bitmap ->
+            val drawable = requireNotNull(AppCompatResources.getDrawable(context, res))
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(Canvas(bitmap))
+        }
+    }
 
     /** Рендер силуэта и обрезка альфы по видимым границам (в квадрат, с полем 8%). */
     private fun croppedGlyph(context: Context, @DrawableRes res: Int): Bitmap {
@@ -293,21 +330,20 @@ object AppIcons {
 }
 
 /**
- * Ставит выбранный small icon и просит новые версии System UI использовать его
- * также в левом слоте карточки вместо статической иконки пакета.
- *
- * Платформенный ключ появился в API 37, а AndroidX-константа — в Core 1.19.
- * Проект пока собирается с API 36 / Core 1.13, поэтому используем стабильное
- * строковое значение напрямую: старые версии Android безопасно игнорируют extra.
+ * Ставит независимо выбранные small icon статус-бара и цветную large icon
+ * содержимого карточки.
  */
 fun NotificationCompat.Builder.applySelectedNotificationIcon(
         context: Context,
         @DrawableRes eventGlyphRes: Int,
 ): NotificationCompat.Builder = apply {
     setSmallIcon(AppIcons.notificationSmallIcon(context, eventGlyphRes))
-    if (AppIcons.notificationCardIconValue(context) == AppIcons.NOTIFICATION_CARD_ICON_STATUS) {
-        addExtras(Bundle(1).apply {
-            putBoolean("android.app.preferSmallIcon", true)
-        })
-    }
+    applySelectedNotificationCardIcon(context)
+}
+
+/** Повторно применяет ручную large icon после аватара или штатной иконки события. */
+fun NotificationCompat.Builder.applySelectedNotificationCardIcon(
+        context: Context,
+): NotificationCompat.Builder = apply {
+    AppIcons.notificationCardLargeIcon(context)?.let { setLargeIcon(it) }
 }

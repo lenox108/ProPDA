@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
+import forpdateam.ru.forpda.common.appicon.applySelectedNotificationCardIcon
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
@@ -92,6 +93,7 @@ object NotificationPublisher {
         if (largeIcon != null && !event.fromSite()) {
             builder.setLargeIcon(largeIcon)
         }
+        builder.applySelectedNotificationCardIcon(context)
         NotificationActions.apply(context, builder, event)
 
         if (!canNotify(context, channelId, event.notificationLogCategory())) return null

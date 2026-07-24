@@ -9,8 +9,8 @@ import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Preferences
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -81,28 +81,45 @@ class NotificationIconSelectionTest {
     }
 
     @Test
+    fun `automatic card mode keeps existing large icon untouched`() {
+        val notification = NotificationCompat.Builder(context, "test")
+                .applySelectedNotificationIcon(context, R.drawable.ic_notify_qms)
+                .build()
+
+        assertEquals(
+                AppIcons.NOTIFICATION_CARD_ICON_AUTO,
+                AppIcons.notificationCardIconValue(context),
+        )
+        assertNull(notification.getLargeIcon())
+    }
+
+    @Test
     fun `card app mode stays independent from custom status icon`() {
         preferences.edit()
                 .putString(Preferences.Main.NOTIFICATION_ICON, "pixel_4")
+                .putString(
+                        Preferences.Main.NOTIFICATION_CARD_ICON,
+                        AppIcons.NOTIFICATION_CARD_ICON_APP,
+                )
                 .commit()
 
         val notification = NotificationCompat.Builder(context, "test")
                 .applySelectedNotificationIcon(context, R.drawable.ic_notify_qms)
                 .build()
 
-        assertEquals(
-                AppIcons.NOTIFICATION_CARD_ICON_APP,
-                AppIcons.notificationCardIconValue(context),
-        )
-        assertFalse(notification.extras.getBoolean("android.app.preferSmallIcon"))
+        assertNotNull(notification.getLargeIcon())
+        assertEquals(IconCompat.TYPE_BITMAP, AppIcons.notificationSmallIcon(
+                context,
+                R.drawable.ic_notify_qms,
+        ).type)
     }
 
     @Test
-    fun `card status mode requests small icon independently from status selection`() {
+    fun `specific card variant creates large icon without changing event status mode`() {
         preferences.edit()
                 .putString(
                         Preferences.Main.NOTIFICATION_CARD_ICON,
-                        AppIcons.NOTIFICATION_CARD_ICON_STATUS,
+                        "droid_4",
                 )
                 .commit()
 
@@ -114,6 +131,9 @@ class NotificationIconSelectionTest {
                 AppIcons.NOTIFICATION_ICON_EVENT,
                 AppIcons.notificationIconValue(context),
         )
-        assertTrue(notification.extras.getBoolean("android.app.preferSmallIcon"))
+        assertNotNull(notification.getLargeIcon())
+        val statusIcon = AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_qms)
+        assertEquals(IconCompat.TYPE_RESOURCE, statusIcon.type)
+        assertEquals(R.drawable.ic_notify_qms, statusIcon.resId)
     }
 }

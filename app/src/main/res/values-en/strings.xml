@@ -624,9 +624,11 @@
     <string name="notification_icon_app_desc">Follows the selected app icon.</string>
     <string name="notification_icon_hint">Android draws the status bar icon in one colour, so only its shape differs.</string>
     <string name="pref_title_notification_card_icon">Notification icon</string>
-    <string name="notification_card_icon_app">App icon</string>
-    <string name="notification_card_icon_status">Match status bar icon</string>
-    <string name="notification_card_icon_hint">This is a separate setting. Replacing the app icon at the left with the status bar icon is supported from Android API 37; older versions keep the app icon.</string>
+    <string name="notification_card_icon_auto">Automatic</string>
+    <string name="notification_card_icon_auto_desc">Keep the event avatar or its standard icon.</string>
+    <string name="notification_card_icon_app">Match app icon</string>
+    <string name="notification_card_icon_app_desc">Follow the selected app icon.</string>
+    <string name="notification_card_icon_hint">Choose the coloured card content icon independently from the status bar icon. Its exact position is controlled by the Android skin.</string>
     <string name="app_icon_minimal_4">Minimal 4</string>
     <string name="app_icon_minimal_4_desc">Clean four with a green dot</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
