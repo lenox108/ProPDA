@@ -888,12 +888,17 @@ class SettingsFragment : BaseSettingFragment() {
         }
     }
 
-    /** Сводка независимой настройки иконки слева внутри карточки уведомления. */
+    /** Сводка независимой настройки цветной иконки внутри карточки уведомления. */
     private fun updateNotificationCardIconSummary(preference: Preference) {
-        preference.summary = when (AppIcons.notificationCardIconValue(requireContext())) {
-            AppIcons.NOTIFICATION_CARD_ICON_STATUS ->
-                getString(R.string.notification_card_icon_status)
-            else -> getString(R.string.notification_card_icon_app)
+        val value = AppIcons.notificationCardIconValue(requireContext())
+        preference.summary = when (value) {
+            AppIcons.NOTIFICATION_CARD_ICON_AUTO ->
+                getString(R.string.notification_card_icon_auto)
+            AppIcons.NOTIFICATION_CARD_ICON_APP ->
+                getString(R.string.notification_card_icon_app)
+            else -> AppIcons.variants.firstOrNull { it.id == value }
+                    ?.let { getString(it.titleRes) }
+                    ?: getString(R.string.notification_card_icon_app)
         }
     }
 
