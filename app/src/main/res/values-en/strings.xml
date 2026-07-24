@@ -159,6 +159,14 @@
     <string name="add_in_spoiler">To spoiler</string>
     <string name="add_attachment">Add attachments</string>
     <string name="delete_selected_attachments">Delete selected attachments</string>
+    <string name="attachments_title">Attached files</string>
+    <string name="attachments_selected">Selected: %d</string>
+    <string name="attachments_grid_view">Grid</string>
+    <string name="attachments_list_view">List</string>
+    <string name="attachments_oldest_first">Oldest first</string>
+    <string name="attachments_newest_first">Newest first</string>
+    <string name="attachment_actions">Attachment actions</string>
+    <string name="attachment_upload_error">Upload failed. Tap “Retry”.</string>
     <string name="send_message">Send a post</string>
     <string name="full_form">Go advanced</string>
     <string name="hide_form">Switch to input field</string>

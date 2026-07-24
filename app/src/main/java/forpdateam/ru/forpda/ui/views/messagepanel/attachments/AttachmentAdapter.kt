@@ -1,77 +1,65 @@
 package forpdateam.ru.forpda.ui.views.messagepanel.attachments
 
-import forpdateam.ru.forpda.common.getVecDrawable
 import android.annotation.SuppressLint
-import android.content.res.ColorStateList
-import android.graphics.Color
-import com.google.android.material.tabs.TabLayout
-import androidx.core.content.ContextCompat
-import androidx.recyclerview.widget.RecyclerView
-import timber.log.Timber
 import android.view.LayoutInflater
+import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.RadioButton
-
 import android.widget.TextView
+import androidx.appcompat.widget.PopupMenu
+import androidx.core.graphics.ColorUtils
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.CircularProgressIndicator
-
+import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ForPdaCoil
-import forpdateam.ru.forpda.databinding.MessagePanelAttachmentsSelectorBinding
+import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.common.getVecDrawable
 import forpdateam.ru.forpda.databinding.MessagePanelAttachmentItemBinding
 import forpdateam.ru.forpda.databinding.MessagePanelAttachmentItemHorizontalBinding
-
-import java.util.ArrayList
-import forpdateam.ru.forpda.R
-import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.ui.views.drawers.adapters.AttachmentListItem
-import forpdateam.ru.forpda.ui.views.drawers.adapters.AttachmentSelectorListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.ListItem
-
+import java.util.ArrayList
 
 /**
- * Created by radiationx on 09.01.17.
+ * Adapter for attachments that keeps list/grid presentation independent from
+ * selection and attachment actions.
  */
-
-class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
+class AttachmentAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private val items = ArrayList<ListItem>()
-    //private val selected = ArrayList<AttachmentItem>()
-    private var itemClickListener: AttachmentAdapter.OnItemClickListener? = null
+    private var itemClickListener: OnItemClickListener? = null
     private var reloadOnClickListener: OnReloadClickListener? = null
-    private var selectorListener: SelectorListener? = null
-    private var isLinear = false
+    private var itemActionListener: OnItemActionListener? = null
+    private var isLinear = true
     private var isReverse = false
+    private var textActionsEnabled = true
 
     companion object {
-        private const val TYPE_SELECTOR = 1
-        private const val TYPE_ITEM = 2
-        private const val TYPE_ITEM_HORIZONTAL = 3
-    }
-
-    init {
-        clear()
+        private const val TYPE_ITEM = 1
+        private const val TYPE_ITEM_HORIZONTAL = 2
+        private const val ACTION_SPOILER = 1
+        private const val ACTION_DELETE = 2
     }
 
     fun updateIsLinear(isLinear: Boolean) {
+        if (this.isLinear == isLinear) return
         this.isLinear = isLinear
-        val index = items.indexOfFirst { it is AttachmentSelectorListItem }
-        if (index != -1) {
-            (items[index] as AttachmentSelectorListItem).isLinear = isLinear
-            notifyItemChanged(index)
-        }
+        notifyDataSetChanged()
     }
 
     fun updateReverse(isReverse: Boolean) {
         this.isReverse = isReverse
-        val index = items.indexOfFirst { it is AttachmentSelectorListItem }
-        if (index != -1) {
-            (items[index] as AttachmentSelectorListItem).isReverse = isReverse
-            notifyItemChanged(index)
-        }
+    }
+
+    fun updateTextActionsEnabled(enabled: Boolean) {
+        if (textActionsEnabled == enabled) return
+        textActionsEnabled = enabled
+        notifyItemRangeChanged(0, itemCount)
     }
 
     fun updateItem(item: AttachmentItem) {
@@ -82,17 +70,9 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
     }
 
     fun add(newItems: List<AttachmentItem>) {
-        val finalItems = if (isReverse) {
-            newItems.asReversed()
-        } else {
-            newItems
-        }
-        val insertIndex = if (isReverse) {
-            1
-        } else {
-            this.items.size
-        }
-        this.items.addAll(insertIndex, finalItems.map { AttachmentListItem(it) })
+        val finalItems = if (isReverse) newItems.asReversed() else newItems
+        val insertIndex = if (isReverse) 0 else items.size
+        items.addAll(insertIndex, finalItems.map { AttachmentListItem(it) })
         notifyItemRangeInserted(insertIndex, finalItems.size)
     }
 
@@ -103,11 +83,9 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
     fun clear() {
         val oldSize = items.size
         items.clear()
-        items.add(AttachmentSelectorListItem(isLinear, isReverse))
-        if (oldSize > 1) {
-            notifyItemRangeRemoved(1, oldSize - 1)
+        if (oldSize > 0) {
+            notifyItemRangeRemoved(0, oldSize)
         }
-        notifyItemChanged(0)
     }
 
     fun removeItem(item: AttachmentItem) {
@@ -118,61 +96,48 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
         }
     }
 
-    override fun getItemViewType(position: Int): Int {
-        val item = items[position]
-        return when (item) {
-            is AttachmentListItem -> if (isLinear) TYPE_ITEM_HORIZONTAL else TYPE_ITEM
-            is AttachmentSelectorListItem -> TYPE_SELECTOR
-            else -> -1
-        }
-    }
+    override fun getItemViewType(position: Int): Int =
+        if (isLinear) TYPE_ITEM_HORIZONTAL else TYPE_ITEM
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): androidx.recyclerview.widget.RecyclerView.ViewHolder {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return when (viewType) {
             TYPE_ITEM -> {
-                val binding = MessagePanelAttachmentItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+                val binding = MessagePanelAttachmentItemBinding.inflate(
+                    LayoutInflater.from(parent.context),
+                    parent,
+                    false
+                )
                 ViewHolder(binding)
             }
             TYPE_ITEM_HORIZONTAL -> {
-                val binding = MessagePanelAttachmentItemHorizontalBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+                val binding = MessagePanelAttachmentItemHorizontalBinding.inflate(
+                    LayoutInflater.from(parent.context),
+                    parent,
+                    false
+                )
                 ViewHolder(binding)
             }
-            TYPE_SELECTOR -> {
-                val binding = MessagePanelAttachmentsSelectorBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-                SelectorHolder(binding)
-            }
-            else -> throw NullPointerException()
+            else -> error("Unknown attachment view type: $viewType")
         }
     }
 
-    override fun onBindViewHolder(holder: androidx.recyclerview.widget.RecyclerView.ViewHolder, position: Int) {
-        val item = items[position]
-        val viewType = getItemViewType(position)
-        when (viewType) {
-            TYPE_ITEM, TYPE_ITEM_HORIZONTAL -> {
-                (holder as ViewHolder).bind((item as AttachmentListItem).item)
-            }
-            TYPE_SELECTOR -> {
-                val selectorItem = (item as AttachmentSelectorListItem)
-                (holder as SelectorHolder).bind(selectorItem.isLinear, selectorItem.isReverse)
-            }
-        }
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        val item = (items[position] as AttachmentListItem).item
+        (holder as ViewHolder).bind(item)
     }
 
-    override fun getItemCount(): Int {
-        return items.size
+    override fun getItemCount(): Int = items.size
+
+    fun setOnItemClickListener(listener: OnItemClickListener) {
+        itemClickListener = listener
     }
 
-    fun setOnItemClickListener(mItemClickListener: AttachmentAdapter.OnItemClickListener) {
-        this.itemClickListener = mItemClickListener
+    fun setReloadOnClickListener(listener: OnReloadClickListener) {
+        reloadOnClickListener = listener
     }
 
-    fun setReloadOnClickListener(reloadOnClickListener: OnReloadClickListener) {
-        this.reloadOnClickListener = reloadOnClickListener
-    }
-
-    fun setSelectorListener(selectorListener: SelectorListener) {
-        this.selectorListener = selectorListener
+    fun setOnItemActionListener(listener: OnItemActionListener) {
+        itemActionListener = listener
     }
 
     interface OnItemClickListener {
@@ -183,67 +148,17 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
         fun onReloadClick(item: AttachmentItem)
     }
 
-    interface SelectorListener {
-        fun onViewTypeChanged(isLinear: Boolean)
-        fun onReverseClick()
+    interface OnItemActionListener {
+        fun onInsert(item: AttachmentItem, toSpoiler: Boolean)
+        fun onDelete(item: AttachmentItem)
     }
 
-    inner class SelectorHolder(private val binding: MessagePanelAttachmentsSelectorBinding) : androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
-        private var tabLayout: TabLayout = binding.selectorTabLayout
-        private var reverseBtn: ImageView = binding.selectorReverse
-        private var gridTab: TabLayout.Tab
-        private var listTab: TabLayout.Tab
-        private var listener: TabLayout.OnTabSelectedListener
-
-        init {
-            val selectedIcon = tabLayout.context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
-            val normalIcon = tabLayout.context.getColorFromAttr(R.attr.icon_base)
-            val iconTint = ColorStateList(
-                arrayOf(
-                    intArrayOf(android.R.attr.state_selected),
-                    intArrayOf()
-                ),
-                intArrayOf(selectedIcon, normalIcon)
-            )
-            tabLayout.tabIconTint = iconTint
-            reverseBtn.imageTintList = ColorStateList.valueOf(normalIcon)
-
-            gridTab = tabLayout.newTab().setIcon(ContextCompat.getDrawable(tabLayout.context, R.drawable.ic_grid)).also {
-                tabLayout.addTab(it)
-            }
-            listTab = tabLayout.newTab().setIcon(ContextCompat.getDrawable(tabLayout.context, R.drawable.ic_view_list)).also {
-                tabLayout.addTab(it)
-            }
-            listener = object : TabLayout.OnTabSelectedListener {
-                override fun onTabReselected(p0: TabLayout.Tab?) {}
-                override fun onTabUnselected(p0: TabLayout.Tab?) {}
-
-                override fun onTabSelected(p0: TabLayout.Tab?) {
-                    selectorListener?.onViewTypeChanged(p0 == listTab)
-                }
-            }
-            reverseBtn.setOnClickListener { selectorListener?.onReverseClick() }
+    inner class ViewHolder(private val bindingBase: Any) : RecyclerView.ViewHolder(
+        if (bindingBase is MessagePanelAttachmentItemBinding) {
+            bindingBase.root
+        } else {
+            (bindingBase as MessagePanelAttachmentItemHorizontalBinding).root
         }
-
-        fun bind(isLinear: Boolean, _isReverse: Boolean) {
-            tabLayout.removeOnTabSelectedListener(listener)
-            if (!isLinear) {
-                gridTab.select()
-            } else {
-                listTab.select()
-            }
-            reverseBtn.isSelected = _isReverse
-            reverseBtn.imageTintList = ColorStateList.valueOf(
-                reverseBtn.context.getColorFromAttr(
-                    if (_isReverse) com.google.android.material.R.attr.colorOnSurface else R.attr.icon_base
-                )
-            )
-            tabLayout.addOnTabSelectedListener(listener)
-        }
-    }
-
-    inner class ViewHolder(private val bindingBase: Any) : androidx.recyclerview.widget.RecyclerView.ViewHolder(
-        if (bindingBase is MessagePanelAttachmentItemBinding) bindingBase.root else (bindingBase as MessagePanelAttachmentItemHorizontalBinding).root
     ), View.OnClickListener {
         private lateinit var imageView: ImageView
         private lateinit var radioButton: RadioButton
@@ -255,7 +170,10 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
         private lateinit var attributes: TextView
         private lateinit var errorText: TextView
         private lateinit var description: View
-        private var progressListener = IWebClient.ProgressListener { percent ->
+        private lateinit var insert: MaterialButton
+        private lateinit var moreActions: ImageButton
+        private var boundItem: AttachmentItem? = null
+        private val progressListener = IWebClient.ProgressListener { percent ->
             itemView.post { updateProgress(percent) }
         }
 
@@ -273,6 +191,8 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
                     attributes = bindingBase.fileAttributes
                     errorText = bindingBase.errorText
                     description = bindingBase.fileDescription
+                    insert = bindingBase.insertAttachment
+                    moreActions = bindingBase.moreActions
                 }
                 is MessagePanelAttachmentItemHorizontalBinding -> {
                     imageView = bindingBase.drawerItemIcon
@@ -285,47 +205,59 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
                     attributes = bindingBase.fileAttributes
                     errorText = bindingBase.errorText
                     description = bindingBase.fileDescription
+                    insert = bindingBase.insertAttachment
+                    moreActions = bindingBase.moreActions
                 }
             }
 
             reload.setOnClickListener {
-                // bindingAdapterPosition + getOrNull + as?: при сдвиге позиций
-                // (удалили вложение) layoutPosition попадал на селектор-элемент →
-                // ClassCastException; NO_POSITION(-1) → IndexOutOfBounds.
-                val item = (items.getOrNull(bindingAdapterPosition) as? AttachmentListItem)?.item
-                        ?: return@setOnClickListener
-                reloadOnClickListener?.onReloadClick(item)
+                currentItem()?.let { item -> reloadOnClickListener?.onReloadClick(item) }
+            }
+            insert.setOnClickListener {
+                currentItem()?.let { item -> itemActionListener?.onInsert(item, false) }
+            }
+            moreActions.setOnClickListener { anchor ->
+                currentItem()?.let { item -> showActions(anchor, item) }
             }
         }
 
         @SuppressLint("SetTextI18n")
         fun bind(item: AttachmentItem) {
-            // На случай реюза viewholder: убираем слушатель у прошлой модели
-            (items.getOrNull(layoutPosition) as? AttachmentListItem)?.item?.progressListener = null
+            boundItem?.progressListener = null
+            boundItem = item
+
+            description.visibility = View.VISIBLE
+            name.visibility = View.VISIBLE
+            name.text = item.name.orEmpty()
+            imageView.contentDescription = item.name
+            moreActions.visibility = View.VISIBLE
+
             when (item.loadState) {
                 AttachmentItem.STATE_LOADING -> {
-                    description.visibility = View.GONE
+                    attributes.visibility = View.GONE
+                    errorText.visibility = View.GONE
                     progressBar.visibility = View.VISIBLE
                     progressValue.visibility = View.VISIBLE
                     reload.visibility = View.GONE
-                    errorText.visibility = View.GONE
-                    imageView.visibility = View.GONE
-                    updateProgress(item.progress)
+                    imageView.visibility = View.INVISIBLE
+                    insert.visibility = View.GONE
+                    updateProgress(item.progress.coerceAtLeast(0))
                     item.progressListener = progressListener
                 }
                 AttachmentItem.STATE_NOT_LOADED -> {
-                    description.visibility = View.GONE
+                    attributes.visibility = View.GONE
+                    errorText.visibility = View.VISIBLE
+                    errorText.text = item.errorText
+                        ?: itemView.context.getString(R.string.attachment_upload_error)
                     progressBar.visibility = View.GONE
                     progressValue.visibility = View.GONE
                     reload.visibility = View.VISIBLE
-                    errorText.visibility = View.VISIBLE
-                    errorText.text = item.errorText ?: "Ошибка загрузки. Нажмите повторить."
-                    imageView.visibility = View.GONE
+                    imageView.visibility = View.INVISIBLE
+                    insert.visibility = View.GONE
                 }
                 AttachmentItem.STATE_LOADED -> {
-                    description.visibility = View.VISIBLE
-                    name.text = item.name
-                    attributes.text = "${item.extension}, ${item.weight}"
+                    attributes.visibility = View.VISIBLE
+                    attributes.text = buildAttributes(item)
                     errorText.visibility = View.GONE
                     progressBar.visibility = View.GONE
                     progressValue.visibility = View.GONE
@@ -334,14 +266,57 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
                     imageView.alpha = 1f
                     imageView.imageTintList = null
                     imageView.clearColorFilter()
-                    if (item.typeFile == AttachmentItem.TYPE_IMAGE) {
-                        ForPdaCoil.loadInto(imageView, item.imageUrl)
+                    insert.visibility = if (textActionsEnabled) View.VISIBLE else View.GONE
+
+                    val previewUrl = item.imageUrl?.takeIf { it.isNotBlank() }
+                        ?: item.url?.takeIf { it.isNotBlank() }
+                    if (item.typeFile == AttachmentItem.TYPE_IMAGE && previewUrl != null) {
+                        ForPdaCoil.loadInto(imageView, previewUrl)
                     } else {
-                        imageView.setImageDrawable(itemView.context.getVecDrawable(R.drawable.ic_insert_drive_file_gray_24dp))
+                        imageView.setImageDrawable(
+                            itemView.context.getVecDrawable(R.drawable.ic_insert_drive_file_gray_24dp)
+                        )
                     }
                 }
             }
             updateChecked(item)
+        }
+
+        private fun buildAttributes(item: AttachmentItem): String {
+            return listOfNotNull(
+                item.extension?.takeIf { it.isNotBlank() }?.uppercase(),
+                item.weight?.takeIf { it.isNotBlank() },
+                if (item.width > 0 && item.height > 0) "${item.width}×${item.height}" else null
+            ).joinToString(" · ")
+        }
+
+        private fun currentItem(): AttachmentItem? {
+            val position = bindingAdapterPosition
+            if (position == RecyclerView.NO_POSITION) return null
+            return (items.getOrNull(position) as? AttachmentListItem)?.item
+        }
+
+        private fun showActions(anchor: View, item: AttachmentItem) {
+            PopupMenu(anchor.context, anchor).apply {
+                if (textActionsEnabled && item.loadState == AttachmentItem.STATE_LOADED) {
+                    menu.add(Menu.NONE, ACTION_SPOILER, Menu.NONE, R.string.add_in_spoiler)
+                }
+                menu.add(Menu.NONE, ACTION_DELETE, Menu.NONE, R.string.delete)
+                setOnMenuItemClickListener { menuItem ->
+                    when (menuItem.itemId) {
+                        ACTION_SPOILER -> {
+                            itemActionListener?.onInsert(item, true)
+                            true
+                        }
+                        ACTION_DELETE -> {
+                            itemActionListener?.onDelete(item)
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                show()
+            }
         }
 
         @SuppressLint("SetTextI18n")
@@ -354,19 +329,30 @@ class AttachmentAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<andr
         }
 
         override fun onClick(v: View) {
-            // См. reload-клик выше: селектор-элемент / NO_POSITION по индексу.
-            val item = (items.getOrNull(bindingAdapterPosition) as? AttachmentListItem)?.item ?: return
-            itemClickListener?.onItemClick(item)
+            currentItem()?.let { item -> itemClickListener?.onItemClick(item) }
         }
 
         private fun updateChecked(item: AttachmentItem) {
             radioButton.isChecked = item.selected
-            if (item.loadState == AttachmentItem.STATE_NOT_LOADED) {
-                overlay.visibility = View.VISIBLE
-                overlay.setBackgroundColor(Color.argb(if (item.selected) 96 else 48, 255, 0, 0))
+            val colorAttr = if (item.loadState == AttachmentItem.STATE_NOT_LOADED) {
+                androidx.appcompat.R.attr.colorError
             } else {
-                overlay.setBackgroundColor(Color.argb(48, 0, 0, 0))
-                overlay.visibility = if (item.selected) View.VISIBLE else View.GONE
+                com.google.android.material.R.attr.colorOnSurface
+            }
+            val alpha = when {
+                item.loadState == AttachmentItem.STATE_NOT_LOADED && item.selected -> 96
+                item.loadState == AttachmentItem.STATE_NOT_LOADED -> 48
+                else -> 40
+            }
+            overlay.setBackgroundColor(
+                ColorUtils.setAlphaComponent(itemView.context.getColorFromAttr(colorAttr), alpha)
+            )
+            overlay.visibility = if (
+                item.selected || item.loadState == AttachmentItem.STATE_NOT_LOADED
+            ) {
+                View.VISIBLE
+            } else {
+                View.GONE
             }
         }
     }

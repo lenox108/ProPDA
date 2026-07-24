@@ -1,145 +1,168 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="@dimen/dp2"
-    android:background="?attr/background_for_lists"
-    android:foreground="?attr/selectableItemBackgroundBorderless"
-    android:minHeight="@dimen/attachment_preview_size">
+    android:layout_marginBottom="@dimen/dp8"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="?attr/colorSurfaceContainer"
+    app:cardCornerRadius="@dimen/dp12"
+    app:cardElevation="0dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:strokeWidth="@dimen/divider_thin">
 
-    <androidx.appcompat.widget.AppCompatImageView
-        android:id="@+id/drawer_item_icon"
-        android:layout_width="@dimen/attachment_preview_size"
-        android:layout_height="@dimen/attachment_preview_size"
-        android:clickable="false"
-        android:importantForAccessibility="no"
-        android:scaleType="centerCrop"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        tools:background="#2f00"
-        tools:visibility="gone" />
-
-    <View
-        android:id="@+id/overlay_and_text"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="?attr/attachment_overlay_bg"
-        android:clickable="false"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <androidx.constraintlayout.widget.Group
-        android:id="@+id/file_description"
-        android:layout_width="wrap_content"
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/attachment_description_bg"
-        app:constraint_referenced_ids="file_name, file_attributes"
-        tools:visibility="visible" />
+        android:minHeight="@dimen/dp88"
+        android:padding="@dimen/dp8">
 
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/file_name"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/content_padding_horizontal"
-        android:layout_marginTop="@dimen/dp4"
-        android:textColor="?attr/colorOnSurface"
-        android:textSize="@dimen/list_topic_title_text_size"
-        app:layout_constraintBottom_toTopOf="@id/file_attributes"
-        app:layout_constraintEnd_toStartOf="@id/radio_button"
-        app:layout_constraintStart_toEndOf="@id/drawer_item_icon"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_chainStyle="packed"
-        tools:text="Какое-то очень длинное название например в две строки ща посомотрим как будет в три строки" />
+        <FrameLayout
+            android:id="@+id/preview_container"
+            android:layout_width="@dimen/dp64"
+            android:layout_height="@dimen/dp64"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
 
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/file_attributes"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/content_padding_horizontal"
-        android:layout_marginTop="@dimen/dp4"
-        android:layout_marginBottom="@dimen/dp4"
-        android:maxLines="1"
-        android:textAllCaps="true"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="@dimen/list_topic_meta_text_size"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/drawer_item_icon"
-        app:layout_constraintTop_toBottomOf="@id/file_name"
-        tools:text="PNG, 1024 KB" />
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/drawer_item_icon"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/background_for_lists"
+                android:clickable="false"
+                android:importantForAccessibility="no"
+                android:scaleType="centerCrop" />
 
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/error_text"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/content_padding_horizontal"
-        android:layout_marginTop="@dimen/dp2"
-        android:maxLines="2"
-        android:textColor="?attr/colorAccent"
-        android:textSize="@dimen/list_section_header_text_size"
-        android:visibility="gone"
-        app:layout_constraintStart_toEndOf="@id/drawer_item_icon"
-        app:layout_constraintTop_toBottomOf="@id/file_attributes"
-        app:layout_constraintEnd_toStartOf="@id/radio_button"
-        tools:text="Ошибка загрузки. Нажмите повторить." />
+            <View
+                android:id="@+id/overlay_and_text"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/attachment_overlay_bg"
+                android:clickable="false"
+                android:visibility="gone" />
 
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/progress_bar"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
+                android:layout_gravity="center"
+                android:clickable="false"
+                android:indeterminate="false"
+                android:visibility="gone"
+                app:indicatorColor="?attr/colorAccent"
+                app:trackColor="?attr/colorAccent"
+                app:trackThickness="@dimen/dp2"
+                tools:visibility="visible" />
 
-    <com.google.android.material.progressindicator.CircularProgressIndicator
-        android:id="@+id/progress_bar"
-        android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp48"
-        android:clickable="false"
-        android:visibility="gone"
-        android:indeterminate="false"
-        app:indicatorColor="?attr/colorAccent"
-        app:trackColor="?attr/colorAccent"
-        app:trackThickness="@dimen/dp2"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/drawer_item_icon"
-        app:layout_constraintTop_toTopOf="parent"
-        tools:visibility="visible" />
+            <TextView
+                android:id="@+id/progress_value"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:textColor="?colorAccent"
+                android:textSize="@dimen/list_section_header_text_size"
+                android:visibility="gone"
+                tools:text="100%"
+                tools:visibility="visible" />
 
-    <TextView
-        android:id="@+id/progress_value"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:gravity="center"
-        android:textColor="?colorAccent"
-        android:textSize="@dimen/list_section_header_text_size"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@id/progress_bar"
-        app:layout_constraintEnd_toEndOf="@id/progress_bar"
-        app:layout_constraintStart_toStartOf="@id/progress_bar"
-        app:layout_constraintTop_toTopOf="@id/progress_bar"
-        tools:text="100%"
-        tools:visibility="visible" />
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/reload"
+                android:layout_width="@dimen/dp48"
+                android:layout_height="@dimen/dp48"
+                android:layout_gravity="center"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/retry"
+                android:visibility="gone"
+                app:srcCompat="@drawable/ic_toolbar_refresh" />
+        </FrameLayout>
 
-    <androidx.appcompat.widget.AppCompatImageButton
-        android:id="@+id/reload"
-        android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp48"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="@string/retry"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/drawer_item_icon"
-        app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/ic_toolbar_refresh"
-        tools:visibility="gone" />
+        <LinearLayout
+            android:id="@+id/attachment_content"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/dp12"
+            android:orientation="vertical"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/preview_container"
+            app:layout_constraintTop_toTopOf="parent">
 
-    <androidx.appcompat.widget.AppCompatRadioButton
-        android:id="@+id/radio_button"
-        android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp48"
-        android:background="@android:color/transparent"
-        android:clickable="false"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-</androidx.constraintlayout.widget.ConstraintLayout>
+            <LinearLayout
+                android:id="@+id/file_description"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingEnd="@dimen/dp40">
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/file_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="middle"
+                    android:maxLines="1"
+                    android:textAppearance="?attr/textAppearanceBodyLarge"
+                    android:textColor="?attr/colorOnSurface"
+                    tools:text="forum-screen-87526.jpg" />
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/file_attributes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/dp2"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    tools:text="JPG · 480 КБ · 1200×900" />
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/error_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/dp2"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textColor="?attr/colorAccent"
+                    android:textSize="@dimen/attachment_error_text_size"
+                    android:visibility="gone"
+                    tools:text="Ошибка загрузки. Нажмите повторить." />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical|end"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/insert_attachment"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="0dp"
+                    android:minHeight="@dimen/dp40"
+                    android:text="@string/insert"
+                    android:textColor="?attr/colorAccent"
+                    app:rippleColor="?attr/colorAccent" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/more_actions"
+                    android:layout_width="@dimen/dp40"
+                    android:layout_height="@dimen/dp40"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/attachment_actions"
+                    app:srcCompat="@drawable/ic_more_vert" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <androidx.appcompat.widget.AppCompatRadioButton
+            android:id="@+id/radio_button"
+            android:layout_width="@dimen/dp40"
+            android:layout_height="@dimen/dp40"
+            android:background="@android:color/transparent"
+            android:clickable="false"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</com.google.android.material.card.MaterialCardView>

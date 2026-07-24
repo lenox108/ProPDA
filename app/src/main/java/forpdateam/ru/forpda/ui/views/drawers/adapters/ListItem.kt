@@ -71,7 +71,6 @@ class DividerShadowListItem : ListItem()
 class BottomTabListItem(val item: DrawerMenuItem, var selected: Boolean = false) : ListItem()
 
 class AttachmentListItem(val item: AttachmentItem) : ListItem()
-class AttachmentSelectorListItem(var isLinear: Boolean, var isReverse: Boolean) : ListItem()
 
 enum class OtherMenuSection {
     LEGACY,
@@ -79,4 +78,3 @@ enum class OtherMenuSection {
     PERSONAL,
     TOOLS,
 }
-
