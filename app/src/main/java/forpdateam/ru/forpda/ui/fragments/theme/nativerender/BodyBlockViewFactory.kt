@@ -455,7 +455,19 @@ class BodyBlockViewFactory(
             // End padding clears the «❞» mark overlaying the card's top-right corner.
             setPadding(0, 0, dp(18f), dp(2f))
             val src = block.sourceUrl?.takeIf { it.isNotBlank() }
-            if (src != null) setOnClickListener { linkHandler.handle(src, null) }
+            if (src != null) {
+                setOnClickListener {
+                    callbacks.onContentLinkTap(scope.scopeId, src)
+                    linkHandler.handle(src, null)
+                }
+                // The quote header is a semantic link even though it is rendered as a styled
+                // TextView rather than a URLSpan. Without an explicit long-click it was the only
+                // in-topic link that could not open the standard link-actions menu.
+                setOnLongClickListener {
+                    callbacks.onLinkLongClick(src)
+                    true
+                }
+            }
         }
         val content = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -570,10 +582,10 @@ class BodyBlockViewFactory(
                 spoilerStates[key] = open
                 applyState()
             }
-            // Whole-card toggle (spoiler parity): inner links/selectable text consume their own
-            // touches, so only the chevron, header gaps and card padding flip the state.
+            // Keep expansion on an explicit control. Making the whole quote card clickable gives
+            // its parent FrameLayout ownership of long-press gestures on some Android/ROM versions,
+            // preventing the descendant TextViews from starting text selection.
             chevron.setOnClickListener(toggle)
-            card.setOnClickListener(toggle)
         }
 
         card.addView(column)
@@ -977,28 +989,36 @@ class BodyBlockViewFactory(
             // download callback, which carries the Activity context the «Способ загрузки» chooser needs.
             val hasLinks = text is Spanned &&
                     text.getSpans(0, text.length, URLSpan::class.java).isNotEmpty()
-            if (hasLinks) {
-                movementMethod = SelectableLinkMovementMethod(object : LinkMovementMethod.ClickListener {
-                    override fun onClick(url: String): Boolean {
-                        val fileName = attachmentFileNameOrNull(url)
-                        if (fileName != null) {
-                            callbacks.onDownloadLinkTap(url, fileName)
-                            return true
-                        }
-                        callbacks.onContentLinkTap(scope.scopeId, url)
-                        return linkHandler.handle(url, null)
-                    }
-
-                    override fun onLongClick(url: String): Boolean {
-                        val fileName = attachmentFileNameOrNull(url)
-                        if (fileName != null) {
-                            callbacks.onDownloadLinkLongPress(url, fileName)
-                        } else {
-                            callbacks.onLinkLongClick(url)
-                        }
+            val linkClicks = object : LinkMovementMethod.ClickListener {
+                override fun onClick(url: String): Boolean {
+                    val fileName = attachmentFileNameOrNull(url)
+                    if (fileName != null) {
+                        callbacks.onDownloadLinkTap(url, fileName)
                         return true
                     }
-                })
+                    callbacks.onContentLinkTap(scope.scopeId, url)
+                    return linkHandler.handle(url, null)
+                }
+
+                override fun onLongClick(url: String): Boolean {
+                    val fileName = attachmentFileNameOrNull(url)
+                    if (fileName != null) {
+                        callbacks.onDownloadLinkLongPress(url, fileName)
+                    } else {
+                        callbacks.onLinkLongClick(url)
+                    }
+                    return true
+                }
+            }
+            if (scope.selectableText) {
+                // Fallback markup is still user-visible post text (and is common inside quotes).
+                // It previously installed a selection-aware movement method for links but never
+                // actually enabled TextView selection, so long-press produced no handles or menu.
+                setTextIsSelectable(true)
+                installQuoteSelectionAction(this, scope)
+                if (hasLinks) movementMethod = SelectableLinkMovementMethod(linkClicks)
+            } else if (hasLinks) {
+                movementMethod = LinkMovementMethod(linkClicks)
             }
         }
         panel.addView(content)

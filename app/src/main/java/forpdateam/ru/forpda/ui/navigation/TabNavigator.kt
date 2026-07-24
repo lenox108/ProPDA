@@ -328,6 +328,24 @@ class TabNavigator(
             return
         }
 
+        // A context-menu «Открыть в новой вкладке» is an explicit request, so it must bypass
+        // same-topic/specific-post/isAlone reuse as well. In particular, a quote's date usually
+        // points into the CURRENT topic; without this guard reuseExistingThemeTabForSpecificPost()
+        // would navigate the existing tab and the menu item would only pretend to be "new tab".
+        if (newScreen.forceNewTab) {
+            val newFragment = createFragment(newScreen.screenKey, newScreen)
+            if (newFragment != null) {
+                val tag = genTag()
+                fragmentManager
+                        .beginTransaction()
+                        .add(containerId, newFragment, tag)
+                        .commitNow()
+                tabController.addNew(tag, newScreen)
+                updateFragmentsState(enterDirection = ENTER_FORWARD)
+            }
+            return
+        }
+
         // Opening a topic FROM a search-results screen must always spawn a FRESH theme tab as a child of
         // that search tab — never reuse (and steal-current) an existing topic tab elsewhere in the tree.
         // «Найти в теме» launches the search as a CHILD of the topic it came from, so the natural stack is

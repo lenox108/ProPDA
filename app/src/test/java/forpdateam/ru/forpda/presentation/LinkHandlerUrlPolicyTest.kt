@@ -4,6 +4,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -54,6 +55,21 @@ class LinkHandlerUrlPolicyTest {
         val article = screen.captured as Screen.ArticleDetail
         assertEquals(458379, article.articleId)
         assertEquals(-1, article.commentId)
+    }
+
+    @Test
+    fun `new-tab argument is carried to an internal topic screen`() {
+        val screen = slot<Screen>()
+
+        linkHandler.handle(
+                "https://4pda.to/forum/index.php?showtopic=123&view=findpost&p=456",
+                router,
+                mapOf(Screen.ARG_FORCE_NEW_TAB to "true"),
+        )
+
+        verify { router.navigateTo(capture(screen)) }
+        assertTrue(screen.captured is Screen.Theme)
+        assertTrue(screen.captured.forceNewTab)
     }
 
     @Test

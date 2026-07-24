@@ -73,6 +73,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     lateinit var linkHandler: ILinkHandler
 
     @Inject
+    lateinit var router: forpdateam.ru.forpda.presentation.TabRouter
+
+    @Inject
     lateinit var menuShortcutPinner: forpdateam.ru.forpda.model.interactors.other.MenuShortcutPinner
 
     /** Browser/download entry point — powers the image and download-link long-press menus. */
@@ -1720,9 +1723,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         systemLinkHandler.handleDownload(url, fileName, requireContext())
     }
 
-    /** Long-press on an in-text hyperlink → open in browser / share / copy link. */
+    /** Long-press on an in-text hyperlink → open in a new tab / browser / share / copy link. */
     override fun onLinkLongClick(url: String) {
-        LinkActionsMenu.show(requireContext(), url, systemLinkHandler, clipboardHelper)
+        LinkActionsMenu.show(
+                requireContext(),
+                url,
+                reportAwareLinkHandler,
+                router,
+                systemLinkHandler,
+                clipboardHelper,
+        )
     }
 
     /**

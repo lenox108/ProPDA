@@ -383,7 +383,14 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
                     override fun onLinkLongClick(url: String) =
                             forpdateam.ru.forpda.ui.fragments.theme.nativerender.LinkActionsMenu
-                                    .show(requireContext(), url, systemLinkHandler, clipboardHelper)
+                                    .show(
+                                            requireContext(),
+                                            url,
+                                            messageLinkHandler,
+                                            router,
+                                            systemLinkHandler,
+                                            clipboardHelper,
+                                    )
                 },
         )
         messagesAdapter.textScale = mainPreferencesHolder.getWebViewFontSize() / REFERENCE_FONT_SIZE

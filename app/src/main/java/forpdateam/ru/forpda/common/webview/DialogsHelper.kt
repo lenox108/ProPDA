@@ -12,6 +12,7 @@ import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.ISystemLinkHandler
+import forpdateam.ru.forpda.presentation.Screen
 import forpdateam.ru.forpda.presentation.TabRouter
 import forpdateam.ru.forpda.ui.activities.imageviewer.ImageViewerActivity
 import forpdateam.ru.forpda.ui.views.DynamicDialogMenu
@@ -38,7 +39,13 @@ class DialogsHelper(
 
         // androidx.core.util.Pair exposes nullable first/second, but handleContextMenu()
         // always builds the Pair with non-null values, so `!!` documents that invariant.
-        dynamicDialogMenu.addItem(openNewTab) { ctx, data -> linkHandler.handle(data.second!!, router) }
+        dynamicDialogMenu.addItem(openNewTab) { _, data ->
+            linkHandler.handle(
+                    data.second!!,
+                    router,
+                    mapOf(Screen.ARG_FORCE_NEW_TAB to true.toString()),
+            )
+        }
         dynamicDialogMenu.addItem(openBrowser) { ctx, data -> systemLinkHandler.handle(data.second!!) }
         dynamicDialogMenu.addItem(copyUrl) { ctx, data -> Utils.copyToClipBoard(data.second!!, clipboardHelper) }
         dynamicDialogMenu.addItem(openImage) { ctx, data ->

@@ -8,6 +8,7 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
     companion object {
         const val ARG_TITLE = "arg_title"
         const val ARG_SUBTITLE = "arg_subtitle"
+        const val ARG_FORCE_NEW_TAB = "arg_force_new_tab"
         private val NO_ID = -1
     }
 
@@ -15,6 +16,8 @@ sealed class Screen : com.github.terrakok.cicerone.Screen {
     open var screenSubTitle: String? = null
     open var fromMenu: Boolean = false
     open var isAlone: Boolean = false
+    /** Skip every navigator reuse rule and create a parallel tab for this screen. */
+    open var forceNewTab: Boolean = false
 
     fun getKey(): String = this::class.java.simpleName
 
