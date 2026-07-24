@@ -3,7 +3,7 @@ package forpdateam.ru.forpda.ui.fragments.notes
 import android.content.Context
 import android.text.InputType
 import android.view.View
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import com.google.android.material.dialog.MaterialAlertDialogBuilder

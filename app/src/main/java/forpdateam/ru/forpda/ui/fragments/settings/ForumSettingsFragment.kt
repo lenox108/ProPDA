@@ -1,7 +1,7 @@
 package forpdateam.ru.forpda.ui.fragments.settings
 
 import android.os.Bundle
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.ListPreference
 import androidx.preference.Preference

@@ -166,7 +166,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                     clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(
                             "notif_diag", forpdateam.ru.forpda.notifications.NotifDiagLog.read(context)))
-                    android.widget.Toast.makeText(context, R.string.bg_check_diagnostics_copied, android.widget.Toast.LENGTH_SHORT).show()
+                    forpdateam.ru.forpda.common.AppToast.makeText(context, R.string.bg_check_diagnostics_copied, forpdateam.ru.forpda.common.AppToast.LENGTH_SHORT).show()
                 }
                 .setNegativeButton(R.string.bg_check_diagnostics_clear) { _, _ ->
                     forpdateam.ru.forpda.notifications.NotifDiagLog.clear(context)

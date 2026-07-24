@@ -9,7 +9,7 @@ import android.os.Bundle
 import android.provider.Browser
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import timber.log.Timber
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import forpdateam.ru.forpda.analytics.Analytics
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R

@@ -3,7 +3,7 @@ package forpdateam.ru.forpda.ui.fragments.theme.nativerender
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.ui.chromeCanvasColor
 import androidx.lifecycle.lifecycleScope

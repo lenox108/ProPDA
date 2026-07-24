@@ -2,7 +2,7 @@ package forpdateam.ru.forpda.ui.fragments.attachments
 
 import android.os.Bundle
 import android.view.View
-import android.widget.Toast
+import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
