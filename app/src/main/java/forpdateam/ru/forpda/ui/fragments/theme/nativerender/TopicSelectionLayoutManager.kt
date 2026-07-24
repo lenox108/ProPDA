@@ -49,3 +49,19 @@ internal class TopicSelectionLayoutManager(context: Context) : LinearLayoutManag
     private fun View?.isSelectableText(): Boolean =
             this is TextView && isTextSelectable
 }
+
+/**
+ * Shared selection-state check for focus scrolling and page-swipe arbitration.
+ *
+ * Selection handles keep their owning TextView focused. Looking only at focus would block page
+ * swipes even after the selection toolbar closes, so require a real non-empty selection range too.
+ */
+internal object TopicTextSelectionState {
+    fun isActive(focusedView: View?): Boolean {
+        val textView = focusedView as? TextView ?: return false
+        if (!textView.isTextSelectable) return false
+        val start = textView.selectionStart
+        val end = textView.selectionEnd
+        return start >= 0 && end >= 0 && start != end
+    }
+}
