@@ -76,7 +76,11 @@ object NotificationPublisher {
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-                .applySelectedNotificationIcon(context, smallIconFor(event))
+                .applySelectedNotificationIcon(
+                        context,
+                        smallIconFor(event),
+                        applyCardIcon = !event.fromQms(),
+                )
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(
@@ -93,7 +97,7 @@ object NotificationPublisher {
         if (largeIcon != null && !event.fromSite()) {
             builder.setLargeIcon(largeIcon)
         }
-        builder.applySelectedNotificationCardIcon(context)
+        if (!event.fromQms()) builder.applySelectedNotificationCardIcon(context)
         NotificationActions.apply(context, builder, event)
 
         if (!canNotify(context, channelId, event.notificationLogCategory())) return null

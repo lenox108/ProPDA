@@ -136,4 +136,23 @@ class NotificationIconSelectionTest {
         assertEquals(IconCompat.TYPE_RESOURCE, statusIcon.type)
         assertEquals(R.drawable.ic_notify_qms, statusIcon.resId)
     }
+
+    @Test
+    fun `disabled card override preserves QMS avatar slot`() {
+        preferences.edit()
+                .putString(Preferences.Main.NOTIFICATION_CARD_ICON, "droid_4")
+                .commit()
+
+        val notification = NotificationCompat.Builder(context, "test")
+                .applySelectedNotificationIcon(
+                        context,
+                        R.drawable.ic_notify_qms,
+                        applyCardIcon = false,
+                )
+                .build()
+
+        assertNull(notification.getLargeIcon())
+        val statusIcon = AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_qms)
+        assertEquals(R.drawable.ic_notify_qms, statusIcon.resId)
+    }
 }

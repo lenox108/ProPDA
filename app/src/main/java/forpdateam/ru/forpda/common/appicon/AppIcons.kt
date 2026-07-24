@@ -336,9 +336,10 @@ object AppIcons {
 fun NotificationCompat.Builder.applySelectedNotificationIcon(
         context: Context,
         @DrawableRes eventGlyphRes: Int,
+        applyCardIcon: Boolean = true,
 ): NotificationCompat.Builder = apply {
     setSmallIcon(AppIcons.notificationSmallIcon(context, eventGlyphRes))
-    applySelectedNotificationCardIcon(context)
+    if (applyCardIcon) applySelectedNotificationCardIcon(context)
 }
 
 /** Повторно применяет ручную large icon после аватара или штатной иконки события. */
