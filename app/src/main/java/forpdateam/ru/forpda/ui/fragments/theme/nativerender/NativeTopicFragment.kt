@@ -1903,10 +1903,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             /** Set once this gesture has done real vertical work — the finger is scrolling, so page swipes
              *  stay disarmed until it lifts, no matter how the pointer drifts sideways afterwards. */
             private var verticalLocked = false
+            /** Active TextView selection owns horizontal handle drags; they must never become page swipes. */
+            private var textSelectionLocked = false
             /** Largest vertical excursion from the down point seen SO FAR in this gesture. A plain
              *  `e.y - downY` cancels itself out when you scroll down and back up, which made an up-down
              *  scroll with a little sideways drift satisfy the `|dx| > |dy|` test and flip the page. */
             private var maxAbsDy = 0f
+
+            private fun lockToTextSelectionIfActive(rv: androidx.recyclerview.widget.RecyclerView): Boolean {
+                if (!textSelectionLocked &&
+                        TopicTextSelectionState.isActive(rv.findFocus())) {
+                    textSelectionLocked = true
+                }
+                if (!textSelectionLocked) return false
+                claimed = false
+                verticalLocked = true
+                hideGestureIndicator()
+                updateRefreshGesture()
+                return true
+            }
 
             override fun onInterceptTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent): Boolean {
                 // Page swipes are a CLASSIC-only navigation (the setting itself says «доступно только в
@@ -1917,11 +1932,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     android.view.MotionEvent.ACTION_DOWN -> {
                         downX = e.x; downY = e.y; claimed = false
                         maxAbsDy = 0f
+                        textSelectionLocked = TopicTextSelectionState.isActive(rv.findFocus())
                         // Finger landing on a list that is still gliding = a catch-the-fling scroll, never a swipe.
                         verticalLocked = rv.scrollState !=
-                                androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE
+                                androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE ||
+                                textSelectionLocked
                     }
                     android.view.MotionEvent.ACTION_MOVE -> {
+                        // ActionMode can start after DOWN (the initial long-press gesture). Re-check on
+                        // every MOVE so dragging either selection handle can never arm page navigation.
+                        if (lockToTextSelectionIfActive(rv)) return false
                         val dx = e.x - downX
                         val dy = e.y - downY
                         maxAbsDy = kotlin.math.max(maxAbsDy, kotlin.math.abs(dy))
@@ -1950,13 +1970,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                             return true // steal the gesture → child gets CANCEL (no link tap / scroll)
                         }
                     }
-                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                        textSelectionLocked = false
                         updateRefreshGesture() // never claimed → restore pull-to-refresh
+                    }
                 }
                 return false
             }
 
             override fun onTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent) {
+                if (lockToTextSelectionIfActive(rv)) {
+                    if (e.actionMasked == android.view.MotionEvent.ACTION_UP ||
+                            e.actionMasked == android.view.MotionEvent.ACTION_CANCEL) {
+                        textSelectionLocked = false
+                    }
+                    return
+                }
                 when (e.actionMasked) {
                     android.view.MotionEvent.ACTION_MOVE -> {
                         val dx = e.x - downX
@@ -1979,11 +2008,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                             if (dx < 0) jumpToPage(barCurrentPage + 1) else jumpToPage(barCurrentPage - 1)
                         }
                         claimed = false
+                        textSelectionLocked = false
                         hideGestureIndicator()
                         updateRefreshGesture() // restore pull-to-refresh after the swipe
                     }
                     android.view.MotionEvent.ACTION_CANCEL -> {
                         claimed = false
+                        textSelectionLocked = false
                         hideGestureIndicator()
                         updateRefreshGesture() // restore pull-to-refresh after the swipe
                     }
