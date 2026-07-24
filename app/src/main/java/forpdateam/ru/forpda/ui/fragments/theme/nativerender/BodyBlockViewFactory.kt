@@ -751,21 +751,103 @@ class BodyBlockViewFactory(
             breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
         })
-        val subtitle = listOfNotNull(block.size, block.desc).joinToString("  ·  ")
-        if (subtitle.isNotBlank()) {
-            texts.addView(TextView(ctx).apply {
-                text = subtitle
-                textSize = scaledSp(12f)
-                setTextColor(muted)
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(0, dp(1f), 0, 0)
-            })
+        val subtitleView = TextView(ctx).apply {
+            textSize = scaledSp(12f)
+            setTextColor(muted)
+            // Same reason as the name above: «80,2 МБ · Кол-во скачиваний: …» clipped away the count
+            // itself — the only number the line carries. The count now rides behind a download glyph
+            // (see [attachmentSubtitle]) so it fits, and wrapping stays on as the fallback for a stray
+            // long `.desc` (a date, a note) that the page may put there instead.
+            setSingleLine(false)
+            maxLines = Integer.MAX_VALUE
+            ellipsize = null
+            breakStrategy = android.text.Layout.BREAK_STRATEGY_SIMPLE
+            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            setPadding(0, dp(1f), 0, 0)
+        }
+        val subtitle = attachmentSubtitle(ctx, block, muted, subtitleView.textSize)
+        if (subtitle.isNotEmpty()) {
+            subtitleView.text = subtitle
+            texts.addView(subtitleView)
         }
 
         row.addView(badge)
         row.addView(texts)
         return row
+    }
+
+    /**
+     * The muted line under a file's name: «80,2 МБ  ·  ⤓ 421».
+     *
+     * 4pda writes the count as the prose «Кол-во скачиваний: 421», which ate the whole line and pushed
+     * the number itself out of view. The label carries no information the glyph doesn't — so when the
+     * `.desc` IS a download count, only the number survives, behind [R.drawable.ic_download] (the same
+     * arrow-into-tray as the Загрузки tab, so the meaning is already learned elsewhere in the app). A
+     * `.desc` that is anything else (a date, an author note) is left verbatim — we only drop text we
+     * can positively identify.
+     *
+     * The glyph is an [ImageSpan] rather than a Unicode arrow on purpose: the body font is
+     * user-switchable, and «⤓»/«⇩» are missing from Roboto Mono and many of the bundled faces — a
+     * drawable renders everywhere, tints with the line and scales with [textSizePx].
+     */
+    private fun attachmentSubtitle(
+            ctx: Context,
+            block: BodyBlock.FileAttachment,
+            muted: Int,
+            textSizePx: Float,
+    ): CharSequence {
+        val out = SpannableStringBuilder()
+        block.size?.trim()?.takeIf { it.isNotBlank() }?.let(out::append)
+        val desc = block.desc?.trim()?.takeIf { it.isNotBlank() }
+        val downloads = desc?.let { DOWNLOAD_COUNT.find(it)?.groupValues?.get(1)?.trim() }
+        val glyph = downloads?.let {
+            androidx.core.content.ContextCompat.getDrawable(ctx, forpdateam.ru.forpda.R.drawable.ic_download)?.mutate()
+        }
+        when {
+            glyph != null -> {
+                if (out.isNotEmpty()) out.append(SUBTITLE_SEPARATOR)
+                val side = (textSizePx * DOWNLOAD_GLYPH_SCALE).toInt()
+                glyph.setBounds(0, 0, side, side)
+                glyph.setTint(muted)
+                val start = out.length
+                out.append('￼') // OBJECT REPLACEMENT CHARACTER — the span draws over it
+                out.setSpan(CenteredImageSpan(glyph), start, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                out.append(' ').append(downloads)
+            }
+            desc != null -> {
+                if (out.isNotEmpty()) out.append(SUBTITLE_SEPARATOR)
+                out.append(desc)
+            }
+        }
+        return out
+    }
+
+    /**
+     * [ImageSpan] centred on the line's x-height instead of sitting on the baseline (`ALIGN_CENTER` is
+     * API 29+, and the app runs from 26). Without it a 12sp glyph next to 12sp digits reads as if it
+     * had slipped a pixel down.
+     */
+    private class CenteredImageSpan(drawable: android.graphics.drawable.Drawable) :
+            android.text.style.ImageSpan(drawable, ALIGN_BOTTOM) {
+        override fun draw(
+                canvas: android.graphics.Canvas,
+                text: CharSequence?,
+                start: Int,
+                end: Int,
+                x: Float,
+                top: Int,
+                y: Int,
+                bottom: Int,
+                paint: android.graphics.Paint,
+        ) {
+            val d = drawable
+            val fm = paint.fontMetricsInt
+            val dy = y + (fm.descent + fm.ascent) / 2 - d.bounds.height() / 2
+            canvas.save()
+            canvas.translate(x, dy.toFloat())
+            d.draw(canvas)
+            canvas.restore()
+        }
     }
 
     /**
@@ -1314,6 +1396,19 @@ class BodyBlockViewFactory(
         val HTML_CACHE = object : android.util.LruCache<String, Spanned>(512 * 1024) {
             override fun sizeOf(key: String, value: Spanned): Int = key.length
         }
+
+        /**
+         * The download count inside a post attachment's `.desc`, written by 4pda as «Кол-во скачиваний:
+         * 421» (older posts: «скачиваний: 421»). Only the digits are kept — see [attachmentSubtitle].
+         * Anchored on the word so a `.desc` carrying something else entirely is never mistaken for a count.
+         */
+        val DOWNLOAD_COUNT = Regex("""скачивани\w*\s*:?\s*(\d[\d\s ]*)""", RegexOption.IGNORE_CASE)
+
+        /** Separator between the size and the download count on the attachment subtitle line. */
+        const val SUBTITLE_SEPARATOR = "  ·  "
+
+        /** Download glyph side, as a multiple of the subtitle text size — optically level with the digits. */
+        const val DOWNLOAD_GLYPH_SCALE = 1.15f
 
         /** A 4pda post-attachment download link: `…/forum/dl/post/<id>/<name>.<ext>`. */
         val ATTACHMENT_URL: Pattern =
