@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import timber.log.Timber
 
@@ -27,7 +28,7 @@ object QuickReplyFailureNotification {
         NotificationsService.createEventChannels(context)
 
         val builder = NotificationCompat.Builder(context, NotificationsService.CHANNEL_QMS_ID)
-                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_qms))
+                .applySelectedNotificationIcon(context, R.drawable.ic_notify_qms)
                 .setContentTitle(context.getString(R.string.notification_quick_reply_failed_title))
                 .setContentText(text)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))

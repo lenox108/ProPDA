@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
 import forpdateam.ru.forpda.notifications.NotificationsService
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import timber.log.Timber
@@ -59,7 +60,7 @@ class AppUpdateNotifier @Inject constructor(
         val collapsed = content.lineSequence().firstOrNull { it.isNotBlank() } ?: fallback
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_mention))
+            .applySelectedNotificationIcon(context, R.drawable.ic_notify_mention)
             .setContentTitle(context.getString(R.string.updater_notification_title))
             .setContentText(collapsed)
             .setStyle(
@@ -116,4 +117,3 @@ class AppUpdateNotifier @Inject constructor(
         private const val NOTIFICATION_ID = 1121483
     }
 }
-

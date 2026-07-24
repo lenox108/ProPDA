@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
@@ -74,7 +75,7 @@ object NotificationPublisher {
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, smallIconFor(event)))
+                .applySelectedNotificationIcon(context, smallIconFor(event))
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(
@@ -132,7 +133,7 @@ object NotificationPublisher {
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(forpdateam.ru.forpda.common.appicon.AppIcons.notificationSmallIcon(context, smallIconFor(first)))
+                .applySelectedNotificationIcon(context, smallIconFor(first))
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(stackedStyle(context, events, title, summary))

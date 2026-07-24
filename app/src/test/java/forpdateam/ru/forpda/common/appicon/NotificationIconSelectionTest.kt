@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.common.appicon
 
 import android.content.Context
+import androidx.core.app.NotificationCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
@@ -8,6 +9,8 @@ import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Preferences
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,5 +77,27 @@ class NotificationIconSelectionTest {
 
         assertEquals(IconCompat.TYPE_RESOURCE, icon.type)
         assertEquals(R.drawable.ic_notify_mention, icon.resId)
+    }
+
+    @Test
+    fun `event mode keeps package identity icon in notification card`() {
+        val notification = NotificationCompat.Builder(context, "test")
+                .applySelectedNotificationIcon(context, R.drawable.ic_notify_qms)
+                .build()
+
+        assertFalse(notification.extras.getBoolean("android.app.preferSmallIcon"))
+    }
+
+    @Test
+    fun `custom mode requests selected small icon in notification card`() {
+        preferences.edit()
+                .putString(Preferences.Main.NOTIFICATION_ICON, "pixel_4")
+                .commit()
+
+        val notification = NotificationCompat.Builder(context, "test")
+                .applySelectedNotificationIcon(context, R.drawable.ic_notify_qms)
+                .build()
+
+        assertTrue(notification.extras.getBoolean("android.app.preferSmallIcon"))
     }
 }
