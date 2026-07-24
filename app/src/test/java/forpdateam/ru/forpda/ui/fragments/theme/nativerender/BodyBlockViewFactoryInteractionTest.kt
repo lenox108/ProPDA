@@ -1,8 +1,11 @@
 package forpdateam.ru.forpda.ui.fragments.theme.nativerender
 
 import android.app.Activity
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.SystemClock
+import android.text.Selection
+import android.text.Spannable
 import android.view.ContextThemeWrapper
 import android.view.MotionEvent
 import android.view.View
@@ -15,6 +18,7 @@ import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.TabRouter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -139,11 +143,78 @@ class BodyBlockViewFactoryInteractionTest {
         assertNotEquals(quoteText.selectionStart, quoteText.selectionEnd)
     }
 
+    @Test
+    fun `quote copy action always writes selected text to clipboard`() {
+        val factory = BodyBlockViewFactory(linkHandler, mutableMapOf(), callbacks())
+        val root = LinearLayout(context)
+        factory.render(
+                root,
+                listOf(
+                        BodyBlock.Quote(
+                                author = "eXense",
+                                date = "Сегодня, 18:37",
+                                sourceUrl = null,
+                                inner = listOf(BodyBlock.Text("страница дергается при прокрутке")),
+                        ),
+                ),
+                BodyBlockViewFactory.RenderScope(scopeId = 4, allowQuoteSelection = true),
+        )
+        val quoteText = root.descendantTextViews()
+                .first { it.text.contains("страница дергается") }
+        val start = quoteText.text.indexOf("при")
+        Selection.setSelection(quoteText.text as Spannable, start, start + "при".length)
+
+        assertTrue(quoteText.onTextContextMenuItem(android.R.id.copy))
+
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        assertEquals("при", clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString())
+    }
+
+    @Test
+    fun `quote long press guard releases parent for an intentional scroll`() {
+        val factory = BodyBlockViewFactory(linkHandler, mutableMapOf(), callbacks())
+        val root = InterceptRecordingLayout(context)
+        factory.render(
+                root,
+                listOf(
+                        BodyBlock.Quote(
+                                author = null,
+                                date = null,
+                                sourceUrl = null,
+                                inner = listOf(BodyBlock.Text("Выделяемый текст цитаты")),
+                        ),
+                ),
+                BodyBlockViewFactory.RenderScope(scopeId = 5, allowQuoteSelection = true),
+        )
+        val quoteText = root.descendantTextViews()
+                .first { it.text.contains("Выделяемый текст цитаты") }
+        val down = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 5f, 5f, 0)
+        quoteText.dispatchTouchEvent(down)
+        down.recycle()
+        assertTrue(root.interceptRequests.last())
+
+        val distance = ViewConfiguration.get(context).scaledTouchSlop * 2f
+        val move = MotionEvent.obtain(0L, 20L, MotionEvent.ACTION_MOVE, 5f, 5f + distance, 0)
+        quoteText.dispatchTouchEvent(move)
+        move.recycle()
+
+        assertFalse(root.interceptRequests.last())
+    }
+
     private fun callbacks(longPress: (String) -> Unit = {}) =
             object : BodyBlockViewFactory.Callbacks {
                 override fun onImageClick(galleryUrls: List<String>, index: Int) = Unit
                 override fun onLinkLongClick(url: String) = longPress(url)
             }
+
+    private class InterceptRecordingLayout(context: Context) : LinearLayout(context) {
+        val interceptRequests = mutableListOf<Boolean>()
+
+        override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
+            interceptRequests += disallowIntercept
+            super.requestDisallowInterceptTouchEvent(disallowIntercept)
+        }
+    }
 
     private fun ViewGroup.descendantTextViews(): List<TextView> {
         val result = ArrayList<TextView>()

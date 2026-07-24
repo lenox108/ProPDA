@@ -995,7 +995,7 @@ class BodyBlockViewFactory(
         // в цвет группы под белый фон (напр. цитата с [member=…]/куратором), становится нечитаемым на
         // светлой карточке Sepia Blue (репорт: ник белым в цитировании) — тот же тракт, что и textView.
         val surface = blockFillColor(ctx)
-        val content = TextView(ctx).apply {
+        val content = TopicSelectableTextView(ctx).apply {
             val text = neutralizeLowContrastColors(surface, stripLinkColors(spanned(ctx, block.html)))
             setText(text)
             SmileProvider.startAnimations(this)
@@ -1044,6 +1044,7 @@ class BodyBlockViewFactory(
                 // TextView implementations silently do nothing. Apply this AFTER movementMethod
                 // setup because a movement method is allowed to update the long-click flag.
                 isLongClickable = true
+                enableReliableSelection()
             } else if (hasLinks) {
                 movementMethod = LinkMovementMethod(linkClicks)
             }
@@ -1109,7 +1110,7 @@ class BodyBlockViewFactory(
     }
 
     private fun textView(ctx: Context, text: CharSequence, scope: RenderScope): TextView {
-        return TextView(ctx).apply {
+        return TopicSelectableTextView(ctx).apply {
             if (textBlockMaxWidthPx > 0) {
                 layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1159,6 +1160,7 @@ class BodyBlockViewFactory(
                 // See the API/OEM note in bindFallback(): TextView selection and View long-clickability
                 // are separate flags on real devices, even though Robolectric couples them.
                 isLongClickable = true
+                enableReliableSelection()
             } else {
                 // Non-selectable (QMS chat bubbles): a selectable TextView claims the long-press for its
                 // text-selection ActionMode (the awkward «текст выделяется + Копировать рядом с Удалить»).
