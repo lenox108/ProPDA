@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.ui.fragments.theme.nativerender
 
 import android.content.Context
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.ArticleLinkResolver
 import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.presentation.ILinkHandler
@@ -25,6 +26,11 @@ object LinkActionsMenu {
             systemLinkHandler: ISystemLinkHandler,
             clipboardHelper: ClipboardHelper,
     ) {
+        // Quote snapbacks and old forum markup commonly carry `/forum/index.php?...` rather than
+        // an absolute URL. LinkHandler can resolve that for in-app navigation, but
+        // SystemLinkHandler deliberately rejects relative URLs. Resolve once before building the
+        // menu so «Открыть в браузере», share and copy all receive the real link too.
+        val resolvedUrl = resolveForActions(url)
         val menu = DynamicDialogMenu<Context, String>()
         menu.addItem(context.getString(R.string.wv_open_new_tab)) { _, link ->
             // Passing the router explicitly follows the established WebView context-menu path:
@@ -46,8 +52,11 @@ object LinkActionsMenu {
             Utils.copyToClipBoard(link, clipboardHelper)
         }
         menu.allowAll()
-        menu.show(context, context, url, url, STYLE)
+        menu.show(context, context, resolvedUrl, resolvedUrl, STYLE)
     }
+
+    internal fun resolveForActions(url: String): String =
+            ArticleLinkResolver.resolveForNavigation(url) ?: url
 
     // Same look as ImageActionsMenu / NativeTopicFragment.showM3Menu, so every native popup matches.
     private val STYLE = DynamicDialogMenu.Style(
