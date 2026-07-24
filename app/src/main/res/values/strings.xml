@@ -781,12 +781,16 @@
     <string name="app_icon_term_4_desc">Окно терминала с зелёной четвёркой; светлая и чёрная темы.</string>
     <string name="app_icon_circuit_4">Микросхема</string>
     <string name="app_icon_circuit_4_desc">Четвёрка из дорожек платы; белая и чёрная темы.</string>
-    <string name="pref_title_notification_icon">Значок уведомлений</string>
+    <string name="pref_title_notification_icon">Значок в статус-баре</string>
     <string name="notification_icon_event">По типу события</string>
     <string name="notification_icon_event_desc">Свой значок для ответов, QMS, упоминаний и загрузок.</string>
     <string name="notification_icon_app">Как иконка приложения</string>
     <string name="notification_icon_app_desc">Следует за выбранной иконкой приложения.</string>
-    <string name="notification_icon_hint">В статус-баре Android рисует значок одним цветом. На поддерживаемых версиях выбранный силуэт также заменит иконку приложения слева в карточке.</string>
+    <string name="notification_icon_hint">Android рисует значок в статус-баре одним цветом — различаться будет только форма.</string>
+    <string name="pref_title_notification_card_icon">Иконка слева в карточке</string>
+    <string name="notification_card_icon_app">Иконка приложения</string>
+    <string name="notification_card_icon_status">Как в статус-баре</string>
+    <string name="notification_card_icon_hint">Это отдельная настройка. Замена системной иконки слева на значок статус-бара поддерживается начиная с Android API 37; более старые версии оставят иконку приложения.</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Цвет акцента</string>
     <string name="accent_neutral">Нейтральный</string>

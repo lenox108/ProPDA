@@ -490,6 +490,23 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
+        findPreference<Preference>(Preferences.Main.NOTIFICATION_CARD_ICON)?.apply {
+            updateNotificationCardIconSummary(this)
+            setOnPreferenceClickListener {
+                forpdateam.ru.forpda.ui.views.dialog.NotificationCardIconPickerDialog.show(
+                        requireContext(),
+                        AppIcons.notificationCardIconValue(requireContext()),
+                ) { picked ->
+                    if (!isAdded) return@show
+                    prefs.edit()
+                            .putString(Preferences.Main.NOTIFICATION_CARD_ICON, picked)
+                            .apply()
+                    updateNotificationCardIconSummary(this)
+                }
+                true
+            }
+        }
+
         findPreference<Preference>(Preferences.Main.ACCENT_PALETTE)?.apply {
             updateAccentSummary(mainPreferencesHolder.getAccentPalette())
             setOnPreferenceClickListener {
@@ -868,6 +885,15 @@ class SettingsFragment : BaseSettingFragment() {
             else -> AppIcons.variants.firstOrNull { it.id == value }
                     ?.let { getString(it.titleRes) }
                     ?: getString(R.string.notification_icon_event)
+        }
+    }
+
+    /** Сводка независимой настройки иконки слева внутри карточки уведомления. */
+    private fun updateNotificationCardIconSummary(preference: Preference) {
+        preference.summary = when (AppIcons.notificationCardIconValue(requireContext())) {
+            AppIcons.NOTIFICATION_CARD_ICON_STATUS ->
+                getString(R.string.notification_card_icon_status)
+            else -> getString(R.string.notification_card_icon_app)
         }
     }
 
