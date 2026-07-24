@@ -1251,23 +1251,6 @@ class BodyBlockViewFactory(
     }
 
     /**
-     * True if the selection toolbar carries framework «smart text» (assist) actions — e.g. the
-     * «Открыть» item Android injects when the selection is a URL/email/phone. Those items dispatch
-     * through a click-listener the framework keeps keyed by the ORIGINAL MenuItem instance
-     * (`Editor.mAssistClickHandlers`), NOT through a plain `intent`. So a menu.clear()+re-add
-     * reorder (used to pull «Цитировать»/«Удалить» to the front on MIUI) silently strips their
-     * handler and the item becomes a dead no-op. When such items are present we must NOT rebuild
-     * the menu — our own item still shows via SHOW_AS_ACTION_ALWAYS, just not forced to the front.
-     */
-    private fun menuHasAssistActions(menu: android.view.Menu): Boolean {
-        for (i in 0 until menu.size()) {
-            val mi = menu.getItem(i)
-            if (mi.groupId == android.R.id.textAssist || mi.itemId == android.R.id.textAssist) return true
-        }
-        return false
-    }
-
-    /**
      * Gives Android's text editor enough time to recognise a long-press before RecyclerView or
      * SwipeRefreshLayout can turn tiny finger movement into a scroll and cancel the child gesture.
      *
@@ -1325,39 +1308,6 @@ class BodyBlockViewFactory(
                 addQuoteItem(menu)
                 return true
             }
-            /**
-             * Force «Цитировать» to the FRONT of the selection toolbar. MIUI/HyperOS ignores our
-             * menu `order` (the item lands after «Копировать»), so we rebuild the menu with our item
-             * first, then re-add the system items preserving their id/group/title/intent — Copy/Share
-             * are dispatched by item id, so their behaviour is unchanged. Adding ours first wins under
-             * BOTH orderings a ROM might use (lowest `order` AND first-inserted). Guarded: any failure
-             * falls back to merely ensuring the item exists, so the menu is never left broken.
-             */
-            fun reorderQuoteFirst(menu: android.view.Menu): Boolean {
-                if (!scope.allowQuoteSelection) return false
-                if (menu.size() > 0 && menu.getItem(0).itemId == QUOTE_MENU_ID) return false
-                // Never rebuild a menu that holds framework smart-text actions (e.g. «Открыть» for a
-                // selected URL): the rebuild would strip their click handler and kill the action.
-                if (menuHasAssistActions(menu)) return ensureQuoteItem(menu)
-                return try {
-                    val others = ArrayList<Array<Any?>>(menu.size())
-                    for (i in 0 until menu.size()) {
-                        val mi = menu.getItem(i)
-                        if (mi.itemId == QUOTE_MENU_ID) continue
-                        others.add(arrayOf(mi.groupId, mi.itemId, mi.order, mi.title, mi.intent))
-                    }
-                    menu.clear()
-                    addQuoteItem(menu)
-                    for (o in others) {
-                        val re = menu.add(o[0] as Int, o[1] as Int, o[2] as Int, o[3] as CharSequence?)
-                                .setShowAsActionFlags(android.view.MenuItem.SHOW_AS_ACTION_IF_ROOM)
-                        (o[4] as? android.content.Intent)?.let { re.intent = it }
-                    }
-                    true
-                } catch (t: Throwable) {
-                    ensureQuoteItem(menu)
-                }
-            }
             override fun onCreateActionMode(mode: android.view.ActionMode, menu: android.view.Menu): Boolean {
                 // Once Android has recognised the long-press, keep RecyclerView/SwipeRefreshLayout from
                 // stealing MOVE events used to place the selection handles. The request propagates
@@ -1366,11 +1316,13 @@ class BodyBlockViewFactory(
                 ensureQuoteItem(menu)
                 return true
             }
-            // MIUI/HyperOS rebuilds the floating-selection toolbar in onPrepare and drops / reorders the
-            // item added in onCreate. Re-add it AND pull it to the front here (stock Android already has
-            // it first, so reorderQuoteFirst early-returns — a no-op there).
+            // Some ROMs rebuild the floating toolbar in onPrepare and drop app-provided items, so make
+            // sure ours is still present. Never clear/recreate framework menu items here: Android keeps
+            // private click handlers on those instances, and replacing them can abort the whole
+            // selection ActionMode on OEM implementations (the quote long-press then appears to do
+            // nothing).
             override fun onPrepareActionMode(mode: android.view.ActionMode, menu: android.view.Menu) =
-                    reorderQuoteFirst(menu)
+                    ensureQuoteItem(menu)
             override fun onActionItemClicked(mode: android.view.ActionMode, menuItem: android.view.MenuItem): Boolean {
                 if (scope.allowQuoteSelection && menuItem.itemId == QUOTE_MENU_ID) {
                     val s = tv.selectionStart.coerceAtLeast(0)

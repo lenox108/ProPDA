@@ -1,8 +1,12 @@
 package forpdateam.ru.forpda.ui.fragments.theme.nativerender
 
+import android.app.Activity
 import android.content.Context
+import android.os.SystemClock
 import android.view.ContextThemeWrapper
 import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -11,10 +15,13 @@ import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.TabRouter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -118,6 +125,44 @@ class BodyBlockViewFactoryInteractionTest {
 
         quoteText.dispatchTouchEvent(MotionEvent.obtain(0L, 10L, MotionEvent.ACTION_UP, 5f, 5f, 0))
         assertEquals(false, root.interceptRequests.last())
+    }
+
+    @Test
+    fun `real long press selects quote text in attached window`() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val themedContext = ContextThemeWrapper(activity, R.style.DayNightAppTheme)
+        val root = LinearLayout(themedContext)
+        val factory = BodyBlockViewFactory(linkHandler, mutableMapOf(), callbacks())
+        factory.render(
+                root,
+                listOf(
+                        BodyBlock.Quote(
+                                author = "Автор",
+                                date = null,
+                                sourceUrl = null,
+                                inner = listOf(BodyBlock.Text("Выделяемый текст цитаты")),
+                        ),
+                ),
+                BodyBlockViewFactory.RenderScope(scopeId = 3, allowQuoteSelection = true),
+        )
+        activity.setContentView(root)
+        root.measure(
+                View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.AT_MOST),
+        )
+        root.layout(0, 0, root.measuredWidth, root.measuredHeight)
+        val quoteText = root.descendantTextViews()
+                .first { it.text.contains("Выделяемый текст цитаты") }
+        val downTime = SystemClock.uptimeMillis()
+        quoteText.dispatchTouchEvent(
+                MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, 20f, 20f, 0),
+        )
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(
+                ViewConfiguration.getLongPressTimeout().toLong() + 100L,
+                java.util.concurrent.TimeUnit.MILLISECONDS,
+        )
+
+        assertNotEquals(quoteText.selectionStart, quoteText.selectionEnd)
     }
 
     private fun callbacks(longPress: (String) -> Unit = {}) =
