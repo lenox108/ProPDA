@@ -411,7 +411,7 @@ def launcher_mask(size: int, kind: str) -> Image.Image:
 
 
 def save_review(icon_id: str, light: Image.Image, dark: Image.Image, mono: Image.Image,
-                light_bg: str, dark_bg: str) -> None:
+                light_bg: str, dark_bg: str, scale: float) -> None:
     """Лист сверки: каждый слой под кругом, сквирклом и скруглённым квадратом."""
     def tile(art: Image.Image, bg) -> Image.Image:
         # bg — либо цвет, либо готовая растровая подложка варианта.
@@ -443,7 +443,7 @@ def save_review(icon_id: str, light: Image.Image, dark: Image.Image, mono: Image
     f_h = ImageFont.truetype(FONT_BOLD, 30)
     f_l = ImageFont.truetype(FONT_BOLD, 19)
     f_s = ImageFont.truetype(FONT_REGULAR, 17)
-    d.text((pad, 22), f"{icon_id} · знак {int(ART_SCALE * 100)}% холста", font=f_h, fill="#1B1D21")
+    d.text((pad, 22), f"{icon_id} · знак {round(scale * 100)}% холста", font=f_h, fill="#1B1D21")
     d.text((pad, 60), "все слои одного размера · проверка трёх масок лаунчера",
            font=f_s, fill="#5A6068")
 
@@ -552,7 +552,8 @@ def main() -> None:
     upsert_registry(args.id, alias, splash_style, with_subtitle=bool(args.subtitle_ru))
     save_review(args.id, light_art, dark_art, mono_art,
                 bg_light if bg_light is not None else light_bg,
-                bg_dark if bg_dark is not None else dark_bg)
+                bg_dark if bg_dark is not None else dark_bg,
+                args.scale)
     print(f"Готово. Псевдоним: {alias}")
 
 
