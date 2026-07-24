@@ -631,6 +631,8 @@
     <string name="notification_card_icon_hint">Choose the coloured card content icon independently from the status bar icon. QMS always keeps the sender avatar. The icon position is controlled by the Android skin.</string>
     <string name="app_icon_minimal_4">Minimal 4</string>
     <string name="app_icon_minimal_4_desc">Clean four with a green dot</string>
+    <string name="app_icon_bold_4">Bold 4</string>
+    <string name="app_icon_bold_4_desc">Bold geometric four</string>
     <!-- app-icon-variants:titles — не удалять, сюда дописывает add_alt_icon.py -->
     <string name="accent_dialog_title">Accent color</string>
     <string name="accent_neutral">Neutral</string>

@@ -119,4 +119,5 @@
     <color name="ic_launcher_term_4_background">#FF000000</color>
     <color name="ic_launcher_circuit_4_background">#FF000000</color>
     <color name="ic_launcher_minimal_4_background">#FF000000</color>
+    <color name="ic_launcher_bold_4_background">#FF000000</color>
 </resources>
