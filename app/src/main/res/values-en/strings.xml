@@ -591,7 +591,7 @@
     <string name="pref_title_app_icon">App icon</string>
     <string name="pref_summary_app_icon">Pick the icon shown on your home screen</string>
     <string name="app_icon_changed">The icon will change once you leave the app</string>
-    <string name="app_icon_default">Default</string>
+    <string name="app_icon_default">Classic P4DA</string>
     <string name="app_icon_four_dark">Dark</string>
     <string name="app_icon_four_blue">Blue</string>
     <string name="app_icon_puzzle">Puzzle 4</string>
