@@ -94,10 +94,38 @@ class PostBodyRenderer {
             //    low-contrast filter never strips it).
             el.tagName("span")
             el.attr("style", "color:#808080")
-            val small = org.jsoup.nodes.Element("small")
+            val small = org.jsoup.nodes.Element("small").attr(OFFTOP_MARKER_ATTR, "")
             el.replaceWith(small)
             small.appendChild(el)
         }
+    }
+
+    /** The content node of an offtop wrapper created by [normalizeOfftopFonts]. */
+    private fun Element.normalizedOfftopContentOrNull(): Element? {
+        if (normalName() != "small" || !hasAttr(OFFTOP_MARKER_ATTR)) return null
+        return children().singleOrNull()?.takeIf {
+            it.normalName() == "span" &&
+                    it.attr("style").replace(" ", "").contains("color:#808080")
+        }
+    }
+
+    /**
+     * Carries an outer offtop style through native structural blocks. Only visible text is decorated:
+     * quote/spoiler chrome, code, attachments and other controls keep their normal readable sizing.
+     */
+    private fun applyOfftopFormatting(block: BodyBlock): BodyBlock = when (block) {
+        is BodyBlock.Text -> block.copy(
+                html = "<small><span style=\"color:#808080\">${block.html}</span></small>",
+        )
+        is BodyBlock.Quote -> block.copy(inner = block.inner.map(::applyOfftopFormatting))
+        is BodyBlock.Spoiler -> block.copy(inner = block.inner.map(::applyOfftopFormatting))
+        is BodyBlock.Hidden -> block.copy(inner = block.inner.map(::applyOfftopFormatting))
+        is BodyBlock.Table -> block.copy(
+                rows = block.rows.map { row ->
+                    row.map { cell -> "<small><span style=\"color:#808080\">$cell</span></small>" }
+                },
+        )
+        else -> block
     }
 
     /**
@@ -204,7 +232,15 @@ class PostBodyRenderer {
             if (complexKind != null) {
                 flushInline()
                 val element = node as Element
-                if (wrapsProseAroundComplexBlock(element)) {
+                val offtopContent = element.normalizedOfftopContentOrNull()
+                if (offtopContent != null) {
+                    // `[offtop][quote]…[/quote][/offtop]` arrives as an inline font wrapped around a block.
+                    // Treating that wrapper as the complex node sends the whole quote to WebFallback because
+                    // the wrapper itself is not `.post-block.quote`; the quote then loses its native card and
+                    // may appear as plain/empty text. Peel the structural blocks from inside the wrapper and
+                    // apply the offtop presentation to their textual content recursively.
+                    blocks.addAll(renderNodes(offtopContent.childNodes()).map(::applyOfftopFormatting))
+                } else if (wrapsProseAroundComplexBlock(element)) {
                     // The node is not itself the complex block — it merely WRAPS one, together with prose
                     // (4pda puts an attach table / `a.ipb-attach` right inside the div that also holds the
                     // typed text, most visibly in QMS messages). Peeling the whole node natively keeps only
@@ -638,6 +674,7 @@ class PostBodyRenderer {
     private companion object {
         const val EDIT_MARKER = "✎"
         val EDIT_TIME = Regex("""\b(?:[01]?\d|2[0-3]):[0-5]\d\b""")
+        const val OFFTOP_MARKER_ATTR = "data-native-offtop"
 
         /**
          * Jsoup selector matching any complex block that must go to the WebView fallback in

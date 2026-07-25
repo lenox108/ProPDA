@@ -110,6 +110,22 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun offtopFont_wrappingQuote_keepsNativeQuoteAndStylesQuotedBody() {
+        val html = "<font style=\"font-size:9px;color:gray;\">" +
+                "<div class=\"post-block quote\"><div class=\"block-title\">User @ today</div>" +
+                "<div class=\"block-body\">текст цитаты</div></div></font>"
+
+        val blocks = renderer.render(html)
+        val quote = blocks.filterIsInstance<BodyBlock.Quote>().single()
+        val inner = quote.inner.filterIsInstance<BodyBlock.Text>().single()
+
+        assertTrue(inner.html.contains("<small"))
+        assertTrue(inner.html.contains("color:#808080"))
+        assertTrue(inner.html.contains("текст цитаты"))
+        assertTrue(blocks.none { it is BodyBlock.WebFallback })
+    }
+
+    @Test
     fun code_isNativeCode_withDecodedTextAndLineBreaks() {
         val blocks = renderer.render(fixture("code_block.html"))
         val code = blocks.filterIsInstance<BodyBlock.Code>().single()
