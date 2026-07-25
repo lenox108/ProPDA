@@ -399,6 +399,11 @@
         <item name="android:fontFamily">@font/forpda_appetite_pro</item>
     </style>
 
+    <style name="ThemeOverlay.ForPDA.MayonezItalicFont" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">@font/forpda_mayonez_italic</item>
+        <item name="android:fontFamily">@font/forpda_mayonez_italic</item>
+    </style>
+
     <!--
         Типографика без M3-трекинга. Material 3 задаёт letterSpacing почти во всех
         ролях (BodyLarge 0.03125em, LabelSmall 0.045em, …) — на кириллице это читается

@@ -89,6 +89,12 @@ class FontManagerTest {
         assertEquals("\"ForPdaAppetitePro\", system-ui, sans-serif", FontManager.webFontFamily(AppFontMode.APPETITE_PRO))
         assertEquals(forpdateam.ru.forpda.R.style.ThemeOverlay_ForPDA_AppetiteProFont, FontController.nativeThemeOverlay(AppFontMode.APPETITE_PRO))
         assertEquals("forpda_appetite_pro", FontController.nativeFontFamilyApplied(AppFontMode.APPETITE_PRO))
+
+        assertEquals(AppFontMode.MAYONEZ_ITALIC, FontManager.parseMode("MAYONEZ_ITALIC"))
+        assertEquals("font_mayonez_italic", FontManager.webFontClass(AppFontMode.MAYONEZ_ITALIC))
+        assertEquals("\"ForPdaMayonezItalic\", system-ui, sans-serif", FontManager.webFontFamily(AppFontMode.MAYONEZ_ITALIC))
+        assertEquals(forpdateam.ru.forpda.R.style.ThemeOverlay_ForPDA_MayonezItalicFont, FontController.nativeThemeOverlay(AppFontMode.MAYONEZ_ITALIC))
+        assertEquals("forpda_mayonez_italic", FontController.nativeFontFamilyApplied(AppFontMode.MAYONEZ_ITALIC))
     }
 
     @Test
@@ -120,6 +126,14 @@ class FontManagerTest {
         assertTrue(appetiteCss.contains("font-weight: 400;"))
         assertTrue(appetiteCss.contains("font-weight: 700;"))
         assertFalse(appetiteCss.contains("ForPdaInter"))
+
+        val mayonezCss = FontManager.webFontCss(AppFontMode.MAYONEZ_ITALIC)
+        assertTrue(mayonezCss.contains("font-family: \"ForPdaMayonezItalic\";"))
+        assertTrue(mayonezCss.contains("fonts/mayonez_italic/mayonez_italic_regular.ttf"))
+        assertTrue(mayonezCss.contains("fonts/mayonez_italic/mayonez_italic_bold_italic.ttf"))
+        assertTrue(mayonezCss.contains("font-weight: 400;"))
+        assertTrue(mayonezCss.contains("font-weight: 700;"))
+        assertFalse(mayonezCss.contains("ForPdaAppetitePro"))
     }
 
     @Test

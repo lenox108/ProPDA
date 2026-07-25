@@ -45,6 +45,13 @@ private val AppetiteProFontFamily = FontFamily(
         Font(R.font.appetite_pro_bold_italic, FontWeight.Bold, FontStyle.Italic),
 )
 
+private val MayonezItalicFontFamily = FontFamily(
+        Font(R.font.mayonez_italic_regular, FontWeight.Normal, FontStyle.Normal),
+        Font(R.font.mayonez_italic_italic, FontWeight.Normal, FontStyle.Italic),
+        Font(R.font.mayonez_italic_bold, FontWeight.Bold, FontStyle.Normal),
+        Font(R.font.mayonez_italic_bold_italic, FontWeight.Bold, FontStyle.Italic),
+)
+
 /** Variable font — `forpda_source_sans_3.xml` pins discrete `wght` instances via fontVariationSettings. */
 @OptIn(ExperimentalTextApi::class)
 private val SourceSans3FontFamily = FontFamily(
@@ -65,6 +72,7 @@ internal fun forpdaFontFamily(mode: AppFontMode): FontFamily = when (mode) {
     AppFontMode.SOURCE_SANS_3 -> SourceSans3FontFamily
     AppFontMode.OPEN_SANS -> OpenSansFontFamily
     AppFontMode.APPETITE_PRO -> AppetiteProFontFamily
+    AppFontMode.MAYONEZ_ITALIC -> MayonezItalicFontFamily
     AppFontMode.ROBOTO_MONO -> FontFamily.Monospace
 }
 

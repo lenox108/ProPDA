@@ -874,6 +874,7 @@ class SettingsFragment : BaseSettingFragment() {
             AppFontMode.SOURCE_SANS_3 -> getString(R.string.pref_summary_app_font_source_sans_3)
             AppFontMode.OPEN_SANS -> getString(R.string.pref_summary_app_font_open_sans)
             AppFontMode.APPETITE_PRO -> getString(R.string.pref_summary_app_font_appetite_pro)
+            AppFontMode.MAYONEZ_ITALIC -> getString(R.string.pref_summary_app_font_mayonez_italic)
             AppFontMode.ROBOTO_MONO -> getString(R.string.pref_summary_app_font_roboto_mono)
         }
     }

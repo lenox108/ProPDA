@@ -299,6 +299,7 @@ class MessagePanel(
             AppFontMode.SOURCE_SANS_3 -> ResourcesCompat.getFont(context, R.font.forpda_source_sans_3) ?: Typeface.DEFAULT
             AppFontMode.OPEN_SANS -> ResourcesCompat.getFont(context, R.font.forpda_open_sans) ?: Typeface.DEFAULT
             AppFontMode.APPETITE_PRO -> ResourcesCompat.getFont(context, R.font.forpda_appetite_pro) ?: Typeface.DEFAULT
+            AppFontMode.MAYONEZ_ITALIC -> ResourcesCompat.getFont(context, R.font.forpda_mayonez_italic) ?: Typeface.DEFAULT
             AppFontMode.ROBOTO_MONO -> Typeface.MONOSPACE
         }
     }

@@ -15,6 +15,7 @@ enum class AppFontMode {
     SOURCE_SANS_3,
     OPEN_SANS,
     APPETITE_PRO,
+    MAYONEZ_ITALIC,
     ROBOTO_MONO
 }
 
@@ -25,6 +26,7 @@ object FontController {
     private const val SOURCE_SANS_3_WEB_FONT_STACK = "\"ForPdaSourceSans3\", system-ui, sans-serif"
     private const val OPEN_SANS_WEB_FONT_STACK = "\"ForPdaOpenSans\", system-ui, sans-serif"
     private const val APPETITE_PRO_WEB_FONT_STACK = "\"ForPdaAppetitePro\", system-ui, sans-serif"
+    private const val MAYONEZ_ITALIC_WEB_FONT_STACK = "\"ForPdaMayonezItalic\", system-ui, sans-serif"
     private const val SYSTEM_WEB_FONT_STACK = "system-ui, sans-serif"
     private const val ROBOTO_MONO_WEB_FONT_STACK = "\"Roboto Mono\", monospace"
     const val ROBOTO_WEB_FONT_CLASS = "font_roboto"
@@ -32,6 +34,7 @@ object FontController {
     const val SOURCE_SANS_3_WEB_FONT_CLASS = "font_source_sans_3"
     const val OPEN_SANS_WEB_FONT_CLASS = "font_open_sans"
     const val APPETITE_PRO_WEB_FONT_CLASS = "font_appetite_pro"
+    const val MAYONEZ_ITALIC_WEB_FONT_CLASS = "font_mayonez_italic"
     const val SYSTEM_WEB_FONT_CLASS = "font_system"
     const val ROBOTO_MONO_WEB_FONT_CLASS = "font_roboto_mono"
 
@@ -61,6 +64,7 @@ object FontController {
         AppFontMode.SOURCE_SANS_3 -> SOURCE_SANS_3_WEB_FONT_STACK
         AppFontMode.OPEN_SANS -> OPEN_SANS_WEB_FONT_STACK
         AppFontMode.APPETITE_PRO -> APPETITE_PRO_WEB_FONT_STACK
+        AppFontMode.MAYONEZ_ITALIC -> MAYONEZ_ITALIC_WEB_FONT_STACK
         AppFontMode.ROBOTO_MONO -> ROBOTO_MONO_WEB_FONT_STACK
     }
 
@@ -71,6 +75,7 @@ object FontController {
         AppFontMode.SOURCE_SANS_3 -> SOURCE_SANS_3_WEB_FONT_CLASS
         AppFontMode.OPEN_SANS -> OPEN_SANS_WEB_FONT_CLASS
         AppFontMode.APPETITE_PRO -> APPETITE_PRO_WEB_FONT_CLASS
+        AppFontMode.MAYONEZ_ITALIC -> MAYONEZ_ITALIC_WEB_FONT_CLASS
         AppFontMode.ROBOTO_MONO -> ROBOTO_MONO_WEB_FONT_CLASS
     }
 
@@ -82,6 +87,7 @@ object FontController {
         AppFontMode.SOURCE_SANS_3 -> R.style.ThemeOverlay_ForPDA_SourceSans3Font
         AppFontMode.OPEN_SANS -> R.style.ThemeOverlay_ForPDA_OpenSansFont
         AppFontMode.APPETITE_PRO -> R.style.ThemeOverlay_ForPDA_AppetiteProFont
+        AppFontMode.MAYONEZ_ITALIC -> R.style.ThemeOverlay_ForPDA_MayonezItalicFont
         AppFontMode.ROBOTO_MONO -> R.style.ThemeOverlay_ForPDA_RobotoMonoFont
     }
 
@@ -92,6 +98,7 @@ object FontController {
         AppFontMode.SOURCE_SANS_3 -> "forpda_source_sans_3"
         AppFontMode.OPEN_SANS -> "forpda_open_sans"
         AppFontMode.APPETITE_PRO -> "forpda_appetite_pro"
+        AppFontMode.MAYONEZ_ITALIC -> "forpda_mayonez_italic"
         AppFontMode.ROBOTO_MONO -> "monospace"
     }
 
@@ -243,6 +250,32 @@ html {
     font-weight: 700;
 }
 """.trim()
+        AppFontMode.MAYONEZ_ITALIC -> """
+@font-face {
+    font-family: "ForPdaMayonezItalic";
+    src: url("file:///android_asset/fonts/mayonez_italic/mayonez_italic_regular.ttf");
+    font-style: normal;
+    font-weight: 400;
+}
+@font-face {
+    font-family: "ForPdaMayonezItalic";
+    src: url("file:///android_asset/fonts/mayonez_italic/mayonez_italic_italic.ttf");
+    font-style: italic;
+    font-weight: 400;
+}
+@font-face {
+    font-family: "ForPdaMayonezItalic";
+    src: url("file:///android_asset/fonts/mayonez_italic/mayonez_italic_bold.ttf");
+    font-style: normal;
+    font-weight: 700;
+}
+@font-face {
+    font-family: "ForPdaMayonezItalic";
+    src: url("file:///android_asset/fonts/mayonez_italic/mayonez_italic_bold_italic.ttf");
+    font-style: italic;
+    font-weight: 700;
+}
+""".trim()
     }
 
     fun webFontCss(useSystemFont: Boolean): String {
@@ -339,7 +372,7 @@ code,
 }
 </style>
 <script>
-document.documentElement.classList.remove("$ROBOTO_WEB_FONT_CLASS", "$INTER_WEB_FONT_CLASS", "$SOURCE_SANS_3_WEB_FONT_CLASS", "$OPEN_SANS_WEB_FONT_CLASS", "$APPETITE_PRO_WEB_FONT_CLASS", "$SYSTEM_WEB_FONT_CLASS", "$ROBOTO_MONO_WEB_FONT_CLASS");
+document.documentElement.classList.remove("$ROBOTO_WEB_FONT_CLASS", "$INTER_WEB_FONT_CLASS", "$SOURCE_SANS_3_WEB_FONT_CLASS", "$OPEN_SANS_WEB_FONT_CLASS", "$APPETITE_PRO_WEB_FONT_CLASS", "$MAYONEZ_ITALIC_WEB_FONT_CLASS", "$SYSTEM_WEB_FONT_CLASS", "$ROBOTO_MONO_WEB_FONT_CLASS");
 document.documentElement.classList.add("$fontClass");
 </script>
 """.trim()
@@ -354,6 +387,7 @@ object FontManager {
     const val SOURCE_SANS_3_WEB_FONT_CLASS = FontController.SOURCE_SANS_3_WEB_FONT_CLASS
     const val OPEN_SANS_WEB_FONT_CLASS = FontController.OPEN_SANS_WEB_FONT_CLASS
     const val APPETITE_PRO_WEB_FONT_CLASS = FontController.APPETITE_PRO_WEB_FONT_CLASS
+    const val MAYONEZ_ITALIC_WEB_FONT_CLASS = FontController.MAYONEZ_ITALIC_WEB_FONT_CLASS
     const val SYSTEM_WEB_FONT_CLASS = FontController.SYSTEM_WEB_FONT_CLASS
 
     fun mode(useSystemFont: Boolean): AppFontMode = FontController.mode(useSystemFont)
