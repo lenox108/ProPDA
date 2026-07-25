@@ -53,6 +53,14 @@ sealed interface BodyBlock {
          */
         val inline: Boolean = false,
         /**
+         * true = a repeated, undimensioned decorative glyph immediately preceding a link in a list.
+         * 4pda emits these as ordinary `<img alt="Изображение">` elements (for example the orange
+         * 20×20 news marker in digest spoilers), so they cannot be identified by `alt` alone. The parser
+         * marks the repeated `img + a + br` shape and the view layer keeps the glyph and link in ONE
+         * horizontal row instead of promoting the glyph to a full-width content-image block.
+         */
+        val inlineListIcon: Boolean = false,
+        /**
          * true = the `<img>` that lived INSIDE an `a.ipb-attach.attach-file` download link (emitted by
          * [PostBodyRenderer.extractDownloadButtons] alongside its [FileAttachment] chip). On 4pda this inner
          * image is EITHER a wide animated «СКАЧАТЬ»/«UPDATE» banner (worth showing) OR a tiny square file-type

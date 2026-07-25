@@ -6,6 +6,7 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.SpannedString
 import android.text.style.URLSpan
+import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -219,8 +220,17 @@ class BodyBlockViewFactory(
             scope: RenderScope,
     ) {
         val spacingPx = (blockSpacingDp * ctx.resources.displayMetrics.density).toInt()
-        blocks.forEachIndexed { index, block ->
-            val child = when (block) {
+        var index = 0
+        while (index < blocks.size) {
+            val block = blocks[index]
+            val inlineIconText = if (block is BodyBlock.Image && block.inlineListIcon) {
+                blocks.getOrNull(index + 1) as? BodyBlock.Text
+            } else {
+                null
+            }
+            val child = if (block is BodyBlock.Image && inlineIconText != null) {
+                inlineListIconView(ctx, block, inlineIconText, scope)
+            } else when (block) {
                 is BodyBlock.Text -> textView(ctx, spanned(ctx, block.html), scope)
                 is BodyBlock.EditNote -> editNoteView(ctx, block)
                 is BodyBlock.Image -> imageView(ctx, block, scope)
@@ -248,13 +258,18 @@ class BodyBlockViewFactory(
             // spacing, so a multi-file post reads as a single compact block rather than sprawling.
             val tightToPrev = index > 0 &&
                     block is BodyBlock.FileAttachment && blocks[index - 1] is BodyBlock.FileAttachment
+            val tightInlineListToPrev = index >= 2 &&
+                    block is BodyBlock.Image && block.inlineListIcon &&
+                    (blocks[index - 2] as? BodyBlock.Image)?.inlineListIcon == true
             lp.topMargin = when {
                 index == 0 -> 0
-                tightToPrev -> (2 * ctx.resources.displayMetrics.density).toInt()
+                tightToPrev || tightInlineListToPrev ->
+                    (TIGHT_BLOCK_GAP_DP * ctx.resources.displayMetrics.density).toInt()
                 else -> spacingPx
             }
             child.layoutParams = lp
             container.addView(child)
+            index += if (inlineIconText != null) 2 else 1
         }
     }
 
@@ -718,6 +733,50 @@ class BodyBlockViewFactory(
                 // Non-viewable (e.g. an off-site link) → hand off to the link handler as before.
                 setOnClickListener { linkHandler.handle(tapUrl, null) }
             }
+        }
+    }
+
+    /**
+     * Browser-like row for 4pda digest/list markers: the tiny glyph and its following linked text remain
+     * one visual line. These glyphs have no width/height attributes, so routing them through [imageView]
+     * would hit the unknown-size full-width fallback and upscale a 20×20 source into a large blurry block.
+     */
+    private fun inlineListIconView(
+            ctx: Context,
+            image: BodyBlock.Image,
+            text: BodyBlock.Text,
+            scope: RenderScope,
+    ): View {
+        val density = ctx.resources.displayMetrics.density
+        val iconSizePx = (INLINE_LIST_ICON_SIZE_DP * density).toInt().coerceAtLeast(1)
+        val gapPx = (INLINE_LIST_ICON_GAP_DP * density).toInt()
+        val icon = ImageView(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(iconSizePx, iconSizePx).apply {
+                marginEnd = gapPx
+                topMargin = (INLINE_LIST_ICON_TOP_DP * density).toInt()
+            }
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = false
+            contentDescription = null
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            ForPdaCoil.loadInto(this, image.imageUrl)
+        }
+        val label = textView(ctx, spanned(ctx, text.html), scope).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    1f,
+            )
+        }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+            layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+            addView(icon)
+            addView(label)
         }
     }
 
@@ -1489,6 +1548,10 @@ class BodyBlockViewFactory(
                 Pattern.compile("""https?://4pda\.(?:to|ru)/forum/dl/post/\d+/(.+\.([^./?#]+))(?:[?#]|$)""")
 
         const val DEFAULT_IMAGE_RATIO = 0.66f
+        private const val INLINE_LIST_ICON_SIZE_DP = 20f
+        private const val INLINE_LIST_ICON_GAP_DP = 6f
+        private const val INLINE_LIST_ICON_TOP_DP = 1f
+        private const val TIGHT_BLOCK_GAP_DP = 2f
 
         /**
          * DEFAULT (Комфортная density) top margin (dp) between block-level segments. Applied uniformly so

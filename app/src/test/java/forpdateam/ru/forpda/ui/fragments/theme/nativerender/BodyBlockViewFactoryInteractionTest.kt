@@ -9,6 +9,7 @@ import android.text.method.ArrowKeyMovementMethod
 import android.view.ContextThemeWrapper
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.test.core.app.ApplicationProvider
@@ -127,6 +128,38 @@ class BodyBlockViewFactoryInteractionTest {
 
         val fallback = root.descendantTextViews().first { it.text.contains("Сложный текст цитаты") }
         assertTrue(fallback.isTextSelectable)
+    }
+
+    @Test
+    fun `digest list icon and following link render as one compact row`() {
+        val factory = BodyBlockViewFactory(linkHandler, mutableMapOf(), callbacks())
+        val root = LinearLayout(context)
+
+        factory.render(
+                root,
+                listOf(
+                        BodyBlock.Image(
+                                imageUrl = "",
+                                linkUrl = null,
+                                displayWidthPx = 0,
+                                displayHeightPx = 0,
+                                inline = true,
+                                inlineListIcon = true,
+                        ),
+                        BodyBlock.Text("<a href=\"https://4pda.to/forum/post\">Новость</a>"),
+                ),
+                BodyBlockViewFactory.RenderScope(scopeId = 144356735),
+        )
+
+        assertEquals("icon + link pair must consume one vertical block", 1, root.childCount)
+        val row = root.getChildAt(0) as LinearLayout
+        assertEquals(LinearLayout.HORIZONTAL, row.orientation)
+        assertEquals(2, row.childCount)
+        val icon = row.getChildAt(0) as ImageView
+        val expectedSize = (20f * context.resources.displayMetrics.density).toInt()
+        assertEquals(expectedSize, icon.layoutParams.width)
+        assertEquals(expectedSize, icon.layoutParams.height)
+        assertEquals("Новость", (row.getChildAt(1) as TextView).text.toString())
     }
 
     @Test

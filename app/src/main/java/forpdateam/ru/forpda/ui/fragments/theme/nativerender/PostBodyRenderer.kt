@@ -46,6 +46,15 @@ class PostBodyRenderer {
      */
     private var serviceIconSrcs: Set<String> = emptySet()
 
+    /**
+     * Repeated, undimensioned `img + link + br` glyphs in the current body. Digest/list posts use a tiny
+     * 20×20 PNG with the generic `alt="Изображение"` before every linked item. It is neither a smile nor one
+     * of 4pda's named service icons, so treating every occurrence as a content image creates a full-width
+     * preview for each bullet. The repeated list shape is conservative enough to distinguish the glyph from
+     * a one-off screenshot followed by its caption link.
+     */
+    private var inlineListIconSrcs: Set<String> = emptySet()
+
     fun render(bodyHtml: String?): List<BodyBlock> {
         if (bodyHtml.isNullOrBlank()) return emptyList()
 
@@ -65,9 +74,28 @@ class PostBodyRenderer {
                 .map { it.attr("src").trim() }
                 .filter { it.isNotEmpty() }
                 .toSet()
+        inlineListIconSrcs = findInlineListIconSrcs(body)
         linkReplyToNicks(body)
         return renderNodes(body.childNodes())
     }
+
+    private fun findInlineListIconSrcs(root: Element): Set<String> =
+            root.select("img").asSequence()
+                    .filter { it.attr("width").isBlank() && it.attr("height").isBlank() }
+                    .filter { it.attr("alt").trim().equals("Изображение", ignoreCase = true) }
+                    .filter { image ->
+                        if (image.parent()?.normalName() == "a") return@filter false
+                        val link = image.nextElementSibling()
+                        link?.normalName() == "a" &&
+                                link.hasAttr("href") &&
+                                link.nextElementSibling()?.normalName() == "br"
+                    }
+                    .map { it.attr("src").trim() }
+                    .filter { it.isNotEmpty() }
+                    .groupingBy { it }
+                    .eachCount()
+                    .filterValues { it >= MIN_INLINE_LIST_ICON_REPETITIONS }
+                    .keys
 
     /**
      * `[offtop]` on 4pda is an INLINE `<font style="font-size:9px;color:gray;">…</font>` — a small, muted
@@ -382,6 +410,7 @@ class PostBodyRenderer {
             displayWidthPx = attr("width").toIntOrZero(),
             displayHeightPx = attr("height").toIntOrZero(),
             inline = true,
+            inlineListIcon = src in inlineListIconSrcs,
         )
     }
 
@@ -675,6 +704,7 @@ class PostBodyRenderer {
         const val EDIT_MARKER = "✎"
         val EDIT_TIME = Regex("""\b(?:[01]?\d|2[0-3]):[0-5]\d\b""")
         const val OFFTOP_MARKER_ATTR = "data-native-offtop"
+        const val MIN_INLINE_LIST_ICON_REPETITIONS = 2
 
         /**
          * Jsoup selector matching any complex block that must go to the WebView fallback in
