@@ -38,6 +38,33 @@ private val OpenSansFontFamily = FontFamily(
         Font(R.font.open_sans_italic, FontWeight.Normal, FontStyle.Italic),
 )
 
+private val IBMPlexSansFontFamily = FontFamily(
+        Font(R.font.ibm_plex_sans_regular, FontWeight.Normal, FontStyle.Normal),
+        Font(R.font.ibm_plex_sans_italic, FontWeight.Normal, FontStyle.Italic),
+        Font(R.font.ibm_plex_sans_bold, FontWeight.Bold, FontStyle.Normal),
+        Font(R.font.ibm_plex_sans_bold_italic, FontWeight.Bold, FontStyle.Italic),
+)
+
+@OptIn(ExperimentalTextApi::class)
+private val GolosTextFontFamily = FontFamily(
+        Font(R.font.golos_text_variable, FontWeight.W400, FontStyle.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+        Font(R.font.golos_text_variable, FontWeight.W500, FontStyle.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+        Font(R.font.golos_text_variable, FontWeight.W600, FontStyle.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+        Font(R.font.golos_text_variable, FontWeight.W700, FontStyle.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+)
+
+@OptIn(ExperimentalTextApi::class)
+private val LiterataFontFamily = FontFamily(
+        Font(R.font.literata_variable, FontWeight.W400, FontStyle.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+        Font(R.font.literata_variable, FontWeight.W500, FontStyle.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+        Font(R.font.literata_variable, FontWeight.W600, FontStyle.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+        Font(R.font.literata_variable, FontWeight.W700, FontStyle.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+        Font(R.font.literata_italic_variable, FontWeight.W400, FontStyle.Italic, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+        Font(R.font.literata_italic_variable, FontWeight.W500, FontStyle.Italic, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+        Font(R.font.literata_italic_variable, FontWeight.W600, FontStyle.Italic, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+        Font(R.font.literata_italic_variable, FontWeight.W700, FontStyle.Italic, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+)
+
 private val AppetiteProFontFamily = FontFamily(
         Font(R.font.appetite_pro_regular, FontWeight.Normal, FontStyle.Normal),
         Font(R.font.appetite_pro_italic, FontWeight.Normal, FontStyle.Italic),
@@ -71,6 +98,9 @@ internal fun forpdaFontFamily(mode: AppFontMode): FontFamily = when (mode) {
     AppFontMode.INTER -> InterFontFamily
     AppFontMode.SOURCE_SANS_3 -> SourceSans3FontFamily
     AppFontMode.OPEN_SANS -> OpenSansFontFamily
+    AppFontMode.IBM_PLEX_SANS -> IBMPlexSansFontFamily
+    AppFontMode.GOLOS_TEXT -> GolosTextFontFamily
+    AppFontMode.LITERATA -> LiterataFontFamily
     AppFontMode.APPETITE_PRO -> AppetiteProFontFamily
     AppFontMode.MAYONEZ_ITALIC -> MayonezItalicFontFamily
     AppFontMode.ROBOTO_MONO -> FontFamily.Monospace

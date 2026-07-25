@@ -394,6 +394,21 @@
         <item name="android:fontFamily">@font/forpda_open_sans</item>
     </style>
 
+    <style name="ThemeOverlay.ForPDA.IBMPlexSansFont" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">@font/forpda_ibm_plex_sans</item>
+        <item name="android:fontFamily">@font/forpda_ibm_plex_sans</item>
+    </style>
+
+    <style name="ThemeOverlay.ForPDA.GolosTextFont" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">@font/forpda_golos_text</item>
+        <item name="android:fontFamily">@font/forpda_golos_text</item>
+    </style>
+
+    <style name="ThemeOverlay.ForPDA.LiterataFont" parent="ThemeOverlay.Material3">
+        <item name="fontFamily">@font/forpda_literata</item>
+        <item name="android:fontFamily">@font/forpda_literata</item>
+    </style>
+
     <style name="ThemeOverlay.ForPDA.AppetiteProFont" parent="ThemeOverlay.Material3">
         <item name="fontFamily">@font/forpda_appetite_pro</item>
         <item name="android:fontFamily">@font/forpda_appetite_pro</item>

@@ -903,6 +903,9 @@
     <string name="pref_summary_app_font_inter">Активный шрифт: Inter; полностью применится после перезапуска</string>
     <string name="pref_summary_app_font_source_sans_3">Активный шрифт: Source Sans 3; полностью применится после перезапуска</string>
     <string name="pref_summary_app_font_open_sans">Активный шрифт: Open Sans; полностью применится после перезапуска</string>
+    <string name="pref_summary_app_font_ibm_plex_sans">Активный шрифт: IBM Plex Sans; полностью применится после перезапуска</string>
+    <string name="pref_summary_app_font_golos_text">Активный шрифт: Golos Text; полностью применится после перезапуска</string>
+    <string name="pref_summary_app_font_literata">Активный шрифт: Literata; полностью применится после перезапуска</string>
     <string name="pref_summary_app_font_appetite_pro">Активный шрифт: Appetite Pro; полностью применится после перезапуска</string>
     <string name="pref_summary_app_font_mayonez_italic">Активный шрифт: Mayonez Italic; полностью применится после перезапуска</string>
     <string name="pref_summary_app_font_roboto_mono">Активный шрифт: Roboto Mono (моноширинный); полностью применится после перезапуска</string>
@@ -911,6 +914,9 @@
     <string name="pref_value_app_font_inter">Inter</string>
     <string name="pref_value_app_font_source_sans_3">Source Sans 3</string>
     <string name="pref_value_app_font_open_sans">Open Sans</string>
+    <string name="pref_value_app_font_ibm_plex_sans">IBM Plex Sans</string>
+    <string name="pref_value_app_font_golos_text">Golos Text</string>
+    <string name="pref_value_app_font_literata">Literata</string>
     <string name="pref_value_app_font_appetite_pro">Appetite Pro</string>
     <string name="pref_value_app_font_mayonez_italic">Mayonez Italic</string>
     <string name="pref_value_app_font_roboto_mono">Roboto Mono</string>

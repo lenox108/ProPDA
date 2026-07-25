@@ -19,7 +19,8 @@ import kotlin.math.roundToInt
 /**
  * Диалог выбора «Шрифта приложения» (AppFontMode) с ВИЗУАЛЬНЫМ ПРЕВЬЮ: каждая
  * карточка рендерит образец текста РЕАЛЬНОЙ гарнитурой (Roboto / Inter /
- * Source Sans 3 / Open Sans / Appetite Pro / Mayonez Italic / системный), чтобы шрифт был виден до применения —
+ * Source Sans 3 / Open Sans / IBM Plex Sans / Golos Text / Literata /
+ * Appetite Pro / Mayonez Italic / системный), чтобы шрифт был виден до применения —
  * шрифты как раз выбирают глазами. Тап по карточке применяет режим (тот же путь
  * recreate, что раньше).
  */
@@ -40,6 +41,9 @@ object FontPickerDialog {
             Entry(AppFontMode.INTER, R.string.pref_value_app_font_inter, R.font.forpda_inter),
             Entry(AppFontMode.SOURCE_SANS_3, R.string.pref_value_app_font_source_sans_3, R.font.forpda_source_sans_3),
             Entry(AppFontMode.OPEN_SANS, R.string.pref_value_app_font_open_sans, R.font.forpda_open_sans),
+            Entry(AppFontMode.IBM_PLEX_SANS, R.string.pref_value_app_font_ibm_plex_sans, R.font.forpda_ibm_plex_sans),
+            Entry(AppFontMode.GOLOS_TEXT, R.string.pref_value_app_font_golos_text, R.font.forpda_golos_text),
+            Entry(AppFontMode.LITERATA, R.string.pref_value_app_font_literata, R.font.forpda_literata),
             Entry(AppFontMode.APPETITE_PRO, R.string.pref_value_app_font_appetite_pro, R.font.forpda_appetite_pro),
             Entry(AppFontMode.MAYONEZ_ITALIC, R.string.pref_value_app_font_mayonez_italic, R.font.forpda_mayonez_italic),
             Entry(AppFontMode.ROBOTO_MONO, R.string.pref_value_app_font_roboto_mono, 0, monospace = true),

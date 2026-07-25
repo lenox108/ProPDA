@@ -84,6 +84,24 @@ class FontManagerTest {
         assertEquals(forpdateam.ru.forpda.R.style.ThemeOverlay_ForPDA_OpenSansFont, FontController.nativeThemeOverlay(AppFontMode.OPEN_SANS))
         assertEquals("forpda_open_sans", FontController.nativeFontFamilyApplied(AppFontMode.OPEN_SANS))
 
+        assertEquals(AppFontMode.IBM_PLEX_SANS, FontManager.parseMode("IBM_PLEX_SANS"))
+        assertEquals("font_ibm_plex_sans", FontManager.webFontClass(AppFontMode.IBM_PLEX_SANS))
+        assertEquals("\"ForPdaIBMPlexSans\", system-ui, sans-serif", FontManager.webFontFamily(AppFontMode.IBM_PLEX_SANS))
+        assertEquals(forpdateam.ru.forpda.R.style.ThemeOverlay_ForPDA_IBMPlexSansFont, FontController.nativeThemeOverlay(AppFontMode.IBM_PLEX_SANS))
+        assertEquals("forpda_ibm_plex_sans", FontController.nativeFontFamilyApplied(AppFontMode.IBM_PLEX_SANS))
+
+        assertEquals(AppFontMode.GOLOS_TEXT, FontManager.parseMode("GOLOS_TEXT"))
+        assertEquals("font_golos_text", FontManager.webFontClass(AppFontMode.GOLOS_TEXT))
+        assertEquals("\"ForPdaGolosText\", system-ui, sans-serif", FontManager.webFontFamily(AppFontMode.GOLOS_TEXT))
+        assertEquals(forpdateam.ru.forpda.R.style.ThemeOverlay_ForPDA_GolosTextFont, FontController.nativeThemeOverlay(AppFontMode.GOLOS_TEXT))
+        assertEquals("forpda_golos_text", FontController.nativeFontFamilyApplied(AppFontMode.GOLOS_TEXT))
+
+        assertEquals(AppFontMode.LITERATA, FontManager.parseMode("LITERATA"))
+        assertEquals("font_literata", FontManager.webFontClass(AppFontMode.LITERATA))
+        assertEquals("\"ForPdaLiterata\", serif", FontManager.webFontFamily(AppFontMode.LITERATA))
+        assertEquals(forpdateam.ru.forpda.R.style.ThemeOverlay_ForPDA_LiterataFont, FontController.nativeThemeOverlay(AppFontMode.LITERATA))
+        assertEquals("forpda_literata", FontController.nativeFontFamilyApplied(AppFontMode.LITERATA))
+
         assertEquals(AppFontMode.APPETITE_PRO, FontManager.parseMode("APPETITE_PRO"))
         assertEquals("font_appetite_pro", FontManager.webFontClass(AppFontMode.APPETITE_PRO))
         assertEquals("\"ForPdaAppetitePro\", system-ui, sans-serif", FontManager.webFontFamily(AppFontMode.APPETITE_PRO))
@@ -118,6 +136,25 @@ class FontManagerTest {
         assertTrue(sourceCss.contains("font-weight: 450;"))
         assertFalse(sourceCss.contains("font-weight: 200 900;"))
         assertTrue(sourceCss.contains("font-weight: 600;"))
+
+        val plexCss = FontManager.webFontCss(AppFontMode.IBM_PLEX_SANS)
+        assertTrue(plexCss.contains("font-family: \"ForPdaIBMPlexSans\";"))
+        assertTrue(plexCss.contains("fonts/ibm_plex_sans/ibm_plex_sans_regular.ttf"))
+        assertTrue(plexCss.contains("fonts/ibm_plex_sans/ibm_plex_sans_bold_italic.ttf"))
+        assertFalse(plexCss.contains("ForPdaGolosText"))
+
+        val golosCss = FontManager.webFontCss(AppFontMode.GOLOS_TEXT)
+        assertTrue(golosCss.contains("font-family: \"ForPdaGolosText\";"))
+        assertTrue(golosCss.contains("fonts/golos_text/golos_text_variable.ttf"))
+        assertTrue(golosCss.contains("font-weight: 400 900;"))
+        assertFalse(golosCss.contains("ForPdaLiterata"))
+
+        val literataCss = FontManager.webFontCss(AppFontMode.LITERATA)
+        assertTrue(literataCss.contains("font-family: \"ForPdaLiterata\";"))
+        assertTrue(literataCss.contains("fonts/literata/literata_variable.ttf"))
+        assertTrue(literataCss.contains("fonts/literata/literata_italic_variable.ttf"))
+        assertTrue(literataCss.contains("font-weight: 200 900;"))
+        assertFalse(literataCss.contains("ForPdaIBMPlexSans"))
 
         val appetiteCss = FontManager.webFontCss(AppFontMode.APPETITE_PRO)
         assertTrue(appetiteCss.contains("font-family: \"ForPdaAppetitePro\";"))

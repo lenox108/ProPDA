@@ -14,6 +14,9 @@ enum class AppFontMode {
     INTER,
     SOURCE_SANS_3,
     OPEN_SANS,
+    IBM_PLEX_SANS,
+    GOLOS_TEXT,
+    LITERATA,
     APPETITE_PRO,
     MAYONEZ_ITALIC,
     ROBOTO_MONO
@@ -25,6 +28,9 @@ object FontController {
     private const val INTER_WEB_FONT_STACK = "\"ForPdaInter\", system-ui, sans-serif"
     private const val SOURCE_SANS_3_WEB_FONT_STACK = "\"ForPdaSourceSans3\", system-ui, sans-serif"
     private const val OPEN_SANS_WEB_FONT_STACK = "\"ForPdaOpenSans\", system-ui, sans-serif"
+    private const val IBM_PLEX_SANS_WEB_FONT_STACK = "\"ForPdaIBMPlexSans\", system-ui, sans-serif"
+    private const val GOLOS_TEXT_WEB_FONT_STACK = "\"ForPdaGolosText\", system-ui, sans-serif"
+    private const val LITERATA_WEB_FONT_STACK = "\"ForPdaLiterata\", serif"
     private const val APPETITE_PRO_WEB_FONT_STACK = "\"ForPdaAppetitePro\", system-ui, sans-serif"
     private const val MAYONEZ_ITALIC_WEB_FONT_STACK = "\"ForPdaMayonezItalic\", system-ui, sans-serif"
     private const val SYSTEM_WEB_FONT_STACK = "system-ui, sans-serif"
@@ -33,6 +39,9 @@ object FontController {
     const val INTER_WEB_FONT_CLASS = "font_inter"
     const val SOURCE_SANS_3_WEB_FONT_CLASS = "font_source_sans_3"
     const val OPEN_SANS_WEB_FONT_CLASS = "font_open_sans"
+    const val IBM_PLEX_SANS_WEB_FONT_CLASS = "font_ibm_plex_sans"
+    const val GOLOS_TEXT_WEB_FONT_CLASS = "font_golos_text"
+    const val LITERATA_WEB_FONT_CLASS = "font_literata"
     const val APPETITE_PRO_WEB_FONT_CLASS = "font_appetite_pro"
     const val MAYONEZ_ITALIC_WEB_FONT_CLASS = "font_mayonez_italic"
     const val SYSTEM_WEB_FONT_CLASS = "font_system"
@@ -63,6 +72,9 @@ object FontController {
         AppFontMode.INTER -> INTER_WEB_FONT_STACK
         AppFontMode.SOURCE_SANS_3 -> SOURCE_SANS_3_WEB_FONT_STACK
         AppFontMode.OPEN_SANS -> OPEN_SANS_WEB_FONT_STACK
+        AppFontMode.IBM_PLEX_SANS -> IBM_PLEX_SANS_WEB_FONT_STACK
+        AppFontMode.GOLOS_TEXT -> GOLOS_TEXT_WEB_FONT_STACK
+        AppFontMode.LITERATA -> LITERATA_WEB_FONT_STACK
         AppFontMode.APPETITE_PRO -> APPETITE_PRO_WEB_FONT_STACK
         AppFontMode.MAYONEZ_ITALIC -> MAYONEZ_ITALIC_WEB_FONT_STACK
         AppFontMode.ROBOTO_MONO -> ROBOTO_MONO_WEB_FONT_STACK
@@ -74,6 +86,9 @@ object FontController {
         AppFontMode.INTER -> INTER_WEB_FONT_CLASS
         AppFontMode.SOURCE_SANS_3 -> SOURCE_SANS_3_WEB_FONT_CLASS
         AppFontMode.OPEN_SANS -> OPEN_SANS_WEB_FONT_CLASS
+        AppFontMode.IBM_PLEX_SANS -> IBM_PLEX_SANS_WEB_FONT_CLASS
+        AppFontMode.GOLOS_TEXT -> GOLOS_TEXT_WEB_FONT_CLASS
+        AppFontMode.LITERATA -> LITERATA_WEB_FONT_CLASS
         AppFontMode.APPETITE_PRO -> APPETITE_PRO_WEB_FONT_CLASS
         AppFontMode.MAYONEZ_ITALIC -> MAYONEZ_ITALIC_WEB_FONT_CLASS
         AppFontMode.ROBOTO_MONO -> ROBOTO_MONO_WEB_FONT_CLASS
@@ -86,6 +101,9 @@ object FontController {
         AppFontMode.INTER -> R.style.ThemeOverlay_ForPDA_InterFont
         AppFontMode.SOURCE_SANS_3 -> R.style.ThemeOverlay_ForPDA_SourceSans3Font
         AppFontMode.OPEN_SANS -> R.style.ThemeOverlay_ForPDA_OpenSansFont
+        AppFontMode.IBM_PLEX_SANS -> R.style.ThemeOverlay_ForPDA_IBMPlexSansFont
+        AppFontMode.GOLOS_TEXT -> R.style.ThemeOverlay_ForPDA_GolosTextFont
+        AppFontMode.LITERATA -> R.style.ThemeOverlay_ForPDA_LiterataFont
         AppFontMode.APPETITE_PRO -> R.style.ThemeOverlay_ForPDA_AppetiteProFont
         AppFontMode.MAYONEZ_ITALIC -> R.style.ThemeOverlay_ForPDA_MayonezItalicFont
         AppFontMode.ROBOTO_MONO -> R.style.ThemeOverlay_ForPDA_RobotoMonoFont
@@ -97,6 +115,9 @@ object FontController {
         AppFontMode.INTER -> "forpda_inter"
         AppFontMode.SOURCE_SANS_3 -> "forpda_source_sans_3"
         AppFontMode.OPEN_SANS -> "forpda_open_sans"
+        AppFontMode.IBM_PLEX_SANS -> "forpda_ibm_plex_sans"
+        AppFontMode.GOLOS_TEXT -> "forpda_golos_text"
+        AppFontMode.LITERATA -> "forpda_literata"
         AppFontMode.APPETITE_PRO -> "forpda_appetite_pro"
         AppFontMode.MAYONEZ_ITALIC -> "forpda_mayonez_italic"
         AppFontMode.ROBOTO_MONO -> "monospace"
@@ -222,6 +243,54 @@ html {
     src: url("file:///android_asset/fonts/open_sans/open_sans_italic.ttf");
     font-style: italic;
     font-weight: 300 800;
+}
+""".trim()
+        AppFontMode.IBM_PLEX_SANS -> """
+@font-face {
+    font-family: "ForPdaIBMPlexSans";
+    src: url("file:///android_asset/fonts/ibm_plex_sans/ibm_plex_sans_regular.ttf");
+    font-style: normal;
+    font-weight: 400;
+}
+@font-face {
+    font-family: "ForPdaIBMPlexSans";
+    src: url("file:///android_asset/fonts/ibm_plex_sans/ibm_plex_sans_italic.ttf");
+    font-style: italic;
+    font-weight: 400;
+}
+@font-face {
+    font-family: "ForPdaIBMPlexSans";
+    src: url("file:///android_asset/fonts/ibm_plex_sans/ibm_plex_sans_bold.ttf");
+    font-style: normal;
+    font-weight: 700;
+}
+@font-face {
+    font-family: "ForPdaIBMPlexSans";
+    src: url("file:///android_asset/fonts/ibm_plex_sans/ibm_plex_sans_bold_italic.ttf");
+    font-style: italic;
+    font-weight: 700;
+}
+""".trim()
+        AppFontMode.GOLOS_TEXT -> """
+@font-face {
+    font-family: "ForPdaGolosText";
+    src: url("file:///android_asset/fonts/golos_text/golos_text_variable.ttf");
+    font-style: normal;
+    font-weight: 400 900;
+}
+""".trim()
+        AppFontMode.LITERATA -> """
+@font-face {
+    font-family: "ForPdaLiterata";
+    src: url("file:///android_asset/fonts/literata/literata_variable.ttf");
+    font-style: normal;
+    font-weight: 200 900;
+}
+@font-face {
+    font-family: "ForPdaLiterata";
+    src: url("file:///android_asset/fonts/literata/literata_italic_variable.ttf");
+    font-style: italic;
+    font-weight: 200 900;
 }
 """.trim()
         AppFontMode.APPETITE_PRO -> """
@@ -372,7 +441,7 @@ code,
 }
 </style>
 <script>
-document.documentElement.classList.remove("$ROBOTO_WEB_FONT_CLASS", "$INTER_WEB_FONT_CLASS", "$SOURCE_SANS_3_WEB_FONT_CLASS", "$OPEN_SANS_WEB_FONT_CLASS", "$APPETITE_PRO_WEB_FONT_CLASS", "$MAYONEZ_ITALIC_WEB_FONT_CLASS", "$SYSTEM_WEB_FONT_CLASS", "$ROBOTO_MONO_WEB_FONT_CLASS");
+document.documentElement.classList.remove("$ROBOTO_WEB_FONT_CLASS", "$INTER_WEB_FONT_CLASS", "$SOURCE_SANS_3_WEB_FONT_CLASS", "$OPEN_SANS_WEB_FONT_CLASS", "$IBM_PLEX_SANS_WEB_FONT_CLASS", "$GOLOS_TEXT_WEB_FONT_CLASS", "$LITERATA_WEB_FONT_CLASS", "$APPETITE_PRO_WEB_FONT_CLASS", "$MAYONEZ_ITALIC_WEB_FONT_CLASS", "$SYSTEM_WEB_FONT_CLASS", "$ROBOTO_MONO_WEB_FONT_CLASS");
 document.documentElement.classList.add("$fontClass");
 </script>
 """.trim()
@@ -386,6 +455,9 @@ object FontManager {
     const val INTER_WEB_FONT_CLASS = FontController.INTER_WEB_FONT_CLASS
     const val SOURCE_SANS_3_WEB_FONT_CLASS = FontController.SOURCE_SANS_3_WEB_FONT_CLASS
     const val OPEN_SANS_WEB_FONT_CLASS = FontController.OPEN_SANS_WEB_FONT_CLASS
+    const val IBM_PLEX_SANS_WEB_FONT_CLASS = FontController.IBM_PLEX_SANS_WEB_FONT_CLASS
+    const val GOLOS_TEXT_WEB_FONT_CLASS = FontController.GOLOS_TEXT_WEB_FONT_CLASS
+    const val LITERATA_WEB_FONT_CLASS = FontController.LITERATA_WEB_FONT_CLASS
     const val APPETITE_PRO_WEB_FONT_CLASS = FontController.APPETITE_PRO_WEB_FONT_CLASS
     const val MAYONEZ_ITALIC_WEB_FONT_CLASS = FontController.MAYONEZ_ITALIC_WEB_FONT_CLASS
     const val SYSTEM_WEB_FONT_CLASS = FontController.SYSTEM_WEB_FONT_CLASS
