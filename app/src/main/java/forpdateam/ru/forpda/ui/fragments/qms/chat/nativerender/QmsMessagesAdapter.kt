@@ -11,6 +11,8 @@ import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.presentation.ILinkHandler
+import forpdateam.ru.forpda.ui.FlatUiStylePolicy
+import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.fragments.theme.nativerender.BodyBlockViewFactory
 
 /**
@@ -83,7 +85,7 @@ class QmsMessagesAdapter(
             notifyDataSetChanged()
         }
 
-    /** «Плоские посты» pref: drop the hairline stroke on quote/spoiler blocks inside messages. */
+    /** «Плоский интерфейс»: без обводки/тени пузыря и вложенных декоративных блоков. */
     var flatBlocks: Boolean = false
         set(value) {
             if (value == field) return
@@ -160,10 +162,6 @@ class QmsMessagesAdapter(
         init {
             bubble.background = bubbleBg
             bubble.clipToOutline = true
-            androidx.core.view.ViewCompat.setElevation(
-                    bubble,
-                    itemView.resources.getDimension(R.dimen.card_elevation),
-            )
             // The app's one unread marker (bottom-nav badge → `?attr/notify_dot_tab`), not a private red.
             status.setBackgroundResource(R.drawable.notify_dot)
         }
@@ -194,7 +192,18 @@ class QmsMessagesAdapter(
             // post-card surface the factory assumes by default — an own bubble is accent-tinted.
             blockFactory.readingSurfaceColor = { fill }
             bubbleBg.setColor(fill)
-            bubbleBg.setStroke((1f * dm.density).toInt().coerceAtLeast(1), bubbleBorderColor(fill))
+            val normalStroke = (1f * dm.density).toInt().coerceAtLeast(1)
+            bubbleBg.setStroke(
+                    FlatUiStylePolicy.decorativeSize(flatBlocks, normalStroke),
+                    bubbleBorderColor(fill),
+            )
+            androidx.core.view.ViewCompat.setElevation(
+                    bubble,
+                    FlatUiStylePolicy.decorativeSize(
+                            flatBlocks,
+                            itemView.resources.getDimension(R.dimen.card_elevation),
+                    ),
+            )
 
             val inSelection = selectionMode
             val selected = inSelection && selectedIds.contains(item.id)
@@ -253,7 +262,25 @@ class QmsMessagesAdapter(
         private fun bubbleFill(isMine: Boolean): Int {
             val ctx = itemView.context
             val card = ctx.getColorFromAttr(R.attr.content_card_surface)
-            if (!isMine) return card
+            if (!isMine) {
+                if (!flatBlocks) return card
+
+                // В чистом AMOLED card и полотно могут быть одним чёрным цветом. После снятия
+                // обводки такой пузырь исчезает, поэтому плоский режим отделяет его только заливкой.
+                val canvas = ctx.chromeCanvasColor(
+                        com.google.android.material.R.attr.colorSurfaceContainerLowest,
+                )
+                if (androidx.core.graphics.ColorUtils.calculateContrast(card, canvas) >=
+                        MIN_FLAT_BUBBLE_CONTRAST) {
+                    return card
+                }
+                val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+                return androidx.core.graphics.ColorUtils.blendARGB(
+                        card,
+                        onSurface,
+                        FLAT_BUBBLE_FILL_RATIO,
+                )
+            }
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
             return androidx.core.graphics.ColorUtils.blendARGB(card, accent, OWN_BUBBLE_ACCENT_RATIO)
         }
@@ -283,6 +310,8 @@ class QmsMessagesAdapter(
         /** `paddingHorizontal` of the bubble in `item_qms_message.xml`, on each side. */
         const val BUBBLE_PADDING_DP = 14f
         const val OWN_BUBBLE_ACCENT_RATIO = 0.12f
+        const val FLAT_BUBBLE_FILL_RATIO = 0.10f
+        const val MIN_FLAT_BUBBLE_CONTRAST = 1.18
 
         /** How far a dark card's outline is lifted toward `colorOnSurface` (post-card parity). */
         const val DARK_CARD_BORDER_LIFT = 0.30f

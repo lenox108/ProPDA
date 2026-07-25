@@ -84,6 +84,7 @@
             а ...ContainerHigh — тон 17, который читается как настоящий серый.
         -->
         <item name="content_card_surface">?attr/colorSurfaceContainerHigh</item>
+        <item name="content_card_elevation">@dimen/card_elevation</item>
         <item name="bottom_nav_bar_shape_appearance">@style/ShapeAppearance.ForPDA.BottomNavBar</item>
         <item name="smart_nav_fab_background">?attr/colorAccent</item>
         <item name="smart_nav_fab_icon">?attr/contrast_text_color</item>

@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.app.other.QuickSetting
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 
 /**
  * Выбор состава ряда «Быстрые настройки». Порядок чипов — канонический (порядок объявления
@@ -29,6 +30,6 @@ object QuickSettingsPickerDialog {
                 .setPositiveButton(android.R.string.ok) { _, _ ->
                     onPicked(all.filterIndexed { index, _ -> checked[index] })
                 }
-                .show()
+                .showWithStyledButtons()
     }
 }

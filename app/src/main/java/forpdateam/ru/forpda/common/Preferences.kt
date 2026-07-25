@@ -176,7 +176,10 @@ object Preferences {
         const val SHOW_AVATARS = PREFIX + "show_avatars"
         const val CIRCLE_AVATARS = PREFIX + "circle_avatars"
         const val ANIMATED_SMILES = PREFIX + "animated_smiles"
-        const val FLAT_POSTS = PREFIX + "flat_posts"
+        /** Ключ сохранён ради совместимости; область настройки теперь охватывает весь интерфейс. */
+        const val FLAT_UI = PREFIX + "flat_posts"
+        @Deprecated("Use FLAT_UI; the persisted key is intentionally unchanged")
+        const val FLAT_POSTS = FLAT_UI
         const val MODERN_POST_HEADER = PREFIX + "modern_post_header"
         const val HIGHLIGHT_UNREAD_POST = PREFIX + "highlight_unread_post"
         const val ANCHOR_HISTORY = PREFIX + "anchor_history"

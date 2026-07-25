@@ -21,6 +21,8 @@ import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.shape.ShapeAppearanceModel
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.FlatUi
+import forpdateam.ru.forpda.ui.FlatUiStylePolicy
 import timber.log.Timber
 
 /**
@@ -146,10 +148,12 @@ fun AlertDialog.applyForPdaMaterialStyle() {
 fun AlertDialog.applyForPdaSurface() {
     val surface = resolveColor(context, R.attr.colorSurface, 0xff000000.toInt())
     val outline = resolveColor(context, R.attr.colorOutline, surface)
-    val background = createDialogSurface(context, surface, outline)
+    val flat = FlatUi.isEnabled(context)
+    val background = createDialogSurface(context, surface, outline, flat)
 
     window?.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
     window?.setDimAmount(0.32f)
+    if (flat) window?.decorView?.elevation = 0f
     listView?.setDialogPanelBackground()
     window?.decorView?.apply {
         setDialogPanelBackground()
@@ -188,7 +192,7 @@ private fun View.applyTypeface(typeface: Typeface) {
     }
 }
 
-private fun createDialogSurface(context: Context, surface: Int, outline: Int): Drawable {
+private fun createDialogSurface(context: Context, surface: Int, outline: Int, flat: Boolean): Drawable {
     val density = context.resources.displayMetrics.density
     val shape = ShapeAppearanceModel.builder()
             .setAllCornerSizes(28f * density)
@@ -197,7 +201,10 @@ private fun createDialogSurface(context: Context, surface: Int, outline: Int): D
     return MaterialShapeDrawable(shape).apply {
         fillColor = ColorStateList.valueOf(surface)
         strokeColor = ColorStateList.valueOf(outline)
-        strokeWidth = if (outline == surface) 0f else density
+        strokeWidth = FlatUiStylePolicy.decorativeSize(
+                flat,
+                if (outline == surface) 0f else density,
+        )
         initializeElevationOverlay(context)
     }
 }

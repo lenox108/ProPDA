@@ -79,7 +79,7 @@ class TopicDataStore(private val context: Context) {
             safeDataStoreFlow(context.topicDataStore.data.map { preferences ->
                 preferences[PreferencesKeys.FLAT_POSTS]
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
-                        .getBoolean(AppPreferences.Theme.FLAT_POSTS, false)
+                        .getBoolean(AppPreferences.Theme.FLAT_UI, false)
             }, false)
 
     fun observeModernPostHeaderFlow(): Flow<Boolean> =

@@ -17,6 +17,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.ui.FlatUi
+import forpdateam.ru.forpda.ui.FlatUiStylePolicy
 import forpdateam.ru.forpda.ui.dp12
 import forpdateam.ru.forpda.ui.dp16
 import forpdateam.ru.forpda.ui.dp48
@@ -188,7 +190,13 @@ class SmartNavigationMenu(
             }
         }
         view.background = bgDrawable
-        ViewCompat.setElevation(view, context.dp16.toFloat())
+        ViewCompat.setElevation(
+                view,
+                FlatUiStylePolicy.decorativeSize(
+                        FlatUi.isEnabled(context),
+                        context.dp16.toFloat(),
+                ),
+        )
 
         val pageList = view.findViewById<RecyclerView>(R.id.smart_nav_page_list)
         val itemHeight = context.dp48

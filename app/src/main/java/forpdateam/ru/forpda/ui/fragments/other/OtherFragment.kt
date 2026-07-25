@@ -41,6 +41,7 @@ import forpdateam.ru.forpda.ui.views.dialog.AccentPickerDialog
 import forpdateam.ru.forpda.ui.views.dialog.FontPickerDialog
 import forpdateam.ru.forpda.ui.views.dialog.PalettePickerDialog
 import forpdateam.ru.forpda.ui.views.dialog.ThemeModePickerDialog
+import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
 import forpdateam.ru.forpda.presentation.other.OtherViewModel
 import forpdateam.ru.forpda.ui.BottomNavWindowInset
@@ -425,7 +426,7 @@ class OtherFragment : TabFragment() {
                     dialog.dismiss()
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+                .showWithStyledButtons()
     }
 
     private fun densityLabel(density: Preferences.Main.TopicPostDensity): Int = when (density) {
@@ -473,7 +474,7 @@ class OtherFragment : TabFragment() {
                         dialog.dismiss()
                     }
                     .setNegativeButton(android.R.string.cancel, null)
-                    .show()
+                    .showWithStyledButtons()
         }
     }
 

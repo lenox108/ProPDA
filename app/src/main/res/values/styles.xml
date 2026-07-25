@@ -671,6 +671,7 @@
         <item name="list_plate_stroke_color">@android:color/transparent</item>
         <!-- Светлая тема: карточка = самый светлый тон (белый), а не тёмный inset ...ContainerHigh. -->
         <item name="content_card_surface">?attr/colorSurface</item>
+        <item name="content_card_elevation">@dimen/card_elevation</item>
         <item name="bottom_nav_bar_shape_appearance">@style/ShapeAppearance.ForPDA.BottomNavBar</item>
         <item name="smart_nav_fab_background">?attr/colorAccent</item>
         <item name="smart_nav_fab_icon">?attr/contrast_text_color</item>
@@ -871,6 +872,19 @@
         <item name="actionOverflowMenuStyle">@style/Widget.ForPDA.PopupMenu.Overflow</item>
     </style>
 
+    <!--
+        Расширенный наследник прежней настройки `theme.flat_posts`.
+        Снимает только декоративные контуры/подъём общих поверхностей. Рамки полей ввода,
+        выбранных элементов, ошибок и фокуса намеренно живут в собственных стилях.
+    -->
+    <style name="ThemeOverlay.ForPDA.FlatUi" parent="">
+        <item name="main_toolbar_stroke_width">0dp</item>
+        <item name="main_toolbar_stroke_color">@android:color/transparent</item>
+        <item name="list_plate_stroke_width">0dp</item>
+        <item name="list_plate_stroke_color">@android:color/transparent</item>
+        <item name="content_card_elevation">0dp</item>
+    </style>
+
     <!-- Slide-down-from-top window animation for the native topic hat/poll overlays (WebView parity). -->
     <style name="ThemeTopSheetAnimation">
         <item name="android:windowEnterAnimation">@anim/theme_top_sheet_enter</item>
@@ -1025,7 +1039,7 @@
 
     <style name="CardStyle.Item" parent="CardView">
         <item name="cardCornerRadius">@dimen/card_corner_radius</item>
-        <item name="cardElevation">@dimen/card_elevation</item>
+        <item name="cardElevation">?attr/content_card_elevation</item>
         <!-- LayoutInflater-safe: CardView инфлейтится через LayoutInflater, который
              сам делает 2-ой уровень deref для ?attr/... и трекает палитру обоев.
              content_card_surface редиректит на colorSurface (светлые) / colorSurfaceContainerHigh

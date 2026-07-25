@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.other
 
+import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -15,6 +16,7 @@ import forpdateam.ru.forpda.databinding.ItemOtherMenuQuickSettingsBinding
 import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.entity.app.other.OtherMenuBlock
 import forpdateam.ru.forpda.entity.app.other.QuickSetting
+import forpdateam.ru.forpda.ui.FlatUi
 import forpdateam.ru.forpda.ui.views.drawers.adapters.ListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuContinueListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuHeaderListItem
@@ -178,6 +180,13 @@ class OtherMenuQuickSettingsDelegate(
             item.items.forEach { setting ->
                 val chip = Chip(group.context).apply {
                     text = context.getString(quickSettingTitle(setting))
+                    if (FlatUi.isEnabled(context)) {
+                        chipStrokeWidth = 0f
+                        elevation = 0f
+                        chipBackgroundColor = ColorStateList.valueOf(
+                                context.getColorFromAttr(R.attr.content_card_surface),
+                        )
+                    }
                     setOnClickListener { clickListener(setting) }
                 }
                 group.addView(chip)

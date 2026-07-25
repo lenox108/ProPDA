@@ -282,11 +282,12 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
-        if (key == forpdateam.ru.forpda.common.Preferences.Theme.FLAT_POSTS) {
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.FLAT_UI) {
             val value = sharedPrefs.getBoolean(key, false)
             if (isAdded) {
                 lifecycleScope.launch {
                     forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setFlatPosts(value)
+                    activity?.recreate()
                 }
             }
         }
@@ -401,7 +402,7 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = topicHolder.getCircleAvatars()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.ANIMATED_SMILES)
                 ?.isChecked = topicHolder.getAnimatedSmiles()
-            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.FLAT_POSTS)
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.FLAT_UI)
                 ?.isChecked = topicHolder.getFlatPosts()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.MODERN_POST_HEADER)
                 ?.isChecked = topicHolder.getModernPostHeader()
