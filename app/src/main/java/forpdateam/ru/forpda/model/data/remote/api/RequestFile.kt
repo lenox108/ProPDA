@@ -11,7 +11,8 @@ class RequestFile(
     var fileStream: InputStream,
     val fileSize: Long? = null,
     private val streamProvider: (() -> InputStream)? = null,
-    var requestName: String? = null
+    var requestName: String? = null,
+    val sourceUri: String? = null,
 ) {
     constructor(fileName: String, mimeType: String, fileStream: InputStream) : this(fileName, mimeType, fileStream, null)
 
@@ -21,7 +22,15 @@ class RequestFile(
 
     fun canOpenStreamAgain(): Boolean = streamProvider != null
 
+    /** Replaces a consumed upload stream with a fresh one before a first attempt or retry. */
+    fun resetStream(): Boolean {
+        val fresh = reopenStream() ?: return false
+        runCatching { fileStream.close() }
+        fileStream = fresh
+        return true
+    }
+
     override fun toString(): String {
-        return "RequestFile{$fileName, $mimeType, $requestName, $fileSize, $fileStream}"
+        return "RequestFile{$fileName, $mimeType, $requestName, $fileSize}"
     }
 }

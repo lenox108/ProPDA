@@ -335,6 +335,9 @@ class QmsApi(
             val item = pending[i]
 
             file.requestName = "source"
+            if (file.canOpenStreamAgain()) {
+                file.resetStream()
+            }
             val builder = NetworkRequest.Builder()
                     .url(uploadUrl)
                     .formHeaders(headers)

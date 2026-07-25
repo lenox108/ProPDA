@@ -11,6 +11,8 @@ import android.widget.RadioButton
 import android.widget.TextView
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.graphics.ColorUtils
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.CircularProgressIndicator
@@ -22,28 +24,45 @@ import forpdateam.ru.forpda.databinding.MessagePanelAttachmentItemBinding
 import forpdateam.ru.forpda.databinding.MessagePanelAttachmentItemHorizontalBinding
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.model.data.remote.IWebClient
-import forpdateam.ru.forpda.ui.views.drawers.adapters.AttachmentListItem
-import forpdateam.ru.forpda.ui.views.drawers.adapters.ListItem
-import java.util.ArrayList
 
 /**
  * Adapter for attachments that keeps list/grid presentation independent from
  * selection and attachment actions.
  */
-class AttachmentAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-    private val items = ArrayList<ListItem>()
+class AttachmentAdapter(
+    private val rowIdProvider: (AttachmentItem) -> Long,
+) : ListAdapter<AttachmentAdapter.Row, RecyclerView.ViewHolder>(ROW_DIFF) {
     private var itemClickListener: OnItemClickListener? = null
     private var reloadOnClickListener: OnReloadClickListener? = null
     private var itemActionListener: OnItemActionListener? = null
     private var isLinear = true
     private var isReverse = false
     private var textActionsEnabled = true
+    private var sourceItems: List<AttachmentItem> = emptyList()
+
+    data class Row(
+        val id: Long,
+        val item: AttachmentItem,
+        val signature: List<Any?>,
+    )
 
     companion object {
         private const val TYPE_ITEM = 1
         private const val TYPE_ITEM_HORIZONTAL = 2
         private const val ACTION_SPOILER = 1
         private const val ACTION_DELETE = 2
+
+        private val ROW_DIFF = object : DiffUtil.ItemCallback<Row>() {
+            override fun areItemsTheSame(oldItem: Row, newItem: Row): Boolean =
+                oldItem.id == newItem.id
+
+            override fun areContentsTheSame(oldItem: Row, newItem: Row): Boolean =
+                oldItem.signature == newItem.signature
+        }
+    }
+
+    init {
+        setHasStableIds(true)
     }
 
     fun updateIsLinear(isLinear: Boolean) {
@@ -53,7 +72,9 @@ class AttachmentAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     }
 
     fun updateReverse(isReverse: Boolean) {
+        if (this.isReverse == isReverse) return
         this.isReverse = isReverse
+        submitItems(sourceItems)
     }
 
     fun updateTextActionsEnabled(enabled: Boolean) {
@@ -63,37 +84,13 @@ class AttachmentAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     }
 
     fun updateItem(item: AttachmentItem) {
-        val index = items.indexOfFirst { (it as? AttachmentListItem)?.item == item }
-        if (index != -1) {
-            notifyItemChanged(index)
-        }
+        if (item in sourceItems) submitItems(sourceItems)
     }
 
-    fun add(newItems: List<AttachmentItem>) {
-        val finalItems = if (isReverse) newItems.asReversed() else newItems
-        val insertIndex = if (isReverse) 0 else items.size
-        items.addAll(insertIndex, finalItems.map { AttachmentListItem(it) })
-        notifyItemRangeInserted(insertIndex, finalItems.size)
-    }
-
-    fun add(item: AttachmentItem) {
-        add(listOf(item))
-    }
-
-    fun clear() {
-        val oldSize = items.size
-        items.clear()
-        if (oldSize > 0) {
-            notifyItemRangeRemoved(0, oldSize)
-        }
-    }
-
-    fun removeItem(item: AttachmentItem) {
-        val index = items.indexOfFirst { (it as? AttachmentListItem)?.item == item }
-        if (index != -1) {
-            items.removeAt(index)
-            notifyItemRemoved(index)
-        }
+    fun submitItems(newItems: List<AttachmentItem>) {
+        sourceItems = newItems.toList()
+        val ordered = if (isReverse) sourceItems.asReversed() else sourceItems
+        submitList(ordered.map(::toRow))
     }
 
     override fun getItemViewType(position: Int): Int =
@@ -122,11 +119,41 @@ class AttachmentAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        val item = (items[position] as AttachmentListItem).item
+        val item = getItem(position).item
         (holder as ViewHolder).bind(item)
     }
 
-    override fun getItemCount(): Int = items.size
+    override fun getItemId(position: Int): Long = getItem(position).id
+
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        (holder as? ViewHolder)?.unbind()
+        super.onViewRecycled(holder)
+    }
+
+    private fun toRow(item: AttachmentItem): Row = Row(
+        id = rowIdProvider(item),
+        item = item,
+        signature = listOf(
+            item.id,
+            item.name,
+            item.extension,
+            item.weight,
+            item.typeFile,
+            item.loadState,
+            item.status,
+            item.imageUrl,
+            item.url,
+            item.width,
+            item.height,
+            item.md5,
+            item.progress,
+            item.isError,
+            item.errorText,
+            item.selected,
+            textActionsEnabled,
+            isLinear,
+        ),
+    )
 
     fun setOnItemClickListener(listener: OnItemClickListener) {
         itemClickListener = listener
@@ -293,7 +320,7 @@ class AttachmentAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         private fun currentItem(): AttachmentItem? {
             val position = bindingAdapterPosition
             if (position == RecyclerView.NO_POSITION) return null
-            return (items.getOrNull(position) as? AttachmentListItem)?.item
+            return currentList.getOrNull(position)?.item
         }
 
         private fun showActions(anchor: View, item: AttachmentItem) {
@@ -354,6 +381,14 @@ class AttachmentAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             } else {
                 View.GONE
             }
+        }
+
+        fun unbind() {
+            val item = boundItem
+            if (item?.progressListener === progressListener) {
+                item.progressListener = null
+            }
+            boundItem = null
         }
     }
 }

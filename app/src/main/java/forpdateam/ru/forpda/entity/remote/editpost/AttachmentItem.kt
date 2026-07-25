@@ -56,6 +56,10 @@ class AttachmentItem : Parcelable {
     var width: Int = 0
     var height: Int = 0
     var md5: String? = null
+    /** Persistable source metadata for retrying an interrupted upload after process recreation. */
+    var sourceUri: String? = null
+    var sourceMimeType: String? = null
+    var sourceFileSize: Long? = null
     var progress: Int = -1
         private set
 
@@ -95,6 +99,9 @@ class AttachmentItem : Parcelable {
         writeStringToParcel(parcel, imageUrl)
         writeStringToParcel(parcel, url)
         writeStringToParcel(parcel, errorText)
+        writeStringToParcel(parcel, sourceUri)
+        writeStringToParcel(parcel, sourceMimeType)
+        parcel.writeLong(sourceFileSize ?: -1L)
     }
 
     private constructor(parcel: Parcel) {
@@ -111,6 +118,9 @@ class AttachmentItem : Parcelable {
         imageUrl = readStringFromParcel(parcel)
         url = readStringFromParcel(parcel)
         errorText = readStringFromParcel(parcel)
+        sourceUri = readStringFromParcel(parcel)
+        sourceMimeType = readStringFromParcel(parcel)
+        sourceFileSize = parcel.readLong().takeIf { it >= 0L }
     }
 
     private fun writeStringToParcel(parcel: Parcel, string: String?) {

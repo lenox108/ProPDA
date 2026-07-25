@@ -91,7 +91,6 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
     }
 
     fun onToolSelected(item: ButtonData) {
-        recordRecent(item.text)
         when (item.text) {
             "URL" -> urlInsert(item)
             "QUOTE" -> quoteInsert(item)
@@ -103,8 +102,14 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
             "BACKGROUND" -> colorInsert(item)
             "SIZE" -> sizeInsert(item)
             "FONT" -> fontInsert(item)
-            "RELEASER" -> messagePanel.insertText(RELEASER_SKELETON)
-            else -> simpleInsertText(item)
+            "RELEASER" -> {
+                messagePanel.insertText(RELEASER_SKELETON)
+                recordRecent(item.text)
+            }
+            else -> {
+                simpleInsertText(item)
+                recordRecent(item.text)
+            }
         }
     }
 
@@ -153,25 +158,31 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
 
     private fun listInsert(item: ButtonData, num: Boolean) {
         val selected = messagePanel.getSelectedText()
-        val listLines = mutableListOf<String>()
-        val tag = "LIST"
+        val range = messagePanel.selectionRange
         if (selected.isNotEmpty()) {
             MaterialAlertDialogBuilder(getContext())
                 .setMessage(R.string.transform_string_to_list)
                 .setPositiveButton(R.string.ok) { _, _ ->
-                    val lines = TextUtils.split(selected, "\n")
-                    listLines.addAll(lines)
-                    messagePanel.deleteSelected()
+                    val result = createListMarkup(
+                        num = num,
+                        lines = selected.split('\n'),
+                    )
+                    messagePanel.replaceTextRange(
+                        range[0],
+                        range[1],
+                        result,
+                    )
+                    recordRecent(item.text)
                 }
                 .setNegativeButton(R.string.no, null)
-                .setOnDismissListener { listInsert(tag, num, listLines) }
                 .showWithStyledButtons()
         } else {
-            listInsert(tag, num, listLines)
+            showListBuilder(item, num)
         }
     }
 
-    private fun listInsert(tag: String, num: Boolean, listLines: MutableList<String>) {
+    private fun showListBuilder(item: ButtonData, num: Boolean) {
+        val listLines = mutableListOf<String>()
         val builder = MaterialAlertDialogBuilder(getContext())
         val binding = ReportLayoutBinding.inflate(LayoutInflater.from(builder.context))
         val i = intArrayOf(listLines.size + 1)
@@ -182,14 +193,10 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
             .setView(binding.root)
             .setPositiveButton(R.string.add, null)
             .setNegativeButton(R.string.close) { _, _ ->
-                val body = StringBuilder()
-                for (line in listLines) {
-                    body.append("[*]").append(line).append('\n')
-                }
-                val resultHeaders = arrayListOf<Pair<String, String>>()
-                if (num) resultHeaders.add(Pair("", "1"))
-                val bbcodes = createBbCode(tag, resultHeaders, body.toString())
-                messagePanel.insertText(bbcodes[0], bbcodes[1], false)
+                messagePanel.insertText(
+                    createListMarkup(num, listLines),
+                )
+                recordRecent(item.text)
             }
             .showWithStyledButtons()
         val positiveButton = alertDialog.getButton(DialogInterface.BUTTON_POSITIVE)
@@ -209,6 +216,20 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
         })
     }
 
+    private fun createListMarkup(num: Boolean, lines: List<String>): String {
+        val body = buildString {
+            lines.forEach { line ->
+                append("[*]").append(line).append('\n')
+            }
+        }
+        val resultHeaders = arrayListOf<Pair<String, String>>()
+        if (num) resultHeaders.add(Pair("", "1"))
+        // The forum represents a numbered list as [LIST=1], while NUMLIST is only the
+        // editor tool identifier used for recents and its dedicated icon.
+        val bbcode = createBbCode("LIST", resultHeaders, body)
+        return bbcode[0] + bbcode[1]
+    }
+
     private fun colorInsert(item: ButtonData) {
         ColorPicker(getContext(), object : ColorPaletteView.OnColorSelectedListener {
             override fun onColorSelected(color: Int) {
@@ -220,6 +241,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
                 resultHeaders.add(Pair("", colorStr))
                 val bbcodes = createBbCode(item.text, resultHeaders, null)
                 messagePanel.insertText(bbcodes[0], bbcodes[1])
+                recordRecent(item.text)
             }
         })
     }
@@ -239,6 +261,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
                 resultHeaders.add(Pair("", (which + 1).toString()))
                 val bbcodes = createBbCode(item.text, resultHeaders, null)
                 messagePanel.insertText(bbcodes[0], bbcodes[1])
+                recordRecent(item.text)
                 dialog.dismiss()
             }
             .setNegativeButton(R.string.cancel, null)
@@ -256,6 +279,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
             override fun onInsert(resultHeaders: ArrayList<Pair<String, String>>, bodyResult: String?) {
                 val bbcodes = createBbCode(item.text, resultHeaders, bodyResult)
                 messagePanel.insertText(bbcodes[0], bbcodes[1], range[0], range[1])
+                recordRecent(item.text)
             }
         })
         insertHelper.show()
@@ -272,6 +296,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
             override fun onInsert(resultHeaders: ArrayList<Pair<String, String>>, bodyResult: String?) {
                 val bbcodes = createBbCode(item.text, resultHeaders, bodyResult)
                 messagePanel.insertText(bbcodes[0], bbcodes[1], range[0], range[1])
+                recordRecent(item.text)
             }
         })
         insertHelper.show()
@@ -288,6 +313,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
             override fun onInsert(resultHeaders: ArrayList<Pair<String, String>>, bodyResult: String?) {
                 val bbcodes = createBbCode(item.text, resultHeaders, bodyResult)
                 messagePanel.insertText(bbcodes[0], bbcodes[1], range[0], range[1])
+                recordRecent(item.text)
             }
         })
         insertHelper.show()
@@ -304,6 +330,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
             override fun onInsert(resultHeaders: ArrayList<Pair<String, String>>, bodyResult: String?) {
                 val bbcodes = createBbCode(item.text, resultHeaders, bodyResult)
                 messagePanel.insertText(bbcodes[0], bbcodes[1], range[0], range[1])
+                recordRecent(item.text)
             }
         })
         insertHelper.show()
@@ -320,6 +347,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
             override fun onInsert(resultHeaders: ArrayList<Pair<String, String>>, bodyResult: String?) {
                 val bbcodes = createBbCode(item.text, resultHeaders, bodyResult)
                 messagePanel.insertText(bbcodes[0], bbcodes[1], range[0], range[1])
+                recordRecent(item.text)
             }
         })
         insertHelper.show()
@@ -330,13 +358,17 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
         if (headers != null) {
             for (header in headers) {
                 if (header.first.isNullOrEmpty() && !header.second.isNullOrEmpty()) {
-                    start.append("=").append(header.second)
+                    start.append("=").append(sanitizeHeaderValue(header.second))
                     break
                 }
             }
             for (header in headers) {
                 if (header.first.isNullOrEmpty() || header.second.isNullOrEmpty()) continue
-                start.append(" ").append(header.first).append("=\"").append(header.second).append("\"")
+                start.append(" ")
+                    .append(header.first)
+                    .append("=\"")
+                    .append(sanitizeHeaderValue(header.second))
+                    .append("\"")
             }
         }
         start.append("]")
@@ -344,6 +376,9 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
         val end = "[/$tag]"
         return arrayOf(start.toString(), end)
     }
+
+    private fun sanitizeHeaderValue(value: String): String =
+        value.replace("]", "").replace("\"", "'")
 
     private fun simpleInsertText(item: ButtonData) {
         val bbcodes = createBbCode(item.text, null, null)

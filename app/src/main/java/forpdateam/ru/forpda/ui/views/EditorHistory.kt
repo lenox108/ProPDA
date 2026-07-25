@@ -4,6 +4,10 @@ internal data class EditorEdit(
     val start: Int,
     val before: String,
     val after: String,
+    val beforeSelectionStart: Int = start,
+    val beforeSelectionEnd: Int = start,
+    val afterSelectionStart: Int = start + after.length,
+    val afterSelectionEnd: Int = start + after.length,
 ) {
     val weight: Int
         get() = before.length + after.length
@@ -16,12 +20,14 @@ internal data class EditorEdit(
 internal class EditorHistory(
     private val maxOperations: Int,
     private val maxChars: Int,
+    private val groupingWindowMillis: Long = 1_000L,
 ) {
     private val undo = ArrayDeque<EditorEdit>()
     private val redo = ArrayDeque<EditorEdit>()
     private var undoChars = 0
     private var lastEditWasTyping = false
     private var lastEditWasDeleting = false
+    private var lastEditAtMillis = Long.MIN_VALUE
 
     val canUndo: Boolean
         get() = undo.isNotEmpty()
@@ -35,7 +41,16 @@ internal class EditorHistory(
         resetGrouping()
     }
 
-    fun record(start: Int, before: CharSequence, after: CharSequence) {
+    fun record(
+        start: Int,
+        before: CharSequence,
+        after: CharSequence,
+        beforeSelectionStart: Int = start,
+        beforeSelectionEnd: Int = beforeSelectionStart,
+        afterSelectionStart: Int = start + after.length,
+        afterSelectionEnd: Int = afterSelectionStart,
+        recordedAtMillis: Long = System.currentTimeMillis(),
+    ) {
         if (before.isEmpty() && after.isEmpty()) return
         redo.clear()
         val beforeText = before.toString()
@@ -43,26 +58,41 @@ internal class EditorHistory(
         val last = undo.lastOrNull()
         val isTyping = beforeText.isEmpty() && afterText.length == 1 && afterText[0] != '\n'
         val isDeleting = afterText.isEmpty() && beforeText.length == 1
+        val withinGroupingWindow = lastEditAtMillis != Long.MIN_VALUE &&
+            recordedAtMillis - lastEditAtMillis in 0..groupingWindowMillis
         var merged = false
 
-        if (isTyping && lastEditWasTyping && last != null &&
+        if (isTyping && lastEditWasTyping && withinGroupingWindow && last != null &&
             last.before.isEmpty() && last.start + last.after.length == start
         ) {
-            undo[undo.lastIndex] = last.copy(after = last.after + afterText)
+            undo[undo.lastIndex] = last.copy(
+                after = last.after + afterText,
+                afterSelectionStart = afterSelectionStart,
+                afterSelectionEnd = afterSelectionEnd,
+            )
             undoChars += afterText.length
             merged = true
-        } else if (isDeleting && lastEditWasDeleting && last != null && last.after.isEmpty()) {
+        } else if (
+            isDeleting && lastEditWasDeleting && withinGroupingWindow &&
+            last != null && last.after.isEmpty()
+        ) {
             when {
                 start + beforeText.length == last.start -> {
                     undo[undo.lastIndex] = last.copy(
                         start = start,
                         before = beforeText + last.before,
+                        afterSelectionStart = afterSelectionStart,
+                        afterSelectionEnd = afterSelectionEnd,
                     )
                     undoChars += beforeText.length
                     merged = true
                 }
                 start == last.start -> {
-                    undo[undo.lastIndex] = last.copy(before = last.before + beforeText)
+                    undo[undo.lastIndex] = last.copy(
+                        before = last.before + beforeText,
+                        afterSelectionStart = afterSelectionStart,
+                        afterSelectionEnd = afterSelectionEnd,
+                    )
                     undoChars += beforeText.length
                     merged = true
                 }
@@ -70,7 +100,15 @@ internal class EditorHistory(
         }
 
         if (!merged) {
-            val operation = EditorEdit(start, beforeText, afterText)
+            val operation = EditorEdit(
+                start = start,
+                before = beforeText,
+                after = afterText,
+                beforeSelectionStart = beforeSelectionStart,
+                beforeSelectionEnd = beforeSelectionEnd,
+                afterSelectionStart = afterSelectionStart,
+                afterSelectionEnd = afterSelectionEnd,
+            )
             undo.addLast(operation)
             undoChars += operation.weight
         }
@@ -79,6 +117,7 @@ internal class EditorHistory(
         }
         lastEditWasTyping = isTyping
         lastEditWasDeleting = isDeleting
+        lastEditAtMillis = recordedAtMillis
     }
 
     fun takeUndo(): EditorEdit? {
@@ -100,5 +139,6 @@ internal class EditorHistory(
     private fun resetGrouping() {
         lastEditWasTyping = false
         lastEditWasDeleting = false
+        lastEditAtMillis = Long.MIN_VALUE
     }
 }

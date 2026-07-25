@@ -91,6 +91,8 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
     /** Дебаунс-сохранение черновика сообщения QMS (ключ qms:<userId>:<themeId>). */
     private var qmsDraftSaveJob: kotlinx.coroutines.Job? = null
+    private var pendingQmsDraft:
+            Pair<String, forpdateam.ru.forpda.model.repository.draft.PostDraft>? = null
 
     private val pickFileLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
@@ -207,13 +209,14 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     private fun persistQmsDraft() {
         val key = qmsDraftKey() ?: return
         val snapshot = messagePanel.captureSnapshot()
-        val draft = forpdateam.ru.forpda.model.repository.draft.PostDraft.create(
+        val draft = forpdateam.ru.forpda.model.repository.draft.PostDraft.createFromSnapshots(
             message = snapshot.message,
             selectionStart = snapshot.selectionStart,
             selectionEnd = snapshot.selectionEnd,
             attachments = snapshot.attachments,
             editorMode = "compact",
         )
+        pendingQmsDraft = key to draft
         qmsDraftSaveJob?.cancel()
         qmsDraftSaveJob = viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(600)
@@ -223,7 +226,17 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
     private fun clearQmsDraft() {
         qmsDraftSaveJob?.cancel()
+        pendingQmsDraft = null
         qmsDraftKey()?.let { postDraftRepository.clearFireAndForget(it) }
+    }
+
+    private fun flushQmsDraft() {
+        qmsDraftSaveJob?.cancel()
+        val pending = pendingQmsDraft ?: return
+        postDraftRepository.saveFireAndForget(
+                pending.first,
+                pending.second,
+                System.currentTimeMillis())
     }
 
     /** Восстановить черновик сообщения в пустое поле (после перезапуска / нового открытия чата). */
@@ -532,6 +545,9 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         attachmentsPopup = null
         clearMessagePanelTextDialog?.dismiss()
         clearMessagePanelTextDialog = null
+        if (::messagePanel.isInitialized) {
+            messagePanel.onDestroy()
+        }
         _chatBinding = null
         super.onDestroyView()
     }
@@ -1069,8 +1085,9 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
     private fun sendMessage() {
         val snapshot = messagePanel.captureSnapshot()
-        pendingSendSnapshot = snapshot
-        presenter.sendMessage(snapshot.message, snapshot.attachments)
+        if (presenter.sendMessage(snapshot.message, snapshot.attachmentItems())) {
+            pendingSendSnapshot = snapshot
+        }
     }
 
     private fun requestClearMessagePanelText() {
@@ -1209,6 +1226,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     override fun onPauseOrHide() {
         super.onPauseOrHide()
         logQmsChat("lifecycle_on_pause")
+        flushQmsDraft()
         presenter.onScreenHidden()
         if (::messagePanel.isInitialized) {
             messagePanel.onPause()
@@ -1218,9 +1236,6 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     override fun onDestroy() {
         logQmsChat("lifecycle_on_destroy")
         super.onDestroy()
-        if (::messagePanel.isInitialized) {
-            messagePanel.onDestroy()
-        }
     }
 
     override fun hideKeyboard() {

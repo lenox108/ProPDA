@@ -4,6 +4,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
+import androidx.appcompat.widget.TooltipCompat
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.getVecDrawable
 import forpdateam.ru.forpda.databinding.MessagePanelAdvancedItemBinding
@@ -56,6 +57,7 @@ class PanelItemAdapter(
             holder.binding.itemTitle.text = item.title
             holder.binding.itemTitle.visibility = View.VISIBLE
         }
+        TooltipCompat.setTooltipText(holder.itemView, item.title ?: item.text)
     }
 
     override fun getItemCount(): Int = items.size

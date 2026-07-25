@@ -20,4 +20,5 @@ data class PostDraftRoom(
     val selectionEnd: Int = -1,
     val attachmentsJson: String = "[]",
     val editorMode: String = "",
+    val attachmentsChanged: Boolean = false,
 )
