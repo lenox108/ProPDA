@@ -6,6 +6,7 @@ import forpdateam.ru.forpda.model.data.remote.api.favorites.Sorting
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,6 +16,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class FavoritesAdapterIdentityTest {
+
+    @Test
+    fun `row unread indicator is always a dot and never a counter`() {
+        assertEquals("", FavoritesAdapter.rowUnreadIndicatorText(showDot = true, isUnread = true))
+        assertNull(FavoritesAdapter.rowUnreadIndicatorText(showDot = false, isUnread = true))
+        assertNull(FavoritesAdapter.rowUnreadIndicatorText(showDot = true, isUnread = false))
+    }
 
     @Test
     fun `pinned topics with same title keep different identity`() {

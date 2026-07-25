@@ -75,6 +75,13 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
                 unreadPostCount = item.unreadPostCount,
                 pages = item.pages
         )
+
+        /**
+         * `show_dot` отвечает только за точку в строке темы. Числовой счётчик избранного —
+         * отдельная настройка, которая применяется к иконке меню/нижней панели.
+         */
+        internal fun rowUnreadIndicatorText(showDot: Boolean, isUnread: Boolean): String? =
+                if (showDot && isUnread) "" else null
     }
 
     internal data class FavItemContentKey(
@@ -446,19 +453,11 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
                     if (isUnread) Typeface.BOLD else Typeface.NORMAL,
             )
             binding.topicItemTitle.setTextColor(if (isUnread) titleColorNew else titleColor)
-            when {
-                // Точка/счётчик в избранном зависят ТОЛЬКО от «Индикатора новых сообщений»
-                // (show_dot) — паритет с «Историей». Настройка «Показывать счётчики
-                // непрочитанного в избранном» (show_unread_badge / showUnreadIndicators)
-                // управляет лишь бейджем в меню/шторке, а не строками списка.
-                !showDot || !isUnread -> binding.topicItemUnreadDot.visibility = View.GONE
-                item.unreadPostCount > 1 -> {
-                    binding.topicItemUnreadDot.visibility = View.VISIBLE
-                    binding.topicItemUnreadDot.text = item.unreadPostCount.toString()
-                }
+            when (val indicatorText = rowUnreadIndicatorText(showDot, isUnread)) {
+                null -> binding.topicItemUnreadDot.visibility = View.GONE
                 else -> {
                     binding.topicItemUnreadDot.visibility = View.VISIBLE
-                    binding.topicItemUnreadDot.text = ""
+                    binding.topicItemUnreadDot.text = indicatorText
                 }
             }
             FavoritesUnreadTrace.uiBound(item, showUnreadIndicators, showDot)
