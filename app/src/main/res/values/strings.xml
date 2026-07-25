@@ -749,7 +749,9 @@
     <string name="pref_title_restore_backup">Восстановить из бэкапа</string>
     <string name="pref_summary_restore_backup">Загрузить настройки из файла</string>
     <string name="settings_backup_include_session">Сохранить профиль и сессию (cookies)</string>
+    <string name="settings_backup_include_session_summary">После восстановления не потребуется повторный вход. Файл нельзя передавать другим.</string>
     <string name="settings_backup_session_warning">Можно дополнительно сохранить текущий аккаунт, чтобы после восстановления не вводить логин и пароль. Такой файл даёт доступ к аккаунту — не передавайте его другим.</string>
+    <string name="settings_backup_without_session_message">Будут сохранены все настройки без профиля и cookies. Текущий аккаунт не попадёт в файл.</string>
     <string name="settings_backup_restore_warning">Настройки из файла заменят текущие. Если бэкап содержит профиль и cookies, будет восстановлена и сессия аккаунта.</string>
     <string name="settings_backup_created">Бэкап сохранён</string>
     <string name="settings_backup_restored_title">Бэкап восстановлен</string>
