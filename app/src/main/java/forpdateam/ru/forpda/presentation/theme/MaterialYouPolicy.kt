@@ -23,8 +23,8 @@ import forpdateam.ru.forpda.common.Preferences as AppPreferences
  *   Не перекрашивается то, что ПИНИТСЯ статикой внутри оверлея (защита от
  *   TypedArray-краша — см. KDoc [ThemeOverlay.ForPDA.MaterialYouSurface]), и
  *   атрибуты без M3-зеркала (см. план).
- * - AMOLED → ACCENT_ONLY: красим только акцент, но НЕ поднимаем поверхности с
- *   чистого чёрного (иначе теряется смысл OLED-экономии).
+ * - AMOLED → AMOLED_SURFACE: базовое полотно остаётся чистым #000000, а
+ *   приподнятые поверхности получают сдержанный оттенок обоев (L*=11).
  * - всё остальное → NONE.
  */
 object MaterialYouPolicy {
@@ -33,8 +33,8 @@ object MaterialYouPolicy {
     enum class Mode {
         /** Не накладывать ничего. */
         NONE,
-        /** Только акцент (FAB, переключатели, ссылки) — для AMOLED. */
-        ACCENT_ONLY,
+        /** Акцент + тёмные приподнятые поверхности над чёрным AMOLED-полотном. */
+        AMOLED_SURFACE,
         /** Акцент + поверхности + типографика + хром — для SYSTEM light/dark. */
         SURFACE,
     }
@@ -68,7 +68,7 @@ object MaterialYouPolicy {
             isNight: Boolean
     ): Mode {
         if (!shouldApplyDynamicColors(enabled, palette)) return Mode.NONE
-        return if (isAmoledSkin(themeMode, isNight)) Mode.ACCENT_ONLY else Mode.SURFACE
+        return if (isAmoledSkin(themeMode, isNight)) Mode.AMOLED_SURFACE else Mode.SURFACE
     }
 
     internal fun isAmoledSkin(

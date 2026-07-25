@@ -158,10 +158,9 @@ object MaterialYouApplier {
             }
         }
 
-        // SURFACE (акцент + динамический фон) для light/dark; AMOLED-оверлей для
-        // AMOLED. Оба отдают surface-роли динамике обоев — AMOLED-вариант просто
-        // не получает DarkFloor и потому остаётся самым тёмным. Работает и для
-        // обоев, и для произвольного seed.
+        // SURFACE (акцент + динамический фон) для light/dark; AMOLED-оверлей
+        // сохраняет чисто чёрное полотно и тонирует только приподнятые
+        // поверхности на L*=11. Работает и для обоев, и для произвольного seed.
         val isAmoled = MaterialYouPolicy.isAmoledSkin(themeMode, isNight)
         val overlay = if (isAmoled) {
             R.style.ThemeOverlay_ForPDA_MaterialYouAmoled
