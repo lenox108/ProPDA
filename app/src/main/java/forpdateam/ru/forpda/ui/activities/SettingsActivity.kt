@@ -16,6 +16,7 @@ import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.ui.chromeCanvasColor
 import forpdateam.ru.forpda.ui.EdgeToEdge
 import forpdateam.ru.forpda.ui.FontController
+import forpdateam.ru.forpda.ui.FlatUi
 import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.UiThemeStyles
 import forpdateam.ru.forpda.ui.AccentApplier
@@ -44,6 +45,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var appliedUiPalette: Preferences.Main.UiPalette
     private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
     private var appliedMaterialYou: Boolean = false
+    private var appliedFlatUi: Boolean = false
     private lateinit var appliedAccent: Preferences.Main.AccentPalette
     private var appliedAccentStyle: Preferences.Main.AccentStyle = Preferences.Main.AccentStyle.TONAL
 
@@ -89,6 +91,7 @@ class SettingsActivity : AppCompatActivity() {
         // per-Activity applier is the canonical entry point — see MaterialYouApplier KDoc.
         MaterialYouApplier.applyIfEnabled(this)
         AccentApplier.applyIfEnabled(this)
+        appliedFlatUi = FlatUi.applyThemeOverlay(this)
         // Последний слой: усиление контраста по системной настройке (a11y, Android 14+).
         ContrastApplier.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
@@ -146,6 +149,12 @@ class SettingsActivity : AppCompatActivity() {
         val materialYouNow = mainPreferencesHolder.getUseMaterialYou()
         if (materialYouNow != appliedMaterialYou) {
             appliedMaterialYou = materialYouNow
+            recreate()
+            return
+        }
+        val flatUiNow = FlatUi.isEnabled(this)
+        if (flatUiNow != appliedFlatUi) {
+            appliedFlatUi = flatUiNow
             recreate()
             return
         }

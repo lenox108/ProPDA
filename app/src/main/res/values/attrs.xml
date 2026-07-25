@@ -56,6 +56,8 @@
         см. KDoc ThemeOverlay.ForPDA.MaterialYouSurface).
     -->
     <attr name="content_card_surface" extension="reference" format="color" />
+    <!-- Общая высота декоративной карточки; «Плоский интерфейс» переопределяет её в 0dp. -->
+    <attr name="content_card_elevation" format="dimension" />
     <attr name="notify_dot_tab" extension="reference" />
     <attr name="item_tab_close_color" extension="reference" format="color" />
 

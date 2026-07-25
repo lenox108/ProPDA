@@ -43,6 +43,7 @@ import forpdateam.ru.forpda.ui.BottomNavWindowInset
 import forpdateam.ru.forpda.ui.EdgeToEdge
 import forpdateam.ru.forpda.ui.DimensionHelper
 import forpdateam.ru.forpda.ui.FontController
+import forpdateam.ru.forpda.ui.FlatUi
 import forpdateam.ru.forpda.ui.SystemBarAppearance
 import forpdateam.ru.forpda.ui.UiThemeStyles
 import forpdateam.ru.forpda.ui.navigation.TabNavigator
@@ -103,6 +104,7 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
     private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
     private var appliedAppFontSize: Int = 16
     private var appliedMaterialYou: Boolean = false
+    private var appliedFlatUi: Boolean = false
     private lateinit var appliedAccent: Preferences.Main.AccentPalette
     private var appliedAccentStyle: Preferences.Main.AccentStyle = Preferences.Main.AccentStyle.TONAL
 
@@ -211,6 +213,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         // Курируемый акцент («смена цвета») — после Material You; взаимоисключающи
         // по AccentPolicy (Material You приоритетнее, когда реально доступен).
         AccentApplier.applyIfEnabled(this)
+        // Плоский UI — финальный визуальный слой поверх выбранной палитры/акцента.
+        appliedFlatUi = FlatUi.applyThemeOverlay(this)
         // Последний слой: усиление контраста по системной настройке (a11y, Android 14+).
         ContrastApplier.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
@@ -458,6 +462,13 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         if (materialYouNow != appliedMaterialYou) {
             appliedMaterialYou = materialYouNow
             if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=materialYou")
+            recreate()
+            return
+        }
+        val flatUiNow = FlatUi.isEnabled(this)
+        if (flatUiNow != appliedFlatUi) {
+            appliedFlatUi = flatUiNow
+            if (BuildConfig.DEBUG) Timber.d("activityRecreated=true reason=flatUi")
             recreate()
             return
         }
