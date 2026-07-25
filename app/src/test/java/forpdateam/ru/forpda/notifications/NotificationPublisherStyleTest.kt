@@ -1,7 +1,10 @@
 package forpdateam.ru.forpda.notifications
 
+import android.graphics.Bitmap
 import androidx.core.app.NotificationCompat
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +19,22 @@ import org.robolectric.RuntimeEnvironment
  */
 @RunWith(RobolectricTestRunner::class)
 class NotificationPublisherStyleTest {
+
+    @Test
+    fun avatar_isKeptOnlyForQmsNotifications() {
+        val avatar = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        val qms = NotificationEvent(
+            NotificationEvent.Type.NEW,
+            NotificationEvent.Source.QMS,
+        )
+        val theme = NotificationEvent(
+            NotificationEvent.Type.NEW,
+            NotificationEvent.Source.THEME,
+        )
+
+        assertSame(avatar, NotificationPublisher.avatarFor(qms, avatar))
+        assertNull(NotificationPublisher.avatarFor(theme, avatar))
+    }
 
     @Test
     fun stackedStyle_picksInboxForFourOrMoreEvents() {

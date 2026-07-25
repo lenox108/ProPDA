@@ -3,16 +3,10 @@ package forpdateam.ru.forpda.downloads
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.BitmapDrawable
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.res.ResourcesCompat
 import forpdateam.ru.forpda.R
-import forpdateam.ru.forpda.common.appicon.AppIcons
 import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
-import forpdateam.ru.forpda.common.appicon.applySelectedNotificationCardIcon
 
 internal object DownloadNotifications {
     // Единый канал для всех уведомлений о загрузках
@@ -51,8 +45,6 @@ internal object DownloadNotifications {
         ensureChannel(context)
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .applySelectedNotificationIcon(context, R.drawable.ic_notify_download)
-            .setLargeIcon(appLauncherBitmap(context))
-            .applySelectedNotificationCardIcon(context)
             .setColor(ContextCompat.getColor(context, R.color.light_link_color))
             .setOnlyAlertOnce(true)
             .setOngoing(true)
@@ -64,40 +56,11 @@ internal object DownloadNotifications {
         ensureChannel(context)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .applySelectedNotificationIcon(context, R.drawable.ic_notify_download)
-            .setLargeIcon(appLauncherBitmap(context))
-            .applySelectedNotificationCardIcon(context)
             .setColor(ContextCompat.getColor(context, R.color.light_link_color))
             .setOnlyAlertOnce(false)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         return builder
-    }
-
-    /**
-     * Большая круглая иконка уведомления — лого приложения. Нужна, т.к. на ряде OEM (MIUI/ColorOS/
-     * OneUI) адаптивная launcher‑иконка в круглом слоте уведомления рендерится как пустой цветной
-     * круг без содержимого (прозрачный background + foreground вне safe zone маски). Рендерим сами
-     * из mipmap: получаем Drawable через ResourcesCompat (корректно разворачивает adaptive‑icon),
-     * кладём на Bitmap фиксированного размера.
-     */
-    private fun appLauncherBitmap(context: Context): Bitmap? {
-        val d = try {
-            ResourcesCompat.getDrawable(
-                context.resources,
-                forpdateam.ru.forpda.common.appicon.AppIcons.currentIconRes(context),
-                context.theme,
-            )
-        } catch (_: Throwable) {
-            null
-        } ?: return null
-        if (d is BitmapDrawable && d.bitmap != null) return d.bitmap
-        val size = context.resources.getDimensionPixelSize(android.R.dimen.notification_large_icon_width)
-            .coerceAtLeast(96)
-        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        d.setBounds(0, 0, size, size)
-        d.draw(canvas)
-        return bmp
     }
 }
