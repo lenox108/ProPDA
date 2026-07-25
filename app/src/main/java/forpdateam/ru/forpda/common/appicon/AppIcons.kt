@@ -292,19 +292,10 @@ object AppIcons {
     }
 }
 
-internal const val EXTRA_PREFER_SMALL_NOTIFICATION_ICON = "android.app.preferSmallIcon"
-
-/**
- * Ставит выбранный системный значок уведомления.
- *
- * До Android 17 small icon используется в статус-баре и стандартном шаблоне
- * карточки. Начиная с Android 17 система по умолчанию может показывать в карточке
- * launcher icon; extra ниже просит оставить там тот же small icon.
- */
+/** Ставит выбранный small icon статус-бара. */
 fun NotificationCompat.Builder.applySelectedNotificationIcon(
         context: Context,
         @DrawableRes eventGlyphRes: Int,
 ): NotificationCompat.Builder = apply {
     setSmallIcon(AppIcons.notificationSmallIcon(context, eventGlyphRes))
-    extras.putBoolean(EXTRA_PREFER_SMALL_NOTIFICATION_ICON, true)
 }
