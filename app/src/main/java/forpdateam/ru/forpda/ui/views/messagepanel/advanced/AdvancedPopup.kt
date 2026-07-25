@@ -79,7 +79,7 @@ class AdvancedPopup(
 
         binding.tabLayout.setupWithViewPager(viewPager)
         val tabIcons = intArrayOf(
-            R.drawable.ic_code_font,
+            R.drawable.ic_format_tools,
             R.drawable.ic_smile,
             R.drawable.ic_emoji,
             R.drawable.ic_history,
@@ -336,7 +336,7 @@ class AdvancedPopup(
         transition(EditorInputEvent.HIDE)
         compactOpenHeight = 0
         compactOpenRetryScheduled = false
-        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_code_font))
+        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_format_tools))
 
         hideCompactAdvancedViewOnly()
         clearCompactFakeKeyboardState()
@@ -368,7 +368,7 @@ class AdvancedPopup(
         compactOpenRetryScheduled = false
         hideCompactAdvancedViewOnly()
 
-        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_code_font))
+        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_format_tools))
         clearCompactFakeKeyboardState()
         messagePanel.setImeSuppressed(false)
 
@@ -537,7 +537,7 @@ class AdvancedPopup(
             d.isFakeKeyboardShow = false
             dimensionsProvider.update(d)
         }
-        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_code_font))
+        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_format_tools))
         // Любое закрытие панели (back / programmatic / system) должно возвращать режим ввода.
         messagePanel.setImeSuppressed(false)
         // Восстановить курсор/мигание (после возврата фокуса/перекрытия).
