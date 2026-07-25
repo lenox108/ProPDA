@@ -73,6 +73,40 @@ class LinkHandlerUrlPolicyTest {
     }
 
     @Test
+    fun `plain browser post url is tagged as explicit post navigation`() {
+        val screen = slot<Screen>()
+
+        linkHandler.handle(
+                "https://4pda.to/forum/index.php?showtopic=123&p=456",
+                router
+        )
+
+        verify { router.navigateTo(capture(screen)) }
+        val theme = screen.captured as Screen.Theme
+        assertEquals("link", theme.topicOpenSource)
+        assertEquals("explicit_post", theme.topicOpenIntent)
+    }
+
+    @Test
+    fun `list open intent stays authoritative for a plain post parameter`() {
+        val screen = slot<Screen>()
+
+        linkHandler.handle(
+                "https://4pda.to/forum/index.php?showtopic=123&p=456",
+                router,
+                mapOf(
+                        Screen.Theme.ARG_TOPIC_OPEN_SOURCE to "favorites",
+                        Screen.Theme.ARG_TOPIC_OPEN_INTENT to "fresh_favorites"
+                )
+        )
+
+        verify { router.navigateTo(capture(screen)) }
+        val theme = screen.captured as Screen.Theme
+        assertEquals("favorites", theme.topicOpenSource)
+        assertEquals("fresh_favorites", theme.topicOpenIntent)
+    }
+
+    @Test
     fun `handle keeps external http links external`() {
         linkHandler.handle("https://example.com/path", router)
 

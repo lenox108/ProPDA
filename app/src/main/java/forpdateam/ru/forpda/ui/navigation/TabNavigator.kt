@@ -11,6 +11,7 @@ import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import forpdateam.ru.forpda.diagnostic.FpdaDebugLog
 import forpdateam.ru.forpda.diagnostic.NavBackstackTrace
 import forpdateam.ru.forpda.presentation.Screen
+import forpdateam.ru.forpda.presentation.theme.ThemeUrlPolicy
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
 import forpdateam.ru.forpda.ui.activities.WebVewNotFoundActivity
@@ -739,11 +740,7 @@ class TabNavigator(
             }
 
     private fun themeUrlTargetsSpecificPost(url: String): Boolean {
-        val u = url.lowercase()
-        if (u.contains("act=findpost")) return true
-        if (u.contains("view=findpost")) return true
-        if (Regex("[?&]pid=\\d+").containsMatchIn(u)) return true
-        return false
+        return ThemeUrlPolicy.isExplicitPostNavigationUrl(url)
     }
 
     private fun logQmsNavigation(command: String, screen: Screen) {
