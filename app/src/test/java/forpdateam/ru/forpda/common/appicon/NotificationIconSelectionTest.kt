@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.common.appicon
 
 import android.content.Context
+import androidx.core.app.NotificationCompat
 import androidx.core.graphics.drawable.IconCompat
 import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
@@ -8,6 +9,7 @@ import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Preferences
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,6 +38,15 @@ class NotificationIconSelectionTest {
 
         assertEquals(IconCompat.TYPE_RESOURCE, icon.type)
         assertEquals(R.drawable.ic_notify_qms, icon.resId)
+    }
+
+    @Test
+    fun `selected small icon is preferred in notification card`() {
+        val notification = NotificationCompat.Builder(context, "test")
+                .applySelectedNotificationIcon(context, R.drawable.ic_notify_download)
+                .build()
+
+        assertTrue(notification.extras.getBoolean(EXTRA_PREFER_SMALL_NOTIFICATION_ICON))
     }
 
     @Test

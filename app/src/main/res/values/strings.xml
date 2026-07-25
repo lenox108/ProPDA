@@ -805,12 +805,12 @@
     <string name="app_icon_term_4_desc">Окно терминала с зелёной четвёркой; светлая и чёрная темы.</string>
     <string name="app_icon_circuit_4">Микросхема</string>
     <string name="app_icon_circuit_4_desc">Четвёрка из дорожек платы; белая и чёрная темы.</string>
-    <string name="pref_title_notification_icon">Значок в статус-баре</string>
+    <string name="pref_title_notification_icon">Иконка уведомлений</string>
     <string name="notification_icon_event">По типу события</string>
     <string name="notification_icon_event_desc">Свой значок для ответов, QMS, упоминаний и загрузок.</string>
     <string name="notification_icon_app">Как иконка приложения</string>
     <string name="notification_icon_app_desc">Следует за выбранной иконкой приложения.</string>
-    <string name="notification_icon_hint">Android рисует значок в статус-баре одним цветом — различаться будет только форма.</string>
+    <string name="notification_icon_hint">Один выбранный значок используется слева в уведомлении и в статус-баре. Android отображает его одним цветом, поэтому различается только форма.</string>
     <string name="notification_qms_me">Я</string>
     <string name="app_icon_minimal_4">Минималистичная 4</string>
     <string name="app_icon_minimal_4_desc">Чистая четвёрка с зелёной точкой</string>
