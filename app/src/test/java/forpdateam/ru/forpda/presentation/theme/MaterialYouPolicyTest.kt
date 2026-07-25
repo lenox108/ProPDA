@@ -86,18 +86,18 @@ class MaterialYouPolicyTest {
     }
 
     @Test
-    fun resolveMode_accentOnly_forAmoled() {
+    fun resolveMode_amoledSurface_forAmoled() {
         assertEquals(
-                MaterialYouPolicy.Mode.ACCENT_ONLY,
+                MaterialYouPolicy.Mode.AMOLED_SURFACE,
                 MaterialYouPolicy.resolveMode(true, system, amoled, isNight = true)
         )
     }
 
     @Test
-    fun resolveMode_systemAmoled_accentOnlyAtNight_surfaceByDay() {
+    fun resolveMode_systemAmoled_amoledSurfaceAtNight_surfaceByDay() {
         assertEquals(
-                "SYSTEM_AMOLED at night uses the pure-black AMOLED skin",
-                MaterialYouPolicy.Mode.ACCENT_ONLY,
+                "SYSTEM_AMOLED at night uses black canvas with tinted elevated surfaces",
+                MaterialYouPolicy.Mode.AMOLED_SURFACE,
                 MaterialYouPolicy.resolveMode(true, system, systemAmoled, isNight = true)
         )
         assertEquals(

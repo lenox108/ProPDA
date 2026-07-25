@@ -211,7 +211,7 @@
     <!--
         Material You: AMOLED-оверлей. Накладывается ПОВЕРХ DynamicColors для
         AMOLED-скинов (ThemeMode.AMOLED и SYSTEM_AMOLED ночью) — см.
-        MaterialYouApplier + MaterialYouPolicy (Mode.ACCENT_ONLY).
+        MaterialYouApplier + MaterialYouPolicy (Mode.AMOLED_SURFACE).
 
         Зачем отдельный оверлей вместо MaterialYouAccent:
         DynamicColors переопределяет ВСЕ M3-surface-роли (colorSurface,
@@ -226,10 +226,8 @@
         шапка на сером фоне.
 
         Решение: наследуем акцент из MaterialYouAccent (colorPrimary/colorAccent
-        трекают обои), но ПИНИМ все surface-роли обратно на amoled-чёрный. Это
-        концептуально то же, что делает базовая AmoledAppTheme
-        (values-night/styles.xml) — все surface-роли = чистый чёрный, карточки
-        отделяются обводкой list_plate_stroke, а не поднятием тона.
+        трекают обои), пиним базовое полотно на amoled-чёрный, а приподнятые
+        surface-роли — на отдельный сдержанный оттенок обоев L*=11.
 
         Безопасность: пины КОНКРЕТНЫЕ @color/amoled_* (не ?attr/) — их безопасно
         читает и TypedArray.getColorStateList, и resolveAttribute (в отличие от
@@ -253,8 +251,8 @@
             более цветном слоте system_accent2 (на AMOLED-светлотах бесцветный
             neutral2 не читается — см. material_you_amoled_base.xml).
 
-            Осознанный размен: чистого #000000 под Material You больше нет. AMOLED
-            БЕЗ Material You (базовая AmoledAppTheme) остаётся чистым чёрным.
+            Осознанный размен: под Material You полностью чёрным остаётся полотно,
+            но не карточки. AMOLED БЕЗ Material You остаётся целиком чёрным.
         -->
         <!--
             БАЗА остаётся чистым amoled-чёрным: фон страниц, полотно хрома (шапка,

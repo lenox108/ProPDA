@@ -19,9 +19,11 @@
     читается (на этом провалился заход с примесью в чёрное полотно,
     #000000 -> #0E1219, «не видно»). accent2 несёт заметную цветность.
 
-    Светлота L* = 14 — уровень статичной @color/dark_card_background (#242424):
-    карточка уверенно читается НАД чёрным фоном, оставаясь тёмной.
+    Светлота L* = 11: первый заход был 14 (уровень статичной
+    @color/dark_card_background #242424), но по эталонным скринам пользователя
+    карточки вышли светлее образца. 11 — компромисс: карточка всё ещё читается
+    над чёрным фоном, но выглядит глубже и ближе к AMOLED-референсу.
 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@android:color/system_accent2_700" android:lStar="14" />
+    <item android:color="@android:color/system_accent2_700" android:lStar="11" />
 </selector>

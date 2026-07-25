@@ -29,9 +29,8 @@ import org.robolectric.annotation.Config
  *    детерминированная формула тонирования обоями.
  *
  * 3. С наложенным [R.style.ThemeOverlay_ForPDA_MaterialYouAmoled] (путь AMOLED)
- *    флаги dynamic И amoled = true → полотно тонируется примесью
- *    [ChromeCanvas.AMOLED_BLEND] поверх чёрной базы и ОТЛИЧАЕТСЯ от чёрного
- *    (в AMOLED раньше из обоев менялся только акцент — жалоба).
+ *    полотно остаётся чистым чёрным, а приподнятые поверхности получают
+ *    wallpaper-оттенок с контрактной светлотой L*=11.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = android.app.Application::class)
@@ -120,11 +119,20 @@ class ChromeCanvasTest {
 
         // 2. КАРТОЧКИ тонированы обоями — иначе Material You в AMOLED не виден
         //    нигде, кроме акцента (исходная жалоба).
+        val card = activity.getColorFromAttr(
+                com.google.android.material.R.attr.colorSurfaceContainerHigh)
         assertNotEquals(
                 "card surface must be wallpaper-tinted, not amoled black",
                 amoledBlack,
-                activity.getColorFromAttr(
-                        com.google.android.material.R.attr.colorSurfaceContainerHigh),
+                card,
+        )
+        val lab = DoubleArray(3)
+        ColorUtils.colorToLAB(card, lab)
+        assertEquals(
+                "AMOLED card lightness must stay at the approved L*=11",
+                11.0,
+                lab[0],
+                0.75,
         )
     }
 }

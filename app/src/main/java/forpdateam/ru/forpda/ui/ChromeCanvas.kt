@@ -28,15 +28,12 @@ import forpdateam.ru.forpda.common.getColorFromAttr
  * уже несёт оттенок обоев (lStar-пин поверх системного слота, 93aacd5), и
  * полотно обязано оставаться ТЕМНЕЕ карточек — примесь контейнера это ломала.
  *
- * Гейт — атрибут-флаг [R.attr.chrome_canvas_dynamic], который ставят
+ * Гейт — атрибут-флаг [R.attr.chrome_canvas_dynamic], который ставит только
  * `ThemeOverlay.ForPDA.MaterialYouSurface` (Material You, палитра SYSTEM,
- * светлая/тёмная) И `ThemeOverlay.ForPDA.MaterialYouAmoled` (AMOLED под MY).
- * Everywhere else (15 статических палитр, MY off, API < 31) флаг не разрешается
- * → [chromeCanvasColor] возвращает ровно `fallbackAttr`, т.е. в точности прежний
- * цвет — статика не может измениться by construction. Под AMOLED база (Lowest)
- * с 22.07.2026 тоже ДИНАМИЧЕСКАЯ: MaterialYouAmoled больше не пинит surface-роли
- * на чёрный, поэтому полотно (как и в тёмной) берётся КАК ЕСТЬ, [DARK_BLEND] = 0
- * — оттенок обоев уже внутри самой базы.
+ * светлая/тёмная). В AMOLED-оверлее флага нет: [chromeCanvasColor] возвращает
+ * чёрный `fallbackAttr`, а оттенок обоев получают только карточки через
+ * `content_card_surface`. Everywhere else (15 статических палитр, MY off,
+ * API < 31) тоже используется точный fallback — статика не меняется.
  *
  * Почему флаг в теме, а не чтение префов: тема — единственный источник правды о
  * том, какие оверлеи РЕАЛЬНО наложились на активити (см. MaterialYouApplier);
