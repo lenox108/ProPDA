@@ -461,7 +461,7 @@ open class ExtendedWebView @JvmOverloads constructor(
         evalJs(
             """
             document.documentElement.style.setProperty("--app-font-family", ${fontFamily.jsStringLiteral()});
-            document.documentElement.classList.remove(${FontController.ROBOTO_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.INTER_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.SOURCE_SANS_3_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.OPEN_SANS_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.SYSTEM_WEB_FONT_CLASS.jsStringLiteral()});
+            document.documentElement.classList.remove(${FontController.ROBOTO_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.INTER_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.SOURCE_SANS_3_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.OPEN_SANS_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.APPETITE_PRO_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.SYSTEM_WEB_FONT_CLASS.jsStringLiteral()}, ${FontController.ROBOTO_MONO_WEB_FONT_CLASS.jsStringLiteral()});
             document.documentElement.classList.add(${fontClass.jsStringLiteral()});
             """.trimIndent()
         )

@@ -83,6 +83,12 @@ class FontManagerTest {
         assertEquals("\"ForPdaOpenSans\", system-ui, sans-serif", FontManager.webFontFamily(AppFontMode.OPEN_SANS))
         assertEquals(forpdateam.ru.forpda.R.style.ThemeOverlay_ForPDA_OpenSansFont, FontController.nativeThemeOverlay(AppFontMode.OPEN_SANS))
         assertEquals("forpda_open_sans", FontController.nativeFontFamilyApplied(AppFontMode.OPEN_SANS))
+
+        assertEquals(AppFontMode.APPETITE_PRO, FontManager.parseMode("APPETITE_PRO"))
+        assertEquals("font_appetite_pro", FontManager.webFontClass(AppFontMode.APPETITE_PRO))
+        assertEquals("\"ForPdaAppetitePro\", system-ui, sans-serif", FontManager.webFontFamily(AppFontMode.APPETITE_PRO))
+        assertEquals(forpdateam.ru.forpda.R.style.ThemeOverlay_ForPDA_AppetiteProFont, FontController.nativeThemeOverlay(AppFontMode.APPETITE_PRO))
+        assertEquals("forpda_appetite_pro", FontController.nativeFontFamilyApplied(AppFontMode.APPETITE_PRO))
     }
 
     @Test
@@ -106,6 +112,14 @@ class FontManagerTest {
         assertTrue(sourceCss.contains("font-weight: 450;"))
         assertFalse(sourceCss.contains("font-weight: 200 900;"))
         assertTrue(sourceCss.contains("font-weight: 600;"))
+
+        val appetiteCss = FontManager.webFontCss(AppFontMode.APPETITE_PRO)
+        assertTrue(appetiteCss.contains("font-family: \"ForPdaAppetitePro\";"))
+        assertTrue(appetiteCss.contains("fonts/appetite_pro/appetite_pro_regular.ttf"))
+        assertTrue(appetiteCss.contains("fonts/appetite_pro/appetite_pro_bold_italic.ttf"))
+        assertTrue(appetiteCss.contains("font-weight: 400;"))
+        assertTrue(appetiteCss.contains("font-weight: 700;"))
+        assertFalse(appetiteCss.contains("ForPdaInter"))
     }
 
     @Test

@@ -38,6 +38,13 @@ private val OpenSansFontFamily = FontFamily(
         Font(R.font.open_sans_italic, FontWeight.Normal, FontStyle.Italic),
 )
 
+private val AppetiteProFontFamily = FontFamily(
+        Font(R.font.appetite_pro_regular, FontWeight.Normal, FontStyle.Normal),
+        Font(R.font.appetite_pro_italic, FontWeight.Normal, FontStyle.Italic),
+        Font(R.font.appetite_pro_bold, FontWeight.Bold, FontStyle.Normal),
+        Font(R.font.appetite_pro_bold_italic, FontWeight.Bold, FontStyle.Italic),
+)
+
 /** Variable font — `forpda_source_sans_3.xml` pins discrete `wght` instances via fontVariationSettings. */
 @OptIn(ExperimentalTextApi::class)
 private val SourceSans3FontFamily = FontFamily(
@@ -57,6 +64,7 @@ internal fun forpdaFontFamily(mode: AppFontMode): FontFamily = when (mode) {
     AppFontMode.INTER -> InterFontFamily
     AppFontMode.SOURCE_SANS_3 -> SourceSans3FontFamily
     AppFontMode.OPEN_SANS -> OpenSansFontFamily
+    AppFontMode.APPETITE_PRO -> AppetiteProFontFamily
     AppFontMode.ROBOTO_MONO -> FontFamily.Monospace
 }
 

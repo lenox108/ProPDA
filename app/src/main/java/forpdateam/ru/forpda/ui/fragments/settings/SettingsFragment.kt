@@ -873,7 +873,8 @@ class SettingsFragment : BaseSettingFragment() {
             AppFontMode.INTER -> getString(R.string.pref_summary_app_font_inter)
             AppFontMode.SOURCE_SANS_3 -> getString(R.string.pref_summary_app_font_source_sans_3)
             AppFontMode.OPEN_SANS -> getString(R.string.pref_summary_app_font_open_sans)
-            AppFontMode.ROBOTO_MONO -> "Roboto Mono — моноширинный; применится после возврата из настроек"
+            AppFontMode.APPETITE_PRO -> getString(R.string.pref_summary_app_font_appetite_pro)
+            AppFontMode.ROBOTO_MONO -> getString(R.string.pref_summary_app_font_roboto_mono)
         }
     }
 

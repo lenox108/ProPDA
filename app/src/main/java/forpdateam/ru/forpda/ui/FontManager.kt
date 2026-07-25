@@ -14,6 +14,7 @@ enum class AppFontMode {
     INTER,
     SOURCE_SANS_3,
     OPEN_SANS,
+    APPETITE_PRO,
     ROBOTO_MONO
 }
 
@@ -23,12 +24,14 @@ object FontController {
     private const val INTER_WEB_FONT_STACK = "\"ForPdaInter\", system-ui, sans-serif"
     private const val SOURCE_SANS_3_WEB_FONT_STACK = "\"ForPdaSourceSans3\", system-ui, sans-serif"
     private const val OPEN_SANS_WEB_FONT_STACK = "\"ForPdaOpenSans\", system-ui, sans-serif"
+    private const val APPETITE_PRO_WEB_FONT_STACK = "\"ForPdaAppetitePro\", system-ui, sans-serif"
     private const val SYSTEM_WEB_FONT_STACK = "system-ui, sans-serif"
     private const val ROBOTO_MONO_WEB_FONT_STACK = "\"Roboto Mono\", monospace"
     const val ROBOTO_WEB_FONT_CLASS = "font_roboto"
     const val INTER_WEB_FONT_CLASS = "font_inter"
     const val SOURCE_SANS_3_WEB_FONT_CLASS = "font_source_sans_3"
     const val OPEN_SANS_WEB_FONT_CLASS = "font_open_sans"
+    const val APPETITE_PRO_WEB_FONT_CLASS = "font_appetite_pro"
     const val SYSTEM_WEB_FONT_CLASS = "font_system"
     const val ROBOTO_MONO_WEB_FONT_CLASS = "font_roboto_mono"
 
@@ -57,6 +60,7 @@ object FontController {
         AppFontMode.INTER -> INTER_WEB_FONT_STACK
         AppFontMode.SOURCE_SANS_3 -> SOURCE_SANS_3_WEB_FONT_STACK
         AppFontMode.OPEN_SANS -> OPEN_SANS_WEB_FONT_STACK
+        AppFontMode.APPETITE_PRO -> APPETITE_PRO_WEB_FONT_STACK
         AppFontMode.ROBOTO_MONO -> ROBOTO_MONO_WEB_FONT_STACK
     }
 
@@ -66,6 +70,7 @@ object FontController {
         AppFontMode.INTER -> INTER_WEB_FONT_CLASS
         AppFontMode.SOURCE_SANS_3 -> SOURCE_SANS_3_WEB_FONT_CLASS
         AppFontMode.OPEN_SANS -> OPEN_SANS_WEB_FONT_CLASS
+        AppFontMode.APPETITE_PRO -> APPETITE_PRO_WEB_FONT_CLASS
         AppFontMode.ROBOTO_MONO -> ROBOTO_MONO_WEB_FONT_CLASS
     }
 
@@ -76,6 +81,7 @@ object FontController {
         AppFontMode.INTER -> R.style.ThemeOverlay_ForPDA_InterFont
         AppFontMode.SOURCE_SANS_3 -> R.style.ThemeOverlay_ForPDA_SourceSans3Font
         AppFontMode.OPEN_SANS -> R.style.ThemeOverlay_ForPDA_OpenSansFont
+        AppFontMode.APPETITE_PRO -> R.style.ThemeOverlay_ForPDA_AppetiteProFont
         AppFontMode.ROBOTO_MONO -> R.style.ThemeOverlay_ForPDA_RobotoMonoFont
     }
 
@@ -85,6 +91,7 @@ object FontController {
         AppFontMode.INTER -> "forpda_inter"
         AppFontMode.SOURCE_SANS_3 -> "forpda_source_sans_3"
         AppFontMode.OPEN_SANS -> "forpda_open_sans"
+        AppFontMode.APPETITE_PRO -> "forpda_appetite_pro"
         AppFontMode.ROBOTO_MONO -> "monospace"
     }
 
@@ -210,6 +217,32 @@ html {
     font-weight: 300 800;
 }
 """.trim()
+        AppFontMode.APPETITE_PRO -> """
+@font-face {
+    font-family: "ForPdaAppetitePro";
+    src: url("file:///android_asset/fonts/appetite_pro/appetite_pro_regular.ttf");
+    font-style: normal;
+    font-weight: 400;
+}
+@font-face {
+    font-family: "ForPdaAppetitePro";
+    src: url("file:///android_asset/fonts/appetite_pro/appetite_pro_italic.ttf");
+    font-style: italic;
+    font-weight: 400;
+}
+@font-face {
+    font-family: "ForPdaAppetitePro";
+    src: url("file:///android_asset/fonts/appetite_pro/appetite_pro_bold.ttf");
+    font-style: normal;
+    font-weight: 700;
+}
+@font-face {
+    font-family: "ForPdaAppetitePro";
+    src: url("file:///android_asset/fonts/appetite_pro/appetite_pro_bold_italic.ttf");
+    font-style: italic;
+    font-weight: 700;
+}
+""".trim()
     }
 
     fun webFontCss(useSystemFont: Boolean): String {
@@ -306,7 +339,7 @@ code,
 }
 </style>
 <script>
-document.documentElement.classList.remove("$ROBOTO_WEB_FONT_CLASS", "$INTER_WEB_FONT_CLASS", "$SOURCE_SANS_3_WEB_FONT_CLASS", "$OPEN_SANS_WEB_FONT_CLASS", "$SYSTEM_WEB_FONT_CLASS", "$ROBOTO_MONO_WEB_FONT_CLASS");
+document.documentElement.classList.remove("$ROBOTO_WEB_FONT_CLASS", "$INTER_WEB_FONT_CLASS", "$SOURCE_SANS_3_WEB_FONT_CLASS", "$OPEN_SANS_WEB_FONT_CLASS", "$APPETITE_PRO_WEB_FONT_CLASS", "$SYSTEM_WEB_FONT_CLASS", "$ROBOTO_MONO_WEB_FONT_CLASS");
 document.documentElement.classList.add("$fontClass");
 </script>
 """.trim()
@@ -320,6 +353,7 @@ object FontManager {
     const val INTER_WEB_FONT_CLASS = FontController.INTER_WEB_FONT_CLASS
     const val SOURCE_SANS_3_WEB_FONT_CLASS = FontController.SOURCE_SANS_3_WEB_FONT_CLASS
     const val OPEN_SANS_WEB_FONT_CLASS = FontController.OPEN_SANS_WEB_FONT_CLASS
+    const val APPETITE_PRO_WEB_FONT_CLASS = FontController.APPETITE_PRO_WEB_FONT_CLASS
     const val SYSTEM_WEB_FONT_CLASS = FontController.SYSTEM_WEB_FONT_CLASS
 
     fun mode(useSystemFont: Boolean): AppFontMode = FontController.mode(useSystemFont)
