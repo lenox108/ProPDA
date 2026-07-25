@@ -600,11 +600,11 @@
     <string name="pref_title_app_icon">App icon</string>
     <string name="pref_summary_app_icon">Pick the icon shown on your home screen</string>
     <string name="app_icon_changed">The icon will change once you leave the app</string>
-    <string name="app_icon_default">Classic P4DA</string>
+    <string name="app_icon_default">Retro Four</string>
     <string name="app_icon_four_dark">Dark</string>
     <string name="app_icon_four_blue">Blue</string>
     <string name="app_icon_puzzle">Puzzle 4</string>
-    <string name="app_icon_default_desc">Orange P4DA mark on a light surface.</string>
+    <string name="app_icon_default_desc">Orange icon with a four on a dark display and a DA label.</string>
     <string name="app_icon_four_dark_desc">White four on a graphite plate.</string>
     <string name="app_icon_four_blue_desc">Blue four on a white plate.</string>
     <string name="app_icon_puzzle_desc">Colour puzzle pieces; white background, black in dark theme.</string>
