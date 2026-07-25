@@ -96,6 +96,20 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun offtopFont_insideQuote_keepsQuote_bodyRenderedSmallAndGrey() {
+        val html = "<div class=\"post-block quote\"><div class=\"block-title\">User @ today</div>" +
+                "<div class=\"block-body\">до <font style=\"font-size:9px;color:gray;\">офф</font> после</div></div>"
+
+        val quote = renderer.render(html).filterIsInstance<BodyBlock.Quote>().single()
+        val inner = quote.inner.filterIsInstance<BodyBlock.Text>().single()
+
+        assertTrue(inner.html.contains("<small"))
+        assertTrue(inner.html.contains("color:#808080"))
+        assertFalse(inner.html.contains("font-size"))
+        assertTrue(inner.html.contains("до") && inner.html.contains("офф") && inner.html.contains("после"))
+    }
+
+    @Test
     fun code_isNativeCode_withDecodedTextAndLineBreaks() {
         val blocks = renderer.render(fixture("code_block.html"))
         val code = blocks.filterIsInstance<BodyBlock.Code>().single()
