@@ -13,7 +13,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.appicon.applySelectedNotificationIcon
-import forpdateam.ru.forpda.common.appicon.applySelectedNotificationCardIcon
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
@@ -45,7 +44,7 @@ object NotificationPublisher {
             prefs: NotificationPreferencesHolder,
             event: NotificationEvent,
             intentUrlOverride: String? = null,
-            largeIcon: android.graphics.Bitmap? = null,
+            avatar: android.graphics.Bitmap? = null,
     ): Int? {
         if (!prefs.getMainEnabled()) return null
 
@@ -57,6 +56,7 @@ object NotificationPublisher {
         val text = textFor(context, event)
         val summary = summaryFor(context, event)
         val intentUrl = intentUrlOverride ?: intentUrlFor(event)
+        val qmsAvatar = avatarFor(event, avatar)
 
         val notifyIntent = Intent(Intent.ACTION_VIEW, Uri.parse(intentUrl))
                 .setClass(context, MainActivity::class.java)
@@ -76,23 +76,16 @@ object NotificationPublisher {
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-                .applySelectedNotificationIcon(
-                        context,
-                        smallIconFor(event),
-                        applyCardIcon = !event.fromQms(),
-                )
+                .applySelectedNotificationIcon(context, smallIconFor(event))
                 .setContentTitle(title)
                 .setContentText(text)
-                .setStyle(styleFor(context, event, title, text, summary, largeIcon))
+                .setStyle(styleFor(context, event, title, text, summary, qmsAvatar))
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
 
-        if (largeIcon != null && !event.fromSite()) {
-            builder.setLargeIcon(largeIcon)
-        }
-        if (!event.fromQms()) builder.applySelectedNotificationCardIcon(context)
+        qmsAvatar?.let { builder.setLargeIcon(it) }
         NotificationActions.apply(context, builder, event)
 
         if (!canNotify(context, channelId, event.notificationLogCategory())) return null
@@ -102,6 +95,12 @@ object NotificationPublisher {
         Log.i(NOTIFICATIONS_LOG_TAG, "Published ${event.notificationLogCategory()} notification")
         return notifyId
     }
+
+    /** Цветная large icon допустима только как аватар собеседника в QMS. */
+    internal fun avatarFor(
+            event: NotificationEvent,
+            avatar: android.graphics.Bitmap?,
+    ): android.graphics.Bitmap? = avatar.takeIf { event.fromQms() }
 
     /** @return ID опубликованного stacked-уведомления либо null, если публикация не состоялась. */
     @SuppressLint("MissingPermission")

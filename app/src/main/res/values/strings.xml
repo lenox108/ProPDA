@@ -811,12 +811,6 @@
     <string name="notification_icon_app">Как иконка приложения</string>
     <string name="notification_icon_app_desc">Следует за выбранной иконкой приложения.</string>
     <string name="notification_icon_hint">Android рисует значок в статус-баре одним цветом — различаться будет только форма.</string>
-    <string name="pref_title_notification_card_icon">Иконка уведомлений</string>
-    <string name="notification_card_icon_auto">Автоматически</string>
-    <string name="notification_card_icon_auto_desc">Сохранять аватар или штатную иконку события.</string>
-    <string name="notification_card_icon_app">Как иконка приложения</string>
-    <string name="notification_card_icon_app_desc">Следовать за выбранной иконкой приложения.</string>
-    <string name="notification_card_icon_hint">Выберите цветную иконку содержимого карточки независимо от значка в статус-баре. QMS всегда сохраняет аватар отправителя. Точное положение иконки определяет оболочка Android.</string>
     <string name="notification_qms_me">Я</string>
     <string name="app_icon_minimal_4">Минималистичная 4</string>
     <string name="app_icon_minimal_4_desc">Чистая четвёрка с зелёной точкой</string>

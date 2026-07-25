@@ -472,7 +472,7 @@ class NotificationsService : Service() {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip incoming notification: app preference disabled")
             return
         }
-        if (notificationPreferencesHolder.getMainAvatarsEnabled()) {
+        if (event.fromQms() && notificationPreferencesHolder.getMainAvatarsEnabled()) {
             val cacheKey = "user_${event.userId}"
             avatarBitmapCache.get(cacheKey)?.let { cached ->
                 sendNotification(event, cached)
@@ -507,7 +507,7 @@ class NotificationsService : Service() {
     }
 
     fun sendNotification(event: NotificationEvent, avatar: Bitmap?) {
-        NotificationPublisher.publish(this, notificationPreferencesHolder, event, largeIcon = avatar)
+        NotificationPublisher.publish(this, notificationPreferencesHolder, event, avatar = avatar)
                 ?.let { postedEventNotifyIds.add(it) }
     }
 

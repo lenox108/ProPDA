@@ -43,6 +43,19 @@ class NotificationsServiceAvatarCacheTest {
     }
 
     @Test
+    fun sendNotification_loadsAvatarsOnlyForQms() {
+        val body = readServiceSource()
+        val sendOpen = body.indexOf("fun sendNotification(event: NotificationEvent) {")
+        val cacheCheck = body.indexOf("avatarBitmapCache.get(cacheKey)", sendOpen)
+        val qmsGate = body.indexOf("if (event.fromQms()", sendOpen)
+
+        assertTrue(
+            "загрузка аватара должна быть закрыта QMS-гейтом до обращения к кэшу",
+            sendOpen >= 0 && qmsGate in (sendOpen + 1) until cacheCheck,
+        )
+    }
+
+    @Test
     fun avatarCache_isLruCacheOfSize64() {
         val body = readServiceSource()
         val regex = Regex(
