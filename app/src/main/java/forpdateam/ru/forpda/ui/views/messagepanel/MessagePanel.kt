@@ -15,6 +15,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
@@ -103,6 +104,7 @@ class MessagePanel(
     
     private var params: ViewGroup.LayoutParams? = null
     private var isMonospace = true
+    private var isSending = false
 
     /**
      * When true, editor must keep focus/selection but never show IME automatically.
@@ -238,15 +240,7 @@ class MessagePanel(
 
         textWatcher = object : SimpleTextWatcher() {
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-                if (s.isNotEmpty()) {
-                    if (sendButton?.colorFilter == null) {
-                        sendButton?.setColorFilter(context.getColorFromAttr(R.attr.colorAccent))
-                    }
-                } else {
-                    if (sendButton?.colorFilter != null) {
-                        sendButton?.clearColorFilter()
-                    }
-                }
+                updateSendAppearance()
             }
         }
         messageField?.addTextChangedListener(requireNotNull(textWatcher))
@@ -409,8 +403,23 @@ class MessagePanel(
     }
     
     fun setProgressState(state: Boolean) {
-        sendProgress?.visibility = if (state) View.VISIBLE else View.GONE
-        sendButton?.visibility = if (state) View.GONE else View.VISIBLE
+        isSending = state
+        if (state) {
+            hidePopupWindows()
+            attachmentsPopup?.dismiss()
+            hideImeFromEditor(clearFocus = false)
+        }
+        sendProgress.visibility = if (state) View.VISIBLE else View.GONE
+        sendButton.visibility = if (state) View.GONE else View.VISIBLE
+        messageField.isEnabled = !state
+        advancedButton.isEnabled = !state
+        attachmentsButton.isEnabled = !state
+        fullButton.isEnabled = !state
+        hideButton?.isEnabled = !state
+        editPollButton?.isEnabled = !state
+        previewButton.isEnabled = !state
+        clearMessageButton.isEnabled = !state
+        updateSendAppearance()
     }
 
     fun isInputBlocked(): Boolean =
@@ -527,8 +536,9 @@ class MessagePanel(
     }
     
     fun updateAttachmentsCounter(count: Int) {
-        attachmentsCounter?.text = count.toString()
-        attachmentsCounter?.visibility = if (count > 0) View.VISIBLE else View.GONE
+        attachmentsCounter.text = count.toString()
+        attachmentsCounter.visibility = if (count > 0) View.VISIBLE else View.GONE
+        updateSendAppearance()
     }
     
     val message: String
@@ -536,6 +546,31 @@ class MessagePanel(
     
     val attachments: List<AttachmentItem>
         get() = attachmentsPopup?.getAttachments() ?: emptyList()
+
+    fun captureSnapshot(): MessagePanelSnapshot {
+        val range = selectionRange
+        val items = attachments.toList()
+        return MessagePanelSnapshot(
+            message = message,
+            selectionStart = range[0],
+            selectionEnd = range[1],
+            attachments = items,
+            attachmentIdentities = items.map(AttachmentItem::toIdentity),
+        )
+    }
+
+    /**
+     * Очищает только то состояние, которое действительно было отправлено. Если редактор успел
+     * получить другое состояние, оно не теряется при позднем ответе сервера.
+     */
+    fun clearIfUnchanged(snapshot: MessagePanelSnapshot): Boolean {
+        val isSame = message == snapshot.message &&
+            attachments.map(AttachmentItem::toIdentity) == snapshot.attachmentIdentities
+        if (!isSame) return false
+        clearMessage()
+        clearAttachments()
+        return true
+    }
     
     fun clearMessage() {
         messageField?.setText("")
@@ -543,6 +578,18 @@ class MessagePanel(
     
     fun clearAttachments() {
         attachmentsPopup?.clearAttachments()
+    }
+
+    private fun updateSendAppearance() {
+        if (!::sendButton.isInitialized) return
+        val hasContent = message.isNotEmpty() || attachments.isNotEmpty()
+        if (hasContent) {
+            sendButton.setColorFilter(context.getColorFromAttr(R.attr.colorAccent))
+        } else {
+            sendButton.clearColorFilter()
+        }
+        sendButton.isEnabled = !isSending
+        sendButton.alpha = if (isSending) 0.4f else 1f
     }
     
     private fun onCreatePanel() {
@@ -598,9 +645,49 @@ class MessagePanel(
             movementMethod = LinkMovementMethod.getInstance()
         }
 
+        val previewContent = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(
+                previewView,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                )
+            )
+            if (attachments.isNotEmpty()) {
+                addView(
+                    TextView(context).apply {
+                        setTextColor(
+                            context.getColorFromAttr(
+                                com.google.android.material.R.attr.colorOnSurfaceVariant
+                            )
+                        )
+                        textSize = 14f
+                        setPadding(
+                            resources.getDimensionPixelSize(R.dimen.content_padding_horizontal),
+                            0,
+                            resources.getDimensionPixelSize(R.dimen.content_padding_horizontal),
+                            resources.getDimensionPixelSize(R.dimen.content_padding_vertical),
+                        )
+                        text = buildString {
+                            append(context.getString(R.string.attachments_count, attachments.size))
+                            attachments.forEach { item ->
+                                append("\n• ")
+                                append(item.name ?: "attachment_${item.id}")
+                            }
+                        }
+                    },
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    )
+                )
+            }
+        }
+
         val previewContainer = ScrollView(context).apply {
             setBackgroundColor(context.getColorFromAttr(com.google.android.material.R.attr.colorSurface))
-            addView(previewView, ViewGroup.LayoutParams(
+            addView(previewContent, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ))
@@ -735,6 +822,7 @@ class MessagePanel(
         textWatcher?.let { messageField.removeTextChangedListener(it) }
         messageField.setOnTouchListener(null)
         messageField.onFocusChangeListener = null
+        messageField.onSelectionChangedListener = null
         fullBinding = null
         quickBinding = null
     }

@@ -3,34 +3,7 @@ package forpdateam.ru.forpda.common.bbcode
 import forpdateam.ru.forpda.common.Html
 
 object BbcodePreviewRenderer {
-    private val supportedTags = setOf(
-        "b",
-        "i",
-        "u",
-        "s",
-        "strike",
-        "url",
-        "quote",
-        "spoiler",
-        "offtop",
-        "hide",
-        "code",
-        "snapback",
-        "mergetime",
-        "br",
-        "size",
-        "color",
-        "background",
-        "font",
-        "left",
-        "center",
-        "right",
-        "sub",
-        "sup",
-        "cur",
-        "list",
-        "*"
-    )
+    private val supportedTags = BbcodeRegistry.previewTags
 
     fun renderToHtml(source: String): String {
         if (source.isBlank()) {

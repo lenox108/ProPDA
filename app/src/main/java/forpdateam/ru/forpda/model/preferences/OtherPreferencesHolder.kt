@@ -23,6 +23,8 @@ class OtherPreferencesHolder(
 
     suspend fun setMessagePanelBbCodes(value: String) = dataStore.setMessagePanelBbCodes(value)
 
+    suspend fun setMessagePanelRecentCodes(value: String) = dataStore.setMessagePanelRecentCodes(value)
+
     suspend fun setShowReportWarning(value: Boolean) = dataStore.setShowReportWarning(value)
 
     suspend fun setTooltipSearchSettings(value: Boolean) = dataStore.setTooltipSearchSettings(value)
@@ -44,6 +46,8 @@ class OtherPreferencesHolder(
     suspend fun getMessagePanelBbCodes(): String = dataStore.messagePanelBbCodes.first()
 
     fun getMessagePanelBbCodesSync(): String = dataStore.getMessagePanelBbCodesSync()
+
+    fun getMessagePanelRecentCodesSync(): String = dataStore.getMessagePanelRecentCodesSync()
 
     suspend fun getShowReportWarning(): Boolean = dataStore.showReportWarning.first()
 

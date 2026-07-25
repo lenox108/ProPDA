@@ -55,13 +55,14 @@ class AdvancedPopup(
     private var compactAdvancedView: View? = null
     private var compactHost: LinearLayout? = null
     private var popupGeneration = 0
-    private var compactInputState = CompactInputState.NONE
+    private var compactInputState = EditorInputState.HIDDEN
     private var compactOpenedAt = 0L
     private var compactOpenHeight = 0
     private var compactOpenRetryScheduled = false
 
     private var inActivityHost: ViewGroup? = null
     private var inActivityAdvancedView: View? = null
+    private val pages = ArrayList<BasePanelItem>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -69,13 +70,27 @@ class AdvancedPopup(
         val binding = MessagePanelAdvancedBinding.inflate(LayoutInflater.from(context), null, false)
         val viewPager = binding.pager
 
-        val viewList = ArrayList<BasePanelItem>()
-        viewList.add(CodesPanelItem(context, messagePanel, messagePanel.otherPreferencesHolder))
-        viewList.add(SmilesPanelItem(context, messagePanel))
-        viewList.add(EmojiPanelItem(context, messagePanel))
-        viewPager.adapter = MyPagerAdapter(viewList)
+        val codesPanel = CodesPanelItem(context, messagePanel, messagePanel.otherPreferencesHolder)
+        pages.add(codesPanel)
+        pages.add(SmilesPanelItem(context, messagePanel))
+        pages.add(EmojiPanelItem(context, messagePanel))
+        pages.add(RecentCodesPanelItem(context, messagePanel, codesPanel))
+        viewPager.adapter = MyPagerAdapter(pages)
 
         binding.tabLayout.setupWithViewPager(viewPager)
+        val tabIcons = intArrayOf(
+            R.drawable.ic_code_font,
+            R.drawable.ic_smile,
+            R.drawable.ic_emoji,
+            R.drawable.ic_history,
+        )
+        pages.forEachIndexed { index, page ->
+            binding.tabLayout.getTabAt(index)?.apply {
+                text = null
+                setIcon(tabIcons[index])
+                contentDescription = page.title
+            }
+        }
 
         if (fullFormEditor) {
             binding.sheetKeyboardButton.visibility = View.VISIBLE
@@ -102,26 +117,6 @@ class AdvancedPopup(
         }
         messagePanel.messageField.onUndoStateChanged = { updateUndoRedoEnabled() }
         updateUndoRedoEnabled()
-
-        binding.deleteButton.setOnClickListener {
-            val messageField = messagePanel.messageField
-            val selectionStart = messageField?.selectionStart ?: 0
-            val selectionEnd = messageField?.selectionEnd ?: 0
-            var s = selectionStart
-            var e = selectionEnd
-            if (e < s && e != -1) {
-                val c = s
-                s = e
-                e = c
-            }
-            if (s != -1 && s != e) {
-                messageField?.text?.delete(s, e)
-                return@setOnClickListener
-            }
-            if (s > 0) {
-                messageField?.text?.delete(s - 1, s)
-            }
-        }
 
         if (fullFormEditor) {
             // Fullscreen editor must not open a separate Window; render the panel inside the activity.
@@ -230,8 +225,8 @@ class AdvancedPopup(
         if (fullFormEditor && inActivityHost != null) {
             return isInActivityFullFormShowing()
         }
-        return compactInputState == CompactInputState.BBCODE_OPENING ||
-            compactInputState == CompactInputState.BBCODE
+        return compactInputState == EditorInputState.PANEL_OPENING ||
+            compactInputState == EditorInputState.PANEL_OPEN
     }
 
     private fun attachCompactAdvancedView(advancedView: View) {
@@ -284,7 +279,7 @@ class AdvancedPopup(
         if (fullFormEditor) {
             return
         }
-        if (compactInputState == CompactInputState.BBCODE_OPENING) {
+        if (compactInputState == EditorInputState.PANEL_OPENING) {
             if (dimensions.isKeyboardShow()) {
                 hideCompactAdvancedViewOnly()
                 messagePanel.hideImeFromEditor(clearFocus = false)
@@ -296,7 +291,7 @@ class AdvancedPopup(
             messagePanel.setCanScrolling(false)
             return
         }
-        if (compactInputState == CompactInputState.BBCODE) {
+        if (compactInputState == EditorInputState.PANEL_OPEN) {
             clearCompactHostImeSpacing()
             if (dimensions.imeInsetBottom > 0) {
                 messagePanel.hideImeFromEditor(clearFocus = false)
@@ -312,8 +307,8 @@ class AdvancedPopup(
             messagePanel.setCanScrolling(false)
             return
         }
-        if (compactInputState == CompactInputState.IME_REQUESTED && dimensions.imeInsetBottom > 0) {
-            compactInputState = CompactInputState.NONE
+        if (compactInputState == EditorInputState.KEYBOARD_REQUESTED && dimensions.imeInsetBottom > 0) {
+            transition(EditorInputEvent.KEYBOARD_VISIBLE)
             messagePanel.setCanScrolling(false)
             return
         }
@@ -338,10 +333,10 @@ class AdvancedPopup(
             return
         }
 
-        compactInputState = CompactInputState.NONE
+        transition(EditorInputEvent.HIDE)
         compactOpenHeight = 0
         compactOpenRetryScheduled = false
-        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_add))
+        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_code_font))
 
         hideCompactAdvancedViewOnly()
         clearCompactFakeKeyboardState()
@@ -353,8 +348,8 @@ class AdvancedPopup(
 
     /** Пока compact BBCode встроен в host, IME-отступы host должны быть отключены. */
     fun isCompactBbcodeLayoutHoldActive(): Boolean =
-        compactInputState == CompactInputState.BBCODE_OPENING ||
-            compactInputState == CompactInputState.BBCODE
+        compactInputState == EditorInputState.PANEL_OPENING ||
+            compactInputState == EditorInputState.PANEL_OPEN
 
     private fun switchToKeyboard() {
         if (fullFormEditor) {
@@ -368,12 +363,12 @@ class AdvancedPopup(
 
     private fun hideCompactPopupForKeyboard() {
         popupGeneration++
-        compactInputState = CompactInputState.IME_REQUESTED
+        transition(EditorInputEvent.REQUEST_KEYBOARD)
         compactOpenHeight = 0
         compactOpenRetryScheduled = false
         hideCompactAdvancedViewOnly()
 
-        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_add))
+        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_code_font))
         clearCompactFakeKeyboardState()
         messagePanel.setImeSuppressed(false)
 
@@ -458,7 +453,7 @@ class AdvancedPopup(
             return
         }
 
-        compactInputState = CompactInputState.BBCODE_OPENING
+        transition(EditorInputEvent.OPEN_PANEL)
         compactOpenHeight = 0
         compactOpenRetryScheduled = false
         clearCompactFakeKeyboardState()
@@ -542,7 +537,7 @@ class AdvancedPopup(
             d.isFakeKeyboardShow = false
             dimensionsProvider.update(d)
         }
-        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_add))
+        messagePanel.advancedButton?.setImageDrawable(context.getVecDrawable(R.drawable.ic_code_font))
         // Любое закрытие панели (back / programmatic / system) должно возвращать режим ввода.
         messagePanel.setImeSuppressed(false)
         // Восстановить курсор/мигание (после возврата фокуса/перекрытия).
@@ -657,12 +652,12 @@ class AdvancedPopup(
     private fun completeCompactAdvancedOpen(
         dimensions: DimensionHelper.Dimensions = dimensionsProvider.getDimensions()
     ) {
-        if (compactInputState != CompactInputState.BBCODE_OPENING &&
-            compactInputState != CompactInputState.BBCODE
+        if (compactInputState != EditorInputState.PANEL_OPENING &&
+            compactInputState != EditorInputState.PANEL_OPEN
         ) {
             return
         }
-        compactInputState = CompactInputState.BBCODE
+        transition(EditorInputEvent.PANEL_READY)
         compactOpenRetryScheduled = false
         compactOpenedAt = SystemClock.uptimeMillis()
         clearCompactHostImeSpacing()
@@ -685,7 +680,7 @@ class AdvancedPopup(
         compactOpenRetryScheduled = true
         messagePanel.postDelayed({
             compactOpenRetryScheduled = false
-            if (generation != popupGeneration || compactInputState != CompactInputState.BBCODE_OPENING) {
+            if (generation != popupGeneration || compactInputState != EditorInputState.PANEL_OPENING) {
                 return@postDelayed
             }
             val dimensions = dimensionsProvider.getDimensions()
@@ -754,6 +749,7 @@ class AdvancedPopup(
     fun onDestroy() {
         hidePopup()
         messagePanel.messageField.onUndoStateChanged = null
+        pages.forEach(BasePanelItem::dispose)
         scope.cancel()
         // Cancel all pending postDelayed/post Runnables (keyboard retry, compact open retry, etc.)
         messagePanel.handler?.removeCallbacksAndMessages(null)
@@ -772,11 +768,8 @@ class AdvancedPopup(
         fun onHide()
     }
 
-    private enum class CompactInputState {
-        NONE,
-        BBCODE_OPENING,
-        BBCODE,
-        IME_REQUESTED
+    private fun transition(event: EditorInputEvent) {
+        compactInputState = EditorInputStateReducer.reduce(compactInputState, event)
     }
 
     private companion object {

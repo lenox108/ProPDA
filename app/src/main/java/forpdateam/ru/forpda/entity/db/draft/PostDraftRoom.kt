@@ -8,8 +8,7 @@ import androidx.room.PrimaryKey
  *
  * [key] — стабильный ключ вида "topic:<topicId>". Черновик переживает не только смерть процесса
  * (её закрывает instance state фрагмента), но и полное удаление задачи из recents, где instance
- * state теряется. Хранит последнюю редакцию текста; каретка не персистится (при восстановлении
- * ставится в конец).
+ * state теряется. Хранит точный текст, выделение, режим редактора и метаданные вложений.
  */
 @Entity(tableName = "post_draft")
 data class PostDraftRoom(
@@ -17,4 +16,8 @@ data class PostDraftRoom(
     val key: String,
     val message: String = "",
     val updatedAt: Long = 0L,
+    val selectionStart: Int = -1,
+    val selectionEnd: Int = -1,
+    val attachmentsJson: String = "[]",
+    val editorMode: String = "",
 )

@@ -16,4 +16,7 @@ interface PostDraftDao {
 
     @Query("DELETE FROM post_draft WHERE key = :key")
     suspend fun delete(key: String)
+
+    @Query("DELETE FROM post_draft WHERE updatedAt < :cutoff")
+    suspend fun deleteOlderThan(cutoff: Long)
 }

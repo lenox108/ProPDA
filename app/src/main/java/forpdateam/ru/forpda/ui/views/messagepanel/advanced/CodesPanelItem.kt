@@ -11,11 +11,11 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputLayout
 import androidx.recyclerview.widget.ItemTouchHelper
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.bbcode.BbcodeRegistry
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.databinding.ReportLayoutBinding
 import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
-import forpdateam.ru.forpda.ui.views.messagepanel.SimpleInstruction
 import forpdateam.ru.forpda.ui.views.messagepanel.advanced.adapters.ItemDragCallback
 import forpdateam.ru.forpda.ui.views.messagepanel.advanced.adapters.PanelItemAdapter
 import forpdateam.ru.forpda.ui.views.messagepanel.colorpicker.ColorPaletteView
@@ -37,6 +37,8 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
 
     companion object {
         private var colors: MutableMap<String, String>? = null
+        private const val MAX_RECENT_CODES = 10
+        private val DEFAULT_RECENT_CODES = listOf("B", "QUOTE", "URL", "SPOILER", "CODE")
 
         /**
          * Скелет поста для раздела «Релизер» (act=post + шаблон темы на 4pda).
@@ -50,47 +52,104 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
             append("[b]Краткое описание:[/b] \n")
             append("\n") // описание (что нового) — свободным текстом
         }
+
+        fun createButtonData(context: Context, tool: BbcodeRegistry.Tool): ButtonData = when (tool) {
+            BbcodeRegistry.Tool.BOLD -> ButtonData(tool.tag, R.drawable.ic_code_bold, context.getString(R.string.codes_name_bold))
+            BbcodeRegistry.Tool.ITALIC -> ButtonData(tool.tag, R.drawable.ic_code_italic, context.getString(R.string.codes_name_italic))
+            BbcodeRegistry.Tool.UNDERLINE -> ButtonData(tool.tag, R.drawable.ic_code_underline, context.getString(R.string.codes_name_underline))
+            BbcodeRegistry.Tool.STRIKE -> ButtonData(tool.tag, R.drawable.ic_code_s, context.getString(R.string.codes_name_s))
+            BbcodeRegistry.Tool.URL -> ButtonData(tool.tag, R.drawable.ic_code_url, context.getString(R.string.codes_name_link))
+            BbcodeRegistry.Tool.SPOILER -> ButtonData(tool.tag, R.drawable.ic_code_spoiler, context.getString(R.string.codes_name_spoiler))
+            BbcodeRegistry.Tool.OFFTOP -> ButtonData(tool.tag, R.drawable.ic_code_offtop, context.getString(R.string.codes_name_offtop))
+            BbcodeRegistry.Tool.QUOTE -> ButtonData(tool.tag, R.drawable.ic_code_quote, context.getString(R.string.codes_name_quote))
+            BbcodeRegistry.Tool.CODE -> ButtonData(tool.tag, R.drawable.ic_code_code, context.getString(R.string.codes_name_code))
+            BbcodeRegistry.Tool.COLOR -> ButtonData(tool.tag, R.drawable.ic_code_color, context.getString(R.string.codes_name_text_color))
+            BbcodeRegistry.Tool.SIZE -> ButtonData(tool.tag, R.drawable.ic_code_size, context.getString(R.string.codes_name_text_size))
+            BbcodeRegistry.Tool.FONT -> ButtonData(tool.tag, R.drawable.ic_code_font, context.getString(R.string.codes_name_font))
+            BbcodeRegistry.Tool.HIDE -> ButtonData(tool.tag, R.drawable.ic_code_hide, context.getString(R.string.codes_name_hide))
+            BbcodeRegistry.Tool.BACKGROUND -> ButtonData(tool.tag, R.drawable.ic_code_background, context.getString(R.string.codes_name_bg_color))
+            BbcodeRegistry.Tool.LIST -> ButtonData(tool.tag, R.drawable.ic_code_list, context.getString(R.string.codes_name_list))
+            BbcodeRegistry.Tool.NUMBERED_LIST -> ButtonData(tool.tag, R.drawable.ic_code_numlist, context.getString(R.string.codes_name_numlist))
+            BbcodeRegistry.Tool.LEFT -> ButtonData(tool.tag, R.drawable.ic_code_left, context.getString(R.string.codes_name_left))
+            BbcodeRegistry.Tool.CENTER -> ButtonData(tool.tag, R.drawable.ic_code_center, context.getString(R.string.codes_name_center))
+            BbcodeRegistry.Tool.RIGHT -> ButtonData(tool.tag, R.drawable.ic_code_right, context.getString(R.string.codes_name_right))
+            BbcodeRegistry.Tool.SUBSCRIPT -> ButtonData(tool.tag, R.drawable.ic_code_sub, context.getString(R.string.codes_name_sub))
+            BbcodeRegistry.Tool.SUPERSCRIPT -> ButtonData(tool.tag, R.drawable.ic_code_sup, context.getString(R.string.codes_name_sup))
+            BbcodeRegistry.Tool.CURATOR -> ButtonData(tool.tag, R.drawable.ic_code_cur, context.getString(R.string.codes_name_curator))
+            BbcodeRegistry.Tool.RELEASER -> ButtonData(tool.tag, R.drawable.ic_code_release, context.getString(R.string.codes_name_release))
+        }
     }
 
     private val viewScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val codeItems: MutableList<ButtonData> = getCodes()
+    private var recentChangedListener: ((List<String>) -> Unit)? = null
 
     private val clickListener = object : PanelItemAdapter.OnItemClickListener {
         override fun onItemClick(item: ButtonData) {
-            when (item.text) {
-                "URL" -> urlInsert(item)
-                "QUOTE" -> quoteInsert(item)
-                "CODE" -> codeInsert(item)
-                "SPOILER" -> spoilerInsert(item)
-                "LIST" -> listInsert(item, false)
-                "NUMLIST" -> listInsert(item, true)
-                "COLOR" -> colorInsert(item)
-                "BACKGROUND" -> colorInsert(item)
-                "SIZE" -> sizeInsert(item)
-                "FONT" -> fontInsert(item)
-                "RELEASER" -> messagePanel.insertText(RELEASER_SKELETON)
-                else -> simpleInsertText(item)
-            }
+            onToolSelected(item)
+        }
+    }
+
+    fun onToolSelected(item: ButtonData) {
+        recordRecent(item.text)
+        when (item.text) {
+            "URL" -> urlInsert(item)
+            "QUOTE" -> quoteInsert(item)
+            "CODE" -> codeInsert(item)
+            "SPOILER" -> spoilerInsert(item)
+            "LIST" -> listInsert(item, false)
+            "NUMLIST" -> listInsert(item, true)
+            "COLOR" -> colorInsert(item)
+            "BACKGROUND" -> colorInsert(item)
+            "SIZE" -> sizeInsert(item)
+            "FONT" -> fontInsert(item)
+            "RELEASER" -> messagePanel.insertText(RELEASER_SKELETON)
+            else -> simpleInsertText(item)
         }
     }
 
     init {
-        val adapter = PanelItemAdapter(codeItems, emptyList(), PanelItemAdapter.TYPE_DRAWABLE)
+        val adapter = PanelItemAdapter(
+            codeItems,
+            emptyList(),
+            PanelItemAdapter.TYPE_DRAWABLE,
+            showTitles = false,
+        )
         adapter.setOnItemClickListener(clickListener)
-        recyclerView.setColumnWidth((96 * context.resources.displayMetrics.density).toInt())
+        recyclerView.setColumnWidth(context.resources.getDimensionPixelSize(R.dimen.dp64))
         val touchHelper = ItemTouchHelper(ItemDragCallback(adapter))
         touchHelper.attachToRecyclerView(recyclerView)
         recyclerView.adapter = adapter
+    }
 
-        if (otherPreferencesHolder.getTooltipMessagePanelSortingSync()) {
-            val instruction = SimpleInstruction(getContext())
-            instruction.setText(getContext().getString(R.string.code_panel_instruction))
-            instruction.setOnCloseClick {
-                viewScope.launch { otherPreferencesHolder.setTooltipMessagePanelSorting(false) }
-            }
-            addView(instruction)
+    fun initialRecentCodes(): List<String> {
+        val stored = parseRecentCodes(otherPreferencesHolder.getMessagePanelRecentCodesSync())
+        return if (stored.isEmpty()) DEFAULT_RECENT_CODES else stored
+    }
+
+    fun setRecentChangedListener(listener: ((List<String>) -> Unit)?) {
+        recentChangedListener = listener
+    }
+
+    private fun recordRecent(tag: String) {
+        val normalized = BbcodeRegistry.findTool(tag)?.tag ?: return
+        val updated = buildList {
+            add(normalized)
+            addAll(initialRecentCodes().filterNot { it.equals(normalized, ignoreCase = true) })
+        }.take(MAX_RECENT_CODES)
+        recentChangedListener?.invoke(updated)
+        viewScope.launch {
+            otherPreferencesHolder.setMessagePanelRecentCodes(updated.joinToString(","))
         }
     }
+
+    private fun parseRecentCodes(value: String): List<String> =
+        value.split(',')
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .mapNotNull { BbcodeRegistry.findTool(it)?.tag }
+            .distinct()
+            .take(MAX_RECENT_CODES)
 
     private fun listInsert(item: ButtonData, num: Boolean) {
         val selected = messagePanel.getSelectedText()
@@ -291,7 +350,7 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
         messagePanel.insertText(bbcodes[0], bbcodes[1])
     }
 
-    override fun onDetachedFromWindow() {
+    override fun dispose() {
         val savedOrder = codeItems.map { it.text }.joinToString(",")
         if (savedOrder.isNotEmpty()) {
             viewScope.launch {
@@ -302,34 +361,12 @@ class CodesPanelItem(context: Context, panel: MessagePanel, private val otherPre
         } else {
             viewScope.cancel()
         }
-        super.onDetachedFromWindow()
     }
 
     private fun getCodes(): MutableList<ButtonData> {
-        val tempCodes = arrayListOf<ButtonData>()
-        tempCodes.add(ButtonData("B", R.drawable.ic_code_bold, getContext().getString(R.string.codes_name_bold)))
-        tempCodes.add(ButtonData("I", R.drawable.ic_code_italic, getContext().getString(R.string.codes_name_italic)))
-        tempCodes.add(ButtonData("U", R.drawable.ic_code_underline, getContext().getString(R.string.codes_name_underline)))
-        tempCodes.add(ButtonData("S", R.drawable.ic_code_s, getContext().getString(R.string.codes_name_s)))
-        tempCodes.add(ButtonData("URL", R.drawable.ic_code_url, getContext().getString(R.string.codes_name_link)))
-        tempCodes.add(ButtonData("SPOILER", R.drawable.ic_code_spoiler, getContext().getString(R.string.codes_name_spoiler)))
-        tempCodes.add(ButtonData("OFFTOP", R.drawable.ic_code_offtop, getContext().getString(R.string.codes_name_offtop)))
-        tempCodes.add(ButtonData("QUOTE", R.drawable.ic_code_quote, getContext().getString(R.string.codes_name_quote)))
-        tempCodes.add(ButtonData("CODE", R.drawable.ic_code_code, getContext().getString(R.string.codes_name_code)))
-        tempCodes.add(ButtonData("COLOR", R.drawable.ic_code_color, getContext().getString(R.string.codes_name_text_color)))
-        tempCodes.add(ButtonData("SIZE", R.drawable.ic_code_size, getContext().getString(R.string.codes_name_text_size)))
-        tempCodes.add(ButtonData("FONT", R.drawable.ic_code_font, getContext().getString(R.string.codes_name_font)))
-        tempCodes.add(ButtonData("HIDE", R.drawable.ic_code_hide, getContext().getString(R.string.codes_name_hide)))
-        tempCodes.add(ButtonData("BACKGROUND", R.drawable.ic_code_background, getContext().getString(R.string.codes_name_bg_color)))
-        tempCodes.add(ButtonData("LIST", R.drawable.ic_code_list, getContext().getString(R.string.codes_name_list)))
-        tempCodes.add(ButtonData("NUMLIST", R.drawable.ic_code_numlist, getContext().getString(R.string.codes_name_numlist)))
-        tempCodes.add(ButtonData("LEFT", R.drawable.ic_code_left, getContext().getString(R.string.codes_name_left)))
-        tempCodes.add(ButtonData("CENTER", R.drawable.ic_code_center, getContext().getString(R.string.codes_name_center)))
-        tempCodes.add(ButtonData("RIGHT", R.drawable.ic_code_right, getContext().getString(R.string.codes_name_right)))
-        tempCodes.add(ButtonData("SUB", R.drawable.ic_code_sub, getContext().getString(R.string.codes_name_sub)))
-        tempCodes.add(ButtonData("SUP", R.drawable.ic_code_sup, getContext().getString(R.string.codes_name_sup)))
-        tempCodes.add(ButtonData("CUR", R.drawable.ic_code_cur, getContext().getString(R.string.codes_name_curator)))
-        tempCodes.add(ButtonData("RELEASER", R.drawable.ic_code_release, getContext().getString(R.string.codes_name_release)))
+        val tempCodes = BbcodeRegistry.editorTools
+            .map { createButtonData(getContext(), it) }
+            .toMutableList()
 
         val sorted = otherPreferencesHolder.getMessagePanelBbCodesSync()
         if (sorted.isBlank()) {

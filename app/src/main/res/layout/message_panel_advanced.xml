@@ -39,6 +39,7 @@
             android:clipToPadding="true"
             app:layout_collapseMode="pin"
             app:tabGravity="fill"
+            app:tabIconTint="?attr/colorOnSurfaceVariant"
             app:tabIndicatorColor="?attr/colorAccent"
             app:tabMode="fixed"
             app:tabPaddingEnd="@dimen/dp2"
@@ -60,19 +61,10 @@
             android:id="@+id/redo_button"
             android:layout_width="@dimen/dp48"
             android:layout_height="@dimen/dp48"
-            android:layout_toStartOf="@+id/delete_button"
+            android:layout_alignParentEnd="true"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/msg_panel_redo"
             app:srcCompat="@drawable/ic_editor_redo" />
-
-        <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/delete_button"
-            android:layout_width="@dimen/dp56"
-            android:layout_height="@dimen/dp48"
-            android:layout_alignParentEnd="true"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/msg_panel_delete_last_char"
-            app:srcCompat="@drawable/ic_toolbar_backspace" />
     </RelativeLayout>
 
 

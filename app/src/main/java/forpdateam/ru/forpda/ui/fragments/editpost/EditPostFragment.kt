@@ -521,6 +521,13 @@ class EditPostFragment : TabFragment() {
         }
 
         val messageForPanels = resolveMessageForShowForm(form)
+        if (form.restoredDraftSelectionStart >= 0 && form.restoredDraftSelectionEnd >= 0) {
+            initialSelectionRange = intArrayOf(
+                form.restoredDraftSelectionStart,
+                form.restoredDraftSelectionEnd,
+            )
+            pendingFullscreenSelection = initialSelectionRange
+        }
         setAttachmentsToPanels(
                 mergeEditorAttachments(form.attachments, currentAttachmentsPopup()?.getAttachments().orEmpty())
         )
@@ -726,6 +733,9 @@ class EditPostFragment : TabFragment() {
     private fun currentAttachmentsPopup(): AttachmentsPopup? = currentPanel()?.attachmentsPopup
 
     private fun setupPanel(panel: MessagePanel) {
+        panel.messageField.onSelectionChangedListener = { _, _ ->
+            if (panel === currentPanel()) persistCurrentEditorDraft()
+        }
         panel.addSendOnClickListener { presenter.onSendClick() }
         panel.setClearMessageClickListener { requestClearEditorText() }
         panel.attachmentsPopup?.setAddOnClickListener { tryPickFile() }
@@ -735,6 +745,9 @@ class EditPostFragment : TabFragment() {
                 enqueueUpload(files, pending)
             }
         })
+        panel.attachmentsPopup?.setOnAttachmentsChangedListener {
+            persistCurrentEditorDraft()
+        }
         panel.fullButton?.also { btn ->
             if (formType == EditPostForm.TYPE_EDIT_POST) {
                 // Как раньше: в режиме редактирования поста кнопка “полноэкранно” не нужна.
@@ -1294,12 +1307,23 @@ class EditPostFragment : TabFragment() {
             override fun afterTextChanged(s: Editable) {
                 val text = s.toString()
                 draftContentMirror = text
-                // Персистентный черновик ответа (дебаунс в ViewModel; no-op вне TYPE_NEW_POST).
-                presenter.persistDraft(text)
+                persistCurrentEditorDraft(text)
             }
         }
         fullPanel.messageField.addTextChangedListener(watcher)
         compactPanel.messageField.addTextChangedListener(watcher)
+    }
+
+    private fun persistCurrentEditorDraft(messageOverride: String? = null) {
+        val panel = currentPanel() ?: return
+        val snapshot = panel.captureSnapshot()
+        presenter.persistDraft(
+            message = messageOverride ?: snapshot.message,
+            selectionStart = snapshot.selectionStart,
+            selectionEnd = snapshot.selectionEnd,
+            attachments = snapshot.attachments,
+            editorMode = if (isCompactMode) "compact" else "full",
+        )
     }
 
     /** Текст компактного поля для переноса в full; при «пустом» чтении буфера — [draftContentMirror]. */

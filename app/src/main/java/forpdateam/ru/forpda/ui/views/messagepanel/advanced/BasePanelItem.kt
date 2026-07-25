@@ -13,7 +13,7 @@ import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
  * Created by radiationx on 08.01.17.
  */
 @SuppressLint("ViewConstructor")
-open class BasePanelItem @JvmOverloads constructor(
+open class BasePanelItem constructor(
     context: Context,
     protected val messagePanel: MessagePanel,
     val title: String
@@ -36,4 +36,6 @@ open class BasePanelItem @JvmOverloads constructor(
         }
     }
 
+    /** Вызывается владельцем панели один раз при окончательном уничтожении редактора. */
+    open fun dispose() = Unit
 }
