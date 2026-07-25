@@ -694,6 +694,9 @@
     <string name="pref_summary_app_font_inter">Active font: Inter; fully applies after restart</string>
     <string name="pref_summary_app_font_source_sans_3">Active font: Source Sans 3; fully applies after restart</string>
     <string name="pref_summary_app_font_open_sans">Active font: Open Sans; fully applies after restart</string>
+    <string name="pref_summary_app_font_ibm_plex_sans">Active font: IBM Plex Sans; fully applies after restart</string>
+    <string name="pref_summary_app_font_golos_text">Active font: Golos Text; fully applies after restart</string>
+    <string name="pref_summary_app_font_literata">Active font: Literata; fully applies after restart</string>
     <string name="pref_summary_app_font_appetite_pro">Active font: Appetite Pro; fully applies after restart</string>
     <string name="pref_summary_app_font_mayonez_italic">Active font: Mayonez Italic; fully applies after restart</string>
     <string name="pref_summary_app_font_roboto_mono">Active font: Roboto Mono (monospaced); fully applies after restart</string>
@@ -702,6 +705,9 @@
     <string name="pref_value_app_font_inter">Inter</string>
     <string name="pref_value_app_font_source_sans_3">Source Sans 3</string>
     <string name="pref_value_app_font_open_sans">Open Sans</string>
+    <string name="pref_value_app_font_ibm_plex_sans">IBM Plex Sans</string>
+    <string name="pref_value_app_font_golos_text">Golos Text</string>
+    <string name="pref_value_app_font_literata">Literata</string>
     <string name="pref_value_app_font_appetite_pro">Appetite Pro</string>
     <string name="pref_value_app_font_mayonez_italic">Mayonez Italic</string>
     <string name="pref_value_app_font_roboto_mono">Roboto Mono</string>
