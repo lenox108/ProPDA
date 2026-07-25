@@ -154,6 +154,43 @@ class TopicOpenTargetResolverTest {
     }
 
     @Test
+    fun externalLinkWithPlainPostParamWinsOverLastUnreadSetting() {
+        val resolution = TopicOpenTargetResolver.resolve(
+                TopicOpenContext(
+                        rawUrl = "https://4pda.to/forum/index.php?showtopic=123&p=456",
+                        setting = AppPreferences.Main.TopicOpenTarget.LAST_UNREAD,
+                        sourceScreen = "link",
+                        openIntentRaw = TopicOpenIntentClassifier.FRESH_LEGACY
+                )
+        )
+
+        assertEquals(TopicOpenTargetType.EXPLICIT_POST, resolution.targetType)
+        assertEquals(456, resolution.resolvedPostId)
+        assertEquals("explicit_post_source", resolution.reason)
+        assertTrue(resolution.url.contains("p=456"))
+        assertTrue(resolution.url.contains("view=findpost"))
+        assertFalse(resolution.url.contains("view=getnewpost"))
+    }
+
+    @Test
+    fun externalGetnewpostReadHintIsNotReclassifiedAsExplicitPost() {
+        val resolution = TopicOpenTargetResolver.resolve(
+                TopicOpenContext(
+                        rawUrl = "https://4pda.to/forum/index.php?showtopic=123&view=getnewpost&p=456",
+                        setting = AppPreferences.Main.TopicOpenTarget.LAST_UNREAD,
+                        sourceScreen = "link",
+                        openIntentRaw = TopicOpenIntentClassifier.FRESH_LEGACY
+                )
+        )
+
+        assertEquals(TopicOpenTargetType.SETTING_LAST_UNREAD, resolution.targetType)
+        assertEquals(
+                "https://4pda.to/forum/index.php?showtopic=123&view=getnewpost",
+                resolution.url
+        )
+    }
+
+    @Test
     fun bookmarkSourceWithFindpostStaysExplicitPost() {
         // App-generated bookmark URLs already carry view=findpost — must remain explicit and unchanged.
         val url = "https://4pda.to/forum/index.php?s=&showtopic=123&view=findpost&p=456"

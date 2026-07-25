@@ -97,4 +97,27 @@ class ThemeUrlPolicyTest {
         assertTrue(ThemeUrlPolicy.isThemeUrl("https://4pda.to/forum/index.php?showtopic=123"))
         assertFalse(ThemeUrlPolicy.isThemeUrl("https://4pda.to/forum/index.php?showforum=123"))
     }
+
+    @Test
+    fun explicitPostNavigation_recognizesBrowserPostLinksButNotServerReadHints() {
+        val explicitPostUrls = listOf(
+                "https://4pda.to/forum/index.php?showtopic=123&p=456",
+                "https://4pda.to/forum/index.php?showtopic=123&pid=456",
+                "https://4pda.to/forum/index.php?showtopic=123#entry456",
+                "https://4pda.to/forum/index.php?showtopic=123&view=findpost&p=456",
+                "https://4pda.to/forum/index.php?act=findpost&pid=456",
+        )
+        explicitPostUrls.forEach { url ->
+            assertTrue(url, ThemeUrlPolicy.isExplicitPostNavigationUrl(url))
+        }
+
+        val readHintUrls = listOf(
+                "https://4pda.to/forum/index.php?showtopic=123",
+                "https://4pda.to/forum/index.php?showtopic=123&view=getnewpost&p=456",
+                "https://4pda.to/forum/index.php?showtopic=123&view=getlastpost&p=456",
+        )
+        readHintUrls.forEach { url ->
+            assertFalse(url, ThemeUrlPolicy.isExplicitPostNavigationUrl(url))
+        }
+    }
 }

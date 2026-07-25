@@ -327,6 +327,7 @@ object TopicOpenTargetResolver {
         if (context.openIntentRaw?.trim() == TopicOpenIntentClassifier.EXPLICIT_POST) return true
         return when (context.sourceScreen.lowercase()) {
             "bookmark", "bookmarks", "note", "notes", "mentions", "mention" -> true
+            "link", "internal_link" -> ThemeUrlPolicy.isExplicitPostNavigationUrl(context.rawUrl)
             else -> false
         }
     }

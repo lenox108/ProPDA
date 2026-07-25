@@ -10,6 +10,7 @@ import forpdateam.ru.forpda.common.MimeTypeUtil
 import forpdateam.ru.forpda.common.SiteUrls
 import forpdateam.ru.forpda.common.webview.UrlDecision
 import forpdateam.ru.forpda.common.webview.UrlPolicy
+import forpdateam.ru.forpda.presentation.theme.ThemeUrlPolicy
 import java.net.URLDecoder
 import java.util.Locale
 import java.util.regex.Pattern
@@ -444,13 +445,7 @@ class LinkHandler(
     }
 
     private fun isExplicitTopicPostUrl(url: String): Boolean {
-        val trimmed = url.trim()
-        if (trimmed.isEmpty()) return false
-        val lower = trimmed.lowercase(Locale.ROOT)
-        if (lower.contains("act=findpost")) return true
-        if (lower.contains("view=findpost")) return true
-        if (Regex("""(?i)[?&]pid=\d+""").containsMatchIn(trimmed)) return true
-        return false
+        return ThemeUrlPolicy.isExplicitPostNavigationUrl(url)
     }
 
     private fun resolveArticleOpenSource(args: Map<String, String>): String {

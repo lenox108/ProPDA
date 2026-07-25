@@ -42,6 +42,19 @@ object ThemeUrlPolicy {
 
     fun isThemeUrl(rawUrl: String?): Boolean = parse(rawUrl) != null
 
+    /**
+     * True for a user-facing link that targets a concrete forum post.
+     *
+     * A plain `showtopic=…&p=…` URL is a valid post link when it comes from a browser or an
+     * in-page tap. In list rows the same parameter may be a last-read hint, so callers that have
+     * an explicit list-open intent must keep that intent authoritative.
+     *
+     * `view=getnewpost/getlastpost&p=…` stays false because [parse] does not classify those
+     * server bookmark URLs as find-post navigation.
+     */
+    fun isExplicitPostNavigationUrl(rawUrl: String?): Boolean =
+            parse(rawUrl)?.isFindPost == true
+
     private fun normalize(rawUrl: String?): String? {
         val value = rawUrl
                 ?.trim()
