@@ -184,6 +184,7 @@ class BodyBlockViewFactoryInteractionTest {
         val image = root.getChildAt(0) as ImageView
         assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, image.layoutParams.width)
         assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, image.layoutParams.height)
+        assertEquals(ImageView.ScaleType.FIT_CENTER, image.scaleType)
     }
 
     @Test

@@ -20,6 +20,7 @@ import forpdateam.ru.forpda.common.LinkMovementMethod
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.ui.fragments.theme.nativerender.BodyBlock
+import forpdateam.ru.forpda.ui.fragments.theme.nativerender.BodyBlockViewFactory
 import forpdateam.ru.forpda.ui.fragments.theme.nativerender.PostBodyRenderer
 import forpdateam.ru.forpda.ui.fragments.theme.nativerender.SmileProvider
 import kotlin.math.roundToInt
@@ -62,8 +63,17 @@ class SearchPostBodyRenderer(
 
     private fun renderBlocks(container: LinearLayout, blocks: List<BodyBlock>, gallery: ArrayList<String>, depth: Int) {
         val ctx = container.context
-        blocks.forEach { block ->
-            val view: View = when (block) {
+        var blockIndex = 0
+        while (blockIndex < blocks.size) {
+            val block = blocks[blockIndex]
+            val inlineIconText = if (block is BodyBlock.Image && block.inlineListIcon) {
+                blocks.getOrNull(blockIndex + 1) as? BodyBlock.Text
+            } else {
+                null
+            }
+            val view: View = if (block is BodyBlock.Image && inlineIconText != null) {
+                inlineListIconView(ctx, block, inlineIconText)
+            } else when (block) {
                 is BodyBlock.Text -> textView(ctx, spanned(ctx, block.html))
                 is BodyBlock.EditNote -> editNoteView(ctx, block.html)
                 is BodyBlock.Image -> imageView(ctx, block, gallery)
@@ -75,18 +85,21 @@ class SearchPostBodyRenderer(
                 is BodyBlock.Table -> textView(ctx, spanned(ctx, tableToHtml(block)))
                 is BodyBlock.WebFallback -> textView(ctx, spanned(ctx, block.html))
             }
-            // Images use WRAP_CONTENT width so their intrinsic size shows through (maxWidth only DOWNSCALES
-            // large ones) — forcing MATCH_PARENT here stretched a small icon/smiley to the full column width,
-            // upscaling it into «огромные пиксели» (the topic renderer keeps each image's own WRAP_CONTENT).
-            // Everything else fills the column.
-            val widthMode = if (block is BodyBlock.Image) {
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            } else {
-                ViewGroup.LayoutParams.MATCH_PARENT
-            }
-            container.addView(view, LinearLayout.LayoutParams(widthMode, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(ctx, 2f)
-            })
+            // Preserve an image factory's exact authored/intrinsic box. Replacing these params here with
+            // MATCH_PARENT (or even a fresh WRAP_CONTENT pair) reintroduces the same giant-icon bug fixed in
+            // topic/QMS rendering. Text and structural blocks still fill the search-card column.
+            val params = (view.layoutParams as? LinearLayout.LayoutParams)
+                    ?: LinearLayout.LayoutParams(
+                            if (block is BodyBlock.Image) {
+                                ViewGroup.LayoutParams.WRAP_CONTENT
+                            } else {
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            },
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                    )
+            params.topMargin = dp(ctx, 2f)
+            container.addView(view, params)
+            blockIndex += if (inlineIconText != null) 2 else 1
         }
     }
 
@@ -124,19 +137,94 @@ class SearchPostBodyRenderer(
     private fun imageView(ctx: Context, block: BodyBlock.Image, gallery: ArrayList<String>): View = ImageView(ctx).apply {
         val dm = ctx.resources.displayMetrics
         val columnWidthPx = (dm.widthPixels - dp(ctx, 32f)).coerceAtLeast(1)
-        scaleType = ImageView.ScaleType.FIT_START
+        val maxHeightPx = dp(ctx, THUMB_MAX_HEIGHT_DP)
+        val hasDeclaredSize = block.displayWidthPx > 0 && block.displayHeightPx > 0
+        layoutParams = if (hasDeclaredSize) {
+            val box = BodyBlockViewFactory.resolveStableInlineImageBox(
+                    displayWidthPx = block.displayWidthPx,
+                    displayHeightPx = block.displayHeightPx,
+                    density = dm.density,
+                    columnWidthPx = columnWidthPx,
+                    maxHeightPx = maxHeightPx,
+            )
+            LinearLayout.LayoutParams(box.widthPx, box.heightPx)
+        } else {
+            LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+        }
+        scaleType = ImageView.ScaleType.FIT_CENTER
         adjustViewBounds = true
         // Search results are a DENSE list of preview cards, so EVERY image (content banner, attachment
-        // screenshot, quoted picture) is a COMPACT thumbnail — fit within the column and a modest max height,
-        // downscaled, NEVER upscaled. Width mode (WRAP_CONTENT) is applied by the caller in [renderBlocks] so
-        // a small icon keeps its intrinsic size instead of stretching to the column; maxWidth only caps.
+        // screenshot, quoted picture) is a COMPACT thumbnail. Declared dimensions reserve the authored box;
+        // old markup waits for the decoded source dimensions instead of guessing a full-width preview.
         maxWidth = columnWidthPx
-        maxHeight = dp(ctx, THUMB_MAX_HEIGHT_DP)
+        maxHeight = maxHeightPx
         val viewerUrl = block.linkUrl ?: block.imageUrl
         val index = gallery.size
         gallery.add(viewerUrl)
-        ForPdaCoil.loadInto(this, block.imageUrl)
+        if (hasDeclaredSize) {
+            ForPdaCoil.loadInto(this, block.imageUrl)
+        } else {
+            ForPdaCoil.loadIntoAtMost(
+                    imageView = this,
+                    url = block.imageUrl,
+                    maxWidthPx = columnWidthPx,
+                    maxHeightPx = maxHeightPx,
+            ) { width, height ->
+                if (width > 0 && height > 0) {
+                    val box = BodyBlockViewFactory.resolveStableInlineImageBox(
+                            displayWidthPx = width,
+                            displayHeightPx = height,
+                            density = dm.density,
+                            columnWidthPx = columnWidthPx,
+                            maxHeightPx = maxHeightPx,
+                    )
+                    (layoutParams as? LinearLayout.LayoutParams)?.let { params ->
+                        params.width = box.widthPx
+                        params.height = box.heightPx
+                        layoutParams = params
+                    }
+                }
+            }
+        }
         setOnClickListener { onImageClick(ArrayList(gallery), index) }
+    }
+
+    /** Browser-like compact marker + linked label row, shared in spirit with the topic/QMS renderer. */
+    private fun inlineListIconView(
+            ctx: Context,
+            image: BodyBlock.Image,
+            text: BodyBlock.Text,
+    ): View {
+        val iconSizePx = dp(ctx, INLINE_LIST_ICON_SIZE_DP)
+        val icon = ImageView(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(iconSizePx, iconSizePx).apply {
+                marginEnd = dp(ctx, INLINE_LIST_ICON_GAP_DP)
+            }
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = null
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            ForPdaCoil.loadInto(this, image.imageUrl)
+        }
+        val label = textView(ctx, spanned(ctx, text.html)).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                    0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    1f,
+            )
+        }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+            layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+            addView(icon)
+            addView(label)
+        }
     }
 
     private fun quoteView(ctx: Context, block: BodyBlock.Quote, gallery: ArrayList<String>, depth: Int): View {
@@ -429,8 +517,12 @@ class SearchPostBodyRenderer(
          *  with [BodyBlockViewFactory.BLOCK_FILL_TONAL_STEP]). */
         const val BLOCK_FILL_TONAL_STEP = 0.07f
 
-        /** Max height of a preview image in a search-result card (compact thumbnail; downscale, never upscale). */
+        /** Max height of a preview image in a search-result card. */
         const val THUMB_MAX_HEIGHT_DP = 200f
+
+        /** Browser-like size and gap for repeated digest/news markers. */
+        const val INLINE_LIST_ICON_SIZE_DP = 20f
+        const val INLINE_LIST_ICON_GAP_DP = 4f
 
         /** Parsed-body LRU capacity: covers a viewport of post cards so a fling never re-parses HTML. */
         const val BLOCK_CACHE_SIZE = 48
