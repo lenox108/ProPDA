@@ -97,6 +97,7 @@
     <string name="retry">Повторить</string>
     <string name="delete">Удалить</string>
     <string name="save">Сохранить</string>
+    <string name="restore">Восстановить</string>
     <string name="insert">Вставить</string>
     <string name="search">Поиск</string>
     <string name="copy">Копировать</string>
@@ -742,6 +743,18 @@
 
     <!-- Preferences/Settings -->
     <string name="pref_title_notifications">Уведомления</string>
+    <string name="pref_title_backup">Резервная копия</string>
+    <string name="pref_title_create_backup">Создать бэкап</string>
+    <string name="pref_summary_create_backup">Сохранить настройки в файл</string>
+    <string name="pref_title_restore_backup">Восстановить из бэкапа</string>
+    <string name="pref_summary_restore_backup">Загрузить настройки из файла</string>
+    <string name="settings_backup_include_session">Сохранить профиль и сессию (cookies)</string>
+    <string name="settings_backup_session_warning">Можно дополнительно сохранить текущий аккаунт, чтобы после восстановления не вводить логин и пароль. Такой файл даёт доступ к аккаунту — не передавайте его другим.</string>
+    <string name="settings_backup_restore_warning">Настройки из файла заменят текущие. Если бэкап содержит профиль и cookies, будет восстановлена и сессия аккаунта.</string>
+    <string name="settings_backup_created">Бэкап сохранён</string>
+    <string name="settings_backup_restored_title">Бэкап восстановлен</string>
+    <string name="settings_backup_restored_message">Чтобы применить все настройки и сессию, приложение будет перезапущено.</string>
+    <string name="settings_backup_error">Не удалось обработать бэкап</string>
 
     <string name="pref_title_main">Общие</string>
 

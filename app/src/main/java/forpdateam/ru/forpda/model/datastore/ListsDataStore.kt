@@ -22,6 +22,11 @@ private val Context.listsDataStore: DataStore<Preferences> by preferencesDataSto
 class ListsDataStore(private val context: Context) {
     private val mirrorPrefs = context.getSharedPreferences("lists_mirror", Context.MODE_PRIVATE)
 
+    suspend fun exportBackupValues(): Map<String, Any> = context.listsDataStore.exportBackupValues()
+
+    suspend fun restoreBackupValues(values: Map<String, Any>) =
+            context.listsDataStore.restoreBackupValues(values)
+
     private inline fun <T> safeDataStoreFlow(
             flow: Flow<T>,
             default: T

@@ -43,6 +43,7 @@
     <string name="downloads_clear_list">Clear list</string>
     <string name="delete">Delete</string>
     <string name="save">Save</string>
+    <string name="restore">Restore</string>
     <string name="insert">Paste</string>
     <string name="copy">Copy</string>
     <string name="quote">Quote</string>
@@ -556,6 +557,18 @@
     <string name="search_settings_btn_search">Search</string>
     <!-- Preferences/Settings -->
     <string name="pref_title_notifications">Notifications</string>
+    <string name="pref_title_backup">Backup</string>
+    <string name="pref_title_create_backup">Create backup</string>
+    <string name="pref_summary_create_backup">Save settings to a file</string>
+    <string name="pref_title_restore_backup">Restore from backup</string>
+    <string name="pref_summary_restore_backup">Load settings from a file</string>
+    <string name="settings_backup_include_session">Save profile and session (cookies)</string>
+    <string name="settings_backup_session_warning">You can also save the current account so you do not have to enter your login and password after restoring. This file grants access to the account—do not share it.</string>
+    <string name="settings_backup_restore_warning">Settings from the file will replace the current ones. If the backup contains a profile and cookies, the account session will also be restored.</string>
+    <string name="settings_backup_created">Backup saved</string>
+    <string name="settings_backup_restored_title">Backup restored</string>
+    <string name="settings_backup_restored_message">The app will restart to apply all settings and the session.</string>
+    <string name="settings_backup_error">Could not process the backup</string>
     <string name="pref_title_clear_menu_sequence">Reset menu</string>
     <string name="pref_summary_clear_menu_sequence">Reset menu items sequence</string>
     <string name="pref_title_startup_screen">Startup screen</string>

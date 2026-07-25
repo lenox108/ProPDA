@@ -19,6 +19,11 @@ private val Context.otherDataStore: DataStore<Preferences> by preferencesDataSto
 class OtherDataStore(private val context: Context) {
     private val mirrorPrefs = context.getSharedPreferences("other_mirror", Context.MODE_PRIVATE)
 
+    suspend fun exportBackupValues(): Map<String, Any> = context.otherDataStore.exportBackupValues()
+
+    suspend fun restoreBackupValues(values: Map<String, Any>) =
+            context.otherDataStore.restoreBackupValues(values)
+
     private inline fun <T> safeDataStoreFlow(
             flow: Flow<T>,
             default: T

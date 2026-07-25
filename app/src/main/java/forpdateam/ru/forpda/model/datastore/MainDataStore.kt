@@ -27,6 +27,15 @@ private val Context.mainDataStore: DataStore<Preferences> by preferencesDataStor
 class MainDataStore(private val context: Context) {
     private val mirrorPrefs = context.getSharedPreferences("main_mirror", Context.MODE_PRIVATE)
 
+    suspend fun exportBackupValues(): Map<String, Any> =
+            context.mainDataStore.exportBackupValues(setOf(PreferencesKeys.DOWNLOAD_FOLDER_URI.name))
+
+    suspend fun restoreBackupValues(values: Map<String, Any>) =
+            context.mainDataStore.restoreBackupValues(
+                    values,
+                    preservedKeys = setOf(PreferencesKeys.DOWNLOAD_FOLDER_URI.name),
+            )
+
     private inline fun <T> safeDataStoreFlow(
             flow: Flow<T>,
             default: T
