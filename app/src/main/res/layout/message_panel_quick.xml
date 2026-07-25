@@ -108,7 +108,7 @@
             android:layout_weight="1"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/codes_and_smiles"
-            app:srcCompat="@drawable/ic_code_font" />
+            app:srcCompat="@drawable/ic_format_tools" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_clear_message"
