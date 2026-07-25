@@ -563,7 +563,9 @@
     <string name="pref_title_restore_backup">Restore from backup</string>
     <string name="pref_summary_restore_backup">Load settings from a file</string>
     <string name="settings_backup_include_session">Save profile and session (cookies)</string>
+    <string name="settings_backup_include_session_summary">You will not need to sign in again after restoring. Do not share the file.</string>
     <string name="settings_backup_session_warning">You can also save the current account so you do not have to enter your login and password after restoring. This file grants access to the account—do not share it.</string>
+    <string name="settings_backup_without_session_message">All settings will be saved without the profile or cookies. The current account will not be included in the file.</string>
     <string name="settings_backup_restore_warning">Settings from the file will replace the current ones. If the backup contains a profile and cookies, the account session will also be restored.</string>
     <string name="settings_backup_created">Backup saved</string>
     <string name="settings_backup_restored_title">Backup restored</string>

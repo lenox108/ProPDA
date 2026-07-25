@@ -57,6 +57,8 @@ import java.util.Locale
 import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 
+private const val PREF_BACKUP_INCLUDE_SESSION = "backup.include_session"
+
 /**
  * Created by radiationx on 25.12.16.
  */
@@ -883,6 +885,14 @@ class SettingsFragment : BaseSettingFragment() {
             title = getString(R.string.pref_title_backup)
         }
         preferenceScreen.addPreference(category)
+        category.addPreference(forpdateam.ru.forpda.ui.views.SwitchPreference(requireContext()).apply {
+            key = PREF_BACKUP_INCLUDE_SESSION
+            layoutResource = R.layout.preference_custom
+            title = getString(R.string.settings_backup_include_session)
+            summary = getString(R.string.settings_backup_include_session_summary)
+            setDefaultValue(false)
+            isIconSpaceReserved = false
+        })
         category.addPreference(Preference(requireContext()).apply {
             key = "backup.create"
             layoutResource = R.layout.preference_custom
@@ -910,18 +920,18 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun showCreateBackupDialog() {
-        val checked = booleanArrayOf(false)
+        val includeSession = preferences.getBoolean(PREF_BACKUP_INCLUDE_SESSION, false)
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.pref_title_create_backup)
-            .setMessage(R.string.settings_backup_session_warning)
-            .setMultiChoiceItems(
-                arrayOf(getString(R.string.settings_backup_include_session)),
-                checked,
-            ) { _, _, isChecked ->
-                checked[0] = isChecked
-            }
+            .setMessage(
+                if (includeSession) {
+                    R.string.settings_backup_session_warning
+                } else {
+                    R.string.settings_backup_without_session_message
+                },
+            )
             .setPositiveButton(R.string.save) { _, _ ->
-                pendingBackupIncludesSession = checked[0]
+                pendingBackupIncludesSession = includeSession
                 val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
                 createBackupLauncher.launch("propda-backup-$date.json")
             }
