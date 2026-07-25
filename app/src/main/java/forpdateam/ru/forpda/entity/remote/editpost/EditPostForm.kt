@@ -27,6 +27,7 @@ class EditPostForm {
     var restoredEditDraft: String? = null
     var restoredDraftSelectionStart: Int = -1
     var restoredDraftSelectionEnd: Int = -1
+    var restoredDraftAttachments: List<AttachmentItem>? = null
 
     fun addAttachment(item: AttachmentItem) {
         attachments.add(item)

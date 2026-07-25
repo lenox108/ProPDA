@@ -12,6 +12,7 @@ import android.view.Window
 import android.view.WindowManager
 import android.widget.LinearLayout
 import androidx.core.view.WindowCompat
+import androidx.appcompat.widget.TooltipCompat
 import androidx.viewpager.widget.PagerAdapter
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -59,6 +60,8 @@ class AdvancedPopup(
     private var compactOpenedAt = 0L
     private var compactOpenHeight = 0
     private var compactOpenRetryScheduled = false
+    private var compactOpenRunnable: Runnable? = null
+    private var deferredKeyboardRunnable: Runnable? = null
 
     private var inActivityHost: ViewGroup? = null
     private var inActivityAdvancedView: View? = null
@@ -116,6 +119,18 @@ class AdvancedPopup(
             updateUndoRedoEnabled()
         }
         messagePanel.messageField.onUndoStateChanged = { updateUndoRedoEnabled() }
+        TooltipCompat.setTooltipText(
+            binding.undoButton,
+            binding.undoButton.contentDescription,
+        )
+        TooltipCompat.setTooltipText(
+            binding.redoButton,
+            binding.redoButton.contentDescription,
+        )
+        TooltipCompat.setTooltipText(
+            binding.sheetKeyboardButton,
+            binding.sheetKeyboardButton.contentDescription,
+        )
         updateUndoRedoEnabled()
 
         if (fullFormEditor) {
@@ -554,10 +569,12 @@ class AdvancedPopup(
         messagePanel.setCanScrolling(true)
         if (showKeyboardAfterSheetDismiss) {
             showKeyboardAfterSheetDismiss = false
-            messagePanel.postDelayed({
+            deferredKeyboardRunnable?.let(messagePanel::removeCallbacks)
+            deferredKeyboardRunnable = Runnable {
                 messagePanel.showKeyboard()
                 messagePanel.forceEditorCursorRefresh()
-            }, 120L)
+                deferredKeyboardRunnable = null
+            }.also { messagePanel.postDelayed(it, 120L) }
         }
     }
 
@@ -678,19 +695,20 @@ class AdvancedPopup(
             return
         }
         compactOpenRetryScheduled = true
-        messagePanel.postDelayed({
+        compactOpenRunnable = Runnable {
             compactOpenRetryScheduled = false
+            compactOpenRunnable = null
             if (generation != popupGeneration || compactInputState != EditorInputState.PANEL_OPENING) {
-                return@postDelayed
+                return@Runnable
             }
             val dimensions = dimensionsProvider.getDimensions()
             if (dimensions.isKeyboardShow()) {
                 messagePanel.hideImeFromEditor(clearFocus = false)
                 scheduleCompactAdvancedOpen(generation, COMPACT_OPEN_RETRY_DELAY_MS)
-                return@postDelayed
+                return@Runnable
             }
             completeCompactAdvancedOpen(dimensions)
-        }, delayMillis)
+        }.also { messagePanel.postDelayed(it, delayMillis) }
     }
 
     private fun clearCompactFakeKeyboardState() {
@@ -747,12 +765,24 @@ class AdvancedPopup(
     }
 
     fun onDestroy() {
-        hidePopup()
+        popupGeneration++
+        compactOpenRunnable?.let(messagePanel::removeCallbacks)
+        compactOpenRunnable = null
+        deferredKeyboardRunnable?.let(messagePanel::removeCallbacks)
+        deferredKeyboardRunnable = null
+        compactOpenRetryScheduled = false
+        showKeyboardAfterSheetDismiss = false
+        stateListener = null
+        formatSheet?.setOnDismissListener(null)
+        if (formatSheet?.isShowing == true) formatSheet?.dismiss()
+        formatSheet = null
+        inActivityHost?.animate()?.cancel()
+        inActivityAdvancedView?.visibility = View.GONE
+        inActivityHost?.visibility = View.GONE
+        compactAdvancedView?.visibility = View.GONE
         messagePanel.messageField.onUndoStateChanged = null
         pages.forEach(BasePanelItem::dispose)
         scope.cancel()
-        // Cancel all pending postDelayed/post Runnables (keyboard retry, compact open retry, etc.)
-        messagePanel.handler?.removeCallbacksAndMessages(null)
     }
 
     fun hidePopupWindows() {

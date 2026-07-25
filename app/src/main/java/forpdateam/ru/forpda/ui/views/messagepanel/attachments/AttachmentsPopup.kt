@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.ui.views.messagepanel.attachments
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.net.Uri
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.View
@@ -32,12 +33,16 @@ import timber.log.Timber
  * Created by radiationx on 09.01.17.
  */
 
-class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel) {
+class AttachmentsPopup(
+    context: Context,
+    private val messagePanel: MessagePanel,
+    private val stateStore: AttachmentStateStore = AttachmentStateStore(),
+) {
     private val context: Context = context
     private val dialog: BottomSheetDialog
     private val binding = MessagePanelAttachmentsBinding.inflate(LayoutInflater.from(context), null, false)
     private val recyclerView: AutoFitRecyclerView = binding.autoFitRecyclerView
-    private val adapter = AttachmentAdapter()
+    private val adapter = AttachmentAdapter(stateStore::rowId)
 
     private val noAttachments: TextView = binding.noAttachmentsText
     private val emptyAttachments: TextView = binding.emptyAttachmentsText
@@ -59,21 +64,27 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     private var isReverse = false
 
 
-    private val attachments = mutableListOf<AttachmentItem>()
-    private val selected = mutableListOf<AttachmentItem>()
-
-
     private var insertAttachmentListener: OnInsertAttachmentListener? = null
     private var retryUploadListener: OnRetryUploadListener? = null
     private var deleteSelectedListener: (() -> Unit)? = null
     private var attachmentsChangedListener: ((List<AttachmentItem>) -> Unit)? = null
 
-    /** Для retry: сопоставляем loading item -> исходный файл. */
-    private val fileByItem = LinkedHashMap<AttachmentItem, RequestFile>()
+    private val attachmentItems: List<AttachmentItem>
+        get() = stateStore.items()
+    private val selectedItems: List<AttachmentItem>
+        get() = stateStore.selectedItems()
 
-    fun getAttachments(): List<AttachmentItem> = attachments.toList()
+    private val stateListener: (AttachmentStateStore.Change) -> Unit = { change ->
+        adapter.submitItems(attachmentItems)
+        renderState()
+        if (change.contentChanged) {
+            attachmentsChangedListener?.invoke(attachmentItems)
+        }
+    }
 
-    fun getSelected(): List<AttachmentItem> = selected.toList()
+    fun getAttachments(): List<AttachmentItem> = attachmentItems
+
+    fun getSelected(): List<AttachmentItem> = selectedItems
 
     init {
         dialog = BottomSheetDialog(context)
@@ -103,12 +114,12 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         //deleteFile.setItemClickListener(v -> adapter.deleteSelected());
         adapter.setReloadOnClickListener(object : AttachmentAdapter.OnReloadClickListener {
             override fun onReloadClick(item: AttachmentItem) {
-                val file = fileByItem[item]
+                val file = stateStore.sourceFor(item)
                 if (file != null) {
                     // Сбрасываем состояние и перезапускаем загрузку одного файла.
                     item.loadState = AttachmentItem.STATE_LOADING
                     item.setError(false)
-                    adapter.updateItem(item)
+                    stateStore.itemChanged(item)
                     retryUploadListener?.onRetry(listOf(file), listOf(item))
                 }
             }
@@ -116,16 +127,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
         adapter.setOnItemClickListener(object : AttachmentAdapter.OnItemClickListener {
             override fun onItemClick(item: AttachmentItem) {
-                item.toggle()
-                if (item.selected) {
-                    if (!selected.contains(item)) {
-                        selected.add(item)
-                    }
-                } else {
-                    selected.remove(item)
-                }
-                onSelectedChange()
-                adapter.updateItem(item)
+                stateStore.toggleSelection(item)
             }
         })
         adapter.setOnItemActionListener(object : AttachmentAdapter.OnItemActionListener {
@@ -140,10 +142,8 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
                 deleteSelectedListener?.invoke()
             }
         })
-        onDataChange(0)
-
-        addToText.setOnClickListener { insertAttachment(selected, false) }
-        addToSpoiler.setOnClickListener { insertAttachment(selected, true) }
+        addToText.setOnClickListener { insertAttachment(selectedItems, false) }
+        addToSpoiler.setOnClickListener { insertAttachment(selectedItems, true) }
         retryFailed.setOnClickListener { retryAllFailed() }
         clearFailed.setOnClickListener { clearAllFailed() }
         deleteFile.setOnClickListener { showSelectedActions() }
@@ -155,6 +155,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
             dialog.setContentView(binding.root)
             dialog.show()
         }
+        stateStore.addListener(stateListener)
 
         /*if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             Window window = dialog.getWindow();
@@ -202,8 +203,6 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         reverseOrder.setOnClickListener {
             isReverse = !isReverse
             adapter.updateReverse(isReverse)
-            adapter.clear()
-            adapter.add(attachments)
             reverseOrder.isSelected = isReverse
             reverseOrder.setText(
                 if (isReverse) {
@@ -216,7 +215,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     private fun showSelectedActions() {
-        if (selected.isEmpty()) return
+        if (selectedItems.isEmpty()) return
         PopupMenu(context, deleteFile).apply {
             menu.add(
                 Menu.NONE,
@@ -237,15 +236,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     private fun selectOnly(item: AttachmentItem) {
-        for (selectedItem in ArrayList(selected)) {
-            if (selectedItem.selected) selectedItem.toggle()
-            adapter.updateItem(selectedItem)
-        }
-        selected.clear()
-        if (!item.selected) item.toggle()
-        selected.add(item)
-        adapter.updateItem(item)
-        onSelectedChange()
+        stateStore.selectOnly(item)
     }
 
     fun setEnabledTextControls(enabled: Boolean) {
@@ -271,16 +262,11 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     fun unSelectItems() {
-        for (item in selected) {
-            if (item.selected) item.toggle()
-            adapter.updateItem(item)
-        }
-        selected.clear()
-        onSelectedChange()
+        stateStore.clearSelection()
     }
 
     fun containNotLoaded(): Boolean {
-        for (item in selected) {
+        for (item in selectedItems) {
             if (item.loadState != AttachmentItem.STATE_LOADED)
                 return true
         }
@@ -289,13 +275,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
 
     fun deleteSelected() {
-        for (item in selected) {
-            if (item.status == AttachmentItem.STATUS_REMOVED) {
-                attachments.remove(item)
-                adapter.removeItem(item)
-                updateDataCounter()
-            }
-        }
+        stateStore.removeAll(selectedItems.filter { it.status == AttachmentItem.STATUS_REMOVED })
         unSelectItems()
     }
 
@@ -304,7 +284,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         messagePanel.updateAttachmentsCounter(count)
         emptyAttachments.visibility = if (count == 0) View.VISIBLE else View.GONE
         recyclerView.visibility = if (count == 0) View.GONE else View.VISIBLE
-        if (selected.isEmpty()) {
+        if (selectedItems.isEmpty()) {
             browseControls.visibility = if (count > 0) View.VISIBLE else View.GONE
             noAttachments.text = if (count > 0) {
                 context.getString(R.string.attachments_count, count)
@@ -314,24 +294,24 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         }
     }
 
-    private fun updateDataCounter() {
-        onDataChange(attachments.size)
+    private fun renderState() {
+        onDataChange(attachmentItems.size)
         updateRetryVisibility()
-        attachmentsChangedListener?.invoke(attachments.toList())
+        onSelectedChange()
     }
 
     private fun onSelectedChange() {
-        val hasSelection = selected.isNotEmpty()
+        val hasSelection = selectedItems.isNotEmpty()
         noAttachments.text = if (hasSelection) {
-            context.getString(R.string.attachments_selected, selected.size)
-        } else if (attachments.isNotEmpty()) {
-            context.getString(R.string.attachments_count, attachments.size)
+            context.getString(R.string.attachments_selected, selectedItems.size)
+        } else if (attachmentItems.isNotEmpty()) {
+            context.getString(R.string.attachments_count, attachmentItems.size)
         } else {
             context.getString(R.string.no_attachments)
         }
-        selectedCount.text = context.getString(R.string.attachments_selected, selected.size)
+        selectedCount.text = context.getString(R.string.attachments_selected, selectedItems.size)
         addFile.visibility = if (hasSelection) View.GONE else View.VISIBLE
-        browseControls.visibility = if (!hasSelection && attachments.isNotEmpty()) {
+        browseControls.visibility = if (!hasSelection && attachmentItems.isNotEmpty()) {
             View.VISIBLE
         } else {
             View.GONE
@@ -344,19 +324,23 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     private fun updateRetryVisibility() {
-        val hasFailed = attachments.any { it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError }
-        val shouldShow = hasFailed && selected.isEmpty()
+        val hasFailed = attachmentItems.any {
+            it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError
+        }
+        val shouldShow = hasFailed && selectedItems.isEmpty()
         retryFailed.visibility = if (shouldShow) View.VISIBLE else View.GONE
         clearFailed.visibility = if (shouldShow) View.VISIBLE else View.GONE
     }
 
     private fun retryAllFailed() {
-        val retryItems = attachments.filter { it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError }
+        val retryItems = attachmentItems.filter {
+            it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError
+        }
             .mapNotNull { item ->
-                val file = fileByItem[item] ?: return@mapNotNull null
+                val file = stateStore.sourceFor(item) ?: return@mapNotNull null
                 item.loadState = AttachmentItem.STATE_LOADING
                 item.setError(false)
-                adapter.updateItem(item)
+                stateStore.itemChanged(item)
                 file to item
             }
         if (retryItems.isEmpty()) return
@@ -367,16 +351,12 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     private fun clearAllFailed() {
-        if (selected.isNotEmpty()) return
-        val failedItems = attachments.filter { it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError }
-        if (failedItems.isEmpty()) return
-        for (item in failedItems) {
-            fileByItem.remove(item)
-            attachments.remove(item)
-            adapter.removeItem(item)
+        if (selectedItems.isNotEmpty()) return
+        val failedItems = attachmentItems.filter {
+            it.loadState == AttachmentItem.STATE_NOT_LOADED || it.isError
         }
-        updateDataCounter()
-        onSelectedChange()
+        if (failedItems.isEmpty()) return
+        stateStore.removeAll(failedItems)
     }
 
     private fun tryLockControls(enable: Boolean) {
@@ -402,10 +382,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     }
 
     fun onLoadAttachments(form: EditPostForm) {
-        clearAttachments()
-        attachments.addAll(form.attachments)
-        adapter.add(form.attachments)
-        updateDataCounter()
+        setAttachments(form.attachments)
     }
 
     fun preUploadFiles(files: List<RequestFile>): List<AttachmentItem> {
@@ -413,16 +390,16 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         val loadingItems = ArrayList<AttachmentItem>()
         for (file in files) {
             val item = AttachmentItem(file.fileName)
+            item.sourceUri = file.sourceUri
+            item.sourceMimeType = file.mimeType
+            item.sourceFileSize = file.fileSize
             item.setProgressListener { _ ->
 
             }
-            fileByItem[item] = file
             Timber.d("Add loading item $item")
-            attachments.add(item)
-            adapter.add(item)
+            stateStore.add(item, file)
             loadingItems.add(item)
         }
-        updateDataCounter()
         return loadingItems
     }
 
@@ -446,17 +423,15 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
             if (item.loadState == AttachmentItem.STATE_NOT_LOADED) {
                 // Оставляем элемент, чтобы можно было нажать retry.
                 item.setError(true)
-                adapter.updateItem(item)
+                stateStore.itemChanged(item)
             } else {
                 // Успешно — можно убрать файл из retry-map.
                 if (item.loadState == AttachmentItem.STATE_LOADED) {
-                    fileByItem.remove(item)
+                    stateStore.removeSource(item)
                 }
-                adapter.updateItem(item)
+                stateStore.itemChanged(item)
             }
         }
-        updateDataCounter()
-        onSelectedChange()
     }
 
     fun preDeleteFiles() {
@@ -474,19 +449,16 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         // Копия до clear: иначе при вызове из setAttachmentsToPanels(getAttachments())
         // это тот же mutableList — clearAttachments() опустошает источник и список становится пустым.
         val snapshot = ArrayList(items)
-        clearAttachments()
-        attachments.addAll(snapshot)
-        adapter.add(snapshot)
-        updateDataCounter()
+        stateStore.replace(snapshot)
+        snapshot.forEach { item ->
+            if (stateStore.sourceFor(item) == null) {
+                restoreRequestFile(item)?.let { stateStore.setSource(item, it) }
+            }
+        }
     }
 
     fun clearAttachments() {
-        attachments.clear()
-        selected.clear()
-        fileByItem.clear()
-        adapter.clear()
-        updateDataCounter()
-        onSelectedChange()
+        stateStore.clear()
     }
 
 
@@ -494,33 +466,81 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
         Timber.d("onDeleteFiles $deletedItems")
         endDeleteProgress()
         val oldSelection = messagePanel.selectionRange
+        val originalMessage = messagePanel.message
         val updatedMessage = removeAttachmentReferencesFromBody(
-            messagePanel.message,
+            originalMessage,
             deletedItems.map { it.id },
         )
-        if (updatedMessage != messagePanel.message) {
-            messagePanel.setText(updatedMessage)
-            val length = updatedMessage.length
-            messagePanel.messageField.setSelection(
-                oldSelection[0].coerceIn(0, length),
-                oldSelection[1].coerceIn(0, length),
+        if (updatedMessage != originalMessage) {
+            messagePanel.replaceTextRange(
+                0,
+                originalMessage.length,
+                updatedMessage,
+                mapSelectionIndex(originalMessage, updatedMessage, oldSelection[0]),
+                mapSelectionIndex(originalMessage, updatedMessage, oldSelection[1]),
             )
         }
-        // Снимок: deletedItems может быть тем же самым списком, что и [selected]
-        // (getSelected() отдаёт живой список, а deleteFiles возвращает его же обратно).
-        // Тогда selected.remove(item) в цикле мутирует итерируемую коллекцию → ConcurrentModificationException
-        // и падение приложения при удалении вложения.
+        val removed = ArrayList<AttachmentItem>()
         for (item in ArrayList(deletedItems)) {
             Timber.d("Delete file $item")
             if (item.status == AttachmentItem.STATUS_REMOVED) {
-                attachments.remove(item)
-                adapter.removeItem(item)
-                selected.remove(item)
+                removed += item
             }
         }
-        updateDataCounter()
-        onSelectedChange()
+        stateStore.removeAll(removed)
         unSelectItems()
+    }
+
+    private fun mapSelectionIndex(before: String, after: String, index: Int): Int {
+        val safeIndex = index.coerceIn(0, before.length)
+        val prefix = before.commonPrefixWith(after).length
+        val maxSuffix = minOf(before.length - prefix, after.length - prefix)
+        var suffix = 0
+        while (
+            suffix < maxSuffix &&
+            before[before.lastIndex - suffix] == after[after.lastIndex - suffix]
+        ) {
+            suffix++
+        }
+        val beforeChangedEnd = before.length - suffix
+        val afterChangedEnd = after.length - suffix
+        return when {
+            safeIndex <= prefix -> safeIndex
+            safeIndex >= beforeChangedEnd ->
+                (afterChangedEnd + safeIndex - beforeChangedEnd).coerceIn(0, after.length)
+            else -> prefix
+        }
+    }
+
+    private fun restoreRequestFile(item: AttachmentItem): RequestFile? {
+        val source = item.sourceUri?.takeIf(String::isNotBlank) ?: return null
+        val uri = runCatching { Uri.parse(source) }.getOrNull() ?: return null
+        val streamProvider = {
+            context.contentResolver.openInputStream(uri)
+                ?: error("Unable to reopen attachment source: $uri")
+        }
+        val firstStream = runCatching(streamProvider).getOrNull() ?: return null
+        return RequestFile(
+            fileName = item.name.orEmpty(),
+            mimeType = item.sourceMimeType.orEmpty(),
+            fileStream = firstStream,
+            fileSize = item.sourceFileSize,
+            streamProvider = streamProvider,
+            sourceUri = source,
+        )
+    }
+
+    fun dispose() {
+        stateStore.removeListener(stateListener)
+        dismiss()
+        getAttachments().forEach { item ->
+            item.progressListener = null
+        }
+        recyclerView.adapter = null
+        insertAttachmentListener = null
+        retryUploadListener = null
+        deleteSelectedListener = null
+        attachmentsChangedListener = null
     }
 
     fun setInsertAttachmentListener(insertAttachmentListener: OnInsertAttachmentListener) {

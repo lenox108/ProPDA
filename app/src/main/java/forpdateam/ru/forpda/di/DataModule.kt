@@ -135,7 +135,10 @@ object DataModule {
             PostDraftDatabase::class.java,
             "post_draft_database"
         )
-            .addMigrations(PostDraftDatabase.MIGRATION_1_2)
+            .addMigrations(
+                PostDraftDatabase.MIGRATION_1_2,
+                PostDraftDatabase.MIGRATION_2_3,
+            )
             .build()
     }
 

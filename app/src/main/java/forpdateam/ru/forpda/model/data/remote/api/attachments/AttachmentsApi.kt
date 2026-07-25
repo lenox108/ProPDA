@@ -52,6 +52,9 @@ class AttachmentsApi(
             val item = pending[i]
 
             file.requestName = "FILE_UPLOAD[]"
+            if (file.canOpenStreamAgain()) {
+                file.resetStream()
+            }
             val digestResult = calculateDigest(file)
             val hash = digestResult.digest
             val md5 = byteArrayToHexString(hash)

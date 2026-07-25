@@ -146,7 +146,22 @@ object FilePickHelper {
                     else -> null
                 } ?: error("Unable to open selected file: $uri")
             }
-            RequestFile(name, mimeType ?: "", streamProvider(), fileSize, streamProvider)
+            // ACTION_OPEN_DOCUMENT grants can survive process death. Photo/gallery providers that
+            // do not support persistable grants simply throw here; the current upload still works.
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            RequestFile(
+                fileName = name,
+                mimeType = mimeType ?: "",
+                fileStream = streamProvider(),
+                fileSize = fileSize,
+                streamProvider = streamProvider,
+                sourceUri = uri.toString(),
+            )
         } catch (e: Exception) {
             Analytics.reportError(e.message.orEmpty(), e)
             null

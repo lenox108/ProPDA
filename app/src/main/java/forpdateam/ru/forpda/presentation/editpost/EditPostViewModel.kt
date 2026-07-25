@@ -11,6 +11,7 @@ import forpdateam.ru.forpda.common.mergeAttachmentIdsFromPostText
 import forpdateam.ru.forpda.common.mergeEditPostMessage
 import forpdateam.ru.forpda.entity.app.EditPostSyncData
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
+import forpdateam.ru.forpda.entity.remote.editpost.AttachmentSnapshot
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.entity.app.profile.IUserHolder
@@ -80,6 +81,7 @@ class EditPostViewModel @Inject constructor(
 
     /** Дебаунс-сохранение персистентного черновика (только TYPE_NEW_POST). */
     private var draftSaveJob: Job? = null
+    private var pendingDraft: Pair<String, PostDraft>? = null
 
     private var messageFromView: (() -> String)? = null
 
@@ -169,7 +171,7 @@ class EditPostViewModel @Inject constructor(
 
     /** Загруженный из БД черновик правки — грузим один раз за сессию редактирования. */
     private var restoredEditDraftLoaded = false
-    private var restoredEditDraft: String? = null
+    private var restoredEditDraftState: PostDraft? = null
 
     private fun draftKey(): String? = when {
         postForm.type == EditPostForm.TYPE_NEW_POST && postForm.topicId > 0 ->
@@ -188,18 +190,34 @@ class EditPostViewModel @Inject constructor(
         editorMode: String = "",
     ) {
         val key = draftKey() ?: return
-        // Для правки не храним черновик, равный чистому серверному тексту — иначе в БД оседают
-        // «пустые» правки, которые потом ложно воскресали бы при повторном открытии.
-        val effective = if (postForm.type == EditPostForm.TYPE_EDIT_POST &&
-            message.trim() == editCleanBaseline?.trim()
-        ) "" else message
-        val draft = PostDraft.create(
-            message = effective,
+        val isEdit = postForm.type == EditPostForm.TYPE_EDIT_POST
+        val messageChanged = !isEdit || message.trim() != editCleanBaseline?.trim()
+        val currentIds = attachments
+            .filter { it.id > 0 && it.status != AttachmentItem.STATUS_REMOVED }
+            .map(AttachmentItem::id)
+            .toSet()
+        val attachmentStateChanged = if (!isEdit) {
+            false
+        } else {
+            editSessionBaselineAttachmentIds?.let { baseline ->
+                currentIds != baseline || attachments.any { it.id <= 0 }
+            } ?: attachments.isNotEmpty()
+        }
+        val attachmentSnapshots = if (!isEdit || attachmentStateChanged) {
+            attachments.map(AttachmentSnapshot::from)
+        } else {
+            emptyList()
+        }
+        val draft = PostDraft.createFromSnapshots(
+            message = if (messageChanged) message else "",
             selectionStart = selectionStart,
             selectionEnd = selectionEnd,
-            attachments = if (postForm.type == EditPostForm.TYPE_NEW_POST) attachments else emptyList(),
+            attachments = attachmentSnapshots,
             editorMode = editorMode,
+            attachmentsChanged = attachmentStateChanged ||
+                (!isEdit && attachmentSnapshots.isNotEmpty()),
         )
+        pendingDraft = key to draft
         draftSaveJob?.cancel()
         draftSaveJob = scope.launch {
             kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
@@ -211,12 +229,24 @@ class EditPostViewModel @Inject constructor(
     fun clearPersistedDraft() {
         val key = draftKey() ?: return
         draftSaveJob?.cancel()
+        pendingDraft = null
         // Fire-and-forget на scope репозитория: VM.scope отменяется сразу за router.exit(),
         // и удаление на нём не успевало выполниться (черновик воскресал при повторном открытии).
         postDraftRepository.clearFireAndForget(key)
     }
 
+    fun flushDraft() {
+        draftSaveJob?.cancel()
+        val pending = pendingDraft ?: return
+        postDraftRepository.saveFireAndForget(
+            pending.first,
+            pending.second,
+            System.currentTimeMillis(),
+        )
+    }
+
     override fun onCleared() {
+        flushDraft()
         cancelEditLoadSafetyTimeout()
         editLoadJob?.cancel()
         uploadJob?.cancel()
@@ -251,9 +281,20 @@ class EditPostViewModel @Inject constructor(
             Timber.d("sendMessage ignored: send already in progress")
             return
         }
+        val submissionAttachments = attachments
+            .map(AttachmentSnapshot::from)
+            .map(AttachmentSnapshot::toAttachmentItem)
+        if (message.isBlank() && submissionAttachments.isEmpty()) return
+        if (submissionAttachments.any {
+                it.id <= 0 || it.loadState != AttachmentItem.STATE_LOADED || it.isError
+            }
+        ) {
+            Timber.d("sendMessage ignored: attachment upload is not complete")
+            return
+        }
         postForm.message = message
         postForm.attachments.clear()
-        for (item in attachments) {
+        for (item in submissionAttachments) {
             postForm.addAttachment(item)
         }
         sendJob = scope.launch {
@@ -386,7 +427,7 @@ class EditPostViewModel @Inject constructor(
                     form.message.length,
                     mergedMessage.length,
                     serverAttachments.size,
-                    !restoredEditDraft.isNullOrBlank(),
+                    !restoredEditDraftState?.message.isNullOrBlank(),
                     mergedMessage.replace("\r\n", "\n").replace("\n", "↵").take(200)
             )
         }
@@ -407,9 +448,19 @@ class EditPostViewModel @Inject constructor(
         // Восстановленный из БД черновик правки показываем поверх чистого текста, но только если он
         // РЕАЛЬНО отличается — иначе ложно пометили бы форму «грязной». baseline остаётся на mergedMessage.
         postForm.restoredEditDraft = if (isEdit) {
-            restoredEditDraft?.takeIf { it.isNotBlank() && it.trim() != mergedMessage.trim() }
+            restoredEditDraftState?.message
+                ?.takeIf { it.isNotBlank() && it.trim() != mergedMessage.trim() }
         } else {
             null
+        }
+        if (isEdit) {
+            val saved = restoredEditDraftState
+            postForm.restoredDraftSelectionStart = saved?.selectionStart ?: -1
+            postForm.restoredDraftSelectionEnd = saved?.selectionEnd ?: -1
+            postForm.restoredDraftAttachments = saved
+                ?.takeIf(PostDraft::attachmentsChanged)
+                ?.attachments
+                ?.map { it.toAttachmentItem() }
         }
         scope.launch { emitEvent(EditPostUiEvent.ShowForm(postForm)) }
     }
@@ -420,7 +471,7 @@ class EditPostViewModel @Inject constructor(
         restoredEditDraftLoaded = true
         val key = draftKey() ?: return
         if (postForm.type != EditPostForm.TYPE_EDIT_POST) return
-        restoredEditDraft = runCatching { postDraftRepository.load(key) }.getOrNull()
+        restoredEditDraftState = runCatching { postDraftRepository.loadDraft(key) }.getOrNull()
     }
 
     fun uploadFiles(files: List<RequestFile>, pending: List<AttachmentItem>) {
@@ -435,7 +486,15 @@ class EditPostViewModel @Inject constructor(
                         }
                         scope.launch { emitEvent(EditPostUiEvent.OnUploadFiles(merged)) }
                     }
-                    .onFailure { errorHandler.handle(it) }
+                    .onFailure { error ->
+                        pending.forEach { item ->
+                            item.loadState = AttachmentItem.STATE_NOT_LOADED
+                            item.setError(true)
+                            item.errorText = error.message
+                        }
+                        scope.launch { emitEvent(EditPostUiEvent.OnUploadFiles(pending)) }
+                        errorHandler.handle(error)
+                    }
         }
     }
 

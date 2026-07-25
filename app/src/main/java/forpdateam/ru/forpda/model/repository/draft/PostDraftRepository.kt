@@ -7,8 +7,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Персистентные черновики редактора для темы, полноэкранной формы и QMS.
@@ -23,49 +27,95 @@ class PostDraftRepository(
      * за router.exit(), и удаление, запущенное на нём, не успевало выполниться — черновик воскресал.
      */
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val operationMutex = Mutex()
+    private val operationClock = AtomicLong()
+    private val latestOperation = ConcurrentHashMap<String, Long>()
 
     suspend fun load(key: String): String? = loadDraft(key)?.message
 
     suspend fun loadDraft(key: String): PostDraft? = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
-        dao.deleteOlderThan(now - DRAFT_TTL_MS)
-        val room = dao.get(key) ?: return@withContext null
-        if (room.message.isBlank() && room.attachmentsJson == "[]") return@withContext null
-        PostDraft(
-            message = room.message,
-            selectionStart = room.selectionStart,
-            selectionEnd = room.selectionEnd,
-            attachments = decodeAttachments(room.attachmentsJson),
-            editorMode = room.editorMode,
-        )
+        operationMutex.withLock {
+            val now = System.currentTimeMillis()
+            dao.deleteOlderThan(now - DRAFT_TTL_MS)
+            val room = dao.get(key) ?: return@withLock null
+            if (room.message.isBlank() && room.attachmentsJson == "[]" && !room.attachmentsChanged) {
+                return@withLock null
+            }
+            PostDraft(
+                message = room.message,
+                selectionStart = room.selectionStart,
+                selectionEnd = room.selectionEnd,
+                attachments = decodeAttachments(room.attachmentsJson),
+                editorMode = room.editorMode,
+                attachmentsChanged = room.attachmentsChanged,
+            )
+        }
     }
 
     suspend fun save(key: String, message: String, updatedAt: Long) =
         save(key, PostDraft(message = message), updatedAt)
 
-    suspend fun save(key: String, draft: PostDraft, updatedAt: Long) = withContext(Dispatchers.IO) {
-        dao.deleteOlderThan(updatedAt - DRAFT_TTL_MS)
-        if (draft.isEmpty) {
-            dao.delete(key)
-        } else {
-            dao.upsert(
-                PostDraftRoom(
-                    key = key,
-                    message = draft.message,
-                    updatedAt = updatedAt,
-                    selectionStart = draft.selectionStart,
-                    selectionEnd = draft.selectionEnd,
-                    attachmentsJson = encodeAttachments(draft.attachments),
-                    editorMode = draft.editorMode,
+    suspend fun save(key: String, draft: PostDraft, updatedAt: Long) {
+        val operation = registerOperation(key)
+        withContext(Dispatchers.IO) {
+            saveRegistered(key, draft, updatedAt, operation)
+        }
+    }
+
+    /** App-lifetime write used by lifecycle flush; it survives destruction of the screen scope. */
+    fun saveFireAndForget(key: String, draft: PostDraft, updatedAt: Long) {
+        val operation = registerOperation(key)
+        ioScope.launch {
+            runCatching { saveRegistered(key, draft, updatedAt, operation) }
+        }
+    }
+
+    private suspend fun saveRegistered(
+        key: String,
+        draft: PostDraft,
+        updatedAt: Long,
+        operation: Long,
+    ) {
+        operationMutex.withLock {
+            // Latest invocation wins. In particular, a delayed save can never resurrect a draft
+            // after clearFireAndForget registered a newer operation for the same key.
+            if (latestOperation[key] != operation) return
+            dao.deleteOlderThan(updatedAt - DRAFT_TTL_MS)
+            if (draft.isEmpty) {
+                dao.delete(key)
+            } else {
+                dao.upsert(
+                    PostDraftRoom(
+                        key = key,
+                        message = draft.message,
+                        updatedAt = updatedAt,
+                        selectionStart = draft.selectionStart,
+                        selectionEnd = draft.selectionEnd,
+                        attachmentsJson = encodeAttachments(draft.attachments),
+                        editorMode = draft.editorMode,
+                        attachmentsChanged = draft.attachmentsChanged,
+                    )
                 )
-            )
+            }
         }
     }
 
     /** Удаление, переживающее уничтожение ViewModel (выход/отправка). */
     fun clearFireAndForget(key: String) {
-        ioScope.launch { runCatching { dao.delete(key) } }
+        val operation = registerOperation(key)
+        ioScope.launch {
+            runCatching {
+                operationMutex.withLock {
+                    if (latestOperation[key] == operation) {
+                        dao.delete(key)
+                    }
+                }
+            }
+        }
     }
+
+    private fun registerOperation(key: String): Long =
+        operationClock.incrementAndGet().also { latestOperation[key] = it }
 
     companion object {
         private const val DRAFT_TTL_MS = 30L * 24L * 60L * 60L * 1000L
@@ -92,6 +142,9 @@ class PostDraftRepository(
                             put("md5", item.md5)
                             put("isError", item.isError)
                             put("errorText", item.errorText)
+                            put("sourceUri", item.sourceUri)
+                            put("sourceMimeType", item.sourceMimeType)
+                            put("sourceFileSize", item.sourceFileSize)
                         }
                     )
                 }
@@ -118,6 +171,9 @@ class PostDraftRepository(
                             md5 = item.stringOrNull("md5"),
                             isError = item.optBoolean("isError"),
                             errorText = item.stringOrNull("errorText"),
+                            sourceUri = item.stringOrNull("sourceUri"),
+                            sourceMimeType = item.stringOrNull("sourceMimeType"),
+                            sourceFileSize = item.longOrNull("sourceFileSize"),
                         )
                     )
                 }
@@ -126,5 +182,8 @@ class PostDraftRepository(
 
         private fun JSONObject.stringOrNull(key: String): String? =
             if (isNull(key)) null else optString(key).takeIf(String::isNotEmpty)
+
+        private fun JSONObject.longOrNull(key: String): Long? =
+            if (isNull(key) || !has(key)) null else optLong(key).takeIf { it >= 0L }
     }
 }

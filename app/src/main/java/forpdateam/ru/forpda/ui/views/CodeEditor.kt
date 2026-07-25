@@ -71,6 +71,9 @@ class CodeEditor @JvmOverloads constructor(
     private var undoRedoInProgress = false
     private var pendingUndoStart = 0
     private var pendingUndoBefore: CharSequence = ""
+    private var pendingUndoAfter: CharSequence = ""
+    private var pendingUndoSelectionStart = 0
+    private var pendingUndoSelectionEnd = 0
     /** Колбэк для UI (кнопки undo/redo): вызывается при любом изменении доступности истории. */
     var onUndoStateChanged: (() -> Unit)? = null
     var onSelectionChangedListener: ((start: Int, end: Int) -> Unit)? = null
@@ -136,38 +139,120 @@ class CodeEditor @JvmOverloads constructor(
         highlightWithoutChange(text ?: return)
     }
 
-    private fun recordEdit(start: Int, before: CharSequence, after: CharSequence) {
-        editHistory.record(start, before, after)
+    private fun recordEdit(
+        start: Int,
+        before: CharSequence,
+        after: CharSequence,
+        beforeSelectionStart: Int,
+        beforeSelectionEnd: Int,
+        afterSelectionStart: Int,
+        afterSelectionEnd: Int,
+    ) {
+        editHistory.record(
+            start = start,
+            before = before,
+            after = after,
+            beforeSelectionStart = beforeSelectionStart,
+            beforeSelectionEnd = beforeSelectionEnd,
+            afterSelectionStart = afterSelectionStart,
+            afterSelectionEnd = afterSelectionEnd,
+        )
         onUndoStateChanged?.invoke()
     }
 
     fun undo() {
         val op = editHistory.takeUndo() ?: return
-        applyUndoRedo(op.start, op.after.length, op.before)
+        applyUndoRedo(
+            op.start,
+            op.after.length,
+            op.before,
+            op.beforeSelectionStart,
+            op.beforeSelectionEnd,
+        )
         onUndoStateChanged?.invoke()
         updateHighlighting()
     }
 
     fun redo() {
         val op = editHistory.takeRedo() ?: return
-        applyUndoRedo(op.start, op.before.length, op.after)
+        applyUndoRedo(
+            op.start,
+            op.before.length,
+            op.after,
+            op.afterSelectionStart,
+            op.afterSelectionEnd,
+        )
         onUndoStateChanged?.invoke()
         updateHighlighting()
     }
 
     /** Заменяет [replaceLen] символов начиная с [start] на [replacement], не записывая правку в историю. */
-    private fun applyUndoRedo(start: Int, replaceLen: Int, replacement: CharSequence) {
+    private fun applyUndoRedo(
+        start: Int,
+        replaceLen: Int,
+        replacement: CharSequence,
+        targetSelectionStart: Int,
+        targetSelectionEnd: Int,
+    ) {
         val e = text ?: return
         val s = start.coerceIn(0, e.length)
         val end = (start + replaceLen).coerceIn(s, e.length)
         undoRedoInProgress = true
         try {
             e.replace(s, end, replacement)
-            setSelection((s + replacement.length).coerceIn(0, text?.length ?: 0))
+            val length = text?.length ?: 0
+            setSelection(
+                targetSelectionStart.coerceIn(0, length),
+                targetSelectionEnd.coerceIn(0, length),
+            )
         } catch (_: Throwable) {
         } finally {
             undoRedoInProgress = false
         }
+    }
+
+    /**
+     * Applies one editor command as one undo operation without replacing the unaffected buffer.
+     */
+    fun replaceRangeAtomically(
+        start: Int,
+        end: Int,
+        replacement: CharSequence,
+        targetSelectionStart: Int,
+        targetSelectionEnd: Int,
+    ): Boolean {
+        val editable = text ?: return false
+        var safeStart = start.coerceIn(0, editable.length)
+        var safeEnd = end.coerceIn(0, editable.length)
+        if (safeEnd < safeStart) {
+            val swap = safeStart
+            safeStart = safeEnd
+            safeEnd = swap
+        }
+        val before = editable.subSequence(safeStart, safeEnd).toString()
+        val beforeSelectionStart = selectionStart.coerceAtLeast(0)
+        val beforeSelectionEnd = selectionEnd.coerceAtLeast(0)
+        undoRedoInProgress = true
+        try {
+            editable.replace(safeStart, safeEnd, replacement)
+            val length = editable.length
+            setSelection(
+                targetSelectionStart.coerceIn(0, length),
+                targetSelectionEnd.coerceIn(0, length),
+            )
+        } finally {
+            undoRedoInProgress = false
+        }
+        recordEdit(
+            start = safeStart,
+            before = before,
+            after = replacement,
+            beforeSelectionStart = beforeSelectionStart,
+            beforeSelectionEnd = beforeSelectionEnd,
+            afterSelectionStart = selectionStart.coerceAtLeast(0),
+            afterSelectionEnd = selectionEnd.coerceAtLeast(0),
+        )
+        return true
     }
 
     fun restartCursorBlink() {
@@ -202,15 +287,28 @@ class CodeEditor @JvmOverloads constructor(
                 if (undoRedoInProgress) return
                 pendingUndoStart = start
                 pendingUndoBefore = if (count > 0) s.subSequence(start, start + count).toString() else ""
+                pendingUndoSelectionStart = selectionStart.coerceAtLeast(0)
+                pendingUndoSelectionEnd = selectionEnd.coerceAtLeast(0)
             }
 
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
                 if (undoRedoInProgress) return
-                val after = if (count > 0) s.subSequence(start, start + count).toString() else ""
-                recordEdit(pendingUndoStart, pendingUndoBefore, after)
+                pendingUndoAfter = if (count > 0) s.subSequence(start, start + count).toString() else ""
             }
 
-            override fun afterTextChanged(e: Editable) {}
+            override fun afterTextChanged(e: Editable) {
+                if (undoRedoInProgress) return
+                val fallbackSelection = (pendingUndoStart + pendingUndoAfter.length).coerceIn(0, e.length)
+                recordEdit(
+                    start = pendingUndoStart,
+                    before = pendingUndoBefore,
+                    after = pendingUndoAfter,
+                    beforeSelectionStart = pendingUndoSelectionStart,
+                    beforeSelectionEnd = pendingUndoSelectionEnd,
+                    afterSelectionStart = selectionStart.takeIf { it >= 0 } ?: fallbackSelection,
+                    afterSelectionEnd = selectionEnd.takeIf { it >= 0 } ?: fallbackSelection,
+                )
+            }
         })
 
         setSyntaxColors()

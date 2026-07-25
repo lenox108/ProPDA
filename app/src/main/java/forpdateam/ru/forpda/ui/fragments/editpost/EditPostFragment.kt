@@ -41,8 +41,10 @@ import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.views.CodeEditor
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
+import forpdateam.ru.forpda.ui.views.messagepanel.EditorSessionStore
 import forpdateam.ru.forpda.ui.views.messagepanel.advanced.AdvancedPopup
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
+import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentStateStore
 import dagger.hilt.android.AndroidEntryPoint
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
@@ -72,6 +74,7 @@ class EditPostFragment : TabFragment() {
 
     private lateinit var fullPanel: MessagePanel
     private lateinit var compactPanel: MessagePanel
+    private val attachmentStateStore = AttachmentStateStore()
     private var isCompactMode = false
     private val uploadQueue: ArrayDeque<Pair<List<RequestFile>, List<AttachmentItem>>> = ArrayDeque()
     private var uploadInProgress = false
@@ -95,12 +98,23 @@ class EditPostFragment : TabFragment() {
      * буфер compact может кратковременно читаться пустым после фокуса/IME на полном поле — копирование
      * только из [compactPanel.messageField] теряет черновик; зеркало остаётся источником правды.
      */
-    private var draftContentMirror: String = ""
+    private val editorSessionStore = EditorSessionStore()
+    private var draftContentMirror: String
+        get() = editorSessionStore.snapshot().message
+        set(value) {
+            val state = editorSessionStore.snapshot()
+            editorSessionStore.replace(
+                    message = value,
+                    selectionStart = state.selectionStart.coerceAtMost(value.length),
+                    selectionEnd = state.selectionEnd.coerceAtMost(value.length),
+                    mode = if (isCompactMode) "compact" else "full")
+        }
     /** После первой успешной [showForm] для TYPE_EDIT_POST — для сравнения «грязности». */
     private var editBaselineEstablished = false
     private var baselineEditMessage: String = ""
     /** Черновик правки наложен на форму один раз — чтобы повторные ShowForm не перетирали ввод. */
     private var editDraftRestoredOnce = false
+    private var editAttachmentsRestoredOnce = false
     /** Текст формы правки применён к панелям — повторные ShowForm (дозагрузка вложений) текст не трогают. */
     private var editMessageAppliedOnce = false
     private var baselineAttachmentSignature: String = ""
@@ -175,15 +189,16 @@ class EditPostFragment : TabFragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         super.onCreateView(inflater, container, savedInstanceState)
         // Полный редактор — в fragment_content (ниже AppBar).
-        fullPanel = MessagePanel(requireContext(), fragmentContainer, fragmentContent, true, mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder)
+        fullPanel = MessagePanel(
+                requireContext(), fragmentContainer, fragmentContent, true,
+                mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder, attachmentStateStore)
         // Компактный редактор — внизу (message_panel_host).
-        compactPanel = MessagePanel(requireContext(), fragmentContainer, messagePanelHost, false, mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder).also {
+        compactPanel = MessagePanel(
+                requireContext(), fragmentContainer, messagePanelHost, false,
+                mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder, attachmentStateStore).also {
             it.visibility = View.GONE
         }
-        presenter.attachMessageSource {
-            val raw = currentPanel()?.messageField?.text?.toString() ?: ""
-            if (raw.isNotEmpty()) raw else draftContentMirror
-        }
+        presenter.attachMessageSource { editorSessionStore.snapshot().message }
         return viewFragment
     }
 
@@ -325,6 +340,12 @@ class EditPostFragment : TabFragment() {
         reasonDialog?.dismiss()
         reasonDialog = null
         presenter.attachMessageSource(null)
+        if (::fullPanel.isInitialized) {
+            fullPanel.onDestroy()
+        }
+        if (::compactPanel.isInitialized) {
+            compactPanel.onDestroy()
+        }
         super.onDestroyView()
     }
 
@@ -334,14 +355,12 @@ class EditPostFragment : TabFragment() {
         // Переживание смерти процесса: сохраняем актуальный текст + каретку, иначе onCreate заново
         // прочитает исходный текст из args и всё, что пользователь дописал, потеряется.
         if (::fullPanel.isInitialized || ::compactPanel.isInitialized) {
-            val panel = currentPanel()
-            val text = panel?.messageField?.text?.toString()?.ifEmpty { draftContentMirror } ?: draftContentMirror
+            val state = editorSessionStore.snapshot()
+            val text = state.message
             if (text.isNotEmpty()) {
                 outState.putString(STATE_DRAFT_TEXT, text)
-                panel?.messageField?.let {
-                    outState.putInt(STATE_DRAFT_SEL_START, it.selectionStart)
-                    outState.putInt(STATE_DRAFT_SEL_END, it.selectionEnd)
-                }
+                outState.putInt(STATE_DRAFT_SEL_START, state.selectionStart)
+                outState.putInt(STATE_DRAFT_SEL_END, state.selectionEnd)
             }
         }
     }
@@ -369,6 +388,7 @@ class EditPostFragment : TabFragment() {
 
     override fun onPauseOrHide() {
         super.onPauseOrHide()
+        presenter.flushDraft()
         restoreFullscreenImeWindowMode()
         if (::fullPanel.isInitialized) {
             fullPanel.onPause()
@@ -386,12 +406,6 @@ class EditPostFragment : TabFragment() {
             presenter.scheduleDiscardTransientUploads(attachmentsSnapshotCache)
         }
         super.onDestroy()
-        if (::fullPanel.isInitialized) {
-            fullPanel.onDestroy()
-        }
-        if (::compactPanel.isInitialized) {
-            compactPanel.onDestroy()
-        }
     }
 
     override fun hideKeyboard() {
@@ -480,9 +494,24 @@ class EditPostFragment : TabFragment() {
         setDraftToPanels(form.message)
         (currentPanel()?.messageField as? CodeEditor)?.updateHighlighting()
         fullPanel.editPollButton?.visibility = View.GONE
-        setAttachmentsToPanels(
+        val mergedServerAttachments =
                 mergeEditorAttachments(form.attachments, currentAttachmentsPopup()?.getAttachments().orEmpty())
-        )
+        if (formType == EditPostForm.TYPE_EDIT_POST && baselineAttachmentSignature.isEmpty()) {
+            baselineAttachmentSignature = attachmentsContentSignature(mergedServerAttachments)
+        }
+        val restoredAttachments = if (
+                formType == EditPostForm.TYPE_EDIT_POST && !editAttachmentsRestoredOnce
+        ) {
+            form.restoredDraftAttachments
+        } else {
+            null
+        }
+        if (restoredAttachments != null) {
+            editAttachmentsRestoredOnce = true
+            setAttachmentsToPanels(restoredAttachments)
+        } else {
+            setAttachmentsToPanels(mergedServerAttachments)
+        }
         currentPanel()?.messageField?.visibility = View.VISIBLE
     }
 
@@ -528,9 +557,24 @@ class EditPostFragment : TabFragment() {
             )
             pendingFullscreenSelection = initialSelectionRange
         }
-        setAttachmentsToPanels(
+        val mergedServerAttachments =
                 mergeEditorAttachments(form.attachments, currentAttachmentsPopup()?.getAttachments().orEmpty())
-        )
+        if (formType == EditPostForm.TYPE_EDIT_POST && baselineAttachmentSignature.isEmpty()) {
+            baselineAttachmentSignature = attachmentsContentSignature(mergedServerAttachments)
+        }
+        val restoredAttachments = if (
+                formType == EditPostForm.TYPE_EDIT_POST && !editAttachmentsRestoredOnce
+        ) {
+            form.restoredDraftAttachments
+        } else {
+            null
+        }
+        if (restoredAttachments != null) {
+            editAttachmentsRestoredOnce = true
+            setAttachmentsToPanels(restoredAttachments)
+        } else {
+            setAttachmentsToPanels(mergedServerAttachments)
+        }
         // Текст правки применяем ОДИН раз: повторный ShowForm (после дозагрузки вложений) иначе
         // перетёр бы уже начатые правки/наложенный черновик серверным текстом. Вложения обновляем всегда.
         val applyMessage = formType != EditPostForm.TYPE_EDIT_POST || !editMessageAppliedOnce
@@ -595,8 +639,7 @@ class EditPostFragment : TabFragment() {
     }
 
     private fun currentDraftForPreservation(): String {
-        val panelText = currentPanel()?.messageField?.text?.toString().orEmpty()
-        return panelText.ifEmpty { draftContentMirror }
+        return editorSessionStore.snapshot().message
     }
 
     /**
@@ -665,7 +708,7 @@ class EditPostFragment : TabFragment() {
         val panel = currentPanel() ?: return
         // Фолбэк на зеркало: на части OEM-прошивок буфер поля может кратковременно читаться пустым —
         // тогда без фолбэка ушёл бы пустой пост. Зеркало держит последнюю известную редакцию.
-        val message = panel.message.ifEmpty { draftContentMirror }
+        val message = editorSessionStore.snapshot().message
         presenter.sendMessage(message, panel.attachments)
     }
 
@@ -708,13 +751,12 @@ class EditPostFragment : TabFragment() {
         uploadInProgress = false
         if (uploadQueue.isNotEmpty()) uploadQueue.removeFirst()
         pumpUploadQueue()
-        // синхронизируем вложения на вторую панель
-        currentAttachmentsPopup()?.let { setAttachmentsToPanels(it.getAttachments()) }
+        refreshAttachmentsSnapshotCache()
     }
 
     private fun onDeleteFiles(items: List<AttachmentItem>) {
         (activeDeletePopup ?: currentAttachmentsPopup())?.onDeleteFiles(items)
-        currentAttachmentsPopup()?.let { setAttachmentsToPanels(it.getAttachments()) }
+        refreshAttachmentsSnapshotCache()
     }
 
     private fun onAttachmentDeleteProgressFinished() {
@@ -733,8 +775,14 @@ class EditPostFragment : TabFragment() {
     private fun currentAttachmentsPopup(): AttachmentsPopup? = currentPanel()?.attachmentsPopup
 
     private fun setupPanel(panel: MessagePanel) {
-        panel.messageField.onSelectionChangedListener = { _, _ ->
-            if (panel === currentPanel()) persistCurrentEditorDraft()
+        panel.messageField.onSelectionChangedListener = { start, end ->
+            if (panel === currentPanel()) {
+                editorSessionStore.updateSelection(
+                        start,
+                        end,
+                        if (isCompactMode) "compact" else "full")
+                persistCurrentEditorDraft()
+            }
         }
         panel.addSendOnClickListener { presenter.onSendClick() }
         panel.setClearMessageClickListener { requestClearEditorText() }
@@ -746,7 +794,10 @@ class EditPostFragment : TabFragment() {
             }
         })
         panel.attachmentsPopup?.setOnAttachmentsChangedListener {
-            persistCurrentEditorDraft()
+            if (panel === currentPanel()) {
+                refreshAttachmentsSnapshotCache()
+                persistCurrentEditorDraft()
+            }
         }
         panel.fullButton?.also { btn ->
             if (formType == EditPostForm.TYPE_EDIT_POST) {
@@ -779,9 +830,10 @@ class EditPostFragment : TabFragment() {
                         showFullscreenImeSynchronouslyOnClick()
                         toggleCompactMode()
                     } else {
-                        val selectionRange = panel.selectionRange
+                        val state = editorSessionStore.snapshot()
+                        val selectionRange = intArrayOf(state.selectionStart, state.selectionEnd)
                         exitedCleanly = true
-                        presenter.exitWithSync(panel.message, selectionRange, panel.attachments)
+                        presenter.exitWithSync(state.message, selectionRange, panel.attachments)
                     }
                 }
             }
@@ -813,7 +865,8 @@ class EditPostFragment : TabFragment() {
 
     private fun copyMessageEditorState(from: MessagePanel, to: MessagePanel, messageTextOverride: String? = null) {
         val fieldText = from.messageField.text?.toString() ?: ""
-        val text = messageTextOverride ?: fieldText
+        val state = editorSessionStore.snapshot()
+        val text = messageTextOverride ?: state.message
         Timber.d(
             "copyState fromCompact=${from === compactPanel} toFull=${to === fullPanel} fieldLen=${fieldText.length} appliedLen=${text.length} hasOverride=${messageTextOverride != null}"
         )
@@ -822,8 +875,8 @@ class EditPostFragment : TabFragment() {
         // целевого поля, чтобы undo не откатывал к прежнему (пустому) содержимому панели.
         (to.messageField as? CodeEditor)?.clearUndoHistory()
         val len = text.length
-        var selStart = from.messageField.selectionStart
-        var selEnd = from.messageField.selectionEnd
+        var selStart = state.selectionStart
+        var selEnd = state.selectionEnd
         if (selStart < 0 || selStart > len) selStart = len
         if (selEnd < 0 || selEnd > len) selEnd = len
         if (selEnd < selStart) {
@@ -883,10 +936,9 @@ class EditPostFragment : TabFragment() {
         } else {
             // Симметрично expand-направлению: текст берём из зеркала-источника-правды, а не из
             // сырого поля, которое IME/restartInput могут кратковременно опустошить в момент клика.
-            val resolved = fullPanel.message.ifEmpty { draftContentMirror }
+            val resolved = editorSessionStore.snapshot().message
             copyMessageEditorState(from, to, resolved)
         }
-        to.attachmentsPopup?.setAttachments(from.attachmentsPopup?.getAttachments() ?: emptyList())
 
         if (expandingToFull) {
             // Компактный BBCode теперь часть layout; закрываем его до смены visibility,
@@ -1270,7 +1322,8 @@ class EditPostFragment : TabFragment() {
     }
 
     private fun setDraftToPanels(text: String) {
-        draftContentMirror = text
+        editorSessionStore.replace(text, text.length, text.length,
+                if (isCompactMode) "compact" else "full")
         fullPanel.setText(text)
         compactPanel.setText(text)
         // Программная загрузка черновика/формы — не должна попадать в историю undo,
@@ -1292,6 +1345,7 @@ class EditPostFragment : TabFragment() {
             fullPanel.messageField.setSelection(length)
             compactPanel.messageField.setSelection(length)
             pendingFullscreenSelection = intArrayOf(length, length)
+            editorSessionStore.updateSelection(length, length)
             return
         }
         var start = pending[0].coerceIn(0, length)
@@ -1300,37 +1354,43 @@ class EditPostFragment : TabFragment() {
         fullPanel.messageField.setSelection(start, end)
         compactPanel.messageField.setSelection(start, end)
         pendingFullscreenSelection = intArrayOf(start, end)
+        editorSessionStore.updateSelection(start, end)
     }
 
     private fun installDraftMirrorWatchers() {
-        val watcher = object : SimpleTextWatcher() {
-            override fun afterTextChanged(s: Editable) {
-                val text = s.toString()
-                draftContentMirror = text
-                persistCurrentEditorDraft(text)
-            }
+        fun install(panel: MessagePanel) {
+            panel.messageField.addTextChangedListener(object : SimpleTextWatcher() {
+                override fun afterTextChanged(s: Editable) {
+                    if (panel !== currentPanel()) return
+                    val text = s.toString()
+                    editorSessionStore.replace(
+                            message = text,
+                            selectionStart = panel.messageField.selectionStart,
+                            selectionEnd = panel.messageField.selectionEnd,
+                            mode = if (isCompactMode) "compact" else "full")
+                    persistCurrentEditorDraft(text)
+                }
+            })
         }
-        fullPanel.messageField.addTextChangedListener(watcher)
-        compactPanel.messageField.addTextChangedListener(watcher)
+        install(fullPanel)
+        install(compactPanel)
     }
 
     private fun persistCurrentEditorDraft(messageOverride: String? = null) {
         val panel = currentPanel() ?: return
-        val snapshot = panel.captureSnapshot()
+        val state = editorSessionStore.snapshot()
         presenter.persistDraft(
-            message = messageOverride ?: snapshot.message,
-            selectionStart = snapshot.selectionStart,
-            selectionEnd = snapshot.selectionEnd,
-            attachments = snapshot.attachments,
+            message = messageOverride ?: state.message,
+            selectionStart = state.selectionStart,
+            selectionEnd = state.selectionEnd,
+            attachments = panel.attachments,
             editorMode = if (isCompactMode) "compact" else "full",
         )
     }
 
     /** Текст компактного поля для переноса в full; при «пустом» чтении буфера — [draftContentMirror]. */
     private fun compactDraftForSync(): String {
-        if (!::compactPanel.isInitialized) return draftContentMirror
-        val t = compactPanel.messageField.text?.toString() ?: ""
-        return if (t.isNotEmpty()) t else draftContentMirror
+        return editorSessionStore.snapshot().message
     }
 
     private fun requestClearEditorText() {
@@ -1364,8 +1424,8 @@ class EditPostFragment : TabFragment() {
     }
 
     private fun setAttachmentsToPanels(items: List<AttachmentItem>) {
+        // Both editor presentations observe the same AttachmentStateStore.
         fullPanel.attachmentsPopup?.setAttachments(items)
-        compactPanel.attachmentsPopup?.setAttachments(items)
         refreshAttachmentsSnapshotCache()
     }
 
@@ -1375,19 +1435,18 @@ class EditPostFragment : TabFragment() {
     }
 
     private fun allAttachmentsSnapshot(): List<AttachmentItem> =
-            mergeEditorAttachments(
-                    if (::fullPanel.isInitialized) fullPanel.attachmentsPopup?.getAttachments().orEmpty() else emptyList(),
-                    if (::compactPanel.isInitialized) compactPanel.attachmentsPopup?.getAttachments().orEmpty() else emptyList()
-            )
+            when {
+                ::fullPanel.isInitialized -> fullPanel.attachmentsPopup?.getAttachments().orEmpty()
+                ::compactPanel.isInitialized -> compactPanel.attachmentsPopup?.getAttachments().orEmpty()
+                else -> emptyList()
+            }
 
     /**
      * Merge списков вложений: не терять session-upload и loading-элементы UI при повторном [EditPostUiEvent.ShowForm]
      * (где [EditPostForm.attachments] ещё без только что загруженных файлов).
      */
     private fun currentMessageNormalized(): String {
-        val panelText = currentPanel()?.messageField?.text?.toString().orEmpty()
-        val resolved = panelText.ifEmpty { draftContentMirror }
-        return resolved.trimEnd()
+        return editorSessionStore.snapshot().message.trimEnd()
     }
 
     /** Активные вложения поста + число локальных (ещё без id) для сравнения с baseline. */
@@ -1415,7 +1474,9 @@ class EditPostFragment : TabFragment() {
         if (formType != EditPostForm.TYPE_EDIT_POST || editBaselineEstablished) return
         editBaselineEstablished = true
         baselineEditMessage = currentMessageNormalized()
-        baselineAttachmentSignature = attachmentsContentSignature(allAttachmentsSnapshot())
+        if (baselineAttachmentSignature.isEmpty()) {
+            baselineAttachmentSignature = attachmentsContentSignature(allAttachmentsSnapshot())
+        }
     }
 
     private fun mergeEditorAttachments(primary: List<AttachmentItem>, secondary: List<AttachmentItem>): List<AttachmentItem> {

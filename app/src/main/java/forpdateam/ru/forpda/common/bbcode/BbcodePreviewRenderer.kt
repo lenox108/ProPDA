@@ -86,7 +86,7 @@ object BbcodePreviewRenderer {
                 "left", "center", "right" -> renderAligned(tag)
                 "sub", "sup" -> wrap(tag.name, parseUntil(tag.name))
                 "cur" -> parseUntil(tag.name)
-                "list" -> parseUntil("list")
+                "list", "numlist" -> parseUntil(tag.name)
                 "*" -> "<br>&bull; "
                 else -> ""
             }

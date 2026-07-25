@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 @Database(
     entities = [PostDraftRoom::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class PostDraftDatabase : RoomDatabase() {
@@ -32,6 +32,14 @@ abstract class PostDraftDatabase : RoomDatabase() {
                 )
                 database.execSQL(
                     "ALTER TABLE post_draft ADD COLUMN editorMode TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE post_draft ADD COLUMN attachmentsChanged INTEGER NOT NULL DEFAULT 0"
                 )
             }
         }

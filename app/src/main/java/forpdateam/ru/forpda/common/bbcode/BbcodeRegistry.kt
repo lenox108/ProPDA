@@ -79,6 +79,7 @@ object BbcodeRegistry {
         "sup",
         "cur",
         "list",
+        "numlist",
         "*",
     )
 

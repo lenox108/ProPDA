@@ -6,6 +6,7 @@ import javax.inject.Inject
 
 import forpdateam.ru.forpda.entity.app.TabNotification
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
+import forpdateam.ru.forpda.entity.remote.editpost.AttachmentSnapshot
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.entity.remote.qms.QmsChatModel
 import forpdateam.ru.forpda.entity.remote.qms.QmsMessage
@@ -101,6 +102,8 @@ class QmsChatViewModel @Inject constructor(
     private var inFlightLoadKey: String? = null
     private var loadRequestId = 0
     private var loadJob: Job? = null
+    /** One in-flight outgoing message/theme at a time; closes the pre-StateFlow double-tap window. */
+    private var submissionJob: Job? = null
     private var openTraceId: String = FpdaDebugLog.newTraceId()
     private var lastRealtimeMessageAtMs = 0L
     /** Экран чата на переднем плане (между [onScreenVisible] и [onScreenHidden]). */
@@ -649,10 +652,19 @@ class QmsChatViewModel @Inject constructor(
     }
 
     fun sendNewTheme(nick: String, title: String, message: String, files: List<AttachmentItem>) {
-        scope.launch {
+        if (submissionJob?.isActive == true) return
+        val submissionFiles = files
+            .map(AttachmentSnapshot::from)
+            .map(AttachmentSnapshot::toAttachmentItem)
+        if (message.isBlank() && submissionFiles.isEmpty()) return
+        if (submissionFiles.any {
+                it.loadState != AttachmentItem.STATE_LOADED || it.isError
+            }
+        ) return
+        submissionJob = scope.launch {
             try {
                 _refreshing.value = true
-                val chat = qmsInteractor.sendNewTheme(nick, title, message, files)
+                val chat = qmsInteractor.sendNewTheme(nick, title, message, submissionFiles)
                 updateCurrentData(chat)
                 _uiEvents.emit(QmsChatUiEvent.ShowChat(chat))
                 _uiEvents.emit(QmsChatUiEvent.OnNewThemeCreate(chat))
@@ -666,14 +678,25 @@ class QmsChatViewModel @Inject constructor(
         }
     }
 
-    fun sendMessage(message: String, files: List<AttachmentItem>) {
+    fun sendMessage(message: String, files: List<AttachmentItem>): Boolean {
         if (userId == QmsChatModel.NOT_CREATED || themeId == QmsChatModel.NOT_CREATED) {
-            return
+            return false
         }
-        scope.launch {
+        if (submissionJob?.isActive == true) return false
+        val submissionFiles = files
+            .map(AttachmentSnapshot::from)
+            .map(AttachmentSnapshot::toAttachmentItem)
+        if (message.isBlank() && submissionFiles.isEmpty()) return false
+        if (submissionFiles.any {
+                it.loadState != AttachmentItem.STATE_LOADED || it.isError
+            }
+        ) {
+            return false
+        }
+        submissionJob = scope.launch {
             try {
                 _messageRefreshing.value = true
-                val messages = qmsInteractor.sendMessage(userId, themeId, message, files)
+                val messages = qmsInteractor.sendMessage(userId, themeId, message, submissionFiles)
                 // Сервер не всегда присылает WS-событие для собственного сообщения сразу,
                 // из-за этого в чате оно не появляется до пересоздания/обновления.
                 // Добавляем пришедшие сообщения в текущие данные и показываем их сразу.
@@ -685,6 +708,7 @@ class QmsChatViewModel @Inject constructor(
                 _messageRefreshing.value = false
             }
         }
+        return true
     }
 
     /**
@@ -748,7 +772,15 @@ class QmsChatViewModel @Inject constructor(
         scope.launch {
             runCatching { qmsInteractor.uploadFiles(files, pending) }
                     .onSuccess { scope.launch { _uiEvents.emit(QmsChatUiEvent.OnUploadFiles(it)) } }
-                    .onFailure { errorHandler.handle(it) }
+                    .onFailure { error ->
+                        pending.forEach { item ->
+                            item.loadState = AttachmentItem.STATE_NOT_LOADED
+                            item.setError(true)
+                            item.errorText = error.message
+                        }
+                        scope.launch { _uiEvents.emit(QmsChatUiEvent.OnUploadFiles(pending)) }
+                        errorHandler.handle(error)
+                    }
         }
     }
 

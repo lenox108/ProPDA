@@ -121,10 +121,18 @@ class BbcodePreviewRendererTest {
         assertNoRawSupportedTags(html)
     }
 
+    @Test
+    fun renderToHtml_numberedList_doesNotLeakBbcode() {
+        val html = BbcodePreviewRenderer.renderToHtml("[numlist][*]one[*]two[/numlist]")
+
+        assertEquals("<br>&bull; one<br>&bull; two", html)
+        assertFalse(html.contains("numlist", ignoreCase = true))
+    }
+
     private fun assertNoRawSupportedTags(html: String) {
         assertFalse(
             html.contains(
-                Regex("""(?i)\[/?(?:b|i|u|s|strike|url|quote|spoiler|offtop|hide|code|snapback|mergetime|size|color|background|font|left|center|right|sub|sup|cur|list|\*)(?:[=\]\s])""")
+                Regex("""(?i)\[/?(?:b|i|u|s|strike|url|quote|spoiler|offtop|hide|code|snapback|mergetime|size|color|background|font|left|center|right|sub|sup|cur|list|numlist|\*)(?:[=\]\s])""")
             )
         )
         assertTrue(html.isNotBlank())

@@ -135,6 +135,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Дебаунс-сохранение черновика ответа в теме (ключ topic:<id>, общий с полноэкранным редактором). */
     private var topicDraftSaveJob: kotlinx.coroutines.Job? = null
+    private var pendingTopicDraft:
+            Pair<String, forpdateam.ru.forpda.model.repository.draft.PostDraft>? = null
 
     // topicPreferencesHolder is provided by the TabFragment supertype.
 
@@ -2660,6 +2662,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     override fun onPause() {
         super.onPause()
+        flushTopicDraft()
         messagePanel?.onPause()
         // Снимаем метку «тема на экране» (сворачивание/переключение вкладки) — иначе гейт
         // глушил бы пуши о теме, которую уже никто не смотрит.
@@ -3188,8 +3191,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         uploadInProgress = true
         viewLifecycleOwner.lifecycleScope.launch {
             val result = editorUseCase.uploadFiles(attachmentRelId(), next.first, next.second)
-            if (view != null && result is ThemeEditorUseCase.UploadResult.Success) {
-                attachmentsPopup?.onUploadFiles(result.items)
+            if (view != null) {
+                when (result) {
+                    is ThemeEditorUseCase.UploadResult.Success ->
+                        attachmentsPopup?.onUploadFiles(result.items)
+                    is ThemeEditorUseCase.UploadResult.Error -> {
+                        next.second.forEach { item ->
+                            item.loadState = AttachmentItem.STATE_NOT_LOADED
+                            item.setError(true)
+                            item.errorText = result.throwable.message
+                        }
+                        attachmentsPopup?.onUploadFiles(next.second)
+                    }
+                }
             }
             uploadInProgress = false
             if (uploadQueue.isNotEmpty()) uploadQueue.removeFirst()
@@ -3750,13 +3764,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun persistTopicDraft(text: String) {
         val key = topicDraftKey() ?: return
         val snapshot = messagePanel?.captureSnapshot()
-        val draft = forpdateam.ru.forpda.model.repository.draft.PostDraft.create(
+        val draft = forpdateam.ru.forpda.model.repository.draft.PostDraft.createFromSnapshots(
             message = snapshot?.message ?: text,
             selectionStart = snapshot?.selectionStart ?: -1,
             selectionEnd = snapshot?.selectionEnd ?: -1,
             attachments = snapshot?.attachments.orEmpty(),
             editorMode = "compact",
         )
+        pendingTopicDraft = key to draft
         topicDraftSaveJob?.cancel()
         topicDraftSaveJob = viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(600)
@@ -3767,7 +3782,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Снять персистентный черновик темы (после успешной отправки нового ответа). */
     private fun clearTopicDraft() {
         topicDraftSaveJob?.cancel()
+        pendingTopicDraft = null
         topicDraftKey()?.let { postDraftRepository.clearFireAndForget(it) }
+    }
+
+    private fun flushTopicDraft() {
+        topicDraftSaveJob?.cancel()
+        val pending = pendingTopicDraft ?: return
+        postDraftRepository.saveFireAndForget(
+                pending.first,
+                pending.second,
+                System.currentTimeMillis())
     }
 
     /**
@@ -3820,8 +3845,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val panel = messagePanel ?: return
         val snapshot = panel.captureSnapshot()
         val message = snapshot.message.ifEmpty { messagePanelDraftMirror }.trim()
-        val attachments = snapshot.attachments.toMutableList()
+        val attachments = snapshot.attachmentItems().toMutableList()
         if ((message.isBlank() && attachments.isEmpty()) || isSending || pageTopicId <= 0) return
+        if (attachments.any {
+                it.id <= 0 || it.loadState != AttachmentItem.STATE_LOADED || it.isError
+            }
+        ) return
         isSending = true
         // A brand-new reply lands at the END of the topic; an edit re-anchors on the edited post.
         val isNewReply = editingForm == null

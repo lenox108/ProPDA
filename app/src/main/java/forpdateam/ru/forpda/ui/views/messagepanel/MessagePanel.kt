@@ -25,6 +25,7 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.appcompat.widget.TooltipCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.BuildConfig
@@ -34,6 +35,7 @@ import forpdateam.ru.forpda.databinding.MessagePanelFullBinding
 import forpdateam.ru.forpda.databinding.MessagePanelQuickBinding
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
+import forpdateam.ru.forpda.entity.remote.editpost.AttachmentSnapshot
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
 import forpdateam.ru.forpda.ui.DimensionsProvider
@@ -42,6 +44,7 @@ import forpdateam.ru.forpda.ui.FontController
 import forpdateam.ru.forpda.ui.views.CodeEditor
 import forpdateam.ru.forpda.ui.views.messagepanel.advanced.AdvancedPopup
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
+import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentStateStore
 import forpdateam.ru.forpda.common.bbcode.BbcodePreviewRenderer
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +62,8 @@ class MessagePanel(
     private val fullForm: Boolean,
     private val mainPreferencesHolder: MainPreferencesHolder,
     private val dimensionsProvider: DimensionsProvider,
-    val otherPreferencesHolder: OtherPreferencesHolder
+    val otherPreferencesHolder: OtherPreferencesHolder,
+    private val attachmentStateStore: AttachmentStateStore = AttachmentStateStore(),
 ) : CardView(context) {
     
     private var fullBinding: MessagePanelFullBinding? = null
@@ -220,12 +224,10 @@ class MessagePanel(
         attachmentsButton?.setOnClickListener { v ->
             attachmentsListeners.forEach { it.onClick(v) }
         }
-        sendButton?.setOnClickListener { v ->
-            forpdateam.ru.forpda.ui.Haptic.confirm(v)
-            sendListeners.forEach { it.onClick(v) }
-        }
+        sendButton?.setOnClickListener(::dispatchSend)
         previewButton?.setOnClickListener { showLocalPreview() }
         clearMessageButton?.setOnClickListener { clearMessageClickListener?.invoke() ?: clearMessage() }
+        installTooltips()
         
         lastHeight = height + context.resources.getDimensionPixelSize(R.dimen.dp16)
         layoutChangeListener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
@@ -497,24 +499,47 @@ class MessagePanel(
 
         field.requestFocus()
         if (!hasSelection) {
-            editable.insert(s, startText + close)
+            val replacement = startText + close
             val cursor = if (selectionInside) s + startText.length else s + startText.length + close.length
-            field.setSelection(cursor.coerceIn(0, editable.length))
+            field.replaceRangeAtomically(s, e, replacement, cursor, cursor)
             return false
         }
 
-        // Вставляем закрывающий тег первым (по большему индексу), чтобы не сдвинуть позицию открывающего.
-        editable.insert(e, close)
-        editable.insert(s, startText)
+        val selected = editable.subSequence(s, e)
+        val replacement = buildString(selected.length + startText.length + close.length) {
+            append(startText)
+            append(selected)
+            append(close)
+        }
         if (endText != null) {
             // keepSelection: держим выделение на исходном тексте, сдвинутом на длину открывающего тега.
-            field.setSelection(s + startText.length, e + startText.length)
+            field.replaceRangeAtomically(
+                s,
+                e,
+                replacement,
+                s + startText.length,
+                e + startText.length,
+            )
         } else {
             val cursor = e + startText.length + close.length
-            field.setSelection(cursor.coerceIn(0, editable.length))
+            field.replaceRangeAtomically(s, e, replacement, cursor, cursor)
         }
         return endText != null
     }
+
+    fun replaceTextRange(
+        start: Int,
+        end: Int,
+        replacement: String,
+        selectionStart: Int = start + replacement.length,
+        selectionEnd: Int = selectionStart,
+    ): Boolean = messageField.replaceRangeAtomically(
+        start,
+        end,
+        replacement,
+        selectionStart,
+        selectionEnd,
+    )
     
     fun getSelectedText(): String {
         val selectionRange = selectionRange
@@ -532,7 +557,7 @@ class MessagePanel(
         val e = selectionRange[1]
         val len = messageField?.text?.length ?: 0
         if (s >= 0 && e <= len && s < e) {
-            messageField?.text?.delete(s, e)
+            messageField.replaceRangeAtomically(s, e, "", s, s)
         }
     }
     
@@ -550,13 +575,11 @@ class MessagePanel(
 
     fun captureSnapshot(): MessagePanelSnapshot {
         val range = selectionRange
-        val items = attachments.toList()
         return MessagePanelSnapshot(
             message = message,
             selectionStart = range[0],
             selectionEnd = range[1],
-            attachments = items,
-            attachmentIdentities = items.map(AttachmentItem::toIdentity),
+            attachments = attachments.map(AttachmentSnapshot::from),
         )
     }
 
@@ -566,7 +589,7 @@ class MessagePanel(
      */
     fun clearIfUnchanged(snapshot: MessagePanelSnapshot): Boolean {
         val isSame = message == snapshot.message &&
-            attachments.map(AttachmentItem::toIdentity) == snapshot.attachmentIdentities
+            attachments.map(AttachmentSnapshot::from) == snapshot.attachments
         if (!isSame) return false
         clearMessage()
         clearAttachments()
@@ -583,18 +606,51 @@ class MessagePanel(
 
     private fun updateSendAppearance() {
         if (!::sendButton.isInitialized) return
-        val hasContent = message.isNotEmpty() || attachments.isNotEmpty()
-        if (hasContent) {
+        val blockReason = sendBlockReason()
+        if (blockReason == MessageSendBlockReason.NONE) {
             sendButton.setColorFilter(context.getColorFromAttr(R.attr.colorAccent))
         } else {
             sendButton.clearColorFilter()
         }
-        sendButton.isEnabled = !isSending
-        sendButton.alpha = if (isSending) 0.4f else 1f
+        val enabled = !isSending && blockReason == MessageSendBlockReason.NONE
+        sendButton.isEnabled = enabled
+        sendButton.alpha = if (enabled) 1f else 0.4f
+    }
+
+    fun sendBlockReason(): MessageSendBlockReason =
+        MessageSendEligibility.evaluate(message, attachments.map(AttachmentSnapshot::from))
+
+    private fun dispatchSend(view: View) {
+        if (isSending || sendBlockReason() != MessageSendBlockReason.NONE) return
+        // Disable synchronously, before a ViewModel has time to publish its progress state. This
+        // closes the double-tap window on a slow device while the receiver starts the request.
+        sendButton.isEnabled = false
+        forpdateam.ru.forpda.ui.Haptic.confirm(view)
+        sendListeners.forEach { it.onClick(view) }
+        if (!isSending) {
+            // Validation/reason dialogs may defer the real request. Restore the local click gate;
+            // the actual request will call setProgressState(true).
+            post { updateSendAppearance() }
+        }
+    }
+
+    private fun installTooltips() {
+        listOfNotNull(
+            attachmentsButton,
+            fullButton,
+            hideButton,
+            editPollButton,
+            advancedButton,
+            clearMessageButton,
+            previewButton,
+            sendButton,
+        ).forEach { button ->
+            TooltipCompat.setTooltipText(button, button.contentDescription)
+        }
     }
     
     private fun onCreatePanel() {
-        attachmentsPopup = AttachmentsPopup(context, this)
+        attachmentsPopup = AttachmentsPopup(context, this, attachmentStateStore)
         advancedPopup = AdvancedPopup(context, this, fullForm, dimensionsProvider)
     }
     
@@ -702,7 +758,7 @@ class MessagePanel(
                 messageField.post { showKeyboard() }
             }
             .setPositiveButton(R.string.send_message) { _, _ ->
-                sendListeners.forEach { it.onClick(this) }
+                dispatchSend(this)
             }
             .showWithStyledButtons()
     }
@@ -815,15 +871,22 @@ class MessagePanel(
     
     fun onDestroy() {
         advancedPopup?.onDestroy()
+        attachmentsPopup?.dispose()
+        attachmentsPopup = null
         scope.cancel()
-        // Cancel all pending postDelayed (keyboard show retries, editor touch probes, etc.)
-        messageField.handler?.removeCallbacksAndMessages(null)
+        cancelDeferredKeyboardShowRequests()
+        editorTouchGeneration++
         // Remove listeners to prevent leaks
         layoutChangeListener?.let { removeOnLayoutChangeListener(it) }
         textWatcher?.let { messageField.removeTextChangedListener(it) }
         messageField.setOnTouchListener(null)
         messageField.onFocusChangeListener = null
         messageField.onSelectionChangedListener = null
+        advancedListeners.clear()
+        attachmentsListeners.clear()
+        sendListeners.clear()
+        clearMessageClickListener = null
+        heightChangeListener = null
         fullBinding = null
         quickBinding = null
     }
