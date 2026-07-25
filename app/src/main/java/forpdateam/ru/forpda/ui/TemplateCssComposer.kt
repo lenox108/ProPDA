@@ -134,11 +134,10 @@ class TemplateCssComposer(
             }
             // ЕДИНЫЙ источник правды со схемой (AccentSchemes) — тот же, что
             // генерит нативные @color/accent_* и превью пикера. Раньше здесь
-            // строилась схема инлайном, и для стиля EXPRESSIVE бралась RAW
-            // SchemeExpressive (primary = hue(seed)+240°): форум в WebView
-            // красился «не тем» оттенком (Синий → зелёный), пока хром/свотч/
-            // превью оставались корректными. AccentSchemes.expressive() чинит
-            // primary по тону seed — теперь все потребители сходятся.
+            // строилась схема инлайном, и ручной стиль EXPRESSIVE расходился с
+            // нативным хромом. AccentSchemes теперь задаёт единый контракт:
+            // legacy-ключ EXPRESSIVE означает видимый режим «Однотонный», где
+            // primary/secondary/tertiary сохраняют hue подписанного акцента.
             val scheme = AccentSchemes.scheme(seed, mainPreferencesHolder.getAccentStyle(), isNight)
             val argb = MaterialDynamicColors().primary().getArgb(scheme)
             "#%06X".format(argb and 0xFFFFFF)

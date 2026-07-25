@@ -105,7 +105,8 @@ object Preferences {
          * палитре (кроме NEUTRAL) и к произвольному цвету:
          * - TONAL — приглушённый SchemeTonalSpot (по умолчанию);
          * - VIBRANT — сочный SchemeVibrant («Насыщенные цвета»);
-         * - EXPRESSIVE — M3 Expressive (сдвинутые оттенки, живые вторичные/третичные).
+         * - EXPRESSIVE — legacy-ключ режима «Однотонный»: один hue, разная хрома
+         *   primary/secondary/tertiary. Имя enum сохраняется ради настроек.
          * Ресурсы: accent_* / accent_*_vibrant_* / accent_*_expressive_*
          * (AccentPaletteGenerator) + оверлеи ThemeOverlay.ForPDA.Accent.*[.Vibrant|.Expressive].
          */

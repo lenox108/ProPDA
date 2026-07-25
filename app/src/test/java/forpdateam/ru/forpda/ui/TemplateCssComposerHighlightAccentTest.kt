@@ -108,8 +108,8 @@ class TemplateCssComposerHighlightAccentTest {
         )
     }
 
-    // H1/Expressive: стиль акцента меняет тон акцента контста форума
-    // (TonalSpot vs Vibrant vs Expressive — три разных схемы M3 из одного seed).
+    // Legacy-ключ EXPRESSIVE = видимый режим «Однотонный»; его primary остаётся
+    // в hue seed, но отличается по хроме от TonalSpot и Vibrant.
     @Test
     fun compose_ppdaAccentDiffersBetweenAccentStyles() {
         fun accentHexFor(style: forpdateam.ru.forpda.common.Preferences.Main.AccentStyle): String {
@@ -135,8 +135,8 @@ class TemplateCssComposerHighlightAccentTest {
         val vibrant = accentHexFor(forpdateam.ru.forpda.common.Preferences.Main.AccentStyle.VIBRANT)
         val expressive = accentHexFor(forpdateam.ru.forpda.common.Preferences.Main.AccentStyle.EXPRESSIVE)
         assertTrue("Vibrant accent must differ from muted (TonalSpot)", tonal != vibrant)
-        assertTrue("Expressive accent must differ from TonalSpot", tonal != expressive)
-        assertTrue("Expressive accent must differ from Vibrant", vibrant != expressive)
+        assertTrue("Monochromatic accent must differ from TonalSpot", tonal != expressive)
+        assertTrue("Monochromatic accent must differ from Vibrant", vibrant != expressive)
     }
 
     @Test

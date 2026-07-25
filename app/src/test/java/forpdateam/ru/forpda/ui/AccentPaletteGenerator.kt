@@ -3,15 +3,14 @@ package forpdateam.ru.forpda.ui
 import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.MaterialDynamicColors
 import forpdateam.ru.forpda.common.Preferences.Main.AccentStyle
-import org.junit.Ignore
 import org.junit.Test
 import java.io.File
 
 /**
- * ГЕНЕРАТОР (не обычный тест — помечен @Ignore, запускается вручную).
+ * ГЕНЕРАТОР (не обычный тест: без системного флага выполняется как no-op).
  *
  * Единственный источник правды для акцент-палитр «смены цвета». Использует ТОЧНЫЙ
- * Material 3 алгоритм (`SchemeTonalSpot` + `MaterialDynamicColors` из
+ * Material 3 алгоритм (`DynamicScheme` + `MaterialDynamicColors` из
  * material-color-utilities, бандл Material 1.12) — тот же, что генерит Material You
  * из обоев — и эмитит `colors_accents.xml` (light) + `values-night/colors_accents.xml`
  * (dark). Работает на JVM, offline, значит палитры одинаковы на ВСЕХ API (26+),
@@ -26,7 +25,6 @@ import java.io.File
  * inversePrimary). Поверхности/фон остаются НЕЙТРАЛЬНЫМИ (из базовой темы) — акцент
  * красит кнопки/FAB/ссылки/чипы/переключатели/выделение, но не «замыливает» фоны.
  */
-@Ignore("Manual generator; run with -Dforpda.generateAccents=true to rewrite colors_accents.xml")
 class AccentPaletteGenerator {
 
     /** name (для ресурсов) → seed-цвет (ARGB). Порядок = порядок в гриде выбора. */
@@ -75,14 +73,14 @@ class AccentPaletteGenerator {
         val sb = StringBuilder()
         sb.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
         sb.append("<!--\n")
-        sb.append("    СГЕНЕРИРОВАНО AccentPaletteGenerator (material-color-utilities, SchemeTonalSpot).\n")
+        sb.append("    СГЕНЕРИРОВАНО AccentPaletteGenerator (AccentSchemes + MaterialDynamicColors).\n")
         sb.append("    НЕ РЕДАКТИРОВАТЬ ВРУЧНУЮ — перегенерировать через генератор (см. его KDoc).\n")
         sb.append("    Вариант: ${if (isDark) "DARK (values-night)" else "LIGHT (values)"}.\n")
         sb.append("-->\n")
         sb.append("<resources>\n")
         // Три набора стилей акцента (см. AccentStyle): приглушённый TonalSpot (по
-        // умолчанию), сочный Vibrant (инфикс `_vibrant_`) и экспрессивный
-        // Expressive (инфикс `_expressive_`, M3 Expressive — сдвинутые оттенки).
+        // умолчанию), сочный Vibrant (инфикс `_vibrant_`) и однотонный
+        // (legacy-инфикс `_expressive_` сохраняется для совместимости ресурсов).
         for ((name, seed) in seeds) {
             // Схемы — строго через AccentSchemes (тот же код, что и живое превью в
             // AccentPickerDialog), иначе свотч/превью и применённая тема разъезжаются.
