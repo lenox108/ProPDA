@@ -134,7 +134,9 @@ object DataModule {
             context,
             PostDraftDatabase::class.java,
             "post_draft_database"
-        ).build()
+        )
+            .addMigrations(PostDraftDatabase.MIGRATION_1_2)
+            .build()
     }
 
     @Provides @Singleton

@@ -66,13 +66,14 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     private var insertAttachmentListener: OnInsertAttachmentListener? = null
     private var retryUploadListener: OnRetryUploadListener? = null
     private var deleteSelectedListener: (() -> Unit)? = null
+    private var attachmentsChangedListener: ((List<AttachmentItem>) -> Unit)? = null
 
     /** Для retry: сопоставляем loading item -> исходный файл. */
     private val fileByItem = LinkedHashMap<AttachmentItem, RequestFile>()
 
-    fun getAttachments(): List<AttachmentItem> = attachments
+    fun getAttachments(): List<AttachmentItem> = attachments.toList()
 
-    fun getSelected(): List<AttachmentItem> = selected
+    fun getSelected(): List<AttachmentItem> = selected.toList()
 
     init {
         dialog = BottomSheetDialog(context)
@@ -316,6 +317,7 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     private fun updateDataCounter() {
         onDataChange(attachments.size)
         updateRetryVisibility()
+        attachmentsChangedListener?.invoke(attachments.toList())
     }
 
     private fun onSelectedChange() {
@@ -393,6 +395,10 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
 
     fun setDeleteOnClickListener(listener: () -> Unit) {
         deleteSelectedListener = listener
+    }
+
+    fun setOnAttachmentsChangedListener(listener: ((List<AttachmentItem>) -> Unit)?) {
+        attachmentsChangedListener = listener
     }
 
     fun onLoadAttachments(form: EditPostForm) {
@@ -487,19 +493,25 @@ class AttachmentsPopup(context: Context, private val messagePanel: MessagePanel)
     fun onDeleteFiles(deletedItems: List<AttachmentItem>) {
         Timber.d("onDeleteFiles $deletedItems")
         endDeleteProgress()
+        val oldSelection = messagePanel.selectionRange
+        val updatedMessage = removeAttachmentReferencesFromBody(
+            messagePanel.message,
+            deletedItems.map { it.id },
+        )
+        if (updatedMessage != messagePanel.message) {
+            messagePanel.setText(updatedMessage)
+            val length = updatedMessage.length
+            messagePanel.messageField.setSelection(
+                oldSelection[0].coerceIn(0, length),
+                oldSelection[1].coerceIn(0, length),
+            )
+        }
         // Снимок: deletedItems может быть тем же самым списком, что и [selected]
         // (getSelected() отдаёт живой список, а deleteFiles возвращает его же обратно).
         // Тогда selected.remove(item) в цикле мутирует итерируемую коллекцию → ConcurrentModificationException
         // и падение приложения при удалении вложения.
         for (item in ArrayList(deletedItems)) {
             Timber.d("Delete file $item")
-            if (item.id > 0) {
-                // Снять ВСЕ формы ссылки на вложение (BBCode/img/url/markdown/голый URL), иначе 4PDA
-                // при сохранении заново отрисует картинку по оставшейся разметке — вложение «не удаляется».
-                messagePanel.setText(
-                        removeAttachmentReferencesFromBody(messagePanel.message, item.id)
-                )
-            }
             if (item.status == AttachmentItem.STATUS_REMOVED) {
                 attachments.remove(item)
                 adapter.removeItem(item)

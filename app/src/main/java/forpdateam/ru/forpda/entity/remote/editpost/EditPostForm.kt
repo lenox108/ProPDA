@@ -25,6 +25,8 @@ class EditPostForm {
      * поверх [message], тогда как baseline «грязности» остаётся на [message]. null — черновика нет.
      */
     var restoredEditDraft: String? = null
+    var restoredDraftSelectionStart: Int = -1
+    var restoredDraftSelectionEnd: Int = -1
 
     fun addAttachment(item: AttachmentItem) {
         attachments.add(item)

@@ -989,6 +989,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (editingForm == null) persistTopicDraft(s.toString())
             }
         })
+        panel.messageField.onSelectionChangedListener = { _, _ ->
+            if (editingForm == null) persistTopicDraft(panel.message)
+        }
         panel.addSendOnClickListener { sendMessage() }
         panel.setClearMessageClickListener { confirmClearMessage() }
         panel.hideButton?.visibility = View.VISIBLE
@@ -1005,6 +1008,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 enqueueUpload(files, pending)
             }
         })
+        attachmentsPopup?.setOnAttachmentsChangedListener {
+            if (editingForm == null) persistTopicDraft(panel.message)
+        }
         messagePanel = panel
     }
 
@@ -3742,10 +3748,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Дебаунс-сохранение черновика нового ответа (ключ общий с полноэкранным редактором). */
     private fun persistTopicDraft(text: String) {
         val key = topicDraftKey() ?: return
+        val snapshot = messagePanel?.captureSnapshot()
+        val draft = forpdateam.ru.forpda.model.repository.draft.PostDraft.create(
+            message = snapshot?.message ?: text,
+            selectionStart = snapshot?.selectionStart ?: -1,
+            selectionEnd = snapshot?.selectionEnd ?: -1,
+            attachments = snapshot?.attachments.orEmpty(),
+            editorMode = "compact",
+        )
         topicDraftSaveJob?.cancel()
         topicDraftSaveJob = viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(600)
-            runCatching { postDraftRepository.save(key, text.trim(), System.currentTimeMillis()) }
+            runCatching { postDraftRepository.save(key, draft, System.currentTimeMillis()) }
         }
     }
 
@@ -3766,14 +3780,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (editingForm != null) return
         if (resolveMessagePanelDraft().isNotBlank()) return
         viewLifecycleOwner.lifecycleScope.launch {
-            val saved = runCatching { postDraftRepository.load(key) }.getOrNull().orEmpty()
-            if (saved.isEmpty()) return@launch
+            val saved = runCatching { postDraftRepository.loadDraft(key) }.getOrNull()
+                ?: return@launch
             if (view == null || editingForm != null) return@launch
             if (resolveMessagePanelDraft().isNotBlank()) return@launch
-            panel.setText(saved)
-            panel.moveCursorToEnd()
+            panel.setText(saved.message)
+            panel.attachmentsPopup?.setAttachments(saved.attachments.map { it.toAttachmentItem() })
+            val length = saved.message.length
+            val start = saved.selectionStart.takeIf { it in 0..length } ?: length
+            val end = saved.selectionEnd.takeIf { it in 0..length } ?: start
+            panel.messageField.setSelection(minOf(start, end), maxOf(start, end))
             panel.messageField.clearUndoHistory()
-            messagePanelDraftMirror = saved
+            messagePanelDraftMirror = saved.message
         }
     }
 
@@ -3799,8 +3817,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     private fun sendMessage() {
         val panel = messagePanel ?: return
-        val message = resolveMessagePanelDraft().trim()
-        val attachments = panel.attachments.toMutableList()
+        val snapshot = panel.captureSnapshot()
+        val message = snapshot.message.ifEmpty { messagePanelDraftMirror }.trim()
+        val attachments = snapshot.attachments.toMutableList()
         if ((message.isBlank() && attachments.isEmpty()) || isSending || pageTopicId <= 0) return
         isSending = true
         // A brand-new reply lands at the END of the topic; an edit re-anchors on the edited post.
@@ -3826,8 +3845,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (view == null) return@launch
             panel.setProgressState(false)
             result.onSuccess { postedPage ->
-                panel.clearMessage()
-                panel.clearAttachments()
+                panel.clearIfUnchanged(snapshot)
                 messagePanelDraftMirror = ""
                 if (isNewReply) clearTopicDraft()
                 editingForm = null

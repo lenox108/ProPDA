@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.views
 import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.R
 import timber.log.Timber
 
 import android.content.Context
@@ -9,7 +10,6 @@ import android.os.Looper
 import android.text.Editable
 import android.text.Spannable
 import android.text.TextWatcher
-import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.view.ActionMode
@@ -21,6 +21,8 @@ import android.widget.ScrollView
 import androidx.core.view.ViewCompat
 import androidx.appcompat.widget.AppCompatEditText
 import forpdateam.ru.forpda.common.Html
+import forpdateam.ru.forpda.common.bbcode.BbcodeRegistry
+import forpdateam.ru.forpda.common.getColorFromAttr
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
@@ -32,9 +34,18 @@ class CodeEditor @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : AppCompatEditText(context, attrs) {
     private object ForumCodes {
-        val ELEMENT: Pattern = Pattern.compile("(\\[(?:/)?((?:attachment|background|nomergetime|mergetime|snapback|numlist|spoiler|offtop|center|color|right|quote|code|font|hide|left|list|size|img|sub|sup|cur|url|b|i|u|s|\\*)))=?\\s?([^\\]\\[]+?)?(\\])", Pattern.CASE_INSENSITIVE)
+        private val tags = BbcodeRegistry.syntaxTags
+            .sortedByDescending(String::length)
+            .joinToString("|", transform = Pattern::quote)
+        val ELEMENT: Pattern = Pattern.compile(
+            "(\\[(?:/)?((?:$tags)))=?\\s?([^\\]\\[]+?)?(\\])",
+            Pattern.CASE_INSENSITIVE,
+        )
         val ATTRIBUTE: Pattern = Pattern.compile("(name|date|post)?=?([\\s\\S]+?)\\s?(?=(?:name|date|post)=|\\z)", Pattern.CASE_INSENSITIVE)
     }
+
+    /** Маркер спана редактора: очистка подсветки не должна удалять пользовательские спаны. */
+    private class SyntaxColorSpan(color: Int) : ForegroundColorSpan(color)
 
     private val updateHandler = Handler(Looper.getMainLooper())
     private val updateRunnable = Runnable {
@@ -55,34 +66,21 @@ class CodeEditor @JvmOverloads constructor(
     private var insertionActionModeActive: Boolean = false
 
     // --- Undo/redo ---
-    private data class EditOp(val start: Int, val before: CharSequence, val after: CharSequence) {
-        val weight: Int get() = before.length + after.length
-    }
-    private val undoStack = ArrayDeque<EditOp>()
-    private val redoStack = ArrayDeque<EditOp>()
-    /** Суммарный вес операций в стеке undo (before+after), чтобы ограничивать память, а не только число операций. */
-    private var undoStackChars = 0
+    private val editHistory = EditorHistory(MAX_UNDO_OPS, MAX_UNDO_CHARS)
     /** Пока true — правки от undo()/redo() не пишутся обратно в стек. */
     private var undoRedoInProgress = false
     private var pendingUndoStart = 0
     private var pendingUndoBefore: CharSequence = ""
-    /** Последняя правка была посимвольным набором — для склейки подряд идущих вставок в одну операцию. */
-    private var lastEditWasTyping = false
-    /** Последняя правка была посимвольным удалением (backspace) — для склейки подряд идущих удалений. */
-    private var lastEditWasDeleting = false
     /** Колбэк для UI (кнопки undo/redo): вызывается при любом изменении доступности истории. */
     var onUndoStateChanged: (() -> Unit)? = null
+    var onSelectionChangedListener: ((start: Int, end: Int) -> Unit)? = null
 
-    fun canUndo(): Boolean = undoStack.isNotEmpty()
-    fun canRedo(): Boolean = redoStack.isNotEmpty()
+    fun canUndo(): Boolean = editHistory.canUndo
+    fun canRedo(): Boolean = editHistory.canRedo
 
     /** Сбросить историю (после программной загрузки черновика — чтобы undo не стирал весь текст). */
     fun clearUndoHistory() {
-        undoStack.clear()
-        redoStack.clear()
-        undoStackChars = 0
-        lastEditWasTyping = false
-        lastEditWasDeleting = false
+        editHistory.clear()
         onUndoStateChanged?.invoke()
     }
 
@@ -139,67 +137,20 @@ class CodeEditor @JvmOverloads constructor(
     }
 
     private fun recordEdit(start: Int, before: CharSequence, after: CharSequence) {
-        if (before.isEmpty() && after.isEmpty()) return
-        redoStack.clear()
-        val last = undoStack.lastOrNull()
-        // Склейка: подряд идущий набор одиночных символов (не перевод строки) — одна операция undo,
-        // иначе undo откатывал бы по одной букве.
-        val isTyping = before.isEmpty() && after.length == 1 && after[0] != '\n'
-        // Аналогично для удаления одиночных символов (backspace/forward-delete).
-        val isDeleting = after.isEmpty() && before.length == 1
-        var merged = false
-        if (isTyping && lastEditWasTyping && last != null &&
-            last.before.isEmpty() && last.start + last.after.length == start
-        ) {
-            undoStack[undoStack.lastIndex] = last.copy(after = last.after.toString() + after)
-            undoStackChars += after.length
-            merged = true
-        } else if (isDeleting && lastEditWasDeleting && last != null && last.after.isEmpty()) {
-            if (start + before.length == last.start) {
-                // backspace: удалён символ прямо перед предыдущим удалённым — before нового идёт раньше.
-                undoStack[undoStack.lastIndex] =
-                    last.copy(start = start, before = before.toString() + last.before)
-                undoStackChars += before.length
-                merged = true
-            } else if (start == last.start) {
-                // forward-delete: удаляем с той же позиции — before нового идёт позже.
-                undoStack[undoStack.lastIndex] =
-                    last.copy(before = last.before.toString() + before)
-                undoStackChars += before.length
-                merged = true
-            }
-        }
-        if (!merged) {
-            undoStack.addLast(EditOp(start, before, after))
-            undoStackChars += before.length + after.length
-        }
-        // Ограничение памяти: вытесняем самые старые операции, пока превышен бюджет символов или число операций.
-        while (undoStack.size > 1 && (undoStackChars > MAX_UNDO_CHARS || undoStack.size > MAX_UNDO_OPS)) {
-            undoStackChars -= undoStack.removeFirst().weight
-        }
-        lastEditWasTyping = isTyping
-        lastEditWasDeleting = isDeleting
+        editHistory.record(start, before, after)
         onUndoStateChanged?.invoke()
     }
 
     fun undo() {
-        val op = undoStack.removeLastOrNull() ?: return
-        undoStackChars -= op.weight
+        val op = editHistory.takeUndo() ?: return
         applyUndoRedo(op.start, op.after.length, op.before)
-        redoStack.addLast(op)
-        lastEditWasTyping = false
-        lastEditWasDeleting = false
         onUndoStateChanged?.invoke()
         updateHighlighting()
     }
 
     fun redo() {
-        val op = redoStack.removeLastOrNull() ?: return
+        val op = editHistory.takeRedo() ?: return
         applyUndoRedo(op.start, op.before.length, op.after)
-        undoStack.addLast(op)
-        undoStackChars += op.weight
-        lastEditWasTyping = false
-        lastEditWasDeleting = false
         onUndoStateChanged?.invoke()
         updateHighlighting()
     }
@@ -283,9 +234,9 @@ class CodeEditor @JvmOverloads constructor(
     }
 
     private fun setSyntaxColors() {
-        colorTag = Color.parseColor("#446FBD")
-        colorAttrName = Color.parseColor("#6D8600")
-        colorAttrValue = Color.parseColor("#e88501")
+        colorTag = context.getColorFromAttr(R.attr.colorAccent)
+        colorAttrName = context.getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
+        colorAttrValue = context.getColorFromAttr(com.google.android.material.R.attr.colorTertiary)
     }
 
     private fun cancelUpdate() {
@@ -295,8 +246,11 @@ class CodeEditor @JvmOverloads constructor(
 
     private fun highlightWithoutChange(e: Editable) {
         modified = false
-        highlight(e)
-        modified = true
+        try {
+            highlight(e)
+        } finally {
+            modified = true
+        }
     }
 
     private fun highlight(e: Editable): Editable {
@@ -356,7 +310,7 @@ class CodeEditor @JvmOverloads constructor(
                                 val ag1s = attributes.start(1)
                                 val ag1e = attributes.end(1)
                                 e.setSpan(
-                                    ForegroundColorSpan(colorAttrName),
+                                    SyntaxColorSpan(colorAttrName),
                                     visibleStart + eg3s + ag1s,
                                     visibleStart + eg3s + ag1e,
                                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -368,7 +322,7 @@ class CodeEditor @JvmOverloads constructor(
                                 val ag2s = attributes.start(2)
                                 val ag2e = attributes.end(2)
                                 e.setSpan(
-                                    ForegroundColorSpan(color),
+                                    SyntaxColorSpan(color),
                                     visibleStart + eg3s + ag2s,
                                     visibleStart + eg3s + ag2e,
                                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -390,7 +344,7 @@ class CodeEditor @JvmOverloads constructor(
                             }
                         }
                         e.setSpan(
-                            ForegroundColorSpan(color),
+                            SyntaxColorSpan(color),
                             visibleStart + eg3s,
                             visibleStart + eg3e,
                             Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -401,7 +355,7 @@ class CodeEditor @JvmOverloads constructor(
                 val eg1s = m.start(1)
                 val eg1e = m.end(1)
                 e.setSpan(
-                    ForegroundColorSpan(colorTag),
+                    SyntaxColorSpan(colorTag),
                     visibleStart + eg1s,
                     visibleStart + eg1e,
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -410,7 +364,7 @@ class CodeEditor @JvmOverloads constructor(
                 val eg4s = m.start(4)
                 val eg4e = m.end(4)
                 e.setSpan(
-                    ForegroundColorSpan(colorTag),
+                    SyntaxColorSpan(colorTag),
                     visibleStart + eg4s,
                     visibleStart + eg4e,
                     Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -449,10 +403,7 @@ class CodeEditor @JvmOverloads constructor(
         private fun clearSpans(e: Editable, start: Int, end: Int) {
             val s = start.coerceIn(0, e.length)
             val en = end.coerceIn(s, e.length)
-            e.getSpans(s, en, ForegroundColorSpan::class.java).forEach { span ->
-                e.removeSpan(span)
-            }
-            e.getSpans(s, en, BackgroundColorSpan::class.java).forEach { span ->
+            e.getSpans(s, en, SyntaxColorSpan::class.java).forEach { span ->
                 e.removeSpan(span)
             }
         }
@@ -483,6 +434,7 @@ class CodeEditor @JvmOverloads constructor(
      */
     override fun onSelectionChanged(selStart: Int, selEnd: Int) {
         super.onSelectionChanged(selStart, selEnd)
+        onSelectionChangedListener?.invoke(selStart, selEnd)
         if (!isAttachedToWindow) return
         if (!isFocused || !hasWindowFocus()) return
         if (insertionActionModeActive) return

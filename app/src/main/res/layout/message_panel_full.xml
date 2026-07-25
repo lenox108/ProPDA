@@ -47,56 +47,52 @@
 
     </ScrollView>
 
-    <RelativeLayout
+    <LinearLayout
         android:id="@+id/controls"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="@dimen/dp48"
+        android:gravity="center"
+        android:orientation="horizontal">
 
-        <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/button_advanced_input"
-            android:layout_width="@dimen/dp48"
+        <FrameLayout
+            android:layout_width="0dp"
             android:layout_height="@dimen/dp48"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/msg_panel_advanced_bbcode_desc"
-            app:srcCompat="@drawable/ic_add" />
+            android:layout_weight="1">
 
-        <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/button_attachments"
-            android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp48"
-            android:layout_marginStart="@dimen/message_panel_button_overlap"
-            android:layout_toEndOf="@+id/button_advanced_input"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/attachments"
-            app:srcCompat="@drawable/ic_attachment" />
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/button_attachments"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/attachments"
+                app:srcCompat="@drawable/ic_attachment" />
 
-        <TextView
-            android:id="@+id/attachment_counter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignTop="@+id/button_attachments"
-            android:layout_alignEnd="@id/button_attachments"
-            android:layout_marginTop="@dimen/content_spacing"
-            android:layout_marginEnd="@dimen/content_spacing_half"
-            android:background="@drawable/notify_dot_menu"
-            android:gravity="center"
-            android:importantForAccessibility="no"
-            android:maxLines="1"
-            android:minWidth="@dimen/dp16"
-            android:minHeight="@dimen/dp16"
-            android:paddingStart="@dimen/content_spacing_half"
-            android:paddingEnd="@dimen/content_spacing_half"
-            tools:text="1"
-            android:textColor="@color/white"
-            android:textSize="@dimen/news_list_compat_meta_text_size"
-            android:visibility="gone" />
+            <TextView
+                android:id="@+id/attachment_counter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="@dimen/content_spacing"
+                android:layout_marginEnd="@dimen/content_spacing_half"
+                android:background="@drawable/notify_dot_menu"
+                android:gravity="center"
+                android:importantForAccessibility="no"
+                android:maxLines="1"
+                android:minWidth="@dimen/dp16"
+                android:minHeight="@dimen/dp16"
+                android:paddingStart="@dimen/content_spacing_half"
+                android:paddingEnd="@dimen/content_spacing_half"
+                android:textColor="@color/white"
+                android:textSize="@dimen/news_list_compat_meta_text_size"
+                android:visibility="gone"
+                tools:text="1" />
+        </FrameLayout>
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_edt_poll"
-            android:layout_width="@dimen/dp48"
+            android:layout_width="0dp"
             android:layout_height="@dimen/dp48"
-            android:layout_marginStart="@dimen/message_panel_button_overlap"
-            android:layout_toEndOf="@+id/button_attachments"
+            android:layout_weight="1"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/poll"
             android:visibility="gone"
@@ -104,55 +100,63 @@
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_full"
-            android:layout_width="@dimen/dp48"
+            android:layout_width="0dp"
             android:layout_height="@dimen/dp48"
-            android:layout_marginStart="@dimen/message_panel_button_overlap"
-            android:layout_toEndOf="@+id/button_edt_poll"
+            android:layout_weight="1"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/full_form"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_fullscreen" />
 
         <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/button_clear_message"
-            android:layout_width="@dimen/dp48"
+            android:id="@+id/button_advanced_input"
+            android:layout_width="0dp"
             android:layout_height="@dimen/dp48"
-            android:layout_toStartOf="@+id/button_preview"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/msg_panel_advanced_bbcode_desc"
+            app:srcCompat="@drawable/ic_code_font" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/button_clear_message"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/dp48"
+            android:layout_weight="1"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/msg_panel_clear_message"
             app:srcCompat="@drawable/ic_clear" />
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_preview"
-            android:layout_width="@dimen/dp48"
+            android:layout_width="0dp"
             android:layout_height="@dimen/dp48"
-            android:layout_toStartOf="@+id/send_container"
+            android:layout_weight="1"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/msg_panel_preview"
             app:srcCompat="@drawable/ic_visibility" />
 
         <FrameLayout
             android:id="@+id/send_container"
-            android:layout_width="@dimen/dp48"
+            android:layout_width="0dp"
             android:layout_height="@dimen/dp48"
-            android:layout_alignParentEnd="true">
+            android:layout_weight="1">
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/button_send"
-                android:layout_width="@dimen/dp48"
-                android:layout_height="@dimen/dp48"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/send_message"
                 app:srcCompat="@drawable/ic_send" />
 
             <ProgressBar
                 android:id="@+id/send_progress"
-                android:layout_width="@dimen/dp48"
-                android:layout_height="@dimen/dp48"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:clickable="false"
                 android:contentDescription="@string/send_message"
                 android:padding="@dimen/dp8"
                 android:visibility="gone" />
         </FrameLayout>
-    </RelativeLayout>
+    </LinearLayout>
 </LinearLayout>

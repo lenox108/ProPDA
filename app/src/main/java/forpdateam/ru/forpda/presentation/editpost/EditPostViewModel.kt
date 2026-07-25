@@ -16,6 +16,7 @@ import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.entity.app.profile.IUserHolder
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
+import forpdateam.ru.forpda.model.repository.draft.PostDraft
 import forpdateam.ru.forpda.model.repository.draft.PostDraftRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.posteditor.PostEditorRepository
@@ -147,8 +148,14 @@ class EditPostViewModel @Inject constructor(
                 // (цитата/ответ). Ключ по topicId — «недописанный ответ» переживает перезапуск приложения.
                 if (postForm.message.isEmpty()) {
                     draftKey()?.let { key ->
-                        runCatching { postDraftRepository.load(key) }.getOrNull()?.let { saved ->
-                            postForm.message = saved
+                        runCatching { postDraftRepository.loadDraft(key) }.getOrNull()?.let { saved ->
+                            postForm.message = saved.message
+                            postForm.restoredDraftSelectionStart = saved.selectionStart
+                            postForm.restoredDraftSelectionEnd = saved.selectionEnd
+                            postForm.attachments.clear()
+                            postForm.attachments.addAll(
+                                saved.attachments.map { it.toAttachmentItem() }
+                            )
                         }
                     }
                 }
@@ -173,17 +180,30 @@ class EditPostViewModel @Inject constructor(
     }
 
     /** Дебаунс-сохранение черновика (вызывается из View на каждое изменение текста). */
-    fun persistDraft(message: String) {
+    fun persistDraft(
+        message: String,
+        selectionStart: Int = -1,
+        selectionEnd: Int = -1,
+        attachments: List<AttachmentItem> = emptyList(),
+        editorMode: String = "",
+    ) {
         val key = draftKey() ?: return
         // Для правки не храним черновик, равный чистому серверному тексту — иначе в БД оседают
         // «пустые» правки, которые потом ложно воскресали бы при повторном открытии.
         val effective = if (postForm.type == EditPostForm.TYPE_EDIT_POST &&
             message.trim() == editCleanBaseline?.trim()
         ) "" else message
+        val draft = PostDraft.create(
+            message = effective,
+            selectionStart = selectionStart,
+            selectionEnd = selectionEnd,
+            attachments = if (postForm.type == EditPostForm.TYPE_NEW_POST) attachments else emptyList(),
+            editorMode = editorMode,
+        )
         draftSaveJob?.cancel()
         draftSaveJob = scope.launch {
             kotlinx.coroutines.delay(DRAFT_SAVE_DEBOUNCE_MS)
-            runCatching { postDraftRepository.save(key, effective.trim(), System.currentTimeMillis()) }
+            runCatching { postDraftRepository.save(key, draft, System.currentTimeMillis()) }
         }
     }
 

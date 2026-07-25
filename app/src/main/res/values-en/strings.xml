@@ -231,6 +231,7 @@
     <string name="emoji_cat_objects">Objects</string>
     <string name="emoji_cat_symbols">Symbols</string>
     <string name="codes_title">Formating</string>
+    <string name="recent_title">Recent</string>
     <string name="codes_text_size">Text size</string>
     <string name="codes_text_size_item_Size" formatted="false">Size %s</string>
     <string name="codes_link">URL</string>

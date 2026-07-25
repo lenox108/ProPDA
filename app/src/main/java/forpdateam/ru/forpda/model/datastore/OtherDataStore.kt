@@ -42,6 +42,7 @@ class OtherDataStore(private val context: Context) {
         val APP_VERSIONS_HISTORY = stringPreferencesKey("app_versions_history")
         val SEARCH_SETTINGS = stringPreferencesKey("search_settings")
         val MESSAGE_PANEL_BBCODES_SORT = stringPreferencesKey("message_panel_bbcodes_sort")
+        val MESSAGE_PANEL_RECENT_CODES = stringPreferencesKey("message_panel_recent_codes")
         val SHOW_REPORT_WARNING = booleanPreferencesKey("show_report_warning")
         val TOOLTIP_SEARCH_SETTINGS = booleanPreferencesKey("tooltip_search_settings")
         val TOOLTIP_MESSAGE_PANEL_SORTING = booleanPreferencesKey("tooltip_message_panel_sorting")
@@ -103,6 +104,21 @@ class OtherDataStore(private val context: Context) {
         }
         mirrorPrefs.edit().remove("message_panel_bbcodes_sort").apply()
     }
+
+    val messagePanelRecentCodes: Flow<String> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
+        preferences[PreferencesKeys.MESSAGE_PANEL_RECENT_CODES] ?: ""
+    }, "")
+
+    suspend fun setMessagePanelRecentCodes(value: String) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.MESSAGE_PANEL_RECENT_CODES] = value
+        }
+        mirrorPrefs.edit().putString("message_panel_recent_codes", value).apply()
+    }
+
+    /** Instant synchronous read used while constructing the editor panel. */
+    fun getMessagePanelRecentCodesSync(): String =
+        mirrorPrefs.getString("message_panel_recent_codes", "").orEmpty()
 
     val showReportWarning: Flow<Boolean> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
         preferences[PreferencesKeys.SHOW_REPORT_WARNING] ?: true

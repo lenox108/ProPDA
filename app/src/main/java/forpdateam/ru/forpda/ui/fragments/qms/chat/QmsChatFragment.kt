@@ -115,6 +115,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         private set
     private var attachmentsPopup: AttachmentsPopup? = null
     private var clearMessagePanelTextDialog: AlertDialog? = null
+    private var pendingSendSnapshot: forpdateam.ru.forpda.ui.views.messagepanel.MessagePanelSnapshot? = null
 
     private lateinit var messagesAdapter: QmsMessagesAdapter
     private lateinit var messagesLayoutManager: LinearLayoutManager
@@ -189,20 +190,34 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         messagePanel = MessagePanel(requireContext(), fragmentContainer, messagePanelHost, false, mainPreferencesHolder, dimensionsProvider, otherPreferencesHolder)
         attachmentsPopup = messagePanel.attachmentsPopup
         messagePanel.messageField.addTextChangedListener(object : forpdateam.ru.forpda.common.simple.SimpleTextWatcher() {
-            override fun afterTextChanged(s: android.text.Editable) { persistQmsDraft(s.toString()) }
+            override fun afterTextChanged(s: android.text.Editable) { persistQmsDraft() }
         })
+        messagePanel.messageField.onSelectionChangedListener = { _, _ ->
+            persistQmsDraft()
+        }
+        attachmentsPopup?.setOnAttachmentsChangedListener {
+            persistQmsDraft()
+        }
         return viewFragment
     }
 
     private fun qmsDraftKey(): String? =
             if (presenter.themeId > 0) "qms:${presenter.userId}:${presenter.themeId}" else null
 
-    private fun persistQmsDraft(text: String) {
+    private fun persistQmsDraft() {
         val key = qmsDraftKey() ?: return
+        val snapshot = messagePanel.captureSnapshot()
+        val draft = forpdateam.ru.forpda.model.repository.draft.PostDraft.create(
+            message = snapshot.message,
+            selectionStart = snapshot.selectionStart,
+            selectionEnd = snapshot.selectionEnd,
+            attachments = snapshot.attachments,
+            editorMode = "compact",
+        )
         qmsDraftSaveJob?.cancel()
         qmsDraftSaveJob = viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(600)
-            runCatching { postDraftRepository.save(key, text.trim(), System.currentTimeMillis()) }
+            runCatching { postDraftRepository.save(key, draft, System.currentTimeMillis()) }
         }
     }
 
@@ -217,11 +232,18 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         if (!::messagePanel.isInitialized) return
         if (messagePanel.message.isNotBlank()) return
         viewLifecycleOwner.lifecycleScope.launch {
-            val saved = runCatching { postDraftRepository.load(key) }.getOrNull().orEmpty()
-            if (saved.isEmpty() || view == null) return@launch
+            val saved = runCatching { postDraftRepository.loadDraft(key) }.getOrNull()
+                ?: return@launch
+            if (view == null) return@launch
             if (messagePanel.message.isNotBlank()) return@launch
-            messagePanel.setText(saved)
-            messagePanel.moveCursorToEnd()
+            messagePanel.setText(saved.message)
+            messagePanel.attachmentsPopup?.setAttachments(
+                saved.attachments.map { it.toAttachmentItem() }
+            )
+            val length = saved.message.length
+            val start = saved.selectionStart.takeIf { it in 0..length } ?: length
+            val end = saved.selectionEnd.takeIf { it in 0..length } ?: start
+            messagePanel.messageField.setSelection(minOf(start, end), maxOf(start, end))
             messagePanel.messageField.clearUndoHistory()
         }
     }
@@ -1020,6 +1042,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     }
 
     private fun onNewThemeCreate(data: QmsChatModel) {
+        pendingSendSnapshot = null
         messagePanel.clearMessage()
         messagePanel.clearAttachments()
         clearQmsDraft()
@@ -1038,14 +1061,16 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     private fun onSentMessage(items: List<QmsMessage>) {
         if (items.isNotEmpty() && items[0].content != null) {
             //Empty because result returned from websocket
-            messagePanel.clearMessage()
-            messagePanel.clearAttachments()
+            pendingSendSnapshot?.let(messagePanel::clearIfUnchanged)
+            pendingSendSnapshot = null
             clearQmsDraft()
         }
     }
 
     private fun sendMessage() {
-        presenter.sendMessage(messagePanel.message, attachmentsPopup?.getAttachments() ?: emptyList())
+        val snapshot = messagePanel.captureSnapshot()
+        pendingSendSnapshot = snapshot
+        presenter.sendMessage(snapshot.message, snapshot.attachments)
     }
 
     private fun requestClearMessagePanelText() {

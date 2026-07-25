@@ -13,7 +13,8 @@ import java.util.Collections
 class PanelItemAdapter(
     private val items: MutableList<ButtonData>,
     private val urlsToAssets: List<String>,
-    private val type: Int
+    private val type: Int,
+    private val showTitles: Boolean = true,
 ) : RecyclerView.Adapter<PanelItemAdapter.ViewHolder>(), ItemDragCallback.ItemTouchHelperAdapter {
 
     companion object {
@@ -47,9 +48,9 @@ class PanelItemAdapter(
                 holder.itemView.context.getVecDrawable(item.iconRes)
             )
         }
-        if (item.title == null) {
+        if (!showTitles || item.title == null) {
             holder.binding.itemTitle.visibility = View.GONE
-            holder.itemView.contentDescription = item.text
+            holder.itemView.contentDescription = item.title ?: item.text
         } else {
             holder.itemView.contentDescription = item.title
             holder.binding.itemTitle.text = item.title
@@ -66,7 +67,9 @@ class PanelItemAdapter(
         }
 
         override fun onClick(v: View) {
-            val item = items[layoutPosition]
+            val position = bindingAdapterPosition
+            if (position == RecyclerView.NO_POSITION) return
+            val item = items.getOrNull(position) ?: return
             if (item.listener != null) {
                 item.listener?.onClick(item)
             } else if (itemClickListener != null) {

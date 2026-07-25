@@ -88,3 +88,10 @@ fun removeAttachmentReferencesFromBody(message: String, id: Int): String {
     )
     return out
 }
+
+/** Удаляет ссылки на группу вложений за одну чистую трансформацию текста. */
+fun removeAttachmentReferencesFromBody(message: String, ids: Collection<Int>): String =
+    ids.asSequence()
+        .filter { it > 0 }
+        .distinct()
+        .fold(message, ::removeAttachmentReferencesFromBody)
