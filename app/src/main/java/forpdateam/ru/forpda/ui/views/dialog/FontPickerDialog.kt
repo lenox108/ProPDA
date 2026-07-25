@@ -160,6 +160,8 @@ object FontPickerDialog {
                 .setTitle(R.string.pref_title_app_font)
                 .setView(ScrollView(context).apply { addView(list) })
                 .setNegativeButton(android.R.string.cancel, null)
-                .showWithStyledButtons(compact = false)
+                // Each sample already has its own Typeface. The shared dialog styler normally
+                // reapplies the active app font to every TextView and would make all previews equal.
+                .showWithStyledButtons(compact = false, applyAppFont = false)
     }
 }
