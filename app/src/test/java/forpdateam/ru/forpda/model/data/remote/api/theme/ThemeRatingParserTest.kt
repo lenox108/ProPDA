@@ -48,11 +48,11 @@ class ThemeRatingParserTest {
     fun parsesRatingFromKnownRatingElement() {
         val html = """
             <div class="post" id="entry555">
-                <span id="ka_555">−2</span>
+                <span id="ka_555">2</span>
             </div>
         """.trimIndent()
 
-        assertEquals(mapOf(555 to "-2"), ThemeRatingParser.parsePostRatings(html))
+        assertEquals(mapOf(555 to "+2"), ThemeRatingParser.parsePostRatings(html))
     }
 
     @Test

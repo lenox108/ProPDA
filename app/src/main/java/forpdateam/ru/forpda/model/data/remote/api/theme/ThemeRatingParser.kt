@@ -1,5 +1,7 @@
 package forpdateam.ru.forpda.model.data.remote.api.theme
 
+import forpdateam.ru.forpda.entity.remote.theme.PostRatingFormatter
+
 object ThemeRatingParser {
 
     data class PostVoteControls(
@@ -88,7 +90,7 @@ object ThemeRatingParser {
         kaPEntryRegex.findAll(body).forEach { m ->
             val postId = m.groupValues.getOrNull(1)?.toIntOrNull() ?: return@forEach
             val ratingTotal = m.groupValues.getOrNull(2)?.toIntOrNull() ?: return@forEach
-            result[postId] = ratingTotal.toSignedRatingString()
+            result[postId] = PostRatingFormatter.format(ratingTotal)
         }
         return result
     }
@@ -156,10 +158,7 @@ object ThemeRatingParser {
         return postRatingTextRegex.find(text)
                 ?.groupValues
                 ?.getOrNull(1)
-                ?.replace(" ", "")
-                ?.replace('−', '-')
-                ?.replace('–', '-')
-                ?.takeIf { it.isNotBlank() }
+                ?.let(PostRatingFormatter::normalize)
     }
 
     private fun extractRatingFromLabeledAttributes(postHtml: String): String? {
@@ -237,15 +236,7 @@ object ThemeRatingParser {
     }
 
     private fun String.normalizeRating(): String? {
-        return replace(" ", "")
-                .replace('−', '-')
-                .replace('–', '-')
-                .takeIf { it.isNotBlank() }
-    }
-
-    private fun Int.toSignedRatingString(): String = when {
-        this > 0 -> "+$this"
-        else -> toString()
+        return PostRatingFormatter.normalize(this)
     }
 
     private fun String.decodeHtmlEntities(): String {

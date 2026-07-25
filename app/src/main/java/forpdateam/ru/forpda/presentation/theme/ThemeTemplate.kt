@@ -6,6 +6,7 @@ import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.entity.common.AuthData
+import forpdateam.ru.forpda.entity.remote.theme.PostRatingFormatter
 import forpdateam.ru.forpda.entity.remote.theme.ThemePost
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.AuthHolder
@@ -914,7 +915,7 @@ class ThemeTemplate(
             canQuote: Boolean = false
     ): PostRatingUi {
         val hasServerPostRating = !post.postRating.isNullOrBlank()
-        val postRating = post.postRating.takeUnless { it.isNullOrBlank() } ?: "0"
+        val postRating = PostRatingFormatter.normalize(post.postRating) ?: "0"
         val hasNonZeroServerPostRating = themePostRatingToInt(postRating) != 0
         val isTopHatSource = source.startsWith("top_hat")
         val isOwnPost = authorized &&
