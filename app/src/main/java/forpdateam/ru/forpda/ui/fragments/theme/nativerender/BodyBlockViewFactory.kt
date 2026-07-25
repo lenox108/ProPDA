@@ -677,12 +677,11 @@ class BodyBlockViewFactory(
                         (targetWidth * ratio).toInt().coerceIn(1, dm.heightPixels),
                 ).apply { topMargin = topInset }
             }
-            scaleType = if (block.inline && !isButtonGif && !block.attachmentButton) {
-                // Keep small source images crisp inside the reserved box; CENTER_INSIDE only scales down.
-                ImageView.ScaleType.CENTER_INSIDE
-            } else {
-                ImageView.ScaleType.FIT_CENTER
-            }
+            // The box is already the browser-like authored/intrinsic size, capped to the content column.
+            // FIT_CENTER fills that exact box without cropping. Crucially, an undimensioned image does not
+            // receive its box until the decoded source size is known, so this can never inflate it to a
+            // guessed full-column rectangle.
+            scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
             setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
             // The inner <img> of an attach-file link (attachmentButton) and a linked inline gif (isButtonGif)
