@@ -599,7 +599,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (dy < 0 && !healing) maybeLoadPrevPage()
                 markVisiblePostsRead()
                 maybeMarkTopicReadAtEnd()
-                updateBarCurrentPageFromScroll()
+                // Idle relayouts (metadata growth) and the end-gap healer can report a synthetic dy.
+                // They must not impersonate a reading direction and flip the page counter backwards.
+                val readingDelta = if (healing ||
+                        rv.scrollState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) 0 else dy
+                updateBarCurrentPageFromScroll(readingDelta)
                 updateBottomPaginationBarOffset()
                 if (!healing) updateFabOnScroll(dy)
                 if (smartNavMenu?.isShowing() == true) smartNavMenu?.dismiss()
@@ -2302,6 +2306,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (newItems.isNotEmpty()) {
                     loadedItems.addAll(newItems)
                     submitPosts {
+                        // Appending can expose the next page without another scroll callback (the old page
+                        // ended inside the viewport). Refresh from the committed adapter geometry so the
+                        // toolbar changes together with the visible «Страница N» divider.
+                        updateBarCurrentPageFromScroll(scrollDelta = 1)
                         // Chain another prefetch if the appended page still leaves the bottom underfilled
                         // (short pages / tall viewport), so reading forward never stalls at a page seam.
                         // Also re-evaluate the end-of-topic mark: the append can land while the list is
@@ -3596,14 +3604,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * «Current page» for the bar = the page whose posts occupy the MOST pixels of the viewport right now.
-     * Each item carries its authoritative [NativePostItem.pageNumber] tag, so we sum visible height per page
-     * and pick the dominant one. This beats index arithmetic (`firstLoadedPage + index/perPage`), which drifts
-     * when a page has an odd post count (hat / «Добавлено» merges / deletions), and beats plain first-visible,
-     * which would keep showing page N while only the footer of its last post lingers at the very top even
-     * though page N+1 already fills the screen (the reported «71 / 72 но читаю 72» case).
+     * «Current page» follows the page boundary in the user's reading direction. When scrolling down, the
+     * newest visible page wins as soon as its «Страница N» divider/post enters the viewport; scrolling up
+     * symmetrically selects the oldest visible page. Each item carries its authoritative
+     * [NativePostItem.pageNumber], so odd server page sizes, hats and deleted posts cannot skew the result.
      */
-    private fun updateBarCurrentPageFromScroll() {
+    private fun updateBarCurrentPageFromScroll(scrollDelta: Int) {
         if (!pagination.isInitialised || loadedItems.isEmpty()) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         val first = lm.findFirstVisibleItemPosition()
@@ -3611,15 +3617,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (first == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return
         val viewTop = recyclerView.paddingTop
         val viewBottom = recyclerView.height - recyclerView.paddingBottom
-        val pagePixels = HashMap<Int, Int>()
+        val visiblePages = LinkedHashSet<Int>()
         for (pos in first..last) {
             val v = lm.findViewByPosition(pos) ?: continue
             val page = loadedItems.getOrNull(pos - headerOffset())?.pageNumber ?: continue
             if (page <= 0) continue
             val visible = (minOf(v.bottom, viewBottom) - maxOf(v.top, viewTop)).coerceAtLeast(0)
-            if (visible > 0) pagePixels[page] = (pagePixels[page] ?: 0) + visible
+            if (visible > 0) visiblePages.add(page)
         }
-        val page = (pagePixels.maxByOrNull { it.value }?.key ?: return).coerceIn(1, pagination.totalPages)
+        val page = TopicVisiblePagePolicy.resolve(
+                visiblePages = visiblePages,
+                currentPage = barCurrentPage,
+                scrollDelta = scrollDelta,
+        )?.coerceIn(1, pagination.totalPages) ?: return
         if (page != barCurrentPage) {
             barCurrentPage = page
             updatePaginationBar()
