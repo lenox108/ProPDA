@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.getColorFromAttr
+import forpdateam.ru.forpda.entity.remote.theme.PostRatingFormatter
 import forpdateam.ru.forpda.presentation.ILinkHandler
 
 /**
@@ -791,8 +792,8 @@ class TopicPostsAdapter(
             }
             // Show the rating NUMBER only when it's non-zero — the WebView hides a «0» rating
             // (post_rating_hidden), otherwise every post would carry a meaningless «0» between the thumbs.
-            item.postRating
-                    ?.takeIf { it.isNotBlank() && it.replace("+", "").trim().toIntOrNull() != 0 }
+            PostRatingFormatter.normalize(item.postRating)
+                    ?.takeIf { PostRatingFormatter.parse(it) != 0 }
                     ?.let { actions.addView(ratingLabel(it)) }
             if (canMinus) {
                 actions.addView(iconAction(R.drawable.ic_post_thumb_down, null,

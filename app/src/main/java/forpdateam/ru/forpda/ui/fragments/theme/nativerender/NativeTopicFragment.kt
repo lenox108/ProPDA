@@ -19,6 +19,7 @@ import forpdateam.ru.forpda.common.dedupeAttachmentsById
 import forpdateam.ru.forpda.common.mergeAttachmentIdsFromPostText
 import forpdateam.ru.forpda.entity.remote.editpost.AttachmentItem
 import forpdateam.ru.forpda.entity.remote.editpost.EditPostForm
+import forpdateam.ru.forpda.entity.remote.theme.PostRatingFormatter
 import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.model.data.remote.api.RequestFile
 import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
@@ -2794,8 +2795,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val idx = loadedItems.indexOfFirst { it.postId == postId }
         if (idx < 0) return
         val cur = loadedItems[idx]
-        val newRating = ((cur.postRating?.replace("+", "")?.trim()?.toIntOrNull() ?: 0) + delta)
-        val displayedRating = newRating.toString()
+        val newRating = (PostRatingFormatter.parse(cur.postRating) ?: 0) + delta
+        val displayedRating = PostRatingFormatter.format(newRating)
         confirmedPostRatings[postId] = displayedRating
         // Voted once → can't vote again on that direction; drop both to avoid a second attempt.
         loadedItems[idx] = cur.copy(
