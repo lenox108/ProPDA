@@ -91,7 +91,7 @@ object AccentApplier {
     /**
      * Стиль-оверлей для палитры (см. `styles_accents.xml`). NEUTRAL/CUSTOM → null.
      * [style] выбирает набор: приглушённый (TonalSpot), сочный (Vibrant) или
-     * экспрессивный (Expressive).
+     * однотонный (legacy-ключ Expressive).
      */
     internal fun overlayFor(
             accent: Preferences.Main.AccentPalette,

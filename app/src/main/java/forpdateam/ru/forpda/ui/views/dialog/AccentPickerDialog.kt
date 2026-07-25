@@ -105,8 +105,8 @@ object AccentPickerDialog {
             val m = MaterialDynamicColors()
             // Превью показывает ровно те роли, что перекрывает accent-оверлей: кнопка —
             // primary, ссылка — secondary (ссылки в приложении читают ?attr/colorSecondary),
-            // чип — tertiary-контейнер. Иначе «Экспрессивный» (он уводит именно secondary и
-            // tertiary) выглядел в диалоге неотличимо от «Обычного».
+            // чип — tertiary-контейнер. Для «Однотонного» превью показывает три
+            // насыщенности одного выбранного hue.
             return Roles(
                     m.primary().getArgb(scheme),
                     m.onPrimary().getArgb(scheme),
@@ -176,7 +176,7 @@ object AccentPickerDialog {
             }
         }
 
-        // --- Ряд стиля акцента: Обычный / Насыщенный / Экспрессивный ---
+        // --- Ряд стиля акцента: Обычный / Насыщенный / Однотонный ---
         val styleChips = mutableMapOf<AccentStyle, TextView>()
         fun refreshStyleChips() {
             val r = rolesFor(selected, selectedCustom)

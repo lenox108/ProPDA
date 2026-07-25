@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    СГЕНЕРИРОВАНО AccentPaletteGenerator (material-color-utilities, SchemeTonalSpot).
+    СГЕНЕРИРОВАНО AccentPaletteGenerator (AccentSchemes + MaterialDynamicColors).
     НЕ РЕДАКТИРОВАТЬ ВРУЧНУЮ — перегенерировать через генератор (см. его KDoc).
     Вариант: DARK (values-night).
 -->
@@ -37,14 +37,14 @@
     <color name="accent_blue_expressive_primary_container">#1E438F</color>
     <color name="accent_blue_expressive_on_primary_container">#DAE2FF</color>
     <color name="accent_blue_expressive_inverse_primary">#3A5BA9</color>
-    <color name="accent_blue_expressive_secondary">#F0B8C7</color>
-    <color name="accent_blue_expressive_on_secondary">#4A2531</color>
-    <color name="accent_blue_expressive_secondary_container">#633B47</color>
-    <color name="accent_blue_expressive_on_secondary_container">#FFD9E2</color>
-    <color name="accent_blue_expressive_tertiary">#C2C2F9</color>
-    <color name="accent_blue_expressive_on_tertiary">#2B2B59</color>
-    <color name="accent_blue_expressive_tertiary_container">#414271</color>
-    <color name="accent_blue_expressive_on_tertiary_container">#E1DFFF</color>
+    <color name="accent_blue_expressive_secondary">#BBC6EA</color>
+    <color name="accent_blue_expressive_on_secondary">#24304D</color>
+    <color name="accent_blue_expressive_secondary_container">#3B4665</color>
+    <color name="accent_blue_expressive_on_secondary_container">#DAE2FF</color>
+    <color name="accent_blue_expressive_tertiary">#B2C5FF</color>
+    <color name="accent_blue_expressive_on_tertiary">#172E60</color>
+    <color name="accent_blue_expressive_tertiary_container">#304578</color>
+    <color name="accent_blue_expressive_on_tertiary_container">#DAE2FF</color>
     <!-- indigo (seed #4355B9) -->
     <color name="accent_indigo_primary">#BAC3FF</color>
     <color name="accent_indigo_on_primary">#222C61</color>
@@ -77,14 +77,14 @@
     <color name="accent_indigo_expressive_primary_container">#313F90</color>
     <color name="accent_indigo_expressive_on_primary_container">#DEE0FF</color>
     <color name="accent_indigo_expressive_inverse_primary">#4958A9</color>
-    <color name="accent_indigo_expressive_secondary">#DDBCE0</color>
-    <color name="accent_indigo_expressive_on_secondary">#3F2844</color>
-    <color name="accent_indigo_expressive_secondary_container">#573E5C</color>
-    <color name="accent_indigo_expressive_on_secondary_container">#FAD8FD</color>
-    <color name="accent_indigo_expressive_tertiary">#CEBEF7</color>
-    <color name="accent_indigo_expressive_on_tertiary">#352857</color>
-    <color name="accent_indigo_expressive_tertiary_container">#4C3F6F</color>
-    <color name="accent_indigo_expressive_on_tertiary_container">#E8DDFF</color>
+    <color name="accent_indigo_expressive_secondary">#C0C4EB</color>
+    <color name="accent_indigo_expressive_on_secondary">#292E4D</color>
+    <color name="accent_indigo_expressive_secondary_container">#404565</color>
+    <color name="accent_indigo_expressive_on_secondary_container">#DEE0FF</color>
+    <color name="accent_indigo_expressive_tertiary">#BAC3FF</color>
+    <color name="accent_indigo_expressive_on_tertiary">#222C61</color>
+    <color name="accent_indigo_expressive_tertiary_container">#394379</color>
+    <color name="accent_indigo_expressive_on_tertiary_container">#DEE0FF</color>
     <!-- violet (seed #7B4FCF) -->
     <color name="accent_violet_primary">#D2BCFD</color>
     <color name="accent_violet_on_primary">#38265C</color>
@@ -117,14 +117,14 @@
     <color name="accent_violet_expressive_primary_container">#523689</color>
     <color name="accent_violet_expressive_on_primary_container">#EADDFF</color>
     <color name="accent_violet_expressive_inverse_primary">#6B4FA2</color>
-    <color name="accent_violet_expressive_secondary">#EAB9D2</color>
-    <color name="accent_violet_expressive_on_secondary">#472639</color>
-    <color name="accent_violet_expressive_secondary_container">#603C50</color>
-    <color name="accent_violet_expressive_on_secondary_container">#FFD8EA</color>
-    <color name="accent_violet_expressive_tertiary">#E3B8EC</color>
-    <color name="accent_violet_expressive_on_tertiary">#43244D</color>
-    <color name="accent_violet_expressive_tertiary_container">#5B3A65</color>
-    <color name="accent_violet_expressive_on_tertiary_container">#FAD7FF</color>
+    <color name="accent_violet_expressive_secondary">#CFC0E8</color>
+    <color name="accent_violet_expressive_on_secondary">#352B4B</color>
+    <color name="accent_violet_expressive_secondary_container">#4C4162</color>
+    <color name="accent_violet_expressive_on_secondary_container">#EADDFF</color>
+    <color name="accent_violet_expressive_tertiary">#D2BCFD</color>
+    <color name="accent_violet_expressive_on_tertiary">#38265C</color>
+    <color name="accent_violet_expressive_tertiary_container">#4F3D74</color>
+    <color name="accent_violet_expressive_on_tertiary_container">#EADDFF</color>
     <!-- purple (seed #9C27B0) -->
     <color name="accent_purple_primary">#EBB5ED</color>
     <color name="accent_purple_on_primary">#49204E</color>
@@ -157,14 +157,14 @@
     <color name="accent_purple_expressive_primary_container">#6A2E73</color>
     <color name="accent_purple_expressive_on_primary_container">#FFD6FE</color>
     <color name="accent_purple_expressive_inverse_primary">#85468D</color>
-    <color name="accent_purple_expressive_secondary">#F3B7BC</color>
-    <color name="accent_purple_expressive_on_secondary">#4C2529</color>
-    <color name="accent_purple_expressive_secondary_container">#663A3F</color>
-    <color name="accent_purple_expressive_on_secondary_container">#FFDADB</color>
-    <color name="accent_purple_expressive_tertiary">#E4C377</color>
-    <color name="accent_purple_expressive_on_tertiary">#3F2E00</color>
-    <color name="accent_purple_expressive_tertiary_container">#5A4301</color>
-    <color name="accent_purple_expressive_on_tertiary_container">#FFDF99</color>
+    <color name="accent_purple_expressive_secondary">#DFBBDE</color>
+    <color name="accent_purple_expressive_on_secondary">#412743</color>
+    <color name="accent_purple_expressive_secondary_container">#593E5A</color>
+    <color name="accent_purple_expressive_on_secondary_container">#FCD7FB</color>
+    <color name="accent_purple_expressive_tertiary">#EBB5ED</color>
+    <color name="accent_purple_expressive_on_tertiary">#49204E</color>
+    <color name="accent_purple_expressive_tertiary_container">#613766</color>
+    <color name="accent_purple_expressive_on_tertiary_container">#FFD6FE</color>
     <!-- pink (seed #C2185B) -->
     <color name="accent_pink_primary">#FFB1C2</color>
     <color name="accent_pink_on_primary">#551D2D</color>
@@ -197,14 +197,14 @@
     <color name="accent_pink_expressive_primary_container">#7C2942</color>
     <color name="accent_pink_expressive_on_primary_container">#FFD9DF</color>
     <color name="accent_pink_expressive_inverse_primary">#9A4059</color>
-    <color name="accent_pink_expressive_secondary">#F3BB9A</color>
-    <color name="accent_pink_expressive_on_secondary">#4A2811</color>
-    <color name="accent_pink_expressive_secondary_container">#643D25</color>
-    <color name="accent_pink_expressive_on_secondary_container">#FFDBC8</color>
-    <color name="accent_pink_expressive_tertiary">#BCCE8B</color>
-    <color name="accent_pink_expressive_on_tertiary">#273502</color>
-    <color name="accent_pink_expressive_tertiary_container">#3D4C17</color>
-    <color name="accent_pink_expressive_on_tertiary_container">#D7EAA4</color>
+    <color name="accent_pink_expressive_secondary">#F1B7C3</color>
+    <color name="accent_pink_expressive_on_secondary">#4B252E</color>
+    <color name="accent_pink_expressive_secondary_container">#643B44</color>
+    <color name="accent_pink_expressive_on_secondary_container">#FFD9DF</color>
+    <color name="accent_pink_expressive_tertiary">#FFB1C2</color>
+    <color name="accent_pink_expressive_on_tertiary">#551D2D</color>
+    <color name="accent_pink_expressive_tertiary_container">#713343</color>
+    <color name="accent_pink_expressive_on_tertiary_container">#FFD9DF</color>
     <!-- red (seed #D32F2F) -->
     <color name="accent_red_primary">#FFB3AC</color>
     <color name="accent_red_on_primary">#571E1A</color>
@@ -237,14 +237,14 @@
     <color name="accent_red_expressive_primary_container">#7E2B26</color>
     <color name="accent_red_expressive_on_primary_container">#FFDAD6</color>
     <color name="accent_red_expressive_inverse_primary">#9C413C</color>
-    <color name="accent_red_expressive_secondary">#C4CB96</color>
-    <color name="accent_red_expressive_on_secondary">#2E330D</color>
-    <color name="accent_red_expressive_secondary_container">#444A21</color>
-    <color name="accent_red_expressive_on_secondary_container">#E1E7B1</color>
-    <color name="accent_red_expressive_tertiary">#A8D29D</color>
-    <color name="accent_red_expressive_on_tertiary">#153812</color>
-    <color name="accent_red_expressive_tertiary_container">#2C4F26</color>
-    <color name="accent_red_expressive_on_tertiary_container">#C4EEB7</color>
+    <color name="accent_red_expressive_secondary">#F5B7B1</color>
+    <color name="accent_red_expressive_on_secondary">#4C2522</color>
+    <color name="accent_red_expressive_secondary_container">#673B37</color>
+    <color name="accent_red_expressive_on_secondary_container">#FFDAD6</color>
+    <color name="accent_red_expressive_tertiary">#FFB3AC</color>
+    <color name="accent_red_expressive_on_tertiary">#571E1A</color>
+    <color name="accent_red_expressive_tertiary_container">#73332F</color>
+    <color name="accent_red_expressive_on_tertiary_container">#FFDAD6</color>
     <!-- deeporange (seed #E64A19) -->
     <color name="accent_deeporange_primary">#FFB5A0</color>
     <color name="accent_deeporange_on_primary">#561F0F</color>
@@ -277,14 +277,14 @@
     <color name="accent_deeporange_expressive_primary_container">#7C2D15</color>
     <color name="accent_deeporange_expressive_on_primary_container">#FFDBD1</color>
     <color name="accent_deeporange_expressive_inverse_primary">#9B442A</color>
-    <color name="accent_deeporange_expressive_secondary">#BCCD9D</color>
-    <color name="accent_deeporange_expressive_on_secondary">#283512</color>
-    <color name="accent_deeporange_expressive_secondary_container">#3E4B27</color>
-    <color name="accent_deeporange_expressive_on_secondary_container">#D8E9B8</color>
-    <color name="accent_deeporange_expressive_tertiary">#9FD3A8</color>
-    <color name="accent_deeporange_expressive_on_tertiary">#04391A</color>
-    <color name="accent_deeporange_expressive_tertiary_container">#20502F</color>
-    <color name="accent_deeporange_expressive_on_tertiary_container">#BAEFC3</color>
+    <color name="accent_deeporange_expressive_secondary">#F5B8A7</color>
+    <color name="accent_deeporange_expressive_on_secondary">#4C261B</color>
+    <color name="accent_deeporange_expressive_secondary_container">#663C2F</color>
+    <color name="accent_deeporange_expressive_on_secondary_container">#FFDBD1</color>
+    <color name="accent_deeporange_expressive_tertiary">#FFB5A0</color>
+    <color name="accent_deeporange_expressive_on_tertiary">#561F0F</color>
+    <color name="accent_deeporange_expressive_tertiary_container">#723523</color>
+    <color name="accent_deeporange_expressive_on_tertiary_container">#FFDBD1</color>
     <!-- orange (seed #EF6C00) -->
     <color name="accent_orange_primary">#FFB68F</color>
     <color name="accent_orange_on_primary">#532201</color>
@@ -317,14 +317,14 @@
     <color name="accent_orange_expressive_primary_container">#773200</color>
     <color name="accent_orange_expressive_on_primary_container">#FFDBCA</color>
     <color name="accent_orange_expressive_inverse_primary">#974812</color>
-    <color name="accent_orange_expressive_secondary">#B3CEA7</color>
-    <color name="accent_orange_expressive_on_secondary">#1F361A</color>
-    <color name="accent_orange_expressive_secondary_container">#354D2E</color>
-    <color name="accent_orange_expressive_on_secondary_container">#CEEBC1</color>
-    <color name="accent_orange_expressive_tertiary">#95D4B6</color>
-    <color name="accent_orange_expressive_on_tertiary">#003826</color>
-    <color name="accent_orange_expressive_tertiary_container">#0E513A</color>
-    <color name="accent_orange_expressive_on_tertiary_container">#B1F0D1</color>
+    <color name="accent_orange_expressive_secondary">#F3BA9C</color>
+    <color name="accent_orange_expressive_on_secondary">#4A2713</color>
+    <color name="accent_orange_expressive_secondary_container">#653D27</color>
+    <color name="accent_orange_expressive_on_secondary_container">#FFDBCA</color>
+    <color name="accent_orange_expressive_tertiary">#FFB68F</color>
+    <color name="accent_orange_expressive_on_tertiary">#532201</color>
+    <color name="accent_orange_expressive_tertiary_container">#703714</color>
+    <color name="accent_orange_expressive_on_tertiary_container">#FFDBCA</color>
     <!-- amber (seed #FF8F00) -->
     <color name="accent_amber_primary">#FFB77A</color>
     <color name="accent_amber_on_primary">#4C2700</color>
@@ -357,14 +357,14 @@
     <color name="accent_amber_expressive_primary_container">#6D3A00</color>
     <color name="accent_amber_expressive_on_primary_container">#FFDCC2</color>
     <color name="accent_amber_expressive_inverse_primary">#8F4E00</color>
-    <color name="accent_amber_expressive_secondary">#D0C890</color>
-    <color name="accent_amber_expressive_on_secondary">#363107</color>
-    <color name="accent_amber_expressive_secondary_container">#4D481C</color>
-    <color name="accent_amber_expressive_on_secondary_container">#EDE4AA</color>
-    <color name="accent_amber_expressive_tertiary">#ECC078</color>
-    <color name="accent_amber_expressive_on_tertiary">#422C00</color>
-    <color name="accent_amber_expressive_tertiary_container">#5F4102</color>
-    <color name="accent_amber_expressive_on_tertiary_container">#FFDEAB</color>
+    <color name="accent_amber_expressive_secondary">#EFBD94</color>
+    <color name="accent_amber_expressive_on_secondary">#48290C</color>
+    <color name="accent_amber_expressive_secondary_container">#623F20</color>
+    <color name="accent_amber_expressive_on_secondary_container">#FFDCC2</color>
+    <color name="accent_amber_expressive_tertiary">#FFB77A</color>
+    <color name="accent_amber_expressive_on_tertiary">#4C2700</color>
+    <color name="accent_amber_expressive_tertiary_container">#6B3B05</color>
+    <color name="accent_amber_expressive_on_tertiary_container">#FFDCC2</color>
     <!-- green (seed #2E7D32) -->
     <color name="accent_green_primary">#A1D39A</color>
     <color name="accent_green_on_primary">#0A390F</color>
@@ -397,14 +397,14 @@
     <color name="accent_green_expressive_primary_container">#075315</color>
     <color name="accent_green_expressive_on_primary_container">#ABF5A3</color>
     <color name="accent_green_expressive_inverse_primary">#276C2B</color>
-    <color name="accent_green_expressive_secondary">#A6D0B9</color>
-    <color name="accent_green_expressive_on_secondary">#0F3727</color>
-    <color name="accent_green_expressive_secondary_container">#284E3C</color>
-    <color name="accent_green_expressive_on_secondary_container">#C1ECD4</color>
-    <color name="accent_green_expressive_tertiary">#8CD3CD</color>
-    <color name="accent_green_expressive_on_tertiary">#003734</color>
-    <color name="accent_green_expressive_tertiary_container">#00504C</color>
-    <color name="accent_green_expressive_on_tertiary_container">#A8F0E9</color>
+    <color name="accent_green_expressive_secondary">#B0CFA9</color>
+    <color name="accent_green_expressive_on_secondary">#1D361C</color>
+    <color name="accent_green_expressive_secondary_container">#334D30</color>
+    <color name="accent_green_expressive_on_secondary_container">#CCEBC4</color>
+    <color name="accent_green_expressive_tertiary">#A1D39A</color>
+    <color name="accent_green_expressive_on_tertiary">#0A390F</color>
+    <color name="accent_green_expressive_tertiary_container">#245024</color>
+    <color name="accent_green_expressive_on_tertiary_container">#BCF0B4</color>
     <!-- teal (seed #00796B) -->
     <color name="accent_teal_primary">#83D5C6</color>
     <color name="accent_teal_on_primary">#003730</color>
@@ -437,14 +437,14 @@
     <color name="accent_teal_expressive_primary_container">#005047</color>
     <color name="accent_teal_expressive_on_primary_container">#76F8E2</color>
     <color name="accent_teal_expressive_inverse_primary">#006B5E</color>
-    <color name="accent_teal_expressive_secondary">#A6CCDF</color>
-    <color name="accent_teal_expressive_on_secondary">#083544</color>
-    <color name="accent_teal_expressive_secondary_container">#254B5B</color>
-    <color name="accent_teal_expressive_on_secondary_container">#C1E8FC</color>
-    <color name="accent_teal_expressive_tertiary">#8CD2D8</color>
-    <color name="accent_teal_expressive_on_tertiary">#00363A</color>
-    <color name="accent_teal_expressive_tertiary_container">#004F54</color>
-    <color name="accent_teal_expressive_on_tertiary_container">#A8EEF4</color>
+    <color name="accent_teal_expressive_secondary">#A1D0C5</color>
+    <color name="accent_teal_expressive_on_secondary">#033730</color>
+    <color name="accent_teal_expressive_secondary_container">#214E46</color>
+    <color name="accent_teal_expressive_on_secondary_container">#BCECE1</color>
+    <color name="accent_teal_expressive_tertiary">#83D5C6</color>
+    <color name="accent_teal_expressive_on_tertiary">#003730</color>
+    <color name="accent_teal_expressive_tertiary_container">#005047</color>
+    <color name="accent_teal_expressive_on_tertiary_container">#9FF2E2</color>
     <!-- cyan (seed #0097A7) -->
     <color name="accent_cyan_primary">#82D3E0</color>
     <color name="accent_cyan_on_primary">#00363D</color>
@@ -477,12 +477,12 @@
     <color name="accent_cyan_expressive_primary_container">#004F58</color>
     <color name="accent_cyan_expressive_on_primary_container">#97F0FF</color>
     <color name="accent_cyan_expressive_inverse_primary">#006874</color>
-    <color name="accent_cyan_expressive_secondary">#CDC0E9</color>
-    <color name="accent_cyan_expressive_on_secondary">#342B4B</color>
-    <color name="accent_cyan_expressive_secondary_container">#4B4263</color>
-    <color name="accent_cyan_expressive_on_secondary_container">#E9DDFF</color>
-    <color name="accent_cyan_expressive_tertiary">#93CFE7</color>
-    <color name="accent_cyan_expressive_on_tertiary">#003544</color>
-    <color name="accent_cyan_expressive_tertiary_container">#004D61</color>
-    <color name="accent_cyan_expressive_on_tertiary_container">#B8EAFF</color>
+    <color name="accent_cyan_expressive_secondary">#A1CED6</color>
+    <color name="accent_cyan_expressive_on_secondary">#00363D</color>
+    <color name="accent_cyan_expressive_secondary_container">#1F4D54</color>
+    <color name="accent_cyan_expressive_on_secondary_container">#BDEAF3</color>
+    <color name="accent_cyan_expressive_tertiary">#82D3E0</color>
+    <color name="accent_cyan_expressive_on_tertiary">#00363D</color>
+    <color name="accent_cyan_expressive_tertiary_container">#004F58</color>
+    <color name="accent_cyan_expressive_on_tertiary_container">#9EEFFD</color>
 </resources>

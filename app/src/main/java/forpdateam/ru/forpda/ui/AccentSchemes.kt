@@ -2,7 +2,6 @@ package forpdateam.ru.forpda.ui
 
 import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.Hct
-import com.google.android.material.color.utilities.SchemeExpressive
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.SchemeVibrant
 import com.google.android.material.color.utilities.TonalPalette
@@ -20,17 +19,14 @@ import forpdateam.ru.forpda.common.Preferences.Main.AccentStyle
  * вторичных ролей:
  * - TONAL — приглушённый (SchemeTonalSpot, хрома primary ≈ 36);
  * - VIBRANT — сочный (SchemeVibrant, хрома выжата до предела гаммы);
- * - EXPRESSIVE — «живой»: primary заметно ярче приглушённого, но не кричит как
- *   Vibrant, а secondary/tertiary уведены в неожиданные тона (у синего — оливковый
- *   и зелёный). Именно они красят ссылки (`colorSecondary`) и tertiary-контейнеры,
- *   так что стиль виден не только на кнопке.
+ * - EXPRESSIVE — внутреннее legacy-имя видимого режима «Однотонный»: primary
+ *   заметно ярче приглушённого, secondary/tertiary отличаются насыщенностью, но
+ *   сохраняют hue подписанного акцента.
  *
- * ВАЖНО, почему EXPRESSIVE не берётся из `SchemeExpressive` как есть. Эта схема
- * строит primary-палитру как `hue(seed) + 240°` — осознанный «неожиданный» сдвиг.
- * Для акцента из обоев (у них нет имени) это нормально, но у нас грид ПОДПИСАННЫХ
- * цветов: «Синий» давал primary #2E6A3A (зелёный), «Зелёный» — #94483F (кирпичный).
- * Поэтому primary-палитру мы задаём сами по тону seed'а, а у SchemeExpressive
- * забираем ровно то, ради чего он нужен, — повёрнутые secondary/tertiary и нейтрали.
+ * Почему это НЕ `SchemeExpressive`: системной палитре из обоев допустимы повороты
+ * hue, а ручной грид обещает конкретный цвет названием. Раньше у «Синего»
+ * secondary становился розовым (#F0B8C7 / container #633B47), поэтому выбранный
+ * акцент визуально не соответствовал подписи. Material You этим кодом не затронут.
  */
 object AccentSchemes {
 
@@ -43,17 +39,24 @@ object AccentSchemes {
         }
     }
 
-    /** SchemeExpressive со своей primary-палитрой: тон подписи + повышенная хрома. */
+    /**
+     * Однотонная схема для ручного акцента.
+     *
+     * [Variant.EXPRESSIVE] сохраняем как внутренний контракт тона контейнеров и
+     * совместимость с сохранённым enum-значением, но все три accent-палитры строим
+     * сами из hue seed'а. Нейтрали берём у TonalSpot: они не входят в accent-overlay,
+     * однако нужны [DynamicScheme] для корректного вычисления ролей.
+     */
     private fun expressive(seed: Hct, isDark: Boolean): DynamicScheme {
-        val base = SchemeExpressive(seed, isDark, 0.0)
+        val base = SchemeTonalSpot(seed, isDark, 0.0)
         return DynamicScheme(
                 seed,
                 Variant.EXPRESSIVE,
                 isDark,
                 0.0,
                 TonalPalette.fromHueAndChroma(seed.hue, EXPRESSIVE_PRIMARY_CHROMA),
-                base.secondaryPalette,
-                base.tertiaryPalette,
+                TonalPalette.fromHueAndChroma(seed.hue, EXPRESSIVE_SECONDARY_CHROMA),
+                TonalPalette.fromHueAndChroma(seed.hue, EXPRESSIVE_TERTIARY_CHROMA),
                 base.neutralPalette,
                 base.neutralVariantPalette,
         )
@@ -61,7 +64,9 @@ object AccentSchemes {
 
     /**
      * Между приглушённым (≈36) и сочным. Выше не поднимаем: Vibrant выжимает хрому в
-     * границу гаммы, а у зелёного она всего ≈58 — на 58 Expressive слился бы с ним.
+     * границу гаммы, а у зелёного она всего ≈58 — на 58 однотонный слился бы с ним.
      */
     private const val EXPRESSIVE_PRIMARY_CHROMA = 48.0
+    private const val EXPRESSIVE_SECONDARY_CHROMA = 24.0
+    private const val EXPRESSIVE_TERTIARY_CHROMA = 36.0
 }

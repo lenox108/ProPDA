@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Accent-оверлеи «смены цвета». Для каждой палитры два стиля:
-    ThemeOverlay.ForPDA.Accent.<Name>        — приглушённый (TonalSpot, по умолчанию)
+    Accent-оверлеи ручной «смены цвета». Для каждой палитры три стиля:
+    ThemeOverlay.ForPDA.Accent.<Name>         — приглушённый (TonalSpot, по умолчанию)
     ThemeOverlay.ForPDA.Accent.<Name>.Vibrant — сочный (Vibrant, тумблер «Насыщенные цвета»)
-    Цвета — @color/accent_* / accent_*_vibrant_* из colors_accents.xml (day/night),
+    ThemeOverlay.ForPDA.Accent.<Name>.Expressive — однотонный (legacy-имя сохранено)
+    Цвета — @color/accent_* / accent_*_vibrant_* / accent_*_expressive_*
+    из colors_accents.xml (day/night),
     сгенерированы AccentPaletteGenerator. Перекрываем только акцентные M3-роли.
 -->
 <resources>
@@ -415,7 +417,7 @@
         <item name="colorAccent">@color/accent_cyan_vibrant_primary</item>
         <item name="android:colorAccent">@color/accent_cyan_vibrant_primary</item>
     </style>
-    <!-- Expressive (M3 Expressive: сдвинутые оттенки) — стиль акцента EXPRESSIVE -->
+    <!-- Однотонный ручной акцент (legacy-ключ/суффикс EXPRESSIVE сохранён для совместимости) -->
     <style name="ThemeOverlay.ForPDA.Accent.Blue.Expressive" parent="">
         <item name="colorPrimary">@color/accent_blue_expressive_primary</item>
         <item name="colorOnPrimary">@color/accent_blue_expressive_on_primary</item>
