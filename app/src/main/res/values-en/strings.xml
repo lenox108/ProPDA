@@ -641,12 +641,12 @@
     <string name="app_icon_term_4_desc">Terminal window with a green four; light and black themes.</string>
     <string name="app_icon_circuit_4">Circuit</string>
     <string name="app_icon_circuit_4_desc">Circuit-trace four; white and black themes.</string>
-    <string name="pref_title_notification_icon">Status bar icon</string>
+    <string name="pref_title_notification_icon">Notification icon</string>
     <string name="notification_icon_event">By event type</string>
     <string name="notification_icon_event_desc">A separate glyph for replies, QMS, mentions and downloads.</string>
     <string name="notification_icon_app">Match app icon</string>
     <string name="notification_icon_app_desc">Follows the selected app icon.</string>
-    <string name="notification_icon_hint">Android draws the status bar icon in one colour, so only its shape differs.</string>
+    <string name="notification_icon_hint">The selected icon is used on the notification card and in the status bar. Android draws it in one colour, so only its shape differs.</string>
     <string name="notification_qms_me">Me</string>
     <string name="app_icon_minimal_4">Minimal 4</string>
     <string name="app_icon_minimal_4_desc">Clean four with a green dot</string>
