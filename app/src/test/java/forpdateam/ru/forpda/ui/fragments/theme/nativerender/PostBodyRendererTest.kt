@@ -526,6 +526,50 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun repeatedUndimensionedDigestIcon_staysInlineWithEachFollowingLink() {
+        // Exact structure from topic 1077922 / post 144356735, first spoiler «ИИНТЕРЕСНОЕ и НОВОСТИ».
+        // The shared source is a real 20×20 PNG, but the markup provides no width/height and uses the generic
+        // alt «Изображение». Regression: every icon became an unknown-size BodyBlock.Image; the view reserved
+        // a full-column 0.66-ratio preview and displayed giant blurry orange markers above the links.
+        val icon = "https://4pda.to/s/as6yvs3DxBxz2z05poMmVR753NnVV3SDDDZtQ4fHS7g08tXJ.png"
+        val html = """
+            <div class="post-block spoil close">
+              <div class="block-title">ИИНТЕРЕСНОЕ и НОВОСТИ</div>
+              <div class="block-body">
+                <img alt="Изображение" src="$icon" />
+                <a href="https://4pda.to/forum/index.php?p=143907176">Nvidia nim провайдер добавил защиту</a><br />
+                <img alt="Изображение" src="$icon" />
+                <a href="https://4pda.to/forum/index.php?p=143947096">DeepSeek-V4-Flash раздают бесплатно</a><br />
+              </div>
+            </div>
+        """.trimIndent()
+
+        val spoiler = renderer.render(html).filterIsInstance<BodyBlock.Spoiler>().single()
+        val images = spoiler.inner.filterIsInstance<BodyBlock.Image>()
+        assertEquals(2, images.size)
+        assertTrue(images.all { it.inline })
+        assertTrue(
+                "repeated digest markers must join the following text row",
+                images.all { it.inlineListIcon },
+        )
+        assertTrue(
+                "server really omitted dimensions; classification must not depend on fake attrs",
+                images.all { it.displayWidthPx == 0 && it.displayHeightPx == 0 },
+        )
+        assertEquals(2, spoiler.inner.filterIsInstance<BodyBlock.Text>().size)
+    }
+
+    @Test
+    fun oneOffUndimensionedImageBeforeCaption_isNotForcedIntoListIconSize() {
+        val html = "<img alt=\"Изображение\" src=\"https://4pda.to/s/screenshot.png\" />" +
+                "<a href=\"https://4pda.to/forum/post\">Подпись скриншота</a><br />"
+
+        val image = renderer.render(html).filterIsInstance<BodyBlock.Image>().single()
+        assertTrue(image.inline)
+        assertFalse("a single screenshot/caption pair remains a content image", image.inlineListIcon)
+    }
+
+    @Test
     fun quoteSnapbackArrow_isNotExploded_staysInlineText() {
         // 4pda prefixes a «reply-to» header with a tiny <img alt="*"> snapback arrow linking to the quoted
         // post. It is a service glyph, not content — peeling it into a block Image blew a ~13px arrow up into
