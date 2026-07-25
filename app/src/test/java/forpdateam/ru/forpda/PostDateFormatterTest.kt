@@ -24,6 +24,17 @@ class PostDateFormatterTest {
     }
 
     @Test
+    fun `дата цитаты со скриншота становится относительной`() {
+        val screenshotNow = LocalDateTime.of(2026, 7, 25, 21, 5)
+                .atZone(zone).toInstant().toEpochMilli()
+
+        assertEquals(
+                "17 мин.",
+                PostDateFormatter.relative("25.07.26, 20:48", screenshotNow, zone),
+        )
+    }
+
+    @Test
     fun `вчерашний пост считается от вчерашней даты`() {
         assertEquals("17 ч.", relative("Вчера, 21:55"))
     }

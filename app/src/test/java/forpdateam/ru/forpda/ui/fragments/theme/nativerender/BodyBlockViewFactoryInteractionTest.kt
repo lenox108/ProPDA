@@ -15,6 +15,8 @@ import androidx.test.core.app.ApplicationProvider
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.TabRouter
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -38,6 +40,33 @@ class BodyBlockViewFactoryInteractionTest {
         override fun handle(inputUrl: String?, router: TabRouter?, args: Map<String, String>) = true
         override fun handle(inputUrl: String?, router: TabRouter?) = true
         override fun findScreen(url: String): String? = null
+    }
+
+    @Test
+    fun `modern post date setting also formats the quote header`() {
+        val factory = BodyBlockViewFactory(linkHandler, mutableMapOf(), callbacks()).apply {
+            modernPostDates = true
+        }
+        val root = LinearLayout(context)
+        val rawDate = LocalDateTime.now()
+                .minusHours(2)
+                .format(DateTimeFormatter.ofPattern("dd.MM.yy, HH:mm"))
+
+        factory.render(
+                root,
+                listOf(
+                        BodyBlock.Quote(
+                                author = "Автор",
+                                date = rawDate,
+                                sourceUrl = null,
+                                inner = listOf(BodyBlock.Text("Текст цитаты")),
+                        ),
+                ),
+                BodyBlockViewFactory.RenderScope(scopeId = 790, allowQuoteSelection = true),
+        )
+
+        val header = root.descendantTextViews().first { it.text.contains("Автор") }
+        assertEquals("Автор · 2 ч.", header.text.toString())
     }
 
     @Test
