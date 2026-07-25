@@ -32,6 +32,7 @@ import timber.log.Timber
 fun MaterialAlertDialogBuilder.showWithStyledButtons(
     compact: Boolean = true,
     minWidthDp: Int = DIALOG_MIN_WIDTH_DP,
+    applyAppFont: Boolean = true,
 ): AlertDialog {
     val dialog = create()
     dialog.applyForPdaSurface()
@@ -39,7 +40,7 @@ fun MaterialAlertDialogBuilder.showWithStyledButtons(
     // иначе системный scale/переезд окна при ресайзе виден как «прыжок».
     if (compact) dialog.window?.setWindowAnimations(0)
     dialog.setOnShowListener {
-        dialog.applyForPdaMaterialStyle()
+        dialog.applyForPdaMaterialStyle(applyAppFont)
         if (compact) dialog.applyCompactWidthAnimated(minWidthDp)
     }
     dialog.show()
@@ -139,10 +140,12 @@ private fun AlertDialog.shrinkWidthToContent(minWidthDp: Int = DIALOG_MIN_WIDTH_
     }
 }
 
-fun AlertDialog.applyForPdaMaterialStyle() {
+fun AlertDialog.applyForPdaMaterialStyle(applyAppFont: Boolean = true) {
     applyForPdaSurface()
     applyForPdaButtonColors()
-    applyForPdaFontMode()
+    if (applyAppFont) {
+        applyForPdaFontMode()
+    }
 }
 
 fun AlertDialog.applyForPdaSurface() {
