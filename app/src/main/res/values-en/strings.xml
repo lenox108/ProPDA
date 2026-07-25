@@ -604,7 +604,7 @@
     <string name="app_icon_four_dark">Dark</string>
     <string name="app_icon_four_blue">Blue</string>
     <string name="app_icon_puzzle">Puzzle 4</string>
-    <string name="app_icon_default_desc">Orange icon with a four on a dark display and a DA label.</string>
+    <string name="app_icon_default_desc">Modern 4PDA variant.</string>
     <string name="app_icon_four_dark_desc">White four on a graphite plate.</string>
     <string name="app_icon_four_blue_desc">Blue four on a white plate.</string>
     <string name="app_icon_puzzle_desc">Colour puzzle pieces; white background, black in dark theme.</string>
