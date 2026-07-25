@@ -695,6 +695,7 @@
     <string name="pref_summary_app_font_source_sans_3">Active font: Source Sans 3; fully applies after restart</string>
     <string name="pref_summary_app_font_open_sans">Active font: Open Sans; fully applies after restart</string>
     <string name="pref_summary_app_font_appetite_pro">Active font: Appetite Pro; fully applies after restart</string>
+    <string name="pref_summary_app_font_mayonez_italic">Active font: Mayonez Italic; fully applies after restart</string>
     <string name="pref_summary_app_font_roboto_mono">Active font: Roboto Mono (monospaced); fully applies after restart</string>
     <string name="pref_value_app_font_system">System</string>
     <string name="pref_value_app_font_roboto">Roboto</string>
@@ -702,6 +703,7 @@
     <string name="pref_value_app_font_source_sans_3">Source Sans 3</string>
     <string name="pref_value_app_font_open_sans">Open Sans</string>
     <string name="pref_value_app_font_appetite_pro">Appetite Pro</string>
+    <string name="pref_value_app_font_mayonez_italic">Mayonez Italic</string>
     <string name="pref_value_app_font_roboto_mono">Roboto Mono</string>
     <string name="font_picker_current_font">Currently used: %1$s</string>
     <string name="font_picker_active">✓ Active</string>
