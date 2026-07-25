@@ -163,6 +163,30 @@ class BodyBlockViewFactoryInteractionTest {
     }
 
     @Test
+    fun `undimensioned inline image does not reserve a full-width guessed box`() {
+        val factory = BodyBlockViewFactory(linkHandler, mutableMapOf(), callbacks())
+        val root = LinearLayout(context)
+
+        factory.render(
+                root,
+                listOf(
+                        BodyBlock.Image(
+                                imageUrl = "",
+                                linkUrl = null,
+                                displayWidthPx = 0,
+                                displayHeightPx = 0,
+                                inline = true,
+                        ),
+                ),
+                BodyBlockViewFactory.RenderScope(scopeId = 1115315),
+        )
+
+        val image = root.getChildAt(0) as ImageView
+        assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, image.layoutParams.width)
+        assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, image.layoutParams.height)
+    }
+
+    @Test
     fun `attachment rearms selection controller after detached native quote premeasure`() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
         val movement = SelectionCheckMovementMethod()

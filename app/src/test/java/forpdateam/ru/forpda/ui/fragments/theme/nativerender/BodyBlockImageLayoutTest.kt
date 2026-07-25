@@ -34,17 +34,17 @@ class BodyBlockImageLayoutTest {
     }
 
     @Test
-    fun `missing dimensions reserve consistent full-width preview`() {
+    fun `small intrinsic image stays small instead of being upscaled to column width`() {
         val box = BodyBlockViewFactory.resolveStableInlineImageBox(
-                displayWidthPx = 0,
-                displayHeightPx = 0,
+                displayWidthPx = 32,
+                displayHeightPx = 24,
                 density = 3f,
                 columnWidthPx = 900,
                 maxHeightPx = 2000,
         )
 
-        assertEquals(900, box.widthPx)
-        assertEquals(594, box.heightPx)
+        assertEquals(96, box.widthPx)
+        assertEquals(72, box.heightPx)
     }
 
 }

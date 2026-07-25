@@ -18,6 +18,7 @@ import coil.request.ErrorResult
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Precision
+import coil.size.Scale
 import forpdateam.ru.forpda.client.Client
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import kotlinx.coroutines.Dispatchers
@@ -140,6 +141,39 @@ object ForPdaCoil {
                 .target(imageView)
                 .listener(onSuccess = { _, result ->
                     onSize(result.drawable.intrinsicWidth, result.drawable.intrinsicHeight)
+                })
+                .build()
+        imageLoader.enqueue(req)
+    }
+
+    /**
+     * Loads an image independently of its initially WRAP_CONTENT [ImageView], decoding no larger than the
+     * supplied bounds and reporting the resulting bitmap size. [Precision.INEXACT] is essential: a tiny
+     * source stays tiny instead of being upscaled to the requested bounds, while a huge source is sampled
+     * down and never decoded at its potentially unsafe full resolution.
+     */
+    fun loadIntoAtMost(
+            imageView: ImageView,
+            url: String?,
+            maxWidthPx: Int,
+            maxHeightPx: Int,
+            onSize: (width: Int, height: Int) -> Unit,
+    ) {
+        if (url.isNullOrBlank()) return
+        val req = ImageRequest.Builder(imageView.context.applicationContext)
+                .data(normalizeData(url))
+                .size(maxWidthPx.coerceAtLeast(1), maxHeightPx.coerceAtLeast(1))
+                .scale(Scale.FIT)
+                .precision(Precision.INEXACT)
+                .crossfade(false)
+                .target(imageView)
+                .listener(onSuccess = { _, result ->
+                    val drawable = result.drawable
+                    if (drawable is BitmapDrawable) {
+                        onSize(drawable.bitmap.width, drawable.bitmap.height)
+                    } else {
+                        onSize(drawable.intrinsicWidth, drawable.intrinsicHeight)
+                    }
                 })
                 .build()
         imageLoader.enqueue(req)

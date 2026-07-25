@@ -617,10 +617,10 @@ class BodyBlockViewFactory(
     }
 
     /**
-     * Native inline attachment image. Reserves height from the server-provided display
-     * dimensions BEFORE the bitmap loads, so a late-arriving image never slides the scroll
-     * anchor (§2/§6). Tapping routes the attachment link through the app (image viewer /
-     * download), same as the WebView path.
+     * Native inline attachment image. Images with server-provided dimensions reserve their final box
+     * before loading. Old markup without dimensions starts at WRAP_CONTENT and is sized from the source
+     * bitmap after loading, which prevents tiny service icons from being decoded/upscaled to full width.
+     * Tapping routes the attachment link through the app (image viewer / download), same as the WebView.
      */
     private fun imageView(ctx: Context, block: BodyBlock.Image, scope: RenderScope): View {
         val dm = ctx.resources.displayMetrics
@@ -641,22 +641,20 @@ class BodyBlockViewFactory(
         // real aspect ratio — a tiny square service icon (snapback arrow, file-type icon) must stay small.
         val isButtonGif = block.inline && !block.linkUrl.isNullOrBlank() && !viewable &&
                 block.imageUrl.substringBefore('?').endsWith(".gif", ignoreCase = true)
+        val hasDeclaredSize = block.displayWidthPx > 0 && block.displayHeightPx > 0
         return ImageView(ctx).apply {
             if (block.inline) {
-                if (isButtonGif || block.attachmentButton) {
+                if (isButtonGif || block.attachmentButton || !hasDeclaredSize) {
                     // Download/update graphics still need their decoded dimensions to distinguish a wide
-                    // banner from a tiny file glyph. They are small and do not cause the large topic jumps
-                    // that full-size content pictures used to produce.
+                    // banner from a tiny file glyph. Ordinary undimensioned images also must not reserve a
+                    // guessed full-width box: the real source dimensions are applied after Coil loads them.
                     layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT,
                     ).apply { topMargin = topInset }
                 } else {
-                    // Reserve the final image box BEFORE Coil completes. WRAP_CONTENT measured these views
-                    // as 0px high and then expanded the post by hundreds of pixels during a fling, visibly
-                    // moving the page. Server dimensions retain the authored aspect ratio; old posts without
-                    // dimensions get a consistent preview ratio. CENTER_INSIDE keeps it uncropped and avoids
-                    // turning a genuinely small source bitmap into a blurry full-width image.
+                    // Reserve the final image box BEFORE Coil completes. Server dimensions retain the
+                    // authored aspect ratio and avoid moving the post when a large content image arrives.
                     val box = resolveStableInlineImageBox(
                             displayWidthPx = block.displayWidthPx,
                             displayHeightPx = block.displayHeightPx,
@@ -715,6 +713,31 @@ class BodyBlockViewFactory(
                                 lp.topMargin = 0
                                 layoutParams = lp
                             }
+                        }
+                    }
+                }
+            } else if (block.inline && !hasDeclaredSize) {
+                // Do not let this WRAP_CONTENT ImageView make Coil decode an unbounded original. INEXACT
+                // decoding preserves a tiny source's true 32×24 (etc.) dimensions but samples large photos
+                // to the post bounds. The box converts the reported pixels to browser-like device pixels.
+                ForPdaCoil.loadIntoAtMost(
+                        imageView = this,
+                        url = block.imageUrl,
+                        maxWidthPx = columnWidthPx,
+                        maxHeightPx = dm.heightPixels,
+                ) { w, h ->
+                    if (w > 0 && h > 0) {
+                        val box = resolveStableInlineImageBox(
+                                displayWidthPx = w,
+                                displayHeightPx = h,
+                                density = dm.density,
+                                columnWidthPx = columnWidthPx,
+                                maxHeightPx = dm.heightPixels,
+                        )
+                        (layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                            lp.width = box.widthPx
+                            lp.height = box.heightPx
+                            layoutParams = lp
                         }
                     }
                 }

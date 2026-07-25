@@ -448,6 +448,18 @@ class PostBodyRendererTest {
     }
 
     @Test
+    fun topicHat_undimensionedAndroidLogo_keepsItsSourceSizeForTheView() {
+        val image = renderer.render(fixture("topic_hat.html"))
+                .filterIsInstance<BodyBlock.Image>()
+                .first { it.imageUrl.contains("Zy0hEHci0VoolKcVH289BigH8f5BA5xRz0kvtrjCPBWYZz2rtz1.png") }
+
+        assertTrue(image.inline)
+        assertEquals(0, image.displayWidthPx)
+        assertEquals(0, image.displayHeightPx)
+        assertFalse("single topic logo is not a digest list marker", image.inlineListIcon)
+    }
+
+    @Test
     fun malformedHtml_doesNotThrow_andKeepsContent() {
         // Graceful degradation is a hard requirement (§6): never crash, never lose content.
         val blocks = renderer.render(fixture("malformed.html"))
