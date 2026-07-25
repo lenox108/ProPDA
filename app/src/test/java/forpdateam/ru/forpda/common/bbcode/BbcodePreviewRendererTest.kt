@@ -64,6 +64,19 @@ class BbcodePreviewRendererTest {
     }
 
     @Test
+    fun renderToHtml_offtopInsideQuote_keepsNestedFormatting() {
+        val html = BbcodePreviewRenderer.renderToHtml(
+            """[quote name="User"]before [offtop]side [b]note[/b][/offtop] after[/quote]"""
+        )
+
+        assertEquals(
+            """<blockquote><b>User</b><br>before <small><font color="#888888">side <b>note</b></font></small> after</blockquote>""",
+            html
+        )
+        assertNoRawSupportedTags(html)
+    }
+
+    @Test
     fun renderToHtml_hideTag_rendersLabelledBlock() {
         val html = BbcodePreviewRenderer.renderToHtml("[hide]secret[/hide]")
 
