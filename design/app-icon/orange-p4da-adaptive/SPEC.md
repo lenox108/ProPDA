@@ -4,7 +4,7 @@
 
 - Use `ART_SCALE = 0.50` on the 1080×1080 adaptive-icon canvas.
 - Apply 50% to the coloured light and AMOLED foregrounds.
-- Keep the Android themed/monochrome foreground at its approved 66% scale.
+- Use 46% for the Android themed/monochrome foreground.
 - Centre the final visible bounds independently after scaling.
 - Allow no more than 2 px difference between opposite margins at 1080×1080.
 

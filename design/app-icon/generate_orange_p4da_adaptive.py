@@ -23,7 +23,7 @@ CANVAS = 1080
 # The launcher zooms adaptive foregrounds by about 1.5×. At 50%, the artwork
 # stays inside both the circular launcher mask and the Settings preview.
 ART_SCALE = 0.50
-MONO_SCALE = 0.66
+MONO_SCALE = 0.46
 DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 
 
@@ -151,7 +151,7 @@ def themed_mask() -> Image.Image:
     mdy = round((CANVAS - (top + bottom)) / 2)
     final_mask = Image.new("L", (CANVAS, CANVAS), 0)
     final_mask.paste(mask, (mdx, mdy))
-    # The themed Android icon keeps its previously approved 66% geometry.
+    # Monet/monochrome use the common 46% geometry verified under real masks.
     reduced = final_mask.resize(
         (round(CANVAS * MONO_SCALE), round(CANVAS * MONO_SCALE)),
         Image.Resampling.LANCZOS,
