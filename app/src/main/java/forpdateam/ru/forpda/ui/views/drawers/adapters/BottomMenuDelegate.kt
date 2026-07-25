@@ -1,6 +1,5 @@
 package forpdateam.ru.forpda.ui.views.drawers.adapters
 
-import android.content.res.ColorStateList
 import android.graphics.PorterDuff
 import android.util.TypedValue
 import android.view.LayoutInflater
@@ -59,8 +58,6 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
                 binding.itemBottomMenuIcon.setImageDrawable(ContextCompat.getDrawable(context, item.icon))
 
                 binding.tabActiveBackground.apply {
-                    backgroundTintList = ColorStateList.valueOf(
-                            ActiveSelectionColors.indicator(context))
                     visibility = if (selected) View.VISIBLE else View.GONE
                     animate().cancel()
                     if (selected && animate) {
@@ -107,10 +104,10 @@ class BottomMenuDelegate(private val clickListener: Listener) : AdapterDelegate<
                     }
                 }
                 val inactiveColor = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
-                // Primary-роли сохраняют оттенок выбранного акцента. Secondary у
-                // expressive-палитр может быть комплементарным (у синего — розовым).
+                // M3 NavigationBar: активная иконка лежит на «таблетке» colorSecondaryContainer,
+                // поэтому её тон — colorOnSecondaryContainer (не colorOnSurface).
                 val iconColor = if (selected) {
-                    ActiveSelectionColors.onIndicator(context)
+                    context.getColorFromAttr(com.google.android.material.R.attr.colorOnSecondaryContainer)
                 } else {
                     inactiveColor
                 }
