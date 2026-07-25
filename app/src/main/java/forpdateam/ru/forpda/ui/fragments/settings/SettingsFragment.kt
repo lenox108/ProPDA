@@ -49,7 +49,11 @@ import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.ui.AppFontMode
 import forpdateam.ru.forpda.ui.FontController
 import forpdateam.ru.forpda.model.repository.auth.AuthRepository
+import forpdateam.ru.forpda.settingsbackup.SettingsBackupService
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -68,13 +72,30 @@ class SettingsFragment : BaseSettingFragment() {
     @Inject lateinit var preferences: SharedPreferences
     @Inject lateinit var dayNightHelper: DayNightHelper
     @Inject lateinit var clipboardHelper: ClipboardHelper
+    @Inject lateinit var settingsBackupService: SettingsBackupService
 
     // Запас под последней плашкой («Аккаунт» с правилами форума), чтобы она не липла к низу.
     override val extraBottomPaddingPx: Int
         get() = resources.getDimensionPixelSize(R.dimen.dp24)
 
     private var logoutJob: kotlinx.coroutines.Job? = null
+    private var pendingBackupIncludesSession = false
     private val prefs by lazy { preferences }
+    private val createBackupLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri == null) return@registerForActivityResult
+            lifecycleScope.launch {
+                runCatching {
+                    settingsBackupService.write(uri, pendingBackupIncludesSession)
+                }.onSuccess {
+                    showSnackbarAboveSystemBars(R.string.settings_backup_created, Snackbar.LENGTH_LONG)
+                }.onFailure(::showBackupError)
+            }
+        }
+    private val restoreBackupLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) confirmBackupRestore(uri)
+        }
     private val downloadFolderLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
         val uri = result.data?.data ?: return@registerForActivityResult
@@ -317,6 +338,7 @@ class SettingsFragment : BaseSettingFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         addPreferencesFromResource(R.xml.preferences)
+        addBackupPreferences()
 
         // Синхронизируем DataStore → SwitchPreference, чтобы переключатели
         // показывали актуальные значения, а не XML-defaults.
@@ -853,6 +875,92 @@ class SettingsFragment : BaseSettingFragment() {
                 true
             }
         }
+    }
+
+    private fun addBackupPreferences() {
+        val category = PreferenceCategory(requireContext()).apply {
+            layoutResource = R.layout.preference_category_custom
+            title = getString(R.string.pref_title_backup)
+        }
+        preferenceScreen.addPreference(category)
+        category.addPreference(Preference(requireContext()).apply {
+            key = "backup.create"
+            layoutResource = R.layout.preference_custom
+            title = getString(R.string.pref_title_create_backup)
+            summary = getString(R.string.pref_summary_create_backup)
+            isPersistent = false
+            isIconSpaceReserved = false
+            setOnPreferenceClickListener {
+                showCreateBackupDialog()
+                true
+            }
+        })
+        category.addPreference(Preference(requireContext()).apply {
+            key = "backup.restore"
+            layoutResource = R.layout.preference_custom
+            title = getString(R.string.pref_title_restore_backup)
+            summary = getString(R.string.pref_summary_restore_backup)
+            isPersistent = false
+            isIconSpaceReserved = false
+            setOnPreferenceClickListener {
+                restoreBackupLauncher.launch(arrayOf("application/json", "text/json", "text/plain"))
+                true
+            }
+        })
+    }
+
+    private fun showCreateBackupDialog() {
+        val checked = booleanArrayOf(false)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.pref_title_create_backup)
+            .setMessage(R.string.settings_backup_session_warning)
+            .setMultiChoiceItems(
+                arrayOf(getString(R.string.settings_backup_include_session)),
+                checked,
+            ) { _, _, isChecked ->
+                checked[0] = isChecked
+            }
+            .setPositiveButton(R.string.save) { _, _ ->
+                pendingBackupIncludesSession = checked[0]
+                val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                createBackupLauncher.launch("propda-backup-$date.json")
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .showWithStyledButtons()
+    }
+
+    private fun confirmBackupRestore(uri: Uri) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.pref_title_restore_backup)
+            .setMessage(R.string.settings_backup_restore_warning)
+            .setPositiveButton(R.string.restore) { _, _ ->
+                lifecycleScope.launch {
+                    runCatching { settingsBackupService.restore(uri) }
+                        .onSuccess { showBackupRestoredDialog() }
+                        .onFailure(::showBackupError)
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .showWithStyledButtons()
+    }
+
+    private fun showBackupRestoredDialog() {
+        if (!isAdded) return
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.settings_backup_restored_title)
+            .setMessage(R.string.settings_backup_restored_message)
+            .setCancelable(false)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                MainActivity.restartApplication(requireActivity())
+            }
+            .showWithStyledButtons()
+    }
+
+    private fun showBackupError(error: Throwable) {
+        if (!isAdded) return
+        val message = error.message?.takeIf { it.isNotBlank() }
+            ?: getString(R.string.settings_backup_error)
+        showSnackbarAboveSystemBars(message, Snackbar.LENGTH_LONG)
     }
 
     private fun showAppFontRestartNotice() {

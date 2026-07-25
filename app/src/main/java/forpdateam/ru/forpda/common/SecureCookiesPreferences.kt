@@ -208,10 +208,39 @@ class SecureCookiesPreferences private constructor(context: Context) {
         encryptedPrefs.edit().remove(key).apply()
     }
 
+    /**
+     * Возвращает только переносимые cookies авторизации. Служебные флаги хранилища и ключ
+     * AndroidKeyStore намеренно не экспортируются.
+     */
+    fun exportAuthCookies(): Map<String, String> =
+        AUTH_COOKIE_KEYS.mapNotNull { key ->
+            encryptedPrefs.getString(key, null)?.let { key to it }
+        }.toMap()
+
+    /**
+     * Полностью заменяет сохранённую сессию значениями из бэкапа. commit() нужен здесь
+     * намеренно: после восстановления приложение сразу перезапускается.
+     */
+    fun restoreAuthCookies(values: Map<String, String>): Boolean {
+        val editor = encryptedPrefs.edit()
+        AUTH_COOKIE_KEYS.forEach(editor::remove)
+        values.forEach { (key, value) ->
+            if (key in AUTH_COOKIE_KEYS) editor.putString(key, value)
+        }
+        return editor.commit()
+    }
+
     companion object {
         /** Попыток создать зашифрованное хранилище до fallback (KeyStore transient на cold start). */
         private const val ENCRYPTED_CREATE_ATTEMPTS = 3
         private const val ENCRYPTED_CREATE_RETRY_MS = 120L
+        private val AUTH_COOKIE_KEYS = setOf(
+            "cookie_member_id",
+            "cookie_pass_hash",
+            "cookie_session_id",
+            "cookie_anonymous",
+            "cookie_cf_clearance",
+        )
 
         @Volatile
         private var instance: SecureCookiesPreferences? = null
