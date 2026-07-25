@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.ui.views.dialog
 import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -18,19 +19,17 @@ import kotlin.math.roundToInt
 /**
  * Диалог выбора «Шрифта приложения» (AppFontMode) с ВИЗУАЛЬНЫМ ПРЕВЬЮ: каждая
  * карточка рендерит образец текста РЕАЛЬНОЙ гарнитурой (Roboto / Inter /
- * Source Sans 3 / Open Sans / системный), чтобы шрифт был виден до применения —
+ * Source Sans 3 / Open Sans / Appetite Pro / системный), чтобы шрифт был виден до применения —
  * шрифты как раз выбирают глазами. Тап по карточке применяет режим (тот же путь
  * recreate, что раньше).
  */
 object FontPickerDialog {
 
-    // literalTitle — для шрифтов без строкового ресурса (имя-собственное, напр. «Roboto Mono»).
     // monospace — рисовать превью платформенным monospace (Typeface.MONOSPACE).
     private data class Entry(
             val mode: AppFontMode,
             @StringRes val title: Int,
             @FontRes val font: Int,
-            val literalTitle: String? = null,
             val monospace: Boolean = false,
     )
 
@@ -41,7 +40,8 @@ object FontPickerDialog {
             Entry(AppFontMode.INTER, R.string.pref_value_app_font_inter, R.font.forpda_inter),
             Entry(AppFontMode.SOURCE_SANS_3, R.string.pref_value_app_font_source_sans_3, R.font.forpda_source_sans_3),
             Entry(AppFontMode.OPEN_SANS, R.string.pref_value_app_font_open_sans, R.font.forpda_open_sans),
-            Entry(AppFontMode.ROBOTO_MONO, R.string.pref_value_app_font_system, 0, literalTitle = "Roboto Mono", monospace = true),
+            Entry(AppFontMode.APPETITE_PRO, R.string.pref_value_app_font_appetite_pro, R.font.forpda_appetite_pro),
+            Entry(AppFontMode.ROBOTO_MONO, R.string.pref_value_app_font_roboto_mono, 0, monospace = true),
     )
 
     fun show(context: Context, current: AppFontMode, onPick: (AppFontMode) -> Unit) {
@@ -50,9 +50,11 @@ object FontPickerDialog {
 
         val outline = context.getColorFromAttr(com.google.android.material.R.attr.colorOutline)
         val selectedRing = context.getColorFromAttr(androidx.appcompat.R.attr.colorPrimary)
+        val onPrimaryContainer = context.getColorFromAttr(com.google.android.material.R.attr.colorOnPrimaryContainer)
         val onSurface = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val onSurfaceVar = context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
         val cardBg = context.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerLow)
+        val selectedBg = context.getColorFromAttr(com.google.android.material.R.attr.colorPrimaryContainer)
 
         lateinit var dialog: androidx.appcompat.app.AlertDialog
 
@@ -61,8 +63,31 @@ object FontPickerDialog {
             setPadding(px(16), px(4), px(16), px(8))
         }
 
+        val currentTitle = context.getString(
+                entries.firstOrNull { it.mode == current }?.title
+                        ?: R.string.pref_value_app_font_system
+        )
+        list.addView(TextView(context).apply {
+            text = context.getString(R.string.font_picker_current_font, currentTitle)
+            setTextColor(onPrimaryContainer)
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(px(16), px(12), px(16), px(12))
+            background = GradientDrawable().apply {
+                cornerRadius = px(12).toFloat()
+                setColor(selectedBg)
+            }
+        }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = px(4)
+            bottomMargin = px(8)
+        })
+
         entries.forEach { e ->
             val selected = e.mode == current
+            val title = context.getString(e.title)
             val face = when {
                 e.monospace -> Typeface.MONOSPACE
                 e.font == 0 -> Typeface.DEFAULT
@@ -76,10 +101,29 @@ object FontPickerDialog {
                 typeface = face
             }
             val label = TextView(context).apply {
-                text = e.literalTitle ?: context.getString(e.title)
+                text = title
                 setTextColor(onSurfaceVar)
-                textSize = 12f
+                textSize = 13f
                 setPadding(0, px(4), 0, 0)
+            }
+            val selectionLabel = TextView(context).apply {
+                text = if (selected) context.getString(R.string.font_picker_active) else ""
+                setTextColor(selectedRing)
+                textSize = 12f
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.END
+                setPadding(px(8), px(4), 0, 0)
+                visibility = if (selected) TextView.VISIBLE else TextView.GONE
+            }
+            val footer = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(label, LinearLayout.LayoutParams(
+                        0,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        1f
+                ))
+                addView(selectionLabel)
             }
             val card = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -90,8 +134,15 @@ object FontPickerDialog {
                     setStroke(if (selected) px(3) else px(1), if (selected) selectedRing else outline)
                 }
                 addView(sample)
-                addView(label)
+                addView(footer)
                 isClickable = true
+                isFocusable = true
+                isSelected = selected
+                contentDescription = if (selected) {
+                    context.getString(R.string.font_picker_active_description, title)
+                } else {
+                    title
+                }
                 setOnClickListener { dialog.dismiss(); onPick(e.mode) }
             }
             list.addView(card, LinearLayout.LayoutParams(
