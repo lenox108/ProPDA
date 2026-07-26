@@ -284,7 +284,9 @@ object TopicOpenTargetResolver {
 
     private fun hasExplicitPageIntentSource(sourceScreen: String): Boolean =
             when (sourceScreen.lowercase()) {
-                "search", "qms", "internal_link", "history", "back_restore", "child_restore" -> true
+                // `link` is the default source for ACTION_VIEW/browser navigation. A non-zero `st`
+                // there is the page the user explicitly opened, not a list-row last-read hint.
+                "link", "search", "qms", "internal_link", "history", "back_restore", "child_restore" -> true
                 else -> false
             }
 

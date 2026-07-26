@@ -94,7 +94,7 @@ class TopicOpenTargetResolverTest {
     @Test
     fun explicitPageIntentSourcesWinOverLastUnreadSetting() {
         val url = "https://4pda.to/forum/index.php?showtopic=123&st=20"
-        val sources = listOf("search", "qms", "internal_link", "history")
+        val sources = listOf("link", "search", "qms", "internal_link", "history")
         sources.forEach { source ->
             val resolution = TopicOpenTargetResolver.resolve(
                     TopicOpenContext(
@@ -106,6 +106,43 @@ class TopicOpenTargetResolverTest {
             assertEquals(url, resolution.url)
             assertEquals(TopicOpenTargetType.EXPLICIT_PAGE, resolution.targetType)
         }
+    }
+
+    @Test
+    fun externalBrowserPageOffsetIsNotReplacedWithUnreadNavigation() {
+        val url = "https://4pda.to/forum/index.php?showtopic=1115315&st=980"
+        val resolution = TopicOpenTargetResolver.resolve(
+                TopicOpenContext(
+                        rawUrl = url,
+                        setting = AppPreferences.Main.TopicOpenTarget.LAST_UNREAD,
+                        sourceScreen = "link",
+                        openIntentRaw = TopicOpenIntentClassifier.FRESH_LEGACY
+                )
+        )
+
+        assertEquals(url, resolution.url)
+        assertEquals(TopicOpenTargetType.EXPLICIT_PAGE, resolution.targetType)
+        assertEquals(980, resolution.resolvedPageSt)
+        assertEquals("explicit_page_st", resolution.reason)
+        assertFalse(resolution.url.contains("view=getnewpost"))
+    }
+
+    @Test
+    fun favoritesPageOffsetRemainsAListResumeHint() {
+        val resolution = TopicOpenTargetResolver.resolve(
+                TopicOpenContext(
+                        rawUrl = "https://4pda.to/forum/index.php?showtopic=1115315&st=980",
+                        setting = AppPreferences.Main.TopicOpenTarget.LAST_UNREAD,
+                        sourceScreen = "favorites",
+                        openIntentRaw = TopicOpenIntentClassifier.FRESH_FAVORITES
+                )
+        )
+
+        assertEquals(
+                "https://4pda.to/forum/index.php?showtopic=1115315&view=getlastpost",
+                resolution.url
+        )
+        assertEquals(TopicOpenTargetType.READ_RESUME, resolution.targetType)
     }
 
     @Test
