@@ -279,7 +279,14 @@ object NotificationPublisher {
             context.getString(R.string.notification_title_mention_Nick, e.userNick)
         }
         e.fromSite() -> "ForPDA"
-        e.fromTheme() -> context.getString(R.string.notification_title_favorite)
+        // Как в офиц. клиенте: в строке шторки — ник ответившего, а темой занят текст.
+        // Общая «Новые сообщения в избранной теме» остаётся только когда ника нет
+        // (WS-событие без обогащения инспектором).
+        e.fromTheme() -> if (e.userNick.isBlank()) {
+            context.getString(R.string.notification_title_favorite)
+        } else {
+            context.getString(R.string.notification_title_favorite_Nick, e.userNick)
+        }
         else -> e.userNick
     }
 
@@ -370,7 +377,9 @@ object NotificationPublisher {
             val nick = e.userNick.ifBlank { context.getString(R.string.notification_title_qms_fallback) }
             return "$nick: ${e.sourceTitle}"
         }
-        return e.sourceTitle.ifBlank { context.getString(R.string.notification_content_theme_fallback) }
+        val title = e.sourceTitle.ifBlank { context.getString(R.string.notification_content_theme_fallback) }
+        // Строка стека — «ник: тема», как у одиночного уведомления и как в QMS-стеке.
+        return if (e.userNick.isBlank()) title else "${e.userNick}: $title"
     }
 
     fun stackedContentFor(context: Context, events: List<NotificationEvent>): CharSequence {
@@ -384,6 +393,9 @@ object NotificationPublisher {
                 content.append("<b>").append(nick).append("</b>")
                 content.append(": ").append(event.sourceTitle)
             } else if (event.fromTheme()) {
+                if (event.userNick.isNotBlank()) {
+                    content.append("<b>").append(event.userNick).append("</b>").append(": ")
+                }
                 content.append(event.sourceTitle)
             }
             if (i < size - 1) {

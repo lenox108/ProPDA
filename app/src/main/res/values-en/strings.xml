@@ -536,6 +536,7 @@
     <string name="notification_quick_reply_failed_title">Message not sent</string>
     <string name="notification_stacked_more">…and %1$d more</string>
     <string name="notification_title_favorite">New posts in a favorite topic</string>
+    <string name="notification_title_favorite_Nick">%1$s in topic</string>
     <string name="notification_content_mention_fallback">Open the topic to view the reply</string>
     <string name="notification_content_theme_fallback">Open favorites to view new posts</string>
     <string name="notification_content_news">You\'ve been mentioned in a comment on the portal</string>
