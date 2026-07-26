@@ -46,8 +46,11 @@ conversation-уведомления, но они меняют семантику
 После сборки релизного APK и ДО `gh release upload`:
 
 ```bash
-python3 scripts/make_circle_variants.py --apk <путь к ProPDA-X.Y.Z.apk>
+python3 scripts/make_circle_variants.py --apk <путь к ProPDA-X.Y.Z.apk> --upload vX.Y.Z
 ```
+
+`--upload` сам вызывает `gh release upload --clobber` (без него варианты просто
+складываются в `circle-variants/` — можно залить вручную).
 
 и загрузить в релиз ВСЕ файлы из `circle-variants/` рядом с базовым APK.
 Без этих ассетов пункт настроек покажет «в релизе нет вариантов иконки

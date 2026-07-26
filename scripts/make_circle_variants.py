@@ -203,6 +203,11 @@ def main():
     parser.add_argument("--keystore-props", default="keystore.parallel.properties",
                         help="properties с параметрами подписи (от корня репозитория)")
     parser.add_argument("--build-tools", default=None, help="каталог build-tools")
+    parser.add_argument("--upload", metavar="TAG", default=None,
+                        help="после сборки залить варианты в релиз TAG через gh release upload "
+                             "(ПУБЛИКАЦИЯ: делать только осознанно)")
+    parser.add_argument("--repo", default="lenox108/ProPDA",
+                        help="репозиторий для --upload")
     args = parser.parse_args()
 
     bt = find_build_tools(args.build_tools)
@@ -275,6 +280,15 @@ def main():
         print("%s → %s (icon=%s, %s)" % (vid, out_path, hex(rid), icon_line.group(1) if icon_line else "?"))
 
     print("Готово: %d вариант(ов) в %s" % (len(targets), out_dir))
+
+    if args.upload:
+        files = sorted(
+            os.path.join(out_dir, f) for f in os.listdir(out_dir) if f.endswith(".apk"))
+        total_mb = sum(os.path.getsize(f) for f in files) / 1048576
+        print("Загрузка %d файлов (%.0f МБ) в релиз %s репозитория %s…"
+              % (len(files), total_mb, args.upload, args.repo))
+        run(["gh", "release", "upload", args.upload, "--repo", args.repo, "--clobber"] + files)
+        print("Загружено.")
 
 
 if __name__ == "__main__":
