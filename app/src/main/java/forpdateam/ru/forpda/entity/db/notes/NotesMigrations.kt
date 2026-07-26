@@ -105,63 +105,17 @@ object NotesMigrations {
     }
 
     /**
-     * Локальные папки избранного. Привязка тем к папкам живёт в отдельной таблице
-     * (`fav_folder_items`), потому что `favorites` полностью перезаписывается на каждом
-     * обновлении списка — колонка внутри неё не пережила бы ни одного refresh.
-     *
-     * Целевая версия — 10, а не 7: номера 7..9 уже носили устройства из эпохи offline-фичи,
-     * и совпадение номера при разной схеме привело бы к падению вместо миграции.
+     * Возврат с v10 на v6. Промежуточная сборка папок избранного держала их таблицы прямо в
+     * AppDatabase и поднимала версию до 10 — из-за чего ЛЮБАЯ сборка без этой фичи падала на
+     * «A migration from 10 to 6 was required but not found» и избранное не открывалось.
+     * Папки переехали в собственную [forpdateam.ru.forpda.entity.db.favorites.FavoritesFoldersDatabase],
+     * а эта миграция возвращает схему к v6 на устройствах, успевших съесть промежуточный билд
+     * (сами папки при этом теряются — фича нигде не релизилась).
      */
-    private fun createFavoriteFolderTables(db: SupportSQLiteDatabase) {
-        db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS fav_folders (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    name TEXT NOT NULL,
-                    sortOrder INTEGER NOT NULL,
-                    createdAt INTEGER NOT NULL,
-                    updatedAt INTEGER NOT NULL
-                )
-                """.trimIndent()
-        )
-        db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS fav_folder_items (
-                    targetKey TEXT NOT NULL,
-                    folderId INTEGER NOT NULL,
-                    updatedAt INTEGER NOT NULL,
-                    PRIMARY KEY(targetKey)
-                )
-                """.trimIndent()
-        )
-        db.execSQL("CREATE INDEX IF NOT EXISTS index_fav_folder_items_folderId ON fav_folder_items (folderId)")
-    }
-
-    val MIGRATION_6_10 = object : Migration(6, 10) {
+    val MIGRATION_10_6 = object : Migration(10, 6) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            createFavoriteFolderTables(db)
-        }
-    }
-
-    /** Устройства из эпохи offline-фичи (v7..v9): роняем её таблицу и заводим папки. */
-    val MIGRATION_7_10 = object : Migration(7, 10) {
-        override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("DROP TABLE IF EXISTS offline_items")
-            createFavoriteFolderTables(db)
-        }
-    }
-
-    val MIGRATION_8_10 = object : Migration(8, 10) {
-        override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("DROP TABLE IF EXISTS offline_items")
-            createFavoriteFolderTables(db)
-        }
-    }
-
-    val MIGRATION_9_10 = object : Migration(9, 10) {
-        override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("DROP TABLE IF EXISTS offline_items")
-            createFavoriteFolderTables(db)
+            db.execSQL("DROP TABLE IF EXISTS fav_folder_items")
+            db.execSQL("DROP TABLE IF EXISTS fav_folders")
         }
     }
 }

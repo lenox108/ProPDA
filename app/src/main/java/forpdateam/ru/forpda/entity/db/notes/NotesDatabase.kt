@@ -4,9 +4,6 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import forpdateam.ru.forpda.entity.db.ForumUserDao
 import forpdateam.ru.forpda.entity.db.ForumUserRoom
-import forpdateam.ru.forpda.entity.db.favorites.FavFolderDao
-import forpdateam.ru.forpda.entity.db.favorites.FavFolderItemRoom
-import forpdateam.ru.forpda.entity.db.favorites.FavFolderRoom
 import forpdateam.ru.forpda.entity.db.favorites.FavItemDao
 import forpdateam.ru.forpda.entity.db.favorites.FavItemRoom
 import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatDao
@@ -29,15 +26,13 @@ import forpdateam.ru.forpda.entity.db.qms.QmsThemesRoom
         QmsThemeRoom::class,
         QmsThemesRoom::class,
         FavItemRoom::class,
-        FavFolderRoom::class,
-        FavFolderItemRoom::class,
         ForumItemFlatRoom::class,
         ForumUserRoom::class
     ],
-    // v7..v9 занимали удалённой offline-фичей (см. MIGRATION_7_6/8_6/9_6), поэтому папки
-    // избранного въезжают сразу на v10: иначе устройство, застрявшее на старой v7, совпало бы
-    // номером версии с новой схемой и упало на проверке целостности вместо миграции.
-    version = 10,
+    // Версию НЕ поднимаем: любой подъём ломает откат на сборку без новой фичи («A migration
+    // from N to 6 was required but not found»). Новые таблицы заводим отдельными БД —
+    // см. FavoritesFoldersDatabase / PostDraftDatabase / TopicReadBoundaryDatabase.
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -48,7 +43,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun qmsThemeDao(): QmsThemeDao
     abstract fun qmsThemesDao(): QmsThemesDao
     abstract fun favItemDao(): FavItemDao
-    abstract fun favFolderDao(): FavFolderDao
     abstract fun forumItemFlatDao(): ForumItemFlatDao
     abstract fun forumUserDao(): ForumUserDao
 }

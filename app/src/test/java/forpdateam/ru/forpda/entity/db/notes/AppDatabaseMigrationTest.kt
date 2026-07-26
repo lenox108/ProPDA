@@ -28,46 +28,53 @@ class AppDatabaseMigrationTest {
                         NotesMigrations.MIGRATION_7_6,
                         NotesMigrations.MIGRATION_8_6,
                         NotesMigrations.MIGRATION_9_6,
-                        NotesMigrations.MIGRATION_6_10,
-                        NotesMigrations.MIGRATION_7_10,
-                        NotesMigrations.MIGRATION_8_10,
-                        NotesMigrations.MIGRATION_9_10
+                        NotesMigrations.MIGRATION_10_6
                 )
                 .allowMainThreadQueries()
                 .build()
         db.openHelper.writableDatabase
-        assertEquals(10, db.openHelper.writableDatabase.version)
+        assertEquals(6, db.openHelper.writableDatabase.version)
         db.close()
     }
 
     /**
-     * Папки избранного приезжают миграцией 6 → 10 (номера 7..9 заняты удалённой
-     * offline-фичей). Пишем в таблицы после миграции: так проверяется не только факт
-     * их создания, но и совпадение схемы с ожиданиями Room (иначе — падение на валидации).
+     * Промежуточная сборка папок избранного держала их таблицы в AppDatabase и поднимала
+     * версию до 10, из-за чего сборки без фичи падали на «A migration from 10 to 6 was
+     * required but not found». Папки уехали в свою БД; этот тест пиннит путь возврата,
+     * иначе устройства с той сборкой останутся с неоткрывающимся избранным.
      */
     @Test
-    fun migrate6To10CreatesFavoriteFolders() {
-        val isolatedDb = "$testDbName-6-10"
+    fun migrate10To6DropsFavoriteFolderTables() {
+        val isolatedDb = "$testDbName-10-6"
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.deleteDatabase(isolatedDb)
-        val db = Room.databaseBuilder(context, AppDatabase::class.java, isolatedDb)
-                .addMigrations(
-                        NotesMigrations.MIGRATION_5_6,
-                        NotesMigrations.MIGRATION_6_10
-                )
+        // Готовим базу «как после промежуточной сборки»: схема v6 + таблицы папок + version = 10.
+        val seed = Room.databaseBuilder(context, AppDatabase::class.java, isolatedDb)
                 .allowMainThreadQueries()
                 .build()
-        db.openHelper.writableDatabase.execSQL(
-                "INSERT INTO fav_folders (name, sortOrder, createdAt, updatedAt) VALUES ('Смартфоны', 1, 1, 1)"
-        )
-        db.openHelper.writableDatabase.execSQL(
-                "INSERT INTO fav_folder_items (targetKey, folderId, updatedAt) VALUES ('t:42', 1, 1)"
-        )
-        db.openHelper.writableDatabase.query(
-                "SELECT folderId FROM fav_folder_items WHERE targetKey = 't:42'"
+        seed.openHelper.writableDatabase.apply {
+            execSQL(
+                    "CREATE TABLE IF NOT EXISTS fav_folders (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "name TEXT NOT NULL, sortOrder INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)"
+            )
+            execSQL(
+                    "CREATE TABLE IF NOT EXISTS fav_folder_items (targetKey TEXT NOT NULL, folderId INTEGER NOT NULL, " +
+                            "updatedAt INTEGER NOT NULL, PRIMARY KEY(targetKey))"
+            )
+            version = 10
+        }
+        seed.close()
+
+        val db = Room.databaseBuilder(context, AppDatabase::class.java, isolatedDb)
+                .addMigrations(NotesMigrations.MIGRATION_10_6)
+                .allowMainThreadQueries()
+                .build()
+        val opened = db.openHelper.writableDatabase
+        assertEquals(6, opened.version)
+        opened.query(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('fav_folders', 'fav_folder_items')"
         ).use { cursor ->
-            assertTrue(cursor.moveToFirst())
-            assertEquals(1, cursor.getInt(0))
+            assertEquals(0, cursor.count)
         }
         db.close()
     }

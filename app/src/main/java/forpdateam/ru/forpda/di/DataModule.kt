@@ -23,6 +23,7 @@ import forpdateam.ru.forpda.entity.db.notes.NotesMigrations
 import forpdateam.ru.forpda.entity.db.history.HistoryItemDao
 import forpdateam.ru.forpda.entity.db.favorites.FavFolderDao
 import forpdateam.ru.forpda.entity.db.favorites.FavItemDao
+import forpdateam.ru.forpda.entity.db.favorites.FavoritesFoldersDatabase
 import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatDao
 import forpdateam.ru.forpda.entity.db.ForumUserDao
 import forpdateam.ru.forpda.entity.db.qms.QmsContactDao
@@ -111,10 +112,7 @@ object DataModule {
             NotesMigrations.MIGRATION_7_6,
             NotesMigrations.MIGRATION_8_6,
             NotesMigrations.MIGRATION_9_6,
-            NotesMigrations.MIGRATION_6_10,
-            NotesMigrations.MIGRATION_7_10,
-            NotesMigrations.MIGRATION_8_10,
-            NotesMigrations.MIGRATION_9_10
+            NotesMigrations.MIGRATION_10_6
         )
             .build()
     }
@@ -177,7 +175,16 @@ object DataModule {
     fun provideFavItemDao(database: AppDatabase): FavItemDao = database.favItemDao()
 
     @Provides @Singleton
-    fun provideFavFolderDao(database: AppDatabase): FavFolderDao = database.favFolderDao()
+    fun provideFavoritesFoldersDatabase(@ApplicationContext context: Context): FavoritesFoldersDatabase {
+        return Room.databaseBuilder(
+            context,
+            FavoritesFoldersDatabase::class.java,
+            "favorites_folders_database"
+        ).build()
+    }
+
+    @Provides @Singleton
+    fun provideFavFolderDao(database: FavoritesFoldersDatabase): FavFolderDao = database.favFolderDao()
 
     @Provides @Singleton
     fun provideFavoritesFoldersRepository(dao: FavFolderDao) = FavoritesFoldersRepository(dao)
