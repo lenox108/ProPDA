@@ -20,6 +20,7 @@ import coil.request.SuccessResult
 import coil.size.Precision
 import coil.size.Scale
 import forpdateam.ru.forpda.client.Client
+import forpdateam.ru.forpda.client.interceptors.ImageProgressInterceptor
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -71,7 +72,12 @@ object ForPdaCoil {
         // body neither cache held, and the image silently failed to load («imageLoadFailure … code=304»,
         // observed on QMS attachments while the very same URL returned 200 to curl). Reuse the client for
         // its cookies/auth/DNS interceptors, but drop the HTTP cache — that is Coil's own documented setup.
-        val okHttp = (webClient as Client).getHttpClient().newBuilder().cache(null).build()
+        val okHttp = (webClient as Client).getHttpClient().newBuilder()
+                .cache(null)
+                // Побайтовый прогресс для тех загрузок, где на URL подписан индикатор
+                // (просмотрщик картинок). Для остальных тело не оборачивается.
+                .addInterceptor(ImageProgressInterceptor())
+                .build()
         imageLoader = ImageLoader.Builder(application)
                 .okHttpClient(okHttp)
                 .components {

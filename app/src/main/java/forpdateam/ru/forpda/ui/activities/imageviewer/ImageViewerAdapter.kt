@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.activities.imageviewer
 
+import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,6 +13,7 @@ import com.google.android.material.snackbar.Snackbar
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.client.OkHttpResponseException
+import forpdateam.ru.forpda.client.interceptors.ImageDownloadProgress
 import forpdateam.ru.forpda.client.interceptors.ImageLoadingInterceptor
 import coil.size.Precision
 import forpdateam.ru.forpda.common.ForPdaCoil
@@ -21,6 +23,7 @@ import forpdateam.ru.forpda.databinding.ImgViewPageBinding
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.internal.http2.StreamResetException
 import timber.log.Timber
+import java.util.Locale
 
 class ImageViewerAdapter : PagerAdapter() {
 
@@ -63,10 +66,17 @@ class ImageViewerAdapter : PagerAdapter() {
     override fun isViewFromObject(view: View, `object`: Any): Boolean = view == `object`
 
     private fun loadImage(container: ViewGroup, binding: ImgViewPageBinding, position: Int) {
-        binding.progressBar.visibility = View.VISIBLE
         val raw = items[position]
         val data = ForPdaCoil.normalizeData(FourPdaImageUrls.resolveViewerUrl(raw))
         logLoadStart(data)
+        showConnecting(binding)
+
+        // Подписка на побайтовый прогресс живёт ровно столько же, сколько сам запрос: снимается
+        // в любом терминальном колбэке, иначе свайп на соседнюю страницу оставил бы висящий колбэк.
+        val progressListener = ImageDownloadProgress.Listener { bytesRead, contentLength ->
+            showDownloadProgress(binding, bytesRead, contentLength)
+        }
+        ImageDownloadProgress.register(data, progressListener)
 
         val request = ImageRequest.Builder(container.context)
                 .data(data)
@@ -75,18 +85,17 @@ class ImageViewerAdapter : PagerAdapter() {
                 .target(binding.photoView)
                 .listener(object : ImageRequest.Listener {
                     override fun onStart(request: ImageRequest) {
-                        binding.progressBar.visibility = View.VISIBLE
-                        if (binding.progressBar.isIndeterminate) {
-                            binding.progressBar.isIndeterminate = false
-                        }
+                        showConnecting(binding)
                     }
 
                     override fun onSuccess(request: ImageRequest, result: SuccessResult) {
-                        binding.progressBar.visibility = View.GONE
+                        ImageDownloadProgress.unregister(data, progressListener)
+                        hideProgress(binding)
                         autoRetryAttempts.remove(position)
                     }
 
                     override fun onError(request: ImageRequest, result: ErrorResult) {
+                        ImageDownloadProgress.unregister(data, progressListener)
                         // Транзиентные сбои (StreamResetException от CDN 4pda, таймауты)
                         // приходят при чтении тела — уже после интерцептора, поэтому его
                         // ретрай 503/504 их не ловит. Сами повторяем загрузку несколько
@@ -96,7 +105,7 @@ class ImageViewerAdapter : PagerAdapter() {
                             if (attempt <= MAX_AUTO_RETRIES) {
                                 autoRetryAttempts[position] = attempt
                                 logAutoRetry(data, result.throwable, attempt)
-                                binding.progressBar.visibility = View.VISIBLE
+                                showConnecting(binding)
                                 binding.photoView.postDelayed(
                                         { loadImage(container, binding, position) },
                                         AUTO_RETRY_DELAY_MS * attempt
@@ -104,7 +113,7 @@ class ImageViewerAdapter : PagerAdapter() {
                                 return
                             }
                         }
-                        binding.progressBar.visibility = View.GONE
+                        hideProgress(binding)
                         autoRetryAttempts.remove(position)
                         logLoadError(data, result.throwable)
                         container.makeSnackbarAboveSystemBars(errorMessageRes(result.throwable), Snackbar.LENGTH_LONG)
@@ -116,7 +125,8 @@ class ImageViewerAdapter : PagerAdapter() {
                     }
 
                     override fun onCancel(request: ImageRequest) {
-                        binding.progressBar.visibility = View.GONE
+                        ImageDownloadProgress.unregister(data, progressListener)
+                        hideProgress(binding)
                     }
                 })
                 .build()
@@ -128,6 +138,47 @@ class ImageViewerAdapter : PagerAdapter() {
             listener(position)
             true
         }
+    }
+
+    /**
+     * Этап «соединяемся»: байты ещё не пошли (DNS/TLS/ожидание ответа CDN) — показываем
+     * бесконечную крутилку без цифр. Material запрещает переключаться в indeterminate,
+     * пока индикатор на экране, поэтому сначала прячем его.
+     */
+    private fun showConnecting(binding: ImgViewPageBinding) {
+        val bar = binding.progressBar
+        if (!bar.isIndeterminate) {
+            bar.visibility = View.GONE
+            bar.isIndeterminate = true
+        }
+        bar.visibility = View.VISIBLE
+        binding.progressText.text = ""
+        binding.progressText.visibility = View.GONE
+    }
+
+    /**
+     * Этап «качаем»: при известном Content-Length кольцо заполняется и в центре идёт процент,
+     * без него — крутилка и накопленный объём, чтобы было видно, что загрузка живая, а не висит.
+     */
+    private fun showDownloadProgress(binding: ImgViewPageBinding, bytesRead: Long, contentLength: Long) {
+        val bar = binding.progressBar
+        if (bar.visibility != View.VISIBLE) return
+        if (contentLength > 0) {
+            val percent = (bytesRead * 100 / contentLength).toInt().coerceIn(0, 100)
+            if (bar.isIndeterminate) {
+                bar.isIndeterminate = false
+            }
+            bar.setProgressCompat(percent, true)
+            binding.progressText.text = String.format(Locale.getDefault(), "%d%%", percent)
+        } else {
+            binding.progressText.text = Formatter.formatShortFileSize(binding.root.context, bytesRead)
+        }
+        binding.progressText.visibility = View.VISIBLE
+    }
+
+    private fun hideProgress(binding: ImgViewPageBinding) {
+        binding.progressBar.visibility = View.GONE
+        binding.progressText.visibility = View.GONE
     }
 
     /**

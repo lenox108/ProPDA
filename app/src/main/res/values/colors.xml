@@ -334,6 +334,11 @@
     <color name="fpda_unread_bg">#244F7896</color>
     <color name="fpda_unread_outline">#6B95B5</color>
 
+    <!-- Незаполненная часть кольца прогресса в просмотрщике: нейтральный полупрозрачный серый,
+         который одинаково читается и поверх тёмной, и поверх светлой картинки. Раньше трек был
+         того же цвета, что и индикатор, поэтому кольцо выглядело просто статичным кружком. -->
+    <color name="image_viewer_progress_track">#66808080</color>
+
     <color name="ic_launcher_four_dark_background">#FF191919</color>
     <color name="ic_launcher_four_blue_background">#FFFFFFFF</color>
     <color name="ic_launcher_puzzle_background">#FFFFFFFF</color>

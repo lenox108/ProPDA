@@ -3,6 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:orientation="vertical"
     android:gravity="center">
 
@@ -14,15 +15,29 @@
 
     <com.google.android.material.progressindicator.CircularProgressIndicator
         android:id="@+id/progress_bar"
-        android:layout_width="@dimen/dp48"
-        android:layout_height="@dimen/dp48"
+        android:layout_width="@dimen/dp56"
+        android:layout_height="@dimen/dp56"
         android:layout_gravity="center"
         android:clickable="false"
         android:visibility="gone"
         android:indeterminate="true"
         app:indicatorColor="?attr/colorAccent"
-        app:trackColor="?attr/colorAccent"
-        app:trackThickness="@dimen/dp2" />
+        app:trackColor="@color/image_viewer_progress_track"
+        app:trackThickness="@dimen/dp4" />
+
+    <!-- Процент (или объём, если сервер не прислал Content-Length) внутри кольца прогресса. -->
+    <TextView
+        android:id="@+id/progress_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:clickable="false"
+        android:visibility="gone"
+        android:includeFontPadding="false"
+        android:textColor="?attr/colorAccent"
+        android:textSize="11sp"
+        tools:text="42%"
+        tools:visibility="visible" />
 
 
 </FrameLayout>
