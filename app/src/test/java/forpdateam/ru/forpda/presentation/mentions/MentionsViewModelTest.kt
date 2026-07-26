@@ -187,6 +187,42 @@ class MentionsViewModelTest {
     }
 
     @Test
+    fun `my answers mode syncs and loads local archive`() = runTest {
+        coEvery { mentionsRepository.syncMentionArchive() } returns Unit
+        coEvery { mentionsRepository.getArchivedMentions(0) } returns MentionsData().apply {
+            items.add(MentionItem().apply {
+                title = "Сохранённый ответ"
+                state = MentionItem.STATE_READ
+                type = MentionItem.TYPE_TOPIC
+                link = "https://4pda.to/forum/index.php?showtopic=1&view=findpost&p=42"
+            })
+        }
+
+        val viewModel = createViewModel()
+        viewModel.setArchiveMode(true)
+        advanceUntilIdle()
+
+        assertEquals(true, viewModel.archiveMode.value)
+        coVerify { mentionsRepository.syncMentionArchive() }
+        coVerify { mentionsRepository.getArchivedMentions(0) }
+    }
+
+    @Test
+    fun `archive pagination does not resync server`() = runTest {
+        coEvery { mentionsRepository.syncMentionArchive() } returns Unit
+        coEvery { mentionsRepository.getArchivedMentions(any()) } returns MentionsData()
+        val viewModel = createViewModel()
+        viewModel.setArchiveMode(true)
+        advanceUntilIdle()
+
+        viewModel.selectPage(20)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { mentionsRepository.syncMentionArchive() }
+        coVerify { mentionsRepository.getArchivedMentions(20) }
+    }
+
+    @Test
     fun `onItemClick keeps badge when mention already read`() = runTest {
         countersHolder.update { it.mentions = 2 }
         val item = MentionItem().apply {
@@ -195,15 +231,15 @@ class MentionsViewModelTest {
             title = "Topic"
             link = "https://4pda.to/forum/index.php?showtopic=1&view=findpost&p=42"
         }
-        // changed=false: ключ уже прочитан (или нет реального совпадения) — строку и бейдж не трогаем,
-        // но переход по ссылке всё равно происходит.
+        // changed=false: ключ уже прочитан (или нет реального совпадения) — бейдж не трогаем.
+        // Саму нажатую строку всё равно гасим, в том числе когда она пришла из локального архива.
         coEvery { mentionsRepository.markMentionItemRead(item) } returns
                 (false to MentionsRepository.UnreadMentionsSnapshot(2, listOf(42, 43)))
 
         createViewModel().onItemClick(item)
         advanceUntilIdle()
 
-        assertEquals(MentionItem.STATE_UNREAD, item.state)
+        assertEquals(MentionItem.STATE_READ, item.state)
         assertEquals(2, countersHolder.get().mentions)
         verify { linkHandler.handle(item.link, router, any()) }
         coVerify { mentionsRepository.markMentionItemRead(item) }

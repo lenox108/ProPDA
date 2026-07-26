@@ -48,11 +48,38 @@ class MentionsViewModel @Inject constructor(
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    private val _archiveMode = MutableStateFlow(false)
+    val archiveMode: StateFlow<Boolean> = _archiveMode.asStateFlow()
+
     private val _uiEvents = MutableSharedFlow<MentionsUiEvent>()
     val uiEvents: SharedFlow<MentionsUiEvent> = _uiEvents.asSharedFlow()
 
-    fun setCurrentSt(st: Int) {
+    fun selectPage(st: Int) {
         _currentSt.value = st
+        if (_archiveMode.value) {
+            loadArchive(sync = false)
+        } else {
+            getMentions()
+        }
+    }
+
+    fun setArchiveMode(enabled: Boolean) {
+        if (_archiveMode.value == enabled) return
+        _archiveMode.value = enabled
+        _currentSt.value = 0
+        if (enabled) {
+            loadArchive(sync = true)
+        } else {
+            getMentions(cacheFirst = false)
+        }
+    }
+
+    fun refresh() {
+        if (_archiveMode.value) {
+            loadArchive(sync = true)
+        } else {
+            getMentions()
+        }
     }
 
     fun start() {
@@ -72,6 +99,7 @@ class MentionsViewModel @Inject constructor(
      */
     fun onShown() {
         if (!subscriptionsStarted) return
+        if (_archiveMode.value) return
         if (loadJob?.isActive == true) return
         if (SystemClock.elapsedRealtime() - lastLoadStartedElapsedMs < SHOW_REFRESH_MIN_INTERVAL_MS) return
         getMentions(cacheFirst = false)
@@ -110,6 +138,40 @@ class MentionsViewModel @Inject constructor(
         }
     }
 
+    private fun loadArchive(sync: Boolean) {
+        loadJob?.cancel()
+        lastLoadStartedElapsedMs = SystemClock.elapsedRealtime()
+        loadJob = scope.launch {
+            val page = _currentSt.value
+            _refreshing.value = true
+            var syncError: Throwable? = null
+            try {
+                if (sync) {
+                    val cached = mentionsRepository.getArchivedMentions(page)
+                    if (cached.items.isNotEmpty()) {
+                        _uiEvents.emit(MentionsUiEvent.ShowMentions(cached))
+                    }
+                    runCatching { mentionsRepository.syncMentionArchive() }
+                            .onFailure { syncError = it }
+                }
+                val data = mentionsRepository.getArchivedMentions(page)
+                _uiEvents.emit(MentionsUiEvent.ShowMentions(data))
+                syncError?.let { error ->
+                    var message: String? = null
+                    errorHandler.handle(error) { _, handledMessage -> message = handledMessage }
+                    _uiEvents.emit(MentionsUiEvent.ShowLoadError(message))
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "loadArchive failed")
+                var message: String? = null
+                errorHandler.handle(e) { _, handledMessage -> message = handledMessage }
+                _uiEvents.emit(MentionsUiEvent.ShowLoadError(message))
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
     fun addTopicToFavorite(topicId: Int, subType: String) {
         scope.launch {
             runCatching {
@@ -129,10 +191,13 @@ class MentionsViewModel @Inject constructor(
         // тап по строке — достаточно сильный сигнал прочтения (переходим ровно на этот пост), поэтому
         // гасим ключ упоминания здесь; markMentionItemRead идемпотентен со штатным путём рендера.
         scope.launch {
+            val wasUnread = !item.isRead
             val (changed, snapshot) = mentionsRepository.markMentionItemRead(item)
             if (changed) {
-                item.state = MentionItem.STATE_READ
                 countersHolder.setMentions(snapshot.unreadCount, source = "mention_opened")
+            }
+            if (wasUnread) {
+                item.state = MentionItem.STATE_READ
                 _uiEvents.emit(MentionsUiEvent.MentionMarkedRead(item))
             }
         }

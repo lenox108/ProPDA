@@ -14,6 +14,7 @@ import forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
 import forpdateam.ru.forpda.model.data.cache.forum.ForumCacheRoom
 import forpdateam.ru.forpda.model.data.cache.forumuser.ForumUsersCacheRoom
 import forpdateam.ru.forpda.model.data.cache.history.HistoryCacheRoom
+import forpdateam.ru.forpda.model.data.cache.mentions.MentionsArchiveStore
 import forpdateam.ru.forpda.model.data.cache.notes.NotesCacheRoom
 import forpdateam.ru.forpda.model.data.cache.qms.QmsCacheRoom
 import forpdateam.ru.forpda.entity.db.notes.NoteFolderDao
@@ -21,6 +22,8 @@ import forpdateam.ru.forpda.entity.db.notes.NoteItemDao
 import forpdateam.ru.forpda.entity.db.notes.AppDatabase
 import forpdateam.ru.forpda.entity.db.notes.NotesMigrations
 import forpdateam.ru.forpda.entity.db.history.HistoryItemDao
+import forpdateam.ru.forpda.entity.db.mentions.MentionArchiveDao
+import forpdateam.ru.forpda.entity.db.mentions.MentionArchiveDatabase
 import forpdateam.ru.forpda.entity.db.favorites.FavItemDao
 import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatDao
 import forpdateam.ru.forpda.entity.db.ForumUserDao
@@ -129,6 +132,19 @@ object DataModule {
         database.topicReadBoundaryDao()
 
     @Provides @Singleton
+    fun provideMentionArchiveDatabase(@ApplicationContext context: Context): MentionArchiveDatabase {
+        return Room.databaseBuilder(
+                context,
+                MentionArchiveDatabase::class.java,
+                "mention_archive_database",
+        ).build()
+    }
+
+    @Provides @Singleton
+    fun provideMentionArchiveDao(database: MentionArchiveDatabase): MentionArchiveDao =
+            database.mentionArchiveDao()
+
+    @Provides @Singleton
     fun providePostDraftDatabase(@ApplicationContext context: Context): PostDraftDatabase {
         return Room.databaseBuilder(
             context,
@@ -179,6 +195,7 @@ object DataModule {
     @Provides @Singleton fun provideNotesCacheRoom(noteItemDao: NoteItemDao, noteFolderDao: NoteFolderDao) =
             NotesCacheRoom(noteItemDao, noteFolderDao)
     @Provides @Singleton fun provideHistoryCacheRoom(historyItemDao: HistoryItemDao) = HistoryCacheRoom(historyItemDao)
+    @Provides @Singleton fun provideMentionsArchiveStore(dao: MentionArchiveDao) = MentionsArchiveStore(dao)
     @Provides @Singleton fun provideFavoritesCacheRoom(favItemDao: FavItemDao) = FavoritesCacheRoom(favItemDao)
     @Provides @Singleton fun provideForumCacheRoom(forumItemFlatDao: ForumItemFlatDao) = ForumCacheRoom(forumItemFlatDao)
     @Provides @Singleton fun provideForumUsersCacheRoom(forumUserDao: ForumUserDao, userSource: UserSourceProvider) = ForumUsersCacheRoom(forumUserDao, userSource)
@@ -212,8 +229,10 @@ object DataModule {
     fun provideMentionsRepository(
             api: MentionsApi,
             preferences: SharedPreferences,
+            archiveStore: MentionsArchiveStore,
+            authHolder: AuthHolder,
             @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
-    ) = MentionsRepository(api, preferences, context)
+    ) = MentionsRepository(api, preferences, context, archiveStore) { authHolder.get().userId }
 
     @Provides @Singleton
     fun provideAuthRepository(
