@@ -103,6 +103,76 @@ open class GithubReleaseSource @Inject constructor() {
     }
 
     /**
+     * Теги релизов из Atom-фида, от самого свежего. Нужны, чтобы искать ассет,
+     * которого нет в релизе установленной версии (см. `CircleIcon.resolve`):
+     * `api.github.com` для этого использовать нельзя — 60 запросов/час на IP.
+     *
+     * @return пустой список при любой ошибке: вызывающий тогда просто не найдёт
+     *   вариант, а не упадёт посреди пользовательского действия.
+     */
+    open fun fetchReleaseTags(): List<String> = try {
+        val request = Request.Builder()
+            .url(LATEST_RELEASE_ATOM_URL)
+            .header("Accept", "application/atom+xml")
+            .header("User-Agent", USER_AGENT)
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) emptyList()
+            else parseAtomTags(response.body?.string().orEmpty())
+        }
+    } catch (e: Exception) {
+        Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "releases.atom tags fetch failed")
+        emptyList()
+    }
+
+    /**
+     * Чистый разбор тегов из Atom-фида: у каждой `<entry>` берётся ссылка вида
+     * `…/releases/tag/<tag>`. Порядок фида (свежие сверху) сохраняется.
+     */
+    fun parseAtomTags(xml: String): List<String> {
+        val parser = try {
+            XmlPullParserFactory.newInstance().apply { isNamespaceAware = false }
+                .newPullParser()
+                .apply { setInput(StringReader(xml)) }
+        } catch (e: Exception) {
+            return emptyList()
+        }
+        val tags = mutableListOf<String>()
+        var entryLink: String? = null
+        var inEntry = false
+        try {
+            var event = parser.eventType
+            while (event != XmlPullParser.END_DOCUMENT) {
+                when (event) {
+                    XmlPullParser.START_TAG -> when (parser.name) {
+                        "entry" -> {
+                            inEntry = true
+                            entryLink = null
+                        }
+                        "link" -> if (inEntry && entryLink == null) {
+                            val rel = parser.getAttributeValue(null, "rel")
+                            if (rel == null || rel == "alternate") {
+                                entryLink = parser.getAttributeValue(null, "href")
+                            }
+                        }
+                    }
+                    XmlPullParser.END_TAG -> if (parser.name == "entry") {
+                        inEntry = false
+                        entryLink?.substringAfter("/releases/tag/", "")
+                            ?.trim()?.trim('/')
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { tags += it }
+                    }
+                }
+                event = parser.next()
+            }
+        } catch (e: Exception) {
+            Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "releases.atom tags parse failed")
+        }
+        return tags
+    }
+
+    /**
      * Чистый разбор Atom-фида релизов GitHub (`releases.atom`). Без сети —
      * тестируемо. Берёт ПЕРВУЮ запись `<entry>` (самый свежий релиз): версию из
      * `<title>` (тег), ссылку из `<link rel="alternate">` (страница релиза),

@@ -72,6 +72,7 @@ class SettingsFragment : BaseSettingFragment() {
     @Inject lateinit var appUpdatePreferences: AppUpdatePreferences
     @Inject lateinit var appUpdateRepository: AppUpdateRepository
     @Inject lateinit var appUpdateScheduler: AppUpdateScheduler
+    @Inject lateinit var circleIcon: CircleIcon
     @Inject lateinit var preferences: SharedPreferences
     @Inject lateinit var dayNightHelper: DayNightHelper
     @Inject lateinit var clipboardHelper: ClipboardHelper
@@ -1042,45 +1043,26 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     /**
-     * Смена кружка = переустановка варианта той же версии (кружок вшит в манифест
-     * APK — см. [CircleIcon]). Скачивает ассет текущего релиза с прогрессом и
-     * открывает системный установщик; тот сам спросит разрешение «установка из
-     * этого источника» и подтверждение обновления.
+     * Смена значка уведомлений = переустановка варианта APK (значок вшит в
+     * манифест — см. [CircleIcon]). Ищет ассет в релизе своей версии, а если там
+     * его нет — в более свежих; во втором случае установка попутно обновит
+     * приложение, поэтому сначала спрашивает. Системный установщик сам запросит
+     * разрешение «установка из этого источника» и подтверждение обновления.
      */
     private fun downloadAndInstallCircleVariant(variantId: String) {
         val context = requireContext()
-        val dp = resources.displayMetrics.density
-        val progress = android.widget.ProgressBar(
-                context, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = true
-            max = 100
-        }
-        val holder = android.widget.LinearLayout(context).apply {
-            val pad = (24 * dp).toInt()
-            setPadding(pad, (16 * dp).toInt(), pad, 0)
-            addView(progress, android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
-        }
-        lateinit var job: kotlinx.coroutines.Job
-        val progressDialog = MaterialAlertDialogBuilder(context)
-                .setTitle(R.string.circle_icon_downloading)
-                .setView(holder)
-                .setCancelable(false)
-                .setNegativeButton(android.R.string.cancel) { _, _ -> job.cancel() }
-                .showWithStyledButtons(compact = false)
-        job = viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                val apk = CircleIcon.download(context, variantId) { fraction ->
-                    if (fraction >= 0f) progress.post {
-                        progress.isIndeterminate = false
-                        progress.progress = (fraction * 100).toInt()
-                    }
-                }
-                progressDialog.dismiss()
-                CircleIcon.install(context, apk)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val resolveJob = coroutineContext[kotlinx.coroutines.Job]
+            val resolveDialog = MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.circle_icon_checking)
+                    .setView(indeterminateProgressView(context))
+                    .setCancelable(false)
+                    .setNegativeButton(android.R.string.cancel) { _, _ -> resolveJob?.cancel() }
+                    .showWithStyledButtons(compact = false)
+            val resolved = try {
+                circleIcon.resolve(context, variantId)
             } catch (e: CircleIcon.AssetMissingException) {
-                progressDialog.dismiss()
+                resolveDialog.dismiss()
                 if (isAdded) {
                     MaterialAlertDialogBuilder(requireContext())
                             .setTitle(R.string.pref_title_circle_icon)
@@ -1089,19 +1071,99 @@ class SettingsFragment : BaseSettingFragment() {
                             .setPositiveButton(android.R.string.ok, null)
                             .showWithStyledButtons(compact = false)
                 }
+                return@launch
             } catch (e: kotlinx.coroutines.CancellationException) {
-                progressDialog.dismiss()
+                resolveDialog.dismiss()
                 throw e
             } catch (e: Exception) {
-                Timber.w(e, "Не удалось скачать вариант кружка %s", variantId)
-                progressDialog.dismiss()
-                if (isAdded) {
-                    showSnackbarAboveSystemBars(
-                            getString(R.string.circle_icon_error_download,
-                                    e.message ?: e.javaClass.simpleName),
-                            Snackbar.LENGTH_LONG)
+                Timber.w(e, "Не удалось найти вариант значка %s", variantId)
+                resolveDialog.dismiss()
+                if (isAdded) showCircleIconError(e)
+                return@launch
+            }
+            resolveDialog.dismiss()
+            if (!isAdded) return@launch
+
+            // Вариант только в свежем релизе: смена значка = ещё и обновление.
+            if (resolved.isUpgrade && !confirmCircleIconUpgrade(resolved.version)) return@launch
+            if (!isAdded) return@launch
+
+            val progress = android.widget.ProgressBar(
+                    context, null, android.R.attr.progressBarStyleHorizontal).apply {
+                isIndeterminate = true
+                max = 100
+            }
+            lateinit var job: kotlinx.coroutines.Job
+            val progressDialog = MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.circle_icon_downloading)
+                    .setView(progressHolder(context, progress))
+                    .setCancelable(false)
+                    .setNegativeButton(android.R.string.cancel) { _, _ -> job.cancel() }
+                    .showWithStyledButtons(compact = false)
+            job = viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val apk = circleIcon.download(context, resolved) { fraction ->
+                        if (fraction >= 0f) progress.post {
+                            progress.isIndeterminate = false
+                            progress.progress = (fraction * 100).toInt()
+                        }
+                    }
+                    progressDialog.dismiss()
+                    CircleIcon.install(context, apk)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    progressDialog.dismiss()
+                    throw e
+                } catch (e: Exception) {
+                    Timber.w(e, "Не удалось скачать вариант значка %s", variantId)
+                    progressDialog.dismiss()
+                    if (isAdded) showCircleIconError(e)
                 }
             }
+        }
+    }
+
+    private fun showCircleIconError(e: Exception) {
+        showSnackbarAboveSystemBars(
+                getString(R.string.circle_icon_error_download,
+                        e.message ?: e.javaClass.simpleName),
+                Snackbar.LENGTH_LONG)
+    }
+
+    /** @return true, если пользователь согласился обновиться до [version]. */
+    private suspend fun confirmCircleIconUpgrade(version: String): Boolean =
+            kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                val dialog = MaterialAlertDialogBuilder(requireContext())
+                        .setTitle(R.string.circle_icon_upgrade_title)
+                        .setMessage(getString(R.string.circle_icon_upgrade_message,
+                                BuildConfig.VERSION_NAME, version))
+                        .setPositiveButton(R.string.circle_icon_upgrade_confirm) { _, _ ->
+                            if (continuation.isActive) continuation.resumeWith(Result.success(true))
+                        }
+                        .setNegativeButton(android.R.string.cancel) { _, _ ->
+                            if (continuation.isActive) continuation.resumeWith(Result.success(false))
+                        }
+                        .setOnCancelListener {
+                            if (continuation.isActive) continuation.resumeWith(Result.success(false))
+                        }
+                        .showWithStyledButtons(compact = false)
+                continuation.invokeOnCancellation { dialog.dismiss() }
+            }
+
+    private fun indeterminateProgressView(context: android.content.Context): android.view.View =
+            progressHolder(context, android.widget.ProgressBar(context).apply { isIndeterminate = true })
+
+    private fun progressHolder(
+            context: android.content.Context,
+            progress: android.widget.ProgressBar,
+    ): android.view.View {
+        val dp = resources.displayMetrics.density
+        return android.widget.LinearLayout(context).apply {
+            gravity = android.view.Gravity.CENTER
+            val pad = (24 * dp).toInt()
+            setPadding(pad, (16 * dp).toInt(), pad, 0)
+            addView(progress, android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
         }
     }
 

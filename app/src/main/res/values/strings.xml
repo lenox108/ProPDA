@@ -812,10 +812,14 @@
     <string name="notification_icon_app_desc">Следует за выбранной иконкой приложения.</string>
     <string name="notification_icon_hint">Настройка изменяет только значок в статус-баре. Android отображает его одним цветом, поэтому различается только форма.</string>
     <string name="pref_title_circle_icon">Иконка уведомлений</string>
-    <string name="circle_icon_hint">Цветную иконку слева в уведомлении Android рисует из значка, вшитого в APK, — сменить её можно только переустановкой. Выбор скачает вариант этой же версии (около 14 МБ) и откроет системную установку поверх: данные и настройки сохранятся, ярлык на рабочем столе не изменится. Иконка обновится после перезагрузки устройства.</string>
+    <string name="circle_icon_hint">Цветную иконку слева в уведомлении Android рисует из значка, вшитого в APK, — сменить её можно только переустановкой. Выбор скачает нужный вариант (около 14 МБ) и откроет системную установку поверх: данные и настройки сохранятся, ярлык на рабочем столе не изменится. Иконка обновится после перезагрузки устройства.</string>
     <string name="circle_icon_current_mark">Текущая иконка</string>
     <string name="circle_icon_summary">Сейчас: %1$s</string>
+    <string name="circle_icon_checking">Поиск варианта…</string>
     <string name="circle_icon_downloading">Скачивание варианта…</string>
+    <string name="circle_icon_upgrade_title">Есть только в новой версии</string>
+    <string name="circle_icon_upgrade_message">Этой иконки нет среди файлов вашей версии %1$s — она есть в версии %2$s. Вместе со сменой иконки приложение обновится до %2$s. Продолжить?</string>
+    <string name="circle_icon_upgrade_confirm">Обновить и сменить</string>
     <string name="circle_icon_same">Этот вариант уже установлен</string>
     <string name="circle_icon_error_not_found">В релизе v%1$s нет вариантов иконки уведомлений. Обновите приложение до свежего релиза и попробуйте снова.</string>
     <string name="circle_icon_error_download">Не удалось скачать вариант: %1$s</string>

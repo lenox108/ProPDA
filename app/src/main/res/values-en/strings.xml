@@ -648,10 +648,14 @@
     <string name="notification_icon_app_desc">Follows the selected app icon.</string>
     <string name="notification_icon_hint">This setting changes only the status bar icon. Android draws it in one colour, so only its shape differs.</string>
     <string name="pref_title_circle_icon">Notification icon</string>
-    <string name="circle_icon_hint">Android draws the coloured icon on the left of a notification from the image baked into the APK — it can only be changed by reinstalling. Picking a variant downloads the same app version (about 14 MB) and opens the system installer on top: data and settings are kept, the home screen icon stays the same. The icon updates after a device reboot.</string>
+    <string name="circle_icon_hint">Android draws the coloured icon on the left of a notification from the image baked into the APK — it can only be changed by reinstalling. Picking a variant downloads the matching app build (about 14 MB) and opens the system installer on top: data and settings are kept, the home screen icon stays the same. The icon updates after a device reboot.</string>
     <string name="circle_icon_current_mark">Current icon</string>
     <string name="circle_icon_summary">Now: %1$s</string>
+    <string name="circle_icon_checking">Looking for the variant…</string>
     <string name="circle_icon_downloading">Downloading variant…</string>
+    <string name="circle_icon_upgrade_title">Only in a newer version</string>
+    <string name="circle_icon_upgrade_message">This icon is not among the files of your version %1$s — it is available in version %2$s. Changing the icon will also update the app to %2$s. Continue?</string>
+    <string name="circle_icon_upgrade_confirm">Update and change</string>
     <string name="circle_icon_same">This variant is already installed</string>
     <string name="circle_icon_error_not_found">Release v%1$s has no notification icon variants. Update the app to the latest release and try again.</string>
     <string name="circle_icon_error_download">Failed to download the variant: %1$s</string>

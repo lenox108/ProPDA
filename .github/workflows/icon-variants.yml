@@ -1,0 +1,92 @@
+# Собирает варианты APK для настройки «Иконка уведомлений» и прикрепляет их к
+# релизу — на стороне GitHub, чтобы 215 МБ не уходило с домашнего интернета.
+#
+# Gradle здесь НЕ нужен: варианты делаются патчем манифеста УЖЕ ОПУБЛИКОВАННОГО
+# APK (см. scripts/make_circle_variants.py и docs/CIRCLE_ICON_RU.md), поэтому
+# они гарантированно совпадают с базовой сборкой релиза, а прогон занимает
+# минуты вместо полной пересборки.
+#
+# ТРЕБУЕТСЯ 4 секрета репозитория (Settings → Secrets and variables → Actions):
+#   PARALLEL_KEYSTORE_BASE64 — `base64 -i signing/forpda-parallel.jks | pbcopy`
+#   PARALLEL_STORE_PASSWORD, PARALLEL_KEY_ALIAS, PARALLEL_KEY_PASSWORD
+# Пока их нет, workflow просто не запускать: он вручную (workflow_dispatch), сам
+# по себе не срабатывает. Помни, что ключ подписи в секретах доступен любому, у
+# кого есть write-доступ к репозиторию.
+name: Icon variants
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза (например v3.3.2)'
+        required: true
+      variants:
+        description: 'Список id через запятую; пусто = все'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  variants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Android build-tools (aapt2/zipalign/apksigner)
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'build-tools;35.0.0'
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PARALLEL_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.PARALLEL_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PARALLEL_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.PARALLEL_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Нет секрета PARALLEL_KEYSTORE_BASE64 — подписать варианты нечем"
+            exit 1
+          fi
+          mkdir -p signing
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > signing/forpda-parallel.jks
+          cat > keystore.parallel.properties <<EOF
+          STORE_FILE=signing/forpda-parallel.jks
+          STORE_PASSWORD=$STORE_PASSWORD
+          KEY_ALIAS=$KEY_ALIAS
+          KEY_PASSWORD=$KEY_PASSWORD
+          EOF
+
+      - name: Download base APK of the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p base
+          # Только базовый ProPDA-X.Y.Z.apk: circle-варианты прошлого прогона не нужны.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'ProPDA-*.apk' --dir base
+          rm -f base/*-circle-*.apk
+          ls -la base
+
+      - name: Build and upload variants
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          VARIANTS: ${{ inputs.variants }}
+        run: |
+          set -euo pipefail
+          apk=$(ls base/ProPDA-*.apk | head -1)
+          args=(--apk "$apk" --upload "$TAG" --repo "$GITHUB_REPOSITORY")
+          if [ -n "$VARIANTS" ]; then
+            args+=(--variants "$VARIANTS")
+          fi
+          python3 scripts/make_circle_variants.py "${args[@]}"
+
+      - name: Wipe signing material
+        if: always()
+        run: rm -rf signing keystore.parallel.properties
