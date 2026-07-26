@@ -320,6 +320,18 @@ class PaginationHelper(private val context: androidx.fragment.app.FragmentActivi
         toolbarPaginationOpaqueUnderlay = underlay
     }
 
+    /**
+     * Переключает автоскрытие шапки на лету (Избранное пиннит её в режиме выбора и в поиске).
+     * Нужен именно сеттер: [syncToolbarPaginationGeometryFromLayout] на КАЖДОМ layout-проходе
+     * AppBar заново применяет флаги из [toolbarPaginationScrollEnabled], поэтому выставленные
+     * снаружи флаги он бы просто затирал.
+     */
+    fun setToolbarScrollEnabled(enabled: Boolean) {
+        if (toolbarPaginationScrollEnabled == enabled) return
+        toolbarPaginationScrollEnabled = enabled
+        toolbarPaginationCollapsing?.let { applyToolbarPaginationScrollFlags(it) }
+    }
+
     private fun applyToolbarPaginationScrollFlags(target: CollapsingToolbarLayout) {
         val params = target.layoutParams as? AppBarLayout.LayoutParams ?: return
         val flags = if (toolbarPaginationScrollEnabled) {

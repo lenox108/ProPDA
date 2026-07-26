@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Лента папок избранного: отдельный ребёнок AppBarLayout (а не вьюха внутри тулбара).
+    AppBarLayout — вертикальный LinearLayout, поэтому строка сама встаёт под шапкой без
+    ручных top-margin'ов, которые пришлось бы синхронизировать со строкой пагинации.
+    Автоскрытие при прокрутке навешивается флагами на этого ребёнка (см. FavoritesFragment).
+-->
+<HorizontalScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/favorites_folder_scroll"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/main_toolbar_accent_surface"
+    android:overScrollMode="never"
+    android:scrollbars="none">
+
+    <com.google.android.material.chip.ChipGroup
+        android:id="@+id/favorites_folder_chips"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingTop="@dimen/dp4"
+        android:paddingBottom="@dimen/dp8"
+        app:chipSpacingHorizontal="@dimen/dp8"
+        app:selectionRequired="true"
+        app:singleLine="true"
+        app:singleSelection="true" />
+</HorizontalScrollView>
