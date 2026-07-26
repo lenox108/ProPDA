@@ -8,6 +8,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
+import forpdateam.ru.forpda.notifications.QmsConversationShortcuts
 import forpdateam.ru.forpda.ui.activities.MainActivity
 
 /**
@@ -53,14 +54,31 @@ object FavoriteShortcuts {
         }
 
         runCatching {
-            if (shortcuts.isEmpty()) {
+            // setDynamicShortcuts заменяет ВЕСЬ динамический пул, а в нём живут ещё и ярлыки
+            // собеседников QMS — без них уведомления выпадают из раздела «Диалоги» шторки.
+            // Поэтому не затираем их, а переносим (сколько влезет в лимит лаунчера).
+            val conversations = ShortcutManagerCompat.getDynamicShortcuts(context)
+                    .filter { QmsConversationShortcuts.isConversationShortcut(it.id) }
+                    .take(conversationSlots(context, shortcuts.size))
+            val merged = shortcuts + conversations
+            if (merged.isEmpty()) {
                 ShortcutManagerCompat.removeAllDynamicShortcuts(context)
             } else {
-                ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
+                ShortcutManagerCompat.setDynamicShortcuts(context, merged)
             }
         }.onFailure { timber.log.Timber.e(it, "FavoriteShortcuts.update failed") }
     }
 
+    private fun conversationSlots(context: Context, used: Int): Int {
+        val max = runCatching { ShortcutManagerCompat.getMaxShortcutCountPerActivity(context) }
+                .getOrDefault(DEFAULT_MAX_SHORTCUTS)
+                .coerceAtLeast(DEFAULT_MAX_SHORTCUTS)
+        return (max - used).coerceAtLeast(0)
+    }
+
     private const val SHORT_LABEL_MAX = 20
     private const val LONG_LABEL_MAX = 40
+
+    /** Гарантия платформы: не меньше 5 динамических ярлыков на активность. */
+    private const val DEFAULT_MAX_SHORTCUTS = 5
 }

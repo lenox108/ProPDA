@@ -543,6 +543,14 @@
     <string name="notification_summary_qms">QMS Chat</string>
     <string name="notification_summary_fav">Favorites</string>
     <string name="notification_summary_comment">Comment</string>
+    <string name="notification_group_title_qms">QMS messages</string>
+    <string name="notification_group_title_fav">Favorite topics</string>
+    <string name="notification_group_title_mention">Mentions</string>
+    <string name="notification_group_title_site">Site comments</string>
+    <plurals name="notification_group_count">
+        <item quantity="one">%d new notification</item>
+        <item quantity="other">%d new notifications</item>
+    </plurals>
     <plurals name="notification_content_qms_count">
         <item quantity="one">%d unread message</item>
         <item quantity="other">%d unread messages</item>

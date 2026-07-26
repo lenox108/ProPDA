@@ -1,21 +1,17 @@
 package forpdateam.ru.forpda.notifications
 
 import android.graphics.Bitmap
-import androidx.core.app.NotificationCompat
 import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 
 /**
- * Smoke test for the style-selector used by [NotificationPublisher.publishStacked].
+ * Smoke test for the per-event pieces of [NotificationPublisher].
  * Runs under Robolectric so the [android.content.Context] is real.
- *
- * See AUDIT-L12.
  */
 @RunWith(RobolectricTestRunner::class)
 class NotificationPublisherStyleTest {
@@ -37,48 +33,23 @@ class NotificationPublisherStyleTest {
     }
 
     @Test
-    fun stackedStyle_picksInboxForFourOrMoreEvents() {
-        val context = RuntimeEnvironment.getApplication()
-        val events = (1..4).map {
-            NotificationEvent(
-                type = NotificationEvent.Type.NEW,
-                source = NotificationEvent.Source.THEME,
-                sourceId = it,
-                sourceTitle = "Topic $it",
-            )
+    fun groupKey_matchesTheChannelOfTheEvent() {
+        val cases = mapOf(
+            NotificationGroups.QMS to NotificationsService.CHANNEL_QMS_ID,
+            NotificationGroups.FAV to NotificationsService.CHANNEL_FAV_ID,
+            NotificationGroups.MENTION to NotificationsService.CHANNEL_MENTION_ID,
+            NotificationGroups.SITE to NotificationsService.CHANNEL_SITE_ID,
+        )
+        for ((group, channel) in cases) {
+            assertEquals(channel, NotificationGroups.channelIdFor(group))
         }
-        val style = NotificationPublisher.stackedStyle(
-            context = context,
-            events = events,
-            title = "4 new",
-            summary = "favorites",
-        )
-        assertTrue(
-            "expected InboxStyle for 4+ events, got ${style::class.java.simpleName}",
-            style is NotificationCompat.InboxStyle
-        )
     }
 
     @Test
-    fun stackedStyle_picksBigTextForSmallStacks() {
-        val context = RuntimeEnvironment.getApplication()
-        val events = (1..3).map {
-            NotificationEvent(
-                type = NotificationEvent.Type.NEW,
-                source = NotificationEvent.Source.THEME,
-                sourceId = it,
-                sourceTitle = "Topic $it",
-            )
-        }
-        val style = NotificationPublisher.stackedStyle(
-            context = context,
-            events = events,
-            title = "3 new",
-            summary = "favorites",
-        )
-        assertTrue(
-            "expected BigTextStyle for < 4 events, got ${style::class.java.simpleName}",
-            style is NotificationCompat.BigTextStyle
-        )
+    fun summaryIds_areDistinctAndNegative() {
+        val ids = NotificationGroups.SUMMARY_IDS
+        assertEquals(ids.size, ids.toSet().size)
+        // Пространство event.notifyId() неотрицательно — сводка не должна в него попадать.
+        assertEquals(emptyList<Int>(), ids.filter { it >= 0 })
     }
 }

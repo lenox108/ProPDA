@@ -145,7 +145,7 @@ class MentionsRepository(
                     forpdateam.ru.forpda.entity.remote.events.NotificationEvent.Type.MENTION,
                     forpdateam.ru.forpda.entity.remote.events.NotificationEvent.Source.THEME
             ).apply { sourceId = topicId }
-            androidx.core.app.NotificationManagerCompat.from(ctx).cancel(event.notifyId())
+            forpdateam.ru.forpda.notifications.NotificationPublisher.cancel(ctx, event)
         }.onFailure { Timber.w(it, "cancelShadeMentionNotification failed") }
     }
 
@@ -155,7 +155,7 @@ class MentionsRepository(
         runCatching {
             val event = forpdateam.ru.forpda.notifications.MentionNotificationMapper.toNotificationEvent(item)
                     ?: return
-            androidx.core.app.NotificationManagerCompat.from(ctx).cancel(event.notifyId())
+            forpdateam.ru.forpda.notifications.NotificationPublisher.cancel(ctx, event)
         }.onFailure { Timber.w(it, "cancelShadeNotificationFor failed") }
     }
 
