@@ -29,6 +29,8 @@ class FavItem : IFavItem {
     var isHidden: Boolean = false
     /** Notifications for this topic are muted locally (device-side mute set). Transient UI flag, not persisted. */
     var isNotifyMuted: Boolean = false
+    /** Имя локальной папки. Заполняется только для результатов поиска (поиск идёт поверх фильтра папок). */
+    var folderTitle: String? = null
     override var desc: String? = null
     override var curatorNick: String? = null
     override var subType: String? = null
@@ -70,6 +72,7 @@ class FavItem : IFavItem {
         inspectorMarkedUnread = (item as? FavItem)?.inspectorMarkedUnread == true
         isHidden = (item as? FavItem)?.isHidden == true
         isNotifyMuted = (item as? FavItem)?.isNotifyMuted == true
+        folderTitle = (item as? FavItem)?.folderTitle
         desc = item.desc
         curatorNick = item.curatorNick
         subType = item.subType

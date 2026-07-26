@@ -4,6 +4,9 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import forpdateam.ru.forpda.entity.db.ForumUserDao
 import forpdateam.ru.forpda.entity.db.ForumUserRoom
+import forpdateam.ru.forpda.entity.db.favorites.FavFolderDao
+import forpdateam.ru.forpda.entity.db.favorites.FavFolderItemRoom
+import forpdateam.ru.forpda.entity.db.favorites.FavFolderRoom
 import forpdateam.ru.forpda.entity.db.favorites.FavItemDao
 import forpdateam.ru.forpda.entity.db.favorites.FavItemRoom
 import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatDao
@@ -26,10 +29,15 @@ import forpdateam.ru.forpda.entity.db.qms.QmsThemesRoom
         QmsThemeRoom::class,
         QmsThemesRoom::class,
         FavItemRoom::class,
+        FavFolderRoom::class,
+        FavFolderItemRoom::class,
         ForumItemFlatRoom::class,
         ForumUserRoom::class
     ],
-    version = 6,
+    // v7..v9 занимали удалённой offline-фичей (см. MIGRATION_7_6/8_6/9_6), поэтому папки
+    // избранного въезжают сразу на v10: иначе устройство, застрявшее на старой v7, совпало бы
+    // номером версии с новой схемой и упало на проверке целостности вместо миграции.
+    version = 10,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -40,6 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun qmsThemeDao(): QmsThemeDao
     abstract fun qmsThemesDao(): QmsThemesDao
     abstract fun favItemDao(): FavItemDao
+    abstract fun favFolderDao(): FavFolderDao
     abstract fun forumItemFlatDao(): ForumItemFlatDao
     abstract fun forumUserDao(): ForumUserDao
 }

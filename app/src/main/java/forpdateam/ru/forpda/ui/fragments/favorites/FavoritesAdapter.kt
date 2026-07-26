@@ -73,7 +73,8 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
                 isClosed = item.isClosed,
                 isNotifyMuted = item.isNotifyMuted,
                 unreadPostCount = item.unreadPostCount,
-                pages = item.pages
+                pages = item.pages,
+                folderTitle = item.folderTitle
         )
 
         /**
@@ -101,7 +102,8 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
             val isClosed: Boolean,
             val isNotifyMuted: Boolean,
             val unreadPostCount: Int,
-            val pages: Int
+            val pages: Int,
+            val folderTitle: String?
     )
 
     private data class SectionShapeKey(
@@ -482,8 +484,16 @@ class FavoritesAdapter : BaseSectionedAdapter<FavItem, BaseSectionedViewHolder<F
             val metadataText = TopicListMetadataFormatter.format(metadataNick, pages)
             binding.topicItemLastNick.text = metadataText
             binding.topicItemDate.text = displayDate(item)
-            if (binding.topicItemDesc.visibility == View.VISIBLE) {
-                binding.topicItemDesc.visibility = View.GONE
+            // Строка описания используется только под имя папки в результатах поиска:
+            // поиск идёт по всему избранному поверх выбранного чипа-фильтра.
+            val folderTitle = item.folderTitle
+            if (folderTitle.isNullOrBlank()) {
+                if (binding.topicItemDesc.visibility == View.VISIBLE) {
+                    binding.topicItemDesc.visibility = View.GONE
+                }
+            } else {
+                binding.topicItemDesc.visibility = View.VISIBLE
+                binding.topicItemDesc.text = folderTitle
             }
             binding.root.contentDescription = buildString {
                 append(item.topicTitle.orEmpty())

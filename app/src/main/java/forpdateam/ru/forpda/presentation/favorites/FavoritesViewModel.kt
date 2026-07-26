@@ -6,6 +6,7 @@ import javax.inject.Inject
 
 import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Utils
+import forpdateam.ru.forpda.entity.app.favorites.FavFolder
 import forpdateam.ru.forpda.entity.remote.favorites.FavData
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import forpdateam.ru.forpda.entity.remote.others.pagination.Pagination
@@ -16,6 +17,7 @@ import forpdateam.ru.forpda.model.interactors.CrossScreenInteractor
 import forpdateam.ru.forpda.model.interactors.theme.ThemePrefetchService
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
+import forpdateam.ru.forpda.model.repository.faviorites.FavoritesFoldersRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoriteMarkReadEntry
 import forpdateam.ru.forpda.model.repository.faviorites.FavoriteMarkReadProgress
@@ -46,6 +48,7 @@ import kotlin.math.ceil
 @OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class FavoritesViewModel @Inject constructor(
         private val favoritesRepository: FavoritesRepository,
+        private val favoritesFoldersRepository: FavoritesFoldersRepository,
         private val eventsRepository: EventsRepository,
         private val listsPreferencesHolder: ListsPreferencesHolder,
         private val crossScreenInteractor: CrossScreenInteractor,
@@ -76,6 +79,10 @@ class FavoritesViewModel @Inject constructor(
     private var hiddenForumIds: Set<Int> = listsPreferencesHolder.getHiddenForumIds()
     // Темы с локально заглушёнными уведомлениями (device-side). Драйвит иконку «уведомления отключены» в строке.
     private var mutedTopicIds: Set<Int> = notificationPreferencesHolder.getMutedTopics()
+    // Локальные папки: список, привязка «тема → папка» и выбранный фильтр (см. FolderSelection).
+    private var folders: List<FavFolder> = emptyList()
+    private var folderAssignments: Map<String, Long> = emptyMap()
+    private var selectedFolder: Long = listsPreferencesHolder.getFavSelectedFolder()
     private var loadAll = listsPreferencesHolder.getFavLoadAll()
     private var unreadTop = listsPreferencesHolder.getUnreadTop()
     private var sorting: Sorting = Sorting(
@@ -116,6 +123,9 @@ class FavoritesViewModel @Inject constructor(
 
     private val _unreadTopFlow = MutableStateFlow(listsPreferencesHolder.getUnreadTop())
     val unreadTopFlow: StateFlow<Boolean> = _unreadTopFlow.asStateFlow()
+
+    private val _foldersState = MutableStateFlow(FavoritesFoldersState(selection = selectedFolder))
+    val foldersState: StateFlow<FavoritesFoldersState> = _foldersState.asStateFlow()
 
     fun start() {
         if (subscriptionsStarted) return
@@ -205,6 +215,35 @@ class FavoritesViewModel @Inject constructor(
             crossScreenInteractor.observeTopic().collect { topicId ->
                 markRead(topicId)
             }
+        }
+
+        scope.launch {
+            favoritesFoldersRepository.folders.collect { list ->
+                folders = list
+                // Папку могли удалить (в т.ч. из другой вкладки) — не оставляем фильтр
+                // указывать в пустоту, иначе список выглядит как «избранное пропало».
+                // Только после первого чтения БД: до него пустой список — это «ещё не знаем»,
+                // и сброс убивал бы выбранную папку на каждом холодном старте.
+                if (favoritesFoldersRepository.isLoaded &&
+                        selectedFolder > 0 &&
+                        list.none { it.id == selectedFolder }) {
+                    applyFolderSelection(FOLDER_ALL)
+                } else {
+                    publishDisplayed()
+                }
+            }
+        }
+
+        scope.launch {
+            favoritesFoldersRepository.assignments.collect {
+                folderAssignments = it
+                publishDisplayed()
+            }
+        }
+
+        scope.launch {
+            runCatching { favoritesFoldersRepository.load() }
+                    .onFailure { errorHandler.handle(it) }
         }
     }
 
@@ -528,7 +567,7 @@ class FavoritesViewModel @Inject constructor(
     }
 
     private fun publishDisplayed() {
-        val all = applyHiddenFlags(filterDisplayedItems())
+        val all = applyHiddenFlags(scopedItems())
         val displayed: List<FavItem>
         val pagination: Pagination
         if (searchQuery.isNotEmpty()) {
@@ -545,8 +584,114 @@ class FavoritesViewModel @Inject constructor(
         }
         _displayedItems.value = displayed
         _pagination.value = pagination
+        publishFoldersState()
         scope.launch { _uiEvents.emit(FavoritesUiEvent.OnShowFavorite(displayed)) }
     }
+
+    /**
+     * Счётчики для чипов считаются по ВСЕМУ избранному (минус скрытое), а не по текущей
+     * странице/папке: иначе цифра на чипе зависела бы от того, где ты сейчас стоишь.
+     */
+    private fun publishFoldersState() {
+        val source = localItems.filterNot { isItemHidden(it) }
+        val totals = HashMap<Long, Int>()
+        val unread = HashMap<Long, Int>()
+        var noFolderTotal = 0
+        var noFolderUnread = 0
+        source.forEach { item ->
+            val isUnread = item.isUnreadForDisplay() && !item.isForum
+            val folderId = folderIdOf(item)
+            if (folderId == null) {
+                noFolderTotal++
+                if (isUnread) noFolderUnread++
+            } else {
+                totals[folderId] = (totals[folderId] ?: 0) + 1
+                if (isUnread) unread[folderId] = (unread[folderId] ?: 0) + 1
+            }
+        }
+        _foldersState.value = FavoritesFoldersState(
+                folders = folders,
+                selection = selectedFolder,
+                totalCount = source.size,
+                totalUnreadCount = source.count { it.isUnreadForDisplay() && !it.isForum },
+                noFolderCount = noFolderTotal,
+                noFolderUnreadCount = noFolderUnread,
+                folderCounts = totals,
+                folderUnreadCounts = unread
+        )
+    }
+
+    /** Элементы после поиска и фильтра по папке; в поиске папка игнорируется (ищем везде). */
+    private fun scopedItems(): List<FavItem> {
+        val items = filterDisplayedItems()
+        if (searchQuery.isNotEmpty()) return items
+        return when (selectedFolder) {
+            FOLDER_ALL -> items
+            FOLDER_NONE -> items.filter { folderIdOf(it) == null }
+            else -> items.filter { folderIdOf(it) == selectedFolder }
+        }
+    }
+
+    private fun folderIdOf(item: FavItem): Long? {
+        if (!FavoritesFoldersRepository.isAssignable(item)) return null
+        return folderAssignments[FavoritesFoldersRepository.targetKey(item)]
+    }
+
+    fun selectFolder(selection: Long) {
+        if (selection == selectedFolder) return
+        applyFolderSelection(selection)
+        scope.launch { _uiEvents.emit(FavoritesUiEvent.ScrollToTop) }
+    }
+
+    private fun applyFolderSelection(selection: Long) {
+        selectedFolder = selection
+        listsPreferencesHolder.setFavSelectedFolder(selection)
+        // Страницы считаются внутри папки, поэтому смена фильтра всегда возвращает на первую.
+        currentSt = 0
+        publishDisplayed()
+    }
+
+    fun createFolder(name: String, onCreated: ((FavFolder) -> Unit)? = null) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        scope.launch {
+            runCatching { favoritesFoldersRepository.createFolder(trimmed) }
+                    .onSuccess { folder -> onCreated?.invoke(folder) }
+                    .onFailure { errorHandler.handle(it) }
+        }
+    }
+
+    fun renameFolder(id: Long, name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        scope.launch {
+            runCatching { favoritesFoldersRepository.renameFolder(id, trimmed) }
+                    .onFailure { errorHandler.handle(it) }
+        }
+    }
+
+    fun deleteFolder(id: Long) {
+        scope.launch {
+            runCatching { favoritesFoldersRepository.deleteFolder(id) }
+                    .onFailure { errorHandler.handle(it) }
+        }
+    }
+
+    /** Перемещение только локальное: на сервере ничего не трогаем, список не перезапрашиваем. */
+    fun moveFavoritesToFolder(items: List<FavItem>, folderId: Long?) {
+        val keys = items.filter { FavoritesFoldersRepository.isAssignable(it) }
+                .map { FavoritesFoldersRepository.targetKey(it) }
+                .distinct()
+        if (keys.isEmpty()) return
+        scope.launch {
+            runCatching { favoritesFoldersRepository.moveToFolder(keys, folderId) }
+                    .onSuccess { _uiEvents.emit(FavoritesUiEvent.OnMovedToFolder(keys.size, folderId)) }
+                    .onFailure { errorHandler.handle(it) }
+        }
+    }
+
+    /** Папка элемента (для галочки в диалоге перемещения). */
+    fun folderOf(item: FavItem): Long? = folderIdOf(item)
 
     /** Нарезает видимые темы на текущую страницу и собирает соответствующий [Pagination]. */
     private fun buildPageAndPagination(visible: List<FavItem>): Pair<List<FavItem>, Pagination> {
@@ -578,9 +723,17 @@ class FavoritesViewModel @Inject constructor(
 
     /** Проставляет транзиентные флаги [FavItem.isHidden] и [FavItem.isNotifyMuted] по текущим наборам id. */
     private fun applyHiddenFlags(list: List<FavItem>): List<FavItem> {
+        val foldersById = folders.associateBy { it.id }
         for (item in list) {
             item.isHidden = isItemHidden(item)
             item.isNotifyMuted = !item.isForum && item.topicId > 0 && mutedTopicIds.contains(item.topicId)
+            // Имя папки показываем только в поиске: он идёт по всему избранному поверх
+            // выбранного чипа, и без пометки непонятно, откуда найденная тема.
+            item.folderTitle = if (searchQuery.isEmpty()) {
+                null
+            } else {
+                folderIdOf(item)?.let { foldersById[it]?.name }
+            }
         }
         return list
     }
@@ -595,7 +748,8 @@ class FavoritesViewModel @Inject constructor(
         }
     }
 
-    private fun currentDisplayedItems(): List<FavItem> = filterDisplayedItems()
+    // «Прочитать всё» работает в границах текущей папки — как и всё остальное на экране.
+    private fun currentDisplayedItems(): List<FavItem> = scopedItems()
 
     private fun itemsForSearch(): List<FavItem> {
         if (loadAll) {
@@ -653,7 +807,26 @@ class FavoritesViewModel @Inject constructor(
                     .distinctBy { item -> item.topicId }
                     .map { item -> FavoriteMarkReadEntry(item.favId, item.topicId) }
                     .toList()
+
+    companion object {
+        /** Чип «Все» — фильтра нет. */
+        const val FOLDER_ALL = -1L
+        /** Чип «Без папки». */
+        const val FOLDER_NONE = 0L
+    }
 }
+
+/** Состояние ленты чипов: сами папки, выбранный фильтр и счётчики (всего / непрочитанных). */
+data class FavoritesFoldersState(
+        val folders: List<FavFolder> = emptyList(),
+        val selection: Long = FavoritesViewModel.FOLDER_ALL,
+        val totalCount: Int = 0,
+        val totalUnreadCount: Int = 0,
+        val noFolderCount: Int = 0,
+        val noFolderUnreadCount: Int = 0,
+        val folderCounts: Map<Long, Int> = emptyMap(),
+        val folderUnreadCounts: Map<Long, Int> = emptyMap()
+)
 
 sealed class FavoritesUiEvent {
     data class InitSorting(val sorting: Sorting) : FavoritesUiEvent()
@@ -667,6 +840,7 @@ sealed class FavoritesUiEvent {
     data class OnToggleMute(val item: FavItem, val nowMuted: Boolean) : FavoritesUiEvent()
     data class OnToggleHidden(val item: FavItem, val nowHidden: Boolean) : FavoritesUiEvent()
     data class OnToggleHatWatch(val item: FavItem, val nowWatched: Boolean) : FavoritesUiEvent()
+    data class OnMovedToFolder(val count: Int, val folderId: Long?) : FavoritesUiEvent()
     data class ShowLoadError(val message: String?) : FavoritesUiEvent()
     object ShowNeedAuth : FavoritesUiEvent()
     object ScrollToTop : FavoritesUiEvent()
