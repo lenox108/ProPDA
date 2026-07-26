@@ -7,6 +7,7 @@ import forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
 import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.repository.history.HistoryRepository
 import forpdateam.ru.forpda.model.repository.history.HistoryUnreadHarvester
+import forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
@@ -17,6 +18,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,7 @@ class HistoryViewModelTest {
     private lateinit var favoritesCache: FavoritesCacheRoom
     private lateinit var historyUnreadHarvester: HistoryUnreadHarvester
     private lateinit var listsPrefs: ListsPreferencesHolder
+    private lateinit var readBoundaryStore: TopicReadBoundaryStore
     private lateinit var router: TabRouter
     private lateinit var linkHandler: ILinkHandler
     private lateinit var errorHandler: IErrorHandler
@@ -59,12 +62,15 @@ class HistoryViewModelTest {
         favoritesCache = mockk(relaxed = true)
         historyUnreadHarvester = mockk(relaxed = true)
         listsPrefs = mockk(relaxed = true)
+        readBoundaryStore = mockk(relaxed = true)
         router = mockk(relaxed = true)
         linkHandler = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
         clipboardHelper = mockk(relaxed = true)
 
         every { historyRepository.observeItems() } returns itemsFlow
+        // По умолчанию границы прочитанного нет → путь фолбэка (старое поведение через linkHandler).
+        every { readBoundaryStore.lastSeenPostId(any()) } returns 0
         // combine() в VM ждёт эмиссию всех источников; отдаём стартовые значения, иначе items не соберутся.
         every { favoritesCache.observeItems() } returns MutableStateFlow(emptyList<FavItem>())
         every { listsPrefs.observeShowDotFlow() } returns flowOf(false)
@@ -76,7 +82,7 @@ class HistoryViewModelTest {
     }
 
     private fun createViewModel(): HistoryViewModel {
-        return HistoryViewModel(historyRepository, favoritesCache, historyUnreadHarvester, listsPrefs, router, linkHandler, errorHandler, clipboardHelper)
+        return HistoryViewModel(historyRepository, favoritesCache, historyUnreadHarvester, listsPrefs, readBoundaryStore, router, linkHandler, errorHandler, clipboardHelper)
     }
 
     private fun makeItem(id: Int, url: String = "https://4pda.to/$id", title: String = "Title $id"): HistoryItem {
@@ -218,7 +224,7 @@ class HistoryViewModelTest {
     }
 
     @Test
-    fun `onItemClick delegates to linkHandler`() = runTest {
+    fun `onItemClick without read boundary falls back to linkHandler`() = runTest {
         coEvery { historyRepository.getHistory() } returns emptyList()
 
         val vm = createViewModel()
@@ -234,6 +240,30 @@ class HistoryViewModelTest {
                     mapOf(Screen.ARG_TITLE to "Test Topic")
             )
         }
+    }
+
+    @Test
+    fun `onItemClick opens findpost at read boundary, ignoring stored url anchor`() = runTest {
+        coEvery { historyRepository.getHistory() } returns emptyList()
+        every { readBoundaryStore.lastSeenPostId(42) } returns 143987654
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        // Сохранённый в истории url несёт позицию ПРОШЛОГО визита — она не должна победить границу.
+        val item = makeItem(42, "https://4pda.to/forum/index.php?showtopic=42&st=1240#entry140000000", "Test Topic")
+        vm.onItemClick(item)
+
+        val screen = slot<Screen>()
+        verify { router.navigateTo(capture(screen)) }
+        val theme = screen.captured as Screen.Theme
+        assertEquals(
+                "https://4pda.to/forum/index.php?showtopic=42&view=findpost&p=143987654",
+                theme.themeUrl
+        )
+        assertEquals("history", theme.topicOpenSource)
+        assertEquals("Test Topic", theme.screenTitle)
+        verify(exactly = 0) { linkHandler.handle(any(), any(), any()) }
     }
 
     @Test
