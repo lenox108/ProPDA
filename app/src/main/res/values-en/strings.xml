@@ -902,6 +902,10 @@
     <string name="smart_nav_end_unavailable">Could not jump to the end of the topic</string>
     <string name="smart_nav_page_input_hint">Page number</string>
     <string name="smart_nav_page_input_invalid">Enter a number from %1$d to %2$d</string>
+    <string name="smart_nav_move_button">Move the button</string>
+    <string name="smart_fab_move_hint">Drag the button where you want it — it snaps to the nearest edge</string>
+    <string name="smart_fab_move_reset">Reset</string>
+    <string name="smart_fab_move_done">Done</string>
     <string name="funny_topics_nodata_title">No topics here yet</string>
     <string name="funny_topics_nodata_desc">Pull to refresh or go back and choose another forum section.</string>
     <string name="funny_topics_error_title">Could not load topics</string>

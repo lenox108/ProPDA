@@ -580,6 +580,10 @@
     <string name="smart_nav_page_input_invalid">Введите номер от %1$d до %2$d</string>
     <string name="smart_nav_hint">Умная кнопка ниже: нажмите для прокрутки вверх/вниз, удерживайте для перехода по страницам темы.</string>
     <string name="smart_nav_hint_never_show">Больше не показывать</string>
+    <string name="smart_nav_move_button">Переместить кнопку</string>
+    <string name="smart_fab_move_hint">Перетащите кнопку в удобное место — она примагнитится к ближнему краю</string>
+    <string name="smart_fab_move_reset">Сбросить</string>
+    <string name="smart_fab_move_done">Готово</string>
 
     <!-- Attachments -->
     <string name="attachments">Вложения</string>
