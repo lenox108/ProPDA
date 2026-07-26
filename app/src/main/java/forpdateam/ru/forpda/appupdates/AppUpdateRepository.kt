@@ -87,13 +87,16 @@ class AppUpdateRepository @Inject constructor(
     }
 
     /**
-     * Ставит первым тот APK, что сохранит выбранный «кружок уведомлений»
+     * Ставит первым тот APK, что сохранит выбранную «иконку уведомлений»
      * (иконку манифеста — см. [CircleIcon]): иначе обновление молча вернуло бы
-     * стандартный кружок. Если вшит базовый вариант, наоборот гарантирует, что
+     * стандартную иконку. Если вшит базовый вариант, наоборот гарантирует, что
      * первым идёт базовый `ProPDA-<версия>.apk`, а не случайный circle-ассет из
-     * JSON-списка. Ссылка на вариант строится по соглашению об именах даже когда
-     * её нет в списке; если релиз собран без вариантов, скачивание даст 404 — с
-     * ним UI и так откатывается на «Открыть тему».
+     * JSON-списка.
+     *
+     * Ссылку на вариант приходится строить по соглашению об именах (Atom-фид
+     * ассетов не отдаёт), поэтому её существование проверяется HEAD-запросом:
+     * релиз, собранный без вариантов, иначе дал бы 404 на кнопке «Скачать» —
+     * то есть новая настройка ломала бы обновление тем, кто ей воспользовался.
      */
     internal fun preferCircleVariant(downloads: List<DownloadLink>): List<DownloadLink> {
         val base = downloads.firstOrNull { CONVENTIONAL_BASE_APK.matches(it.fileName) }
@@ -104,12 +107,16 @@ class AppUpdateRepository @Inject constructor(
         }
         val version = base.fileName.removePrefix("ProPDA-").removeSuffix(".apk")
         val variantName = CircleIcon.assetName(current, version)
-        val variant = downloads.firstOrNull { it.fileName == variantName }
-                ?: DownloadLink(
-                        url = base.url.removeSuffix(base.fileName) + variantName,
-                        fileName = variantName,
-                        sizeBytes = null,
-                )
+        val known = downloads.firstOrNull { it.fileName == variantName }
+        val variant = known ?: DownloadLink(
+                url = base.url.removeSuffix(base.fileName) + variantName,
+                fileName = variantName,
+                sizeBytes = null,
+        ).takeIf { githubSource.assetExists(it.url) }
+        if (variant == null) {
+            Timber.tag(LOG_TAG).i("circle variant %s missing in release, keeping base apk", variantName)
+            return listOf(base) + downloads.filterNot { it === base }
+        }
         return listOf(variant) + downloads.filterNot { it.fileName == variantName }
     }
 

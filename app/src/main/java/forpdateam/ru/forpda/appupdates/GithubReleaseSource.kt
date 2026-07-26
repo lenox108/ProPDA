@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.appupdates
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import timber.log.Timber
 import org.jsoup.parser.Parser
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
@@ -35,6 +36,26 @@ open class GithubReleaseSource @Inject constructor() {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build()
+    }
+
+    /**
+     * Есть ли такой файл в релизе (HEAD). Нужно для ассетов, чьи ссылки строятся
+     * по соглашению об именах, а не берутся из ответа GitHub — иначе кнопка
+     * «Скачать» повела бы на 404 (см. [AppUpdateRepository.preferCircleVariant]).
+     *
+     * При сетевой ошибке возвращает false: лучше предложить заведомо рабочий
+     * базовый APK, чем ссылку, которая может не открыться.
+     */
+    open fun assetExists(url: String): Boolean = try {
+        val request = Request.Builder()
+            .url(url)
+            .head()
+            .header("User-Agent", USER_AGENT)
+            .build()
+        client.newCall(request).execute().use { it.isSuccessful }
+    } catch (e: Exception) {
+        Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "HEAD %s failed", url)
+        false
     }
 
     /**

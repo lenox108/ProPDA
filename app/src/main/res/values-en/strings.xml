@@ -647,13 +647,13 @@
     <string name="notification_icon_app">Match app icon</string>
     <string name="notification_icon_app_desc">Follows the selected app icon.</string>
     <string name="notification_icon_hint">This setting changes only the status bar icon. Android draws it in one colour, so only its shape differs.</string>
-    <string name="pref_title_circle_icon">Notification shade circle</string>
-    <string name="circle_icon_hint">Android draws the coloured circle on the left of a notification from the icon baked into the APK — it can only be changed by reinstalling. Picking a variant downloads the same app version (…11 MB) and opens the system installer on top: data and settings are kept, the home screen icon stays the same. The circle updates after a device reboot.</string>
-    <string name="circle_icon_current_mark">Current circle</string>
+    <string name="pref_title_circle_icon">Notification icon</string>
+    <string name="circle_icon_hint">Android draws the coloured icon on the left of a notification from the image baked into the APK — it can only be changed by reinstalling. Picking a variant downloads the same app version (about 14 MB) and opens the system installer on top: data and settings are kept, the home screen icon stays the same. The icon updates after a device reboot.</string>
+    <string name="circle_icon_current_mark">Current icon</string>
     <string name="circle_icon_summary">Now: %1$s</string>
     <string name="circle_icon_downloading">Downloading variant…</string>
     <string name="circle_icon_same">This variant is already installed</string>
-    <string name="circle_icon_error_not_found">Release v%1$s has no circle variants. Update the app to the latest release and try again.</string>
+    <string name="circle_icon_error_not_found">Release v%1$s has no notification icon variants. Update the app to the latest release and try again.</string>
     <string name="circle_icon_error_download">Failed to download the variant: %1$s</string>
     <string name="notification_qms_me">Me</string>
     <string name="app_icon_minimal_4">Minimal 4</string>
