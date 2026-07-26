@@ -10,7 +10,6 @@ import okio.Buffer
 import okio.BufferedSource
 import okio.ForwardingSource
 import okio.buffer
-
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -64,8 +63,8 @@ class ImageProgressInterceptor : Interceptor {
         val request = chain.request()
         val response = chain.proceed(request)
         val key = request.url.toString()
-        if (!ImageDownloadProgress.isTracked(key)) return response
-        val body = response.body ?: return response
+        val body = response.body
+        if (body == null || !ImageDownloadProgress.isTracked(key)) return response
         return response.newBuilder()
             .body(ProgressResponseBody(key, body))
             .build()
