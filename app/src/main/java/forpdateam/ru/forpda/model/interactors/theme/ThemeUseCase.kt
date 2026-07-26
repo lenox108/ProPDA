@@ -163,6 +163,10 @@ class ThemeUseCase @Inject constructor(
      * рендере первой видимой страницы. Upsert по id темы: повторный заход только поднимает дату.
      */
     suspend fun recordThemeVisit(url: String, page: ThemePage) {
+        // Страница без постов — не тема, а заглушка (404 / «доступ ограничен» / блокировка провайдера
+        // при выключенном VPN). Такой «визит» не состоялся: не поднимаем дату и не создаём запись с
+        // пустым названием (заголовок заглушки уже погашен в [ThemeApi]).
+        if (page.posts.isEmpty()) return
         val topicId = if (page.id > 0) {
             page.id
         } else {

@@ -88,7 +88,9 @@ class ThemeRepository(
             )
             saveUsersBestEffort(page)
             val resolvedTopicId = if (page.id > 0) page.id else extractTopicIdFromUrl(page.url ?: url) ?: 0
-            if (resolvedTopicId > 0) {
+            // Пустая страница = заглушка (404 / блокировка без VPN), а не визит в тему — см.
+            // [ThemeUseCase.recordThemeVisit].
+            if (resolvedTopicId > 0 && page.posts.isNotEmpty()) {
                 historyCache.add(resolvedTopicId, page.url ?: url, page.title)
             }
             cacheKey?.let { key -> pageMemoryCache.put(key, page) }
