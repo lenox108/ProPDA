@@ -105,6 +105,7 @@ class MainViewModel @Inject constructor(
         Preferences.Main.StartupScreen.FORUM -> Screen.Forum()
         Preferences.Main.StartupScreen.REPLIES -> Screen.Mentions()
         Preferences.Main.StartupScreen.QMS -> Screen.QmsContacts()
+        Preferences.Main.StartupScreen.HISTORY -> Screen.History()
         Preferences.Main.StartupScreen.MENU -> Screen.OtherMenu()
     }
 

@@ -1195,6 +1195,7 @@ class SettingsFragment : BaseSettingFragment() {
                     Preferences.Main.StartupScreen.FORUM -> R.string.pref_summary_startup_screen_forum
                     Preferences.Main.StartupScreen.REPLIES -> R.string.pref_summary_startup_screen_replies
                     Preferences.Main.StartupScreen.QMS -> R.string.pref_summary_startup_screen_qms
+                    Preferences.Main.StartupScreen.HISTORY -> R.string.pref_summary_startup_screen_history
                     Preferences.Main.StartupScreen.MENU -> R.string.pref_summary_startup_screen_menu
                     else -> R.string.pref_summary_startup_screen_news
                 }

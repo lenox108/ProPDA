@@ -141,7 +141,7 @@ object Preferences {
         enum class TopicBackBehavior { HISTORY, ORIGIN }
         enum class TopicOpenTarget { FIRST_PAGE, LAST_UNREAD }
         enum class TopicHeaderInitialState { EXPANDED, COLLAPSED }
-        enum class StartupScreen { NEWS, FAVORITES, FORUM, REPLIES, QMS, MENU }
+        enum class StartupScreen { NEWS, FAVORITES, FORUM, REPLIES, QMS, HISTORY, MENU }
     }
 
     object Lists {
