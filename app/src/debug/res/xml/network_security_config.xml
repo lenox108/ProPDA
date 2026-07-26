@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-оверлей: как main-конфиг, плюс cleartext к 10.0.2.2 — локальному
+     серверу хоста эмулятора для E2E-теста смены «кружка уведомлений»
+     (CircleIcon + debuglab-переопределение базового URL ассетов). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">4pda.to</domain>
+        <domain includeSubdomains="true">www.4pda.to</domain>
+    </domain-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain>10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

@@ -34,6 +34,7 @@ import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.common.appicon.AppIconManager
 import forpdateam.ru.forpda.common.appicon.AppIcons
+import forpdateam.ru.forpda.common.appicon.CircleIcon
 import forpdateam.ru.forpda.ui.activities.MainActivity
 import forpdateam.ru.forpda.ui.activities.SettingsActivity
 import androidx.lifecycle.lifecycleScope
@@ -519,6 +520,25 @@ class SettingsFragment : BaseSettingFragment() {
                         )
                     }
                     updateNotificationIconSummary(this)
+                }
+                true
+            }
+        }
+
+        findPreference<Preference>(Preferences.Main.CIRCLE_ICON)?.apply {
+            updateCircleIconSummary(this)
+            setOnPreferenceClickListener {
+                val current = CircleIcon.currentVariant(requireContext()).id
+                forpdateam.ru.forpda.ui.views.dialog.CircleIconPickerDialog.show(
+                        requireContext(),
+                        current,
+                ) { picked ->
+                    if (!isAdded) return@show
+                    if (picked == current) {
+                        showSnackbarAboveSystemBars(R.string.circle_icon_same, Snackbar.LENGTH_SHORT)
+                    } else {
+                        downloadAndInstallCircleVariant(picked)
+                    }
                 }
                 true
             }
@@ -1011,6 +1031,78 @@ class SettingsFragment : BaseSettingFragment() {
      */
     private fun updateAppIconSummary(preference: Preference) {
         preference.summary = getString(AppIconManager.selected(requireContext()).titleRes)
+    }
+
+    /** Сводка «Кружка уведомлений»: вариант из иконки манифеста установленного APK. */
+    private fun updateCircleIconSummary(preference: Preference) {
+        preference.summary = getString(
+                R.string.circle_icon_summary,
+                getString(CircleIcon.currentVariant(requireContext()).titleRes),
+        )
+    }
+
+    /**
+     * Смена кружка = переустановка варианта той же версии (кружок вшит в манифест
+     * APK — см. [CircleIcon]). Скачивает ассет текущего релиза с прогрессом и
+     * открывает системный установщик; тот сам спросит разрешение «установка из
+     * этого источника» и подтверждение обновления.
+     */
+    private fun downloadAndInstallCircleVariant(variantId: String) {
+        val context = requireContext()
+        val dp = resources.displayMetrics.density
+        val progress = android.widget.ProgressBar(
+                context, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            max = 100
+        }
+        val holder = android.widget.LinearLayout(context).apply {
+            val pad = (24 * dp).toInt()
+            setPadding(pad, (16 * dp).toInt(), pad, 0)
+            addView(progress, android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        lateinit var job: kotlinx.coroutines.Job
+        val progressDialog = MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.circle_icon_downloading)
+                .setView(holder)
+                .setCancelable(false)
+                .setNegativeButton(android.R.string.cancel) { _, _ -> job.cancel() }
+                .showWithStyledButtons(compact = false)
+        job = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val apk = CircleIcon.download(context, variantId) { fraction ->
+                    if (fraction >= 0f) progress.post {
+                        progress.isIndeterminate = false
+                        progress.progress = (fraction * 100).toInt()
+                    }
+                }
+                progressDialog.dismiss()
+                CircleIcon.install(context, apk)
+            } catch (e: CircleIcon.AssetMissingException) {
+                progressDialog.dismiss()
+                if (isAdded) {
+                    MaterialAlertDialogBuilder(requireContext())
+                            .setTitle(R.string.pref_title_circle_icon)
+                            .setMessage(getString(
+                                    R.string.circle_icon_error_not_found, BuildConfig.VERSION_NAME))
+                            .setPositiveButton(android.R.string.ok, null)
+                            .showWithStyledButtons(compact = false)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                progressDialog.dismiss()
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Не удалось скачать вариант кружка %s", variantId)
+                progressDialog.dismiss()
+                if (isAdded) {
+                    showSnackbarAboveSystemBars(
+                            getString(R.string.circle_icon_error_download,
+                                    e.message ?: e.javaClass.simpleName),
+                            Snackbar.LENGTH_LONG)
+                }
+            }
+        }
     }
 
     private fun updateAccentSummary(palette: Preferences.Main.AccentPalette) {

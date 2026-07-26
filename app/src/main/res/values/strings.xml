@@ -811,6 +811,14 @@
     <string name="notification_icon_app">Как иконка приложения</string>
     <string name="notification_icon_app_desc">Следует за выбранной иконкой приложения.</string>
     <string name="notification_icon_hint">Настройка изменяет только значок в статус-баре. Android отображает его одним цветом, поэтому различается только форма.</string>
+    <string name="pref_title_circle_icon">Кружок уведомлений в шторке</string>
+    <string name="circle_icon_hint">Цветной кружок слева в уведомлении Android рисует из иконки, вшитой в APK, — сменить её можно только переустановкой. Выбор скачает вариант этой же версии (…11 МБ) и откроет системную установку поверх: данные и настройки сохранятся, ярлык на рабочем столе не изменится. Кружок обновится после перезагрузки устройства.</string>
+    <string name="circle_icon_current_mark">Текущий кружок</string>
+    <string name="circle_icon_summary">Сейчас: %1$s</string>
+    <string name="circle_icon_downloading">Скачивание варианта…</string>
+    <string name="circle_icon_same">Этот вариант уже установлен</string>
+    <string name="circle_icon_error_not_found">В релизе v%1$s нет вариантов кружка. Обновите приложение до свежего релиза и попробуйте снова.</string>
+    <string name="circle_icon_error_download">Не удалось скачать вариант: %1$s</string>
     <string name="notification_qms_me">Я</string>
     <string name="app_icon_minimal_4">Минималистичная 4</string>
     <string name="app_icon_minimal_4_desc">Чистая четвёрка с зелёной точкой</string>

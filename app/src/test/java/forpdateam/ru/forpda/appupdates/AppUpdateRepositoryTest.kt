@@ -91,9 +91,38 @@ class AppUpdateRepositoryTest {
         assertEquals(only.url, chosen?.url)
     }
 
+    @Test
+    fun preferCircleVariant_prependsVariantAssetForNonBakedIcon() {
+        val app = RuntimeEnvironment.getApplication()
+        val original = app.applicationInfo.icon
+        app.applicationInfo.icon = forpdateam.ru.forpda.R.mipmap.ic_launcher_glass_4
+        try {
+            val base = DownloadLink("https://x/dl/v3.0.0/ProPDA-3.0.0.apk", "ProPDA-3.0.0.apk")
+            val result = newRepository().preferCircleVariant(listOf(base))
+            assertEquals(2, result.size)
+            assertEquals("ProPDA-3.0.0-circle-glass_4.apk", result.first().fileName)
+            assertEquals("https://x/dl/v3.0.0/ProPDA-3.0.0-circle-glass_4.apk", result.first().url)
+            assertEquals("ProPDA-3.0.0.apk", result[1].fileName)
+        } finally {
+            app.applicationInfo.icon = original
+        }
+    }
+
+    @Test
+    fun preferCircleVariant_bakedIconPutsBaseAssetFirst() {
+        val links = listOf(
+            DownloadLink("https://x/ProPDA-3.0.0-circle-blue_4.apk", "ProPDA-3.0.0-circle-blue_4.apk"),
+            DownloadLink("https://x/ProPDA-3.0.0.apk", "ProPDA-3.0.0.apk")
+        )
+        val result = newRepository().preferCircleVariant(links)
+        assertEquals("ProPDA-3.0.0.apk", result.first().fileName)
+        assertEquals(2, result.size)
+    }
+
     private fun newRepository(
         source: GithubReleaseSource = FakeGithubReleaseSource(null)
     ): AppUpdateRepository = AppUpdateRepository(
+        context = RuntimeEnvironment.getApplication(),
         preferences = AppUpdatePreferences(
             RuntimeEnvironment.getApplication().getSharedPreferences("app-update-pref-test", Context.MODE_PRIVATE)
         ),

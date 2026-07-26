@@ -26,6 +26,20 @@ class NotifIconLabReceiver : BroadcastReceiver() {
 
     @SuppressLint("MissingPermission")
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.getStringExtra("mode") == "circle_base") {
+            // Переопределение базового URL ассетов кружка (CircleIcon):
+            // -e url http://10.0.2.2:8123/  (пустой url — сброс на GitHub)
+            val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+            val url = intent.getStringExtra("url")
+            prefs.edit().apply {
+                if (url.isNullOrBlank()) {
+                    remove(forpdateam.ru.forpda.common.appicon.CircleIcon.DEBUG_BASE_URL_PREF)
+                } else {
+                    putString(forpdateam.ru.forpda.common.appicon.CircleIcon.DEBUG_BASE_URL_PREF, url)
+                }
+            }.apply()
+            return
+        }
         if (intent.getStringExtra("mode") == "alias") {
             // Переключение launcher-псевдонима: -e enable <FQCN> -e disable <FQCN>
             val pm = context.packageManager

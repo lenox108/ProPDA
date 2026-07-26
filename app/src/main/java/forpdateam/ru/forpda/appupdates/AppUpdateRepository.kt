@@ -1,7 +1,10 @@
 package forpdateam.ru.forpda.appupdates
 
+import android.content.Context
 import android.util.Log
+import dagger.hilt.android.qualifiers.ApplicationContext
 import forpdateam.ru.forpda.BuildConfig
+import forpdateam.ru.forpda.common.appicon.CircleIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -9,6 +12,7 @@ import java.io.IOException
 import javax.inject.Inject
 
 class AppUpdateRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val preferences: AppUpdatePreferences,
     private val githubSource: GithubReleaseSource
 ) {
@@ -58,7 +62,7 @@ class AppUpdateRepository @Inject constructor(
                 // «Скачать» — прямые ссылки на APK из GitHub-релиза (downloads).
                 topicUrl = TOPIC_URL,
                 description = candidate.description,
-                downloads = candidate.downloads
+                downloads = preferCircleVariant(candidate.downloads)
             )
         } else {
             CheckResult.UpToDate(candidate?.version)
@@ -80,6 +84,33 @@ class AppUpdateRepository @Inject constructor(
 
     fun markNotified(version: SemanticVersion) {
         preferences.setLastNotifiedVersion(version.toString())
+    }
+
+    /**
+     * Ставит первым тот APK, что сохранит выбранный «кружок уведомлений»
+     * (иконку манифеста — см. [CircleIcon]): иначе обновление молча вернуло бы
+     * стандартный кружок. Если вшит базовый вариант, наоборот гарантирует, что
+     * первым идёт базовый `ProPDA-<версия>.apk`, а не случайный circle-ассет из
+     * JSON-списка. Ссылка на вариант строится по соглашению об именах даже когда
+     * её нет в списке; если релиз собран без вариантов, скачивание даст 404 — с
+     * ним UI и так откатывается на «Открыть тему».
+     */
+    internal fun preferCircleVariant(downloads: List<DownloadLink>): List<DownloadLink> {
+        val base = downloads.firstOrNull { CONVENTIONAL_BASE_APK.matches(it.fileName) }
+                ?: return downloads
+        val current = CircleIcon.currentVariant(context).id
+        if (current == CircleIcon.BAKED_ID) {
+            return listOf(base) + downloads.filterNot { it === base }
+        }
+        val version = base.fileName.removePrefix("ProPDA-").removeSuffix(".apk")
+        val variantName = CircleIcon.assetName(current, version)
+        val variant = downloads.firstOrNull { it.fileName == variantName }
+                ?: DownloadLink(
+                        url = base.url.removeSuffix(base.fileName) + variantName,
+                        fileName = variantName,
+                        sizeBytes = null,
+                )
+        return listOf(variant) + downloads.filterNot { it.fileName == variantName }
     }
 
     /**
@@ -170,5 +201,8 @@ class AppUpdateRepository @Inject constructor(
         // Тема обсуждения приложения на 4pda — цель кнопки «Открыть».
         const val TOPIC_ID = 1121483
         const val TOPIC_URL = "https://4pda.to/forum/index.php?showtopic=$TOPIC_ID"
+
+        /** Базовый APK релиза по соглашению об именах: `ProPDA-<x.y.z>.apk`. */
+        private val CONVENTIONAL_BASE_APK = Regex("""ProPDA-\d+(?:\.\d+)*\.apk""")
     }
 }
