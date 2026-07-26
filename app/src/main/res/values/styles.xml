@@ -275,6 +275,19 @@
         <item name="colorSurfaceContainerHigh">@color/material_you_amoled_card</item>
         <item name="colorSurfaceContainerHighest">@color/material_you_amoled_card</item>
         <!--
+            «Таблетка» активного таба нижнего бара (bg_tab_active_pill) и прочие
+            потребители colorSecondaryContainer. Роль раньше не пинилась — её
+            отдавал DynamicColors как есть, а dark secondaryContainer в M3 берётся
+            из палитры SECONDARY (system_accent2, цветность ~16). На чистом чёрном
+            AMOLED-полотне таблетка выходила самым насыщенным пятном экрана
+            (жалоба 26.07.2026 «акцент слишком насыщенный»). Пин сохраняет
+            СВЕТЛОТУ системной роли (L*25, замер на API 36), но берёт
+            малоцветный neutral-variant слот — см. material_you_amoled_pill.xml,
+            то есть меняется только цветность. colorOnSecondaryContainer
+            НЕ пиним: динамический тон 90 остаётся контрастной иконкой.
+        -->
+        <item name="colorSecondaryContainer">@color/material_you_amoled_pill</item>
+        <!--
             chrome_canvas_dynamic ЗДЕСЬ НЕ СТАВИТСЯ намеренно: полотно хрома
             (шапка / нижний таббар / фон страниц / ряды пагинации) должно остаться
             чистым чёрным, поэтому ChromeCanvas идёт по статическому пути и

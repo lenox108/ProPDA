@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Material You AMOLED: «таблетка» активного таба нижнего бара и всё остальное,
+    что читает colorSecondaryContainer (bg_tab_active_pill, Compose-роль
+    secondaryContainer).
+
+    Зачем пин: ThemeOverlay.ForPDA.MaterialYouAmoled эту роль не переопределял,
+    поэтому её отдавал DynamicColors как есть — dark secondaryContainer M3 — это
+    палитра SECONDARY (system_accent2, цветность ~16) на тоне 30. На чистом
+    чёрном полотне AMOLED такая таблетка была самым ярким и насыщенным пятном
+    экрана (жалоба 26.07.2026 «акцент слишком насыщенный»).
+
+    Что делаем: берём малоцветный neutral-variant слот (system_neutral2,
+    цветность ~8) — тот же, что и у карточек (material_you_amoled_card) и у
+    тёмного floor'а, — и держим СВЕТЛОТУ ровно такой, какой её отдавала
+    системная роль: замер на эмуляторе API 36 дал dark secondaryContainer
+    #353B4D = L*25 (цветность 12). Отсюда lStar=25: яркость таблетки не
+    меняется ни на шаг, единственное отличие — вдвое меньше цветности. Так
+    пользователю видно ровно то, на что он жаловался, и ничего больше;
+    иерархия тоже цела — таблетка остаётся заметно светлее карточек (25 vs 11).
+
+    Контраст иконки не трогаем: colorOnSecondaryContainer остаётся динамическим
+    (тон 90) — на тоне 30 это по-прежнему светлая иконка с запасом контраста.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@android:color/system_neutral2_700" android:lStar="25" />
+</selector>

@@ -110,10 +110,12 @@
          оттенком обоев и той же светлотой (lStar). -->
     <color name="material_you_dark_floor_base">@color/dark_background_base</color>
     <color name="material_you_dark_floor_card">@color/dark_card_background</color>
-    <!-- Material You AMOLED: default-алиас для API < 31 (Material You там не
-         применяется). На API 31+ перекрывается color-v31/material_you_amoled_card
-         — селектором с оттенком обоев (system_accent2 + lStar). -->
+    <!-- Material You AMOLED: default-алиасы для API < 31 (Material You там не
+         применяется). На API 31+ перекрываются color-v31/ селекторами с оттенком
+         обоев (system_neutral2 + lStar): карточки на L*=11, «таблетка» активного
+         таба на L*=25. -->
     <color name="material_you_amoled_card">@color/amoled_card_background</color>
+    <color name="material_you_amoled_pill">@color/amoled_card_background</color>
     <color name="dark_background_for_cards">#242424</color>
     <!-- Как background_base: без «островов» #1C1C1E под списками и экранами вроде поиска. -->
     <color name="dark_background_for_lists">#121212</color>

@@ -30,7 +30,10 @@ import org.robolectric.annotation.Config
  *
  * 3. С наложенным [R.style.ThemeOverlay_ForPDA_MaterialYouAmoled] (путь AMOLED)
  *    полотно остаётся чистым чёрным, а приподнятые поверхности получают
- *    wallpaper-оттенок с контрактной светлотой L*=11.
+ *    wallpaper-оттенок с контрактной светлотой L*=11. Плюс роль
+ *    `colorSecondaryContainer` («таблетка» активного таба) пинится на
+ *    малоцветный neutral-variant слот, а не остаётся сырым динамическим
+ *    secondary — иначе она снова станет самым насыщенным пятном на чёрном.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = android.app.Application::class)
@@ -133,6 +136,17 @@ class ChromeCanvasTest {
                 11.0,
                 lab[0],
                 0.75,
+        )
+
+        // 3. ТАБЛЕТКА активного таба (colorSecondaryContainer) обязана идти через
+        //    наш приглушённый селектор, а не оставаться сырой динамической ролью:
+        //    dark secondaryContainer M3 — это цветная secondary-палитра, и на
+        //    чёрном полотне она читалась как пересатурированное пятно.
+        assertEquals(
+                "colorSecondaryContainer must be pinned to the muted AMOLED pill selector",
+                activity.resources.getColor(R.color.material_you_amoled_pill, activity.theme),
+                activity.getColorFromAttr(
+                        com.google.android.material.R.attr.colorSecondaryContainer),
         )
     }
 }
