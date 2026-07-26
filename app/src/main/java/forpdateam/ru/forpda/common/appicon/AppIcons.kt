@@ -1,18 +1,15 @@
 package forpdateam.ru.forpda.common.appicon
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.util.LruCache
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.annotation.StyleRes
-import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.app.NotificationCompat
-import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.IconCompat
+import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.Preferences
+import timber.log.Timber
 
 /**
  * Один вариант иконки приложения.
@@ -227,69 +224,45 @@ object AppIcons {
      *  * [NOTIFICATION_ICON_APP] — силуэт иконки, выбранной для приложения;
      *  * id варианта — силуэт этого варианта.
      *
-     * Monochrome-слой годится статус-бару по природе (белый рисунок на прозрачном,
-     * система берёт только альфу и красит сама), но у него adaptive-поля: знак
-     * занимает ~68% холста и в статус-баре выходил бы на треть меньше соседних
-     * глифов. Поэтому альфу обрезаем по видимым границам и отдаём bitmap.
+     * Варианты передаются именно как скомпилированные drawable-ресурсы.
+     * Android 16 принимает bitmap в поле smallIcon уведомления, но не выводит
+     * такой значок в статус-баре. Цвет ресурса система всё равно заменяет сама,
+     * используя его альфа-канал как маску.
      */
-    fun notificationSmallIcon(context: Context, @DrawableRes eventGlyphRes: Int): IconCompat =
-            when (val value = notificationIconValue(context)) {
-                NOTIFICATION_ICON_EVENT -> IconCompat.createWithResource(context, eventGlyphRes)
-                NOTIFICATION_ICON_APP -> silhouette(context, AppIconManager.selected(context))
-                else -> variants.firstOrNull { it.id == value }?.let { silhouette(context, it) }
-                        // Вариант удалили из сборки — не гадаем, возвращаем штатный глиф.
-                        ?: IconCompat.createWithResource(context, eventGlyphRes)
+    fun notificationSmallIcon(context: Context, @DrawableRes eventGlyphRes: Int): IconCompat {
+        val value = notificationIconValue(context)
+        val (icon, source) = when (value) {
+            NOTIFICATION_ICON_EVENT ->
+                IconCompat.createWithResource(context, eventGlyphRes) to
+                    "event:${resourceName(context, eventGlyphRes)}"
+            NOTIFICATION_ICON_APP -> AppIconManager.selected(context).let { variant ->
+                silhouette(context, variant) to "app:${variant.id}"
             }
+            else -> variants.firstOrNull { it.id == value }?.let { variant ->
+                silhouette(context, variant) to "variant:${variant.id}"
+            }
+                // Вариант удалили из сборки — не гадаем, возвращаем штатный глиф.
+                ?: (IconCompat.createWithResource(context, eventGlyphRes) to
+                    "fallback:${resourceName(context, eventGlyphRes)}")
+        }
+        if (BuildConfig.DEBUG) {
+            Timber.tag(NOTIFICATION_ICON_LOG_TAG).d(
+                "resolved value=%s source=%s type=%d eventRes=0x%08x",
+                value,
+                source,
+                icon.type,
+                eventGlyphRes,
+            )
+        }
+        return icon
+    }
+
+    private fun resourceName(context: Context, @DrawableRes res: Int): String =
+        runCatching { context.resources.getResourceEntryName(res) }
+            .getOrDefault("0x${res.toString(16)}")
 
     private fun silhouette(context: Context, variant: AppIconVariant): IconCompat =
-            runCatching {
-                val bitmap = synchronized(notificationGlyphCache) {
-                    notificationGlyphCache.get(variant.monochromeRes)
-                            ?: croppedGlyph(context, variant.monochromeRes).also {
-                                notificationGlyphCache.put(variant.monochromeRes, it)
-                            }
-                }
-                IconCompat.createWithBitmap(bitmap)
-            }
-                    // Не удалось отрисовать — некритично: покажем силуэт с полями.
-                    .getOrElse { IconCompat.createWithResource(context, variant.monochromeRes) }
-
-    /** Не рендерим и не сканируем один и тот же силуэт при каждом новом уведомлении. */
-    private val notificationGlyphCache = LruCache<Int, Bitmap>(8)
-
-    /** Рендер силуэта и обрезка альфы по видимым границам (в квадрат, с полем 8%). */
-    private fun croppedGlyph(context: Context, @DrawableRes res: Int): Bitmap {
-        val size = 192
-        val full = createBitmap(size, size)
-        val drawable = requireNotNull(AppCompatResources.getDrawable(context, res))
-        drawable.setBounds(0, 0, size, size)
-        drawable.draw(Canvas(full))
-
-        val pixels = IntArray(size * size)
-        full.getPixels(pixels, 0, size, 0, 0, size, size)
-        var left = size; var top = size; var right = -1; var bottom = -1
-        for (y in 0 until size) {
-            for (x in 0 until size) {
-                if (pixels[y * size + x] ushr 24 > 16) {
-                    if (x < left) left = x
-                    if (x > right) right = x
-                    if (y < top) top = y
-                    if (y > bottom) bottom = y
-                }
-            }
-        }
-        if (right < left) return full // пустой силуэт — отдаём как есть
-
-        // Квадрат вокруг знака + небольшое поле, не выходя за холст.
-        val side = maxOf(right - left + 1, bottom - top + 1)
-        val pad = (side * 0.08f).toInt()
-        val box = (side + 2 * pad).coerceAtMost(size)
-        val cx = (left + right) / 2
-        val cy = (top + bottom) / 2
-        val x = (cx - box / 2).coerceIn(0, size - box)
-        val y = (cy - box / 2).coerceIn(0, size - box)
-        return Bitmap.createBitmap(full, x, y, box, box)
-    }
+        IconCompat.createWithResource(context, variant.monochromeRes)
 }
 
 /** Ставит выбранный small icon статус-бара. */
@@ -297,5 +270,15 @@ fun NotificationCompat.Builder.applySelectedNotificationIcon(
         context: Context,
         @DrawableRes eventGlyphRes: Int,
 ): NotificationCompat.Builder = apply {
-    setSmallIcon(AppIcons.notificationSmallIcon(context, eventGlyphRes))
+    val icon = AppIcons.notificationSmallIcon(context, eventGlyphRes)
+    setSmallIcon(icon)
+    if (BuildConfig.DEBUG) {
+        Timber.tag(NOTIFICATION_ICON_LOG_TAG).d(
+            "applied type=%d eventRes=0x%08x",
+            icon.type,
+            eventGlyphRes,
+        )
+    }
 }
+
+private const val NOTIFICATION_ICON_LOG_TAG = "NotificationIcon"

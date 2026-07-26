@@ -39,14 +39,15 @@ class NotificationIconSelectionTest {
     }
 
     @Test
-    fun `specific launcher variant becomes bitmap silhouette`() {
+    fun `specific launcher variant uses its monochrome resource`() {
         preferences.edit()
                 .putString(Preferences.Main.NOTIFICATION_ICON, "pixel_4")
                 .commit()
 
         val icon = AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_qms)
 
-        assertEquals(IconCompat.TYPE_BITMAP, icon.type)
+        assertEquals(IconCompat.TYPE_RESOURCE, icon.type)
+        assertEquals(R.drawable.ic_launcher_pixel_4_monochrome, icon.resId)
     }
 
     @Test
@@ -61,7 +62,8 @@ class NotificationIconSelectionTest {
 
         val icon = AppIcons.notificationSmallIcon(context, R.drawable.ic_notify_qms)
 
-        assertEquals(IconCompat.TYPE_BITMAP, icon.type)
+        assertEquals(IconCompat.TYPE_RESOURCE, icon.type)
+        assertEquals(R.drawable.ic_launcher_droid_4_monochrome, icon.resId)
     }
 
     @Test

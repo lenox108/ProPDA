@@ -508,7 +508,16 @@ class SettingsFragment : BaseSettingFragment() {
                         AppIcons.notificationIconValue(requireContext()),
                 ) { picked ->
                     if (!isAdded) return@show
+                    val previous = AppIcons.notificationIconValue(requireContext())
                     prefs.edit().putString(Preferences.Main.NOTIFICATION_ICON, picked).apply()
+                    if (BuildConfig.DEBUG) {
+                        Timber.tag("NotificationIcon").d(
+                            "preference changed previous=%s picked=%s stored=%s",
+                            previous,
+                            picked,
+                            AppIcons.notificationIconValue(requireContext()),
+                        )
+                    }
                     updateNotificationIconSummary(this)
                 }
                 true
