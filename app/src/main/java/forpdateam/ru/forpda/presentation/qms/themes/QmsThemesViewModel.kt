@@ -133,14 +133,14 @@ class QmsThemesViewModel @Inject constructor(
 
     private fun getNick(): String? = currentData?.nick
 
-    fun openChat() {
-        val userId = getUserId()
-        val data = currentData ?: return
-        val themeId = data.themes.firstOrNull()?.id?.takeIf { it > 0 } ?: return
-        router.replaceScreen(Screen.QmsChat().apply {
-            this.userId = userId
-            this.themeId = themeId
-            themeTitle = data.themes.firstOrNull()?.name
+    /**
+     * FAB на списке диалогов пользователя — создание НОВОЙ темы с ним.
+     * themeId намеренно не задаём: чат открывается в режиме [QmsChatViewModel.MODE_CREATING],
+     * ник подставляется и блокируется, пользователь вводит только заголовок и текст.
+     */
+    fun openChatCreator() {
+        router.navigateTo(Screen.QmsChat().apply {
+            userId = getUserId()
             userNick = getNick()
             avatarUrl = this@QmsThemesViewModel.avatarUrl
         })

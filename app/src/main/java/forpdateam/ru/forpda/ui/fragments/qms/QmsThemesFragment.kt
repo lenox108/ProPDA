@@ -67,7 +67,7 @@ class QmsThemesFragment : RecyclerFragment(), BaseAdapter.OnItemClickListener<Qm
         recyclerView.layoutManager = LinearLayoutManager(context)
 
         fab.setImageDrawable(requireContext().getVecDrawable(R.drawable.ic_fab_create))
-        fab.setOnClickListener { viewModel.openChat() }
+        fab.setOnClickListener { viewModel.openChatCreator() }
         fab.visibility = View.VISIBLE
 
         dialogMenu.apply {
