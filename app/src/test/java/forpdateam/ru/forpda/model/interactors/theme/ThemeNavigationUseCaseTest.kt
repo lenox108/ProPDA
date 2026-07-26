@@ -59,6 +59,22 @@ class ThemeNavigationUseCaseTest {
     }
 
     @Test
+    fun `openPostMentions should search current topic content for post id`() {
+        val url = slot<String>()
+
+        navigationUseCase.openPostMentions(forumId = 10, topicId = 20, postId = 123456)
+
+        verify { linkHandler.handle(capture(url), router) }
+        val settings = SearchSettings.parseSettings(url.captured)
+        assertEquals("123456", settings.query)
+        assertEquals(SearchSettings.RESULT_POSTS.first, settings.result)
+        assertEquals(SearchSettings.SOURCE_CONTENT.first, settings.source)
+        assertEquals(SearchSettings.SUB_FORUMS_FALSE, settings.subforums)
+        assertEquals(listOf("10"), settings.forums)
+        assertEquals(listOf("20"), settings.topics)
+    }
+
+    @Test
     fun `openSearchUserMessages should use user id without emoji nick parameter`() {
         val url = slot<String>()
 

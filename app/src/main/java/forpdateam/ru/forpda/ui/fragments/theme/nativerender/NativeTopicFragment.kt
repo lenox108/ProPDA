@@ -2900,8 +2900,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * The «⋮» post menu (parity with the WebView showPostMenu): reply / quote / copy-link / share /
-     * author profile / report / edit / delete. Rendered as a solid MaterialAlertDialog list.
+     * The «⋮» post menu (parity with the WebView showPostMenu): reply / quote / copy-link /
+     * post mentions / share / report / edit / delete. Rendered as a solid MaterialAlertDialog list.
      */
     override fun onPostMenu(item: NativePostItem) {
         val postUrl = "https://4pda.to/forum/index.php?showtopic=$pageTopicId&view=findpost&p=${item.postId}"
@@ -2914,6 +2914,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         as? android.content.ClipboardManager
                 cm?.setPrimaryClip(android.content.ClipData.newPlainText("post", postUrl))
                 Toast.makeText(requireContext(), "Ссылка скопирована", Toast.LENGTH_SHORT).show()
+            })
+            add("Упоминания поста" to {
+                navigationUseCase.openPostMentions(pageForumId, item.topicId, item.postId)
             })
             add("Поделиться ссылкой" to {
                 runCatching {

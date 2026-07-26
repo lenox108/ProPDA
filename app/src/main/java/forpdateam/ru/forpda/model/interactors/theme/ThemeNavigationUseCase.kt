@@ -99,6 +99,24 @@ class ThemeNavigationUseCase @Inject constructor(
         }.toUrl(), router)
     }
 
+    /**
+     * Opens posts in the current topic that link back to [postId].
+     *
+     * Forum replies/quotes contain the source post id in their findpost link, so the legacy 4PDA
+     * content search can be used as the post-mentions lookup.
+     */
+    fun openPostMentions(forumId: Int, topicId: Int, postId: Int) {
+        if (topicId <= 0 || postId <= 0) return
+        linkHandler.handle(SearchSettings().apply {
+            if (forumId > 0) addForum(forumId.toString())
+            addTopic(topicId.toString())
+            source = SearchSettings.SOURCE_CONTENT.first
+            query = postId.toString()
+            result = SearchSettings.RESULT_POSTS.first
+            subforums = SearchSettings.SUB_FORUMS_FALSE
+        }.toUrl(), router)
+    }
+
     fun openSearchUserTopics(nick: String, userId: Int = 0) {
         linkHandler.handle(SearchSettings().apply {
             source = SearchSettings.SOURCE_ALL.first
