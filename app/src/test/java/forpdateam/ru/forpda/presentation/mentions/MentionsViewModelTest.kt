@@ -2,8 +2,10 @@ package forpdateam.ru.forpda.presentation.mentions
 
 import android.content.SharedPreferences
 import forpdateam.ru.forpda.common.ClipboardHelper
+import forpdateam.ru.forpda.entity.app.profile.IUserHolder
 import forpdateam.ru.forpda.entity.remote.mentions.MentionItem
 import forpdateam.ru.forpda.entity.remote.mentions.MentionsData
+import forpdateam.ru.forpda.entity.remote.search.SearchSettings
 import forpdateam.ru.forpda.model.CountersHolder
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
@@ -15,6 +17,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.coVerify
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,6 +44,7 @@ class MentionsViewModelTest {
     private lateinit var clipboardHelper: ClipboardHelper
     private lateinit var preferences: SharedPreferences
     private lateinit var countersHolder: CountersHolder
+    private lateinit var userHolder: IUserHolder
 
     @Before
     fun setUp() {
@@ -56,6 +60,7 @@ class MentionsViewModelTest {
             every { edit() } returns mockk(relaxed = true)
         }
         countersHolder = CountersHolder(preferences)
+        userHolder = mockk(relaxed = true)
     }
 
     @After
@@ -64,7 +69,16 @@ class MentionsViewModelTest {
     }
 
     private fun createViewModel(): MentionsViewModel {
-        return MentionsViewModel(mentionsRepository, favoritesRepository, countersHolder, router, linkHandler, errorHandler, clipboardHelper)
+        return MentionsViewModel(
+                mentionsRepository,
+                favoritesRepository,
+                countersHolder,
+                router,
+                linkHandler,
+                errorHandler,
+                clipboardHelper,
+                userHolder,
+        )
     }
 
     @Test
@@ -187,39 +201,21 @@ class MentionsViewModelTest {
     }
 
     @Test
-    fun `my answers mode syncs and loads local archive`() = runTest {
-        coEvery { mentionsRepository.syncMentionArchive() } returns Unit
-        coEvery { mentionsRepository.getArchivedMentions(0) } returns MentionsData().apply {
-            items.add(MentionItem().apply {
-                title = "Сохранённый ответ"
-                state = MentionItem.STATE_READ
-                type = MentionItem.TYPE_TOPIC
-                link = "https://4pda.to/forum/index.php?showtopic=1&view=findpost&p=42"
-            })
-        }
-
+    fun `find old answers opens forum content search for current nick`() {
+        every { userHolder.currentNick() } returns "⚡ Тест User ⚡"
+        val url = slot<String>()
         val viewModel = createViewModel()
-        viewModel.setArchiveMode(true)
-        advanceUntilIdle()
+        viewModel.findOldAnswers()
 
-        assertEquals(true, viewModel.archiveMode.value)
-        coVerify { mentionsRepository.syncMentionArchive() }
-        coVerify { mentionsRepository.getArchivedMentions(0) }
-    }
-
-    @Test
-    fun `archive pagination does not resync server`() = runTest {
-        coEvery { mentionsRepository.syncMentionArchive() } returns Unit
-        coEvery { mentionsRepository.getArchivedMentions(any()) } returns MentionsData()
-        val viewModel = createViewModel()
-        viewModel.setArchiveMode(true)
-        advanceUntilIdle()
-
-        viewModel.selectPage(20)
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { mentionsRepository.syncMentionArchive() }
-        coVerify { mentionsRepository.getArchivedMentions(20) }
+        verify { linkHandler.handle(capture(url), router) }
+        val settings = SearchSettings.parseSettings(url.captured)
+        assertEquals("Тест User", settings.query)
+        assertEquals(SearchSettings.RESOURCE_FORUM.first, settings.resourceType)
+        assertEquals(SearchSettings.RESULT_POSTS.first, settings.result)
+        assertEquals(SearchSettings.SORT_DD.first, settings.sort)
+        assertEquals(SearchSettings.SOURCE_CONTENT.first, settings.source)
+        assertEquals(SearchSettings.SUB_FORUMS_TRUE, settings.subforums)
+        assertEquals("", settings.nick)
     }
 
     @Test
@@ -231,15 +227,15 @@ class MentionsViewModelTest {
             title = "Topic"
             link = "https://4pda.to/forum/index.php?showtopic=1&view=findpost&p=42"
         }
-        // changed=false: ключ уже прочитан (или нет реального совпадения) — бейдж не трогаем.
-        // Саму нажатую строку всё равно гасим, в том числе когда она пришла из локального архива.
+        // changed=false: ключ уже прочитан (или нет реального совпадения) — строку и бейдж не трогаем,
+        // но переход по ссылке всё равно происходит.
         coEvery { mentionsRepository.markMentionItemRead(item) } returns
                 (false to MentionsRepository.UnreadMentionsSnapshot(2, listOf(42, 43)))
 
         createViewModel().onItemClick(item)
         advanceUntilIdle()
 
-        assertEquals(MentionItem.STATE_READ, item.state)
+        assertEquals(MentionItem.STATE_UNREAD, item.state)
         assertEquals(2, countersHolder.get().mentions)
         verify { linkHandler.handle(item.link, router, any()) }
         coVerify { mentionsRepository.markMentionItemRead(item) }

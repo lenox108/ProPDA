@@ -3,9 +3,7 @@ package forpdateam.ru.forpda.model.repository.mentions
 import android.content.SharedPreferences
 import forpdateam.ru.forpda.entity.remote.mentions.MentionItem
 import forpdateam.ru.forpda.entity.remote.mentions.MentionsData
-import forpdateam.ru.forpda.model.data.cache.mentions.MentionsArchiveStore
 import forpdateam.ru.forpda.model.data.remote.api.mentions.MentionsApi
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -312,35 +310,6 @@ class MentionsRepositoryTest {
         assertEquals(1, snapshot.unreadCount)
         assertEquals(listOf(42), snapshot.topicPostIds)
         verify(exactly = 0) { mentionsApi.getMentions(20) }
-    }
-
-    @Test
-    fun syncMentionArchive_fetchesEveryServerPageThenUsesRefreshInterval() = runTest {
-        val preferences = InMemorySharedPreferences()
-        val archiveStore = mockk<MentionsArchiveStore>(relaxed = true)
-        val api = mockk<MentionsApi> {
-            every { getMentions(0) } returns MentionsData().apply {
-                pagination = pagination(current = 1, all = 3)
-                items.add(mention(1, 40, MentionItem.STATE_READ))
-            }
-            every { getMentions(20) } returns MentionsData().apply {
-                pagination = pagination(current = 2, all = 3)
-                items.add(mention(1, 20, MentionItem.STATE_READ))
-            }
-            every { getMentions(40) } returns MentionsData().apply {
-                pagination = pagination(current = 3, all = 3)
-                items.add(mention(1, 1, MentionItem.STATE_READ))
-            }
-        }
-        val repository = MentionsRepository(api, preferences, archiveStore = archiveStore) { 10 }
-
-        repository.syncMentionArchive()
-        repository.syncMentionArchive()
-
-        verify(exactly = 2) { api.getMentions(0) }
-        verify(exactly = 1) { api.getMentions(20) }
-        verify(exactly = 1) { api.getMentions(40) }
-        coVerify(exactly = 4) { archiveStore.archive(10, any()) }
     }
 
     @Test

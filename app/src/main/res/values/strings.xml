@@ -1156,11 +1156,8 @@
     <string name="funny_history_nodata_desc">Тут будет отображаться история просмотра тем</string>
     <string name="funny_mentions_nodata_title">Нет упоминаний</string>
     <string name="funny_mentions_nodata_desc">Тут будут отображаться упоминания в темах и комментариях</string>
-    <string name="mentions_archive_title">Мои ответы</string>
-    <string name="mentions_show_archive">Мои ответы</string>
-    <string name="mentions_show_recent">Ответы за 14 дней</string>
-    <string name="funny_mentions_archive_nodata_title">Архив ответов пока пуст</string>
-    <string name="funny_mentions_archive_nodata_desc">Здесь на этом устройстве будут сохраняться найденные ответы и упоминания. Сервер позволяет добавить историю только за последние 14 дней.</string>
+    <string name="mentions_find_old_answers">Найти старые ответы</string>
+    <string name="mentions_old_answers_nick_unavailable">Не удалось определить ваш ник. Откройте профиль и повторите попытку.</string>
     <string name="funny_mentions_error_title">Не удалось загрузить ответы</string>
     <string name="funny_mentions_error_desc">Проверьте подключение и повторите загрузку.</string>
     <string name="funny_notes_nodata_title">Нет закладок</string>

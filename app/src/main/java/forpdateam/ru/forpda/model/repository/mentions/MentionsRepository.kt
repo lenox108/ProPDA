@@ -5,7 +5,6 @@ import android.os.SystemClock
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.entity.remote.mentions.MentionItem
 import forpdateam.ru.forpda.entity.remote.mentions.MentionsData
-import forpdateam.ru.forpda.model.data.cache.mentions.MentionsArchiveStore
 import forpdateam.ru.forpda.model.data.remote.api.mentions.MentionsApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,10 +16,8 @@ import timber.log.Timber
 
 class MentionsRepository(
         private val mentionsApi: MentionsApi,
-        private val preferences: SharedPreferences? = null,
-        private val context: android.content.Context? = null,
-        private val archiveStore: MentionsArchiveStore? = null,
-        private val accountIdProvider: () -> Int = { 0 },
+        preferences: SharedPreferences? = null,
+        private val context: android.content.Context? = null
 ) {
 
     private val stateLock = Any()
@@ -91,53 +88,15 @@ class MentionsRepository(
         }
         logPerf("read-state sync", syncStartedAt, "page=$page items=${result.items.size}")
         logPerf("network refresh", startedAt, "page=$page netItems=${data.items.size} shown=${result.items.size}")
-        archiveStore?.archive(currentAccountId(), result.items)
         result
     }
 
-    /**
-     * Возвращает накопительный локальный архив. В отличие от act=mentions, записи здесь не
-     * удаляются через 14 дней. Архив раздельный для каждого forum member id.
-     */
-    suspend fun getArchivedMentions(page: Int): MentionsData = withContext(Dispatchers.IO) {
-        archiveStore?.getPage(currentAccountId(), page) ?: MentionsData()
-    }
-
-    /**
-     * Забирает все доступные серверные страницы перед первым показом архива и периодически
-     * повторяет полную синхронизацию. Между полными проходами первая страница всё равно
-     * архивируется каждым обычным refresh экрана и фоновым опросом упоминаний.
-     */
-    suspend fun syncMentionArchive(forceFull: Boolean = false) = withContext(Dispatchers.IO) {
-        val accountId = currentAccountId()
-        if (accountId <= 0 || archiveStore == null) return@withContext
-        val firstPage = refreshMentions(0)
-        val now = System.currentTimeMillis()
-        val lastFullSync = preferences?.getLong(archiveFullSyncKey(accountId), 0L) ?: 0L
-        val needsFullSync = forceFull || now - lastFullSync >= ARCHIVE_FULL_SYNC_INTERVAL_MS
-        if (!needsFullSync) return@withContext
-
-        val perPage = firstPage.pagination.perPage.coerceAtLeast(1)
-        val totalPages = firstPage.pagination.all.coerceAtLeast(1)
-        for (pageIndex in 1 until totalPages) {
-            refreshMentions(pageIndex * perPage)
-        }
-        preferences
-                ?.edit()
-                ?.putLong(archiveFullSyncKey(accountId), now)
-                ?.apply()
-    }
-
     suspend fun markPostsRead(topicId: Int, postIds: Collection<Int>): Boolean = withContext(Dispatchers.IO) {
-        val result = markAnswersReadInternal(topicId, postIds)
-        archiveStore?.markTopicPostsRead(currentAccountId(), topicId, postIds)
-        result.changed
+        markAnswersReadInternal(topicId, postIds).changed
     }
 
     suspend fun markAnswerRead(topicId: Int, postId: Int): Pair<Boolean, UnreadMentionsSnapshot> = withContext(Dispatchers.IO) {
-        val result = markAnswersReadInternal(topicId, listOf(postId))
-        archiveStore?.markTopicPostsRead(currentAccountId(), topicId, listOf(postId))
-        result.let { it.changed to it.snapshot }
+        markAnswersReadInternal(topicId, listOf(postId)).let { it.changed to it.snapshot }
     }
 
     suspend fun markMentionItemRead(item: MentionItem): Pair<Boolean, UnreadMentionsSnapshot> = withContext(Dispatchers.IO) {
@@ -150,11 +109,10 @@ class MentionsRepository(
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
                 ?: return@withContext false to getUnreadSnapshotInternalLocked()
-        val result = MentionReadKey.fromLink(normalizedLink)?.let { key ->
-            markAnswersReadInternal(key.topicId, listOf(key.postId)).let { it.changed to it.snapshot }
-        } ?: markMentionKeyRead("${item.type}:$normalizedLink")
-        archiveStore?.markRead(currentAccountId(), item)
-        result
+        MentionReadKey.fromLink(normalizedLink)?.let { key ->
+            return@withContext markAnswersReadInternal(key.topicId, listOf(key.postId)).let { it.changed to it.snapshot }
+        }
+        markMentionKeyRead("${item.type}:$normalizedLink")
     }
 
     suspend fun markPostsReadAndRecomputeUnreadSnapshot(
@@ -167,7 +125,6 @@ class MentionsRepository(
         if (result.changed) {
             cancelShadeMentionNotification(topicId)
         }
-        archiveStore?.markTopicPostsRead(currentAccountId(), topicId, postIds)
         result.let { it.changed to it.snapshot }
     }
 
@@ -236,7 +193,6 @@ class MentionsRepository(
                 markCachedItemReadLocked(key)
             }
         }
-        archiveStore?.markTopicPostsRead(currentAccountId(), topicId, listOf(postId))
         getUnreadSnapshotInternalLocked()
     }
 
@@ -279,7 +235,6 @@ class MentionsRepository(
                     locallyUnreadKeys.mapNotNull { MentionReadKey.fromValue(it)?.postId }
             ))
         }
-        archiveStore?.markTopicReadUpTo(currentAccountId(), topicId, upToPostId)
         logPerf("read-event clear", SystemClock.uptimeMillis(), "topic=$topicId upTo=$upToPostId changed=${result.changed} unread=${result.snapshot.unreadCount}")
         result.changed to result.snapshot
     }
@@ -318,8 +273,6 @@ class MentionsRepository(
             unreadEventsStore.saveKeys(unreadFromEventsKeys)
             logPerf("server reconcile", SystemClock.uptimeMillis(), "server=0 cleared=${keysToRead.size}")
             true
-        }.also { cleared ->
-            if (cleared) archiveStore?.markAllRead(currentAccountId())
         }
     }
 
@@ -481,9 +434,6 @@ class MentionsRepository(
     }
 
     companion object {
-        private const val ARCHIVE_FULL_SYNC_INTERVAL_MS = 6L * 60L * 60L * 1_000L
-        private const val ARCHIVE_FULL_SYNC_KEY_PREFIX = "mentions_archive_full_sync_"
-
         private fun extractMentionPostId(link: String): Int? {
             return Regex("""(?i)(?:[?&](?:p|pid)=|[/#]entry)(\d+)""")
                     .find(link.replace("&amp;", "&"))
@@ -497,12 +447,7 @@ class MentionsRepository(
                 Timber.d("MentionsPerf %s took %dms %s", label, SystemClock.uptimeMillis() - startedAt, extra)
             }
         }
-
-        private fun archiveFullSyncKey(accountId: Int): String =
-                "$ARCHIVE_FULL_SYNC_KEY_PREFIX$accountId"
     }
-
-    private fun currentAccountId(): Int = accountIdProvider().coerceAtLeast(0)
 
     private data class MarkReadResult(
             val changed: Boolean,

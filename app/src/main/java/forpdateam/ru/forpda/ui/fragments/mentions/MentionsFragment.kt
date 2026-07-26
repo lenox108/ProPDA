@@ -50,7 +50,6 @@ class MentionsFragment : RecyclerFragment() {
     private lateinit var dialogMenu: DynamicDialogMenu<MentionsFragment, MentionItem>
     private lateinit var adapter: MentionsAdapter
     private lateinit var paginationHelper: PaginationHelper
-    private var archiveModeMenuItem: MenuItem? = null
 
     private val presenter: MentionsViewModel by viewModels()
 
@@ -62,7 +61,8 @@ class MentionsFragment : RecyclerFragment() {
         }
 
         override fun onSelectedPage(pageNumber: Int) {
-            presenter.selectPage(pageNumber)
+            presenter.setCurrentSt(pageNumber)
+            presenter.getMentions()
         }
     }
 
@@ -80,7 +80,6 @@ class MentionsFragment : RecyclerFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configuration.defaultTitle = getString(R.string.fragment_title_mentions)
-        setTabTitle(getString(R.string.fragment_title_mentions))
         Timber.d("MentionsFragment created")
     }
 
@@ -119,7 +118,7 @@ class MentionsFragment : RecyclerFragment() {
         recyclerView.adapter = adapter
 
         adapter.setOnItemClickListener(adapterListener)
-        refreshLayout.setOnRefreshListener { presenter.refresh() }
+        refreshLayout.setOnRefreshListener { presenter.getMentions() }
         paginationHelper.setListener(paginationListener)
 
         observeViewModel()
@@ -149,18 +148,6 @@ class MentionsFragment : RecyclerFragment() {
                     }
                 }
                 launch {
-                    presenter.archiveMode.collect { archiveMode ->
-                        setTitle(getString(
-                                if (archiveMode) R.string.mentions_archive_title
-                                else R.string.fragment_title_mentions
-                        ))
-                        archiveModeMenuItem?.setTitle(
-                                if (archiveMode) R.string.mentions_show_recent
-                                else R.string.mentions_show_archive
-                        )
-                    }
-                }
-                launch {
                     presenter.uiEvents.collect { event ->
                         handleUiEvent(event)
                     }
@@ -184,32 +171,24 @@ class MentionsFragment : RecyclerFragment() {
             is MentionsUiEvent.ShowAddFavoritesDialog -> showAddFavoritesDialog(event.id)
             is MentionsUiEvent.OnAddToFavorite -> showSnackbar(if (event.result) getString(R.string.favorites_added) else getString(R.string.error_occurred))
             is MentionsUiEvent.ShowLoadError -> showLoadError(event.message)
+            MentionsUiEvent.OldAnswersSearchUnavailable ->
+                showSnackbar(getString(R.string.mentions_old_answers_nick_unavailable))
         }
     }
 
     private fun showMentions(data: MentionsData) {
         contentController.hideContent(ContentController.TAG_ERROR)
-        val archiveMode = presenter.archiveMode.value
-        val emptyTag = if (archiveMode) TAG_ARCHIVE_NO_DATA else ContentController.TAG_NO_DATA
-        val otherEmptyTag = if (archiveMode) ContentController.TAG_NO_DATA else TAG_ARCHIVE_NO_DATA
-        contentController.hideContent(otherEmptyTag)
         if (data.items.isEmpty()) {
-            if (!contentController.contains(emptyTag)) {
+            if (!contentController.contains(ContentController.TAG_NO_DATA)) {
                 val funnyContent = FunnyContent(requireContext())
                         .setImage(R.drawable.ic_notifications)
-                        .setTitle(
-                                if (archiveMode) R.string.funny_mentions_archive_nodata_title
-                                else R.string.funny_mentions_nodata_title
-                        )
-                        .setDesc(
-                                if (archiveMode) R.string.funny_mentions_archive_nodata_desc
-                                else R.string.funny_mentions_nodata_desc
-                        )
-                contentController.addContent(funnyContent, emptyTag)
+                        .setTitle(R.string.funny_mentions_nodata_title)
+                        .setDesc(R.string.funny_mentions_nodata_desc)
+                contentController.addContent(funnyContent, ContentController.TAG_NO_DATA)
             }
-            contentController.showContent(emptyTag)
+            contentController.showContent(ContentController.TAG_NO_DATA)
         } else {
-            contentController.hideContent(emptyTag)
+            contentController.hideContent(ContentController.TAG_NO_DATA)
         }
 
         val diffStartedAt = SystemClock.uptimeMillis()
@@ -232,13 +211,12 @@ class MentionsFragment : RecyclerFragment() {
             return
         }
         contentController.hideContent(ContentController.TAG_NO_DATA)
-        contentController.hideContent(TAG_ARCHIVE_NO_DATA)
         if (!contentController.contains(ContentController.TAG_ERROR)) {
             val funnyContent = FunnyContent(requireContext())
                     .setImage(R.drawable.ic_notifications)
                     .setTitle(R.string.funny_mentions_error_title)
                     .setDesc(R.string.funny_mentions_error_desc)
-                    .addAction(R.string.retry) { presenter.refresh() }
+                    .addAction(R.string.retry) { presenter.getMentions() }
             contentController.addContent(funnyContent, ContentController.TAG_ERROR)
         }
         contentController.showContent(ContentController.TAG_ERROR)
@@ -248,13 +226,10 @@ class MentionsFragment : RecyclerFragment() {
 
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
-        archiveModeMenuItem = menu.add(
-                if (presenter.archiveMode.value) R.string.mentions_show_recent
-                else R.string.mentions_show_archive
-        ).apply {
+        menu.add(R.string.mentions_find_old_answers).apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
             setOnMenuItemClickListener {
-                presenter.setArchiveMode(!presenter.archiveMode.value)
+                presenter.findOldAnswers()
                 true
             }
         }
@@ -283,9 +258,5 @@ class MentionsFragment : RecyclerFragment() {
                     presenter.addTopicToFavorite(id, FavoritesApi.SUB_TYPES[which])
                 }
                 .showWithStyledButtons()
-    }
-
-    private companion object {
-        const val TAG_ARCHIVE_NO_DATA = "MENTIONS_ARCHIVE_NO_DATA"
     }
 }
