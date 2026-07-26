@@ -7,6 +7,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import forpdateam.ru.forpda.client.Client
+import forpdateam.ru.forpda.client.proxy.BlockedTopicRegistry
+import forpdateam.ru.forpda.client.proxy.ProxySettings
 import forpdateam.ru.forpda.common.di.AppScope
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.CountersHolder
@@ -53,6 +55,13 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
+    /** Настройки прокси и список «тем через прокси» — общие для сетевого клиента, ThemeApi и экрана настроек. */
+    @Provides @Singleton
+    fun provideProxySettings(@ApplicationContext context: Context) = ProxySettings(context)
+
+    @Provides @Singleton
+    fun provideBlockedTopicRegistry(@ApplicationContext context: Context) = BlockedTopicRegistry(context)
+
     @Provides
     @Singleton
     fun provideWebClient(
@@ -62,7 +71,18 @@ object NetworkModule {
             blocklistGuard: forpdateam.ru.forpda.blocklist.BlocklistGuard,
             userHolder: forpdateam.ru.forpda.entity.app.profile.IUserHolder,
             @AppScope appScope: CoroutineScope,
-    ): IWebClient = Client(context, authHolder, countersHolder, blocklistGuard, userHolder, appScope)
+            proxySettings: ProxySettings,
+            blockedTopics: BlockedTopicRegistry,
+    ): IWebClient = Client(
+            context,
+            authHolder,
+            countersHolder,
+            blocklistGuard,
+            userHolder,
+            appScope,
+            proxySettings,
+            blockedTopics,
+    )
 
     // region Parsers (concrete classes; @Binds only works for interface→impl binding)
     @Provides @Singleton fun provideAuthParser(pp: IPatternProvider) = AuthParser(pp)
@@ -88,7 +108,12 @@ object NetworkModule {
     // region APIs
     @Provides @Singleton fun provideAuthApi(@ApplicationContext context: Context, wc: IWebClient, p: AuthParser) = AuthApi(context, wc, p)
     @Provides @Singleton fun provideDevDbApi(wc: IWebClient, p: DevDbParser) = DevDbApi(wc, p)
-    @Provides @Singleton fun provideThemeApi(wc: IWebClient, p: ThemeParser, authHolder: AuthHolder) = ThemeApi(wc, p, authHolder)
+    @Provides @Singleton fun provideThemeApi(
+            wc: IWebClient,
+            p: ThemeParser,
+            authHolder: AuthHolder,
+            blockedTopics: BlockedTopicRegistry,
+    ) = ThemeApi(wc, p, authHolder, blockedTopics)
     @Provides @Singleton fun provideEditPostApi(wc: IWebClient, ta: ThemeApi, ep: EditPostParser, ap: AttachmentsParser, tp: ThemeParser) = EditPostApi(wc, ta, ep, ap, tp)
     @Provides @Singleton fun provideEventsApi(wc: IWebClient) = NotificationEventsApi(wc)
     @Provides @Singleton fun provideFavoritesApi(wc: IWebClient, p: FavoritesParser) = FavoritesApi(wc, p)

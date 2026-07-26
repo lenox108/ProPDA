@@ -22,8 +22,14 @@ import forpdateam.ru.forpda.client.interceptors.CacheControlInterceptor
 import forpdateam.ru.forpda.client.interceptors.ErrorInterceptor
 import forpdateam.ru.forpda.client.interceptors.ImageLoadingInterceptor
 import forpdateam.ru.forpda.client.interceptors.RedirectFragmentInterceptor
+import forpdateam.ru.forpda.client.proxy.BlockedTopicRegistry
+import forpdateam.ru.forpda.client.proxy.ProxyConfig
+import forpdateam.ru.forpda.client.proxy.ProxyRouter
+import forpdateam.ru.forpda.client.proxy.ProxySettings
+import forpdateam.ru.forpda.client.proxy.ProxyType
 import okhttp3.Cache
 import okhttp3.Cookie
+import okhttp3.Credentials
 import okhttp3.CookieJar
 import okhttp3.ConnectionPool
 import okhttp3.FormBody
@@ -60,6 +66,8 @@ class Client(
     private val blocklistGuard: BlocklistGuard,
     private val userHolder: forpdateam.ru.forpda.entity.app.profile.IUserHolder,
     @forpdateam.ru.forpda.common.di.AppScope private val appScope: kotlinx.coroutines.CoroutineScope,
+    private val proxySettingsStore: ProxySettings,
+    private val blockedTopicsStore: BlockedTopicRegistry,
 ) : IWebClient {
 
     /**
@@ -87,6 +95,7 @@ class Client(
 
     companion object {
         private val LOG_TAG = Client::class.java.simpleName
+        private const val PROXY_LOG_TAG = "ProxyRoute"
 
         /** Актуальный мобильный Chrome на Android — ближе к WebView и к типичному браузеру пользователя. */
         private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
@@ -163,6 +172,148 @@ class Client(
             .build()
     }
 
+    // region Прокси
+    /**
+     * Часть тем 4PDA закрыта для российских IP: origin отдаёт заглушку, и вернуть контент может
+     * только запрос с другого адреса. Системный VPN для этого не обязателен — достаточно пустить
+     * через прокси трафик одного приложения (а в режиме «только заблокированные темы» — вообще
+     * только их). Прокси-клиенты собираются из [client]/[desktopClient] через `newBuilder()`,
+     * поэтому у них ТОТ ЖЕ cookieJar: сессия общая для обоих маршрутов, иначе через прокси мы
+     * приходили бы гостем и закрытая тема всё равно не открылась бы.
+     *
+     * Клиент пересобирается при смене настроек ([ProxySettings.version]) — без перезапуска приложения.
+     */
+    private class ProxyClients(
+        val configVersion: Int,
+        val config: ProxyConfig,
+        val mobile: OkHttpClient,
+        val desktop: OkHttpClient,
+    )
+
+    @Volatile
+    private var proxyClients: ProxyClients? = null
+
+    /** Список тем, ходящих через прокси — для экрана настроек и автоповтора в ThemeApi. */
+    fun blockedTopicRegistry(): BlockedTopicRegistry = blockedTopicsStore
+
+    fun proxySettings(): ProxySettings = proxySettingsStore
+
+    override fun isProxyConfigured(): Boolean = proxySettingsStore.config() != null
+
+    private fun currentProxyClients(): ProxyClients? {
+        val config = proxySettingsStore.config() ?: return null
+        val version = proxySettingsStore.version
+        proxyClients?.let { if (it.configVersion == version && it.config == config) return it }
+        return synchronized(this) {
+            proxyClients?.let { if (it.configVersion == version && it.config == config) return it }
+            val built = ProxyClients(
+                configVersion = version,
+                config = config,
+                mobile = buildProxyClient(client, config),
+                desktop = buildProxyClient(desktopClient, config),
+            )
+            proxyClients = built
+            Timber.tag(PROXY_LOG_TAG).i("proxy client rebuilt: %s", config.describe())
+            built
+        }
+    }
+
+    private fun buildProxyClient(base: OkHttpClient, config: ProxyConfig): OkHttpClient =
+        base.newBuilder()
+            .proxy(config.toJavaProxy())
+            .apply {
+                if (config.hasCredentials) {
+                    // SOCKS5 с логином/паролем OkHttp сам не умеет — только HTTP-прокси через
+                    // proxyAuthenticator. Для SOCKS ставим глобальный Authenticator (JDK-путь).
+                    if (config.type == ProxyType.HTTP) {
+                        proxyAuthenticator { _, response ->
+                            // Не зацикливаемся: если сервер снова просит авторизацию — сдаёмся.
+                            if (response.request.header("Proxy-Authorization") != null) return@proxyAuthenticator null
+                            response.request.newBuilder()
+                                .header("Proxy-Authorization", Credentials.basic(config.login, config.password))
+                                .build()
+                        }
+                    } else {
+                        installSocksAuthenticator(config)
+                    }
+                }
+            }
+            .build()
+
+    /**
+     * SOCKS5-авторизация в Java идёт через глобальный [java.net.Authenticator] — другого способа
+     * передать логин/пароль в SOCKS-хендшейк у OkHttp нет. Ставим один раз на процесс и отвечаем
+     * только на запросы от прокси (RequestorType.PROXY), чтобы не подсунуть эти данные сайту.
+     */
+    private fun installSocksAuthenticator(config: ProxyConfig) {
+        java.net.Authenticator.setDefault(object : java.net.Authenticator() {
+            override fun getPasswordAuthentication(): java.net.PasswordAuthentication? {
+                if (requestorType != RequestorType.PROXY) return null
+                if (!requestingHost.equals(config.host, ignoreCase = true)) return null
+                return java.net.PasswordAuthentication(config.login, config.password.toCharArray())
+            }
+        })
+    }
+
+    /**
+     * Клиент для этого запроса. Решение принимает [ProxyRouter]: прямой маршрут по умолчанию,
+     * прокси — по флагу запроса, по режиму «весь трафик» или потому, что тема в списке закрытых.
+     */
+    private fun clientFor(request: NetworkRequest, desktop: Boolean): OkHttpClient {
+        val direct = if (desktop) desktopClient else client
+        val proxied = currentProxyClients() ?: return direct
+        val useProxy = ProxyRouter.shouldUseProxy(
+            hasConfig = true,
+            mode = proxySettingsStore.mode,
+            forceProxy = request.forceProxy,
+            url = request.url,
+            formTopicId = ProxyRouter.extractTopicIdFromForm(request.formHeaders),
+            isTopicBlocked = { blockedTopicsStore.isBlocked(it) },
+        )
+        if (!useProxy) return direct
+        if (BuildConfig.DEBUG) Timber.tag(PROXY_LOG_TAG).d("via proxy: %s", request.url)
+        return if (desktop) proxied.desktop else proxied.mobile
+    }
+
+    /**
+     * Проба прокси для кнопки «Проверить» в настройках: запрашивает лёгкую страницу форума ЧЕРЕЗ
+     * указанный прокси, не трогая сохранённые настройки и не меняя маршрут остальных запросов.
+     */
+    fun probeProxy(config: ProxyConfig): ProxyProbeResult {
+        val started = System.currentTimeMillis()
+        return try {
+            val probeClient = buildProxyClient(client, config).newBuilder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .cache(null) // проба должна реально сходить в сеть, а не ответить из кэша
+                .build()
+            val request = Request.Builder().url(IWebClient.COUNTERS_REFRESH_URL).build()
+            probeClient.newCall(request).execute().use { response ->
+                ProxyProbeResult(
+                    ok = response.isSuccessful,
+                    code = response.code,
+                    elapsedMs = System.currentTimeMillis() - started,
+                )
+            }
+        } catch (e: Exception) {
+            Timber.tag(PROXY_LOG_TAG).w(e, "proxy probe failed")
+            ProxyProbeResult(
+                ok = false,
+                code = 0,
+                elapsedMs = System.currentTimeMillis() - started,
+                error = e.message ?: e.javaClass.simpleName,
+            )
+        }
+    }
+
+    data class ProxyProbeResult(
+        val ok: Boolean,
+        val code: Int,
+        val elapsedMs: Long,
+        val error: String? = null,
+    )
+    // endregion
+
     private val desktopClient: OkHttpClient by lazy {
         client.newBuilder()
             .connectTimeout(20, TimeUnit.SECONDS)
@@ -229,7 +380,7 @@ class Client(
         val response = NetworkResponse(netRequest.url)
         var okHttpResponse: Response? = null
         try {
-            okHttpResponse = client.newCall(requestBuilder.build()).execute()
+            okHttpResponse = clientFor(netRequest, desktop = false).newCall(requestBuilder.build()).execute()
             response.code = okHttpResponse.code
             response.message = okHttpResponse.message
             response.redirect = okHttpResponse.request.url.toString()
@@ -256,12 +407,12 @@ class Client(
 
     @Throws(Exception::class)
     override fun request(request: NetworkRequest): NetworkResponse {
-        return request(request, client, null)
+        return request(request, clientFor(request, desktop = false), null)
     }
 
     @Throws(Exception::class)
     override fun request(request: NetworkRequest, progressListener: IWebClient.ProgressListener?): NetworkResponse {
-        return request(request, client, progressListener)
+        return request(request, clientFor(request, desktop = false), progressListener)
     }
 
     @Throws(Exception::class)
@@ -274,7 +425,7 @@ class Client(
                 .addHeader("User-Agent", DESKTOP_USER_AGENT)
                 .build()
         }
-        return request(desktopRequest, desktopClient, null)
+        return request(desktopRequest, clientFor(desktopRequest, desktop = true), null)
     }
 
     @Throws(Exception::class)

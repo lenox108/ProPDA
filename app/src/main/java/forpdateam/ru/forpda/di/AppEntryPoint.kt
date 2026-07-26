@@ -34,6 +34,7 @@ interface AppEntryPoint {
     fun otherPreferencesHolder(): OtherPreferencesHolder
     fun router(): TabRouter
     fun webClient(): IWebClient
+    fun proxySettings(): forpdateam.ru.forpda.client.proxy.ProxySettings
     fun networkState(): NetworkStateProvider
     fun templateManager(): TemplateManager
     fun menuRepository(): MenuRepository

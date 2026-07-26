@@ -79,6 +79,11 @@ class GoogleCaptchaFragment : TabFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // Cloudflare выдаёт челлендж на IP, с которого пришёл запрос, и полученный cf_clearance
+        // годится только для него. Значит проверку надо решать ТЕМ ЖЕ маршрутом — включаем прокси в
+        // WebView даже в режиме «только заблокированные темы». Строго после ExtendedWebView.init(),
+        // который в этом режиме override снимает.
+        forpdateam.ru.forpda.client.proxy.WebViewProxy.applyForced(requireContext())
         setSubtitle("Это из-за VPN/Proxy и т.д.")
         webView.webViewClient = CaptchaWebViewClient()
         webView.loadDataWithBaseURL("https://4pda.to/forum/", content, "text/html", "utf-8", null)

@@ -388,6 +388,17 @@
 
     <PreferenceCategory
         android:layout="@layout/preference_category_custom"
+        android:title="@string/pref_title_proxy">
+        <Preference
+            android:key="open_proxy_settings"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_proxy"
+            android:title="@string/pref_title_proxy"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
         android:title="@string/pref_title_about">
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"

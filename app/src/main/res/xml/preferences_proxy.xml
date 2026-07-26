@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:title="@string/pref_title_proxy">
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom_top"
+        android:title="@string/pref_title_proxy_connection">
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="false"
+            android:key="net.proxy.enabled"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_proxy_enabled"
+            android:title="@string/pref_title_proxy_enabled"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:defaultValue="socks5"
+            android:dependency="net.proxy.enabled"
+            android:entries="@array/proxy_type_titles"
+            android:entryValues="@array/proxy_type_values"
+            android:key="net.proxy.type"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_proxy_type"
+            app:iconSpaceReserved="false"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            android:dependency="net.proxy.enabled"
+            android:key="net.proxy.host"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_proxy_host"
+            app:iconSpaceReserved="false" />
+
+        <EditTextPreference
+            android:dependency="net.proxy.enabled"
+            android:key="net.proxy.port"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_proxy_port"
+            app:iconSpaceReserved="false" />
+
+        <EditTextPreference
+            android:dependency="net.proxy.enabled"
+            android:key="net.proxy.login"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_proxy_login"
+            app:iconSpaceReserved="false" />
+
+        <EditTextPreference
+            android:dependency="net.proxy.enabled"
+            android:key="net.proxy.password"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_proxy_password"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="net.proxy.test"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_proxy_test"
+            android:title="@string/pref_title_proxy_test"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/pref_title_proxy_scope">
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
+            android:dependency="net.proxy.enabled"
+            android:key="net.proxy.only_blocked"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_proxy_only_blocked"
+            android:title="@string/pref_title_proxy_only_blocked"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="net.proxy.blocked_list"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_proxy_blocked_list"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/pref_title_proxy_safety">
+
+        <Preference
+            android:key="net.proxy.safety_note"
+            android:layout="@layout/preference_custom"
+            android:selectable="false"
+            android:summary="@string/pref_summary_proxy_safety"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

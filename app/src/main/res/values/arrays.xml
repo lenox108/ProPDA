@@ -216,4 +216,12 @@
         <item>13</item>
         <item>14</item>
     </string-array>
+    <string-array name="proxy_type_titles">
+        <item>SOCKS5</item>
+        <item>HTTP</item>
+    </string-array>
+    <string-array name="proxy_type_values">
+        <item>socks5</item>
+        <item>http</item>
+    </string-array>
 </resources>
