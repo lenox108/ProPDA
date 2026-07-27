@@ -34,19 +34,26 @@ class HistoryCacheRoom(private val historyItemDao: HistoryItemDao) {
         val existingItem = historyItemDao.getHistoryById(id)
         val unixTime = System.currentTimeMillis()
         val date = dateFormat.format(Date(unixTime))
+        val freshTitle = title?.trim().orEmpty()
 
         if (existingItem == null) {
             val newItem = HistoryItemRoom(
                 id = id,
                 url = url ?: "",
-                title = title ?: "",
+                title = freshTitle,
                 date = date,
                 unixTime = unixTime
             )
             historyItemDao.insertHistory(newItem)
         } else {
+            // Название обновляем на КАЖДОМ визите (раньше апдейт нёс только url/дату). Тема могла быть
+            // переименована, а первый заход мог сохранить мусор — например, заголовок страницы-заглушки
+            // при закрытой без VPN теме; тогда неверное имя оставалось в «Истории» навсегда, даже после
+            // успешного захода. Пустое название старое не затирает: глубокие страницы отдают HTML без
+            // заголовка темы.
             val updatedItem = existingItem.copy(
                 url = url ?: existingItem.url,
+                title = freshTitle.ifEmpty { existingItem.title },
                 unixTime = unixTime,
                 date = date
             )

@@ -24,6 +24,7 @@ import forpdateam.ru.forpda.ui.ContrastApplier
 import forpdateam.ru.forpda.ui.MaterialYouApplier
 import forpdateam.ru.forpda.ui.fragments.settings.NotificationsSettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.ForumSettingsFragment
+import forpdateam.ru.forpda.ui.fragments.settings.ProxySettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.SettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.BaseSettingFragment
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
@@ -125,6 +126,7 @@ class SettingsActivity : AppCompatActivity() {
         val fragment: PreferenceFragmentCompat = when (intent?.getStringExtra(ARG_NEW_PREFERENCE_SCREEN)) {
             NotificationsSettingsFragment.PREFERENCE_SCREEN_NAME -> NotificationsSettingsFragment()
             ForumSettingsFragment.PREFERENCE_SCREEN_NAME -> ForumSettingsFragment()
+            ProxySettingsFragment.PREFERENCE_SCREEN_NAME -> ProxySettingsFragment()
             else -> SettingsFragment()
         }
 

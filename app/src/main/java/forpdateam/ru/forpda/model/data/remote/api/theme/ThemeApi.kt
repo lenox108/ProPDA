@@ -24,7 +24,8 @@ import java.util.regex.Pattern
 class ThemeApi(
         private val webClient: IWebClient,
         private val themeParser: ThemeParser,
-        private val authHolder: forpdateam.ru.forpda.model.AuthHolder? = null
+        private val authHolder: forpdateam.ru.forpda.model.AuthHolder? = null,
+        private val blockedTopics: forpdateam.ru.forpda.client.proxy.BlockedTopicRegistry? = null
 ) {
 
     fun getTheme(
@@ -36,14 +37,75 @@ class ThemeApi(
         // Если ID темы уже известен как «перенесённый» (resolved в этом процессе),
         // сразу подменяем showtopic=OLD на showtopic=NEW — экономим лишний 404/302 раунд.
         val effectiveUrl = redirectKnownMovedTopic(url) ?: url
-        return loadThemeWithRelocationFallback(
+        val page = loadThemeWithRelocationFallback(
                 effectiveUrl,
                 hatOpen,
                 pollOpen,
                 relocationAttemptsLeft = 2,
                 openFromUnreadListHint = openFromUnreadListHint
         )
+        return retryViaProxyIfBlocked(effectiveUrl, page, hatOpen, pollOpen, openFromUnreadListHint)
     }
+
+    /**
+     * Часть тем 4PDA закрыта для российских IP: прямой запрос возвращает заглушку без единого поста.
+     * Если в настройках задан прокси, повторяем ТОТ ЖЕ запрос через него, и когда оттуда приходят
+     * посты — запоминаем тему в [BlockedTopicRegistry]. Дальше все её запросы (страницы, отправка
+     * ответа, вложения) роутятся через прокси сразу, без лишнего прямого круга — см.
+     * [forpdateam.ru.forpda.client.proxy.ProxyRouter].
+     *
+     * Обратный ход: тема из списка открылась напрямую → ограничение сняли, запись убираем. Прямой
+     * запрос для темы из списка случается после протухания отметки — так работает ревалидация
+     * ([BlockedTopicRegistry.REVALIDATE_AFTER_MS]). В режиме «весь трафик через прокси» такая
+     * запись тоже может удалиться (маршрут не различить со стороны API) — не страшно: при возврате
+     * в режим «только заблокированные» тема переучится за один лишний круг.
+     */
+    private fun retryViaProxyIfBlocked(
+            url: String,
+            page: ThemePage,
+            hatOpen: Boolean,
+            pollOpen: Boolean,
+            openFromUnreadListHint: Boolean
+    ): ThemePage {
+        val registry = blockedTopics ?: return page
+        val topicId = page.id.takeIf { it > 0 } ?: extractTopicIdFromUrl(url) ?: 0
+        if (page.posts.isNotEmpty()) {
+            if (topicId > 0 && !registry.isBlocked(topicId)) registry.forget(topicId)
+            return page
+        }
+        if (!webClient.isProxyConfigured()) return page
+        if (registry.isBlocked(topicId)) return page // и так шли через прокси — повтор ничего не даст
+        Timber.tag("ProxyRoute").i("stub for topic %d, retrying via proxy", topicId)
+        val viaProxy = runCatching {
+            loadThemeWithRelocationFallback(
+                    url,
+                    hatOpen,
+                    pollOpen,
+                    relocationAttemptsLeft = 2,
+                    openFromUnreadListHint = openFromUnreadListHint,
+                    viaProxy = true
+            )
+        }.getOrElse {
+            Timber.tag("ProxyRoute").w(it, "proxy retry failed for topic %d", topicId)
+            return page
+        }
+        if (viaProxy.posts.isEmpty()) return page // и через прокси пусто — тема правда удалена/перенесена
+        val resolvedId = viaProxy.id.takeIf { it > 0 } ?: topicId
+        registry.remember(resolvedId)
+        return viaProxy
+    }
+
+    /**
+     * Обычная загрузка страницы темы. [viaProxy] взводит принудительный маршрут через прокси —
+     * это повтор после заглушки; без флага маршрут выбирает [forpdateam.ru.forpda.client.proxy.ProxyRouter]
+     * (тема из списка закрытых и так пойдёт через прокси сама).
+     */
+    private fun fetchTopicHtml(url: String, viaProxy: Boolean) =
+            if (viaProxy) {
+                webClient.request(NetworkRequest.Builder().url(url).forceProxy().build())
+            } else {
+                webClient.get(url)
+            }
 
     private fun redirectKnownMovedTopic(url: String): String? {
         val oldId = extractTopicIdFromUrl(url) ?: return null
@@ -59,9 +121,10 @@ class ThemeApi(
             hatOpen: Boolean,
             pollOpen: Boolean,
             relocationAttemptsLeft: Int,
-            openFromUnreadListHint: Boolean = false
+            openFromUnreadListHint: Boolean = false,
+            viaProxy: Boolean = false
     ): ThemePage {
-        val response = webClient.get(url)
+        val response = fetchTopicHtml(url, viaProxy)
         val redirectUrl: String = response.redirectWithFragment.ifBlank { response.redirect ?: url }
         if (BuildConfig.DEBUG) {
             Timber.tag("ThemeReloc").d(
@@ -154,7 +217,8 @@ class ThemeApi(
                         hatOpen,
                         pollOpen,
                         relocationAttemptsLeft - 1,
-                        openFromUnreadListHint = openFromUnreadListHint
+                        openFromUnreadListHint = openFromUnreadListHint,
+                        viaProxy = viaProxy
                 )
             }
 
@@ -170,7 +234,7 @@ class ThemeApi(
                 if (BuildConfig.DEBUG) {
                     Timber.tag("ThemeReloc").d("strip-probe try url=%s probe=%s", url, probeUrl)
                 }
-                val probeResolved = runCatching { resolveMovedTopicViaStrippedProbe(originalUrl = url, probeUrl = probeUrl) }
+                val probeResolved = runCatching { resolveMovedTopicViaStrippedProbe(originalUrl = url, probeUrl = probeUrl, viaProxy = viaProxy) }
                         .onFailure { Timber.tag("ThemeReloc").w(it, "strip-probe failed") }
                         .getOrNull()
                 if (!probeResolved.isNullOrBlank() &&
@@ -183,13 +247,30 @@ class ThemeApi(
                             hatOpen,
                             pollOpen,
                             relocationAttemptsLeft - 1,
-                            openFromUnreadListHint = openFromUnreadListHint
+                            openFromUnreadListHint = openFromUnreadListHint,
+                            viaProxy = viaProxy
                     )
                 }
             }
         }
 
+        dropTitleOfNonTopicPage(page)
         return page
+    }
+
+    /**
+     * Страница без единого поста — это не тема, а заглушка: 4PDA «Ой! Ошибка 404 / Такой ссылки не
+     * существует» (закрытые/недоступные без VPN темы), страница блокировки провайдера, ошибка CDN.
+     * Парсер берёт название из `<h1>`/`og:title`, поэтому текст заглушки уезжал в заголовок вкладки и
+     * в запись «Истории» как НАЗВАНИЕ ТЕМЫ — и залипал там: повторный (уже успешный, с VPN) заход
+     * заголовок в «Истории» не перезаписывал. Гасим его в источнике: без него UI берёт название из
+     * навигации (ARG_TITLE / уже показанное), а визит в «Историю» вообще не пишется
+     * ([ThemeUseCase.recordThemeVisit]).
+     */
+    private fun dropTitleOfNonTopicPage(page: ThemePage) {
+        if (page.posts.isNotEmpty()) return
+        page.title = null
+        page.desc = null
     }
 
     /**
@@ -198,8 +279,8 @@ class ThemeApi(
      *  - Если итоговый URL даёт другой `showtopic`, рассчитываем целевой URL с переносом
      *    исходных параметров (view=getnewpost/p=…/anchor=…) и сохраняем mapping в [MovedTopicResolver].
      */
-    private fun resolveMovedTopicViaStrippedProbe(originalUrl: String, probeUrl: String): String? {
-        val response = webClient.get(probeUrl)
+    private fun resolveMovedTopicViaStrippedProbe(originalUrl: String, probeUrl: String, viaProxy: Boolean = false): String? {
+        val response = fetchTopicHtml(probeUrl, viaProxy)
         val finalUrl: String = response.redirectWithFragment.ifBlank { response.redirect ?: probeUrl }
         if (BuildConfig.DEBUG) {
             Timber.tag("ThemeReloc").d(

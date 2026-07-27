@@ -946,4 +946,35 @@
     <string name="profile_contact_twitter">Twitter</string>
     <string name="profile_contact_windows_live">Windows Live</string>
 
+    <!-- Proxy: access to topics restricted for your IP -->
+    <string name="pref_title_proxy">Proxy</string>
+    <string name="pref_summary_proxy">Reach topics restricted for your IP without a system VPN</string>
+    <string name="pref_title_proxy_connection">Connection</string>
+    <string name="pref_title_proxy_enabled">Use proxy</string>
+    <string name="pref_summary_proxy_enabled">Applies to this app only — no system VPN needed</string>
+    <string name="pref_title_proxy_type">Type</string>
+    <string name="pref_title_proxy_host">Host</string>
+    <string name="pref_title_proxy_port">Port</string>
+    <string name="pref_title_proxy_login">Login</string>
+    <string name="pref_title_proxy_password">Password</string>
+    <string name="pref_proxy_password_set">Set</string>
+    <string name="pref_proxy_not_set">Not set</string>
+    <string name="pref_title_proxy_test">Test</string>
+    <string name="pref_summary_proxy_test">Request 4PDA through the proxy above</string>
+    <string name="pref_proxy_test_running">Testing…</string>
+    <string name="pref_proxy_test_ok">Proxy works: HTTP %1$d in %2$d ms</string>
+    <string name="pref_proxy_test_http_error">Proxy reachable, but 4PDA returned %1$d</string>
+    <string name="pref_proxy_test_failed">Failed: %1$s</string>
+    <string name="pref_proxy_test_incomplete">Enter host and port first</string>
+    <string name="pref_title_proxy_scope">What goes through the proxy</string>
+    <string name="pref_title_proxy_only_blocked">Blocked topics only</string>
+    <string name="pref_summary_proxy_only_blocked">Regular topics load directly. If a topic returns a stub page, the request is retried through the proxy and that topic keeps using it. Turn off to route all app traffic through the proxy</string>
+    <string name="pref_title_proxy_blocked_list">Topics via proxy</string>
+    <string name="pref_summary_proxy_blocked_list_empty">Empty — no blocked topics seen yet</string>
+    <string name="pref_summary_proxy_blocked_list">Topics in list: %1$d</string>
+    <string name="pref_proxy_blocked_list_clear">Clear the list?</string>
+    <string name="pref_proxy_blocked_list_cleared">List cleared</string>
+    <string name="pref_title_proxy_safety">Security</string>
+    <string name="pref_summary_proxy_safety">Your 4PDA auth cookies travel through the proxy. Use your own server only — on a public one your session is exposed. The password is stored encrypted. Topics render natively, so the proxy fully applies to them; news and other WebView pages always go direct — except the Cloudflare check, which must use the same route. WebView does not support proxy credentials, so with a login set that check goes direct too</string>
+
 </resources>

@@ -146,6 +146,11 @@ open class ExtendedWebView @JvmOverloads constructor(
     fun init(profile: WebViewSecurityProfile = WebViewSecurityProfile.UNTRUSTED_EXTERNAL) {
         destroyedForReuse = false
         securityProfile = profile
+        // Маршрут WebView задаётся на весь процесс, поэтому включаем/снимаем его здесь — в момент,
+        // когда WebView реально понадобился (на старте приложения это стоило бы лишней инициализации
+        // движка). В режиме «только заблокированные темы» override не ставится: выборочно по теме
+        // WebView не умеет — см. [WebViewProxy].
+        forpdateam.ru.forpda.client.proxy.WebViewProxy.applyIfNeeded(context)
         mUiThread = Thread.currentThread()
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val settings = settings

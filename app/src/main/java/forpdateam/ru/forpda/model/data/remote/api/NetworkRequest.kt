@@ -19,6 +19,13 @@ class NetworkRequest private constructor(builder: Builder) {
     val isWithoutBody: Boolean = builder.withoutBody
     val skipCounterUpdate: Boolean = builder.skipCounterUpdate
 
+    /**
+     * Отправить запрос через прокси, даже если обычный маршрут — прямой. Взводится автоповтором
+     * заблокированной темы (см. [forpdateam.ru.forpda.client.proxy.ProxyRouter]). Если прокси не
+     * настроен, флаг ничего не меняет — запрос уйдёт напрямую.
+     */
+    val forceProxy: Boolean = builder.forceProxy
+
     class Builder {
         internal var url: String = ""
         internal var headers: LinkedHashMap<String, String>? = null
@@ -31,6 +38,7 @@ class NetworkRequest private constructor(builder: Builder) {
         internal var method: Boolean = true
         internal var withoutBody: Boolean = false
         internal var skipCounterUpdate: Boolean = false
+        internal var forceProxy: Boolean = false
 
         fun url(url: String) = apply { this.url = url }
 
@@ -60,6 +68,7 @@ class NetworkRequest private constructor(builder: Builder) {
             method = request.method
             withoutBody = request.isWithoutBody
             skipCounterUpdate = request.skipCounterUpdate
+            forceProxy = request.forceProxy
         }
 
         fun xhrHeader() = apply {
@@ -107,6 +116,9 @@ class NetworkRequest private constructor(builder: Builder) {
         fun withoutBody() = apply { withoutBody = true }
 
         fun skipCounterUpdate() = apply { skipCounterUpdate = true }
+
+        /** @see NetworkRequest.forceProxy */
+        fun forceProxy() = apply { forceProxy = true }
 
         fun file(file: RequestFile) = apply {
             this.file = file

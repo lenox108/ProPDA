@@ -80,6 +80,14 @@ interface IWebClient {
     fun isSecureCookieStoreFallback(): Boolean = false
 
     /**
+     * Настроен ли рабочий прокси (адрес+порт и включённый выключатель). Нужен вызывающим, которые
+     * решают, имеет ли смысл повторять запрос через прокси — например, автоповтор темы, закрытой
+     * для российских IP (см. [forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi]).
+     * Реализация по умолчанию — для моков/фейков.
+     */
+    fun isProxyConfigured(): Boolean = false
+
+    /**
      * Функциональный интерфейс для отслеживания прогресса загрузки.
      * В Kotlin можно использовать лямбду: { percent -> ... }
      */
