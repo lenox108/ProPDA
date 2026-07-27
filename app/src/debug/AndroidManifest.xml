@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Отладочная лаборатория значков шторки: только debug-сборки.
+             adb shell am broadcast -n <pkg>/forpdateam.ru.forpda.debuglab.NotifIconLabReceiver -e mode msg -->
+        <receiver
+            android:name="forpdateam.ru.forpda.debuglab.NotifIconLabReceiver"
+            android:exported="true" />
+    </application>
+</manifest>

@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.appupdates
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import timber.log.Timber
 import org.jsoup.parser.Parser
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
@@ -35,6 +36,26 @@ open class GithubReleaseSource @Inject constructor() {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build()
+    }
+
+    /**
+     * Есть ли такой файл в релизе (HEAD). Нужно для ассетов, чьи ссылки строятся
+     * по соглашению об именах, а не берутся из ответа GitHub — иначе кнопка
+     * «Скачать» повела бы на 404 (см. [AppUpdateRepository.preferCircleVariant]).
+     *
+     * При сетевой ошибке возвращает false: лучше предложить заведомо рабочий
+     * базовый APK, чем ссылку, которая может не открыться.
+     */
+    open fun assetExists(url: String): Boolean = try {
+        val request = Request.Builder()
+            .url(url)
+            .head()
+            .header("User-Agent", USER_AGENT)
+            .build()
+        client.newCall(request).execute().use { it.isSuccessful }
+    } catch (e: Exception) {
+        Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "HEAD %s failed", url)
+        false
     }
 
     /**
@@ -79,6 +100,76 @@ open class GithubReleaseSource @Inject constructor() {
         }
 
         return parseAtom(responseBody)
+    }
+
+    /**
+     * Теги релизов из Atom-фида, от самого свежего. Нужны, чтобы искать ассет,
+     * которого нет в релизе установленной версии (см. `CircleIcon.resolve`):
+     * `api.github.com` для этого использовать нельзя — 60 запросов/час на IP.
+     *
+     * @return пустой список при любой ошибке: вызывающий тогда просто не найдёт
+     *   вариант, а не упадёт посреди пользовательского действия.
+     */
+    open fun fetchReleaseTags(): List<String> = try {
+        val request = Request.Builder()
+            .url(LATEST_RELEASE_ATOM_URL)
+            .header("Accept", "application/atom+xml")
+            .header("User-Agent", USER_AGENT)
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) emptyList()
+            else parseAtomTags(response.body?.string().orEmpty())
+        }
+    } catch (e: Exception) {
+        Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "releases.atom tags fetch failed")
+        emptyList()
+    }
+
+    /**
+     * Чистый разбор тегов из Atom-фида: у каждой `<entry>` берётся ссылка вида
+     * `…/releases/tag/<tag>`. Порядок фида (свежие сверху) сохраняется.
+     */
+    fun parseAtomTags(xml: String): List<String> {
+        val parser = try {
+            XmlPullParserFactory.newInstance().apply { isNamespaceAware = false }
+                .newPullParser()
+                .apply { setInput(StringReader(xml)) }
+        } catch (e: Exception) {
+            return emptyList()
+        }
+        val tags = mutableListOf<String>()
+        var entryLink: String? = null
+        var inEntry = false
+        try {
+            var event = parser.eventType
+            while (event != XmlPullParser.END_DOCUMENT) {
+                when (event) {
+                    XmlPullParser.START_TAG -> when (parser.name) {
+                        "entry" -> {
+                            inEntry = true
+                            entryLink = null
+                        }
+                        "link" -> if (inEntry && entryLink == null) {
+                            val rel = parser.getAttributeValue(null, "rel")
+                            if (rel == null || rel == "alternate") {
+                                entryLink = parser.getAttributeValue(null, "href")
+                            }
+                        }
+                    }
+                    XmlPullParser.END_TAG -> if (parser.name == "entry") {
+                        inEntry = false
+                        entryLink?.substringAfter("/releases/tag/", "")
+                            ?.trim()?.trim('/')
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { tags += it }
+                    }
+                }
+                event = parser.next()
+            }
+        } catch (e: Exception) {
+            Timber.tag(AppUpdateRepository.LOG_TAG).w(e, "releases.atom tags parse failed")
+        }
+        return tags
     }
 
     /**

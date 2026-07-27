@@ -4,5 +4,7 @@
     <external-path name="legacy_downloads" path="Download/ForPDA/" />
     <!-- Временные копии для «Открыть» (MediaStore нельзя передать в другое приложение на части OEM): -->
     <cache-path name="open_share" path="open_share/" />
+    <!-- Скачанный вариант APK для смены «кружка уведомлений» (CircleIcon): отдаётся установщику. -->
+    <cache-path name="circle_apk" path="circle_apk/" />
 </paths>
 

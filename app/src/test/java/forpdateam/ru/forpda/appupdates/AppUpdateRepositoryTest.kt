@@ -91,9 +91,57 @@ class AppUpdateRepositoryTest {
         assertEquals(only.url, chosen?.url)
     }
 
+    @Test
+    fun preferCircleVariant_prependsVariantAssetForNonBakedIcon() {
+        withGlassIcon {
+            val base = DownloadLink("https://x/dl/v3.0.0/ProPDA-3.0.0.apk", "ProPDA-3.0.0.apk")
+            val result = newRepository(FakeGithubReleaseSource(null, assetExists = true))
+                .preferCircleVariant(listOf(base))
+            assertEquals(2, result.size)
+            assertEquals("ProPDA-3.0.0-circle-glass_4.apk", result.first().fileName)
+            assertEquals("https://x/dl/v3.0.0/ProPDA-3.0.0-circle-glass_4.apk", result.first().url)
+            assertEquals("ProPDA-3.0.0.apk", result[1].fileName)
+        }
+    }
+
+    /** Релиз без circle-ассетов не должен ломать кнопку «Скачать» ссылкой на 404. */
+    @Test
+    fun preferCircleVariant_missingVariantAssetFallsBackToBase() {
+        withGlassIcon {
+            val base = DownloadLink("https://x/dl/v3.0.0/ProPDA-3.0.0.apk", "ProPDA-3.0.0.apk")
+            val result = newRepository(FakeGithubReleaseSource(null, assetExists = false))
+                .preferCircleVariant(listOf(base))
+            assertEquals(1, result.size)
+            assertEquals("ProPDA-3.0.0.apk", result.first().fileName)
+        }
+    }
+
+    private fun withGlassIcon(block: () -> Unit) {
+        val app = RuntimeEnvironment.getApplication()
+        val original = app.applicationInfo.icon
+        app.applicationInfo.icon = forpdateam.ru.forpda.R.mipmap.ic_launcher_glass_4
+        try {
+            block()
+        } finally {
+            app.applicationInfo.icon = original
+        }
+    }
+
+    @Test
+    fun preferCircleVariant_bakedIconPutsBaseAssetFirst() {
+        val links = listOf(
+            DownloadLink("https://x/ProPDA-3.0.0-circle-blue_4.apk", "ProPDA-3.0.0-circle-blue_4.apk"),
+            DownloadLink("https://x/ProPDA-3.0.0.apk", "ProPDA-3.0.0.apk")
+        )
+        val result = newRepository().preferCircleVariant(links)
+        assertEquals("ProPDA-3.0.0.apk", result.first().fileName)
+        assertEquals(2, result.size)
+    }
+
     private fun newRepository(
         source: GithubReleaseSource = FakeGithubReleaseSource(null)
     ): AppUpdateRepository = AppUpdateRepository(
+        context = RuntimeEnvironment.getApplication(),
         preferences = AppUpdatePreferences(
             RuntimeEnvironment.getApplication().getSharedPreferences("app-update-pref-test", Context.MODE_PRIVATE)
         ),
@@ -101,8 +149,10 @@ class AppUpdateRepositoryTest {
     )
 
     private class FakeGithubReleaseSource(
-        private val candidate: Candidate?
+        private val candidate: Candidate?,
+        private val assetExists: Boolean = true
     ) : GithubReleaseSource() {
         override fun fetchLatestRelease(): Candidate? = candidate
+        override fun assetExists(url: String): Boolean = assetExists
     }
 }
