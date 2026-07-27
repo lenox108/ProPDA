@@ -29,6 +29,7 @@
     <item name="action_favorites_selection_hide" type="id" />
     <item name="action_favorites_selection_show" type="id" />
     <item name="action_favorites_selection_move" type="id" />
+    <item name="action_favorites_folder_strip" type="id" />
 
     <item name="toolbar_opaque_underlay" type="id" />
 

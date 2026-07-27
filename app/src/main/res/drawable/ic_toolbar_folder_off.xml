@@ -1,0 +1,20 @@
+<!--
+    Папка с косой чертой — состояние «лента папок скрыта» для кнопки в тулбаре Избранного.
+    Контурная (в отличие от заливной ic_toolbar_folder): выключенное состояние должно читаться
+    как более «тихое», а не просто как другая форма.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="?attr/colorOnSurface"
+        android:pathData="M4,4H10L12,6H20C21.1,6 22,6.9 22,8V18C22,18.35 21.91,18.68 21.75,18.96L20,17.21V8H12H11.17L10.41,7.24L9.17,6H4V6.79L2.04,4.83C2.19,4.35 2.55,4 4,4Z" />
+    <path
+        android:fillColor="?attr/colorOnSurface"
+        android:pathData="M2,7.83L4,9.83V18H12.17L14.17,20H4C2.9,20 2,19.1 2,18V7.83Z" />
+    <path
+        android:fillColor="?attr/colorOnSurface"
+        android:pathData="M2.81,2L21,20.19L19.78,21.41L1.59,3.22L2.81,2Z" />
+</vector>

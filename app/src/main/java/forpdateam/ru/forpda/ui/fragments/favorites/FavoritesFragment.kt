@@ -3,6 +3,10 @@ package forpdateam.ru.forpda.ui.fragments.favorites
 import android.app.Dialog
 import android.app.SearchManager
 import android.content.Context
+import android.graphics.Typeface
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -24,6 +28,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.RadioGroup
 import android.widget.TextView
+import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.common.showSnackbar
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.presentation.TabRouter
@@ -102,6 +107,7 @@ class FavoritesFragment : RecyclerFragment() {
     private var renderedFoldersState: FavoritesFoldersState? = null
     private var folderStrip: View? = null
     private var folderChips: com.google.android.material.chip.ChipGroup? = null
+    private var folderStripMenuItem: MenuItem? = null
 
     private val presenter: FavoritesViewModel by viewModels()
     private lateinit var favoritesDialogs: FavoritesDialogs
@@ -169,6 +175,10 @@ class FavoritesFragment : RecyclerFragment() {
         appBarLayout.addView(strip, appBarLayout.indexOfChild(toolbarLayout) + 1)
         folderStrip = strip
         folderChips = strip.findViewById(R.id.favorites_folder_chips)
+        // Цвет берём тем же путём, что и сама шапка: под Material You это ChromeCanvas
+        // (динамический тон обоев), а не сырой атрибут — иначе лента заметно отличалась бы
+        // от тулбара под MY. См. TabFragment.topBarSurfaceColor.
+        strip.setBackgroundColor(topBarSurfaceColor())
         contentController.setFirstLoad(false)
         return viewFragment
     }
@@ -302,6 +312,16 @@ class FavoritesFragment : RecyclerFragment() {
                     false
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        // Переключатель ленты папок — в overflow, а не иконкой: в видимой части тулбара уже
+        // три действия, а прятать ленту нужно редко (и с запоминанием выбора).
+        // Отдельная иконка в тулбаре, а не пункт overflow: место есть, а состояние ленты
+        // читается сразу по значку (папка / перечёркнутая папка) без открытия меню.
+        folderStripMenuItem = menu.add(Menu.NONE, R.id.action_favorites_folder_strip, Menu.NONE, getString(R.string.fav_folders_panel))
+                .setOnMenuItemClickListener {
+                    presenter.setFolderStripVisible(!foldersState.stripVisible)
+                    true
+                }
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
         addSelectionMenu(menu)
         updateSelectionUi()
     }
@@ -415,7 +435,7 @@ class FavoritesFragment : RecyclerFragment() {
             )
         }
         val createChip = layoutInflater.inflate(
-                R.layout.toolbar_filter_chip, chips, false) as Chip
+                R.layout.favorites_folder_chip, chips, false) as Chip
         createChip.id = View.generateViewId()
         createChip.text = getString(R.string.fav_folder_create_chip)
         createChip.isCheckable = false
@@ -433,14 +453,36 @@ class FavoritesFragment : RecyclerFragment() {
     ) {
         val chips = folderChips ?: return
         val chip = layoutInflater.inflate(
-                R.layout.toolbar_filter_chip, chips, false) as Chip
+                R.layout.favorites_folder_chip, chips, false) as Chip
         chip.id = View.generateViewId()
-        // Непрочитанное важнее общего количества: цифра на чипе отвечает на вопрос
-        // «куда идти читать», поэтому при непрочитанных показываем именно их.
-        chip.text = when {
-            unread > 0 -> getString(R.string.fav_folder_chip_unread, title, unread)
-            count > 0 -> getString(R.string.fav_folder_chip_total, title, count)
-            else -> title
+        // Цифра — это КОЛИЧЕСТВО ТЕМ, и оно обязано совпадать с тем, что видно в списке.
+        // Раньше при непрочитанных показывалось их число (другим разделителем), и «Кен · 2»
+        // над списком из четырёх тем читалось как ошибка счёта.
+        val label = if (count > 0) getString(R.string.fav_folder_chip_total, title, count) else title
+        // Непрочитанное — точка перед названием, а не второе число: цифра на чипе всегда
+        // означает количество тем. Точка идёт ТЕКСТОМ, а не chipIcon: слот иконки у M3
+        // filter-чипа занимает галочка выбранного состояния, и точка там просто не видна.
+        // Цвет — ?attr/colorAccent: он задан в каждой палитре приложения и подменяется
+        // цветом обоев под Material You, поэтому следует и теме, и палитре, и MY.
+        chip.text = if (unread > 0) {
+            SpannableStringBuilder().apply {
+                val start = length
+                append("• ")
+                setSpan(
+                        ForegroundColorSpan(requireContext().getColorFromAttr(androidx.appcompat.R.attr.colorAccent)),
+                        start,
+                        length,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+                append(label)
+            }
+        } else {
+            label
+        }
+        chip.contentDescription = if (unread > 0) {
+            getString(R.string.fav_folder_chip_unread_cd, title, unread)
+        } else {
+            chip.text
         }
         chip.isChecked = value == selection
         chip.setOnClickListener { presenter.selectFolder(value) }
@@ -961,10 +1003,31 @@ class FavoritesFragment : RecyclerFragment() {
             setTitle(null)
         }
 
-        // В режиме выбора лента не нужна (действия идут над выделением), а в поиске она
-        // вводила бы в заблуждение: поиск идёт по всему избранному поверх выбранной папки.
-        val showChips = !inSelection && searchMenuItem?.isActionViewExpanded != true
+        // Лента показывается только когда папки вообще заведены: тому, кто ими не пользуется,
+        // экран остаётся ровно таким же, как до фичи. Плюс ручной переключатель в overflow.
+        // В режиме выбора она не нужна (действия идут над выделением), а в поиске вводила бы
+        // в заблуждение: поиск идёт по всему избранному поверх выбранной папки.
+        val hasFolders = foldersState.folders.isNotEmpty()
+        val showChips = !inSelection &&
+                searchMenuItem?.isActionViewExpanded != true &&
+                foldersState.stripVisible &&
+                hasFolders
         folderStrip?.visibility = if (showChips) View.VISIBLE else View.GONE
+        // Пункт меню без единой папки бессмысленен — переключать нечего.
+        folderStripMenuItem?.isVisible = !inSelection && hasFolders
+        folderStripMenuItem?.let { item ->
+            val hint = getString(
+                    if (foldersState.stripVisible) R.string.fav_folders_panel_hide
+                    else R.string.fav_folders_panel_show
+            )
+            item.setIcon(
+                    if (foldersState.stripVisible) R.drawable.ic_toolbar_folder
+                    else R.drawable.ic_toolbar_folder_off
+            )
+            item.title = hint
+            MenuItemCompat.setContentDescription(item, hint)
+            MenuItemCompat.setTooltipText(item, hint)
+        }
         applyHeaderAutoHide()
 
         if (::adapter.isInitialized) {

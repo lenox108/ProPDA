@@ -66,6 +66,8 @@ class ListsDataStore(private val context: Context) {
     private val mirrorKeyFavPerPage = "lists.favorites.per_page"
     // Выбранная папка избранного: -1 — все, 0 — «Без папки», иначе id папки.
     private val mirrorKeyFavSelectedFolder = "lists.favorites.selected_folder"
+    // Показывать ли ленту папок (кому папки не нужны — прячет строку целиком).
+    private val mirrorKeyFavFolderStrip = "lists.favorites.folder_strip_visible"
 
     private val legacyPrefs = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
 
@@ -220,6 +222,12 @@ class ListsDataStore(private val context: Context) {
 
     fun setFavSelectedFolder(value: Long) {
         mirrorPrefs.edit().putLong(mirrorKeyFavSelectedFolder, value).apply()
+    }
+
+    fun getFavFolderStripVisibleImmediate(): Boolean = mirrorPrefs.getBoolean(mirrorKeyFavFolderStrip, true)
+
+    fun setFavFolderStripVisible(value: Boolean) {
+        mirrorPrefs.edit().putBoolean(mirrorKeyFavFolderStrip, value).apply()
     }
 
     suspend fun getSortingKey(): String =

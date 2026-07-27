@@ -545,6 +545,9 @@
     <string name="fav_folders_all">Все</string>
     <string name="fav_folder_none">Без папки</string>
     <string name="fav_folders_hint">Папки избранного</string>
+    <string name="fav_folders_panel">Панель папок</string>
+    <string name="fav_folders_panel_hide">Скрыть панель папок</string>
+    <string name="fav_folders_panel_show">Показать панель папок</string>
     <string name="fav_folder_create">Создать папку</string>
     <string name="fav_folder_create_chip">+ Папка</string>
     <string name="fav_folder_name">Название папки</string>
@@ -552,8 +555,8 @@
     <string name="fav_folder_rename">Переименовать папку</string>
     <string name="fav_folder_delete">Удалить папку</string>
     <string name="fav_folder_delete_message">Удалить папку «%1$s»? Темы останутся в избранном, но вернутся в «Без папки».</string>
-    <string name="fav_folder_chip_unread">%1$s · %2$d</string>
-    <string name="fav_folder_chip_total">%1$s (%2$d)</string>
+    <string name="fav_folder_chip_total">%1$s · %2$d</string>
+    <string name="fav_folder_chip_unread_cd">%1$s, непрочитанных: %2$d</string>
     <string name="fav_move_to_folder">Переместить в папку</string>
     <string name="fav_moved_to_folder">Перемещено в «%2$s»: %1$d</string>
     <string name="fav_moved_out_of_folder">Убрано из папок: %1$d</string>

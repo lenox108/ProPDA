@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Текст выбранного чипа — обычный onSurface, а не акцент: акцент на 24%-акцентной
+         подложке в светлых палитрах читается хуже, чем нейтральный текст. -->
+    <item
+        android:color="?attr/colorOnSurface"
+        android:state_checked="true" />
+    <item android:color="?attr/colorOnSurfaceVariant" />
+</selector>

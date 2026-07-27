@@ -63,4 +63,9 @@ class ListsPreferencesHolder(
     fun getFavSelectedFolder(): Long = dataStore.getFavSelectedFolderImmediate()
 
     fun setFavSelectedFolder(value: Long) = dataStore.setFavSelectedFolder(value)
+
+    // Лента папок над списком: пользователь может убрать её совсем, если папками не пользуется.
+    fun getFavFolderStripVisible(): Boolean = dataStore.getFavFolderStripVisibleImmediate()
+
+    fun setFavFolderStripVisible(value: Boolean) = dataStore.setFavFolderStripVisible(value)
 }

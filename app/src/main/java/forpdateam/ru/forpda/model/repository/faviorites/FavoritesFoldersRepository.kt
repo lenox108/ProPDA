@@ -5,6 +5,7 @@ import forpdateam.ru.forpda.entity.db.favorites.FavFolderDao
 import forpdateam.ru.forpda.entity.db.favorites.FavFolderItemRoom
 import forpdateam.ru.forpda.entity.db.favorites.FavFolderRoom
 import forpdateam.ru.forpda.entity.remote.favorites.IFavItem
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +19,9 @@ import kotlinx.coroutines.withContext
  * см. [forpdateam.ru.forpda.entity.db.favorites.FavFolderItemRoom].
  */
 class FavoritesFoldersRepository(
-        private val dao: FavFolderDao
+        private val dao: FavFolderDao,
+        /** Параметром — чтобы тесты гоняли БД на тест-планировщике, а не на реальном IO. */
+        private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
 
     private val _folders = MutableStateFlow<List<FavFolder>>(emptyList())
@@ -37,32 +40,32 @@ class FavoritesFoldersRepository(
     var isLoaded: Boolean = false
         private set
 
-    suspend fun load() = withContext(Dispatchers.IO) {
+    suspend fun load() = withContext(ioDispatcher) {
         reloadFolders()
         reloadAssignments()
         isLoaded = true
     }
 
-    suspend fun createFolder(name: String): FavFolder = withContext(Dispatchers.IO) {
+    suspend fun createFolder(name: String): FavFolder = withContext(ioDispatcher) {
         val now = System.currentTimeMillis()
         val id = dao.insertFolder(FavFolderRoom(name = name, sortOrder = now, createdAt = now, updatedAt = now))
         reloadFolders()
         FavFolder(id = id, name = name, sortOrder = now, createdAt = now, updatedAt = now)
     }
 
-    suspend fun renameFolder(id: Long, name: String) = withContext(Dispatchers.IO) {
+    suspend fun renameFolder(id: Long, name: String) = withContext(ioDispatcher) {
         dao.renameFolder(id, name, System.currentTimeMillis())
         reloadFolders()
     }
 
     /** Удаляет папку; темы из неё не пропадают, а возвращаются в «Без папки». */
-    suspend fun deleteFolder(id: Long) = withContext(Dispatchers.IO) {
+    suspend fun deleteFolder(id: Long) = withContext(ioDispatcher) {
         dao.deleteFolderWithAssignments(id)
         reloadFolders()
         reloadAssignments()
     }
 
-    suspend fun moveToFolder(targetKeys: List<String>, folderId: Long?) = withContext(Dispatchers.IO) {
+    suspend fun moveToFolder(targetKeys: List<String>, folderId: Long?) = withContext(ioDispatcher) {
         if (targetKeys.isEmpty()) return@withContext
         dao.moveToFolder(targetKeys, folderId, System.currentTimeMillis())
         reloadAssignments()
