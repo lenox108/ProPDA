@@ -41,9 +41,7 @@ object PushLogout {
         if (loginKey.isNullOrEmpty()) return
         Thread {
             runCatching {
-                val host = AppProtocolClient.resolveWsHost()
-                AppProtocolClient(host).use { client ->
-                    client.connect()
+                AppProtocolClient.connectAny().use { client ->
                     if (client.resume(memberId, loginKey)) {
                         // Пустой токен = отписка на стороне сервера.
                         client.registerToken("", 0, PushRegistrar.PROVIDER_GOOGLE)

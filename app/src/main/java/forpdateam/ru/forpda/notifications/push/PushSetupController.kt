@@ -1,20 +1,20 @@
 package forpdateam.ru.forpda.notifications.push
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.text.InputType
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import coil.request.ImageRequest
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.net.URL
 import kotlin.coroutines.resume
 
 /**
@@ -29,6 +29,9 @@ class PushSetupController(private val context: Context) {
     private val notifPrefs = NotificationPreferencesHolder(context)
     private val session = PushSessionStore(context)
     private val registrar = PushRegistrar(context, notifPrefs, session)
+
+    /** Причина последнего сетевого сбоя — показываем её вместо бесполезного «status -1». */
+    private var lastError: String? = null
 
     sealed class Outcome {
         object Registered : Outcome()
@@ -57,23 +60,15 @@ class PushSetupController(private val context: Context) {
 
     private suspend fun loginThenRegister(defaultLogin: String?): Outcome {
         val creds = askCredentials(defaultLogin) ?: return Outcome.Cancelled
-        // resolveWsHost() ходит в сеть — строго на IO (StrictMode ловил это на главном потоке).
-        val host = withContext(Dispatchers.IO) {
-            runCatching { AppProtocolClient.resolveWsHost() }
-                    .getOrDefault(AppProtocolClient.DEFAULT_WS_HOST)
-        }
-
         val loginOk = withContext(Dispatchers.IO) {
             runCatching {
-                AppProtocolClient(host).use { client ->
-                    client.connect()
+                AppProtocolClient.connectAny().use { client ->
                     var result = client.login(creds.first, creds.second)
                     var attempts = 0
                     while (result is AppProtocolClient.LoginResult.Captcha && attempts < 3) {
                         attempts++
                         val url = result.imageUrl
-                        val bytes = runCatching { URL(url).openStream().use { it.readBytes() } }.getOrNull()
-                        val captcha = withContext(Dispatchers.Main) { askCaptcha(bytes) }
+                        val captcha = withContext(Dispatchers.Main) { askCaptcha(url) }
                                 ?: return@use AppProtocolClient.LoginResult.Failed(-99)
                         result = client.login(creds.first, creds.second, captcha = captcha)
                     }
@@ -81,6 +76,9 @@ class PushSetupController(private val context: Context) {
                 }
             }.getOrElse {
                 Timber.e(it, "push login failed")
+                // Текст причины нужен пользователю: «status -1» ничего не говорит о том,
+                // что именно не сложилось — сеть, TLS или блокировка провайдером.
+                lastError = it.message ?: it.javaClass.simpleName
                 AppProtocolClient.LoginResult.Failed(-1)
             }
         }
@@ -108,8 +106,11 @@ class PushSetupController(private val context: Context) {
                 }
             }
             is AppProtocolClient.LoginResult.Captcha -> Outcome.Failed("captcha")
-            is AppProtocolClient.LoginResult.Failed ->
-                if (loginOk.status == -99) Outcome.Cancelled else Outcome.Failed("login status ${loginOk.status}")
+            is AppProtocolClient.LoginResult.Failed -> when {
+                loginOk.status == -99 -> Outcome.Cancelled
+                loginOk.status == -1 -> Outcome.Failed(lastError ?: "нет связи с сервером")
+                else -> Outcome.Failed("login status ${loginOk.status}")
+            }
         }
     }
 
@@ -155,13 +156,10 @@ class PushSetupController(private val context: Context) {
                 }
             }
 
-    private suspend fun askCaptcha(imageBytes: ByteArray?): Int? =
+    private suspend fun askCaptcha(imageUrl: String): Int? =
             suspendCancellableCoroutine { cont ->
                 val pad = (context.resources.displayMetrics.density * 16).toInt()
                 val image = ImageView(context).apply {
-                    imageBytes?.let {
-                        setImageBitmap(BitmapFactory.decodeByteArray(it, 0, it.size))
-                    }
                     adjustViewBounds = true
                     layoutParams = LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -176,6 +174,14 @@ class PushSetupController(private val context: Context) {
                     addView(image)
                     addView(field)
                 }
+                // Через общий ImageLoader приложения, а не своим URL.openStream(): тот шёл мимо
+                // регулятора запросов и кук, добавлял неучтённый запрос к 4pda.to и на 429
+                // просто молча не показывал картинку.
+                ForPdaCoil.imageLoader.enqueue(
+                        ImageRequest.Builder(context)
+                                .data(ForPdaCoil.normalizeData(imageUrl))
+                                .target(image)
+                                .build())
                 MaterialAlertDialogBuilder(context)
                         .setTitle("Введите число с картинки")
                         .setView(layout)

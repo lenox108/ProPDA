@@ -35,10 +35,21 @@ import javax.net.ssl.SSLSocketFactory
  * Блокирующий; вызывать с IO-потока. Не потокобезопасен — один вызов на экземпляр.
  */
 class AppProtocolClient(
-        private val host: String = DEFAULT_WS_HOST,
-        private val connectTimeoutMs: Int = 15_000,
+        private val endpoint: Endpoint = Endpoint.Ws(DEFAULT_WS_HOST),
+        private val connectTimeoutMs: Int = 10_000,
         private val readTimeoutMs: Int = 25_000
 ) : AutoCloseable {
+
+    /**
+     * Транспорт до сервера 4PDA. Их клиент поддерживает оба и переключается между ними —
+     * без этого приложение не работает там, где недоступен один из путей.
+     */
+    sealed class Endpoint {
+        /** TLS + HTTP-Upgrade на 443. Идёт через Cloudflare, поэтому доступен не везде. */
+        data class Ws(val host: String) : Endpoint()
+        /** Прямой TCP на «host:port» (обычно app.4pda.to:993), в обход Cloudflare. Без TLS. */
+        data class Direct(val hostPort: String) : Endpoint()
+    }
 
     private lateinit var socket: Socket
     private lateinit var output: OutputStream
@@ -55,6 +66,15 @@ class AppProtocolClient(
 
     /** Открывает TLS-WS и делает hello. Бросает при сетевой ошибке. */
     fun connect() {
+        when (endpoint) {
+            is Endpoint.Ws -> connectWs(endpoint.host)
+            is Endpoint.Direct -> connectDirect(endpoint.hostPort)
+        }
+        val hello = call(listOf("ah", CLIENT_VERSION, "", "", 1, 0))
+        Timber.d("AppProtocol hello (%s) -> %s", endpoint, hello)
+    }
+
+    private fun connectWs(host: String) {
         val raw = Socket()
         raw.connect(InetSocketAddress(host, 443), connectTimeoutMs)
         val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
@@ -76,9 +96,19 @@ class AppProtocolClient(
         output.flush()
         val statusLine = readHttpHeaders()
         if (!statusLine.contains("101")) throw java.io.IOException("WS upgrade failed: $statusLine")
+    }
 
-        val hello = call(listOf("ah", CLIENT_VERSION, "", "", 1, 0))
-        Timber.d("AppProtocol hello -> %s", hello)
+    /** Прямой сокет: тот же фрейминг, но без TLS и без HTTP-рукопожатия. */
+    private fun connectDirect(hostPort: String) {
+        val idx = hostPort.lastIndexOf(':')
+        val host = if (idx > 0) hostPort.substring(0, idx) else hostPort
+        val port = if (idx > 0) hostPort.substring(idx + 1).toIntOrNull() ?: 993 else 993
+        val raw = Socket()
+        raw.connect(InetSocketAddress(host, port), connectTimeoutMs)
+        raw.soTimeout = readTimeoutMs
+        socket = raw
+        output = raw.getOutputStream()
+        input = DataInputStream(BufferedInputStream(raw.getInputStream()))
     }
 
     /** Логин по паролю. Вернёт Captcha(url) если сервер требует капчу — тогда повторить с [captcha]. */
@@ -335,17 +365,57 @@ class AppProtocolClient(
         private const val PROVISION_GIST =
                 "https://gist.githubusercontent.com/aigilea/152b043823de7cfeacd06f348b78ec25/raw/provision.json"
 
+        const val DEFAULT_DIRECT_ENDPOINT = "app.4pda.to:993"
+
         /** Динамический хост WSS из provision-конфига (ключ "w"); при сбое — [DEFAULT_WS_HOST]. */
-        fun resolveWsHost(): String = runCatching {
+        fun resolveWsHost(): String = provision().first
+
+        private fun provision(): Pair<String, String> = runCatching {
             val conn = (URL(PROVISION_GIST).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000; readTimeout = 10_000
             }
-            conn.inputStream.use { readWsHost(it) }
-        }.getOrDefault(DEFAULT_WS_HOST)
+            conn.inputStream.use { stream ->
+                val json = JSONObject(stream.readBytes().toString(Charsets.UTF_8))
+                val ws = json.optString("w", DEFAULT_WS_HOST).ifBlank { DEFAULT_WS_HOST }
+                val direct = json.optString("d", DEFAULT_DIRECT_ENDPOINT).ifBlank { DEFAULT_DIRECT_ENDPOINT }
+                ws to direct
+            }
+        }.getOrDefault(DEFAULT_WS_HOST to DEFAULT_DIRECT_ENDPOINT)
 
-        private fun readWsHost(stream: InputStream): String {
-            val text = stream.readBytes().toString(Charsets.UTF_8)
-            return JSONObject(text).optString("w", DEFAULT_WS_HOST).ifBlank { DEFAULT_WS_HOST }
+        /**
+         * Подключается, перебирая доступные транспорты, и возвращает готовый клиент.
+         *
+         * Порядок намеренно такой: сначала TLS (пароль при логине не идёт открытым текстом),
+         * при неудаче — прямой сокет. Прямой путь обязателен, потому что WSS-хост живёт за
+         * Cloudflare и у части провайдеров (особенно в РФ) недоступен — именно поэтому
+         * официальный клиент тоже держит оба пути.
+         *
+         * @throws java.io.IOException если не удалось ни одним способом; текст содержит причины.
+         */
+        fun connectAny(): AppProtocolClient {
+            val (wsHost, directEndpoint) = provision()
+            val attempts = listOf(Endpoint.Ws(wsHost), Endpoint.Direct(directEndpoint))
+            val problems = StringBuilder()
+            for (endpoint in attempts) {
+                val client = AppProtocolClient(endpoint)
+                try {
+                    client.connect()
+                    Timber.i("AppProtocol connected via %s", endpoint)
+                    return client
+                } catch (t: Throwable) {
+                    runCatching { client.close() }
+                    Timber.w(t, "AppProtocol connect failed via %s", endpoint)
+                    val label = when (endpoint) {
+                        is Endpoint.Ws -> endpoint.host
+                        is Endpoint.Direct -> endpoint.hostPort
+                    }
+                    problems.append(label).append(": ")
+                            .append(t.javaClass.simpleName)
+                            .append(t.message?.let { " ($it)" } ?: "")
+                            .append("; ")
+                }
+            }
+            throw java.io.IOException(problems.toString().trimEnd(' ', ';'))
         }
     }
 }
