@@ -30,6 +30,9 @@ class PushSetupController(private val context: Context) {
     private val session = PushSessionStore(context)
     private val registrar = PushRegistrar(context, notifPrefs, session)
 
+    /** Причина последнего сетевого сбоя — показываем её вместо бесполезного «status -1». */
+    private var lastError: String? = null
+
     sealed class Outcome {
         object Registered : Outcome()
         object Cancelled : Outcome()
@@ -57,16 +60,9 @@ class PushSetupController(private val context: Context) {
 
     private suspend fun loginThenRegister(defaultLogin: String?): Outcome {
         val creds = askCredentials(defaultLogin) ?: return Outcome.Cancelled
-        // resolveWsHost() ходит в сеть — строго на IO (StrictMode ловил это на главном потоке).
-        val host = withContext(Dispatchers.IO) {
-            runCatching { AppProtocolClient.resolveWsHost() }
-                    .getOrDefault(AppProtocolClient.DEFAULT_WS_HOST)
-        }
-
         val loginOk = withContext(Dispatchers.IO) {
             runCatching {
-                AppProtocolClient(host).use { client ->
-                    client.connect()
+                AppProtocolClient.connectAny().use { client ->
                     var result = client.login(creds.first, creds.second)
                     var attempts = 0
                     while (result is AppProtocolClient.LoginResult.Captcha && attempts < 3) {
@@ -81,6 +77,9 @@ class PushSetupController(private val context: Context) {
                 }
             }.getOrElse {
                 Timber.e(it, "push login failed")
+                // Текст причины нужен пользователю: «status -1» ничего не говорит о том,
+                // что именно не сложилось — сеть, TLS или блокировка провайдером.
+                lastError = it.message ?: it.javaClass.simpleName
                 AppProtocolClient.LoginResult.Failed(-1)
             }
         }
@@ -108,8 +107,11 @@ class PushSetupController(private val context: Context) {
                 }
             }
             is AppProtocolClient.LoginResult.Captcha -> Outcome.Failed("captcha")
-            is AppProtocolClient.LoginResult.Failed ->
-                if (loginOk.status == -99) Outcome.Cancelled else Outcome.Failed("login status ${loginOk.status}")
+            is AppProtocolClient.LoginResult.Failed -> when {
+                loginOk.status == -99 -> Outcome.Cancelled
+                loginOk.status == -1 -> Outcome.Failed(lastError ?: "нет связи с сервером")
+                else -> Outcome.Failed("login status ${loginOk.status}")
+            }
         }
     }
 

@@ -64,10 +64,9 @@ class PushRegistrar(
             return@withContext Result.Success
         }
 
-        val host = runCatching { AppProtocolClient.resolveWsHost() }.getOrDefault(AppProtocolClient.DEFAULT_WS_HOST)
+        // connectAny сам переберёт TLS и прямой сокет — см. комментарий там.
         runCatching {
-            AppProtocolClient(host).use { client ->
-                client.connect()
+            AppProtocolClient.connectAny().use { client ->
                 if (!client.resume(session.memberId, session.loginKey!!)) {
                     // login_key протух — чистим, чтобы настройки предложили перелогин.
                     session.loginKey = null
@@ -91,10 +90,9 @@ class PushRegistrar(
     /** Снять регистрацию (пустой токен = отписка на стороне сервера). */
     suspend fun unregister(): Result = withContext(Dispatchers.IO) {
         if (!session.hasSession()) return@withContext Result.NoSession
-        val host = runCatching { AppProtocolClient.resolveWsHost() }.getOrDefault(AppProtocolClient.DEFAULT_WS_HOST)
+        // connectAny сам переберёт TLS и прямой сокет — см. комментарий там.
         runCatching {
-            AppProtocolClient(host).use { client ->
-                client.connect()
+            AppProtocolClient.connectAny().use { client ->
                 if (!client.resume(session.memberId, session.loginKey!!)) return@withContext Result.NoSession
                 client.registerToken("", 0, PROVIDER_GOOGLE)
             }
