@@ -265,6 +265,23 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         applyDeliveryMethod(current)
         updateDeliveryMethodSummary(pref, current)
 
+        // Переключение резервной проверки меняет фоновый опрос — пересобираем производные флаги.
+        preferenceScreen.findPreference<Preference>(KEY_PUSH_SAFETY_NET)
+                ?.onPreferenceChangeListener = OnPreferenceChangeListener { _, newValue ->
+            preferenceScreen.sharedPreferences?.edit()
+                    ?.putBoolean(KEY_PUSH_SAFETY_NET, newValue as? Boolean ?: true)?.apply()
+            applyDeliveryMethod(currentDeliveryMethod())
+            true
+        }
+
+        // Значение интервала выводится в summary, поэтому обновляем подпись сразу после выбора.
+        preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.bg.interval_min")
+                ?.onPreferenceChangeListener = OnPreferenceChangeListener { p, newValue ->
+            (p as? androidx.preference.ListPreference)?.value = newValue as? String
+            updateIntervalPreferenceUi(currentDeliveryMethod())
+            false // значение уже записали сами, иначе оно применилось бы дважды
+        }
+
         pref.onPreferenceChangeListener = OnPreferenceChangeListener { _, newValue ->
             val value = newValue as? String ?: return@OnPreferenceChangeListener false
             if (value == "push") {
@@ -290,19 +307,63 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
      */
     private fun applyDeliveryMethod(method: String) {
         val sp = preferenceScreen.sharedPreferences ?: return
-        val bgEnabled = method != "off"
+        // В режиме Push фоновый опрос — необязательная страховка, и её можно выключить совсем:
+        // тогда доставка идёт исключительно через push (минимум расхода батареи).
+        val safetyNetOn = sp.getBoolean(KEY_PUSH_SAFETY_NET, true)
+        val bgEnabled = when (method) {
+            "off" -> false
+            "push" -> safetyNetOn
+            else -> true
+        }
         val persistentWs = method == "socket"
+        preferenceScreen.findPreference<Preference>(KEY_PUSH_SAFETY_NET)?.isVisible = method == "push"
         sp.edit()
                 .putBoolean(KEY_BG_ENABLED, bgEnabled)
                 .putBoolean(KEY_PERSISTENT_WS, persistentWs)
                 .apply()
-        preferenceScreen.findPreference<Preference>("notifications.bg.interval_min")?.apply {
-            // Интервал имеет смысл только там, где приложение опрашивает форум само.
-            isVisible = method == "poll" || method == "push"
-            summary = getString(
-                    if (method == "push") R.string.pref_summary_bg_interval_safety
-                    else R.string.pref_summary_bg_interval_poll
-            )
+        updateIntervalPreferenceUi(method)
+    }
+
+    /**
+     * Строка интервала обслуживает два РАЗНЫХ смысла, поэтому и подписывается по-разному:
+     * при «Опросе» это основной канал доставки, при «Push» — только аварийная страховка на
+     * случай недоставленного push. Текущее значение выводим в начало summary: иначе, переопределив
+     * summary пояснением, мы бы спрятали от пользователя выбранный интервал.
+     */
+    private fun updateIntervalPreferenceUi(method: String) {
+        val pref = preferenceScreen
+                .findPreference<androidx.preference.ListPreference>("notifications.bg.interval_min") ?: return
+        // Интервал имеет смысл только там, где приложение реально опрашивает форум: при «Опросе»
+        // всегда, при «Push» — лишь пока включена резервная проверка.
+        val safetyNetOn = preferenceScreen.sharedPreferences?.getBoolean(KEY_PUSH_SAFETY_NET, true) ?: true
+        pref.isVisible = method == "poll" || (method == "push" && safetyNetOn)
+        if (!pref.isVisible) return
+        val currentEntry = pref.entry?.toString() ?: pref.value.orEmpty()
+        pref.title = getString(
+                if (method == "push") R.string.pref_title_bg_check_interval_safety
+                else R.string.pref_title_bg_check_interval
+        )
+        pref.summary = getString(
+                if (method == "push") R.string.pref_summary_bg_interval_safety
+                else R.string.pref_summary_bg_interval_poll,
+                currentEntry
+        )
+    }
+
+    /**
+     * При переходе на Push учащённый опрос теряет смысл: события приносит сервер, а фоновая
+     * проверка остаётся лишь страховкой на редкий недоставленный push. Поднимаем интервал до
+     * часа — ровно так поступает официальный клиент в FCM-режиме (safety-net ≈ 1 ч).
+     *
+     * Только ПОВЫШАЕМ и только в момент переключения: если пользователь потом осознанно выберет
+     * другое значение (в т.ч. более частое), перезатирать его при каждом заходе в настройки нельзя.
+     */
+    private fun relaxSafetyNetInterval() {
+        val intervalPref = preferenceScreen
+                .findPreference<androidx.preference.ListPreference>("notifications.bg.interval_min") ?: return
+        val current = intervalPref.value?.toLongOrNull() ?: return
+        if (current < PUSH_SAFETY_NET_MIN) {
+            intervalPref.value = PUSH_SAFETY_NET_MIN.toString()
         }
     }
 
@@ -341,6 +402,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
             when (val outcome = controller.enablePush(defaultLogin)) {
                 is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Registered -> {
                     pref.value = "push"
+                    relaxSafetyNetInterval()
                     applyDeliveryMethod("push")
                     updateDeliveryMethodSummary(pref, "push")
                     toast(getString(R.string.push_setup_registered))
@@ -649,6 +711,10 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         /** Флаги, выводимые из «Способа доставки» (сами тумблеры из UI убраны). */
         private const val KEY_BG_ENABLED = "notifications.bg.enabled"
         private const val KEY_PERSISTENT_WS = "notifications.bg.persistent_ws"
+        /** Страховочный интервал в режиме Push, мин (как safety-net у офиц. клиента). */
+        private const val PUSH_SAFETY_NET_MIN = 60L
+        /** Нужна ли резервная фоновая проверка в режиме Push (можно выключить совсем). */
+        private const val KEY_PUSH_SAFETY_NET = "notifications.push.safety_net"
         /** Период живого обновления статуса «Мгновенный канал», пока экран открыт. */
         private const val REALTIME_STATUS_REFRESH_MS = 3_000L
     }

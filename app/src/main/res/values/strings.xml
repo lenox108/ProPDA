@@ -1060,12 +1060,15 @@
     <string name="pref_summary_delivery_push">Push (Google): сервер 4PDA присылает события мгновенно через Firebase. Работает даже в спящем режиме, без постоянного соединения и почти без расхода батареи. Рекомендуется.</string>
     <string name="pref_summary_delivery_socket">Постоянное соединение: приложение держит непрерывный канал с форумом (как мессенджеры). Мгновенно, но заметно расходует батарею и держит значок в шторке.</string>
     <string name="pref_summary_delivery_off">В фоне ничего не проверяется. Уведомления приходят, только когда приложение открыто.</string>
-    <string name="pref_summary_bg_interval_safety">Страховка на случай, если push не дошёл. Можно ставить редко — 2–4 часа.</string>
+    <string name="pref_title_push_safety_net">Резервная проверка</string>
+    <string name="pref_summary_push_safety_net">Push доставляет события мгновенно. Резервная проверка нужна только на редкий случай, когда push потерялся: не было сети, сбой Google или прошивка выгрузила приложение. Выключите, если хотите максимум экономии батареи и полностью полагаетесь на push.</string>
+    <string name="pref_title_bg_check_interval_safety">Резервная проверка</string>
+    <string name="pref_summary_bg_interval_safety">%1$s. Нужна редко: push доставляет события мгновенно, а эта проверка срабатывает, только если push потерялся — не было сети, сбой Google или прошивка выгрузила приложение. Рекомендуется 1 час.</string>
     <string name="realtime_status_push_active">Push (Google) активен — сервер 4PDA присылает события мгновенно</string>
     <string name="realtime_status_push_pending">Push выбран, но токен не зарегистрирован. Откройте «Способ доставки» и включите push заново.</string>
     <string name="realtime_status_poll_only">Опрос раз в %1$d мин — мгновенный канал не используется</string>
     <string name="realtime_status_bg_off">Фоновая проверка выключена — уведомления только при открытом приложении</string>
-    <string name="pref_summary_bg_interval_poll">Как часто приложение проверяет форум в фоне. Чем реже — тем меньше расход батареи.</string>
+    <string name="pref_summary_bg_interval_poll">%1$s. Как часто приложение само проверяет форум в фоне: чем реже, тем меньше расход батареи, но тем позже придут уведомления.</string>
     <string name="push_setup_account_mismatch">Этот аккаунт не совпадает с тем, под которым вы вошли в приложении. Войдите тем же логином.</string>
     <string name="push_setup_no_gms">Нет сервисов Google Play — push недоступен на этом устройстве.</string>
     <string name="push_setup_registered">Push включён — уведомления будут приходить мгновенно.</string>
