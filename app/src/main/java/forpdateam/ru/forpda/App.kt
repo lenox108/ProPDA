@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.TypedArray
@@ -86,6 +87,18 @@ class App : Application(), androidx.work.Configuration.Provider {
     // region Companion Object
     companion object {
         private const val VERSION_HISTORY_STARTUP_DELAY_MS = 1_500L
+
+        /**
+         * Ключи, из которых складывается push-битмаск на сервере 4PDA
+         * (см. PushRegistrar.computeBitmask). Изменение любого требует перерегистрации.
+         */
+        private val PUSH_BITMASK_KEYS = setOf(
+                "notifications.main.enabled",
+                "notifications.qms.enabled",
+                "notifications.fav.enabled",
+                "notifications.fav.only_important",
+                "notifications.mentions.enabled"
+        )
     }
     // endregion
 
@@ -122,6 +135,12 @@ class App : Application(), androidx.work.Configuration.Provider {
     private val appLifecycleObserver = AppLifecycleObserver()
 
     private val isInitialized = AtomicBoolean(false)
+
+    /**
+     * Сильная ссылка на слушателя push-настроек: SharedPreferences держит слушателей слабо,
+     * без поля его собрал бы GC и битмаск перестал бы обновляться.
+     */
+    private var pushPrefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     // endregion
 
     // region Lifecycle
@@ -411,11 +430,17 @@ class App : Application(), androidx.work.Configuration.Provider {
         appScope.launch {
             runCatching { registrar.register(force = false) }
                     .onFailure { Timber.w(it, "push token refresh failed") }
-            // Смена включённых семейств уведомлений → перерегистрация с новым битмаском.
-            notificationPreferencesHolder.wantsPushNotificationsFlow()
-                    .distinctUntilChanged()
-                    .collect { runCatching { registrar.register(force = false) } }
         }
+        // Смена ЛЮБОГО семейства уведомлений меняет битмаск, который сервер использует для
+        // отбора событий. wantsPushNotificationsFlow здесь не годится: это OR по семействам,
+        // поэтому выключение только «Избранного» его не меняет и битмаск на сервере протух бы.
+        // Слушаем конкретные ключи; register() сам дедупит по (токен, битмаск).
+        pushPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key in PUSH_BITMASK_KEYS) {
+                appScope.launch { runCatching { registrar.register(force = false) } }
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(pushPrefsListener)
     }
 
     private fun rescheduleEventsCheckWorker() {

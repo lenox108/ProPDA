@@ -56,8 +56,11 @@ class PushSetupController(private val context: Context) {
 
     private suspend fun loginThenRegister(defaultLogin: String?): Outcome {
         val creds = askCredentials(defaultLogin) ?: return Outcome.Cancelled
-        val host = runCatching { AppProtocolClient.resolveWsHost() }
-                .getOrDefault(AppProtocolClient.DEFAULT_WS_HOST)
+        // resolveWsHost() ходит в сеть — строго на IO (StrictMode ловил это на главном потоке).
+        val host = withContext(Dispatchers.IO) {
+            runCatching { AppProtocolClient.resolveWsHost() }
+                    .getOrDefault(AppProtocolClient.DEFAULT_WS_HOST)
+        }
 
         val loginOk = withContext(Dispatchers.IO) {
             runCatching {

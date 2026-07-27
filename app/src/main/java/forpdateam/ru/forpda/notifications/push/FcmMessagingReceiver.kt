@@ -44,8 +44,15 @@ class FcmMessagingReceiver : BroadcastReceiver() {
             }
         }
 
-        NotifDiagLog.log(context, "fcm: push received id=${messageId?.take(12)}")
         Timber.i("FCM push received, waking events check")
+        // Журнал пишем вне главного потока: onReceive идёт на Main, а NotifDiagLog делает
+        // файловый I/O (StrictMode ругался в полевом логе). Диагностика не должна тормозить
+        // приём пуша — enqueue ниже важнее.
+        val appContext = context.applicationContext
+        val diagId = messageId?.take(12)
+        Thread { runCatching { NotifDiagLog.log(appContext, "fcm: push received id=$diagId") } }
+                .apply { isDaemon = true }
+                .start()
 
         val work = OneTimeWorkRequestBuilder<EventsCheckWorker>()
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
