@@ -536,6 +536,8 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                             getString(R.string.push_setup_no_gms)
                         forpdateam.ru.forpda.notifications.push.PushSetupController.ACCOUNT_MISMATCH ->
                             getString(R.string.push_setup_account_mismatch)
+                        forpdateam.ru.forpda.notifications.push.PushSetupController.NOT_PRO ->
+                            getString(R.string.push_setup_not_pro)
                         else -> getString(R.string.push_setup_failed, outcome.message)
                     }
                     toast(msg)
