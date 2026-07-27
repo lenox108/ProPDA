@@ -40,6 +40,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     private fun handleMarkRead(context: Context, intent: Intent, notifyId: Int) {
         NotificationManagerCompat.from(context).cancel(notifyId)
+        // Ушёл ребёнок группы — сводке нужен новый счётчик (а при последнем ребёнке она снимается).
+        NotificationPublisher.refreshGroupSummaries(context, excludeIds = setOf(notifyId))
         val isMention = intent.getBooleanExtra(EXTRA_IS_MENTION, false)
         val topicId = intent.getIntExtra(EXTRA_TOPIC_ID, 0)
         val postId = intent.getIntExtra(EXTRA_POST_ID, 0)
@@ -72,6 +74,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
             try {
                 qmsInteractor.sendMessage(userId, themeId, text, emptyList())
                 NotificationManagerCompat.from(context).cancel(notifyId)
+                NotificationPublisher.refreshGroupSummaries(context, excludeIds = setOf(notifyId))
             } catch (t: Throwable) {
                 Timber.e(t, "Notification quick-reply failed user=$userId theme=$themeId")
                 // Уведомление уже свернулось, и без этого текст пользователя пропадал молча:

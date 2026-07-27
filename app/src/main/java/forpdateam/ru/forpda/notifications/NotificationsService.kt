@@ -408,8 +408,7 @@ class NotificationsService : Service() {
         removeForegroundNotification()
         val manager = getNotificationManager()
         runCatching {
-            manager.cancel(NotificationPublisher.NOTIFY_STACKED_QMS_ID)
-            manager.cancel(NotificationPublisher.NOTIFY_STACKED_FAV_ID)
+            NotificationGroups.SUMMARY_IDS.forEach { manager.cancel(it) }
             postedEventNotifyIds.toList().forEach { manager.cancel(it) }
             postedEventNotifyIds.clear()
             // Подметаем и то, что опубликовал фоновый EventsCheckWorker: он публикует
@@ -439,31 +438,11 @@ class NotificationsService : Service() {
         getNotificationManager().cancel(id)
         postedEventNotifyIds.remove(id)
         Log.i(NOTIFICATIONS_LOG_TAG, "Cancelled notification id=$id source=${event.source} sourceId=${event.sourceId}")
-        // Сводка («N сообщений», [NotificationPublisher.publishStacked]) висит под собственным ID и
-        // сама не исчезает вместе с последним снятым событием — в шторке оставалась группа про уже
-        // прочитанные сообщения. Снимаем её, когда в канале не осталось ни одного события.
-        when {
-            event.fromQms() ->
-                cancelStackedIfEmpty(CHANNEL_QMS_ID, NotificationPublisher.NOTIFY_STACKED_QMS_ID, id)
-            event.fromTheme() && !event.isMention ->
-                cancelStackedIfEmpty(CHANNEL_FAV_ID, NotificationPublisher.NOTIFY_STACKED_FAV_ID, id)
-        }
-    }
-
-    /**
-     * Снимает сводное уведомление канала, если в шторке не осталось ни одного его события.
-     * [justCancelledId] исключается явно: `activeNotifications` успевает вернуть уведомление,
-     * которое мы отменили строкой выше.
-     */
-    private fun cancelStackedIfEmpty(channelId: String, stackedId: Int, justCancelledId: Int) {
-        val systemManager = getSystemService(NotificationManager::class.java) ?: return
-        val active = runCatching { systemManager.activeNotifications }.getOrNull() ?: return
-        val hasEvents = active.any { sbn ->
-            sbn.notification?.channelId == channelId && sbn.id != stackedId && sbn.id != justCancelledId
-        }
-        if (!hasEvents) {
-            getNotificationManager().cancel(stackedId)
-        }
+        // Сводка группы живёт под собственным ID и сама не исчезает вместе с последним снятым
+        // событием — в шторке оставалась группа про уже прочитанное. Пересборка сводок по факту
+        // содержимого шторки снимает опустевшие и подтягивает счётчик у остальных. Только что
+        // снятый ID исключаем явно: activeNotifications успевает вернуть его ещё живым.
+        NotificationPublisher.refreshGroupSummaries(this, excludeIds = setOf(id))
     }
 
     fun sendNotification(event: NotificationEvent) {
@@ -512,7 +491,7 @@ class NotificationsService : Service() {
     }
 
     fun sendNotifications(events: List<NotificationEvent>) {
-        NotificationPublisher.publishStacked(this, notificationPreferencesHolder, events)
+        NotificationPublisher.publishBatch(this, notificationPreferencesHolder, events)
                 ?.let { postedEventNotifyIds.add(it) }
     }
 

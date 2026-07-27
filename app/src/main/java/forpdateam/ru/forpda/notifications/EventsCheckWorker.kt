@@ -338,7 +338,7 @@ class EventsCheckWorker @AssistedInject constructor(
         // двигаем, оно переиграет (полностью закрывает P1 из code-review, а не только предпроверкой).
         var publishBlocked = false
         if (toPublish.size > STACKED_MAX) {
-            if (NotificationPublisher.publishStacked(appContext, prefs, toPublish) == null) publishBlocked = true
+            if (NotificationPublisher.publishBatch(appContext, prefs, toPublish) == null) publishBlocked = true
         } else {
             for (event in toPublish) {
                 if (NotificationPublisher.publish(appContext, prefs, event) == null) publishBlocked = true

@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.notifications
 
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.text.TextUtils
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -23,19 +25,27 @@ import timber.log.Timber
  * Единая сборка системных уведомлений для foreground-сервиса и фонового воркера.
  * До этого у каждого была своя копия билдера, и они успели разойтись: воркер не умел
  * ни аватарки, ни stacked-уведомления, ни события сайта.
+ *
+ * Группировка ([NotificationGroups]) — вторая обязанность объекта: каждое событие уходит в
+ * группу своей категории, а рядом живёт сводка, которую пересобирает [refreshGroupSummaries]
+ * после любой публикации и любой отмены.
  */
 object NotificationPublisher {
 
     private const val NOTIFICATIONS_LOG_TAG = "Notifications"
     /** Помечает интент открытия темы из шторки — MainActivity даёт ему «доверие непрочитанного». */
     const val EXTRA_FROM_NOTIFICATION_TOPIC = "forpda_from_notification_topic"
-    const val NOTIFY_STACKED_QMS_ID = -123
-    const val NOTIFY_STACKED_FAV_ID = -234
-    private const val STACKED_MAX = 4
-    // Switch to InboxStyle at 4+ events so each line stays scannable. Below
-    // the threshold the joined BigText looks more natural than a list.
-    private const val INBOX_STYLE_THRESHOLD = 4
     private const val INBOX_STYLE_MAX_LINES = 6
+
+    /**
+     * Сколько уведомлений пачки показать отдельными карточками. Остальные видны только строкой
+     * «…и ещё N» в сводке: Android держит жёсткий лимит активных уведомлений на приложение
+     * (25), и высыпать туда всю пачку — верный способ потерять часть молча.
+     */
+    private const val BATCH_CHILDREN_MAX = 8
+
+    /** Сводка нужна только когда сворачивать реально есть что. */
+    private const val SUMMARY_MIN_CHILDREN = 2
 
     /** @return ID опубликованного уведомления либо null, если публикация не состоялась. */
     @SuppressLint("MissingPermission")
@@ -45,18 +55,24 @@ object NotificationPublisher {
             event: NotificationEvent,
             intentUrlOverride: String? = null,
             avatar: android.graphics.Bitmap? = null,
+            silent: Boolean = false,
+            refreshSummary: Boolean = true,
     ): Int? {
         if (!prefs.getMainEnabled()) return null
 
         val channelId = channelIdFor(event)
         NotificationsService.createEventChannels(context)
         ensureChannel(context, channelId, channelNameFor(context, event))
+        // Гейт до сборки: иначе заблокированная публикация всё равно успевала опубликовать
+        // ярлык собеседника и прогреть аватар.
+        if (!canNotify(context, channelId, event.notificationLogCategory())) return null
 
         val title = titleFor(context, event)
         val text = textFor(context, event)
         val summary = summaryFor(context, event)
         val intentUrl = intentUrlOverride ?: intentUrlFor(event)
         val qmsAvatar = avatarFor(event, avatar)
+        val conversationShortcutId = QmsConversationShortcuts.push(context, event, qmsAvatar)
 
         val notifyIntent = Intent(Intent.ACTION_VIEW, Uri.parse(intentUrl))
                 .setClass(context, MainActivity::class.java)
@@ -79,20 +95,31 @@ object NotificationPublisher {
                 .applySelectedNotificationIcon(context, smallIconFor(event))
                 .setContentTitle(title)
                 .setContentText(text)
-                .setStyle(styleFor(context, event, title, text, summary, qmsAvatar))
+                .setStyle(styleFor(context, event, title, text, summary, qmsAvatar, conversationShortcutId))
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
 
         qmsAvatar?.let { builder.setLargeIcon(it) }
+        conversationShortcutId?.let {
+            // Пропуск в раздел «Диалоги» (Android 11+): shortcutId + MessagingStyle + Person.
+            builder.setShortcutId(it)
+            builder.setCategory(NotificationCompat.CATEGORY_MESSAGE)
+        }
         NotificationActions.apply(context, builder, event)
+        if (silent) {
+            // Пачка: звонит один раз сводка, дети молчат. Иначе десяток событий = десяток сигналов.
+            builder.setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
+        }
 
-        if (!canNotify(context, channelId, event.notificationLogCategory())) return null
         val manager = NotificationManagerCompat.from(context)
         val notifyId = event.notifyId()
         manager.notify(notifyId, builder.build())
         Log.i(NOTIFICATIONS_LOG_TAG, "Published ${event.notificationLogCategory()} notification")
+        if (refreshSummary) {
+            refreshGroupSummaries(context, justPosted = listOf(summaryChild(context, event)))
+        }
         return notifyId
     }
 
@@ -102,52 +129,195 @@ object NotificationPublisher {
             avatar: android.graphics.Bitmap?,
     ): android.graphics.Bitmap? = avatar.takeIf { event.fromQms() }
 
-    /** @return ID опубликованного stacked-уведомления либо null, если публикация не состоялась. */
-    @SuppressLint("MissingPermission")
-    fun publishStacked(
+    /**
+     * Публикация пачки событий: сами события идут отдельными (но молчащими) уведомлениями,
+     * а звучит и сворачивает их одна сводка группы. Раньше здесь рисовалась рукодельная
+     * «стопка» вне группы — она ложилась ПОВЕРХ уже висящих одиночных уведомлений.
+     *
+     * @return ID сводки либо null, если хотя бы одно уведомление пачки система не пропустила
+     * (воркер по null не двигает снапшот, и событие переиграет).
+     */
+    fun publishBatch(
             context: Context,
             prefs: NotificationPreferencesHolder,
             events: List<NotificationEvent>,
     ): Int? {
         if (events.isEmpty() || !prefs.getMainEnabled()) return null
 
-        val first = events.first()
-        val channelId = channelIdFor(first)
-        NotificationsService.createEventChannels(context)
-        ensureChannel(context, channelId, channelNameFor(context, first))
+        val children = events.take(BATCH_CHILDREN_MAX)
+        // Один ребёнок сводки не получит (сводку под него не публикуем) — значит, замолчать
+        // он не имеет права: иначе событие пришло бы совсем беззвучно.
+        val silent = children.size >= SUMMARY_MIN_CHILDREN
+        var blocked = false
+        val posted = mutableListOf<SummaryChild>()
+        for (event in children) {
+            if (publish(context, prefs, event, silent = silent, refreshSummary = false) == null) {
+                blocked = true
+            } else {
+                posted += summaryChild(context, event)
+            }
+        }
+        val dropped = events.size - children.size
+        if (dropped > 0) {
+            Log.i(NOTIFICATIONS_LOG_TAG, "Batch trimmed: $dropped events shown only in group summary")
+            NotifDiagLog.log(context, "batch: ${events.size} events, ${children.size} shown individually")
+        }
+        val groups = posted.map { it.groupKey }.toSet()
+        refreshGroupSummaries(context, alertGroups = groups, justPosted = posted)
+        Log.i(NOTIFICATIONS_LOG_TAG, "Published batch of ${events.size} events into groups $groups")
+        if (blocked) return null
+        return NotificationGroups.summaryIdFor(NotificationGroups.keyFor(children.first()))
+    }
 
-        val title = summaryFor(context, first)
-        val text = stackedContentFor(context, events)
-        val summary = summaryFor(context, first)
-        val intentUrl = stackedIntentUrlFor(first)
+    /** Ребёнок группы в том виде, в каком его показывает сводка. */
+    data class SummaryChild(
+            val id: Int,
+            val groupKey: String,
+            val line: CharSequence,
+            val postTime: Long,
+    )
 
-        val notifyIntent = Intent(Intent.ACTION_VIEW, Uri.parse(intentUrl))
+    /**
+     * Приводит сводки всех групп в соответствие с тем, что реально висит в шторке: где детей
+     * больше одного — публикует/обновляет сводку, где не осталось — снимает. Состояние берётся
+     * из [NotificationManager.getActiveNotifications], а не из собственного счётчика: свайпы
+     * пользователя, авто-отмена по тапу и параллельные публикации сервиса и фонового воркера
+     * иначе разъезжаются с любым нашим кэшем.
+     *
+     * Шторка отвечает с задержкой в обе стороны, поэтому только что опубликованное и только что
+     * снятое приходится досказывать явно ([justPosted] / [excludeIds]) — иначе сводка появлялась
+     * бы через одно событие и переживала бы последнего снятого ребёнка.
+     *
+     * @param alertGroups группы, чья сводка должна прозвучать (пачка). Для одиночных публикаций
+     * пусто: звук уже дал сам ребёнок, а сводка молчит через `GROUP_ALERT_CHILDREN`.
+     */
+    @SuppressLint("MissingPermission")
+    fun refreshGroupSummaries(
+            context: Context,
+            alertGroups: Set<String> = emptySet(),
+            justPosted: List<SummaryChild> = emptyList(),
+            excludeIds: Set<Int> = emptySet(),
+    ) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val active = runCatching { manager.activeNotifications }.getOrNull() ?: return
+        val compat = NotificationManagerCompat.from(context)
+        val observed = active.mapNotNull { sbn ->
+            val notification = sbn.notification ?: return@mapNotNull null
+            val groupKey = notification.group ?: return@mapNotNull null
+            if (sbn.id in excludeIds) return@mapNotNull null
+            if ((notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return@mapNotNull null
+            if (groupKey !in NotificationGroups.ALL) return@mapNotNull null
+            SummaryChild(sbn.id, groupKey, summaryLineFor(notification), sbn.postTime)
+        }
+        val observedIds = observed.mapTo(mutableSetOf()) { it.id }
+        val all = observed + justPosted.filter { it.id !in observedIds && it.id !in excludeIds }
+        for (groupKey in NotificationGroups.ALL) {
+            val summaryId = NotificationGroups.summaryIdFor(groupKey)
+            val children = all
+                    .filter { it.groupKey == groupKey && it.id != summaryId }
+                    .sortedByDescending { it.postTime }
+            if (children.size < SUMMARY_MIN_CHILDREN) {
+                runCatching { compat.cancel(summaryId) }
+                        .onFailure { Timber.w(it, "group summary cancel failed") }
+                continue
+            }
+            val channelId = NotificationGroups.channelIdFor(groupKey)
+            if (!canDeliver(context, channelId)) continue
+            val builder = summaryBuilder(context, groupKey, children, alert = groupKey in alertGroups)
+            runCatching { compat.notify(summaryId, builder.build()) }
+                    .onFailure { Timber.w(it, "group summary publish failed") }
+        }
+    }
+
+    private fun summaryBuilder(
+            context: Context,
+            groupKey: String,
+            children: List<SummaryChild>,
+            alert: Boolean,
+    ): NotificationCompat.Builder {
+        val title = context.getString(NotificationGroups.titleResFor(groupKey))
+        val count = children.size
+        val text = context.resources.getQuantityString(R.plurals.notification_group_count, count, count)
+        val summaryId = NotificationGroups.summaryIdFor(groupKey)
+
+        val notifyIntent = Intent(Intent.ACTION_VIEW, Uri.parse(NotificationGroups.listUrlFor(groupKey)))
                 .setClass(context, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val notifyId = stackedNotifyId(first)
         val pi = PendingIntent.getActivity(
                 context,
-                notifyId,
+                summaryId,
                 notifyIntent,
                 NotificationsService.activityPendingIntentFlags(0)
         )
 
-        val builder = NotificationCompat.Builder(context, channelId)
-                .applySelectedNotificationIcon(context, smallIconFor(first))
+        val builder = NotificationCompat.Builder(context, NotificationGroups.channelIdFor(groupKey))
+                .applySelectedNotificationIcon(context, NotificationGroups.smallIconFor(groupKey))
                 .setContentTitle(title)
                 .setContentText(text)
-                .setStyle(stackedStyle(context, events, title, summary))
-                .setNumber(events.size.coerceAtMost(99))
+                .setStyle(summaryStyle(context, children, title, text))
+                .setNumber(count.coerceAtMost(99))
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+                .setGroup(groupKey)
+                .setGroupSummary(true)
 
-        if (!canNotify(context, channelId, "stacked")) return null
-        val manager = NotificationManagerCompat.from(context)
-        manager.notify(notifyId, builder.build())
-        Log.i(NOTIFICATIONS_LOG_TAG, "Published stacked ${first.notificationLogCategory()} notification, count=${events.size}")
-        return notifyId
+        if (alert) {
+            // Пачка: дети молчат (GROUP_ALERT_SUMMARY), звук даёт сводка — ровно один раз.
+            builder.setOnlyAlertOnce(false)
+        } else {
+            builder.setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+                    // Сводка пересобирается на каждое событие и отмену; без этого каждая
+                    // пересборка была бы поводом для нового сигнала.
+                    .setOnlyAlertOnce(true)
+        }
+        return builder
+    }
+
+    internal fun summaryStyle(
+            context: Context,
+            children: List<SummaryChild>,
+            title: CharSequence,
+            summary: CharSequence,
+    ): NotificationCompat.Style {
+        val inbox = NotificationCompat.InboxStyle()
+                .setBigContentTitle(title)
+                .setSummaryText(summary)
+        val shown = minOf(children.size, INBOX_STYLE_MAX_LINES)
+        for (i in 0 until shown) {
+            inbox.addLine(children[i].line)
+        }
+        if (children.size > shown) {
+            inbox.addLine(context.getString(R.string.notification_stacked_more, children.size - shown))
+        }
+        return inbox
+    }
+
+    private fun summaryChild(context: Context, event: NotificationEvent): SummaryChild = SummaryChild(
+            id = event.notifyId(),
+            groupKey = NotificationGroups.keyFor(event),
+            line = summaryLine(titleFor(context, event), textFor(context, event)),
+            postTime = System.currentTimeMillis(),
+    )
+
+    /**
+     * Строка сводки для уже висящего уведомления: исходного [NotificationEvent] на руках нет —
+     * сводку пересобирает и действие из шторки, и отмена по прочтению.
+     */
+    private fun summaryLineFor(notification: Notification): CharSequence = summaryLine(
+            notification.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
+            notification.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty(),
+    )
+
+    /** Заголовок и текст пользовательские (ник, название темы) — экранируем перед склейкой в HTML. */
+    private fun summaryLine(rawTitle: String, rawText: String): CharSequence {
+        val title = rawTitle.trim()
+        val text = rawText.trim()
+        if (title.isEmpty()) return text
+        if (text.isEmpty()) return title
+        val html = "<b>${TextUtils.htmlEncode(title)}</b> ${TextUtils.htmlEncode(text)}"
+        return ApiUtils.spannedFromHtml(html) ?: "$title $text"
     }
 
     private fun canNotify(context: Context, channelId: String, category: String): Boolean {
@@ -200,7 +370,9 @@ object NotificationPublisher {
     }
 
     fun cancel(context: Context, event: NotificationEvent) {
-        NotificationManagerCompat.from(context).cancel(event.notifyId())
+        val notifyId = event.notifyId()
+        NotificationManagerCompat.from(context).cancel(notifyId)
+        refreshGroupSummaries(context, excludeIds = setOf(notifyId))
     }
 
     fun channelIdFor(e: NotificationEvent): String = when {
@@ -222,7 +394,9 @@ object NotificationPublisher {
      * аватар отправителя (как в мессенджерах), а не значок приложения. Это
      * единственный легальный способ подменить кружок в строке шторки: кружок
      * рисуется системой из ApplicationInfo и через Notification API не меняется.
-     * Без аватара или ника (и для всех остальных событий) — прежний BigText.
+     * Вместе с [QmsConversationShortcuts] это же условие пускает уведомление в раздел
+     * «Диалоги» (Android 11+), поэтому стиль включается и без аватара — по одному нику.
+     * Для всех остальных событий — прежний BigText.
      */
     private fun styleFor(
             context: Context,
@@ -231,11 +405,17 @@ object NotificationPublisher {
             text: String,
             summary: String?,
             avatar: android.graphics.Bitmap?,
+            conversationShortcutId: String?,
     ): NotificationCompat.Style {
-        if (event.fromQms() && avatar != null && event.userNick.isNotEmpty()) {
+        if (event.fromQms() && event.userNick.isNotEmpty()) {
             val sender = androidx.core.app.Person.Builder()
                     .setName(event.userNick)
-                    .setIcon(androidx.core.graphics.drawable.IconCompat.createWithBitmap(avatar))
+                    .setKey(conversationShortcutId ?: QmsConversationShortcuts.shortcutId(event.userId))
+                    .apply {
+                        avatar?.let {
+                            setIcon(androidx.core.graphics.drawable.IconCompat.createWithBitmap(it))
+                        }
+                    }
                     .build()
             val me = androidx.core.app.Person.Builder()
                     .setName(context.getString(R.string.notification_qms_me))
@@ -326,87 +506,6 @@ object NotificationPublisher {
         e.fromQms() -> "https://4pda.to/forum/index.php?act=qms&mid=${e.userId}&t=${e.sourceId}"
         e.fromTheme() -> "https://4pda.to/forum/index.php?showtopic=${e.sourceId}&view=getnewpost"
         else -> "https://4pda.to/forum/index.php?act=mentions"
-    }
-
-    fun stackedNotifyId(first: NotificationEvent): Int = when {
-        first.fromQms() -> NOTIFY_STACKED_QMS_ID
-        first.fromTheme() -> NOTIFY_STACKED_FAV_ID
-        else -> first.notifyId()
-    }
-
-    fun stackedIntentUrlFor(first: NotificationEvent): String = when {
-        first.fromQms() -> "https://4pda.to/forum/index.php?act=qms"
-        first.fromTheme() -> "https://4pda.to/forum/index.php?act=fav"
-        else -> "https://4pda.to/forum/index.php?act=mentions"
-    }
-
-    /**
-     * Builds the [NotificationCompat.Style] for [publishStacked]. Uses
-     * [NotificationCompat.InboxStyle] for 4+ events so the user can read each
-     * line individually; falls back to [NotificationCompat.BigTextStyle] for
-     * small stacks where the joined text is the more natural form. See AUDIT-L12.
-     */
-    internal fun stackedStyle(
-            context: Context,
-            events: List<NotificationEvent>,
-            title: CharSequence,
-            summary: CharSequence,
-    ): NotificationCompat.Style {
-        if (events.size >= INBOX_STYLE_THRESHOLD) {
-            val inbox = NotificationCompat.InboxStyle()
-                    .setBigContentTitle(title)
-                    .setSummaryText(summary)
-            val show = minOf(events.size, INBOX_STYLE_MAX_LINES)
-            for (i in 0 until show) {
-                val event = events[i]
-                inbox.addLine(stackedLineFor(context, event))
-            }
-            if (events.size > show) {
-                inbox.addLine(context.getString(R.string.notification_stacked_more, events.size - show))
-            }
-            return inbox
-        }
-        return NotificationCompat.BigTextStyle()
-                .setBigContentTitle(title)
-                .bigText(stackedContentFor(context, events))
-                .setSummaryText(summary)
-    }
-
-    private fun stackedLineFor(context: Context, e: NotificationEvent): CharSequence {
-        if (e.fromQms()) {
-            val nick = e.userNick.ifBlank { context.getString(R.string.notification_title_qms_fallback) }
-            return "$nick: ${e.sourceTitle}"
-        }
-        val title = e.sourceTitle.ifBlank { context.getString(R.string.notification_content_theme_fallback) }
-        // Строка стека — «ник: тема», как у одиночного уведомления и как в QMS-стеке.
-        return if (e.userNick.isBlank()) title else "${e.userNick}: $title"
-    }
-
-    fun stackedContentFor(context: Context, events: List<NotificationEvent>): CharSequence {
-        val content = StringBuilder()
-        val size = minOf(events.size, STACKED_MAX)
-        for (i in 0 until size) {
-            val event = events[i]
-            if (event.fromQms()) {
-                var nick = event.userNick
-                if (nick.isEmpty()) nick = context.getString(R.string.notification_title_qms_fallback)
-                content.append("<b>").append(nick).append("</b>")
-                content.append(": ").append(event.sourceTitle)
-            } else if (event.fromTheme()) {
-                if (event.userNick.isNotBlank()) {
-                    content.append("<b>").append(event.userNick).append("</b>").append(": ")
-                }
-                content.append(event.sourceTitle)
-            }
-            if (i < size - 1) {
-                content.append("<br>")
-            }
-        }
-        if (events.size > size) {
-            content.append("<br>")
-            content.append(context.getString(R.string.notification_stacked_more, events.size - size))
-        }
-        return ApiUtils.spannedFromHtml(content.toString()) ?: content
     }
 
     private fun ensureChannel(context: Context, channelId: String, channelName: String) {

@@ -744,6 +744,16 @@
     <string name="notification_summary_qms">Чат QMS</string>
     <string name="notification_summary_fav">Избранное</string>
     <string name="notification_summary_comment">Комментарий</string>
+    <string name="notification_group_title_qms">Сообщения QMS</string>
+    <string name="notification_group_title_fav">Избранные темы</string>
+    <string name="notification_group_title_mention">Упоминания</string>
+    <string name="notification_group_title_site">Комментарии на сайте</string>
+    <plurals name="notification_group_count">
+        <item quantity="one">%d новое уведомление</item>
+        <item quantity="few">%d новых уведомления</item>
+        <item quantity="many">%d новых уведомлений</item>
+        <item quantity="other">%d новых уведомления</item>
+    </plurals>
     <string name="notification_hat_channel_name">Новые версии в шапке</string>
     <string name="notification_hat_title">Новая версия приложения</string>
     <string name="notification_hat_fallback">В шапку темы добавлен новый файл</string>

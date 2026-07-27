@@ -79,11 +79,13 @@ object NotificationActions {
 
     /**
      * Навешивает действия + группировку на билдер одиночного уведомления.
-     * Группировка ([setGroup]) по типу события → Android сам сворачивает
-     * однотипные уведомления (QMS/избранное/упоминания/сайт) в один бандл, при
-     * этом каждое остаётся отдельно-действенным (свои «Ответить»/«Прочитано»).
-     * Явный summary не постим: система авто-генерирует заголовок бандла (N+), а
-     * ручной summary конфликтовал бы с legacy stacked-путём.
+     * Группировка ([setGroup]) по типу события → однотипные уведомления
+     * (QMS/избранное/упоминания/сайт) сворачиваются в один бандл, при этом каждое
+     * остаётся отдельно-действенным (свои «Ответить»/«Прочитано»).
+     *
+     * Одного ключа мало: без опубликованной сводки Android не сворачивает группу и заодно
+     * исключает её из авто-бандлинга. Сводку постит
+     * [NotificationPublisher.refreshGroupSummaries] — вызывать её после публикации обязательно.
      */
     fun apply(context: Context, builder: NotificationCompat.Builder, event: NotificationEvent) {
         replyAction(context, event)?.let { builder.addAction(it) }
@@ -91,12 +93,7 @@ object NotificationActions {
         builder.setGroup(groupKeyFor(event))
     }
 
-    fun groupKeyFor(event: NotificationEvent): String = when {
-        event.isMention -> "forpda.group.mention"
-        event.fromQms() -> "forpda.group.qms"
-        event.fromTheme() -> "forpda.group.fav"
-        else -> "forpda.group.site"
-    }
+    fun groupKeyFor(event: NotificationEvent): String = NotificationGroups.keyFor(event)
 
     /**
      * PendingIntent сравнивает Intent'ы через filterEquals (action/data/component), игнорируя
