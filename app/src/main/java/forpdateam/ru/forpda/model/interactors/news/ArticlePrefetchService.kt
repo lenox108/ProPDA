@@ -71,20 +71,23 @@ class ArticlePrefetchService(
         schedulePrefetch(articleId, prefetchDebounceMs)
     }
 
-    /** A deliberate tap must not wait for the speculative row-bind debounce. */
+    /**
+     * A deliberate tap must not wait for the speculative row-bind debounce. Такая загрузка уже не
+     * спекулятивная — она идёт с пользовательским приоритетом, мимо бюджета и паузы после 429.
+     */
     @Synchronized
     fun prefetchArticleNow(articleId: Int) {
         prefetchJob?.cancel()
         inflightByArticleId.remove(articleId)?.cancel()
-        schedulePrefetch(articleId, debounceMs = 0L)
+        schedulePrefetch(articleId, debounceMs = 0L, deliberate = true)
     }
 
-    private fun schedulePrefetch(articleId: Int, debounceMs: Long) {
+    private fun schedulePrefetch(articleId: Int, debounceMs: Long, deliberate: Boolean = false) {
         if (articleId <= 0) return
         if (inflightByArticleId[articleId]?.isActive == true) return
         if (articleId == lastPrefetchedId && memoryCache.get(articleId).valid) return
         // 4pda прямо сейчас ограничивает нас по частоте — спекулятивную работу не начинаем вовсе.
-        if (FourPdaRequestGovernor.isCoolingDown()) return
+        if (!deliberate && FourPdaRequestGovernor.isCoolingDown()) return
 
         // RecyclerView binds several visible rows in one burst. Previously every bind launched a full
         // article GET and only the last Job reference was retained, so opening News could hit 4PDA with
@@ -96,7 +99,7 @@ class ArticlePrefetchService(
             try {
                 if (debounceMs > 0L) delay(debounceMs)
                 prefetchMutex.withLock {
-                    prefetchArticleLocked(articleId)
+                    prefetchArticleLocked(articleId, deliberate)
                 }
             } catch (error: kotlinx.coroutines.CancellationException) {
                 throw error
@@ -114,7 +117,7 @@ class ArticlePrefetchService(
         deferred.start()
     }
 
-    private suspend fun prefetchArticleLocked(articleId: Int) {
+    private suspend fun prefetchArticleLocked(articleId: Int, deliberate: Boolean = false) {
         val memoryHit = memoryCache.get(articleId)
         if (memoryHit.valid) {
             ArticleCacheTrace.log(
@@ -141,7 +144,7 @@ class ArticlePrefetchService(
             )
             return
         }
-        if (!consumeNetworkBudget()) {
+        if (!deliberate && !consumeNetworkBudget()) {
             ArticleCacheTrace.log(
                     event = "prefetch_skip",
                     articleId = articleId,
@@ -155,7 +158,7 @@ class ArticlePrefetchService(
         val fetch = newsRepository.fetchArticleDetails(
                 id = articleId,
                 phase = ArticleParsePhase.FIRST_RENDER,
-                background = true
+                background = !deliberate
         )
         val mapped = withContext(Dispatchers.Default) {
             articleTemplate.mapEntity(fetch.page)
