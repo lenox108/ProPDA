@@ -76,9 +76,14 @@ class AvatarRepository(
                 getAvatarSync(id) ?: throw AvatarNotFoundException(avatarId = id)
             }
 
-    suspend fun getAvatar(nick: String): String =
+    /**
+     * @param background true для догрузки аватарок ленты — спекулятивный запрос, который общий
+     * регулятор нагрузки пропускает только при свободном бюджете и глушит после 429.
+     */
+    @JvmOverloads
+    suspend fun getAvatar(nick: String, background: Boolean = false): String =
             withContext(Dispatchers.IO) {
-                fetchAvatarByNick(nick) ?: throw AvatarNotFoundException(nick = nick)
+                fetchAvatarByNick(nick, background) ?: throw AvatarNotFoundException(nick = nick)
             }
 
     fun getAvatarForWebViewInterceptSync(nick: String): String? {
@@ -100,10 +105,11 @@ class AvatarRepository(
 
     private suspend fun getAvatarSync(id: Int): String? = forumUsersCache.getUserById(id)?.avatar
 
-    private suspend fun fetchAvatarByNick(nick: String): String? =
-            getCachedAvatarUrl(nick) ?: forumUsersCache.getUserByNick(nick)?.avatar?.also {
-                cacheAvatarUrl(nick, it)
-            }
+    private suspend fun fetchAvatarByNick(nick: String, background: Boolean = false): String? =
+            getCachedAvatarUrl(nick)
+                    ?: forumUsersCache.getUserByNick(nick, background = background)?.avatar?.also {
+                        cacheAvatarUrl(nick, it)
+                    }
 
     private fun getCachedAvatarUrl(nick: String): String? = avatarUrlByNick.get(nick)
 

@@ -13,6 +13,7 @@ import android.graphics.drawable.VectorDrawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.os.Looper
 import android.os.StrictMode
 import android.util.DisplayMetrics
 import android.util.TypedValue
@@ -180,6 +181,8 @@ class App : Application(), androidx.work.Configuration.Provider {
         // потеряла выбранную пользователем иконку (см. AppIconManager).
         forpdateam.ru.forpda.common.appicon.AppIconManager.ensureLauncherPresent(this)
 
+        warmUpWebViewWhenIdle()
+
         // Lifecycle observer для очистки ресурсов
         ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
         BatteryDebugLogger.logState("App", "created")
@@ -191,6 +194,29 @@ class App : Application(), androidx.work.Configuration.Provider {
         }
     }
     
+    /**
+     * Первое обращение к WebView в процессе поднимает движок Chromium — это сотни миллисекунд,
+     * которые иначе платит открытие статьи или темы. Делаем это заранее, когда главный поток
+     * освободился после старта: создаём и сразу уничтожаем пустой WebView.
+     *
+     * Всё в runCatching: на устройствах без/с обновляющимся WebView-провайдером конструктор
+     * бросает исключение, и это не повод падать при запуске.
+     */
+    private fun warmUpWebViewWhenIdle() {
+        Looper.myQueue().addIdleHandler {
+            runCatching {
+                android.webkit.WebView(this).apply {
+                    settings.javaScriptEnabled = false
+                    destroy()
+                }
+                ColdStartTracer.mark("app.webview.warm")
+            }.onFailure { error ->
+                Timber.w(error, "WebView warm-up skipped")
+            }
+            false // одноразовый прогрев
+        }
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         updateResources()

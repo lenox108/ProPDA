@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.model.interactors.news
 
+import forpdateam.ru.forpda.client.FourPdaRequestGovernor
 import forpdateam.ru.forpda.diagnostic.ArticleCacheTrace
 import forpdateam.ru.forpda.model.data.remote.api.news.ArticleParsePhase
 import forpdateam.ru.forpda.model.repository.news.NewsRepository
@@ -35,6 +36,7 @@ class ArticlePrefetchService(
     /** Only one speculative article request may touch 4PDA at a time. */
     private val prefetchMutex = Mutex()
     private val inflightByArticleId = ConcurrentHashMap<Int, Deferred<Unit>>()
+    private val networkPrefetchTimestamps = ArrayDeque<Long>()
     @Volatile
     private var lastPrefetchedId: Int = -1
     @Volatile
@@ -81,6 +83,8 @@ class ArticlePrefetchService(
         if (articleId <= 0) return
         if (inflightByArticleId[articleId]?.isActive == true) return
         if (articleId == lastPrefetchedId && memoryCache.get(articleId).valid) return
+        // 4pda прямо сейчас ограничивает нас по частоте — спекулятивную работу не начинаем вовсе.
+        if (FourPdaRequestGovernor.isCoolingDown()) return
 
         // RecyclerView binds several visible rows in one burst. Previously every bind launched a full
         // article GET and only the last Job reference was retained, so opening News could hit 4PDA with
@@ -137,7 +141,22 @@ class ArticlePrefetchService(
             )
             return
         }
-        val fetch = newsRepository.fetchArticleDetails(articleId, ArticleParsePhase.FIRST_RENDER)
+        if (!consumeNetworkBudget()) {
+            ArticleCacheTrace.log(
+                    event = "prefetch_skip",
+                    articleId = articleId,
+                    cacheLayer = "network",
+                    hit = false,
+                    valid = false,
+                    reason = "budget_exhausted"
+            )
+            return
+        }
+        val fetch = newsRepository.fetchArticleDetails(
+                id = articleId,
+                phase = ArticleParsePhase.FIRST_RENDER,
+                background = true
+        )
         val mapped = withContext(Dispatchers.Default) {
             articleTemplate.mapEntity(fetch.page)
         }
@@ -156,8 +175,27 @@ class ArticlePrefetchService(
         }
     }
 
+    /**
+     * Скользящее окно на [PREFETCH_BUDGET] сетевых префетчей в минуту. Кэш-попадания бюджет не
+     * тратят: платим только за реальные обращения к 4pda. Долгий скролл ленты с остановками больше
+     * не может превратиться в непрерывный поток спекулятивных загрузок статей.
+     */
+    private fun consumeNetworkBudget(nowMs: Long = System.currentTimeMillis()): Boolean {
+        synchronized(networkPrefetchTimestamps) {
+            while (networkPrefetchTimestamps.isNotEmpty() &&
+                    nowMs - networkPrefetchTimestamps.first() > PREFETCH_BUDGET_WINDOW_MS) {
+                networkPrefetchTimestamps.removeFirst()
+            }
+            if (networkPrefetchTimestamps.size >= PREFETCH_BUDGET) return false
+            networkPrefetchTimestamps.addLast(nowMs)
+            return true
+        }
+    }
+
     private companion object {
         /** Coalesces the row-bind burst; deliberate taps bypass it via [prefetchArticleNow]. */
         const val DEFAULT_PREFETCH_DEBOUNCE_MS = 350L
+        const val PREFETCH_BUDGET = 6
+        const val PREFETCH_BUDGET_WINDOW_MS = 60_000L
     }
 }

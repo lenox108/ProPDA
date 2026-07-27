@@ -244,11 +244,15 @@ class QmsApi(
             )
         }
     }
-    fun findUser(nick: String): List<ForumUser> {
+    @JvmOverloads
+    fun findUser(nick: String, background: Boolean = false): List<ForumUser> {
         val encodedNick = URLEncoder.encode(nick, "UTF-8")
         val builder = NetworkRequest.Builder()
                 .url("https://4pda.to/forum/index.php?act=qms-xhr&action=autocomplete-username&q=$encodedNick")
                 .xhrHeader()
+        if (background) {
+            builder.background()
+        }
         val response = webClient.request(builder.build())
         return qmsParser.parseSearch(response.body)
     }

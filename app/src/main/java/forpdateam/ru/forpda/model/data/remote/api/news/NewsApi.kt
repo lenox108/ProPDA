@@ -31,6 +31,17 @@ data class CommentEditContext(
         val articleId: Int = 0,
 )
 
+/**
+ * Результат загрузки страницы ленты. [items] == null вместе с [notModified] == true означает
+ * «сервер подтвердил, что ничего не изменилось» — тело не передавалось.
+ */
+data class NewsListFetch(
+        val items: List<NewsItem>?,
+        val notModified: Boolean = false,
+        val etag: String? = null,
+        val lastModified: String? = null
+)
+
 data class ArticleFetchResult(
         val page: DetailsPage,
         val rawBody: String,
@@ -49,14 +60,45 @@ class NewsApi(
         private val articleParser: ArticleParser
 ) {
 
-    suspend fun getNews(category: String, pageNumber: Int): List<NewsItem> {
+    suspend fun getNews(category: String, pageNumber: Int): List<NewsItem> =
+            fetchNewsList(category, pageNumber).items.orEmpty()
+
+    /**
+     * Загружает страницу ленты, при наличии сохранённых валидаторов — условным запросом.
+     * Если 4pda отвечает `304 Not Modified`, тело не приходит вовсе: вызывающий переиспользует
+     * свой кэш ([NewsListFetch.notModified]). Сервер валидаторов может и не давать — тогда это
+     * обычный GET, как раньше.
+     */
+    suspend fun fetchNewsList(
+            category: String,
+            pageNumber: Int,
+            etag: String? = null,
+            lastModified: String? = null
+    ): NewsListFetch {
         if (category == Constants.NEWS_CATEGORY_TECH) {
-            return getTechNews(pageNumber)
+            // Сводная категория склеена из шести лент — общего валидатора у неё нет.
+            return NewsListFetch(items = getTechNews(pageNumber))
         }
         return withContext(Dispatchers.IO) {
             val url = getLink(category, pageNumber)
-            val response = webClient.get(url)
-            articleParser.parseArticles(response.body)
+            val builder = NetworkRequest.Builder().url(url)
+            etag?.takeIf { it.isNotBlank() }?.let { builder.addHeader("If-None-Match", it) }
+            lastModified?.takeIf { it.isNotBlank() }?.let { builder.addHeader("If-Modified-Since", it) }
+            val response = webClient.request(builder.build())
+            if (response.code == HTTP_NOT_MODIFIED) {
+                NewsListFetch(
+                        items = null,
+                        notModified = true,
+                        etag = response.etag ?: etag,
+                        lastModified = response.lastModified ?: lastModified
+                )
+            } else {
+                NewsListFetch(
+                        items = articleParser.parseArticles(response.body),
+                        etag = response.etag,
+                        lastModified = response.lastModified
+                )
+            }
         }
     }
 
@@ -83,9 +125,10 @@ class NewsApi(
     fun fetchArticleDetails(
             url: String,
             phase: ArticleParsePhase = ArticleParsePhase.FIRST_RENDER,
-            bypassCache: Boolean = false
+            bypassCache: Boolean = false,
+            background: Boolean = false
     ): ArticleFetchResult {
-        val response = webClient.request(buildArticleRequest(url, bypassCache))
+        val response = webClient.request(buildArticleRequest(url, bypassCache, background))
         val body = response.body
         if (BuildConfig.DEBUG) {
             // Debug-only: trace the raw response characteristics without logging sensitive data.
@@ -322,10 +365,17 @@ class NewsApi(
         return userId > 0
     }
 
-    private fun buildArticleRequest(url: String, bypassCache: Boolean): NetworkRequest {
+    private fun buildArticleRequest(
+            url: String,
+            bypassCache: Boolean,
+            background: Boolean = false
+    ): NetworkRequest {
         val builder = NetworkRequest.Builder()
                 .url(url)
                 .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        if (background) {
+            builder.background()
+        }
         if (bypassCache) {
             builder.addHeader("Cache-Control", "no-cache, no-store, must-revalidate")
             builder.addHeader("Pragma", "no-cache")
@@ -380,6 +430,7 @@ class NewsApi(
         const val KNOWN_DESKTOP_POLL_ARTICLE_ID = 456521
         const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         const val TECH_NEWS_CONCURRENCY = 3
+        const val HTTP_NOT_MODIFIED = 304
         val TECH_URLS = listOf(
                 Constants.NEWS_URL_TECH_SMARTPHONES,
                 Constants.NEWS_URL_TECH_LAPTOPS,

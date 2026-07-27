@@ -14,6 +14,9 @@ data class NetworkResponse(
     var body: String = "",
     /** Фрагмент (#entry…) из заголовка Location при редиректе — OkHttp его обрезает. */
     var redirectFragment: String? = null,
+    /** Валидаторы кэша: позволяют повторный запрос сделать условным (If-None-Match / If-Modified-Since). */
+    var etag: String? = null,
+    var lastModified: String? = null,
     /** true, если тело прочитано с ограничением по размеру (capped read) и было обрезано. */
     var truncated: Boolean = false
 ) {

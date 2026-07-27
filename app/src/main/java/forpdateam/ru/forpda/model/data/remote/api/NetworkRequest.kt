@@ -19,6 +19,9 @@ class NetworkRequest private constructor(builder: Builder) {
     val isWithoutBody: Boolean = builder.withoutBody
     val skipCounterUpdate: Boolean = builder.skipCounterUpdate
 
+    /** Важность запроса для общего регулятора нагрузки на 4pda (см. FourPdaRequestGovernor). */
+    val priority: forpdateam.ru.forpda.client.RequestPriority = builder.priority
+
     class Builder {
         internal var url: String = ""
         internal var headers: LinkedHashMap<String, String>? = null
@@ -31,6 +34,14 @@ class NetworkRequest private constructor(builder: Builder) {
         internal var method: Boolean = true
         internal var withoutBody: Boolean = false
         internal var skipCounterUpdate: Boolean = false
+        internal var priority: forpdateam.ru.forpda.client.RequestPriority =
+                forpdateam.ru.forpda.client.RequestPriority.USER
+
+        /** Помечает запрос спекулятивным: он уступает дорогу и умолкает после 429. */
+        fun background() = apply { priority = forpdateam.ru.forpda.client.RequestPriority.BACKGROUND }
+
+        fun priority(priority: forpdateam.ru.forpda.client.RequestPriority) =
+                apply { this.priority = priority }
 
         fun url(url: String) = apply { this.url = url }
 
@@ -60,6 +71,7 @@ class NetworkRequest private constructor(builder: Builder) {
             method = request.method
             withoutBody = request.isWithoutBody
             skipCounterUpdate = request.skipCounterUpdate
+            priority = request.priority
         }
 
         fun xhrHeader() = apply {
