@@ -25,28 +25,30 @@ import java.util.Locale
 object AppIntegrity {
 
     /**
-     * SHA-256 сертификата подписи РЕЛИЗНЫХ сборок (нижний регистр, без разделителей).
+     * SHA-256 сертификата подписи автора (нижний регистр, без разделителей).
      *
-     * ⚠️ ЗАПОЛНИТЬ ПЕРЕД ПУБЛИКАЦИЕЙ. Получить командой:
-     *   apksigner verify --print-certs ProPDA-release.apk | grep "SHA-256 digest"
+     * Сверено 27.07.2026 по двум независимым источникам: keystore `signing/forpda-parallel.jks`
+     * и опубликованный релиз `ProPDA-3.3.2.apk` с GitHub. Отпечатки совпали — значит debug и
+     * release подписываются одним ключом.
      *
-     * Пока здесь пусто, проверка подписи не работает (Pro при этом функционирует нормально).
+     * ⚠️ Сменишь keystore — обнови значение, иначе Pro отключится у ВСЕХ покупателей. Отпечаток
+     * новой сборки: `apksigner verify --print-certs <файл>.apk | grep "SHA-256 digest"`.
      */
-    private const val RELEASE_CERT_SHA256 = ""
-
-    /** Отладочный ключ этой машины: чтобы локальные сборки не спотыкались о проверку. */
-    private const val DEBUG_CERT_SHA256 =
+    private const val TRUSTED_CERT_SHA256 =
             "0d73c87a7ab09f4dfbe9ebfc03b0967e92fab2f56b752ceda30ff873b748c109"
 
-    /** true, если подпись своя ЛИБО проверка ещё не настроена. */
+    /**
+     * true, если APK подписан ключом автора.
+     *
+     * В debug-сборках проверка пропускается: проект собирается и без keystore (тогда Gradle
+     * подписывает отладочным ключом), и разработчик не должен из-за этого терять Pro.
+     * Пиратство касается распространяемых release-сборок — там проверка работает.
+     */
     fun isTrusted(context: Context): Boolean {
-        val expected = buildList {
-            if (RELEASE_CERT_SHA256.isNotBlank()) add(RELEASE_CERT_SHA256.lowercase(Locale.ROOT))
-            if (BuildConfig.DEBUG) add(DEBUG_CERT_SHA256)
-        }
-        if (expected.isEmpty()) return true // отпечаток не задан — не мешаем работе
+        if (BuildConfig.DEBUG) return true
+        if (TRUSTED_CERT_SHA256.isBlank()) return true // отпечаток не задан — не мешаем работе
         val actual = currentCertSha256(context) ?: return true
-        val ok = actual in expected
+        val ok = actual == TRUSTED_CERT_SHA256.lowercase(Locale.ROOT)
         if (!ok) Timber.w("app signature mismatch: %s", actual.take(12))
         return ok
     }
