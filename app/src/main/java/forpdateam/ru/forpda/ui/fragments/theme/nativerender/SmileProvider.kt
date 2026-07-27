@@ -18,6 +18,7 @@ import android.view.View
 import android.widget.TextView
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
+import kotlin.math.roundToInt
 
 /**
  * Renders 4pda smile shortcodes (`:thank_you:`, `:happy:`, …) as native inline images from the
@@ -31,10 +32,17 @@ import java.util.regex.Pattern
  * `;)`, `:P`, `B)`, `<_<`, `o.O`, …). The ASCII ones are the common case in real posts and previously
  * leaked as literal text ("вместо смайлов — символы"); they are guarded by whitespace/line boundaries
  * exactly as `z_emoticons.js`'s `buildRegexp` guards them, so a `:)` inside a URL/word/code never fires.
- * Smile gifs are local (no network, no async
+ * Smile images are local (no network, no async
  * layout jump); by default they render as a static first frame at a fixed inline size. With the
  * «Анимированные смайлы» pref on (and API 28+) the span carries an [AnimatedImageDrawable] instead —
  * playback is wired to the host TextView via [startAnimations].
+ *
+ * Two packs ship side by side. The baseline is 4pda's classic ~20px `<name>.gif` set, which covers all
+ * 162 files. On top of it, 39 smiles also exist in 4pda's HD set (`s.4pda.to/img/emot_hd/`, sourced as
+ * APNG and converted to animated WebP because the platform decodes animated GIF/WebP but not APNG) —
+ * those ship as `<name>.webp` and win on API 28+, see [assetFor]. The HD pack matters beyond sharpness:
+ * four of its entries animate where the classic gif is a single still — `:D`/`:-D`, `:(`/`:-(`,
+ * `:-)`/`:smile:` and `:censored:` — which is what the «смайлы не анимируются» report was about.
  */
 object SmileProvider {
 
@@ -49,18 +57,27 @@ object SmileProvider {
     @Volatile
     private var pattern: Pattern? = null
 
-    /** gif filename → decoded first frame (null = known-undecodable, don't retry). */
+    /** classic gif filename → HD replacement ("biggrin.gif" → "biggrin.webp"), for the 39 that have one. */
+    @Volatile
+    private var hdVariants: Map<String, String> = emptyMap()
+
+    /** asset filename → decoded first frame (null = known-undecodable, don't retry). */
     private val bitmapCache = HashMap<String, Bitmap?>()
 
-    /** gif filename → raw bytes for the animated decode path (null = unreadable, don't retry).
+    /** asset filename → raw bytes for the animated decode path (null = unreadable, don't retry).
      *  Each animated span needs its OWN [AnimatedImageDrawable] (per-span bounds + playback state),
-     *  so what's shared is the source bytes, not the drawable. All 171 gifs total ~1.2 MB. */
+     *  so what's shared is the source bytes, not the drawable. */
     private val bytesCache = HashMap<String, ByteArray?>()
 
     private fun ensureLoaded(assets: AssetManager) {
         if (codeToFile != null) return
         synchronized(this) {
             if (codeToFile != null) return
+            hdVariants = runCatching {
+                assets.list(SMILE_ASSET_DIR).orEmpty()
+                        .filter { it.endsWith(".webp") }
+                        .associateBy { it.removeSuffix(".webp") + ".gif" }
+            }.getOrDefault(emptyMap())
             val map = LinkedHashMap<String, String>()
             runCatching {
                 val js = assets.open(EMOTICON_SCRIPT).bufferedReader().use { it.readText() }
@@ -106,8 +123,40 @@ object SmileProvider {
     }
 
     /**
-     * Returns [text] with every known smile shortcode replaced by an inline [ImageSpan] sized
-     * [sizePx] square. If nothing matches (or the map failed to load) the original text is returned.
+     * The asset to actually decode for [file]: the HD WebP when this smile has one and the platform can
+     * decode it, otherwise the classic gif. Animated WebP needs [ImageDecoder] (API 28+), and so does the
+     * animated path in general, so API 26–27 simply stays on the gif pack it has always used.
+     */
+    private fun assetFor(file: String): String =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) hdVariants[file] ?: file else file
+
+    /**
+     * [assetFor] for callers outside the span pipeline — the editor's smiles panel, which loads the very
+     * same files through Coil and would otherwise keep showing the classic gif (and so a still `:D`)
+     * next to posts already rendering the HD one.
+     */
+    fun assetNameFor(file: String, assets: AssetManager): String {
+        ensureLoaded(assets)
+        return assetFor(file)
+    }
+
+    /**
+     * Lays the drawable out on the text line: [sizePx] tall, width following the image's own aspect.
+     * The packs are full of non-square smiles (`:clapping:` 40×24, `:feminist:` 105×95), and forcing a
+     * square box — as this used to — squashed every one of them.
+     */
+    private fun Drawable.sizeToLine(sizePx: Int): Drawable = apply {
+        val w = if (intrinsicWidth > 0 && intrinsicHeight > 0) {
+            (sizePx.toFloat() * intrinsicWidth / intrinsicHeight).roundToInt().coerceAtLeast(1)
+        } else {
+            sizePx
+        }
+        setBounds(0, 0, w, sizePx)
+    }
+
+    /**
+     * Returns [text] with every known smile shortcode replaced by an inline [ImageSpan] [sizePx] tall.
+     * If nothing matches (or the map failed to load) the original text is returned.
      * With [animated] the span gets a live [AnimatedImageDrawable] (API 28+; the host must call
      * [startAnimations] on the TextView after setText); otherwise — a static first frame.
      */
@@ -123,8 +172,13 @@ object SmileProvider {
         m.reset(out)
         while (m.find()) {
             val file = map[m.group()] ?: continue
-            val drawable = (if (animated) animatedDrawableFor(file, res.assets, sizePx) else null)
-                    ?: drawableFor(file, res, sizePx) ?: continue
+            val asset = assetFor(file)
+            // Every step degrades to the next: HD animated → HD still → classic gif still.
+            val drawable = (if (animated) animatedDrawableFor(asset, res.assets) else null)
+                    ?: drawableFor(asset, res)
+                    ?: (if (asset != file) drawableFor(file, res) else null)
+                    ?: continue
+            drawable.sizeToLine(sizePx)
             out.setSpan(
                     ImageSpan(drawable, ImageSpan.ALIGN_BOTTOM),
                     m.start(), m.end(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE,
@@ -137,14 +191,14 @@ object SmileProvider {
      * A fresh [BitmapDrawable] per span over a shared cached frame — an [ImageSpan]'s drawable carries
      * its own bounds and may be drawn by several TextViews at once, so instances are never shared.
      *
-     * Decoding goes through [BitmapFactory] rather than `Drawable.createFromStream`: 149 of the 171
+     * Decoding goes through [BitmapFactory] rather than `Drawable.createFromStream`: most of the
      * bundled smiles are animated, and for those the latter hands back an `AnimatedImageDrawable`
      * whose `constantState` is null — uncopyable, so every cache hit produced a null drawable and the
      * shortcode leaked through as literal text.
      */
-    private fun drawableFor(file: String, res: Resources, sizePx: Int): Drawable? {
+    private fun drawableFor(file: String, res: Resources): Drawable? {
         val frame = frameFor(file, res.assets) ?: return null
-        return BitmapDrawable(res, frame).apply { setBounds(0, 0, sizePx, sizePx) }
+        return BitmapDrawable(res, frame)
     }
 
     private fun frameFor(file: String, assets: AssetManager): Bitmap? = synchronized(bitmapCache) {
@@ -157,11 +211,13 @@ object SmileProvider {
     }
 
     /**
-     * A fresh [AnimatedImageDrawable] over the cached gif bytes, or null when the platform can't
-     * (API < 28), decoding fails, or the gif turns out to be single-frame (ImageDecoder then returns
+     * A fresh [AnimatedImageDrawable] over the cached image bytes, or null when the platform can't
+     * (API < 28), decoding fails, or the image turns out to be single-frame (ImageDecoder then returns
      * a plain BitmapDrawable) — every null falls back to the static [drawableFor] path in the caller.
+     * Single-frame is the normal outcome for 22 of the classic gifs (`:D`, `:(`, `B)`, `:P`, `<_<` …),
+     * which is why four of them are served from the HD pack instead — see [assetFor].
      */
-    private fun animatedDrawableFor(file: String, assets: AssetManager, sizePx: Int): Drawable? {
+    private fun animatedDrawableFor(file: String, assets: AssetManager): Drawable? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
         val bytes = bytesFor(file, assets) ?: return null
         return runCatching {
@@ -175,7 +231,6 @@ object SmileProvider {
             ImageDecoder.decodeDrawable(ImageDecoder.createSource(direct))
         }.getOrNull()
                 ?.takeIf { it is AnimatedImageDrawable }
-                ?.apply { setBounds(0, 0, sizePx, sizePx) }
     }
 
     private fun bytesFor(file: String, assets: AssetManager): ByteArray? = synchronized(bytesCache) {
