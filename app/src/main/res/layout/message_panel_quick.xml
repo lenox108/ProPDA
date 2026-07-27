@@ -41,7 +41,8 @@
             android:layout_height="@dimen/dp48"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/msg_panel_expand"
-            app:srcCompat="@drawable/ic_expand_less_black_24dp" />
+            app:srcCompat="@drawable/ic_toolbar_create"
+            app:tint="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 
     <ScrollView
