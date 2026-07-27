@@ -713,6 +713,7 @@
     <string name="notification_quick_reply_failed_title">Сообщение не отправлено</string>
     <string name="notification_stacked_more">…и ещё %1$d</string>
     <string name="notification_title_favorite">Новые сообщения в избранной теме</string>
+    <string name="notification_title_favorite_Nick">%1$s в теме</string>
     <string name="notification_content_mention_fallback">Откройте тему, чтобы посмотреть ответ</string>
     <string name="notification_content_theme_fallback">Откройте избранное, чтобы посмотреть новые сообщения</string>
     <string name="notification_content_news">Вам ответили на комментарий на сайте</string>
