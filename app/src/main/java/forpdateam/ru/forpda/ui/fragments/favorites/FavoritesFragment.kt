@@ -315,17 +315,15 @@ class FavoritesFragment : RecyclerFragment() {
                     currentSortDialog?.show()
                     false
                 }
-                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        // Переключатель ленты папок — в overflow, а не иконкой: в видимой части тулбара уже
-        // три действия, а прятать ленту нужно редко (и с запоминанием выбора).
-        // Отдельная иконка в тулбаре, а не пункт overflow: место есть, а состояние ленты
-        // читается сразу по значку (папка / перечёркнутая папка) без открытия меню.
+        // Сортировка и панель папок — в overflow: их меняют раз в сто лет, а иконками они
+        // забивали шапку. Иконками остаются поиск и «прочитать всё» — самое частое действие
+        // экрана, которому дорога каждая лишняя пара тапов.
         folderStripMenuItem = menu.add(Menu.NONE, R.id.action_favorites_folder_strip, Menu.NONE, getString(R.string.fav_folders_panel))
+                .setCheckable(true)
                 .setOnMenuItemClickListener {
                     presenter.setFolderStripVisible(!foldersState.stripVisible)
                     true
                 }
-                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
         addSelectionMenu(menu)
         updateSelectionUi()
     }
@@ -1087,21 +1085,10 @@ class FavoritesFragment : RecyclerFragment() {
                 searchMenuItem?.isActionViewExpanded != true &&
                 foldersState.stripVisible
         folderStrip?.visibility = if (showChips) View.VISIBLE else View.GONE
-        // Кнопка живёт в тулбаре всегда (кроме режима выбора) — по ней же лента и возвращается.
+        // Пункт живёт в меню всегда (кроме режима выбора) — им же лента и возвращается.
+        // Состояние показывает галочка пункта, поэтому отдельных «Скрыть/Показать» не нужно.
         folderStripMenuItem?.isVisible = !inSelection
-        folderStripMenuItem?.let { item ->
-            val hint = getString(
-                    if (foldersState.stripVisible) R.string.fav_folders_panel_hide
-                    else R.string.fav_folders_panel_show
-            )
-            item.setIcon(
-                    if (foldersState.stripVisible) R.drawable.ic_toolbar_folder
-                    else R.drawable.ic_toolbar_folder_off
-            )
-            item.title = hint
-            MenuItemCompat.setContentDescription(item, hint)
-            MenuItemCompat.setTooltipText(item, hint)
-        }
+        folderStripMenuItem?.isChecked = foldersState.stripVisible
         applyHeaderAutoHide()
 
         if (::adapter.isInitialized) {
