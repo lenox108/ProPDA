@@ -12,6 +12,8 @@ import forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
 import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.repository.history.HistoryRepository
 import forpdateam.ru.forpda.model.repository.history.HistoryUnreadHarvester
+import forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
+import forpdateam.ru.forpda.presentation.theme.TopicUnreadFindPostReloadPolicy
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
@@ -35,6 +37,7 @@ class HistoryViewModel @Inject constructor(
         private val favoritesCache: FavoritesCacheRoom,
         private val historyUnreadHarvester: HistoryUnreadHarvester,
         private val listsPrefs: ListsPreferencesHolder,
+        private val readBoundaryStore: TopicReadBoundaryStore,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
         private val errorHandler: IErrorHandler,
@@ -161,7 +164,32 @@ class HistoryViewModel @Inject constructor(
         item.url?.let { clipboardHelper.copyToClipboard(it) }
     }
 
+    /**
+     * «История» = вернуться туда, где остановился, а не «открыть тему заново».
+     *
+     * Раньше строка отдавала в [linkHandler] URL, сохранённый в истории — а это ФИНАЛЬНЫЙ url страницы
+     * прошлого визита (после редиректа, вместе с `st=`/`p=`/`#entry…`, см. ThemeUseCase.recordThemeVisit).
+     * Резолвер видел в нём явную страницу/пост и садился на них, не доходя до настройки «При открытии
+     * темы»: пользователь попадал на позицию, зафиксированную прошлым заходом (пост упоминания, тогдашний
+     * первый непрочитанный, страница прыжка) — отсюда жалоба «открывается рандомно».
+     *
+     * Теперь берём клиентскую границу прочитанного ([TopicReadBoundaryStore] — наибольший пост, реально
+     * побывавший во вьюпорте) и открываем findpost прямо на неё: резолвер видит явный пост (EXPLICIT_POST)
+     * и не подменяет якорь. Тот же путь, что у строки «Продолжить чтение» в «Ещё»
+     * (`OtherViewModel.onContinueClick`). Границы нет (старая запись истории, кэш ещё не прогрет) —
+     * честный фолбэк на прежнее поведение.
+     */
     fun onItemClick(item: HistoryItem) {
+        val topicId = item.id
+        val boundaryPostId = if (topicId > 0) readBoundaryStore.lastSeenPostId(topicId) else 0
+        if (topicId > 0 && boundaryPostId > 0) {
+            router.navigateTo(Screen.Theme().apply {
+                themeUrl = TopicUnreadFindPostReloadPolicy.buildFindPostUrl(topicId, boundaryPostId.toString())
+                topicOpenSource = "history"
+                screenTitle = item.title
+            })
+            return
+        }
         item.url?.let { url ->
             linkHandler.handle(url, router, mapOf(Screen.ARG_TITLE to (item.title ?: "")))
         }
