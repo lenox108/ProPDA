@@ -1065,7 +1065,10 @@
     <string name="pro_status_locked">Мгновенные push-уведомления доступны в Pro. Ваш ID на 4PDA: %1$d</string>
     <string name="pro_status_not_logged">Войдите в аккаунт 4PDA, чтобы активировать Pro</string>
     <string name="pro_dialog_title">Активация ProPDA Pro</string>
-    <string name="pro_dialog_message">Ваш ID на 4PDA: %1$d\n\nСообщите его автору после оплаты и вставьте полученный ключ. Ключ привязан к вашему аккаунту.</string>
+    <string name="pro_dialog_message">Сообщите свой ID автору после оплаты и вставьте полученный ключ. Ключ привязан к вашему аккаунту.</string>
+    <string name="pro_dialog_id">Ваш ID на 4PDA: %1$d</string>
+    <string name="pro_dialog_id_hint">Нажмите на номер, чтобы скопировать</string>
+    <string name="pro_id_copied">ID скопирован</string>
     <string name="pro_dialog_hint">Ключ активации</string>
     <string name="pro_activate">Активировать</string>
     <string name="pro_deactivate">Удалить ключ</string>

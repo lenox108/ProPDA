@@ -273,6 +273,17 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         }
     }
 
+    /** Копирует ID аккаунта — его нужно передать автору для выпуска ключа. */
+    private fun copyMemberId(ctx: android.content.Context, memberId: Int) {
+        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                as? android.content.ClipboardManager ?: return
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("4PDA ID", memberId.toString()))
+        // Android 13+ сам показывает всплывающее подтверждение копирования — свой тост был бы дублем.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            toast(getString(R.string.pro_id_copied))
+        }
+    }
+
     private fun showProDialog() {
         val ctx = context ?: return
         val memberId = forpdateam.ru.forpda.pro.ProLicense.currentMemberId(ctx)
@@ -287,14 +298,44 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
             setText(androidx.preference.PreferenceManager.getDefaultSharedPreferences(ctx)
                     .getString(forpdateam.ru.forpda.pro.ProLicense.KEY_LICENSE, "").orEmpty())
         }
-        val container = android.widget.FrameLayout(ctx).apply {
-            val pad = (24 * resources.displayMetrics.density).toInt()
+        val density = resources.displayMetrics.density
+        val pad = (24 * density).toInt()
+        // Пояснение и ID — своими View, а не setMessage(): текст диалога не кликабелен, а ID
+        // пользователю нужно передать автору, поэтому он должен копироваться одним касанием.
+        val explanation = android.widget.TextView(ctx).apply {
+            text = getString(R.string.pro_dialog_message)
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val idView = android.widget.TextView(ctx).apply {
+            text = getString(R.string.pro_dialog_id, memberId)
+            textSize = 18f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            isClickable = true
+            isFocusable = true
+            // Штатный фон «нажимаемого» элемента, чтобы касание давало отклик.
+            val outValue = android.util.TypedValue()
+            ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
+            setBackgroundResource(outValue.resourceId)
+            val vp = (8 * density).toInt()
+            setPadding(vp, vp, vp, vp)
+            setOnClickListener { copyMemberId(ctx, memberId) }
+        }
+        val hintView = android.widget.TextView(ctx).apply {
+            text = getString(R.string.pro_dialog_id_hint)
+            textSize = 12f
+            alpha = 0.7f
+            setPadding(0, 0, 0, (12 * density).toInt())
+        }
+        val container = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
             setPadding(pad, pad / 2, pad, 0)
+            addView(explanation)
+            addView(idView)
+            addView(hintView)
             addView(input)
         }
         val builder = androidx.appcompat.app.AlertDialog.Builder(ctx)
                 .setTitle(R.string.pro_dialog_title)
-                .setMessage(getString(R.string.pro_dialog_message, memberId))
                 .setView(container)
                 .setPositiveButton(R.string.pro_activate) { _, _ ->
                     when (forpdateam.ru.forpda.pro.ProLicense.activate(ctx, input.text.toString())) {
