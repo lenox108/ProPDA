@@ -1,6 +1,10 @@
 # Собирает варианты APK для настройки «Иконка уведомлений» и прикрепляет их к
 # релизу — на стороне GitHub, чтобы 215 МБ не уходило с домашнего интернета.
 #
+# Запускается САМ при публикации релиза (и вручную, если нужно перевыложить).
+# Базовый APK обычно заливают уже после создания релиза, поэтому workflow ждёт
+# его появления до 20 минут и только потом делает варианты.
+#
 # Gradle здесь НЕ нужен: варианты делаются патчем манифеста УЖЕ ОПУБЛИКОВАННОГО
 # APK (см. scripts/make_circle_variants.py и docs/CIRCLE_ICON_RU.md), поэтому
 # они гарантированно совпадают с базовой сборкой релиза, а прогон занимает
@@ -9,12 +13,15 @@
 # ТРЕБУЕТСЯ 4 секрета репозитория (Settings → Secrets and variables → Actions):
 #   PARALLEL_KEYSTORE_BASE64 — `base64 -i signing/forpda-parallel.jks | pbcopy`
 #   PARALLEL_STORE_PASSWORD, PARALLEL_KEY_ALIAS, PARALLEL_KEY_PASSWORD
-# Пока их нет, workflow просто не запускать: он вручную (workflow_dispatch), сам
-# по себе не срабатывает. Помни, что ключ подписи в секретах доступен любому, у
-# кого есть write-доступ к репозиторию.
+# Пока их нет, прогон завершается предупреждением и НЕ падает: релиз просто
+# выходит без вариантов иконки (приложение это переживает — см. docs).
+# Помни, что ключ подписи в секретах доступен любому, у кого есть write-доступ
+# к репозиторию.
 name: Icon variants
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -28,18 +35,51 @@ on:
 permissions:
   contents: write
 
+# Два прогона на один тег одновременно перезаписывали бы одни и те же ассеты.
+concurrency:
+  group: icon-variants-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
   variants:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve release tag
+        id: cfg
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAG" ]; then
+            echo "::error::Не удалось определить тег релиза"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Работаем с релизом $TAG"
+
+      - name: Check signing secrets
+        id: secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PARALLEL_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::Нет секрета PARALLEL_KEYSTORE_BASE64 — варианты иконки не собираются"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Android build-tools (aapt2/zipalign/apksigner)
+        if: steps.secrets.outputs.skip == 'false'
         uses: android-actions/setup-android@v3
         with:
           packages: 'build-tools;35.0.0'
 
       - name: Restore signing key
+        if: steps.secrets.outputs.skip == 'false'
         env:
           KEYSTORE_BASE64: ${{ secrets.PARALLEL_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.PARALLEL_STORE_PASSWORD }}
@@ -47,10 +87,6 @@ jobs:
           KEY_PASSWORD: ${{ secrets.PARALLEL_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Нет секрета PARALLEL_KEYSTORE_BASE64 — подписать варианты нечем"
-            exit 1
-          fi
           mkdir -p signing
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > signing/forpda-parallel.jks
           cat > keystore.parallel.properties <<EOF
@@ -60,10 +96,32 @@ jobs:
           KEY_PASSWORD=$KEY_PASSWORD
           EOF
 
-      - name: Download base APK of the release
+      - name: Wait for the base APK of the release
+        if: steps.secrets.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.cfg.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Релиз часто публикуют раньше, чем догружается APK, — ждём до 20 минут.
+          for attempt in $(seq 1 40); do
+            names=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --json assets -q '.assets[].name' || true)
+            if printf '%s\n' "$names" | grep -qE '^ProPDA-[0-9]+(\.[0-9]+)*\.apk$'; then
+              echo "Базовый APK на месте."
+              exit 0
+            fi
+            echo "Базового APK ещё нет, жду 30 с ($attempt/40)"
+            sleep 30
+          done
+          echo "::error::За 20 минут базовый ProPDA-X.Y.Z.apk в релизе $TAG не появился"
+          exit 1
+
+      - name: Download base APK
+        if: steps.secrets.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.cfg.outputs.tag }}
         run: |
           set -euo pipefail
           mkdir -p base
@@ -74,15 +132,16 @@ jobs:
           ls -la base
 
       - name: Build and upload variants
+        if: steps.secrets.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ steps.cfg.outputs.tag }}
           VARIANTS: ${{ inputs.variants }}
         run: |
           set -euo pipefail
           apk=$(ls base/ProPDA-*.apk | head -1)
           args=(--apk "$apk" --upload "$TAG" --repo "$GITHUB_REPOSITORY")
-          if [ -n "$VARIANTS" ]; then
+          if [ -n "${VARIANTS:-}" ]; then
             args+=(--variants "$VARIANTS")
           fi
           python3 scripts/make_circle_variants.py "${args[@]}"
