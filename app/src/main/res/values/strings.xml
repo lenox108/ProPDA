@@ -768,6 +768,7 @@
     <string name="pref_summary_startup_screen_forum">При запуске открывается раздел «Форум».</string>
     <string name="pref_summary_startup_screen_replies">При запуске открывается раздел «Ответы».</string>
     <string name="pref_summary_startup_screen_qms">При запуске открывается раздел «QMS».</string>
+    <string name="pref_summary_startup_screen_history">При запуске открывается раздел «История».</string>
     <string name="pref_summary_startup_screen_menu">При запуске открывается экран «Меню».</string>
     <string name="pref_title_bottom_nav_order">Порядок нижнего меню</string>
     <string name="pref_summary_bottom_nav_order">Выберите, какие разделы первыми показываются на нижней панели; остальные остаются в полном меню.</string>
