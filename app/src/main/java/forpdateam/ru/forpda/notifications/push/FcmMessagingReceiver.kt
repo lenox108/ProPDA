@@ -1,0 +1,69 @@
+package forpdateam.ru.forpda.notifications.push
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkManager
+import forpdateam.ru.forpda.notifications.EventsCheckWorker
+import forpdateam.ru.forpda.notifications.NotifDiagLog
+import timber.log.Timber
+import java.util.ArrayDeque
+
+/**
+ * Приёмник FCM data-сообщений от сервера 4PDA (легаси c2dm-путь, как в офиц. клиенте). Сам не
+ * ходит в сеть (у BroadcastReceiver жёсткий бюджет) — только будит [EventsCheckWorker]
+ * expedited-работой, которая переиспользует весь зрелый пайплайн ProPDA (inspector-дозагрузка,
+ * дедуп, [forpdateam.ru.forpda.notifications.NotificationPublisher]).
+ *
+ * Это и есть выигрыш push над опросом/сокетом: сообщение будит процесс силами GmsCore даже в
+ * Doze (`google.delivered_priority=high`), сокет держать не нужно.
+ *
+ * Payload не парсим в событие напрямую (ключи `t/i/e1/an/…` из Unread2), а используем как сигнал
+ * «что-то изменилось» и берём авторитетное состояние из inspector — так не дублируем логику и не
+ * рискуем на нестабильном формате.
+ */
+class FcmMessagingReceiver : BroadcastReceiver() {
+
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != ACTION_RECEIVE) return
+
+        // Дедуп по google.message_id: GmsCore иногда доставляет дубли (окно как в офиц. клиенте).
+        val messageId = intent.getStringExtra("google.message_id")
+        if (messageId != null) {
+            synchronized(recentIds) {
+                if (recentIds.contains(messageId)) {
+                    Timber.d("FCM duplicate %s, ignore", messageId)
+                    return
+                }
+                if (recentIds.size >= DEDUP_WINDOW) recentIds.remove()
+                recentIds.add(messageId)
+            }
+        }
+
+        NotifDiagLog.log(context, "fcm: push received id=${messageId?.take(12)}")
+        Timber.i("FCM push received, waking events check")
+
+        val work = OneTimeWorkRequestBuilder<EventsCheckWorker>()
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .setInputData(Data.Builder().putBoolean(EventsCheckWorker.KEY_FCM_TRIGGER, true).build())
+                .build()
+        runCatching {
+            WorkManager.getInstance(context.applicationContext)
+                    .enqueueUniqueWork(FCM_WORK_NAME, ExistingWorkPolicy.REPLACE, work)
+        }.onFailure {
+            Timber.e(it, "FCM: enqueue check failed")
+            NotifDiagLog.log(context, "fcm: enqueue failed ${it.javaClass.simpleName}")
+        }
+    }
+
+    companion object {
+        private const val ACTION_RECEIVE = "com.google.android.c2dm.intent.RECEIVE"
+        const val FCM_WORK_NAME = "events_check_fcm"
+        private const val DEDUP_WINDOW = 16
+        private val recentIds = ArrayDeque<String>(DEDUP_WINDOW)
+    }
+}

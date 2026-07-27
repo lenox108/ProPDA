@@ -99,7 +99,11 @@ class EventsCheckWorker @AssistedInject constructor(
             NotifDiagLog.log(applicationContext, "worker: skip (push disabled)")
             return@withContext Result.success()
         }
-        if (!prefs.getBgCheckEnabled()) {
+        // FCM-триггер (реальный push от сервера) обходит гейт «фоновая проверка выключена»: в
+        // режиме доставки Push периодический опрос намеренно off, но пробуждение по push должно
+        // идти в сеть за авторитетным состоянием.
+        val fcmTriggered = inputData.getBoolean(KEY_FCM_TRIGGER, false)
+        if (!fcmTriggered && !prefs.getBgCheckEnabled()) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: background preference disabled")
             Timber.d("EventsCheckWorker: bgCheck disabled, skip")
             NotifDiagLog.log(applicationContext, "worker: skip (bg disabled)")
@@ -145,7 +149,9 @@ class EventsCheckWorker @AssistedInject constructor(
         val minGapMs = prefs.getBgCheckIntervalMin() * 60_000L / 2
         val prevCheckAt = prefs.getLastCheckAt()
         val sinceLastCheck = now - prevCheckAt
-        if (sinceLastCheck in 0 until minGapMs) {
+        // FCM-триггер не подчиняется анти-дребезгу по интервалу опроса: пуш — это точный сигнал
+        // о новом событии, а не периодическая страховка.
+        if (!fcmTriggered && sinceLastCheck in 0 until minGapMs) {
             Timber.d("EventsCheckWorker: checked ${sinceLastCheck / 1000}s ago, skip")
             NotifDiagLog.log(applicationContext, "worker: skip (checked ${sinceLastCheck / 1000}s ago)")
             return@withContext Result.success()
@@ -448,5 +454,7 @@ class EventsCheckWorker @AssistedInject constructor(
          */
         private val workLock = Mutex()
         const val UNIQUE_NAME = "events_check_periodic"
+        /** inputData-флаг: проверка вызвана реальным FCM-пушем (обходит гейты опроса). */
+        const val KEY_FCM_TRIGGER = "trigger_fcm"
     }
 }

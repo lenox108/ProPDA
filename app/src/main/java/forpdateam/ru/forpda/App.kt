@@ -173,6 +173,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         setupNetworkTracking()
         setupBackgroundEventsCheck()
         setupRealtimePushToggle()
+        setupPushTokenRefresh()
         setupAppUpdateCheck()
 
         // Ярлык обязан существовать при любом старте процесса — даже если процесс
@@ -394,6 +395,26 @@ class App : Application(), androidx.work.Configuration.Provider {
                             forpdateam.ru.forpda.notifications.NotificationsService.startAndCheckNoBind(this@App)
                         }
                     }
+        }
+    }
+
+    /**
+     * Если выбран способ доставки Push — на каждом старте молча переобновляем регистрацию токена
+     * (FCM-токен может протухнуть/смениться при IID-refresh; [PushRegistrar] дедупит по токену и
+     * битмаску, поэтому лишний `ai` не шлётся). Также реагирует на изменение семейств уведомлений
+     * (меняется битмаск). Требует уже полученной сессии (login_key из настроек) — иначе no-op.
+     */
+    private fun setupPushTokenRefresh() {
+        val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        if (prefs.getString("notifications.delivery_method", "poll") != "push") return
+        val registrar = forpdateam.ru.forpda.notifications.push.PushRegistrar(this, notificationPreferencesHolder)
+        appScope.launch {
+            runCatching { registrar.register(force = false) }
+                    .onFailure { Timber.w(it, "push token refresh failed") }
+            // Смена включённых семейств уведомлений → перерегистрация с новым битмаском.
+            notificationPreferencesHolder.wantsPushNotificationsFlow()
+                    .distinctUntilChanged()
+                    .collect { runCatching { registrar.register(force = false) } }
         }
     }
 

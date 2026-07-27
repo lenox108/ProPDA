@@ -114,6 +114,17 @@
         android:layout="@layout/preference_category_custom"
         android:title="@string/pref_title_bg_check">
 
+        <ListPreference
+            android:defaultValue="poll"
+            android:dependency="notifications.main.enabled"
+            android:dialogTitle="@string/pref_title_delivery_method"
+            android:entries="@array/entries_notify_delivery_method"
+            android:entryValues="@array/entry_values_notify_delivery_method"
+            android:key="notifications.delivery_method"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_delivery_method"
+            app:iconSpaceReserved="false" />
+
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"
             android:dependency="notifications.main.enabled"

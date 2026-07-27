@@ -38,6 +38,9 @@
     <!-- Перевзвод будильника фоновой проверки после перезагрузки/обновления (иначе alarm-цепь
          молчит до первого срабатывания страховочного периодика — до получаса). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Приём FCM push от сервера 4PDA (легаси c2dm-канал, как в официальном клиенте). -->
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
     <!-- Постоянное соединение (опция): FGS без 6-часового лимита dataSync (Android 15). -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
@@ -522,6 +525,20 @@
         <receiver
             android:name=".notifications.NotificationActionReceiver"
             android:exported="false" />
+
+        <!--
+          Push-доставка через FCM под sender 4PDA (легаси c2dm-путь, как в офиц. клиенте).
+          Разрешено правообладателем 4PDA. permission SEND гарантирует, что сообщения принимаем
+          только от GmsCore. Сам ресивер сетью не занимается — будит EventsCheckWorker.
+        -->
+        <receiver
+            android:name=".notifications.push.FcmMessagingReceiver"
+            android:exported="true"
+            android:permission="com.google.android.c2dm.permission.SEND">
+            <intent-filter>
+                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

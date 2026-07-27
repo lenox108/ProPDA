@@ -35,6 +35,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         addPreferencesFromResource(R.xml.preferences_notifications)
         configureAndroidNotificationSettings()
         configureNestedNotificationDependencies()
+        configureDeliveryMethod()
         (activity as? SettingsActivity)?.supportActionBar?.title = preferenceScreen.title
     }
 
@@ -247,6 +248,69 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         configureChannelLink("notifications.system.channel.mentions", NotificationsService.CHANNEL_MENTION_ID)
         configureChannelLink("notifications.system.channel.favorites", NotificationsService.CHANNEL_FAV_ID)
         configureChannelLink("notifications.system.channel.downloads", DownloadNotifications.CHANNEL_ID)
+    }
+
+    /**
+     * Выбор способа доставки (Опрос / Push). При выборе Push запускаем одноразовую настройку
+     * ([forpdateam.ru.forpda.notifications.push.PushSetupController]): app-логин за login_key +
+     * регистрация FCM-токена. При провале/отмене откатываем значение обратно на «Опрос».
+     */
+    private fun configureDeliveryMethod() {
+        val pref = preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
+                ?: return
+        updateDeliveryMethodSummary(pref, pref.value ?: "poll")
+        pref.onPreferenceChangeListener = OnPreferenceChangeListener { _, newValue ->
+            val value = newValue as? String ?: return@OnPreferenceChangeListener false
+            if (value == "push") {
+                startPushSetup(pref)
+                // Значение выставим сами после успешной настройки — пока не принимаем.
+                false
+            } else {
+                disablePush()
+                updateDeliveryMethodSummary(pref, value)
+                true
+            }
+        }
+    }
+
+    private fun updateDeliveryMethodSummary(pref: androidx.preference.ListPreference, value: String) {
+        pref.summary = getString(
+                if (value == "push") R.string.pref_summary_delivery_push
+                else R.string.pref_summary_delivery_poll
+        )
+    }
+
+    private fun startPushSetup(pref: androidx.preference.ListPreference) {
+        val activity = activity ?: return
+        val controller = forpdateam.ru.forpda.notifications.push.PushSetupController(activity)
+        val defaultLogin = preferenceScreen.sharedPreferences?.getString("auth_login", null)
+        lifecycleScope.launch {
+            when (val outcome = controller.enablePush(defaultLogin)) {
+                is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Registered -> {
+                    pref.value = "push"
+                    updateDeliveryMethodSummary(pref, "push")
+                    toast(getString(R.string.push_setup_registered))
+                }
+                is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Cancelled -> Unit
+                is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Failed -> {
+                    val msg = if (outcome.message == forpdateam.ru.forpda.notifications.push.PushSetupController.NO_GMS)
+                        getString(R.string.push_setup_no_gms)
+                    else getString(R.string.push_setup_failed, outcome.message)
+                    toast(msg)
+                }
+            }
+        }
+    }
+
+    private fun disablePush() {
+        val activity = activity ?: return
+        val controller = forpdateam.ru.forpda.notifications.push.PushSetupController(activity)
+        lifecycleScope.launch { runCatching { controller.disablePush() } }
+    }
+
+    private fun toast(message: String) {
+        val ctx = context ?: return
+        forpdateam.ru.forpda.common.AppToast.makeText(ctx, message, forpdateam.ru.forpda.common.AppToast.LENGTH_LONG).show()
     }
 
     private fun configureNestedNotificationDependencies() {

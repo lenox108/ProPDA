@@ -1054,6 +1054,14 @@
     <string name="pref_summary_favorites_live_tab">Обновлять данные во вкладке</string>
     <string name="pref_title_hat_watch">Новые версии приложений</string>
     <string name="pref_summary_hat_watch">Пуш, когда в шапку отслеживаемой темы добавляют новый apk. Включайте слежение в меню темы или в избранном («Следить за новыми версиями»).</string>
+    <!-- Способ доставки уведомлений -->
+    <string name="pref_title_delivery_method">Способ доставки</string>
+    <string name="pref_summary_delivery_poll">Опрос: приложение периодически проверяет форум в фоне. Экономно, но с задержкой.</string>
+    <string name="pref_summary_delivery_push">Push (Google): сервер 4PDA присылает уведомления мгновенно через Firebase — работает даже в спящем режиме, без постоянного соединения и почти без расхода батареи.</string>
+    <string name="push_setup_no_gms">Нет сервисов Google Play — push недоступен на этом устройстве.</string>
+    <string name="push_setup_registered">Push включён — уведомления будут приходить мгновенно.</string>
+    <string name="push_setup_failed">Не удалось включить push: %1$s</string>
+    <string name="push_setup_in_progress">Настраиваю push…</string>
     <string name="pref_title_bg_check">Работать в фоне</string>
     <string name="pref_summary_bg_check">Выключено: приложение ничего не делает, пока закрыто. Уведомления приходят, только когда оно открыто.</string>
     <string name="pref_title_bg_check_interval">Интервал фоновой проверки</string>
