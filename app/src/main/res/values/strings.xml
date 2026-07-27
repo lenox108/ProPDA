@@ -1276,6 +1276,13 @@
         <item quantity="other">%d закладки</item>
     </plurals>
 
+    <plurals name="msg_panel_collapsed_attachments">
+        <item quantity="one">%d вложение</item>
+        <item quantity="few">%d вложения</item>
+        <item quantity="many">%d вложений</item>
+        <item quantity="other">%d вложения</item>
+    </plurals>
+
     <!-- New res -->
 
     <!-- Closeable info -->

@@ -257,6 +257,7 @@ class MessagePanel(
         textWatcher = object : SimpleTextWatcher() {
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
                 updateSendAppearance()
+                if (isCollapsed) updateCollapsedPreview()
             }
         }
         messageField?.addTextChangedListener(requireNotNull(textWatcher))
@@ -430,12 +431,8 @@ class MessagePanel(
         applyCollapsedState(startCollapsed)
     }
 
-    /** Свёрнутая панель прячет текст — пока в ней есть что терять, держим её открытой. */
-    fun canCollapse(): Boolean =
-        message.isBlank() && attachmentsPopup?.getAttachments().isNullOrEmpty()
-
     fun collapse(byUser: Boolean = false) {
-        if (!isCollapsible || isCollapsed || !canCollapse()) return
+        if (!isCollapsible || isCollapsed) return
         hideImeFromEditor()
         applyCollapsedState(true)
         if (byUser) collapsedChangeListener?.invoke(true)
@@ -453,6 +450,31 @@ class MessagePanel(
         collapsedBar?.visibility = if (collapsed) View.VISIBLE else View.GONE
         messageWrapper?.visibility = if (collapsed) View.GONE else View.VISIBLE
         collapsedControls?.visibility = if (collapsed) View.GONE else View.VISIBLE
+        if (collapsed) updateCollapsedPreview()
+    }
+
+    /**
+     * В свёрнутой строке показываем сам набранный текст, а не подсказку: сворачивать с текстом
+     * можно (черновик никуда не девается), но пользователь должен видеть, что в панели что-то есть.
+     */
+    private fun updateCollapsedPreview() {
+        val hint = quickBinding?.collapsedHint ?: return
+        val text = message.trim()
+        val attachments = attachmentsPopup?.getAttachments()?.size ?: 0
+        when {
+            text.isNotEmpty() -> {
+                hint.text = text
+                hint.setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            }
+            attachments > 0 -> {
+                hint.text = resources.getQuantityString(R.plurals.msg_panel_collapsed_attachments, attachments, attachments)
+                hint.setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+            }
+            else -> {
+                hint.setText(R.string.msg_panel_hint_message)
+                hint.setTextColor(context.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            }
+        }
     }
 
     fun disableBehavior() {
