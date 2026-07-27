@@ -19,6 +19,7 @@ import kotlinx.coroutines.Job
 import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
+import forpdateam.ru.forpda.model.preferences.OtherPreferencesHolder
 import forpdateam.ru.forpda.presentation.IErrorHandler
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.Screen
@@ -43,6 +44,7 @@ class QmsChatViewModel @Inject constructor(
         private val avatarRepository: AvatarRepository,
         private val eventsRepository: EventsRepository,
         private val mainPreferencesHolder: MainPreferencesHolder,
+        private val otherPreferencesHolder: OtherPreferencesHolder,
         private val router: TabRouter,
         private val linkHandler: ILinkHandler,
         private val errorHandler: IErrorHandler
@@ -206,6 +208,20 @@ class QmsChatViewModel @Inject constructor(
         avatarUrl = newData.avatarUrl
         loadedChatKey = chatKey(userId, themeId)
         updateMode()
+    }
+
+    /** Ники, которым уже создавали темы: подставляются в выпадающий список поля ника. */
+    fun recentNicks(): List<String> =
+            QmsNickHistory.parse(otherPreferencesHolder.getQmsRecentNicksSync())
+
+    private fun rememberNick(nick: String) {
+        if (nick.isBlank()) return
+        scope.launch {
+            runCatching {
+                val updated = QmsNickHistory.add(otherPreferencesHolder.getQmsRecentNicksSync(), nick)
+                otherPreferencesHolder.setQmsRecentNicks(updated)
+            }.onFailure { Timber.e(it, "QMS: не удалось сохранить ник в историю") }
+        }
     }
 
     fun findUser(nick: String) {
@@ -665,6 +681,7 @@ class QmsChatViewModel @Inject constructor(
             try {
                 _refreshing.value = true
                 val chat = qmsInteractor.sendNewTheme(nick, title, message, submissionFiles)
+                rememberNick(chat.nick?.takeIf { it.isNotBlank() } ?: nick)
                 updateCurrentData(chat)
                 _uiEvents.emit(QmsChatUiEvent.ShowChat(chat))
                 _uiEvents.emit(QmsChatUiEvent.OnNewThemeCreate(chat))
