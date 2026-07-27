@@ -29,6 +29,10 @@ class OtherPreferencesHolder(
 
     fun getQmsRecentNicksSync(): String = dataStore.getQmsRecentNicksSync()
 
+    suspend fun setQmsEditorCollapsed(value: Boolean) = dataStore.setQmsEditorCollapsed(value)
+
+    fun getQmsEditorCollapsedSync(): Boolean = dataStore.getQmsEditorCollapsedSync()
+
     suspend fun setShowReportWarning(value: Boolean) = dataStore.setShowReportWarning(value)
 
     suspend fun setTooltipSearchSettings(value: Boolean) = dataStore.setTooltipSearchSettings(value)

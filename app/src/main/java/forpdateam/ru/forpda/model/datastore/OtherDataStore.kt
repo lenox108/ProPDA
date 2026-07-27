@@ -57,6 +57,7 @@ class OtherDataStore(private val context: Context) {
         val OTHER_MENU_QUICK_SETTINGS = stringPreferencesKey("other_menu_quick_settings")
         val OTHER_MENU_HIDDEN_BLOCKS = stringPreferencesKey("other_menu_hidden_blocks")
         val QMS_RECENT_NICKS = stringPreferencesKey("qms_recent_nicks")
+        val QMS_EDITOR_COLLAPSED = booleanPreferencesKey("qms_editor_collapsed")
     }
 
     val appFirstStart: Flow<Boolean> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
@@ -236,4 +237,23 @@ class OtherDataStore(private val context: Context) {
 
     fun getQmsRecentNicksSync(): String =
             mirrorPrefs.getString("qms_recent_nicks", "").orEmpty()
+
+    /**
+     * Свёрнута ли панель ввода в чате QMS. Флаг общий на приложение (а не на диалог):
+     * это привычка пользователя, а не свойство переписки. По умолчанию свёрнута.
+     */
+    val qmsEditorCollapsed: Flow<Boolean> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
+        preferences[PreferencesKeys.QMS_EDITOR_COLLAPSED] ?: true
+    }, true)
+
+    suspend fun setQmsEditorCollapsed(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.QMS_EDITOR_COLLAPSED] = value
+        }
+        mirrorPrefs.edit().putBoolean("qms_editor_collapsed", value).apply()
+    }
+
+    /** Читается синхронно при создании панели — иначе она мигнёт развёрнутой. */
+    fun getQmsEditorCollapsedSync(): Boolean =
+            mirrorPrefs.getBoolean("qms_editor_collapsed", true)
 }

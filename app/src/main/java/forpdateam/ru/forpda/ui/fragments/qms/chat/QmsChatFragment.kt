@@ -304,6 +304,14 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
 
         messagePanel.addSendOnClickListener { presenter.onSendClick() }
         messagePanel.setClearMessageClickListener { requestClearMessagePanelText() }
+        // Свёрнутое поле ввода: состояние общее на приложение и переключается только руками
+        // (по скроллу не сворачиваем — это дёргало бы паддинг списка во время подгрузки вверх).
+        messagePanel.setCollapsible(true, otherPreferencesHolder.getQmsEditorCollapsedSync())
+        messagePanel.collapsedChangeListener = { collapsed ->
+            viewLifecycleOwner.lifecycleScope.launch {
+                runCatching { otherPreferencesHolder.setQmsEditorCollapsed(collapsed) }
+            }
+        }
         restoreQmsDraftIntoPanel()
 
         messagePanel.heightChangeListener = MessagePanel.HeightChangeListener {

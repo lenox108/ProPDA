@@ -86,6 +86,18 @@ class MessagePanel(
     private var clearMessageClickListener: (() -> Unit)? = null
     
     lateinit var messageField: CodeEditor
+
+    // --- Сворачивание панели (включается только в чате QMS) ---
+    private var collapsedBar: View? = null
+    private var collapsedControls: View? = null
+    /** Панель умеет сворачиваться в одну строку. Выключено — старое поведение без изменений. */
+    var isCollapsible: Boolean = false
+        private set
+    var isCollapsed: Boolean = false
+        private set
+    /** Вызывается только на смену состояния пользователем — для сохранения флага. */
+    var collapsedChangeListener: ((Boolean) -> Unit)? = null
+
     private val panelBehavior = MessagePanelBehavior()
     private var advancedPopup: AdvancedPopup? = null
     var attachmentsPopup: AttachmentsPopup? = null
@@ -178,6 +190,8 @@ class MessagePanel(
             sendProgress = qb.sendProgress
             formProgress = null
             messageWrapper = qb.messageWrapper
+            collapsedBar = qb.collapsedBar
+            collapsedControls = qb.controls
         }
         isClickable = true
         
@@ -395,6 +409,52 @@ class MessagePanel(
         }
     }
     
+    /**
+     * Включает сворачивание панели в одну строку и задаёт стартовое состояние.
+     * Вызывать после [init] — до первого показа панели, чтобы не мигать развёрнутым видом.
+     */
+    fun setCollapsible(enabled: Boolean, startCollapsed: Boolean) {
+        if (fullForm) return
+        isCollapsible = enabled
+        hideButton?.apply {
+            visibility = if (enabled) View.VISIBLE else View.GONE
+            contentDescription = context.getString(R.string.msg_panel_collapse)
+            setOnClickListener { collapse(byUser = true) }
+        }
+        collapsedBar?.setOnClickListener { expand(byUser = true, focusInput = true) }
+        quickBinding?.buttonExpand?.setOnClickListener { expand(byUser = true, focusInput = true) }
+        if (!enabled) {
+            applyCollapsedState(false)
+            return
+        }
+        applyCollapsedState(startCollapsed)
+    }
+
+    /** Свёрнутая панель прячет текст — пока в ней есть что терять, держим её открытой. */
+    fun canCollapse(): Boolean =
+        message.isBlank() && attachmentsPopup?.getAttachments().isNullOrEmpty()
+
+    fun collapse(byUser: Boolean = false) {
+        if (!isCollapsible || isCollapsed || !canCollapse()) return
+        hideImeFromEditor()
+        applyCollapsedState(true)
+        if (byUser) collapsedChangeListener?.invoke(true)
+    }
+
+    fun expand(byUser: Boolean = false, focusInput: Boolean = false) {
+        if (!isCollapsible || !isCollapsed) return
+        applyCollapsedState(false)
+        if (focusInput) post { requestKeyboard("expand") }
+        if (byUser) collapsedChangeListener?.invoke(false)
+    }
+
+    private fun applyCollapsedState(collapsed: Boolean) {
+        isCollapsed = collapsed
+        collapsedBar?.visibility = if (collapsed) View.VISIBLE else View.GONE
+        messageWrapper?.visibility = if (collapsed) View.GONE else View.VISIBLE
+        collapsedControls?.visibility = if (collapsed) View.GONE else View.VISIBLE
+    }
+
     fun disableBehavior() {
         if (params is CoordinatorLayout.LayoutParams) {
             (params as CoordinatorLayout.LayoutParams).behavior = null
@@ -440,6 +500,8 @@ class MessagePanel(
     
     fun setText(text: String?) {
         messageField?.setText(text)
+        // Черновик или подставленный текст — намерение писать очевидно, свёрнутой панель не оставляем.
+        if (!text.isNullOrBlank()) expand()
     }
 
     /** Помещает курсор в конец текста — удобно при открытии поста на правку. */
@@ -486,6 +548,8 @@ class MessagePanel(
     
     fun insertText(startText: String, endText: String?, selectionStart: Int, selectionEnd: Int, selectionInside: Boolean): Boolean {
         show()
+        // Цитата/ответ приходят сюда — панель должна открыться вместе с текстом.
+        expand(focusInput = true)
         val field = messageField
         val editable = field.text ?: return false
         val len = editable.length
