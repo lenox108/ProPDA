@@ -69,8 +69,10 @@ class NewsRepository(
         val key = newsListKey(category, pageNumber)
         newsListCache.get(key)?.let { return it }
         if (pageNumber != FIRST_PAGE) return null
-        val entry = newsListDiskCache?.get(key) ?: return null
+        // Чтение индекса и Room — только на IO: getCachedNews зовут с главного потока (SWR на входе
+        // во вкладку), и файловый доступ оттуда стоил бы кадров.
         return withContext(Dispatchers.IO) {
+            val entry = newsListDiskCache?.get(key) ?: return@withContext null
             entry.items.copyNewsItems().also { applyKnownAvatars(it) }
         }
     }
