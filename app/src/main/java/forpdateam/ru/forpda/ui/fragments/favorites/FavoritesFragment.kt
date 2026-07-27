@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.ui.fragments.favorites
 import android.app.Dialog
 import android.app.SearchManager
 import android.content.Context
+import android.graphics.Typeface
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -103,7 +104,6 @@ class FavoritesFragment : RecyclerFragment() {
     private var folderStrip: View? = null
     private var folderChips: com.google.android.material.chip.ChipGroup? = null
     private var folderStripMenuItem: MenuItem? = null
-    private var createFolderMenuItem: MenuItem? = null
 
     private val presenter: FavoritesViewModel by viewModels()
     private lateinit var favoritesDialogs: FavoritesDialogs
@@ -310,13 +310,6 @@ class FavoritesFragment : RecyclerFragment() {
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
         // Переключатель ленты папок — в overflow, а не иконкой: в видимой части тулбара уже
         // три действия, а прятать ленту нужно редко (и с запоминанием выбора).
-        // Без единой папки ленты (а значит и чипа «+ Папка») на экране нет — заводить первую
-        // папку нужно откуда-то ещё, иначе фича выглядит недоступной.
-        createFolderMenuItem = menu.add(R.string.fav_folder_create)
-                .setOnMenuItemClickListener {
-                    favoritesDialogs.showCreateFolderDialog()
-                    true
-                }
         // Отдельная иконка в тулбаре, а не пункт overflow: место есть, а состояние ленты
         // читается сразу по значку (папка / перечёркнутая папка) без открытия меню.
         folderStripMenuItem = menu.add(Menu.NONE, R.id.action_favorites_folder_strip, Menu.NONE, getString(R.string.fav_folders_panel))
@@ -458,13 +451,12 @@ class FavoritesFragment : RecyclerFragment() {
         val chip = layoutInflater.inflate(
                 R.layout.favorites_folder_chip, chips, false) as Chip
         chip.id = View.generateViewId()
-        // Непрочитанное важнее общего количества: цифра на чипе отвечает на вопрос
-        // «куда идти читать», поэтому при непрочитанных показываем именно их.
-        chip.text = when {
-            unread > 0 -> getString(R.string.fav_folder_chip_unread, title, unread)
-            count > 0 -> getString(R.string.fav_folder_chip_total, title, count)
-            else -> title
-        }
+        // Цифра — это КОЛИЧЕСТВО ТЕМ, и оно обязано совпадать с тем, что видно в списке.
+        // Раньше при непрочитанных показывалось их число (другим разделителем), и «Кен · 2»
+        // над списком из четырёх тем читалось как ошибка счёта.
+        chip.text = if (count > 0) getString(R.string.fav_folder_chip_total, title, count) else title
+        // Непрочитанное отмечаем жирностью — тем же языком, что и строки списка.
+        chip.setTypeface(Typeface.DEFAULT, if (unread > 0) Typeface.BOLD else Typeface.NORMAL)
         chip.isChecked = value == selection
         chip.setOnClickListener { presenter.selectFolder(value) }
         if (folder != null) {
@@ -1009,7 +1001,6 @@ class FavoritesFragment : RecyclerFragment() {
             MenuItemCompat.setContentDescription(item, hint)
             MenuItemCompat.setTooltipText(item, hint)
         }
-        createFolderMenuItem?.isVisible = !inSelection
         applyHeaderAutoHide()
 
         if (::adapter.isInitialized) {
