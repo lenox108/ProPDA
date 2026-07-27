@@ -1,6 +1,7 @@
 package forpdateam.ru.forpda.ui.views
 
 import android.content.Context
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -34,7 +35,10 @@ internal object SmartNavMenuPositioner {
 
         val parentHeight = parent.height.takeIf { it > 0 } ?: parent.rootView.height
         val bottomReserved = bottomChromeHeightPx(context, parent) + context.dp12
-        val topReserved = context.dp16
+        // Кнопку можно поднять к верхнему краю ([SmartFabPlacement]), а меню центрируется по ней —
+        // поэтому потолок не просто 16dp от координатора, а низ AppBar, иначе меню лезет под тулбар.
+        val appBarBottom = parent.findViewById<View>(R.id.appbar_layout)?.bottom ?: 0
+        val topReserved = maxOf(context.dp16, appBarBottom + context.dp8)
         val maxMenuHeight = (parentHeight - topReserved - bottomReserved).coerceAtLeast(context.dp40 * 3)
 
         // Shrink page list if menu exceeds available height (single-pass measure)
@@ -66,12 +70,23 @@ internal object SmartNavMenuPositioner {
         val menuH = menuView.measuredHeight
 
         val maxTop = (parentHeight - bottomReserved - menuH).coerceAtLeast(topReserved)
-        // Position to the left of FAB, vertically centered with FAB, then keep it above bottom chrome.
-        val targetX = (anchorX - parentLoc[0] - menuW - context.dp8).coerceAtLeast(context.dp16)
+        // Кнопку можно утащить к любому краю ([SmartFabPlacement]), поэтому сторона выбирается по её
+        // центру: у правого края — меню слева от кнопки (как было), у левого — справа, иначе оно
+        // упиралось бы в клампе в левый край и наезжало на саму кнопку.
+        val anchorLeftInParent = anchorX - parentLoc[0]
+        val parentWidth = parent.width.takeIf { it > 0 } ?: parent.rootView.width
+        val anchorCenterX = anchorLeftInParent + anchorView.width / 2
+        val placeLeftOfAnchor = anchorCenterX >= parentWidth / 2
+        val maxStart = (parentWidth - menuW - context.dp16).coerceAtLeast(context.dp16)
+        val rawX = if (placeLeftOfAnchor) anchorLeftInParent - menuW - context.dp8
+        else anchorLeftInParent + anchorView.width + context.dp8
+        val targetX = rawX.coerceIn(context.dp16, maxStart)
         val targetY = (anchorY - parentLoc[1] + anchorH / 2 - menuH / 2).coerceIn(topReserved, maxTop)
 
-        val params = FrameLayout.LayoutParams(menuW, menuH)
-        params.marginStart = targetX
+        // Абсолютная гравитация + leftMargin: сторону меню мы уже посчитали сами, а marginStart в RTL
+        // отмерялся бы от противоположного края.
+        val params = FrameLayout.LayoutParams(menuW, menuH, Gravity.TOP or Gravity.LEFT)
+        params.leftMargin = targetX
         params.topMargin = targetY
         menuView.layoutParams = params
     }

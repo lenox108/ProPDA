@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -63,6 +64,8 @@ class MainDataStore(private val context: Context) {
         val IS_EDITOR_MONOSPACE = booleanPreferencesKey("is_editor_monospace")
         val IS_EDITOR_DEFAULT_HIDDEN = booleanPreferencesKey("is_editor_default_hidden")
         val SCROLL_BUTTON_ENABLE = booleanPreferencesKey("scroll_button_enable")
+        val SMART_BUTTON_POS_X = floatPreferencesKey("smart_button_pos_x")
+        val SMART_BUTTON_POS_Y = floatPreferencesKey("smart_button_pos_y")
         val TOPIC_PAGINATION_PANEL_ENABLE = booleanPreferencesKey("topic_pagination_panel_enable")
         val TOPIC_PAGINATION_PANELS = stringPreferencesKey("topic_pagination_panels")
         val TOPIC_SCROLL_MODE = stringPreferencesKey("topic_scroll_mode")
@@ -318,6 +321,47 @@ class MainDataStore(private val context: Context) {
             return mirrorPrefs.getBoolean("scroll_button_enable", true)
         }
         return true
+    }
+
+    /**
+     * Положение «умной кнопки» темы, заданное пользователем в режиме переноса. Хранится НЕ в пикселях,
+     * а долями свободной области (0f — левый/верхний край допустимой зоны, 1f — правый/нижний): так
+     * позиция переживает поворот, разделённый экран, смену insets и другой размер экрана. Отсутствие
+     * ключей = «по умолчанию» (нижний правый угол, см. NativeTopicFragment.setupFab).
+     */
+    suspend fun setSmartButtonPosition(xFraction: Float, yFraction: Float) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.SMART_BUTTON_POS_X] = xFraction
+            preferences[PreferencesKeys.SMART_BUTTON_POS_Y] = yFraction
+        }
+        mirrorPrefs.edit()
+                .putFloat(MIRROR_SMART_BUTTON_POS_X, xFraction)
+                .putFloat(MIRROR_SMART_BUTTON_POS_Y, yFraction)
+                .apply()
+    }
+
+    /** Сброс на позицию по умолчанию («Сбросить» в режиме переноса). */
+    suspend fun clearSmartButtonPosition() {
+        safeEdit { preferences ->
+            preferences.remove(PreferencesKeys.SMART_BUTTON_POS_X)
+            preferences.remove(PreferencesKeys.SMART_BUTTON_POS_Y)
+        }
+        mirrorPrefs.edit()
+                .remove(MIRROR_SMART_BUTTON_POS_X)
+                .remove(MIRROR_SMART_BUTTON_POS_Y)
+                .apply()
+    }
+
+    /** `null` — положение не задавалось, кнопку рисуем в позиции по умолчанию. */
+    fun getSmartButtonPositionImmediate(): Pair<Float, Float>? {
+        if (!mirrorPrefs.contains(MIRROR_SMART_BUTTON_POS_X) ||
+                !mirrorPrefs.contains(MIRROR_SMART_BUTTON_POS_Y)) {
+            return null
+        }
+        val x = mirrorPrefs.getFloat(MIRROR_SMART_BUTTON_POS_X, 1f)
+        val y = mirrorPrefs.getFloat(MIRROR_SMART_BUTTON_POS_Y, 1f)
+        if (!x.isFinite() || !y.isFinite()) return null
+        return x.coerceIn(0f, 1f) to y.coerceIn(0f, 1f)
     }
 
     suspend fun setTopicPaginationPanels(value: AppPreferences.Main.TopicPaginationPanels) {
@@ -1088,6 +1132,9 @@ class MainDataStore(private val context: Context) {
 
     private companion object {
         private const val LOG_TAG = "MainDataStore"
+        /** Зеркало для синхронного чтения положения «умной кнопки» на первом кадре темы. */
+        private const val MIRROR_SMART_BUTTON_POS_X = "smart_button_pos_x"
+        private const val MIRROR_SMART_BUTTON_POS_Y = "smart_button_pos_y"
         /** Дефолтный seed для AccentPalette.CUSTOM — приятный синий (Material Blue 700). */
         private const val DEFAULT_ACCENT_CUSTOM_COLOR = 0xFF1976D2.toInt()
     }

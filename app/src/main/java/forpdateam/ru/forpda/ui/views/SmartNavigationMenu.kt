@@ -39,6 +39,8 @@ class SmartNavigationMenu(
         fun onGoToStart()
         fun onGoToEnd()
         fun onGoToUnread()
+        /** «Переместить кнопку» — единственный вход в режим свободного размещения FAB. */
+        fun onMoveButton()
         fun onDismiss()
     }
 
@@ -229,6 +231,10 @@ class SmartNavigationMenu(
         setupAction(view, R.id.smart_nav_action_enter, R.string.smart_nav_enter_page, R.drawable.ic_smart_nav_page_number) {
             showPageInput(view)
         }
+        setupAction(view, R.id.smart_nav_action_move, R.string.smart_nav_move_button, R.drawable.ic_smart_nav_move) {
+            listener?.onMoveButton()
+            dismiss()
+        }
 
         unreadActionView = view.findViewById(R.id.smart_nav_action_unread)
         setupPageInput(view)
@@ -239,18 +245,28 @@ class SmartNavigationMenu(
     private fun bindMenuData(view: View, currentPage: Int, totalPages: Int, hasUnread: Boolean) {
         pageAdapter?.update(currentPage, totalPages)
         val actualTotal = totalPages
+        // Одностраничная тема: переходить некуда, но пункт «Переместить кнопку» должен быть доступен и
+        // здесь — иначе в такой теме умную кнопку не переставить. Остальное просто прячем.
+        val navigationAvailable = actualTotal > 1
 
         val pageList = view.findViewById<RecyclerView>(R.id.smart_nav_page_list)
         val itemHeight = context.dp48
-        val scrollPosition = (currentPage - 1).coerceIn(0, actualTotal - 1)
-        pageList.post {
-            (pageList.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(
-                scrollPosition,
-                itemHeight * (PAGE_LIST_VISIBLE_ROWS / 2)
-            )
+        pageList.visibility = if (navigationAvailable) View.VISIBLE else View.GONE
+        if (navigationAvailable) {
+            val scrollPosition = (currentPage - 1).coerceIn(0, actualTotal - 1)
+            pageList.post {
+                (pageList.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(
+                    scrollPosition,
+                    itemHeight * (PAGE_LIST_VISIBLE_ROWS / 2)
+                )
+            }
         }
 
-        unreadActionView?.visibility = if (hasUnread) View.VISIBLE else View.GONE
+        unreadActionView?.visibility = if (navigationAvailable && hasUnread) View.VISIBLE else View.GONE
+        for (actionId in NAVIGATION_ACTION_IDS) {
+            view.findViewById<View>(actionId)?.visibility =
+                if (navigationAvailable) View.VISIBLE else View.GONE
+        }
 
         // Reset input state from previous usage
         val actions = view.findViewById<View>(R.id.smart_nav_actions)
@@ -258,7 +274,7 @@ class SmartNavigationMenu(
         val inputContainer = view.findViewById<View>(R.id.smart_nav_input_container)
         val editText = view.findViewById<EditText>(R.id.smart_nav_page_input)
         actions?.visibility = View.VISIBLE
-        divider?.visibility = View.VISIBLE
+        divider?.visibility = if (navigationAvailable) View.VISIBLE else View.GONE
         inputContainer?.visibility = View.GONE
         editText?.text?.clear()
         editText?.error = null
@@ -373,6 +389,13 @@ class SmartNavigationMenu(
     private companion object {
         private const val PAGE_LIST_VISIBLE_ROWS = 5
         private const val MIN_PAGE_LIST_VISIBLE_ROWS = 3
+
+        /** Пункты, осмысленные только в многостраничной теме («Переместить кнопку» — всегда). */
+        private val NAVIGATION_ACTION_IDS = intArrayOf(
+            R.id.smart_nav_action_start,
+            R.id.smart_nav_action_end,
+            R.id.smart_nav_action_enter,
+        )
 
         private fun Context.getDimensionFromAttr(attr: Int): Int {
             val typedValue = TypedValue()

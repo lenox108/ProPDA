@@ -41,6 +41,7 @@
         <include layout="@layout/smart_nav_action_item" android:id="@+id/smart_nav_action_unread"/>
         <include layout="@layout/smart_nav_action_item" android:id="@+id/smart_nav_action_end"/>
         <include layout="@layout/smart_nav_action_item" android:id="@+id/smart_nav_action_enter"/>
+        <include layout="@layout/smart_nav_action_item" android:id="@+id/smart_nav_action_move"/>
     </LinearLayout>
 
     <!-- Inline page number input (hidden by default) -->

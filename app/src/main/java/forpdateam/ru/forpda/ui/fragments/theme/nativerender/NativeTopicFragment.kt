@@ -495,6 +495,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Reused WebView smart-navigation popup (page wheel + start/unread/end/enter-number). */
     private var smartNavMenu: forpdateam.ru.forpda.ui.views.SmartNavigationMenu? = null
 
+    /** Свободное размещение умной кнопки: позиция из настроек + режим переноса из smart-nav меню. */
+    private var fabPlacement: forpdateam.ru.forpda.ui.views.SmartFabPlacement? = null
+    private var smartButtonPositionJob: kotlinx.coroutines.Job? = null
+
     /** «Умная кнопка темы» (FAB) state: enabled per pref; arrow follows the last scroll direction. */
     private var fabEnabled = false
     private var fabPointsDown = true
@@ -504,6 +508,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     override fun hasBackHandling(): Boolean =
             themeOverlay != null || messagePanel?.visibility == View.VISIBLE || searchBar?.visibility == View.VISIBLE ||
+                    fabPlacement?.isMoveModeActive == true ||
                     // История переходов внутри вкладки (HISTORY): «назад» должен вернуть по истории,
                     // а не выйти из приложения на корневой вкладке — иначе back-callback выключается.
                     (mainPreferencesHolder.getTopicBackBehavior() ==
@@ -511,6 +516,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                             themeBackStack.isNotEmpty())
 
     override fun onBackPressed(): Boolean {
+        // Режим переноса умной кнопки — модальный оверлей поверх всего, «назад» выходит из него первым.
+        fabPlacement?.takeIf { it.isMoveModeActive }?.let {
+            it.stopMoveMode()
+            return true
+        }
         // Back closes the hat/poll overlay first, then the find-on-page bar / reply editor, before leaving.
         if (dismissThemeOverlay()) return true
         if (searchBar?.visibility == View.VISIBLE) {
@@ -861,21 +871,37 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun setupFab() {
         fabEnabled = mainPreferencesHolder.getScrollButtonEnabled()
         val dm = resources.displayMetrics
-        // Bottom-end, lifted above the CLASSIC pagination bar so it never sits on top of it.
-        (fab.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams)?.let { lp ->
-            lp.gravity = android.view.Gravity.BOTTOM or android.view.Gravity.END
-            val m = (16 * dm.density).toInt()
-            lp.rightMargin = m
-            // Lifted a bit higher off the bottom (WebView reference sits well above the tab bar); in
-            // CLASSIC it must also clear the pagination bar, so it sits higher still.
-            lp.bottomMargin = ((if (isClassicMode()) 152 else 112) * dm.density).toInt()
-            fab.layoutParams = lp
-        }
         androidx.core.view.ViewCompat.setElevation(fab, 12f * dm.density)
+        fabPlacement?.dispose()
+        fabPlacement = null
         if (!fabEnabled) {
             fab.hide()
             return
         }
+        // Положение кнопки: по умолчанию нижний правый угол (как было), но пользователь может
+        // перенести её через «Переместить кнопку» в smart-nav меню — см. [SmartFabPlacement].
+        fabPlacement = forpdateam.ru.forpda.ui.views.SmartFabPlacement(
+                fab = fab,
+                parent = coordinatorLayout,
+                topReservePx = { appBarLayout.bottom.coerceAtLeast(0) },
+                bottomReservePx = {
+                    paginationBar?.takeIf { it.visibility == View.VISIBLE }?.height ?: 0
+                },
+                // Lifted a bit higher off the bottom (WebView reference sits well above the tab bar); in
+                // CLASSIC it must also clear the pagination bar, so it sits higher still.
+                defaultBottomOffsetPx = { ((if (isClassicMode()) 152 else 112) * dm.density).toInt() },
+                onPositionCommitted = { x, y -> persistSmartButtonPosition(x, y) },
+                onPositionReset = { persistSmartButtonPosition(null, null) },
+                onMoveModeChanged = { active ->
+                    if (active) {
+                        // Режим переноса держит кнопку на экране: авто-скрытие по таймеру здесь только мешало бы.
+                        fabHideHandler.removeCallbacks(fabHideRunnable)
+                        if (!fab.isShown) fab.show()
+                    } else {
+                        showFabTemporarily()
+                    }
+                },
+        ).also { it.setStoredPosition(mainPreferencesHolder.getSmartButtonPosition()) }
         fab.size = com.google.android.material.floatingactionbutton.FloatingActionButton.SIZE_MINI
         fab.setImageResource(forpdateam.ru.forpda.R.drawable.ic_arrow_down)
         // FAB colours are a matched pair defined per theme: smart_nav_fab_background + smart_nav_fab_icon.
@@ -904,6 +930,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
         // Hidden until the user scrolls (WebView parity): appears on any scroll, hides after idle.
         fab.hide()
+    }
+
+    /**
+     * Запись положения умной кнопки ОДНОЙ очередью: перенос и «Сбросить» могут идти подряд, а две
+     * независимые корутины с suspend-записью в DataStore легко легли бы в обратном порядке — и сброс
+     * оказался бы затёрт отставшей записью позиции. `null, null` = сброс на значение по умолчанию.
+     */
+    private fun persistSmartButtonPosition(x: Float?, y: Float?) {
+        smartButtonPositionJob?.cancel()
+        smartButtonPositionJob = viewLifecycleOwner.lifecycleScope.launch {
+            if (x == null || y == null) mainPreferencesHolder.clearSmartButtonPosition()
+            else mainPreferencesHolder.setSmartButtonPosition(x, y)
+        }
     }
 
     /** Show the smart button and (re)arm its idle auto-hide. */
@@ -2719,6 +2758,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         attachmentsPopup = null
         smartNavMenu?.dispose()
         smartNavMenu = null
+        fabPlacement?.dispose()
+        fabPlacement = null
         fabHideHandler.removeCallbacks(fabHideRunnable)
         gestureOverlay = null
         gestureOverlayGlyph = null
@@ -3676,7 +3717,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * / «Ввести номер». On a single-page topic it's meaningless, so nothing shows.
      */
     private fun showSmartNavMenu() {
-        if (!pagination.isInitialised || pagination.totalPages <= 1) return
+        // Одностраничная тема тоже открывает меню — в свёрнутом виде, с одним пунктом «Переместить
+        // кнопку»: иначе в такой теме кнопку некуда было бы перенести.
+        if (!pagination.isInitialised) return
         val menu = smartNavMenu ?: forpdateam.ru.forpda.ui.views.SmartNavigationMenu(
                 requireContext(), fab, coordinatorLayout).also {
             it.setListener(object : forpdateam.ru.forpda.ui.views.SmartNavigationMenu.Listener {
@@ -3686,6 +3729,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 override fun onGoToUnread() {
                     pendingJumpToTop = false
                     loadTopic(unreadUrl())
+                }
+                override fun onMoveButton() {
+                    fabPlacement?.startMoveMode()
                 }
                 override fun onDismiss() {}
             })

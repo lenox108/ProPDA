@@ -80,6 +80,9 @@ class MainPreferencesHolder(
 
     fun getScrollButtonEnabled(): Boolean = dataStore.getScrollButtonEnabledImmediate()
 
+    /** Положение «умной кнопки» долями свободной области; `null` — позиция по умолчанию. */
+    fun getSmartButtonPosition(): Pair<Float, Float>? = dataStore.getSmartButtonPositionImmediate()
+
     fun getCompatibilityMode(): Boolean = dataStore.getCompatibilityModeImmediate()
 
     fun getSmartPreload(): Boolean = dataStore.getSmartPreloadImmediate()
@@ -148,6 +151,11 @@ class MainPreferencesHolder(
     suspend fun setShowBottomArrow(value: Boolean) = dataStore.setShowBottomArrow(value)
 
     suspend fun setScrollButtonEnabled(value: Boolean) = dataStore.setScrollButtonEnabled(value)
+
+    suspend fun setSmartButtonPosition(xFraction: Float, yFraction: Float) =
+            dataStore.setSmartButtonPosition(xFraction, yFraction)
+
+    suspend fun clearSmartButtonPosition() = dataStore.clearSmartButtonPosition()
 
     suspend fun setCompatibilityMode(value: Boolean) = dataStore.setCompatibilityMode(value)
 
