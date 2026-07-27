@@ -12,6 +12,7 @@ import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.common.ClipboardHelper
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.common.Utils
+import forpdateam.ru.forpda.diagnostic.ColdStartTracer
 import forpdateam.ru.forpda.entity.remote.news.NewsItem
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.data.remote.api.news.Constants
@@ -116,6 +117,12 @@ class ArticlesListViewModel @Inject constructor(
                             bypassCache = bypassCache
                     )
                 }
+                // Метки видно в ColdStart-снимке: news.list.cache — момент показа ленты из кэша,
+                // news.list.network — момент ответа сети. Разница между ними и есть выигрыш SWR.
+                ColdStartTracer.mark("news.list.network")
+                if (BuildConfig.DEBUG) {
+                    ColdStartTracer.logSnapshot()
+                }
                 if (withClear && shownFromCacheSignature == listSignature(items)) {
                     // Сеть подтвердила ровно то, что уже показано из кэша: не пересобираем список,
                     // иначе пользователь получил бы мигание и потерю позиции скролла на ровном месте.
@@ -154,6 +161,7 @@ class ArticlesListViewModel @Inject constructor(
         currentItems.clear()
         currentItems.addAll(cached)
         shownFromCacheSignature = listSignature(cached)
+        ColdStartTracer.mark("news.list.cache")
         _uiEvents.emit(ArticlesListUiEvent.ShowNews(cached, true))
     }
 
