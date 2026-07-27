@@ -1100,8 +1100,8 @@
     <string name="pref_title_enable_avatars">Загружать аватары</string>
     <string name="pref_title_download_notifications">Уведомления о загрузках</string>
     <string name="pref_summary_download_notifications">Прогресс и завершение скачивания файлов. Не зависит от общего переключателя уведомлений.</string>
-    <string name="pref_title_favorites_live_tab">Живой список</string>
-    <string name="pref_summary_favorites_live_tab">Обновлять данные во вкладке</string>
+    <string name="pref_title_favorites_live_tab">Обновлять список сразу</string>
+    <string name="pref_summary_favorites_live_tab">Новые посты отмечаются в Избранном сразу, не дожидаясь захода в раздел. Выключите, если не нравится, что строки списка меняются на ходу.</string>
     <string name="pref_title_hat_watch">Новые версии приложений</string>
     <string name="pref_summary_hat_watch">Пуш, когда в шапку отслеживаемой темы добавляют новый apk. Включайте слежение в меню темы или в избранном («Следить за новыми версиями»).</string>
     <!-- Способ доставки уведомлений -->
