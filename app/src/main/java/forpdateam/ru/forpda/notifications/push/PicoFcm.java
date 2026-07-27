@@ -284,13 +284,29 @@ public class PicoFcm {
 
     private void finish(int id, Bundle res) {
         Req r;
+        boolean idle;
         synchronized (pending) {
             r = pending.get(id);
             pending.remove(id);
+            idle = pending.size() == 0;
         }
+        // Отвязываем сервис GmsCore, когда запросов не осталось: без этого биндинг жил до
+        // смерти процесса (утечка ServiceConnection). Так же поступает и оригинал.
+        if (idle) releaseServiceBinding();
         if (r == null) return;
         handler.removeCallbacks(r.timeout);
         r.cb.onResult(id, res);
+    }
+
+    private void releaseServiceBinding() {
+        if (v2Service == null && v2Compat == null) return;
+        v2Service = null;
+        v2Compat = null;
+        try {
+            ctx.unbindService(conn);
+        } catch (Exception ignored) {
+            // уже отвязан / не был привязан
+        }
     }
 
     private static Bundle error(String msg) {

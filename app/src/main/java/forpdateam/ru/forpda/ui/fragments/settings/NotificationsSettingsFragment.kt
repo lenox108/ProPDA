@@ -258,25 +258,78 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     private fun configureDeliveryMethod() {
         val pref = preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
                 ?: return
-        updateDeliveryMethodSummary(pref, pref.value ?: "poll")
+        // Приводим список в соответствие с реальными флагами (миграция старых установок, где
+        // способ выбирался двумя отдельными тумблерами).
+        val current = resolveCurrentMethod(pref.value)
+        if (pref.value != current) pref.value = current
+        applyDeliveryMethod(current)
+        updateDeliveryMethodSummary(pref, current)
+
         pref.onPreferenceChangeListener = OnPreferenceChangeListener { _, newValue ->
             val value = newValue as? String ?: return@OnPreferenceChangeListener false
             if (value == "push") {
+                // Push принимаем только после успешной регистрации токена.
                 startPushSetup(pref)
-                // Значение выставим сами после успешной настройки — пока не принимаем.
                 false
             } else {
                 disablePush()
+                applyDeliveryMethod(value)
                 updateDeliveryMethodSummary(pref, value)
                 true
             }
         }
     }
 
+    /**
+     * Единственный источник правды — выбранный способ доставки. Отсюда выводим взаимоисключающие
+     * флаги, которые читает остальной код: периодический опрос ([KEY_BG_ENABLED]) и постоянный
+     * сокет ([KEY_PERSISTENT_WS]). Так каналы не могут быть включены одновременно и мешать друг другу.
+     *
+     * В режиме push фоновый опрос остаётся ВКЛЮЧЁННЫМ намеренно — как редкая страховка на случай
+     * недоставленного push (так же делает и официальный клиент).
+     */
+    private fun applyDeliveryMethod(method: String) {
+        val sp = preferenceScreen.sharedPreferences ?: return
+        val bgEnabled = method != "off"
+        val persistentWs = method == "socket"
+        sp.edit()
+                .putBoolean(KEY_BG_ENABLED, bgEnabled)
+                .putBoolean(KEY_PERSISTENT_WS, persistentWs)
+                .apply()
+        preferenceScreen.findPreference<Preference>("notifications.bg.interval_min")?.apply {
+            // Интервал имеет смысл только там, где приложение опрашивает форум само.
+            isVisible = method == "poll" || method == "push"
+            summary = getString(
+                    if (method == "push") R.string.pref_summary_bg_interval_safety
+                    else R.string.pref_summary_bg_interval_poll
+            )
+        }
+    }
+
+    /** Выбранный способ доставки (источник правды для статусов и предупреждений). */
+    private fun currentDeliveryMethod(): String =
+            preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
+                    ?.value ?: "poll"
+
+    /** Текущий способ: push авторитетен (нужна регистрация), остальное выводим из флагов. */
+    private fun resolveCurrentMethod(stored: String?): String {
+        if (stored == "push") return "push"
+        val sp = preferenceScreen.sharedPreferences ?: return stored ?: "poll"
+        return when {
+            !sp.getBoolean(KEY_BG_ENABLED, true) -> "off"
+            sp.getBoolean(KEY_PERSISTENT_WS, false) -> "socket"
+            else -> "poll"
+        }
+    }
+
     private fun updateDeliveryMethodSummary(pref: androidx.preference.ListPreference, value: String) {
         pref.summary = getString(
-                if (value == "push") R.string.pref_summary_delivery_push
-                else R.string.pref_summary_delivery_poll
+                when (value) {
+                    "push" -> R.string.pref_summary_delivery_push
+                    "socket" -> R.string.pref_summary_delivery_socket
+                    "off" -> R.string.pref_summary_delivery_off
+                    else -> R.string.pref_summary_delivery_poll
+                }
         )
     }
 
@@ -288,6 +341,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
             when (val outcome = controller.enablePush(defaultLogin)) {
                 is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Registered -> {
                     pref.value = "push"
+                    applyDeliveryMethod("push")
                     updateDeliveryMethodSummary(pref, "push")
                     toast(getString(R.string.push_setup_registered))
                 }
@@ -392,6 +446,22 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         val sp = preferenceScreen.sharedPreferences
         val intervalMin = (sp?.getString("notifications.bg.interval_min", null)?.toLongOrNull() ?: 30L)
                 .coerceAtLeast(15L)
+        // Статус обязан отражать ВЫБРАННЫЙ канал. Иначе в режиме push пользователь видел бы
+        // «Недоступен: сеть блокирует соединение» из-за неподнятого WebSocket, хотя push
+        // работает и сокет ему не нужен вовсе.
+        when (currentDeliveryMethod()) {
+            "push" -> {
+                val ctx = context ?: return null
+                val registered = !forpdateam.ru.forpda.notifications.push.PushSessionStore(ctx)
+                        .lastRegisteredToken.isNullOrEmpty()
+                return getString(
+                        if (registered) R.string.realtime_status_push_active
+                        else R.string.realtime_status_push_pending
+                )
+            }
+            "poll" -> return getString(R.string.realtime_status_poll_only, intervalMin)
+            "off" -> return getString(R.string.realtime_status_bg_off)
+        }
         return when {
             repo.isWebSocketConnected() -> getString(R.string.realtime_status_connected)
             // isWsLikelyBlocked / isWsCoolingDown вместо только кулдауна: открытый экран настроек
@@ -469,8 +539,11 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     private fun updateBgStalledWarning() {
         val context = context ?: return
         val sp = preferenceScreen.sharedPreferences ?: return
+        // В режиме push фоновый опрос — лишь редкая страховка; его задержка НЕ означает, что
+        // уведомления не приходят, поэтому пугать предупреждением здесь нельзя.
         val bgEnabled = sp.getBoolean("notifications.main.enabled", true) &&
-                sp.getBoolean("notifications.bg.enabled", true)
+                sp.getBoolean("notifications.bg.enabled", true) &&
+                currentDeliveryMethod() != "push"
         val intervalMin = (sp.getString("notifications.bg.interval_min", null)?.toLongOrNull() ?: 30L)
                 .coerceAtLeast(15L)
         val lastRun = sp.getLong("notifications.bg.last_worker_run_at", 0L)
@@ -569,6 +642,9 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
 
     companion object {
         const val PREFERENCE_SCREEN_NAME = "notifications"
+        /** Флаги, выводимые из «Способа доставки» (сами тумблеры из UI убраны). */
+        private const val KEY_BG_ENABLED = "notifications.bg.enabled"
+        private const val KEY_PERSISTENT_WS = "notifications.bg.persistent_ws"
         /** Период живого обновления статуса «Мгновенный канал», пока экран открыт. */
         private const val REALTIME_STATUS_REFRESH_MS = 3_000L
     }

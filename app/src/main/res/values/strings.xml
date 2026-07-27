@@ -1056,8 +1056,16 @@
     <string name="pref_summary_hat_watch">Пуш, когда в шапку отслеживаемой темы добавляют новый apk. Включайте слежение в меню темы или в избранном («Следить за новыми версиями»).</string>
     <!-- Способ доставки уведомлений -->
     <string name="pref_title_delivery_method">Способ доставки</string>
-    <string name="pref_summary_delivery_poll">Опрос: приложение периодически проверяет форум в фоне. Экономно, но с задержкой.</string>
-    <string name="pref_summary_delivery_push">Push (Google): сервер 4PDA присылает уведомления мгновенно через Firebase — работает даже в спящем режиме, без постоянного соединения и почти без расхода батареи.</string>
+    <string name="pref_summary_delivery_poll">Опрос: приложение само проверяет форум раз в интервал. Экономно, но уведомления приходят с задержкой.</string>
+    <string name="pref_summary_delivery_push">Push (Google): сервер 4PDA присылает события мгновенно через Firebase. Работает даже в спящем режиме, без постоянного соединения и почти без расхода батареи. Рекомендуется.</string>
+    <string name="pref_summary_delivery_socket">Постоянное соединение: приложение держит непрерывный канал с форумом (как мессенджеры). Мгновенно, но заметно расходует батарею и держит значок в шторке.</string>
+    <string name="pref_summary_delivery_off">В фоне ничего не проверяется. Уведомления приходят, только когда приложение открыто.</string>
+    <string name="pref_summary_bg_interval_safety">Страховка на случай, если push не дошёл. Можно ставить редко — 2–4 часа.</string>
+    <string name="realtime_status_push_active">Push (Google) активен — сервер 4PDA присылает события мгновенно</string>
+    <string name="realtime_status_push_pending">Push выбран, но токен не зарегистрирован. Откройте «Способ доставки» и включите push заново.</string>
+    <string name="realtime_status_poll_only">Опрос раз в %1$d мин — мгновенный канал не используется</string>
+    <string name="realtime_status_bg_off">Фоновая проверка выключена — уведомления только при открытом приложении</string>
+    <string name="pref_summary_bg_interval_poll">Как часто приложение проверяет форум в фоне. Чем реже — тем меньше расход батареи.</string>
     <string name="push_setup_no_gms">Нет сервисов Google Play — push недоступен на этом устройстве.</string>
     <string name="push_setup_registered">Push включён — уведомления будут приходить мгновенно.</string>
     <string name="push_setup_failed">Не удалось включить push: %1$s</string>

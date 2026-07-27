@@ -142,7 +142,7 @@ class AppProtocolClient(
         return sb.toString().substringBefore("\r\n")
     }
 
-    private fun writeFrame(payload: ByteArray, compress: Boolean = true) {
+    private fun writeFrame(payload: ByteArray, compress: Boolean = true, opcode: Int = OPCODE_TEXT) {
         val body: ByteArray
         val len: Int
         if (compress) {
@@ -158,7 +158,7 @@ class AppProtocolClient(
             body = payload; len = payload.size
         }
         val header = ByteArrayOutputStream(14)
-        header.write(0x80 or 0x01 or (if (compress) 0x40 else 0)) // FIN + text + RSV1
+        header.write(0x80 or (opcode and 0x0F) or (if (compress) 0x40 else 0)) // FIN + opcode + RSV1
         when {
             len <= 125 -> header.write(len)
             len <= 0xFFFF -> { header.write(126); header.write((len shr 8) and 0xFF); header.write(len and 0xFF) }
@@ -198,9 +198,11 @@ class AppProtocolClient(
             val data = ByteArray(length.toInt())
             input.readFully(data)
             when (opcode) {
-                0x9 -> writeFrame(data, compress = false) // ping -> pong (raw)
-                0xA -> Unit // pong
-                0x8 -> throw EOFException("server close")
+                // Ping обязан получить именно PONG: раньше сюда уходил text-фрейм, и сервер
+                // пытался разобрать его как документ (десинхронизация протокола).
+                OPCODE_PING -> writeFrame(data, compress = false, opcode = OPCODE_PONG)
+                OPCODE_PONG -> Unit
+                OPCODE_CLOSE -> throw EOFException("server close")
                 else -> {
                     val bytes = if (rsv1 && length > 4) inflate(data) else data
                     return decodeDoc(bytes)
@@ -325,6 +327,10 @@ class AppProtocolClient(
         private const val CLIENT_VERSION = "1.9.43"
         private val CP1251: Charset = Charset.forName("windows-1251")
         private val SYNC_FLUSH = byteArrayOf(0, 0, 0xFF.toByte(), 0xFF.toByte())
+        private const val OPCODE_TEXT = 0x1
+        private const val OPCODE_CLOSE = 0x8
+        private const val OPCODE_PING = 0x9
+        private const val OPCODE_PONG = 0xA
 
         private const val PROVISION_GIST =
                 "https://gist.githubusercontent.com/aigilea/152b043823de7cfeacd06f348b78ec25/raw/provision.json"

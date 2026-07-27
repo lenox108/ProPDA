@@ -125,15 +125,12 @@
             android:title="@string/pref_title_delivery_method"
             app:iconSpaceReserved="false" />
 
-        <forpdateam.ru.forpda.ui.views.SwitchPreference
-            android:defaultValue="true"
-            android:dependency="notifications.main.enabled"
-            android:key="notifications.bg.enabled"
-            android:layout="@layout/preference_custom"
-            android:summary="@string/pref_summary_bg_check"
-            android:title="@string/pref_title_bg_check"
-            app:iconSpaceReserved="false" />
-
+        <!--
+          «Работать в фоне» и «Постоянное соединение» больше не отдельные тумблеры: они
+          ВЫВОДЯТСЯ из выбранного способа доставки (см. NotificationsSettingsFragment.
+          applyDeliveryMethod), чтобы взаимоисключающие каналы не мешали друг другу.
+          Ключи сохранены — их читают EventsRepository/NotificationsService/воркеры.
+        -->
         <ListPreference
             android:defaultValue="30"
             android:dependency="notifications.bg.enabled"
@@ -143,15 +140,6 @@
             android:key="notifications.bg.interval_min"
             android:layout="@layout/preference_custom"
             android:title="@string/pref_title_bg_check_interval"
-            app:iconSpaceReserved="false" />
-
-        <forpdateam.ru.forpda.ui.views.SwitchPreference
-            android:defaultValue="false"
-            android:dependency="notifications.bg.enabled"
-            android:key="notifications.bg.persistent_ws"
-            android:layout="@layout/preference_custom"
-            android:summary="@string/pref_summary_persistent_ws"
-            android:title="@string/pref_title_persistent_ws"
             app:iconSpaceReserved="false" />
 
         <Preference

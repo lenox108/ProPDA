@@ -31,6 +31,22 @@ class FcmMessagingReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ACTION_RECEIVE) return
 
+        // GmsCore может прислать служебную команду вместо события: токен инвалидирован и его
+        // надо перевыпустить. Без этой ветки push тихо умер бы до перезапуска приложения.
+        if (intent.getStringExtra("from") == IID_SENDER) {
+            val cmd = intent.getStringExtra("CMD")
+            if (cmd == "RST" || cmd == "RST_FULL" || cmd == "SYNC") {
+                Timber.i("FCM IID command %s -> refreshing token", cmd)
+                runCatching {
+                    WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+                            PushTokenRefreshWorker.WORK_NAME,
+                            ExistingWorkPolicy.REPLACE,
+                            OneTimeWorkRequestBuilder<PushTokenRefreshWorker>().build())
+                }.onFailure { Timber.e(it, "FCM: token refresh enqueue failed") }
+            }
+            return
+        }
+
         // Дедуп по google.message_id: GmsCore иногда доставляет дубли (окно как в офиц. клиенте).
         val messageId = intent.getStringExtra("google.message_id")
         if (messageId != null) {
@@ -69,6 +85,8 @@ class FcmMessagingReceiver : BroadcastReceiver() {
 
     companion object {
         private const val ACTION_RECEIVE = "com.google.android.c2dm.intent.RECEIVE"
+        /** Отправитель служебных команд Instance ID (сброс/синхронизация токена). */
+        private const val IID_SENDER = "google.com/iid"
         const val FCM_WORK_NAME = "events_check_fcm"
         private const val DEDUP_WINDOW = 16
         private val recentIds = ArrayDeque<String>(DEDUP_WINDOW)
