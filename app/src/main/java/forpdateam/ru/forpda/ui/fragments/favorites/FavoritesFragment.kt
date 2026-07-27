@@ -420,14 +420,18 @@ class FavoritesFragment : RecyclerFragment() {
                 selection = state.selection,
                 folder = null
         )
-        addFolderChip(
-                title = getString(R.string.fav_folder_none),
-                count = state.noFolderCount,
-                unread = state.noFolderUnreadCount,
-                value = FavoritesViewModel.FOLDER_NONE,
-                selection = state.selection,
-                folder = null
-        )
+        // Без единой папки «Без папки» — это ровно то же, что «Все»: два одинаковых чипа
+        // подряд только шумят. Появляется вместе с первой папкой.
+        if (state.folders.isNotEmpty()) {
+            addFolderChip(
+                    title = getString(R.string.fav_folder_none),
+                    count = state.noFolderCount,
+                    unread = state.noFolderUnreadCount,
+                    value = FavoritesViewModel.FOLDER_NONE,
+                    selection = state.selection,
+                    folder = null
+            )
+        }
         state.folders.forEach { folder ->
             addFolderChip(
                     title = folder.name,
@@ -1074,18 +1078,17 @@ class FavoritesFragment : RecyclerFragment() {
             setTitle(null)
         }
 
-        // Лента показывается только когда папки вообще заведены: тому, кто ими не пользуется,
-        // экран остаётся ровно таким же, как до фичи. Плюс ручной переключатель в overflow.
-        // В режиме выбора она не нужна (действия идут над выделением), а в поиске вводила бы
-        // в заблуждение: поиск идёт по всему избранному поверх выбранной папки.
-        val hasFolders = foldersState.folders.isNotEmpty()
+        // Видимостью ленты управляет ТОЛЬКО переключатель: без папок она тоже показывается
+        // («Все» + чип «+ Папка»), иначе завести первую папку было бы неоткуда, а кнопка в
+        // тулбаре выглядела бы неработающей. В режиме выбора лента не нужна (действия идут
+        // над выделением), а в поиске вводила бы в заблуждение: поиск идёт по всему
+        // избранному поверх выбранной папки.
         val showChips = !inSelection &&
                 searchMenuItem?.isActionViewExpanded != true &&
-                foldersState.stripVisible &&
-                hasFolders
+                foldersState.stripVisible
         folderStrip?.visibility = if (showChips) View.VISIBLE else View.GONE
-        // Пункт меню без единой папки бессмысленен — переключать нечего.
-        folderStripMenuItem?.isVisible = !inSelection && hasFolders
+        // Кнопка живёт в тулбаре всегда (кроме режима выбора) — по ней же лента и возвращается.
+        folderStripMenuItem?.isVisible = !inSelection
         folderStripMenuItem?.let { item ->
             val hint = getString(
                     if (foldersState.stripVisible) R.string.fav_folders_panel_hide
