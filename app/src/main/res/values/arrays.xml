@@ -108,6 +108,20 @@
         <item>MENU</item>
     </string-array>
 
+    <!-- Способ доставки уведомлений (как «фоновая активность» у офиц. клиента) -->
+    <string-array name="entries_notify_delivery_method">
+        <item>Push (Google) — мгновенно, экономно</item>
+        <item>Постоянное соединение — мгновенно, ест батарею</item>
+        <item>Опрос — с задержкой, экономно</item>
+        <item>Не проверять в фоне</item>
+    </string-array>
+    <string-array name="entry_values_notify_delivery_method">
+        <item>push</item>
+        <item>socket</item>
+        <item>poll</item>
+        <item>off</item>
+    </string-array>
+
     <!-- Первый пункт (минимум) обязан совпадать с NotificationDataStore.MIN_BG_CHECK_INTERVAL_MIN -->
     <string-array name="entries_notify_bg_interval">
         <item>15 минут</item>

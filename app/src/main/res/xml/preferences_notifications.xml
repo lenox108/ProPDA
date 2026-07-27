@@ -114,33 +114,57 @@
         android:layout="@layout/preference_category_custom"
         android:title="@string/pref_title_bg_check">
 
-        <forpdateam.ru.forpda.ui.views.SwitchPreference
-            android:defaultValue="true"
-            android:dependency="notifications.main.enabled"
-            android:key="notifications.bg.enabled"
+        <!-- Статус Pro и ввод ключа активации: push доступен только с ним. -->
+        <Preference
+            android:key="pro.license_entry"
             android:layout="@layout/preference_custom"
-            android:summary="@string/pref_summary_bg_check"
-            android:title="@string/pref_title_bg_check"
+            android:title="@string/pref_title_pro"
             app:iconSpaceReserved="false" />
 
         <ListPreference
+            android:defaultValue="poll"
+            android:dependency="notifications.main.enabled"
+            android:dialogTitle="@string/pref_title_delivery_method"
+            android:entries="@array/entries_notify_delivery_method"
+            android:entryValues="@array/entry_values_notify_delivery_method"
+            android:key="notifications.delivery_method"
+            android:layout="@layout/preference_custom"
+            android:title="@string/pref_title_delivery_method"
+            app:iconSpaceReserved="false" />
+
+        <!--
+          «Работать в фоне» и «Постоянное соединение» больше не отдельные тумблеры: они
+          ВЫВОДЯТСЯ из выбранного способа доставки (см. NotificationsSettingsFragment.
+          applyDeliveryMethod), чтобы взаимоисключающие каналы не мешали друг другу.
+          Ключи сохранены — их читают EventsRepository/NotificationsService/воркеры.
+        -->
+        <!--
+          Резервная проверка виден только в режиме Push (управляется кодом): в остальных
+          режимах фоновый опрос и есть основной канал, отключать его отдельно бессмысленно.
+        -->
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
+            android:key="notifications.push.safety_net"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_push_safety_net"
+            android:title="@string/pref_title_push_safety_net"
+            app:iconSpaceReserved="false" />
+
+        <!--
+          БЕЗ android:dependency: тумблера notifications.bg.enabled больше нет в иерархии
+          (он выводится из «Способа доставки»), а androidx.preference падает с
+          IllegalStateException, если зависимость не найдена на экране. Видимость интервала
+          задаёт applyDeliveryMethod().
+        -->
+        <ListPreference
             android:defaultValue="30"
-            android:dependency="notifications.bg.enabled"
+            android:dependency="notifications.main.enabled"
             android:dialogTitle="@string/pref_title_bg_check_interval"
             android:entries="@array/entries_notify_bg_interval"
             android:entryValues="@array/entry_values_notify_bg_interval"
             android:key="notifications.bg.interval_min"
             android:layout="@layout/preference_custom"
             android:title="@string/pref_title_bg_check_interval"
-            app:iconSpaceReserved="false" />
-
-        <forpdateam.ru.forpda.ui.views.SwitchPreference
-            android:defaultValue="false"
-            android:dependency="notifications.bg.enabled"
-            android:key="notifications.bg.persistent_ws"
-            android:layout="@layout/preference_custom"
-            android:summary="@string/pref_summary_persistent_ws"
-            android:title="@string/pref_title_persistent_ws"
             app:iconSpaceReserved="false" />
 
         <Preference

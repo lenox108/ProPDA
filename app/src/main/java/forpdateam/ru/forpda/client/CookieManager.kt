@@ -253,6 +253,10 @@ class CookieManager(
                "cookie_anonymous", "cookie_cf_clearance").forEach { securePrefs.remove(it) }
         // Очищаем userId из обычных prefs
         PreferenceManager.getDefaultSharedPreferences(context).edit().remove("member_id").apply()
+        // Push-сессия живёт отдельно от cookies: без этого сервер продолжал бы слать push
+        // разлогиненному пользователю, а вход другим аккаунтом переиспользовал бы чужой
+        // login_key (см. PushLogout).
+        runCatching { forpdateam.ru.forpda.notifications.push.PushLogout.onLogout(context) }
         // Сбрасываем authHolder
         val authData = authHolder.get()
         authHolder.set(authData.copy(state = AuthState.NO_AUTH, userId = AuthData.NO_ID))
