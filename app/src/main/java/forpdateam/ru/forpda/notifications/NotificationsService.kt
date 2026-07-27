@@ -409,6 +409,7 @@ class NotificationsService : Service() {
         val manager = getNotificationManager()
         runCatching {
             NotificationGroups.SUMMARY_IDS.forEach { manager.cancel(it) }
+            NotificationPublisher.forgetAllChildren()
             postedEventNotifyIds.toList().forEach { manager.cancel(it) }
             postedEventNotifyIds.clear()
             // Подметаем и то, что опубликовал фоновый EventsCheckWorker: он публикует

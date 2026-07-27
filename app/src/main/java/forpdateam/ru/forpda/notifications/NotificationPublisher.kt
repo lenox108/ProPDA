@@ -117,9 +117,9 @@ object NotificationPublisher {
         val notifyId = event.notifyId()
         manager.notify(notifyId, builder.build())
         Log.i(NOTIFICATIONS_LOG_TAG, "Published ${event.notificationLogCategory()} notification")
-        if (refreshSummary) {
-            refreshGroupSummaries(context, justPosted = listOf(summaryChild(context, event)))
-        }
+        // Запоминаем ДО refresh: шторка своего же уведомления сейчас ещё не отдаёт.
+        rememberChild(summaryChild(context, event))
+        if (refreshSummary) refreshGroupSummaries(context)
         return notifyId
     }
 
@@ -149,12 +149,12 @@ object NotificationPublisher {
         // он не имеет права: иначе событие пришло бы совсем беззвучно.
         val silent = children.size >= SUMMARY_MIN_CHILDREN
         var blocked = false
-        val posted = mutableListOf<SummaryChild>()
+        val groups = mutableSetOf<String>()
         for (event in children) {
             if (publish(context, prefs, event, silent = silent, refreshSummary = false) == null) {
                 blocked = true
             } else {
-                posted += summaryChild(context, event)
+                groups += NotificationGroups.keyFor(event)
             }
         }
         val dropped = events.size - children.size
@@ -162,8 +162,7 @@ object NotificationPublisher {
             Log.i(NOTIFICATIONS_LOG_TAG, "Batch trimmed: $dropped events shown only in group summary")
             NotifDiagLog.log(context, "batch: ${events.size} events, ${children.size} shown individually")
         }
-        val groups = posted.map { it.groupKey }.toSet()
-        refreshGroupSummaries(context, alertGroups = groups, justPosted = posted)
+        refreshGroupSummaries(context, alertGroups = groups)
         Log.i(NOTIFICATIONS_LOG_TAG, "Published batch of ${events.size} events into groups $groups")
         if (blocked) return null
         return NotificationGroups.summaryIdFor(NotificationGroups.keyFor(children.first()))
@@ -178,15 +177,39 @@ object NotificationPublisher {
     )
 
     /**
+     * Только что опубликованные дети. `notify()` — асинхронный binder-вызов, и следующий за ним
+     * `getActiveNotifications()` своего же уведомления ещё не видит. На пачке (WS сыплет события
+     * по одному в тесном цикле) это значило, что КАЖДАЯ публикация видела «детей меньше двух» и
+     * сводку не ставила вовсе — полевой симптом «группировка не работает». Реестр живёт
+     * [RECENT_TRUST_WINDOW_MS] и только дополняет шторку, никогда её не переопределяя: дальше
+     * этого окна авторитет снова у системы, и свайпы пользователя ничего не воскрешает.
+     */
+    private val recentChildren = java.util.concurrent.ConcurrentHashMap<Int, SummaryChild>()
+
+    private const val RECENT_TRUST_WINDOW_MS = 8_000L
+
+    private fun rememberChild(child: SummaryChild) {
+        recentChildren[child.id] = child
+    }
+
+    private fun forgetChildren(ids: Set<Int>) {
+        ids.forEach { recentChildren.remove(it) }
+    }
+
+    /** Сервис снимает всё разом (логаут, выключение push) — реестр обязан обнулиться вместе с ним. */
+    fun forgetAllChildren() {
+        recentChildren.clear()
+    }
+
+    /**
      * Приводит сводки всех групп в соответствие с тем, что реально висит в шторке: где детей
      * больше одного — публикует/обновляет сводку, где не осталось — снимает. Состояние берётся
      * из [NotificationManager.getActiveNotifications], а не из собственного счётчика: свайпы
      * пользователя, авто-отмена по тапу и параллельные публикации сервиса и фонового воркера
      * иначе разъезжаются с любым нашим кэшем.
      *
-     * Шторка отвечает с задержкой в обе стороны, поэтому только что опубликованное и только что
-     * снятое приходится досказывать явно ([justPosted] / [excludeIds]) — иначе сводка появлялась
-     * бы через одно событие и переживала бы последнего снятого ребёнка.
+     * Шторка отвечает с задержкой в обе стороны, поэтому свежие публикации досказывает
+     * [recentChildren], а только что снятое — [excludeIds].
      *
      * @param alertGroups группы, чья сводка должна прозвучать (пачка). Для одиночных публикаций
      * пусто: звук уже дал сам ребёнок, а сводка молчит через `GROUP_ALERT_CHILDREN`.
@@ -195,12 +218,14 @@ object NotificationPublisher {
     fun refreshGroupSummaries(
             context: Context,
             alertGroups: Set<String> = emptySet(),
-            justPosted: List<SummaryChild> = emptyList(),
             excludeIds: Set<Int> = emptySet(),
     ) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         val active = runCatching { manager.activeNotifications }.getOrNull() ?: return
         val compat = NotificationManagerCompat.from(context)
+        forgetChildren(excludeIds)
+        val now = System.currentTimeMillis()
+        recentChildren.entries.removeAll { now - it.value.postTime > RECENT_TRUST_WINDOW_MS }
         val observed = active.mapNotNull { sbn ->
             val notification = sbn.notification ?: return@mapNotNull null
             val groupKey = notification.group ?: return@mapNotNull null
@@ -210,7 +235,7 @@ object NotificationPublisher {
             SummaryChild(sbn.id, groupKey, summaryLineFor(notification), sbn.postTime)
         }
         val observedIds = observed.mapTo(mutableSetOf()) { it.id }
-        val all = observed + justPosted.filter { it.id !in observedIds && it.id !in excludeIds }
+        val all = observed + recentChildren.values.filter { it.id !in observedIds }
         for (groupKey in NotificationGroups.ALL) {
             val summaryId = NotificationGroups.summaryIdFor(groupKey)
             val children = all
