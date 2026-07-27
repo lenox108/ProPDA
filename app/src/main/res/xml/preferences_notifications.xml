@@ -131,9 +131,15 @@
           applyDeliveryMethod), чтобы взаимоисключающие каналы не мешали друг другу.
           Ключи сохранены — их читают EventsRepository/NotificationsService/воркеры.
         -->
+        <!--
+          БЕЗ android:dependency: тумблера notifications.bg.enabled больше нет в иерархии
+          (он выводится из «Способа доставки»), а androidx.preference падает с
+          IllegalStateException, если зависимость не найдена на экране. Видимость интервала
+          задаёт applyDeliveryMethod().
+        -->
         <ListPreference
             android:defaultValue="30"
-            android:dependency="notifications.bg.enabled"
+            android:dependency="notifications.main.enabled"
             android:dialogTitle="@string/pref_title_bg_check_interval"
             android:entries="@array/entries_notify_bg_interval"
             android:entryValues="@array/entry_values_notify_bg_interval"

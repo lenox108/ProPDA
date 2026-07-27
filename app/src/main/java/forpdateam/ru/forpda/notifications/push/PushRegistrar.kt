@@ -36,6 +36,18 @@ class PushRegistrar(
      */
     suspend fun register(force: Boolean = false): Result = withContext(Dispatchers.IO) {
         if (!session.hasSession()) return@withContext Result.NoSession
+        // Страховка от привязки токена к чужому аккаунту: если в приложении сменился
+        // пользователь, а push-сессия осталась от прежнего — гасим её вместо регистрации.
+        val appUserId = runCatching {
+            androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+                    .getString("member_id", null)?.toIntOrNull()
+        }.getOrNull()
+        if (appUserId != null && appUserId != 0 && appUserId != session.memberId) {
+            Timber.w("PushRegistrar: account changed (app=%d push=%d), dropping stale session",
+                    appUserId, session.memberId)
+            session.clear()
+            return@withContext Result.NoSession
+        }
 
         val token = obtainToken() ?: return@withContext Result.NoGms
         val bitmask = computeBitmask()

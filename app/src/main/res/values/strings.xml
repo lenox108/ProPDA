@@ -1066,6 +1066,7 @@
     <string name="realtime_status_poll_only">Опрос раз в %1$d мин — мгновенный канал не используется</string>
     <string name="realtime_status_bg_off">Фоновая проверка выключена — уведомления только при открытом приложении</string>
     <string name="pref_summary_bg_interval_poll">Как часто приложение проверяет форум в фоне. Чем реже — тем меньше расход батареи.</string>
+    <string name="push_setup_account_mismatch">Этот аккаунт не совпадает с тем, под которым вы вошли в приложении. Войдите тем же логином.</string>
     <string name="push_setup_no_gms">Нет сервисов Google Play — push недоступен на этом устройстве.</string>
     <string name="push_setup_registered">Push включён — уведомления будут приходить мгновенно.</string>
     <string name="push_setup_failed">Не удалось включить push: %1$s</string>

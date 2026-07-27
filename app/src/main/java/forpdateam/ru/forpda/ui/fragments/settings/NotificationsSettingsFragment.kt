@@ -347,9 +347,13 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                 }
                 is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Cancelled -> Unit
                 is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Failed -> {
-                    val msg = if (outcome.message == forpdateam.ru.forpda.notifications.push.PushSetupController.NO_GMS)
-                        getString(R.string.push_setup_no_gms)
-                    else getString(R.string.push_setup_failed, outcome.message)
+                    val msg = when (outcome.message) {
+                        forpdateam.ru.forpda.notifications.push.PushSetupController.NO_GMS ->
+                            getString(R.string.push_setup_no_gms)
+                        forpdateam.ru.forpda.notifications.push.PushSetupController.ACCOUNT_MISMATCH ->
+                            getString(R.string.push_setup_account_mismatch)
+                        else -> getString(R.string.push_setup_failed, outcome.message)
+                    }
                     toast(msg)
                 }
             }

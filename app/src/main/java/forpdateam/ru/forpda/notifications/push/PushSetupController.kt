@@ -86,6 +86,17 @@ class PushSetupController(private val context: Context) {
 
         return when (loginOk) {
             is AppProtocolClient.LoginResult.Success -> {
+                // Аккаунт push обязан совпадать с тем, под которым работает приложение: иначе
+                // сервер слал бы события ЧУЖОГО пользователя, а локальная проверка их не нашла
+                // бы — пустые пробуждения и путаница.
+                val appUserId = runCatching {
+                    androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+                            .getString("member_id", null)?.toIntOrNull()
+                }.getOrNull()
+                if (appUserId != null && appUserId != 0 && appUserId != loginOk.memberId) {
+                    Timber.w("push login account mismatch: app=%d push=%d", appUserId, loginOk.memberId)
+                    return Outcome.Failed(ACCOUNT_MISMATCH)
+                }
                 session.saveSession(loginOk.memberId, loginOk.loginKey)
                 when (val r = registrar.register(force = true)) {
                     is PushRegistrar.Result.Success -> Outcome.Registered
@@ -180,5 +191,6 @@ class PushSetupController(private val context: Context) {
 
     companion object {
         const val NO_GMS = "no_gms"
+        const val ACCOUNT_MISMATCH = "account_mismatch"
     }
 }
