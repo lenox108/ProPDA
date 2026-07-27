@@ -196,4 +196,7 @@
     <!-- Настройки / превью шрифтов: крупные заголовки секций -->
     <dimen name="font_settings_section_header_text_size">32sp</dimen>
     <dimen name="updater_app_title_text_size">42sp</dimen>
+    <!-- Точка «есть непрочитанное» на чипе папки избранного (см. UnreadDotSpan). -->
+    <dimen name="fav_folder_dot_radius">3.5dp</dimen>
+    <dimen name="fav_folder_dot_gap">6dp</dimen>
 </resources>
