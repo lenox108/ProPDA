@@ -2,7 +2,9 @@ package forpdateam.ru.forpda.ui.views.messagepanel.advanced
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.AssetManager
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.ui.fragments.theme.nativerender.SmileProvider
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
 import forpdateam.ru.forpda.ui.views.messagepanel.advanced.adapters.PanelItemAdapter
 
@@ -189,12 +191,20 @@ class SmilesPanelItem(context: Context, panel: MessagePanel) :
             return list
         }
 
+        /**
+         * The panel shows the same files the post renderer does, so it resolves them the same way —
+         * [SmileProvider.assetNameFor] swaps in the HD WebP where 4pda has one. Without that the picker
+         * kept offering a still `:D`/`:(`/`:-)` while the posts below it already animated.
+         */
         @JvmStatic
-        fun getUrlToAssets(): List<String> {
+        fun getUrlToAssets(assets: AssetManager): List<String> {
             urlToAssets?.let { return it }
             val list = mutableListOf<String>()
             for (data in getSmiles()) {
-                list.add("assets://smiles/${data.icon}")
+                // PanelItemAdapter addresses this list by position, so an icon-less entry must still take
+                // its slot — dropping it would shift the URL of every smile after it onto the wrong tile.
+                val icon = data.icon
+                list.add(if (icon == null) "" else "assets://smiles/${SmileProvider.assetNameFor(icon, assets)}")
             }
             urlToAssets = list
             return list
@@ -202,7 +212,11 @@ class SmilesPanelItem(context: Context, panel: MessagePanel) :
     }
 
     init {
-        val adapter = PanelItemAdapter(getSmiles().toMutableList(), getUrlToAssets(), PanelItemAdapter.TYPE_ASSET)
+        val adapter = PanelItemAdapter(
+            getSmiles().toMutableList(),
+            getUrlToAssets(context.assets),
+            PanelItemAdapter.TYPE_ASSET,
+        )
         adapter.setOnItemClickListener(object : PanelItemAdapter.OnItemClickListener {
             override fun onItemClick(item: ButtonData) {
                 messagePanel.insertText(" ${item.text} ")

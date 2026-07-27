@@ -131,6 +131,16 @@ object SmileProvider {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) hdVariants[file] ?: file else file
 
     /**
+     * [assetFor] for callers outside the span pipeline — the editor's smiles panel, which loads the very
+     * same files through Coil and would otherwise keep showing the classic gif (and so a still `:D`)
+     * next to posts already rendering the HD one.
+     */
+    fun assetNameFor(file: String, assets: AssetManager): String {
+        ensureLoaded(assets)
+        return assetFor(file)
+    }
+
+    /**
      * Lays the drawable out on the text line: [sizePx] tall, width following the image's own aspect.
      * The packs are full of non-square smiles (`:clapping:` 40×24, `:feminist:` 105×95), and forcing a
      * square box — as this used to — squashed every one of them.
