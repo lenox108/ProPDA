@@ -29,14 +29,30 @@ object ProLicense {
             "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAElgz1YCTYb6UU4eG1znQmxRNMD0S7hdM2AkzUWX8Sj" +
                     "DkdBSXBaZzME2bWP6LFpcJs/oKW5SgWCkbO5ffQAeT9dQ=="
 
-    /** Подписываемая строка. Должна совпадать с ProKeyGen.MESSAGE_PREFIX. */
-    private const val MESSAGE_PREFIX = "propda-pro:v1:"
+    /**
+     * Подписываемая строка ("propda-pro:v1:", должна совпадать с ProKeyGen.MESSAGE_PREFIX).
+     *
+     * Хранится в XOR-виде намеренно: в открытом виде она была бы заметна обычным поиском по
+     * строкам в APK и приводила бы взломщика прямо к проверке лицензии. Это не шифрование —
+     * лишь снятие очевидной подсказки.
+     */
+    private val MESSAGE_PREFIX: String
+        get() = byteArrayOf(0x2a, 0x28, 0x35, 0x2a, 0x3e, 0x3b, 0x77,
+                0x2a, 0x28, 0x35, 0x60, 0x2c, 0x6b, 0x60)
+                .map { (it.toInt() xor 0x5A).toChar() }
+                .joinToString("")
 
     const val KEY_LICENSE = "pro.license_key"
     private const val KEY_MEMBER_ID = "member_id"
 
-    /** Активирован ли Pro для текущего аккаунта. */
+    /**
+     * Активирован ли Pro для текущего аккаунта.
+     *
+     * Проверка намеренно повторяется в нескольких независимых местах (здесь, в PushRegistrar
+     * и в FcmMessagingReceiver): патч одной точки не открывает функцию целиком.
+     */
     fun isUnlocked(context: Context): Boolean {
+        if (!AppIntegrity.isTrusted(context)) return false
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val license = prefs.getString(KEY_LICENSE, null)?.trim().orEmpty()
         if (license.isEmpty()) return false

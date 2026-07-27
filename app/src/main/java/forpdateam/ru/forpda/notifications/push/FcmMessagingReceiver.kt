@@ -47,6 +47,13 @@ class FcmMessagingReceiver : BroadcastReceiver() {
             return
         }
 
+        // Третья, независимая точка проверки Pro (первые две — экран настроек и PushRegistrar).
+        // Обход только настроек не даёт работающих уведомлений: входящий push здесь отбрасывается.
+        if (!forpdateam.ru.forpda.pro.ProLicense.isUnlocked(context.applicationContext)) {
+            Timber.d("FCM push ignored: pro license missing")
+            return
+        }
+
         // Дедуп по google.message_id: GmsCore иногда доставляет дубли (окно как в офиц. клиенте).
         val messageId = intent.getStringExtra("google.message_id")
         if (messageId != null) {
