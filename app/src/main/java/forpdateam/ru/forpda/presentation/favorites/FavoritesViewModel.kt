@@ -225,9 +225,11 @@ class FavoritesViewModel @Inject constructor(
                 // указывать в пустоту, иначе список выглядит как «избранное пропало».
                 // Только после первого чтения БД: до него пустой список — это «ещё не знаем»,
                 // и сброс убивал бы выбранную папку на каждом холодном старте.
+                // Папок не осталось совсем — «Без папки» тоже теряет смысл (это все темы),
+                // и чипа для него в ленте больше нет: возвращаемся на «Все».
+                val staleNoFolder = list.isEmpty() && selectedFolder == FOLDER_NONE
                 if (favoritesFoldersRepository.isLoaded &&
-                        selectedFolder > 0 &&
-                        list.none { it.id == selectedFolder }) {
+                        (staleNoFolder || (selectedFolder > 0 && list.none { it.id == selectedFolder }))) {
                     applyFolderSelection(FOLDER_ALL)
                 } else {
                     publishDisplayed()

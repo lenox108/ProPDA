@@ -315,17 +315,15 @@ class FavoritesFragment : RecyclerFragment() {
                     currentSortDialog?.show()
                     false
                 }
-                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        // Переключатель ленты папок — в overflow, а не иконкой: в видимой части тулбара уже
-        // три действия, а прятать ленту нужно редко (и с запоминанием выбора).
-        // Отдельная иконка в тулбаре, а не пункт overflow: место есть, а состояние ленты
-        // читается сразу по значку (папка / перечёркнутая папка) без открытия меню.
+        // Сортировка и панель папок — в overflow: их меняют раз в сто лет, а иконками они
+        // забивали шапку. Иконками остаются поиск и «прочитать всё» — самое частое действие
+        // экрана, которому дорога каждая лишняя пара тапов.
         folderStripMenuItem = menu.add(Menu.NONE, R.id.action_favorites_folder_strip, Menu.NONE, getString(R.string.fav_folders_panel))
+                .setCheckable(true)
                 .setOnMenuItemClickListener {
                     presenter.setFolderStripVisible(!foldersState.stripVisible)
                     true
                 }
-                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
         addSelectionMenu(menu)
         updateSelectionUi()
     }
@@ -420,14 +418,18 @@ class FavoritesFragment : RecyclerFragment() {
                 selection = state.selection,
                 folder = null
         )
-        addFolderChip(
-                title = getString(R.string.fav_folder_none),
-                count = state.noFolderCount,
-                unread = state.noFolderUnreadCount,
-                value = FavoritesViewModel.FOLDER_NONE,
-                selection = state.selection,
-                folder = null
-        )
+        // Без единой папки «Без папки» — это ровно то же, что «Все»: два одинаковых чипа
+        // подряд только шумят. Появляется вместе с первой папкой.
+        if (state.folders.isNotEmpty()) {
+            addFolderChip(
+                    title = getString(R.string.fav_folder_none),
+                    count = state.noFolderCount,
+                    unread = state.noFolderUnreadCount,
+                    value = FavoritesViewModel.FOLDER_NONE,
+                    selection = state.selection,
+                    folder = null
+            )
+        }
         state.folders.forEach { folder ->
             addFolderChip(
                     title = folder.name,
@@ -1074,31 +1076,19 @@ class FavoritesFragment : RecyclerFragment() {
             setTitle(null)
         }
 
-        // Лента показывается только когда папки вообще заведены: тому, кто ими не пользуется,
-        // экран остаётся ровно таким же, как до фичи. Плюс ручной переключатель в overflow.
-        // В режиме выбора она не нужна (действия идут над выделением), а в поиске вводила бы
-        // в заблуждение: поиск идёт по всему избранному поверх выбранной папки.
-        val hasFolders = foldersState.folders.isNotEmpty()
+        // Видимостью ленты управляет ТОЛЬКО переключатель: без папок она тоже показывается
+        // («Все» + чип «+ Папка»), иначе завести первую папку было бы неоткуда, а кнопка в
+        // тулбаре выглядела бы неработающей. В режиме выбора лента не нужна (действия идут
+        // над выделением), а в поиске вводила бы в заблуждение: поиск идёт по всему
+        // избранному поверх выбранной папки.
         val showChips = !inSelection &&
                 searchMenuItem?.isActionViewExpanded != true &&
-                foldersState.stripVisible &&
-                hasFolders
+                foldersState.stripVisible
         folderStrip?.visibility = if (showChips) View.VISIBLE else View.GONE
-        // Пункт меню без единой папки бессмысленен — переключать нечего.
-        folderStripMenuItem?.isVisible = !inSelection && hasFolders
-        folderStripMenuItem?.let { item ->
-            val hint = getString(
-                    if (foldersState.stripVisible) R.string.fav_folders_panel_hide
-                    else R.string.fav_folders_panel_show
-            )
-            item.setIcon(
-                    if (foldersState.stripVisible) R.drawable.ic_toolbar_folder
-                    else R.drawable.ic_toolbar_folder_off
-            )
-            item.title = hint
-            MenuItemCompat.setContentDescription(item, hint)
-            MenuItemCompat.setTooltipText(item, hint)
-        }
+        // Пункт живёт в меню всегда (кроме режима выбора) — им же лента и возвращается.
+        // Состояние показывает галочка пункта, поэтому отдельных «Скрыть/Показать» не нужно.
+        folderStripMenuItem?.isVisible = !inSelection
+        folderStripMenuItem?.isChecked = foldersState.stripVisible
         applyHeaderAutoHide()
 
         if (::adapter.isInitialized) {
