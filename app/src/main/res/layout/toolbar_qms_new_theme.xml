@@ -38,6 +38,9 @@
             android:imeOptions="actionNext"
             android:inputType="textPersonName"
             android:maxLines="1"
+            android:popupBackground="@drawable/bg_popup_menu_m3"
+            android:popupElevation="3dp"
+            android:dropDownVerticalOffset="@dimen/content_spacing_half"
             android:scrollHorizontally="true"
             android:textColor="?attr/colorOnSurface"
             android:textColorHint="?attr/colorOnSurfaceVariant" />

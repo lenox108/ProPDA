@@ -25,6 +25,10 @@ class OtherPreferencesHolder(
 
     suspend fun setMessagePanelRecentCodes(value: String) = dataStore.setMessagePanelRecentCodes(value)
 
+    suspend fun setQmsRecentNicks(value: String) = dataStore.setQmsRecentNicks(value)
+
+    fun getQmsRecentNicksSync(): String = dataStore.getQmsRecentNicksSync()
+
     suspend fun setShowReportWarning(value: Boolean) = dataStore.setShowReportWarning(value)
 
     suspend fun setTooltipSearchSettings(value: Boolean) = dataStore.setTooltipSearchSettings(value)

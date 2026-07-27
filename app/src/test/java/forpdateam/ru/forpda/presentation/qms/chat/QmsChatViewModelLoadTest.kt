@@ -82,6 +82,7 @@ class QmsChatViewModelLoadTest {
                 prefs,
                 mockk(relaxed = true),
                 mockk(relaxed = true),
+                mockk(relaxed = true),
                 mockk<IErrorHandler>(relaxed = true)
         ).apply {
             userId = 1

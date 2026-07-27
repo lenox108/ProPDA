@@ -475,6 +475,7 @@
     <string name="chat_creator_enter_nick">Введите ник пользователя</string>
     <string name="chat_creator_enter_title">Введите название темы</string>
     <string name="chat_creator_enter_message">Введите сообщение</string>
+    <string name="qms_recent_nicks">Ранее введённые ники</string>
     <string name="add_to_blacklist">В черный список</string>
     <string name="user_added_to_blacklist">Пользователь добавлен в черный список</string>
     <string name="blacklist">Черный список</string>

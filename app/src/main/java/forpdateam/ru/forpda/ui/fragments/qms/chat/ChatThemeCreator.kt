@@ -26,6 +26,8 @@ class ChatThemeCreator(
     private val titleField: TextInputEditText
     private var userNick: String? = presenter.nick
     private var themeTitle: String? = presenter.title
+    /** Ранее введённые ники — подсказки для нового диалога. */
+    private val recentNicks: List<String> = presenter.recentNicks()
     private val basePaddingTop: Int
 
     init {
@@ -67,11 +69,24 @@ class ChatThemeCreator(
     }
 
     fun onShowSearchRes(res: List<ForumUser>) {
-        val nicks = ArrayList<String>()
-        for (user in res) {
-            user.nick?.let { nicks.add(it) }
-        }
-        nickField.setAdapter(ArrayAdapter(nickField.context, android.R.layout.simple_dropdown_item_1line, nicks))
+        val prefix = nickField.text?.toString().orEmpty()
+        // Ники из истории, подходящие под ввод, идут первыми: по ним чаще всего и пишут повторно.
+        val nicks = LinkedHashSet<String>()
+        nicks.addAll(recentNicks.filter { it.startsWith(prefix, ignoreCase = true) })
+        res.forEach { user -> user.nick?.let { nicks.add(it) } }
+        setSuggestions(nicks.toList())
+    }
+
+    private fun setSuggestions(nicks: List<String>) {
+        nickField.setAdapter(ArrayAdapter(nickField.context, R.layout.item_qms_nick_suggestion, nicks))
+    }
+
+    /** Пустое поле + непустая история → показываем список ранее введённых ников целиком. */
+    private fun showHistoryDropdown() {
+        if (recentNicks.isEmpty()) return
+        if (!nickField.text.isNullOrBlank()) return
+        setSuggestions(recentNicks)
+        nickField.post { if (nickField.isAttachedToWindow) nickField.showDropDown() }
     }
 
     private fun initCreatorViews() {
@@ -100,10 +115,25 @@ class ChatThemeCreator(
             nickField.isFocusable = true
             nickField.isFocusableInTouchMode = true
             nickField.isClickable = true
+            if (recentNicks.isNotEmpty()) {
+                // Стрелка справа раскрывает историю ников, даже когда поле пустое
+                // (autocomplete сам по себе срабатывает только на ввод).
+                nickBlock.endIconMode = TextInputLayout.END_ICON_DROPDOWN_MENU
+                nickBlock.setEndIconContentDescription(R.string.qms_recent_nicks)
+                setSuggestions(recentNicks)
+                nickField.setOnClickListener { showHistoryDropdown() }
+                nickField.setOnFocusChangeListener { _, hasFocus ->
+                    if (hasFocus) showHistoryDropdown()
+                }
+            }
             nickField.addTextChangedListener(object : SimpleTextWatcher() {
                 override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
                     userNick = s.toString()
-                    userNick?.let { searchUser(it) }
+                    if (s.isBlank()) {
+                        setSuggestions(recentNicks)
+                    } else {
+                        searchUser(s.toString())
+                    }
                     fragment.setSubtitle(userNick)
                 }
             })

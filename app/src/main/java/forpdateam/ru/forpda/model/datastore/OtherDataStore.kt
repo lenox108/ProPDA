@@ -56,6 +56,7 @@ class OtherDataStore(private val context: Context) {
         val OTHER_MENU_SHORTCUTS = stringPreferencesKey("other_menu_shortcuts")
         val OTHER_MENU_QUICK_SETTINGS = stringPreferencesKey("other_menu_quick_settings")
         val OTHER_MENU_HIDDEN_BLOCKS = stringPreferencesKey("other_menu_hidden_blocks")
+        val QMS_RECENT_NICKS = stringPreferencesKey("qms_recent_nicks")
     }
 
     val appFirstStart: Flow<Boolean> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
@@ -217,4 +218,22 @@ class OtherDataStore(private val context: Context) {
             preferences[PreferencesKeys.OTHER_MENU_HIDDEN_BLOCKS] = value
         }
     }
+
+    /**
+     * Ники, которым уже создавали темы QMS: свежие первыми, через '\n'.
+     * Зеркалится в SharedPreferences — форма создания темы читает список синхронно при инфляции.
+     */
+    val qmsRecentNicks: Flow<String> = safeDataStoreFlow(context.otherDataStore.data.map { preferences ->
+        preferences[PreferencesKeys.QMS_RECENT_NICKS] ?: ""
+    }, "")
+
+    suspend fun setQmsRecentNicks(value: String) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.QMS_RECENT_NICKS] = value
+        }
+        mirrorPrefs.edit().putString("qms_recent_nicks", value).apply()
+    }
+
+    fun getQmsRecentNicksSync(): String =
+            mirrorPrefs.getString("qms_recent_nicks", "").orEmpty()
 }
