@@ -1,5 +1,6 @@
 package forpdateam.ru.forpda.ui.fragments.favorites
 
+import android.animation.ValueAnimator
 import android.app.Dialog
 import android.app.SearchManager
 import android.content.Context
@@ -108,6 +109,9 @@ class FavoritesFragment : RecyclerFragment() {
     private var folderStrip: View? = null
     private var folderChips: com.google.android.material.chip.ChipGroup? = null
     private var folderStripMenuItem: MenuItem? = null
+    /** Сколько непрочитанных было у чипа в прошлой отрисовке — по нему решаем, играть ли анимацию. */
+    private val folderDotUnreadCounts = mutableMapOf<Long, Int>()
+    private val folderDotAnimators = mutableSetOf<android.animation.Animator>()
 
     private val presenter: FavoritesViewModel by viewModels()
     private lateinit var favoritesDialogs: FavoritesDialogs
@@ -465,15 +469,16 @@ class FavoritesFragment : RecyclerFragment() {
         // Цвет — ?attr/colorAccent: он задан в каждой палитре приложения и подменяется
         // цветом обоев под Material You, поэтому следует и теме, и палитре, и MY.
         chip.text = if (unread > 0) {
+            val span = UnreadDotSpan(
+                    color = requireContext().getColorFromAttr(androidx.appcompat.R.attr.colorAccent),
+                    radiusPx = resources.getDimension(R.dimen.fav_folder_dot_radius),
+                    gapPx = resources.getDimension(R.dimen.fav_folder_dot_gap),
+            )
+            animateFolderDot(chip, span, value, unread)
             SpannableStringBuilder().apply {
                 val start = length
-                append("• ")
-                setSpan(
-                        ForegroundColorSpan(requireContext().getColorFromAttr(androidx.appcompat.R.attr.colorAccent)),
-                        start,
-                        length,
-                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-                )
+                append(" ")
+                setSpan(span, start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 append(label)
             }
         } else {
@@ -493,6 +498,71 @@ class FavoritesFragment : RecyclerFragment() {
             }
         }
         chips.addView(chip)
+    }
+
+    /**
+     * Движение у точки — только на СОБЫТИЕ, а не на состояние: постоянная пульсация держала бы
+     * шапку в перерисовке всё время, пока есть непрочитанное.
+     *
+     * - точка появилась там, где её не было → плавное проявление + короткий двойной пульс;
+     * - непрочитанных стало больше (точка уже была) → только пульс;
+     * - лента просто пересобралась с теми же числами (это происходит на каждом обновлении
+     *   списка) → ничего не играем, иначе экран дёргался бы сам по себе.
+     */
+    private fun animateFolderDot(chip: Chip, span: UnreadDotSpan, value: Long, unread: Int) {
+        val known = folderDotUnreadCounts.containsKey(value)
+        val previous = folderDotUnreadCounts[value] ?: 0
+        folderDotUnreadCounts[value] = unread
+        // Проявление — когда точки не было. Пульс — только если непрочитанных стало больше
+        // на УЖЕ живой ленте: на первой отрисовке экрана пульсировать не за что, там ещё
+        // ничего не «прилетело», и пульс играл бы при каждом заходе в Избранное.
+        val fadeIn = previous == 0
+        val pulse = known && unread > previous
+        if (!fadeIn && !pulse) return
+        if (!areSystemAnimationsEnabled()) return
+
+        // Аниматор на чип, а не на ленту: чипы пересобираются часто, и общий аниматор
+        // перезапускался бы, смазывая уже сыгравшие точки.
+        val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = if (pulse) DOT_PULSE_DURATION_MS else DOT_APPEAR_DURATION_MS
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { anim ->
+                val t = anim.animatedValue as Float
+                span.alpha = if (fadeIn) (t * 3f).coerceAtMost(1f) else 1f
+                span.scale = if (pulse) {
+                    // Два всплеска размера: |sin(2πt)| даёт ровно две «волны» за проход.
+                    1f + DOT_PULSE_AMPLITUDE * kotlin.math.abs(
+                            kotlin.math.sin(t * 2f * Math.PI.toFloat()))
+                } else {
+                    // Проявление: точка подрастает до нормального размера и на этом всё.
+                    0.4f + 0.6f * (t * 3f).coerceAtMost(1f)
+                }
+                chip.invalidate()
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    span.alpha = 1f
+                    span.scale = 1f
+                    chip.invalidate()
+                    folderDotAnimators.remove(animation)
+                }
+            })
+        }
+        folderDotAnimators.add(animator)
+        animator.start()
+    }
+
+    /** «Отключить анимации» в настройках системы/разработчика — уважаем и не двигаем ничего. */
+    private fun areSystemAnimationsEnabled(): Boolean =
+            android.provider.Settings.Global.getFloat(
+                    requireContext().contentResolver,
+                    android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+                    1f,
+            ) > 0f
+
+    private fun cancelFolderDotAnimations() {
+        folderDotAnimators.toList().forEach { it.cancel() }
+        folderDotAnimators.clear()
     }
 
     private fun showFolderActionsMenu(anchor: View, folder: FavFolder) {
@@ -832,6 +902,7 @@ class FavoritesFragment : RecyclerFragment() {
 
     override fun onDestroy() {
         super.onDestroy()
+        cancelFolderDotAnimations()
         dismissMarkAllReadProgressDialog()
         paginationHelper.destroy()
         if (::adapter.isInitialized) adapter.release()
@@ -1057,6 +1128,13 @@ class FavoritesFragment : RecyclerFragment() {
     }
 
     companion object {
+        /** Появление точки: только мягкое проявление, без пульса. */
+        private const val DOT_APPEAR_DURATION_MS = 350L
+        /** Пульс — когда на уже открытом экране непрочитанных стало больше. */
+        private const val DOT_PULSE_DURATION_MS = 700L
+        /** Насколько раздувается точка на пике (1f + amplitude). */
+        private const val DOT_PULSE_AMPLITUDE = 0.6f
+
         @JvmStatic
         fun getSubNames(context: android.content.Context): Array<CharSequence> {
             return arrayOf(
