@@ -72,6 +72,9 @@ class ArticlesListViewModel @Inject constructor(
     private val avatarSemaphore = Semaphore(AVATAR_CONCURRENCY)
     private val avatarRequestedKeys = mutableSetOf<String>()
 
+    /** Отпечаток ленты, показанной из кэша, — чтобы не перерисовывать её тем же самым из сети. */
+    private var shownFromCacheSignature: String? = null
+
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
@@ -113,6 +116,14 @@ class ArticlesListViewModel @Inject constructor(
                             bypassCache = bypassCache
                     )
                 }
+                if (withClear && shownFromCacheSignature == listSignature(items)) {
+                    // Сеть подтвердила ровно то, что уже показано из кэша: не пересобираем список,
+                    // иначе пользователь получил бы мигание и потерю позиции скролла на ровном месте.
+                    shownFromCacheSignature = null
+                    onListSettled(items.firstOrNull())
+                    return@launch
+                }
+                shownFromCacheSignature = null
                 if (withClear) {
                     currentItems.clear()
                 }
@@ -142,8 +153,13 @@ class ArticlesListViewModel @Inject constructor(
         if (category != selectedCategoryId) return
         currentItems.clear()
         currentItems.addAll(cached)
+        shownFromCacheSignature = listSignature(cached)
         _uiEvents.emit(ArticlesListUiEvent.ShowNews(cached, true))
     }
+
+    /** Компактный отпечаток ленты: по нему видно, принесла ли сеть что-то новое поверх кэша. */
+    private fun listSignature(items: List<NewsItem>): String =
+            items.joinToString(",") { "${it.id}:${it.commentsCount}" }
 
     /**
      * Догружает аватарку одного показанного автора. Уже известный аватар (его проставил
