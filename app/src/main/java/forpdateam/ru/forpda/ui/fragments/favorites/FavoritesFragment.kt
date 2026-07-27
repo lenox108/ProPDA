@@ -4,6 +4,9 @@ import android.app.Dialog
 import android.app.SearchManager
 import android.content.Context
 import android.graphics.Typeface
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -25,6 +28,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.RadioGroup
 import android.widget.TextView
+import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.common.showSnackbar
 import forpdateam.ru.forpda.common.Utils
 import forpdateam.ru.forpda.presentation.TabRouter
@@ -454,9 +458,32 @@ class FavoritesFragment : RecyclerFragment() {
         // Цифра — это КОЛИЧЕСТВО ТЕМ, и оно обязано совпадать с тем, что видно в списке.
         // Раньше при непрочитанных показывалось их число (другим разделителем), и «Кен · 2»
         // над списком из четырёх тем читалось как ошибка счёта.
-        chip.text = if (count > 0) getString(R.string.fav_folder_chip_total, title, count) else title
-        // Непрочитанное отмечаем жирностью — тем же языком, что и строки списка.
-        chip.setTypeface(Typeface.DEFAULT, if (unread > 0) Typeface.BOLD else Typeface.NORMAL)
+        val label = if (count > 0) getString(R.string.fav_folder_chip_total, title, count) else title
+        // Непрочитанное — точка перед названием, а не второе число: цифра на чипе всегда
+        // означает количество тем. Точка идёт ТЕКСТОМ, а не chipIcon: слот иконки у M3
+        // filter-чипа занимает галочка выбранного состояния, и точка там просто не видна.
+        // Цвет — ?attr/colorAccent: он задан в каждой палитре приложения и подменяется
+        // цветом обоев под Material You, поэтому следует и теме, и палитре, и MY.
+        chip.text = if (unread > 0) {
+            SpannableStringBuilder().apply {
+                val start = length
+                append("• ")
+                setSpan(
+                        ForegroundColorSpan(requireContext().getColorFromAttr(androidx.appcompat.R.attr.colorAccent)),
+                        start,
+                        length,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+                append(label)
+            }
+        } else {
+            label
+        }
+        chip.contentDescription = if (unread > 0) {
+            getString(R.string.fav_folder_chip_unread_cd, title, unread)
+        } else {
+            chip.text
+        }
         chip.isChecked = value == selection
         chip.setOnClickListener { presenter.selectFolder(value) }
         if (folder != null) {

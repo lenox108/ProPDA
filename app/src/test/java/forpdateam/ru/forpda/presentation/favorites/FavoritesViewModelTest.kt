@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -77,12 +78,17 @@ class FavoritesViewModelTest {
     private var folderRows: List<FavFolderRoom> = emptyList()
     private var folderAssignmentRows: List<FavFolderItemRoom> = emptyList()
 
-    /** Настоящий репозиторий поверх мок-DAO: нужны живые StateFlow папок/привязок. */
+    /**
+     * Настоящий репозиторий поверх мок-DAO: нужны живые StateFlow папок/привязок.
+     * Диспетчер — тестовый: на реальном Dispatchers.IO чтение БД идёт мимо планировщика,
+     * и advanceUntilIdle не гарантирует, что папки уже загрузились (тест плавал).
+     */
     private fun createFoldersRepository(): FavoritesFoldersRepository {
         val dao = mockk<FavFolderDao>(relaxed = true)
         coEvery { dao.getFolders() } returns folderRows
         coEvery { dao.getAssignments() } returns folderAssignmentRows
-        return FavoritesFoldersRepository(dao).also { foldersRepository = it }
+        return FavoritesFoldersRepository(dao, UnconfinedTestDispatcher(testDispatcher.scheduler))
+                .also { foldersRepository = it }
     }
 
     private fun createViewModel(): FavoritesViewModel {
