@@ -21,7 +21,9 @@ import forpdateam.ru.forpda.entity.db.notes.NoteItemDao
 import forpdateam.ru.forpda.entity.db.notes.AppDatabase
 import forpdateam.ru.forpda.entity.db.notes.NotesMigrations
 import forpdateam.ru.forpda.entity.db.history.HistoryItemDao
+import forpdateam.ru.forpda.entity.db.favorites.FavFolderDao
 import forpdateam.ru.forpda.entity.db.favorites.FavItemDao
+import forpdateam.ru.forpda.entity.db.favorites.FavoritesFoldersDatabase
 import forpdateam.ru.forpda.entity.db.forum.ForumItemFlatDao
 import forpdateam.ru.forpda.entity.db.ForumUserDao
 import forpdateam.ru.forpda.entity.db.qms.QmsContactDao
@@ -60,6 +62,7 @@ import forpdateam.ru.forpda.model.repository.auth.AuthRepository
 import forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
 import forpdateam.ru.forpda.model.repository.devdb.DevDbRepository
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
+import forpdateam.ru.forpda.model.repository.faviorites.FavoritesFoldersRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.forum.ForumRepository
 import forpdateam.ru.forpda.model.repository.history.HistoryRepository
@@ -109,7 +112,8 @@ object DataModule {
             NotesMigrations.MIGRATION_5_6,
             NotesMigrations.MIGRATION_7_6,
             NotesMigrations.MIGRATION_8_6,
-            NotesMigrations.MIGRATION_9_6
+            NotesMigrations.MIGRATION_9_6,
+            NotesMigrations.MIGRATION_10_6
         )
             .build()
     }
@@ -170,6 +174,21 @@ object DataModule {
 
     @Provides @Singleton
     fun provideFavItemDao(database: AppDatabase): FavItemDao = database.favItemDao()
+
+    @Provides @Singleton
+    fun provideFavoritesFoldersDatabase(@ApplicationContext context: Context): FavoritesFoldersDatabase {
+        return Room.databaseBuilder(
+            context,
+            FavoritesFoldersDatabase::class.java,
+            "favorites_folders_database"
+        ).build()
+    }
+
+    @Provides @Singleton
+    fun provideFavFolderDao(database: FavoritesFoldersDatabase): FavFolderDao = database.favFolderDao()
+
+    @Provides @Singleton
+    fun provideFavoritesFoldersRepository(dao: FavFolderDao) = FavoritesFoldersRepository(dao)
 
     @Provides @Singleton
     fun provideForumItemFlatDao(database: AppDatabase): ForumItemFlatDao = database.forumItemFlatDao()

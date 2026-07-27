@@ -103,4 +103,19 @@ object NotesMigrations {
             db.execSQL("DROP TABLE IF EXISTS offline_items")
         }
     }
+
+    /**
+     * Возврат с v10 на v6. Промежуточная сборка папок избранного держала их таблицы прямо в
+     * AppDatabase и поднимала версию до 10 — из-за чего ЛЮБАЯ сборка без этой фичи падала на
+     * «A migration from 10 to 6 was required but not found» и избранное не открывалось.
+     * Папки переехали в собственную [forpdateam.ru.forpda.entity.db.favorites.FavoritesFoldersDatabase],
+     * а эта миграция возвращает схему к v6 на устройствах, успевших съесть промежуточный билд
+     * (сами папки при этом теряются — фича нигде не релизилась).
+     */
+    val MIGRATION_10_6 = object : Migration(10, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("DROP TABLE IF EXISTS fav_folder_items")
+            db.execSQL("DROP TABLE IF EXISTS fav_folders")
+        }
+    }
 }

@@ -8,7 +8,9 @@ import androidx.appcompat.app.AlertDialog
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.tabs.TabLayout
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
+import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import android.view.LayoutInflater
@@ -36,6 +38,8 @@ import forpdateam.ru.forpda.entity.remote.favorites.FavData
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
 import forpdateam.ru.forpda.model.data.remote.api.favorites.Sorting
+import forpdateam.ru.forpda.entity.app.favorites.FavFolder
+import forpdateam.ru.forpda.presentation.favorites.FavoritesFoldersState
 import forpdateam.ru.forpda.presentation.favorites.FavoritesUiEvent
 import forpdateam.ru.forpda.presentation.favorites.FavoritesViewModel
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
@@ -91,6 +95,13 @@ class FavoritesFragment : RecyclerFragment() {
     private var selectionUnpinMenuItem: MenuItem? = null
     private var selectionHideMenuItem: MenuItem? = null
     private var selectionShowMenuItem: MenuItem? = null
+    private var selectionMoveMenuItem: MenuItem? = null
+
+    // --- Папки (лента чипов отдельной строкой под тулбаром) ---
+    private var foldersState = FavoritesFoldersState()
+    private var renderedFoldersState: FavoritesFoldersState? = null
+    private var folderStrip: View? = null
+    private var folderChips: com.google.android.material.chip.ChipGroup? = null
 
     private val presenter: FavoritesViewModel by viewModels()
     private lateinit var favoritesDialogs: FavoritesDialogs
@@ -147,8 +158,17 @@ class FavoritesFragment : RecyclerFragment() {
                 inflater = inflater,
                 target = toolbarLayout,
                 enablePadding = configuration.fitSystemWindow,
+                // Шапка уезжает при прокрутке списка (паритет с экраном темы).
+                toolbarScrollEnabled = true,
                 surfaceColorAttr = R.attr.main_toolbar_accent_surface,
         )
+        // Лента папок — отдельный ребёнок AppBarLayout сразу под шапкой (тулбар + пагинация
+        // живут внутри CollapsingToolbarLayout). AppBarLayout вертикальный, поэтому строка
+        // встаёт на место сама, без ручных margin'ов и без гонки с геометрией пагинации.
+        val strip = inflater.inflate(R.layout.favorites_folder_strip, appBarLayout, false)
+        appBarLayout.addView(strip, appBarLayout.indexOfChild(toolbarLayout) + 1)
+        folderStrip = strip
+        folderChips = strip.findViewById(R.id.favorites_folder_chips)
         contentController.setFirstLoad(false)
         return viewFragment
     }
@@ -193,6 +213,9 @@ class FavoritesFragment : RecyclerFragment() {
                 menuShortcutPinner.pinTopic(data.topicId, data.topicTitle.orEmpty())
                 showSnackbar(R.string.other_menu_shortcut_added)
             }
+            addItem(getString(R.string.fav_move_to_folder)) { _, data ->
+                favoritesDialogs.showMoveToFolderDialog(listOf(data), foldersState.folders) {}
+            }
         }
 
 
@@ -217,6 +240,9 @@ class FavoritesFragment : RecyclerFragment() {
         contentController.addContent(skeleton!!, tagSkeleton)
 
         paginationHelper.setListener(paginationListener)
+
+        folderChips?.contentDescription = getString(R.string.fav_folders_hint)
+        applyHeaderAutoHide()
 
         presenter.start()
         observeViewModel()
@@ -308,6 +334,136 @@ class FavoritesFragment : RecyclerFragment() {
         selectionShowMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_show, Menu.NONE, getString(R.string.fav_selection_show))
                 .setOnMenuItemClickListener { performSelectionHide(false); true }
                 .setVisible(false)
+        selectionMoveMenuItem = menu.add(Menu.NONE, R.id.action_favorites_selection_move, Menu.NONE, getString(R.string.fav_move_to_folder))
+                .setIcon(R.drawable.ic_toolbar_folder)
+                .setOnMenuItemClickListener { showMoveSelectedToFolderDialog(); true }
+                .setVisible(false)
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+    }
+
+    /**
+     * Автоскрытие шапки при прокрутке — штатные флаги [AppBarLayout], один в один как в теме
+     * ([forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment.applyToolbarAutoHide]):
+     * уезжает весь блок целиком — тулбар, пагинация и лента папок. Ручной анимации по onScrolled нет,
+     * поэтому нет и дёрганья на инерции/коротких списках — всё считает сам AppBarLayout.
+     *
+     * Пинним шапку в режиме выбора и в раскрытом поиске: там верхние действия нужны постоянно.
+     */
+    private fun applyHeaderAutoHide() {
+        val pin = isSelectionMode || searchMenuItem?.isActionViewExpanded == true
+        // Флаги самой шапки держит PaginationHelper (он же переприменяет их на каждом layout
+        // AppBar) — иначе он затирал бы выставленные здесь. Ленте задаём РОВНО тот же набор,
+        // чтобы шапка и лента уезжали одним блоком, без рассинхрона на границе.
+        paginationHelper.setToolbarScrollEnabled(!pin)
+        val flags = if (pin) {
+            0
+        } else {
+            com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL or
+                    com.google.android.material.appbar.AppBarLayout.LayoutParams.SCROLL_FLAG_ENTER_ALWAYS
+        }
+        val changed = folderStrip?.let { applyAppBarScrollFlags(it, flags) } ?: false
+        if (pin && changed) appBarLayout.setExpanded(true, false)
+    }
+
+    private fun applyAppBarScrollFlags(view: View, flags: Int): Boolean {
+        val params = view.layoutParams as? com.google.android.material.appbar.AppBarLayout.LayoutParams
+                ?: return false
+        if (params.scrollFlags == flags) return false
+        params.scrollFlags = flags
+        view.layoutParams = params
+        return true
+    }
+
+    private fun showMoveSelectedToFolderDialog() {
+        favoritesDialogs.showMoveToFolderDialog(selectedSnapshot(), foldersState.folders, ::clearSelection)
+    }
+
+    /**
+     * Перерисовывает чипы папок. Полная пересборка (а не точечное обновление) — состояние
+     * маленькое, а счётчики непрочитанного меняются почти на каждом обновлении списка;
+     * [renderedFoldersState] гасит повторную сборку с теми же данными.
+     */
+    private fun bindFolderChips(state: FavoritesFoldersState) {
+        if (renderedFoldersState == state) return
+        renderedFoldersState = state
+        val chips = folderChips ?: return
+        chips.removeAllViews()
+        addFolderChip(
+                title = getString(R.string.fav_folders_all),
+                count = state.totalCount,
+                unread = state.totalUnreadCount,
+                value = FavoritesViewModel.FOLDER_ALL,
+                selection = state.selection,
+                folder = null
+        )
+        addFolderChip(
+                title = getString(R.string.fav_folder_none),
+                count = state.noFolderCount,
+                unread = state.noFolderUnreadCount,
+                value = FavoritesViewModel.FOLDER_NONE,
+                selection = state.selection,
+                folder = null
+        )
+        state.folders.forEach { folder ->
+            addFolderChip(
+                    title = folder.name,
+                    count = state.folderCounts[folder.id] ?: 0,
+                    unread = state.folderUnreadCounts[folder.id] ?: 0,
+                    value = folder.id,
+                    selection = state.selection,
+                    folder = folder
+            )
+        }
+        val createChip = layoutInflater.inflate(
+                R.layout.toolbar_filter_chip, chips, false) as Chip
+        createChip.id = View.generateViewId()
+        createChip.text = getString(R.string.fav_folder_create_chip)
+        createChip.isCheckable = false
+        createChip.setOnClickListener { favoritesDialogs.showCreateFolderDialog() }
+        chips.addView(createChip)
+    }
+
+    private fun addFolderChip(
+            title: String,
+            count: Int,
+            unread: Int,
+            value: Long,
+            selection: Long,
+            folder: FavFolder?
+    ) {
+        val chips = folderChips ?: return
+        val chip = layoutInflater.inflate(
+                R.layout.toolbar_filter_chip, chips, false) as Chip
+        chip.id = View.generateViewId()
+        // Непрочитанное важнее общего количества: цифра на чипе отвечает на вопрос
+        // «куда идти читать», поэтому при непрочитанных показываем именно их.
+        chip.text = when {
+            unread > 0 -> getString(R.string.fav_folder_chip_unread, title, unread)
+            count > 0 -> getString(R.string.fav_folder_chip_total, title, count)
+            else -> title
+        }
+        chip.isChecked = value == selection
+        chip.setOnClickListener { presenter.selectFolder(value) }
+        if (folder != null) {
+            chip.setOnLongClickListener {
+                showFolderActionsMenu(chip, folder)
+                true
+            }
+        }
+        chips.addView(chip)
+    }
+
+    private fun showFolderActionsMenu(anchor: View, folder: FavFolder) {
+        PopupMenu(requireContext(), anchor).apply {
+            menu.add(R.string.fav_folder_rename).setOnMenuItemClickListener {
+                favoritesDialogs.showRenameFolderDialog(folder)
+                true
+            }
+            menu.add(R.string.fav_folder_delete).setOnMenuItemClickListener {
+                favoritesDialogs.confirmDeleteFolder(folder)
+                true
+            }
+        }.show()
     }
 
     private fun addSearchItem(menu: Menu) {
@@ -337,10 +493,16 @@ class FavoritesFragment : RecyclerFragment() {
             }
         })
         item.setOnActionExpandListener(object : MenuItem.OnActionExpandListener {
-            override fun onMenuItemActionExpand(item: MenuItem): Boolean = true
+            override fun onMenuItemActionExpand(item: MenuItem): Boolean {
+                // Чипы прячем только после того, как MenuItem реально раскрылся,
+                // иначе updateSelectionUi ещё видит isActionViewExpanded == false.
+                item.actionView?.post { updateSelectionUi() }
+                return true
+            }
 
             override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
                 presenter.searchLocal("")
+                item.actionView?.post { updateSelectionUi() }
                 return true
             }
         })
@@ -409,6 +571,13 @@ class FavoritesFragment : RecyclerFragment() {
                     }
                 }
                 launch {
+                    presenter.foldersState.collect { state ->
+                        foldersState = state
+                        bindFolderChips(state)
+                        updateSelectionUi()
+                    }
+                }
+                launch {
                     presenter.uiEvents.collect { event ->
                         handleUiEvent(event)
                     }
@@ -438,6 +607,14 @@ class FavoritesFragment : RecyclerFragment() {
             )
             is FavoritesUiEvent.OnToggleHatWatch -> showSnackbar(
                     if (event.nowWatched) R.string.fav_watch_versions_on else R.string.fav_watch_versions_off
+            )
+            is FavoritesUiEvent.OnMovedToFolder -> showSnackbar(
+                    if (event.folderId == null) {
+                        getString(R.string.fav_moved_out_of_folder, event.count)
+                    } else {
+                        val name = foldersState.folders.firstOrNull { it.id == event.folderId }?.name.orEmpty()
+                        getString(R.string.fav_moved_to_folder, event.count, name)
+                    }
             )
             is FavoritesUiEvent.ShowLoadError -> showLoadError(event.message)
             is FavoritesUiEvent.ShowNeedAuth -> Utils.showNeedAuthDialog(requireContext(), router)
@@ -687,6 +864,10 @@ class FavoritesFragment : RecyclerFragment() {
                 if (pinIndex != -1) allow(pinIndex)
             }
 
+            // «Переместить в папку» — и для тем, и для форумов (папки локальные).
+            val moveIndex = containsIndex(getString(R.string.fav_move_to_folder))
+            if (moveIndex != -1) allow(moveIndex)
+
             show(requireContext(), this@FavoritesFragment, item)
         }
     }
@@ -757,6 +938,8 @@ class FavoritesFragment : RecyclerFragment() {
         selectionUnpinMenuItem?.isVisible = inSelection
         selectionHideMenuItem?.isVisible = inSelection
         selectionShowMenuItem?.isVisible = inSelection
+        selectionMoveMenuItem?.isVisible = inSelection
+        selectionMoveMenuItem?.isEnabled = count > 0
 
         selectionMarkReadMenuItem?.isEnabled = count > 0
         selectionDeleteMenuItem?.isEnabled = count > 0
@@ -777,6 +960,12 @@ class FavoritesFragment : RecyclerFragment() {
         } else {
             setTitle(null)
         }
+
+        // В режиме выбора лента не нужна (действия идут над выделением), а в поиске она
+        // вводила бы в заблуждение: поиск идёт по всему избранному поверх выбранной папки.
+        val showChips = !inSelection && searchMenuItem?.isActionViewExpanded != true
+        folderStrip?.visibility = if (showChips) View.VISIBLE else View.GONE
+        applyHeaderAutoHide()
 
         if (::adapter.isInitialized) {
             adapter.setSelectionState(inSelection, selectedItems.keys.toSet())

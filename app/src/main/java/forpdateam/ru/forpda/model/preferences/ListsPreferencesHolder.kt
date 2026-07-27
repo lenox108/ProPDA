@@ -58,4 +58,9 @@ class ListsPreferencesHolder(
     fun getFavPerPage(): Int = dataStore.getFavPerPageImmediate()
 
     fun setFavPerPage(value: Int) = dataStore.setFavPerPage(value)
+
+    // Выбранная папка избранного (локальная группировка): -1 — все, 0 — «Без папки», иначе id.
+    fun getFavSelectedFolder(): Long = dataStore.getFavSelectedFolderImmediate()
+
+    fun setFavSelectedFolder(value: Long) = dataStore.setFavSelectedFolder(value)
 }

@@ -1,5 +1,8 @@
 package forpdateam.ru.forpda.presentation.favorites
 
+import forpdateam.ru.forpda.entity.db.favorites.FavFolderDao
+import forpdateam.ru.forpda.entity.db.favorites.FavFolderItemRoom
+import forpdateam.ru.forpda.entity.db.favorites.FavFolderRoom
 import forpdateam.ru.forpda.entity.remote.favorites.FavItem
 import forpdateam.ru.forpda.entity.remote.favorites.FavoriteReadState
 import forpdateam.ru.forpda.model.AuthHolder
@@ -9,6 +12,7 @@ import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.repository.events.EventsRepository
+import forpdateam.ru.forpda.model.repository.faviorites.FavoritesFoldersRepository
 import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.interactors.theme.ThemeUseCase
 import forpdateam.ru.forpda.presentation.IErrorHandler
@@ -68,6 +72,18 @@ class FavoritesViewModelTest {
     private lateinit var favoritesRepository: FavoritesRepository
     private lateinit var themeUseCase: ThemeUseCase
     private lateinit var authHolder: AuthHolder
+    private lateinit var foldersRepository: FavoritesFoldersRepository
+
+    private var folderRows: List<FavFolderRoom> = emptyList()
+    private var folderAssignmentRows: List<FavFolderItemRoom> = emptyList()
+
+    /** Настоящий репозиторий поверх мок-DAO: нужны живые StateFlow папок/привязок. */
+    private fun createFoldersRepository(): FavoritesFoldersRepository {
+        val dao = mockk<FavFolderDao>(relaxed = true)
+        coEvery { dao.getFolders() } returns folderRows
+        coEvery { dao.getAssignments() } returns folderAssignmentRows
+        return FavoritesFoldersRepository(dao).also { foldersRepository = it }
+    }
 
     private fun createViewModel(): FavoritesViewModel {
         favoritesRepository = mockk<FavoritesRepository>(relaxed = true)
@@ -86,6 +102,10 @@ class FavoritesViewModelTest {
         every { listsPreferencesHolder.observeUnreadTopFlow() } returns flowOf(false)
         every { listsPreferencesHolder.getSortingKey() } returns ""
         every { listsPreferencesHolder.getSortingOrder() } returns ""
+        // Без явного стаба relaxed-мок вернул бы 0 = «Без папки» и молча резал бы список.
+        every { listsPreferencesHolder.getFavSelectedFolder() } returns FavoritesViewModel.FOLDER_ALL
+        // 0 из relaxed-мока превратился бы в страницу из одного элемента (coerceAtLeast(1)).
+        every { listsPreferencesHolder.getFavPerPage() } returns 20
         val eventsRepository = mockk<EventsRepository>(relaxed = true)
         every { eventsRepository.observeEventsTab() } returns emptyFlow()
         val crossScreenInteractor = mockk<CrossScreenInteractor>(relaxed = true)
@@ -94,6 +114,7 @@ class FavoritesViewModelTest {
         authHolder = mockk<AuthHolder>(relaxed = true)
         return FavoritesViewModel(
                 favoritesRepository,
+                createFoldersRepository(),
                 eventsRepository,
                 listsPreferencesHolder,
                 crossScreenInteractor,
@@ -149,6 +170,7 @@ class FavoritesViewModelTest {
         every { crossScreenInteractor.observeTopic() } returns emptyFlow()
         val vm = FavoritesViewModel(
                 favoritesRepository,
+                createFoldersRepository(),
                 eventsRepository,
                 listsPreferencesHolder,
                 crossScreenInteractor,
@@ -201,6 +223,57 @@ class FavoritesViewModelTest {
         coVerify(exactly = 0) { themeUseCase.resetServerMarkReadDedup(any()) }
         // Sanity: the refresh actually ran (otherwise the verification is vacuous).
         coVerify(atLeast = 1) { favoritesRepository.loadFavorites(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `selected folder scopes displayed favorites and counters`() = runTest {
+        folderRows = listOf(FavFolderRoom(id = 7, name = "Смартфоны", sortOrder = 0, createdAt = 0, updatedAt = 0))
+        // favItem(1) → topicId 10, favItem(2) → topicId 20 (см. favItem).
+        folderAssignmentRows = listOf(FavFolderItemRoom(targetKey = "t:10", folderId = 7, updatedAt = 0))
+        val vm = createViewModel()
+        vm.start()
+        itemsFlow.value = listOf(unreadFavItem(1, "In folder"), favItem(2, "No folder"))
+        advanceUntilIdle()
+
+        assertEquals(2, vm.displayedItems.value?.size)
+        assertEquals(1, vm.foldersState.value.folderCounts[7L])
+        assertEquals(1, vm.foldersState.value.folderUnreadCounts[7L])
+        assertEquals(1, vm.foldersState.value.noFolderCount)
+
+        vm.selectFolder(7L)
+        advanceUntilIdle()
+        assertEquals(listOf("In folder"), vm.displayedItems.value?.map { it.topicTitle })
+
+        vm.selectFolder(FavoritesViewModel.FOLDER_NONE)
+        advanceUntilIdle()
+        assertEquals(listOf("No folder"), vm.displayedItems.value?.map { it.topicTitle })
+
+        vm.selectFolder(FavoritesViewModel.FOLDER_ALL)
+        advanceUntilIdle()
+        assertEquals(2, vm.displayedItems.value?.size)
+    }
+
+    @Test
+    fun `search ignores selected folder`() = runTest {
+        folderRows = listOf(FavFolderRoom(id = 7, name = "Смартфоны", sortOrder = 0, createdAt = 0, updatedAt = 0))
+        folderAssignmentRows = listOf(FavFolderItemRoom(targetKey = "t:10", folderId = 7, updatedAt = 0))
+        val vm = createViewModel()
+        // Поиск при клиентской пагинации идёт по сетевому каталогу, а не по кэшу страницы.
+        coEvery { favoritesRepository.fetchAllFavoritesForSearch(any()) } returns listOf(
+                favItem(1, "Alpha in folder"),
+                favItem(2, "Alpha outside"),
+        )
+        vm.start()
+        itemsFlow.value = listOf(favItem(1, "Alpha in folder"), favItem(2, "Alpha outside"))
+        advanceUntilIdle()
+
+        vm.selectFolder(7L)
+        advanceUntilIdle()
+        vm.searchLocal("Alpha")
+        advanceUntilIdle()
+
+        // Поиск идёт по всему избранному поверх фильтра: иначе тему из другой папки не найти.
+        assertEquals(2, vm.displayedItems.value?.size)
     }
 
     @Test

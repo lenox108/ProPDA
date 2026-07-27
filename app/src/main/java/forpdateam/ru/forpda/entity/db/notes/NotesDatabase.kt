@@ -29,6 +29,9 @@ import forpdateam.ru.forpda.entity.db.qms.QmsThemesRoom
         ForumItemFlatRoom::class,
         ForumUserRoom::class
     ],
+    // Версию НЕ поднимаем: любой подъём ломает откат на сборку без новой фичи («A migration
+    // from N to 6 was required but not found»). Новые таблицы заводим отдельными БД —
+    // см. FavoritesFoldersDatabase / PostDraftDatabase / TopicReadBoundaryDatabase.
     version = 6,
     exportSchema = true
 )

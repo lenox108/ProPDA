@@ -64,6 +64,8 @@ class ListsDataStore(private val context: Context) {
     private val mirrorKeyHiddenForumIds = "lists.favorites.hidden_forum_ids"
     // Последний известный размер страницы избранного (для клиентской пагинации на холодном старте).
     private val mirrorKeyFavPerPage = "lists.favorites.per_page"
+    // Выбранная папка избранного: -1 — все, 0 — «Без папки», иначе id папки.
+    private val mirrorKeyFavSelectedFolder = "lists.favorites.selected_folder"
 
     private val legacyPrefs = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
 
@@ -212,6 +214,12 @@ class ListsDataStore(private val context: Context) {
 
     fun setFavPerPage(value: Int) {
         if (value > 0) mirrorPrefs.edit().putInt(mirrorKeyFavPerPage, value).apply()
+    }
+
+    fun getFavSelectedFolderImmediate(): Long = mirrorPrefs.getLong(mirrorKeyFavSelectedFolder, -1L)
+
+    fun setFavSelectedFolder(value: Long) {
+        mirrorPrefs.edit().putLong(mirrorKeyFavSelectedFolder, value).apply()
     }
 
     suspend fun getSortingKey(): String =
