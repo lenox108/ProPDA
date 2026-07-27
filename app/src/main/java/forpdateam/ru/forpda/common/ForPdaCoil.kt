@@ -21,6 +21,7 @@ import coil.size.Precision
 import coil.size.Scale
 import forpdateam.ru.forpda.client.Client
 import forpdateam.ru.forpda.client.interceptors.ImageProgressInterceptor
+import forpdateam.ru.forpda.client.interceptors.RequestGovernorInterceptor
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -72,8 +73,13 @@ object ForPdaCoil {
         // body neither cache held, and the image silently failed to load («imageLoadFailure … code=304»,
         // observed on QMS attachments while the very same URL returned 200 to curl). Reuse the client for
         // its cookies/auth/DNS interceptors, but drop the HTTP cache — that is Coil's own documented setup.
+        // Картинки идут мимо регулятора нагрузки: он существует ради HTML/XHR, за которые 4pda
+        // включает анти-флуд. Одна лента новостей — это два десятка обложек и аватарок, и если бы
+        // они ели тот же бюджет запросов, картинки грузились бы рывками (а сам бюджет кончался бы
+        // до того, как понадобится странице).
         val okHttp = (webClient as Client).getHttpClient().newBuilder()
                 .cache(null)
+                .apply { networkInterceptors().removeAll { it is RequestGovernorInterceptor } }
                 // Побайтовый прогресс для тех загрузок, где на URL подписан индикатор
                 // (просмотрщик картинок). Для остальных тело не оборачивается.
                 .addInterceptor(ImageProgressInterceptor())

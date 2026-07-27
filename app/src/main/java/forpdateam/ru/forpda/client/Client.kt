@@ -22,6 +22,7 @@ import forpdateam.ru.forpda.client.interceptors.CacheControlInterceptor
 import forpdateam.ru.forpda.client.interceptors.ErrorInterceptor
 import forpdateam.ru.forpda.client.interceptors.ImageLoadingInterceptor
 import forpdateam.ru.forpda.client.interceptors.RedirectFragmentInterceptor
+import forpdateam.ru.forpda.client.interceptors.RequestGovernorInterceptor
 import forpdateam.ru.forpda.client.proxy.BlockedTopicRegistry
 import forpdateam.ru.forpda.client.proxy.ProxyConfig
 import forpdateam.ru.forpda.client.proxy.ProxyRouter
@@ -169,6 +170,7 @@ class Client(
             .addInterceptor(BrotliInterceptor)
             .addNetworkInterceptor(RedirectFragmentInterceptor())
             .addNetworkInterceptor(CacheControlInterceptor())
+            .addNetworkInterceptor(RequestGovernorInterceptor())
             .build()
     }
 
@@ -440,6 +442,7 @@ class Client(
         val redirectFragment = RedirectFragmentInterceptor.State()
         val requestBuilder = prepareRequest(request, uploadProgressListener)
             .tag(RedirectFragmentInterceptor.State::class.java, redirectFragment)
+            .tag(RequestPriority::class.java, request.priority)
         val response = NetworkResponse(request.url)
         var okHttpResponse: Response? = null
         
@@ -451,6 +454,8 @@ class Client(
             response.redirect = okHttpResponse.request.url.toString()
             response.locationHeader = okHttpResponse.header("Location")
             response.redirectFragment = redirectFragment.lastFragment.get()
+            response.etag = okHttpResponse.header("ETag")
+            response.lastModified = okHttpResponse.header("Last-Modified")
 
             if (!request.isWithoutBody) {
                 val bodyString = okHttpResponse.body?.string() ?: ""

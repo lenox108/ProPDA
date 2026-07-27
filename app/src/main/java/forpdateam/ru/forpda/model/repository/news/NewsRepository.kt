@@ -8,6 +8,7 @@ import forpdateam.ru.forpda.entity.remote.news.Material
 import forpdateam.ru.forpda.entity.remote.news.NewsItem
 import forpdateam.ru.forpda.entity.remote.news.Tag
 import forpdateam.ru.forpda.model.data.cache.forumuser.ForumUsersCacheRoom
+import forpdateam.ru.forpda.model.data.cache.news.NewsListDiskCache
 import forpdateam.ru.forpda.model.data.remote.api.news.ArticleFetchResult
 import forpdateam.ru.forpda.model.data.remote.api.news.ArticleParsePhase
 import forpdateam.ru.forpda.model.data.remote.api.news.CommentEditContext
@@ -22,7 +23,9 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class NewsRepository(
         private val newsApi: NewsApi,
-        private val forumUsersCache: ForumUsersCacheRoom
+        private val forumUsersCache: ForumUsersCacheRoom,
+        /** null только в юнит-тестах, где диск не нужен: тогда лента живёт лишь в памяти. */
+        private val newsListDiskCache: NewsListDiskCache? = null
 ) {
 
     private val inFlightFetches = ConcurrentHashMap<String, CompletableDeferred<ArticleFetchResult>>()
@@ -39,7 +42,7 @@ class NewsRepository(
                 val raced = inFlightNewsLists.putIfAbsent(key, gate)
                 if (raced != null) continue
                 try {
-                    val result = fetchNewsList(category, pageNumber)
+                    val result = fetchNewsList(category, pageNumber, key, useValidators = true)
                     newsListCache.put(key, result)
                     gate.complete(result.copyNewsItems())
                     return result.copyNewsItems()
@@ -51,22 +54,64 @@ class NewsRepository(
                 }
             }
         }
-        return fetchNewsList(category, pageNumber)
+        // Ручное обновление: валидаторы не шлём, пользователь ждёт заведомо свежий ответ.
+        return fetchNewsList(category, pageNumber, key, useValidators = false)
                 .also { newsListCache.put(key, it) }
                 .copyNewsItems()
     }
 
-    private suspend fun fetchNewsList(category: String, pageNumber: Int): List<NewsItem> =
-            withContext(Dispatchers.IO) {
-                newsApi.getNews(category, pageNumber).also { data ->
-                    val avatarsByAuthorId = forumUsersCache.getUsersByIds(
-                            data.map { it.authorId }.filter { it > 0 }
-                    )
-                    data.forEach { item ->
-                        avatarsByAuthorId[item.authorId]?.avatar?.let { item.avatar = it }
-                    }
-                }
-            }
+    /**
+     * Лента из кэша БЕЗ похода в сеть: память (60 с) → диск (сутки). Экран новостей показывает её
+     * сразу и параллельно обновляет из сети — иначе каждый вход во вкладку упирался в пустой экран
+     * на всё время запроса.
+     */
+    suspend fun getCachedNews(category: String, pageNumber: Int): List<NewsItem>? {
+        val key = newsListKey(category, pageNumber)
+        newsListCache.get(key)?.let { return it }
+        if (pageNumber != FIRST_PAGE) return null
+        // Чтение индекса и Room — только на IO: getCachedNews зовут с главного потока (SWR на входе
+        // во вкладку), и файловый доступ оттуда стоил бы кадров.
+        return withContext(Dispatchers.IO) {
+            val entry = newsListDiskCache?.get(key) ?: return@withContext null
+            entry.items.copyNewsItems().also { applyKnownAvatars(it) }
+        }
+    }
+
+    private suspend fun fetchNewsList(
+            category: String,
+            pageNumber: Int,
+            key: String,
+            useValidators: Boolean
+    ): List<NewsItem> = withContext(Dispatchers.IO) {
+        val cached = if (pageNumber == FIRST_PAGE) newsListDiskCache?.get(key) else null
+        val fetch = newsApi.fetchNewsList(
+                category = category,
+                pageNumber = pageNumber,
+                etag = cached?.etag.takeIf { useValidators },
+                lastModified = cached?.lastModified.takeIf { useValidators }
+        )
+        if (fetch.notModified && cached != null) {
+            // Сервер подтвердил, что страница не менялась — тела не было, платим только заголовками.
+            newsListDiskCache?.refreshValidity(key, cached, fetch.etag, fetch.lastModified)
+            return@withContext cached.items.copyNewsItems().also { applyKnownAvatars(it) }
+        }
+        val items = fetch.items
+                ?: newsApi.getNews(category, pageNumber) // 304 без валидной записи в кэше — грузим целиком
+        applyKnownAvatars(items)
+        if (pageNumber == FIRST_PAGE && items.isNotEmpty()) {
+            newsListDiskCache?.put(key, items, fetch.etag, fetch.lastModified)
+        }
+        items
+    }
+
+    private suspend fun applyKnownAvatars(items: List<NewsItem>) {
+        val avatarsByAuthorId = forumUsersCache.getUsersByIds(
+                items.map { it.authorId }.filter { it > 0 }
+        )
+        items.forEach { item ->
+            avatarsByAuthorId[item.authorId]?.avatar?.let { item.avatar = it }
+        }
+    }
 
     suspend fun likeComment(articleId: Int, commentId: Int): Boolean =
             withContext(Dispatchers.IO) { newsApi.likeComment(articleId, commentId) }
@@ -107,18 +152,20 @@ class NewsRepository(
     suspend fun fetchArticleDetails(
             id: Int,
             phase: ArticleParsePhase = ArticleParsePhase.FIRST_RENDER,
-            bypassCache: Boolean = false
+            bypassCache: Boolean = false,
+            background: Boolean = false
     ): ArticleFetchResult =
-            fetchArticleDetails("https://4pda.to/index.php?p=$id", phase, bypassCache)
+            fetchArticleDetails("https://4pda.to/index.php?p=$id", phase, bypassCache, background)
 
     suspend fun fetchArticleDetails(
             url: String,
             phase: ArticleParsePhase = ArticleParsePhase.FIRST_RENDER,
-            bypassCache: Boolean = false
+            bypassCache: Boolean = false,
+            background: Boolean = false
     ): ArticleFetchResult {
         if (bypassCache) {
             return withContext(Dispatchers.IO) {
-                newsApi.fetchArticleDetails(url, phase, bypassCache = true)
+                newsApi.fetchArticleDetails(url, phase, bypassCache = true, background = background)
             }
         }
         val key = fetchCoalesceKey(url, phase)
@@ -129,7 +176,7 @@ class NewsRepository(
             if (raced != null) continue
             try {
                 val result = withContext(Dispatchers.IO) {
-                    newsApi.fetchArticleDetails(url, phase, bypassCache = false)
+                    newsApi.fetchArticleDetails(url, phase, bypassCache = false, background = background)
                 }
                 gate.complete(result.copyForArticleOpen())
                 return result.copyForArticleOpen()
@@ -221,6 +268,9 @@ class NewsRepository(
     }
 
     private companion object {
+        /** Дисковый кэш держим только для первой страницы: остальные листаются внутри сессии. */
+        const val FIRST_PAGE = 1
+
         fun ArticleFetchResult.copyForArticleOpen(): ArticleFetchResult =
                 copy(page = page.copyForArticleOpen())
 

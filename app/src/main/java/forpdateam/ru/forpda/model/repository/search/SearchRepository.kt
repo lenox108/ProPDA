@@ -58,7 +58,10 @@ class SearchRepository(
     suspend fun findUserByNick(nick: String): ForumUser? = withContext(Dispatchers.IO) {
         val trimmed = nick.trim()
         if (trimmed.isEmpty()) return@withContext null
-        val resolved = runCatching { forumUsersCache.getUserByNick(trimmed) }.getOrNull()
+        // Явный пользовательский поиск ника не должен упираться в кэш промахов списка новостей.
+        val resolved = runCatching {
+            forumUsersCache.getUserByNick(trimmed, useNegativeCache = false)
+        }.getOrNull()
         resolved?.takeIf { it.id > 0 && it.nick?.equals(trimmed, ignoreCase = true) == true }
     }
 

@@ -76,6 +76,7 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
         adapter.setOnClickListener(this)
         adapter.setOnItemDisplayListener { presenter.onItemDisplayed(it) }
         recyclerView.adapter = adapter
+        recyclerView.addOnScrollListener(prefetchOnSettleListener)
         applyNewsGridLayout()
 
         skeleton = forpdateam.ru.forpda.ui.views.SkeletonListView(requireContext()).apply {
@@ -105,7 +106,31 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
     }
 
     override fun onDestroyView() {
+        runCatching { recyclerView.removeOnScrollListener(prefetchOnSettleListener) }
         super.onDestroyView()
+    }
+
+    /**
+     * Прогреваем кэш статьи, которая осталась в центре экрана после остановки скролла — это самый
+     * вероятный кандидат на тап. Во время самого скролла спекулятивных запросов не шлём вообще.
+     */
+    private val prefetchOnSettleListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
+            if (newState != RecyclerView.SCROLL_STATE_IDLE) return
+            presenter.onListSettled(centerVisibleItem(rv))
+        }
+    }
+
+    private fun centerVisibleItem(rv: RecyclerView): NewsItem? {
+        val layoutManager = rv.layoutManager as? GridLayoutManager ?: return null
+        val first = layoutManager.findFirstVisibleItemPosition()
+        val last = layoutManager.findLastVisibleItemPosition()
+        if (first == RecyclerView.NO_POSITION || last == RecyclerView.NO_POSITION) return null
+        // Последняя позиция — строка «Загрузить ещё», она не статья.
+        val lastArticle = minOf(last, adapter.itemCount - 2)
+        if (lastArticle < first) return null
+        val center = (first + lastArticle) / 2
+        return runCatching { adapter.getItem(center) }.getOrNull()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

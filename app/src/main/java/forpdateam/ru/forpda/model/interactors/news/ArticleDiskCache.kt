@@ -24,10 +24,13 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Disk L2 cache for mapped articles. Uses the same [ArticleHtmlValidator] keys as memory cache.
  *
- * Storage model (PERF-003): a single JSON index file (`article_disk_cache.json`) holds all entries.
- * An in-memory [diskEntriesIndex] mirrors the parsed file between flushes; [pending] queues writes
- * and [pendingRemovals] tombstones ids until the debounced flush merges into the index atomically.
- * Per-article files were not adopted to keep invalidation and trim logic in one place.
+ * Модель хранения: лёгкий индекс (`article_disk_cache.json` — только id/версия/время/флаг) плюс по
+ * файлу на статью в подпапке [BODIES_DIR]. Раньше все статьи лежали в ОДНОМ JSON, поэтому первое же
+ * открытие после старта процесса разбирало мегабайты чужих тел ради одной записи, а каждая запись
+ * префетча переписывала весь файл целиком. Теперь чтение — это маленький индекс плюс одно тело,
+ * а запись трогает только изменившиеся файлы.
+ *
+ * [pending] копит записи, [pendingRemovals] — надгробия, пока дебаунс не сольёт всё на диск.
  */
 class ArticleDiskCache(
         context: Context,
@@ -49,16 +52,28 @@ class ArticleDiskCache(
             val reason: String?
     )
 
+    /** Строка индекса: всё, что нужно для решения «стоит ли вообще читать тело статьи с диска». */
+    private data class IndexRecord(
+            val articleId: Int,
+            val parserVersion: Int,
+            val storedAtMs: Long,
+            val deferredExtrasPending: Boolean
+    )
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private val pending = ConcurrentHashMap<Int, Entry>()
     private val pendingRemovals = ConcurrentHashMap.newKeySet<Int>()
     @Volatile
-    private var diskEntriesIndex: Map<Int, Entry>? = null
+    private var diskEntriesIndex: Map<Int, IndexRecord>? = null
     private var saveJob: Job? = null
 
     private val file: File? = runCatching {
         File(context.filesDir, FILE_NAME)
+    }.getOrNull()
+
+    private val bodiesDir: File? = runCatching {
+        File(context.filesDir, BODIES_DIR)
     }.getOrNull()
 
     internal val cacheFileForTest: File?
@@ -76,7 +91,7 @@ class ArticleDiskCache(
         pending[articleId]?.let { pendingEntry ->
             return validateEntry(pendingEntry, articleId, nowMs, fromPending = true)
         }
-        val diskEntry = readEntryFromDisk(articleId) ?: run {
+        val diskEntry = readEntryFromDisk(articleId, nowMs) ?: run {
             ArticleCacheTrace.log(
                     event = "miss",
                     articleId = articleId,
@@ -124,6 +139,7 @@ class ArticleDiskCache(
             pendingRemovals.clear()
             diskEntriesIndex = null
             runCatching { file?.delete() }
+            runCatching { bodiesDir?.listFiles()?.forEach { it.delete() } }
         }
         scheduleFlush()
     }
@@ -186,20 +202,29 @@ class ArticleDiskCache(
     private suspend fun flushLocked() = mutex.withLock {
         val target = file ?: return@withLock
         val merged = readAllFromDisk().toMutableMap()
-        pending.forEach { (id, entry) -> merged[id] = entry }
-        pendingRemovals.forEach { merged.remove(it) }
+        val written = HashMap(pending)
+        val removed = HashSet(pendingRemovals)
+        written.forEach { (id, entry) -> merged[id] = entry.toIndexRecord() }
+        removed.forEach { merged.remove(it) }
         pending.clear()
         pendingRemovals.clear()
+        val evicted = trim(merged)
         diskEntriesIndex = merged.toMap()
-        trim(merged)
-        if (merged.isEmpty()) {
-            runCatching { target.delete() }
-            return@withLock
-        }
         runCatching {
+            // Тела: пишем только изменённые, удаляем стёртые и вытесненные.
+            written.forEach { (id, entry) ->
+                if (merged.containsKey(id)) {
+                    serializeBody(entry)?.let { writeBody(id, it) }
+                }
+            }
+            (removed + evicted).forEach { deleteBody(it) }
+            if (merged.isEmpty()) {
+                runCatching { target.delete() }
+                return@runCatching
+            }
             val items = org.json.JSONArray()
             merged.values.sortedByDescending { it.storedAtMs }.forEach { entry ->
-                serializeEntry(entry)?.let { items.put(it) }
+                items.put(serializeIndexEntry(entry))
             }
             val root = JSONObject()
                     .put("v", VERSION)
@@ -210,26 +235,35 @@ class ArticleDiskCache(
         }
     }
 
-    private fun trim(entries: MutableMap<Int, Entry>) {
+    /** @return id вытесненных по лимиту записей — их тела тоже надо убрать с диска. */
+    private fun trim(entries: MutableMap<Int, IndexRecord>): List<Int> {
+        val evicted = mutableListOf<Int>()
         while (entries.size > maxEntries) {
             val oldest = entries.values.minByOrNull { it.storedAtMs } ?: break
-            entries.remove(oldest.page.id)
+            entries.remove(oldest.articleId)
+            evicted.add(oldest.articleId)
         }
+        return evicted
     }
 
-    private fun readAllFromDisk(): Map<Int, Entry> {
+    private fun readAllFromDisk(): Map<Int, IndexRecord> {
         diskEntriesIndex?.let { return it }
         val target = file ?: return emptyMap()
         if (!target.exists() || target.length() == 0L) return emptyMap()
         return runCatching {
             val json = JSONObject(target.readText(Charsets.UTF_8))
-            if (json.optInt("v", 0) != VERSION) return emptyMap()
+            if (json.optInt("v", 0) != VERSION) {
+                // Формат прошлой версии (все статьи одним файлом) — просто выбрасываем.
+                runCatching { target.delete() }
+                diskEntriesIndex = emptyMap()
+                return emptyMap()
+            }
             val items = json.optJSONArray("items") ?: return emptyMap()
-            val result = HashMap<Int, Entry>()
+            val result = HashMap<Int, IndexRecord>()
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                deserializeEntry(item)?.let { entry ->
-                    result[entry.page.id] = entry
+                deserializeIndexEntry(item)?.let { record ->
+                    result[record.articleId] = record
                 }
             }
             diskEntriesIndex = result
@@ -241,15 +275,85 @@ class ArticleDiskCache(
         }
     }
 
-    private fun readEntryFromDisk(articleId: Int): Entry? = readAllFromDisk()[articleId]
+    /**
+     * Читает запись с диска. Тело статьи (самая дорогая часть) поднимается только если индекс
+     * говорит, что запись ещё имеет шанс быть валидной.
+     */
+    private fun readEntryFromDisk(articleId: Int, nowMs: Long): Entry? {
+        val record = readAllFromDisk()[articleId] ?: return null
+        if (record.parserVersion != ARTICLE_PARSER_VERSION || nowMs - record.storedAtMs > maxAgeMs) {
+            pendingRemovals.add(articleId)
+            scheduleFlush()
+            return null
+        }
+        val body = readBody(articleId) ?: run {
+            pendingRemovals.add(articleId)
+            scheduleFlush()
+            return null
+        }
+        return Entry(
+                page = body,
+                parserVersion = record.parserVersion,
+                storedAtMs = record.storedAtMs,
+                deferredExtrasPending = record.deferredExtrasPending
+        )
+    }
 
-    private fun serializeEntry(entry: Entry): JSONObject? {
+    private fun Entry.toIndexRecord(): IndexRecord = IndexRecord(
+            articleId = page.id,
+            parserVersion = parserVersion,
+            storedAtMs = storedAtMs,
+            deferredExtrasPending = deferredExtrasPending
+    )
+
+    private fun serializeIndexEntry(record: IndexRecord): JSONObject = JSONObject()
+            .put("articleId", record.articleId)
+            .put("parserVersion", record.parserVersion)
+            .put("storedAtMs", record.storedAtMs)
+            .put("deferredExtrasPending", record.deferredExtrasPending)
+
+    private fun deserializeIndexEntry(item: JSONObject): IndexRecord? {
+        val id = item.optInt("articleId", 0)
+        if (id <= 0) return null
+        val storedAtMs = item.optLong("storedAtMs", 0L)
+        if (storedAtMs <= 0L) return null
+        return IndexRecord(
+                articleId = id,
+                parserVersion = item.optInt("parserVersion", ARTICLE_PARSER_VERSION),
+                storedAtMs = storedAtMs,
+                deferredExtrasPending = item.optBoolean("deferredExtrasPending", false)
+        )
+    }
+
+    private fun bodyFile(articleId: Int): File? = bodiesDir?.let { File(it, "$articleId.json") }
+
+    private fun writeBody(articleId: Int, body: JSONObject) {
+        val target = bodyFile(articleId) ?: return
+        bodiesDir?.let { if (!it.exists()) it.mkdirs() }
+        writeAtomically(target, body.toString())
+    }
+
+    private fun readBody(articleId: Int): DetailsPage? {
+        val target = bodyFile(articleId) ?: return null
+        if (!target.exists() || target.length() == 0L) return null
+        return runCatching {
+            deserializeBody(JSONObject(target.readText(Charsets.UTF_8)))
+        }.getOrElse { error ->
+            Timber.w(error, "Article body cache read failed id=%d", articleId)
+            runCatching { target.delete() }
+            null
+        }
+    }
+
+    private fun deleteBody(articleId: Int) {
+        runCatching { bodyFile(articleId)?.takeIf { it.exists() }?.delete() }
+    }
+
+    private fun serializeBody(entry: Entry): JSONObject? {
         val page = entry.page
         return runCatching {
             JSONObject()
                     .put("articleId", page.id)
-                    .put("parserVersion", entry.parserVersion)
-                    .put("storedAtMs", entry.storedAtMs)
                     .put("title", page.title.orEmpty())
                     .put("html", page.html.orEmpty())
                     .put("url", page.url.orEmpty())
@@ -295,12 +399,10 @@ class ArticleDiskCache(
         return map
     }
 
-    private fun deserializeEntry(item: JSONObject): Entry? {
+    private fun deserializeBody(item: JSONObject): DetailsPage? {
         val id = item.optInt("articleId", 0)
         if (id <= 0) return null
-        val storedAtMs = item.optLong("storedAtMs", 0L)
-        if (storedAtMs <= 0L) return null
-        val page = DetailsPage().apply {
+        return DetailsPage().apply {
             this.id = id
             title = item.optString("title").takeIf { it.isNotBlank() }
             html = item.optString("html").takeIf { it.isNotBlank() }
@@ -313,12 +415,6 @@ class ArticleDiskCache(
             date = item.optString("date").takeIf { it.isNotBlank() }
             karmaMap = deserializeKarma(item.optJSONObject("karma"))
         }
-        return Entry(
-                page = page,
-                parserVersion = item.optInt("parserVersion", ARTICLE_PARSER_VERSION),
-                storedAtMs = storedAtMs,
-                deferredExtrasPending = item.optBoolean("deferredExtrasPending", false)
-        )
     }
 
     private fun writeAtomically(target: File, body: String) {
@@ -359,7 +455,9 @@ class ArticleDiskCache(
 
     private companion object {
         private const val FILE_NAME = "article_disk_cache.json"
-        private const val VERSION = 1
+        private const val BODIES_DIR = "article_cache"
+        /** v2 = индекс + тела по файлам; записи v1 (всё одним файлом) отбрасываются при чтении. */
+        private const val VERSION = 2
         private const val FLUSH_DEBOUNCE_MS = 500L
     }
 }

@@ -67,6 +67,7 @@ import forpdateam.ru.forpda.model.repository.faviorites.FavoritesRepository
 import forpdateam.ru.forpda.model.repository.forum.ForumRepository
 import forpdateam.ru.forpda.model.repository.history.HistoryRepository
 import forpdateam.ru.forpda.model.repository.mentions.MentionsRepository
+import forpdateam.ru.forpda.model.data.cache.news.NewsListDiskCache
 import forpdateam.ru.forpda.model.repository.news.NewsRepository
 import forpdateam.ru.forpda.model.interactors.news.ArticleDiskCache
 import forpdateam.ru.forpda.model.interactors.news.ArticleMemoryCache
@@ -290,8 +291,15 @@ object DataModule {
             SearchRepository(api, fucRoom, forumSectionTitleIndex)
 
     @Provides @Singleton
-    fun provideNewsRepository(api: NewsApi, fucRoom: ForumUsersCacheRoom) =
-            NewsRepository(api, fucRoom)
+    fun provideNewsListDiskCache(@ApplicationContext context: Context) =
+            NewsListDiskCache(context)
+
+    @Provides @Singleton
+    fun provideNewsRepository(
+            api: NewsApi,
+            fucRoom: ForumUsersCacheRoom,
+            newsListDiskCache: NewsListDiskCache
+    ) = NewsRepository(api, fucRoom, newsListDiskCache)
 
     @Provides @Singleton
     fun provideArticleDiskCache(@ApplicationContext context: Context) =
