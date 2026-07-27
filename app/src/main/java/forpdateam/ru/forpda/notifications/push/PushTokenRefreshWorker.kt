@@ -39,6 +39,8 @@ class PushTokenRefreshWorker @AssistedInject constructor(
                 Result.success()
             }
             is PushRegistrar.Result.NoGms -> Result.success()
+            // Ключ Pro убрали — обновлять токен незачем, это не ошибка.
+            is PushRegistrar.Result.NotPro -> Result.success()
             is PushRegistrar.Result.Error -> {
                 Timber.w("push token refresh failed: %s", r.reason)
                 NotifDiagLog.log(appContext, "fcm: token refresh failed ${r.reason}")

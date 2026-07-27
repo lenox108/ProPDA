@@ -255,7 +255,82 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
      * ([forpdateam.ru.forpda.notifications.push.PushSetupController]): app-логин за login_key +
      * регистрация FCM-токена. При провале/отмене откатываем значение обратно на «Опрос».
      */
+    /** Строка статуса Pro: показывает member_id (его покупатель сообщает автору) и открывает ввод ключа. */
+    private fun configureProEntry() {
+        val pref = preferenceScreen.findPreference<Preference>("pro.license_entry") ?: return
+        updateProSummary(pref)
+        pref.setOnPreferenceClickListener { showProDialog(); true }
+    }
+
+    private fun updateProSummary(pref: Preference? =
+            preferenceScreen.findPreference("pro.license_entry")) {
+        val ctx = context ?: return
+        val memberId = forpdateam.ru.forpda.pro.ProLicense.currentMemberId(ctx)
+        pref?.summary = when {
+            forpdateam.ru.forpda.pro.ProLicense.isUnlocked(ctx) -> getString(R.string.pro_status_active)
+            memberId == null -> getString(R.string.pro_status_not_logged)
+            else -> getString(R.string.pro_status_locked, memberId)
+        }
+    }
+
+    private fun showProDialog() {
+        val ctx = context ?: return
+        val memberId = forpdateam.ru.forpda.pro.ProLicense.currentMemberId(ctx)
+        if (memberId == null) {
+            toast(getString(R.string.pro_status_not_logged))
+            return
+        }
+        val input = android.widget.EditText(ctx).apply {
+            hint = getString(R.string.pro_dialog_hint)
+            setSingleLine(false)
+            maxLines = 3
+            setText(androidx.preference.PreferenceManager.getDefaultSharedPreferences(ctx)
+                    .getString(forpdateam.ru.forpda.pro.ProLicense.KEY_LICENSE, "").orEmpty())
+        }
+        val container = android.widget.FrameLayout(ctx).apply {
+            val pad = (24 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input)
+        }
+        val builder = androidx.appcompat.app.AlertDialog.Builder(ctx)
+                .setTitle(R.string.pro_dialog_title)
+                .setMessage(getString(R.string.pro_dialog_message, memberId))
+                .setView(container)
+                .setPositiveButton(R.string.pro_activate) { _, _ ->
+                    when (forpdateam.ru.forpda.pro.ProLicense.activate(ctx, input.text.toString())) {
+                        forpdateam.ru.forpda.pro.ProLicense.Result.Activated -> {
+                            toast(getString(R.string.pro_activated))
+                            updateProSummary()
+                        }
+                        forpdateam.ru.forpda.pro.ProLicense.Result.Invalid ->
+                            toast(getString(R.string.pro_invalid))
+                        forpdateam.ru.forpda.pro.ProLicense.Result.NotLoggedIn ->
+                            toast(getString(R.string.pro_status_not_logged))
+                    }
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+        if (forpdateam.ru.forpda.pro.ProLicense.isUnlocked(ctx)) {
+            builder.setNeutralButton(R.string.pro_deactivate) { _, _ ->
+                forpdateam.ru.forpda.pro.ProLicense.deactivate(ctx)
+                // Ключ убрали — push больше не положен, возвращаем бесплатный канал.
+                disablePush()
+                preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
+                        ?.let { dm ->
+                            if (dm.value == "push") {
+                                dm.value = "poll"
+                                applyDeliveryMethod("poll")
+                                updateDeliveryMethodSummary(dm, "poll")
+                            }
+                        }
+                toast(getString(R.string.pro_removed))
+                updateProSummary()
+            }
+        }
+        builder.show()
+    }
+
     private fun configureDeliveryMethod() {
+        configureProEntry()
         val pref = preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
                 ?: return
         // Приводим список в соответствие с реальными флагами (миграция старых установок, где
@@ -285,6 +360,12 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         pref.onPreferenceChangeListener = OnPreferenceChangeListener { _, newValue ->
             val value = newValue as? String ?: return@OnPreferenceChangeListener false
             if (value == "push") {
+                // Push — платная функция: без действующего ключа даже не начинаем настройку.
+                if (!forpdateam.ru.forpda.pro.ProLicense.isUnlocked(requireContext())) {
+                    toast(getString(R.string.pro_required))
+                    showProDialog()
+                    return@OnPreferenceChangeListener false
+                }
                 // Push принимаем только после успешной регистрации токена.
                 startPushSetup(pref)
                 false

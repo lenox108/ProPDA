@@ -27,6 +27,7 @@ class PushRegistrar(
         object Success : Result()
         object NoSession : Result()      // нет login_key — нужен разовый логин в настройках
         object NoGms : Result()          // нет Google Play Services
+        object NotPro : Result()         // нет действующего ключа активации Pro
         data class Error(val reason: String) : Result()
     }
 
@@ -35,6 +36,12 @@ class PushRegistrar(
      * повторный `ai` не шлётся. Блокирующая сеть вынесена на IO.
      */
     suspend fun register(force: Boolean = false): Result = withContext(Dispatchers.IO) {
+        // Push — функция Pro. Проверяем здесь, а не только в UI: это единственная точка, где
+        // токен реально уходит на сервер, поэтому она и должна быть решающей.
+        if (!forpdateam.ru.forpda.pro.ProLicense.isUnlocked(context)) {
+            Timber.d("PushRegistrar: pro license missing, skip")
+            return@withContext Result.NotPro
+        }
         if (!session.hasSession()) return@withContext Result.NoSession
         // Страховка от привязки токена к чужому аккаунту: если в приложении сменился
         // пользователь, а push-сессия осталась от прежнего — гасим её вместо регистрации.
