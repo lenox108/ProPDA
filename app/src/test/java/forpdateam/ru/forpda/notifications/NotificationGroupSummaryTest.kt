@@ -36,6 +36,8 @@ class NotificationGroupSummaryTest {
         Shadows.shadowOf(context as android.app.Application)
                 .grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
         NotificationsService.createEventChannels(context)
+        NotificationPublisher.forgetAllChildren()
+        NotificationManagerCompat.from(context).cancelAll()
     }
 
     @Test
