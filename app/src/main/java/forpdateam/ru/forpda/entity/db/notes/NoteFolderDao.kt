@@ -14,6 +14,9 @@ interface NoteFolderDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFolder(folder: NoteFolderRoom): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFolders(folders: List<NoteFolderRoom>)
+
     @Update
     suspend fun updateFolder(folder: NoteFolderRoom)
 
@@ -22,4 +25,7 @@ interface NoteFolderDao {
 
     @Query("DELETE FROM note_folders WHERE id = :id")
     suspend fun deleteFolder(id: Long)
+
+    @Query("DELETE FROM note_folders")
+    suspend fun deleteAllFolders()
 }
