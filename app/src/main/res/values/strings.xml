@@ -542,6 +542,9 @@
     <string name="fav_folders_all">Все</string>
     <string name="fav_folder_none">Без папки</string>
     <string name="fav_folders_hint">Папки избранного</string>
+    <string name="fav_folders_panel">Панель папок</string>
+    <string name="fav_folders_panel_hide">Скрыть панель папок</string>
+    <string name="fav_folders_panel_show">Показать панель папок</string>
     <string name="fav_folder_create">Создать папку</string>
     <string name="fav_folder_create_chip">+ Папка</string>
     <string name="fav_folder_name">Название папки</string>

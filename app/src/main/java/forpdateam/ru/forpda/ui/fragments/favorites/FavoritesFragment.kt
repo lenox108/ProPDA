@@ -102,6 +102,8 @@ class FavoritesFragment : RecyclerFragment() {
     private var renderedFoldersState: FavoritesFoldersState? = null
     private var folderStrip: View? = null
     private var folderChips: com.google.android.material.chip.ChipGroup? = null
+    private var folderStripMenuItem: MenuItem? = null
+    private var createFolderMenuItem: MenuItem? = null
 
     private val presenter: FavoritesViewModel by viewModels()
     private lateinit var favoritesDialogs: FavoritesDialogs
@@ -169,6 +171,10 @@ class FavoritesFragment : RecyclerFragment() {
         appBarLayout.addView(strip, appBarLayout.indexOfChild(toolbarLayout) + 1)
         folderStrip = strip
         folderChips = strip.findViewById(R.id.favorites_folder_chips)
+        // Цвет берём тем же путём, что и сама шапка: под Material You это ChromeCanvas
+        // (динамический тон обоев), а не сырой атрибут — иначе лента заметно отличалась бы
+        // от тулбара под MY. См. TabFragment.topBarSurfaceColor.
+        strip.setBackgroundColor(topBarSurfaceColor())
         contentController.setFirstLoad(false)
         return viewFragment
     }
@@ -300,6 +306,23 @@ class FavoritesFragment : RecyclerFragment() {
                     currentSortDialog?.setContentView(dialogBinding.root)
                     currentSortDialog?.show()
                     false
+                }
+                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        // Переключатель ленты папок — в overflow, а не иконкой: в видимой части тулбара уже
+        // три действия, а прятать ленту нужно редко (и с запоминанием выбора).
+        // Без единой папки ленты (а значит и чипа «+ Папка») на экране нет — заводить первую
+        // папку нужно откуда-то ещё, иначе фича выглядит недоступной.
+        createFolderMenuItem = menu.add(R.string.fav_folder_create)
+                .setOnMenuItemClickListener {
+                    favoritesDialogs.showCreateFolderDialog()
+                    true
+                }
+        // Отдельная иконка в тулбаре, а не пункт overflow: место есть, а состояние ленты
+        // читается сразу по значку (папка / перечёркнутая папка) без открытия меню.
+        folderStripMenuItem = menu.add(Menu.NONE, R.id.action_favorites_folder_strip, Menu.NONE, getString(R.string.fav_folders_panel))
+                .setOnMenuItemClickListener {
+                    presenter.setFolderStripVisible(!foldersState.stripVisible)
+                    true
                 }
                 .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
         addSelectionMenu(menu)
@@ -961,10 +984,32 @@ class FavoritesFragment : RecyclerFragment() {
             setTitle(null)
         }
 
-        // В режиме выбора лента не нужна (действия идут над выделением), а в поиске она
-        // вводила бы в заблуждение: поиск идёт по всему избранному поверх выбранной папки.
-        val showChips = !inSelection && searchMenuItem?.isActionViewExpanded != true
+        // Лента показывается только когда папки вообще заведены: тому, кто ими не пользуется,
+        // экран остаётся ровно таким же, как до фичи. Плюс ручной переключатель в overflow.
+        // В режиме выбора она не нужна (действия идут над выделением), а в поиске вводила бы
+        // в заблуждение: поиск идёт по всему избранному поверх выбранной папки.
+        val hasFolders = foldersState.folders.isNotEmpty()
+        val showChips = !inSelection &&
+                searchMenuItem?.isActionViewExpanded != true &&
+                foldersState.stripVisible &&
+                hasFolders
         folderStrip?.visibility = if (showChips) View.VISIBLE else View.GONE
+        // Пункт меню без единой папки бессмысленен — переключать нечего.
+        folderStripMenuItem?.isVisible = !inSelection && hasFolders
+        folderStripMenuItem?.let { item ->
+            val hint = getString(
+                    if (foldersState.stripVisible) R.string.fav_folders_panel_hide
+                    else R.string.fav_folders_panel_show
+            )
+            item.setIcon(
+                    if (foldersState.stripVisible) R.drawable.ic_toolbar_folder
+                    else R.drawable.ic_toolbar_folder_off
+            )
+            item.title = hint
+            MenuItemCompat.setContentDescription(item, hint)
+            MenuItemCompat.setTooltipText(item, hint)
+        }
+        createFolderMenuItem?.isVisible = !inSelection
         applyHeaderAutoHide()
 
         if (::adapter.isInitialized) {

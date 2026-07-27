@@ -10,7 +10,6 @@
     android:id="@+id/favorites_folder_scroll"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/main_toolbar_accent_surface"
     android:overScrollMode="never"
     android:scrollbars="none">
 

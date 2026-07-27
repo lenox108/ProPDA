@@ -83,6 +83,7 @@ class FavoritesViewModel @Inject constructor(
     private var folders: List<FavFolder> = emptyList()
     private var folderAssignments: Map<String, Long> = emptyMap()
     private var selectedFolder: Long = listsPreferencesHolder.getFavSelectedFolder()
+    private var folderStripVisible: Boolean = listsPreferencesHolder.getFavFolderStripVisible()
     private var loadAll = listsPreferencesHolder.getFavLoadAll()
     private var unreadTop = listsPreferencesHolder.getUnreadTop()
     private var sorting: Sorting = Sorting(
@@ -612,6 +613,7 @@ class FavoritesViewModel @Inject constructor(
         _foldersState.value = FavoritesFoldersState(
                 folders = folders,
                 selection = selectedFolder,
+                stripVisible = folderStripVisible,
                 totalCount = source.size,
                 totalUnreadCount = source.count { it.isUnreadForDisplay() && !it.isForum },
                 noFolderCount = noFolderTotal,
@@ -649,6 +651,21 @@ class FavoritesViewModel @Inject constructor(
         // Страницы считаются внутри папки, поэтому смена фильтра всегда возвращает на первую.
         currentSt = 0
         publishDisplayed()
+    }
+
+    /**
+     * Показать/скрыть ленту папок. При скрытии обязательно возвращаемся на «Все»: иначе список
+     * остался бы отфильтрованным папкой, а видимой причины, почему часть тем пропала, нет.
+     */
+    fun setFolderStripVisible(visible: Boolean) {
+        if (folderStripVisible == visible) return
+        folderStripVisible = visible
+        listsPreferencesHolder.setFavFolderStripVisible(visible)
+        if (!visible && selectedFolder != FOLDER_ALL) {
+            applyFolderSelection(FOLDER_ALL)
+        } else {
+            publishDisplayed()
+        }
     }
 
     fun createFolder(name: String, onCreated: ((FavFolder) -> Unit)? = null) {
@@ -820,6 +837,8 @@ class FavoritesViewModel @Inject constructor(
 data class FavoritesFoldersState(
         val folders: List<FavFolder> = emptyList(),
         val selection: Long = FavoritesViewModel.FOLDER_ALL,
+        /** Пользовательский переключатель ленты. Сама лента показывается ещё и при наличии папок. */
+        val stripVisible: Boolean = true,
         val totalCount: Int = 0,
         val totalUnreadCount: Int = 0,
         val noFolderCount: Int = 0,
