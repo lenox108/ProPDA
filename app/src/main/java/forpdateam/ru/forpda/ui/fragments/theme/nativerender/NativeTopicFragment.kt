@@ -33,6 +33,7 @@ import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
+import forpdateam.ru.forpda.ui.fragments.theme.modules.BottomRefreshGestureTuning
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 import forpdateam.ru.forpda.ui.views.messagepanel.MessagePanel
 import forpdateam.ru.forpda.ui.views.messagepanel.attachments.AttachmentsPopup
@@ -461,6 +462,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Guards [healBottomEndGap] against re-entering while its own corrective scroll is pending. */
     private var gapHealInProgress = false
+
+    /**
+     * Uptime of the last list scroll of any kind, used by [installBottomRefreshDetector] to keep the
+     * pull-up refresh from arming right after a fling settles at the bottom (the «долистал и по инерции
+     * провёл ещё раз» misfire).
+     */
+    private var lastContentScrollAt = 0L
 
 
     /**
@@ -2082,21 +2090,33 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * BottomRefreshGestureController. Arms only at the TRUE bottom of the list (nothing more to scroll,
      * so it never fights hybrid next-page loading), captures after a clear controlled UPWARD drag (not a
      * fling, not a horizontal swipe), and on release past the threshold reloads the current page.
+     *
+     * Пороги живут в [BottomRefreshGestureTuning] — там же объяснено, почему ход жеста урезан вдвое
+     * (жалоба с ~6.9″: палец приходится тянуть слишком высоко) и чем компенсирована защита от
+     * случайного срабатывания: скоростью отпускания, длительностью и покоем списка к моменту касания.
      */
     private fun installBottomRefreshDetector() {
         val vc = android.view.ViewConfiguration.get(requireContext())
         val touchSlop = vc.scaledTouchSlop
         val density = resources.displayMetrics.density
-        val captureDist = kotlin.math.max(touchSlop * 3f, 48f * density)
-        val triggerDist = 230f * density
-        val maxReleaseVelocity = 1450f * density
-        val minDurationMs = 240L
+        val captureDist = BottomRefreshGestureTuning.captureDistancePx(density, touchSlop)
+        val maxReleaseVelocity = BottomRefreshGestureTuning.maxReleaseVelocityPx(density)
+        val minDurationMs = BottomRefreshGestureTuning.MIN_CONTROLLED_DURATION_MS
+        // «Холодный старт»: докрут инерции после долистывания до низа — самый частый источник случайного
+        // обновления, поэтому касание сразу за скроллом (в т.ч. программным — якорь, restore) жест не взводит.
+        recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                if (dx != 0 || dy != 0) lastContentScrollAt = android.os.SystemClock.uptimeMillis()
+            }
+        })
         recyclerView.addOnItemTouchListener(object : androidx.recyclerview.widget.RecyclerView.OnItemTouchListener {
             private var downX = 0f
             private var downY = 0f
             private var downAt = 0L
             private var captured = false
             private var blocked = false
+            /** Полный ход считается от точки касания — см. [BottomRefreshGestureTuning.triggerDistancePx]. */
+            private var triggerDist = 0f
             private var vt: android.view.VelocityTracker? = null
 
             override fun onInterceptTouchEvent(rv: androidx.recyclerview.widget.RecyclerView, e: android.view.MotionEvent): Boolean {
@@ -2106,8 +2126,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     android.view.MotionEvent.ACTION_DOWN -> {
                         downX = e.x; downY = e.y; downAt = android.os.SystemClock.uptimeMillis()
                         captured = false
-                        // Arm only when already at the very bottom (no more content below) and not mid-reload.
-                        blocked = rv.canScrollVertically(1) || refreshLayout.isRefreshing || e.pointerCount > 1
+                        triggerDist = BottomRefreshGestureTuning.triggerDistancePx(density, downY, captureDist)
+                        val atRest = rv.scrollState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE &&
+                                downAt - lastContentScrollAt >= BottomRefreshGestureTuning.REST_BEFORE_ARM_MS
+                        // Arm only when already at the very bottom (no more content below), at rest, and not mid-reload.
+                        blocked = rv.canScrollVertically(1) || refreshLayout.isRefreshing || e.pointerCount > 1 || !atRest
                         vt = android.view.VelocityTracker.obtain().also { it.addMovement(e) }
                     }
                     android.view.MotionEvent.ACTION_MOVE -> {
@@ -2131,9 +2154,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 vt?.addMovement(e)
                 when (e.actionMasked) {
                     android.view.MotionEvent.ACTION_MOVE -> {
-                        if (!captured) return
+                        // Уход пальца обратно вниз снимает захват (паритет с BottomRefreshGestureController):
+                        // иначе «туда-сюда» в конце темы засчитывалось по последней точке.
                         val up = downY - e.y
-                        val prog = (up / triggerDist).coerceIn(0f, 1f)
+                        if (up <= 0f) {
+                            if (captured) { captured = false; hideGestureIndicator() }
+                            return
+                        }
+                        if (!captured) {
+                            if (blocked || up < captureDist) return
+                            captured = true
+                        }
+                        val prog = BottomRefreshGestureTuning.progress(up, captureDist, triggerDist)
                         showGestureIndicator("↑", getString(if (prog >= 1f)
                                 forpdateam.ru.forpda.R.string.theme_bottom_refresh_release
                             else forpdateam.ru.forpda.R.string.theme_bottom_refresh_pull), prog)

@@ -10,8 +10,6 @@ import android.webkit.WebView
 import forpdateam.ru.forpda.BuildConfig
 import forpdateam.ru.forpda.ui.views.ExtendedWebView
 import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 
 private const val REFRESH_SCROLL_TAG = "RefreshScroll"
 
@@ -37,14 +35,22 @@ class BottomRefreshGestureController(
 
     private val density = target.resources.displayMetrics.density
     private val touchSlop = ViewConfiguration.get(target.context).scaledTouchSlop
-    private val captureDistancePx = max(touchSlop * 3f, 48f * density)
-    private val fullProgressDistancePx = 220f * density
-    private val triggerDistancePx = fullProgressDistancePx
+    private val captureDistancePx = BottomRefreshGestureTuning.captureDistancePx(density, touchSlop)
     private val bottomTolerancePx = 16f * density
     private val verticalDominanceRatio = 1.5f
-    private val maxReleaseVelocityPx = 1450f * density
-    private val minControlledDurationMs = 260L
+    private val maxReleaseVelocityPx = BottomRefreshGestureTuning.maxReleaseVelocityPx(density)
+    private val minControlledDurationMs = BottomRefreshGestureTuning.MIN_CONTROLLED_DURATION_MS
     private val refreshCooldownMs = 1400L
+
+    /**
+     * Полный ход считается от точки касания и потому пересчитывается на каждом ACTION_DOWN — см.
+     * [BottomRefreshGestureTuning.triggerDistancePx]. Гард «список в покое» здесь не реализован: у
+     * WebView нет доступного колбэка о завершении инерции (нативный движок отсекает докрут по
+     * RecyclerView).
+     */
+    private var triggerDistancePx = BottomRefreshGestureTuning.triggerDistancePx(
+            density, target.height.toFloat(), captureDistancePx
+    )
 
     private var downX = 0f
     private var downY = 0f
@@ -68,6 +74,7 @@ class BottomRefreshGestureController(
                 downX = event.x
                 downY = event.y
                 downAt = SystemClock.uptimeMillis()
+                triggerDistancePx = BottomRefreshGestureTuning.triggerDistancePx(density, downY, captureDistancePx)
                 val atBottom = isAtBottom()
                 val hatOpen = isHatOpen()
                 val refreshAllowed = canRefresh()
@@ -82,7 +89,7 @@ class BottomRefreshGestureController(
                 if (BuildConfig.DEBUG) {
                     Log.i(
                             "BottomRefresh",
-                            "gesture down t=$downAt enabled=$isEnabled y=${target.scrollY} max=${currentMaxScrollPx()} atBottom=$atBottom hatOpen=$hatOpen canRefresh=$refreshAllowed blocked=$blocked capture=$captureDistancePx trigger=$triggerDistancePx fullProgress=$fullProgressDistancePx minDuration=$minControlledDurationMs maxVelocity=$maxReleaseVelocityPx refreshing=${target.isUserScrollActive()}"
+                            "gesture down t=$downAt enabled=$isEnabled y=${target.scrollY} max=${currentMaxScrollPx()} atBottom=$atBottom hatOpen=$hatOpen canRefresh=$refreshAllowed blocked=$blocked capture=$captureDistancePx trigger=$triggerDistancePx minDuration=$minControlledDurationMs maxVelocity=$maxReleaseVelocityPx refreshing=${target.isUserScrollActive()}"
                     )
                 }
                 return false
@@ -207,9 +214,8 @@ class BottomRefreshGestureController(
         }
     }
 
-    private fun gestureProgress(distance: Float): Float {
-        return min(1f, max(0f, distance / fullProgressDistancePx))
-    }
+    private fun gestureProgress(distance: Float): Float =
+            BottomRefreshGestureTuning.progress(distance, captureDistancePx, triggerDistancePx)
 
     private fun isAtBottom(): Boolean {
         val contentHeightPx = target.contentHeight * target.scale
