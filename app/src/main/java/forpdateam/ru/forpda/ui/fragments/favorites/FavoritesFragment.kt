@@ -438,7 +438,7 @@ class FavoritesFragment : RecyclerFragment() {
             )
         }
         val createChip = layoutInflater.inflate(
-                R.layout.toolbar_filter_chip, chips, false) as Chip
+                R.layout.favorites_folder_chip, chips, false) as Chip
         createChip.id = View.generateViewId()
         createChip.text = getString(R.string.fav_folder_create_chip)
         createChip.isCheckable = false
@@ -456,7 +456,7 @@ class FavoritesFragment : RecyclerFragment() {
     ) {
         val chips = folderChips ?: return
         val chip = layoutInflater.inflate(
-                R.layout.toolbar_filter_chip, chips, false) as Chip
+                R.layout.favorites_folder_chip, chips, false) as Chip
         chip.id = View.generateViewId()
         // Непрочитанное важнее общего количества: цифра на чипе отвечает на вопрос
         // «куда идти читать», поэтому при непрочитанных показываем именно их.

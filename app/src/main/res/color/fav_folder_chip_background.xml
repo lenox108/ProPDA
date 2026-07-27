@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Подложка чипа папки. Штатный Widget.Material3.Chip.Filter красит выбранный чип
+    в secondaryContainer, который в половине палитр (Nord, AMOLED, Sepia) почти совпадает
+    с фоном шапки — выбранная папка была видна только по галочке. Берём акцент палитры
+    с прозрачностью: он контрастен фону по определению, в любой теме и режиме.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:alpha="0.24"
+        android:color="?attr/colorAccent"
+        android:state_checked="true" />
+    <item android:color="?attr/content_card_surface" />
+</selector>

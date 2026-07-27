@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Чип папки избранного. Отдельный от toolbar_filter_chip (DevDB) — там чипы лежат на
+    контрастном фоне тулбара, а тут на той же плоскости, что и шапка, поэтому выбранное
+    состояние приходится подсвечивать акцентом палитры вручную.
+-->
+<com.google.android.material.chip.Chip
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/Widget.Material3.Chip.Filter"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:checkable="true"
+    android:textColor="@color/fav_folder_chip_text"
+    app:checkedIconTint="?attr/colorAccent"
+    app:chipBackgroundColor="@color/fav_folder_chip_background"
+    app:chipStrokeColor="@color/fav_folder_chip_stroke"
+    app:chipStrokeWidth="1dp" />
