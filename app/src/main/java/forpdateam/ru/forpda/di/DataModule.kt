@@ -82,6 +82,7 @@ import forpdateam.ru.forpda.model.repository.reputation.ReputationRepository
 import forpdateam.ru.forpda.model.repository.search.ForumSectionTitleIndex
 import forpdateam.ru.forpda.model.repository.search.SearchRepository
 import forpdateam.ru.forpda.model.repository.theme.ThemeRepository
+import forpdateam.ru.forpda.settingsbackup.NotesBackupStore
 import forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
 import forpdateam.ru.forpda.model.repository.topics.TopicsRepository
 import forpdateam.ru.forpda.model.NetworkStateProvider
@@ -178,6 +179,7 @@ object DataModule {
 
     @Provides @Singleton fun provideNotesCacheRoom(noteItemDao: NoteItemDao, noteFolderDao: NoteFolderDao) =
             NotesCacheRoom(noteItemDao, noteFolderDao)
+    @Provides @Singleton fun provideNotesBackupStore(database: AppDatabase) = NotesBackupStore(database)
     @Provides @Singleton fun provideHistoryCacheRoom(historyItemDao: HistoryItemDao) = HistoryCacheRoom(historyItemDao)
     @Provides @Singleton fun provideFavoritesCacheRoom(favItemDao: FavItemDao) = FavoritesCacheRoom(favItemDao)
     @Provides @Singleton fun provideForumCacheRoom(forumItemFlatDao: ForumItemFlatDao) = ForumCacheRoom(forumItemFlatDao)
