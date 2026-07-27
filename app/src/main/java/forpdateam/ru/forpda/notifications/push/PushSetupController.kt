@@ -1,20 +1,20 @@
 package forpdateam.ru.forpda.notifications.push
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.text.InputType
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import coil.request.ImageRequest
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.net.URL
 import kotlin.coroutines.resume
 
 /**
@@ -68,8 +68,7 @@ class PushSetupController(private val context: Context) {
                     while (result is AppProtocolClient.LoginResult.Captcha && attempts < 3) {
                         attempts++
                         val url = result.imageUrl
-                        val bytes = runCatching { URL(url).openStream().use { it.readBytes() } }.getOrNull()
-                        val captcha = withContext(Dispatchers.Main) { askCaptcha(bytes) }
+                        val captcha = withContext(Dispatchers.Main) { askCaptcha(url) }
                                 ?: return@use AppProtocolClient.LoginResult.Failed(-99)
                         result = client.login(creds.first, creds.second, captcha = captcha)
                     }
@@ -157,13 +156,10 @@ class PushSetupController(private val context: Context) {
                 }
             }
 
-    private suspend fun askCaptcha(imageBytes: ByteArray?): Int? =
+    private suspend fun askCaptcha(imageUrl: String): Int? =
             suspendCancellableCoroutine { cont ->
                 val pad = (context.resources.displayMetrics.density * 16).toInt()
                 val image = ImageView(context).apply {
-                    imageBytes?.let {
-                        setImageBitmap(BitmapFactory.decodeByteArray(it, 0, it.size))
-                    }
                     adjustViewBounds = true
                     layoutParams = LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -178,6 +174,14 @@ class PushSetupController(private val context: Context) {
                     addView(image)
                     addView(field)
                 }
+                // Через общий ImageLoader приложения, а не своим URL.openStream(): тот шёл мимо
+                // регулятора запросов и кук, добавлял неучтённый запрос к 4pda.to и на 429
+                // просто молча не показывал картинку.
+                ForPdaCoil.imageLoader.enqueue(
+                        ImageRequest.Builder(context)
+                                .data(ForPdaCoil.normalizeData(imageUrl))
+                                .target(image)
+                                .build())
                 MaterialAlertDialogBuilder(context)
                         .setTitle("Введите число с картинки")
                         .setView(layout)
