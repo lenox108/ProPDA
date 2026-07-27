@@ -260,9 +260,7 @@ class NewsMainFragment : RecyclerFragment(), NewsListAdapter.ItemClickListener {
                     .setImage(R.drawable.ic_toolbar_refresh)
                     .setTitle(R.string.funny_news_error_title)
                     .setDesc(R.string.funny_news_error_desc)
-                    .addIconAction(R.drawable.ic_toolbar_refresh, R.string.refresh) {
-                        presenter.refreshArticles()
-                    }
+                    .addAction(R.string.refresh) { presenter.refreshArticles() }
             contentController.addContent(funnyContent, ContentController.TAG_ERROR)
         }
         contentController.showContent(ContentController.TAG_ERROR)

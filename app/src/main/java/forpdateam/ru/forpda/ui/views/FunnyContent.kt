@@ -10,7 +10,6 @@ import androidx.appcompat.content.res.AppCompatResources
 import androidx.annotation.StringRes
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.R as MaterialR
-import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.getColorFromAttr
 import forpdateam.ru.forpda.databinding.FunnyContentBinding
 
@@ -62,29 +61,6 @@ class FunnyContent(context: Context) : RelativeLayout(context) {
             setOnClickListener(listener)
         }
         binding.funnyActions.addView(button)
-    }
-
-    /** Compact circular refresh action for error placeholders; it stays directly below the message. */
-    fun addIconAction(
-        @DrawableRes iconResId: Int,
-        @StringRes contentDescriptionResId: Int,
-        listener: View.OnClickListener,
-    ): FunnyContent = apply {
-        val size = resources.getDimensionPixelSize(R.dimen.dp48)
-        val button = MaterialButton(context, null, MaterialR.attr.materialButtonStyle).apply {
-            icon = AppCompatResources.getDrawable(context, iconResId)
-            iconPadding = 0
-            text = null
-            contentDescription = context.getString(contentDescriptionResId)
-            cornerRadius = size / 2
-            insetTop = 0
-            insetBottom = 0
-            minWidth = size
-            minHeight = size
-            setPadding(0, 0, 0, 0)
-            setOnClickListener(listener)
-        }
-        binding.funnyActions.addView(button, android.widget.LinearLayout.LayoutParams(size, size))
     }
 
     /*
