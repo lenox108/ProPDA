@@ -6,6 +6,7 @@ import android.widget.ArrayAdapter
 import forpdateam.ru.forpda.common.showSnackbar
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.entity.remote.others.user.ForumUser
@@ -20,6 +21,7 @@ class ChatThemeCreator(
 ) {
     private val viewStub: ViewStub
     private val creatorRoot: View
+    private val nickBlock: TextInputLayout
     private val nickField: MaterialAutoCompleteTextView
     private val titleField: TextInputEditText
     private var userNick: String? = presenter.nick
@@ -38,6 +40,7 @@ class ChatThemeCreator(
         viewStub.layoutInflater = android.view.LayoutInflater.from(fragment.requireContext())
         creatorRoot = viewStub.inflate()
         basePaddingTop = creatorRoot.paddingTop
+        nickBlock = fragment.findViewById(R.id.qms_theme_nick_block) as TextInputLayout
         nickField = fragment.findViewById(R.id.qms_theme_nick_field) as MaterialAutoCompleteTextView
         titleField = fragment.findViewById(R.id.qms_theme_title_field) as TextInputEditText
         applyDynamicTopInset()
@@ -76,9 +79,20 @@ class ChatThemeCreator(
         if (hasNick) {
             nickField.visibility = View.VISIBLE
             nickField.setText(userNick)
-            nickField.isEnabled = false
+            // Собеседник уже известен — поле только для чтения. isEnabled=false гасило бы его
+            // до 38% альфы (M3 disabled), поэтому снимаем ввод, а вид оставляем обычным;
+            // замок на конце поля объясняет, почему ник не редактируется.
+            nickField.keyListener = null
+            nickField.isCursorVisible = false
             nickField.isFocusable = false
+            nickField.isFocusableInTouchMode = false
             nickField.isClickable = false
+            nickBlock.endIconMode = TextInputLayout.END_ICON_CUSTOM
+            nickBlock.setEndIconDrawable(R.drawable.ic_lock)
+            nickBlock.setEndIconTintList(nickBlock.hintTextColor)
+            nickBlock.setEndIconOnClickListener(null)
+            nickBlock.isEndIconVisible = true
+            titleField.requestFocus()
             fragment.setSubtitle(userNick)
         } else {
             nickField.visibility = View.VISIBLE

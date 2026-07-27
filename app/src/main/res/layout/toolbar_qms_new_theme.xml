@@ -1,73 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Форма создания новой темы QMS. Живёт в toolbar_content-стабе, поэтому фон совпадает
+    с тулбаром (main_toolbar_accent_surface) — иначе под шапкой видна полоса другого тона.
+    Поля — M3 OutlinedBox с плавающими подписями: у них нормальные внутренние отступы
+    (у голого TextInputLayout без стиля текст прилипал к рамке).
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/colorSurface"
+    android:background="?attr/main_toolbar_accent_surface"
     android:orientation="vertical"
     android:paddingBottom="@dimen/content_block_padding_vertical"
     android:paddingEnd="@dimen/content_padding_horizontal"
     android:paddingStart="@dimen/content_padding_horizontal"
-    android:paddingTop="@dimen/content_block_padding_vertical"
+    android:paddingTop="@dimen/content_spacing"
     android:animateLayoutChanges="true">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/content_block_padding_vertical"
-        android:text="@string/user_nick"
-        android:textColor="?attr/colorOnSurfaceVariant" />
-
     <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/qms_theme_nick_block"
+        style="@style/Widget.ForPDA.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:hintEnabled="false"
-        app:boxBackgroundMode="outline"
-        app:boxBackgroundColor="?attr/colorSurface"
+        android:hint="@string/user_nick"
+        app:boxStrokeColor="@color/qms_textfield_stroke"
         app:boxStrokeWidth="1dp"
         app:boxStrokeWidthFocused="2dp"
-        app:boxStrokeColor="@color/qms_textfield_stroke">
+        app:hintTextColor="?attr/colorOnSurfaceVariant"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.ForPDA.Small"
+        app:startIconDrawable="@drawable/ic_account_circle"
+        app:startIconTint="?attr/colorOnSurfaceVariant">
 
         <com.google.android.material.textfield.MaterialAutoCompleteTextView
             android:id="@+id/qms_theme_nick_field"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint=""
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:textColorHint="@color/dialog_textinput_hint"
+            android:imeOptions="actionNext"
             android:inputType="textPersonName"
             android:maxLines="1"
-            android:scrollHorizontally="true" />
+            android:scrollHorizontally="true"
+            android:textColor="?attr/colorOnSurface"
+            android:textColorHint="?attr/colorOnSurfaceVariant" />
 
     </com.google.android.material.textfield.TextInputLayout>
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/content_block_padding_vertical"
-        android:layout_marginBottom="@dimen/content_block_padding_vertical"
-        android:text="@string/theme"
-        android:textColor="?attr/colorOnSurfaceVariant" />
-
     <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/qms_theme_title_block"
+        style="@style/Widget.ForPDA.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:hintEnabled="false"
-        app:boxBackgroundMode="outline"
-        app:boxBackgroundColor="?attr/colorSurface"
+        android:layout_marginTop="@dimen/content_spacing"
+        android:hint="@string/theme"
+        app:boxStrokeColor="@color/qms_textfield_stroke"
         app:boxStrokeWidth="1dp"
         app:boxStrokeWidthFocused="2dp"
-        app:boxStrokeColor="@color/qms_textfield_stroke">
+        app:counterEnabled="false"
+        app:hintTextColor="?attr/colorOnSurfaceVariant"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.ForPDA.Small"
+        app:startIconDrawable="@drawable/ic_qms_theme_title"
+        app:startIconTint="?attr/colorOnSurfaceVariant">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/qms_theme_title_field"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint=""
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:textColorHint="@color/dialog_textinput_hint"
-            android:inputType="text"
+            android:imeOptions="actionDone"
+            android:inputType="textCapSentences"
             android:maxLines="1"
-            android:scrollHorizontally="true" />
+            android:scrollHorizontally="true"
+            android:textColor="?attr/colorOnSurface"
+            android:textColorHint="?attr/colorOnSurfaceVariant" />
     </com.google.android.material.textfield.TextInputLayout>
 </LinearLayout>
