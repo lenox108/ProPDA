@@ -318,6 +318,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var searchScopeLabel: TextView? = null
     /** The «Искать … по всей теме →» row that hands the query to the server-side topic search. */
     private var searchAllRow: TextView? = null
+    /** Its field-shaped container (background) and the leading/trailing glyphs, tinted with the label. */
+    private var searchAllContainer: View? = null
+    private var searchAllGlyphs: List<android.widget.ImageView> = emptyList()
 
     /**
      * One find-on-page hit: [position] is its post's adapter position (poll-header offset applied),
@@ -3500,15 +3503,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val bar = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
-            setPadding(dp(4f), dp(4f), dp(4f), dp(4f))
+            setPadding(dp(8f), dp(8f), dp(8f), dp(8f))
             visibility = View.GONE
         }
         val row = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
         }
+        // The query + its scope live in ONE filled, rounded field (M3 text-field shape) instead of the
+        // bare underlined EditText — the scope line has to read as part of the field, not as a caption
+        // floating under the bar.
         val inputColumn = android.widget.LinearLayout(ctx).apply {
             orientation = android.widget.LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 10 * dm.density
+                setColor(searchFieldFill(ctx))
+            }
+            setPadding(dp(12f), dp(6f), dp(12f), dp(6f))
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -3517,6 +3528,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             textSize = 15f
             maxLines = 1
             isSingleLine = true
+            background = null // the field's fill is drawn by inputColumn — no second underline inside it
+            setPadding(0, 0, 0, 0)
             addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -3526,7 +3539,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val scope = TextView(ctx).apply {
             textSize = 11f
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
-            setPadding(dp(4f), 0, dp(4f), dp(2f))
         }
         inputColumn.addView(input)
         inputColumn.addView(scope)
@@ -3536,29 +3548,64 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             val ph = dp(8f)
             setPadding(ph, 0, ph, 0)
         }
-        fun iconBtn(label: String, onClick: () -> Unit) = TextView(ctx).apply {
-            text = label
-            textSize = 18f
-            setTextColor(accent)
-            setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
-            setOnClickListener { onClick() }
-        }
+        val rippleAttrs = ctx.obtainStyledAttributes(
+                intArrayOf(android.R.attr.selectableItemBackgroundBorderless))
+        val rippleRes = rippleAttrs.getResourceId(0, 0)
+        rippleAttrs.recycle()
+        fun iconBtn(iconRes: Int, description: String, onClick: () -> Unit) =
+                android.widget.ImageView(ctx).apply {
+                    setImageDrawable(androidx.core.content.ContextCompat.getDrawable(ctx, iconRes)?.mutate())
+                    imageTintList = android.content.res.ColorStateList.valueOf(accent)
+                    contentDescription = description
+                    setPadding(dp(9f), dp(9f), dp(9f), dp(9f))
+                    if (rippleRes != 0) setBackgroundResource(rippleRes)
+                    layoutParams = android.widget.LinearLayout.LayoutParams(dp(40f), dp(40f))
+                    setOnClickListener { onClick() }
+                }
         row.addView(inputColumn)
         row.addView(count)
-        row.addView(iconBtn("↑") { stepMatch(-1) })
-        row.addView(iconBtn("↓") { stepMatch(1) })
-        row.addView(iconBtn("✕") { closeSearch() })
-        val searchAll = TextView(ctx).apply {
-            textSize = 12f
-            setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+        row.addView(iconBtn(forpdateam.ru.forpda.R.drawable.ic_toolbar_search_prev, "Предыдущее совпадение") {
+            stepMatch(-1)
+        })
+        row.addView(iconBtn(forpdateam.ru.forpda.R.drawable.ic_toolbar_search_next, "Следующее совпадение") {
+            stepMatch(1)
+        })
+        row.addView(iconBtn(forpdateam.ru.forpda.R.drawable.ic_close, "Закрыть поиск") { closeSearch() })
+        // «Искать по всей теме» is shaped like the query field itself — same rounded box, leading search
+        // glyph, trailing «→» — so it reads as the SECOND field of the same bar: the place the search
+        // continues when the loaded pages run out, not a caption under the panel.
+        val searchAllRowView = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(12f), dp(9f), dp(12f), dp(9f))
+            isClickable = true
             setOnClickListener { openTopicSearchWithCurrentQuery() }
             layoutParams = android.widget.LinearLayout.LayoutParams(
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(4f) }
+            ).apply { topMargin = dp(6f) }
         }
+        val searchAllIcon = android.widget.ImageView(ctx).apply {
+            setImageDrawable(androidx.core.content.ContextCompat
+                    .getDrawable(ctx, forpdateam.ru.forpda.R.drawable.ic_toolbar_search)?.mutate())
+            layoutParams = android.widget.LinearLayout.LayoutParams(dp(18f), dp(18f))
+                    .apply { marginEnd = dp(10f) }
+        }
+        val searchAll = TextView(ctx).apply {
+            textSize = 13f
+            layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val searchAllArrow = android.widget.ImageView(ctx).apply {
+            setImageDrawable(androidx.core.content.ContextCompat
+                    .getDrawable(ctx, forpdateam.ru.forpda.R.drawable.ic_arrow_right)?.mutate())
+            layoutParams = android.widget.LinearLayout.LayoutParams(dp(18f), dp(18f))
+        }
+        searchAllRowView.addView(searchAllIcon)
+        searchAllRowView.addView(searchAll)
+        searchAllRowView.addView(searchAllArrow)
         bar.addView(row)
-        bar.addView(searchAll)
+        bar.addView(searchAllRowView)
         // Add the bar to the app bar, right below the toolbar, pinned (no scroll flags) — parity with the
         // WebView find-on-page bar, which sits at the top. Hidden (GONE) it takes no space.
         appBarLayout.addView(bar, com.google.android.material.appbar.AppBarLayout.LayoutParams(
@@ -3570,6 +3617,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         searchCountLabel = count
         searchScopeLabel = scope
         searchAllRow = searchAll
+        searchAllContainer = searchAllRowView
+        searchAllGlyphs = listOf(searchAllIcon, searchAllArrow)
         renderSearchChrome()
         return bar
     }
@@ -3645,19 +3694,39 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         searchAllRow?.let { row ->
             val ctx = row.context
             val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-            row.text = if (empty) "Искать «$q» по всей теме  →" else "Искать по всей теме  →"
-            row.setTextColor(if (empty) accent else ctx.getColorFromAttr(
-                    com.google.android.material.R.attr.colorOnSurfaceVariant))
-            row.background = if (empty) {
-                android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = 8 * ctx.resources.displayMetrics.density
+            val tint = if (empty) accent else ctx.getColorFromAttr(
+                    com.google.android.material.R.attr.colorOnSurfaceVariant)
+            row.text = if (empty) "Искать «$q» по всей теме" else "Искать по всей теме"
+            row.setTextColor(tint)
+            searchAllGlyphs.forEach { it.imageTintList = android.content.res.ColorStateList.valueOf(tint) }
+            // Quiet field by default, accent-filled the moment the local pass finds nothing — exactly when
+            // it stops being an option and becomes the next step.
+            searchAllContainer?.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 10 * ctx.resources.displayMetrics.density
+                if (empty) {
                     setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x33))
+                    setStroke((ctx.resources.displayMetrics.density).toInt().coerceAtLeast(1), accent)
+                } else {
+                    setColor(searchFieldFill(ctx))
                 }
-            } else {
-                null
             }
         }
     }
+
+    /**
+     * Fill for the query field / «по всей теме» chip inside the search bar.
+     *
+     * NOT a bare M3 attr: the dark and AMOLED skins pin `colorSurfaceContainer*` to the SAME value as the
+     * bar's own `colorSurfaceContainerHighest`, so a field painted with the attr vanished into the panel
+     * (the same trap [BodyBlockViewFactory.blockFillColor] documents for quotes). Blending the bar surface
+     * one step toward the content colour guarantees a visible delta on every palette.
+     */
+    private fun searchFieldFill(ctx: android.content.Context): Int = androidx.core.graphics.ColorUtils
+            .blendARGB(
+                    ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest),
+                    ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface),
+                    SEARCH_FIELD_TONAL_STEP,
+            )
 
     /** «на странице 412» / «на странице · загружено 412–413» — the honest boundary of the local search. */
     private fun loadedPagesScopeLabel(): String {
@@ -3737,10 +3806,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick = "", query = q)
     }
 
-    /** Re-index the open find-on-page bar after [loadedItems] changed (page appended / prepended / edit). */
+    /**
+     * Re-index the open find-on-page bar after [loadedItems] changed (page appended / prepended / edit).
+     *
+     * The scope line is refreshed even with an EMPTY query: it states which pages are loaded, and that
+     * grows with infinite scroll whether or not something is typed. Gating the whole refresh on a
+     * non-blank query left «загружено 1–2» frozen while the reader scrolled on into page 3 (user report).
+     */
     private fun refreshSearchMatchesIfOpen() {
         if (searchBar?.visibility != View.VISIBLE) return
-        if (searchInput?.text.isNullOrBlank()) return
+        if (searchInput?.text.isNullOrBlank()) {
+            renderSearchChrome()
+            return
+        }
         recomputeSearchMatches(jumpToFirst = false)
     }
 
@@ -5352,6 +5430,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
         /** Where down the viewport the active occurrence is parked — clear of the pinned search bar. */
         const val ACTIVE_MATCH_SCREEN_FRACTION = 0.3f
+
+        /** How far the search field/chip fill is nudged off the bar surface (see searchFieldFill). */
+        const val SEARCH_FIELD_TONAL_STEP = 0.08f
 
         /** `topicOpenSource` values that mean «opened from an external list», not an in-topic link tap.
          *  Reusing the topic tab for one of these must NOT push in-tab Back history — Back should exit the
