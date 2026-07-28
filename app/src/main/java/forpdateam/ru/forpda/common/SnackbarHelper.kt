@@ -1,7 +1,9 @@
 package forpdateam.ru.forpda.common
 
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.view.ContextThemeWrapper
@@ -185,8 +187,24 @@ private fun Snackbar.applyNavigationBarInset(anchor: View): Snackbar {
         return this
     }
 
-    // Клавиатура открыта (снэк держим над IME) либо таббара нет (полноэкранные
-    // экраны) — поднимаем маржином на величину нижнего chrome + системного навбара.
+    // Клавиатура открыта (снэк держим над IME) либо таббара нет (экран настроек и
+    // прочие полноэкранные) — якорим снэк к невидимой распорке высотой с нижний
+    // системный бар / IME.
+    //
+    // Ручная маржин-математика здесь НЕ работает: Material в updateMargins()
+    // ПЕРЕЗАПИСЫВАЕТ bottomMargin (= originalMargins.bottom + extraBottomMargin…,
+    // проверено по байткоду material 1.13.0), затирая всё, что мы дописали в
+    // doOnAttach. А собственный инсет-слушатель снэка на экране настроек давал
+    // ноль — при трёхкнопочной навигации плашка уезжала ПОД кнопки (репро на
+    // эмуляторе + скриншот владельца с Xiaomi). Через anchorView Material считает
+    // отступ по координатам на экране и наш dp уже не теряет.
+    val spacer = anchor.ensureBottomInsetSpacer()
+    if (spacer != null) {
+        setAnchorView(spacer)
+        return this
+    }
+
+    // Крайний случай: не нашли content-контейнер, чтобы повесить распорку.
     view.doOnAttach { snackbarView ->
         val bottomInset = anchor.transientMessageBottomOffsetPx()
         if (bottomInset <= 0) return@doOnAttach
@@ -197,6 +215,33 @@ private fun Snackbar.applyNavigationBarInset(anchor: View): Snackbar {
     }
     return this
 }
+
+/**
+ * Невидимая распорка в `android.R.id.content` высотой с нижние системные бары (или IME):
+ * её верхняя граница — та линия, выше которой должен встать снэкбар. Живёт одна на активити,
+ * переиспользуется и пересчитывается на каждый показ. `INVISIBLE` (не `GONE`) — вью должна
+ * участвовать в разметке, чтобы у неё были координаты, но при этом не ловить касания.
+ */
+private fun View.ensureBottomInsetSpacer(): View? {
+    val content = rootView?.findViewById<View>(android.R.id.content) as? FrameLayout ?: return null
+    val height = transientMessageBottomOffsetPx()
+    if (height <= 0) return null
+
+    val existing = content.findViewWithTag<View>(BOTTOM_INSET_SPACER_TAG)
+    val spacer = existing ?: View(context).apply {
+        tag = BOTTOM_INSET_SPACER_TAG
+        visibility = View.INVISIBLE
+        isClickable = false
+        isFocusable = false
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        content.addView(this)
+    }
+    spacer.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM)
+    return spacer
+}
+
+private const val BOTTOM_INSET_SPACER_TAG = "forpda_snackbar_bottom_inset_spacer"
 
 private fun View.isImeVisible(): Boolean =
         ViewCompat.getRootWindowInsets(this)?.isVisible(WindowInsetsCompat.Type.ime()) == true
