@@ -37,7 +37,11 @@ class DevicesAdapter(
 
         override fun bind(item: ProfileModel.Device) {
             currentItem = item
-            binding.itemTitle.text = "${item.name} ${item.accessory}"
+            // Аксессуара может не быть, а имя — прийти пустым: клеить строку
+            // шаблоном нельзя, иначе в карточке остаётся пустая строка (или «null null»).
+            binding.itemTitle.text = listOfNotNull(item.name, item.accessory)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
         }
 
         interface Listener {
