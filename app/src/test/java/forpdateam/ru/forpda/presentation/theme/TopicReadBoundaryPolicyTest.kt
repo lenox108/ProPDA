@@ -138,4 +138,57 @@ class TopicReadBoundaryPolicyTest {
     fun crossDevice_invalidServerPage_detectorOff() {
         assertFalse(TopicReadBoundaryPolicy.isCrossDeviceReadProgress(serverAnchorPage = 0, maxLoadedPage = 87))
     }
+
+    // --- Граница догнала максимум загруженного: пропускать нечего, резюм назад не нужен ---
+
+    @Test
+    fun boundaryReachedMaxLoaded_trustsServer() {
+        // Юзер дочитал страницу до конца: граница == самый дальний загруженный пост. Сервер увёл на
+        // первый пост следующей страницы — это и есть первый непрочитанный, пропущенного нет.
+        assertNull(TopicReadBoundaryPolicy.resumeAnchorPostId(
+                boundaryPostId = 500,
+                serverAnchorPostId = 600,
+                lastLoadedPostId = 700,
+                boundaryPostOnPage = false,
+                maxLoadedPostId = 500,
+        ))
+    }
+
+    @Test
+    fun boundaryBelowMaxLoaded_stillResumes() {
+        // Юзер остановился В СЕРЕДИНЕ загруженного (предзагрузка/скролл ушли дальше глаз) — между
+        // границей и серверным якорем есть не показанные посты, защита от walk-down обязана работать.
+        assertEquals(500, TopicReadBoundaryPolicy.resumeAnchorPostId(
+                boundaryPostId = 500,
+                serverAnchorPostId = 600,
+                lastLoadedPostId = 700,
+                boundaryPostOnPage = false,
+                maxLoadedPostId = 550,
+        ))
+    }
+
+    @Test
+    fun boundaryReachedMaxLoaded_unknownMaxLoaded_checkOff() {
+        // Старые записи до Room v2 / холодный кэш (maxLoadedPostId=0) → проверка выключена, прежнее поведение.
+        assertEquals(500, TopicReadBoundaryPolicy.resumeAnchorPostId(
+                boundaryPostId = 500,
+                serverAnchorPostId = 600,
+                lastLoadedPostId = 700,
+                boundaryPostOnPage = false,
+                maxLoadedPostId = 0,
+        ))
+    }
+
+    @Test
+    fun boundaryReachedMaxLoaded_coversCrossDeviceOnePageAndFinishedTopic() {
+        // Пробел кросс-девайс-детекта: «+1 страница» и «на другом устройстве дочитали до конца» (сервер
+        // отдаёт нижнюю закладку, номер страницы не убегает) — оба случая теперь разруливаются по постам.
+        assertNull(TopicReadBoundaryPolicy.resumeAnchorPostId(
+                boundaryPostId = 900,
+                serverAnchorPostId = null, // all-read: сервер сажает на низ загруженного окна
+                lastLoadedPostId = 1200,
+                boundaryPostOnPage = false,
+                maxLoadedPostId = 900,
+        ))
+    }
 }

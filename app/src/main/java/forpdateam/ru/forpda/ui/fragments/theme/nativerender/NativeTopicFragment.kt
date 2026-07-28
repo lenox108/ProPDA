@@ -4919,6 +4919,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 lastLoadedPostId = lastLoadedId,
                 firstUnseenPostId = firstUnseenId,
                 boundaryPostOnPage = boundaryOnPage,
+                maxLoadedPostId = readBoundaryStore.maxLoadedPostId(page.id),
         ) ?: return false
         // Резюм — findpost на границу. Гасим «в конец/на верх», чтобы вложенная загрузка села на границу.
         pendingJumpToBottom = false

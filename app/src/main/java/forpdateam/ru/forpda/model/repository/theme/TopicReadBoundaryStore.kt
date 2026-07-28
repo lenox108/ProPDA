@@ -50,6 +50,9 @@ class TopicReadBoundaryStore @Inject constructor(
     /** Самая дальняя страница, которую ЭТО устройство хотя бы загружало (0 = неизвестно). */
     fun maxLoadedPage(topicId: Int): Int = get(topicId)?.maxLoadedPage ?: 0
 
+    /** Самый дальний пост, который ЭТО устройство хотя бы загружало (0 = неизвестно). */
+    fun maxLoadedPostId(topicId: Int): Int = get(topicId)?.maxLoadedPostId ?: 0
+
     /**
      * Двигает границу вверх, если [postId] новее (больше) сохранённого. No-op при откате/невалидном id.
      * Поля [TopicReadBoundaryRoom.maxLoadedPostId]/[TopicReadBoundaryRoom.maxLoadedPage] сохраняем
