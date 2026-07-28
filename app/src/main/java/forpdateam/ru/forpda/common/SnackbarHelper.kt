@@ -4,9 +4,11 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.TextView
 import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.view.ContextThemeWrapper
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
@@ -15,6 +17,7 @@ import androidx.fragment.app.Fragment
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.snackbar.Snackbar
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.appicon.AppIconManager
 import timber.log.Timber
 import kotlin.math.max
 
@@ -108,7 +111,33 @@ fun View.makeSnackbarAboveSystemBars(
     val themed = snackbarThemedContext(forceAppTheme)
     return Snackbar.make(themed, this, message, duration)
             .applyThemedSurfaceColors(themed)
+            .applyAppIcon()
             .applyNavigationBarInset(this)
+}
+
+/**
+ * Значок приложения слева от текста — тот же, что рисует [AppToast], чтобы всплывающие
+ * сообщения выглядели одинаково независимо от того, каким виджетом их показали (снэкбар
+ * или аварийный тост) и на каком устройстве. Иконка берётся из выбранного пользователем
+ * лаунчер-алиаса ([AppIconManager]), поэтому следует за настройкой «Иконка приложения».
+ *
+ * У Material-снэкбара нет слота под иконку, поэтому вешаем её compound-drawable'ом на
+ * текстовую вью — так она центрируется по тексту и корректно ведёт себя при двух строках.
+ * Любая ошибка тут не должна ронять показ сообщения, отсюда runCatching.
+ */
+private fun Snackbar.applyAppIcon(): Snackbar {
+    runCatching {
+        val label = view.findViewById<TextView>(
+                com.google.android.material.R.id.snackbar_text) ?: return this
+        val density = view.resources.displayMetrics.density
+        val size = (24f * density).toInt()
+        val icon = ContextCompat.getDrawable(view.context, AppIconManager.selected(view.context).iconRes)
+                ?: return this
+        icon.setBounds(0, 0, size, size)
+        label.setCompoundDrawablesRelative(icon, null, null, null)
+        label.compoundDrawablePadding = (12f * density).toInt()
+    }
+    return this
 }
 
 /**
