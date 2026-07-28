@@ -43,6 +43,10 @@ public class ProKeyGen {
         }
         switch (args[0]) {
             case "genkey" -> genkey(args.length > 1 ? args[1] : "propda_pro_private.key");
+            case "raw" -> {
+                if (args.length < 2) { usage(); return; }
+                System.out.println(signWith(KEY_FILE, args[1]));
+            }
             case "issue" -> {
                 if (args.length < 2) {
                     usage();
@@ -66,6 +70,7 @@ public class ProKeyGen {
                 ProPDA Pro — генератор ключей активации
 
                   issue <id>                 выдать ключ: ник + журнал + буфер обмена
+                  raw <id>                   напечатать только ключ (для приложения)
                   genkey [файл]              создать пару ключей (делается ОДИН раз)
                   sign <файл_ключа> <id>     только подписать, без журнала
 
