@@ -21,6 +21,10 @@ class TopicPreferencesHolder(
 
     fun observeHighlightUnreadPostFlow(): Flow<Boolean> = dataStore.observeHighlightUnreadPostFlow()
 
+    fun observeHideLowRatedPostsFlow(): Flow<Boolean> = dataStore.observeHideLowRatedPostsFlow()
+
+    fun observeLowRatingThresholdFlow(): Flow<Int> = dataStore.observeLowRatingThresholdFlow()
+
     fun observeForumBlacklistFlow(): Flow<List<ForumBlacklistedUser>> = dataStore.observeForumBlacklistFlow()
 
     fun getShowAvatars(): Boolean = dataStore.getShowAvatarsImmediate()
@@ -34,6 +38,10 @@ class TopicPreferencesHolder(
     fun getModernPostHeader(): Boolean = dataStore.getModernPostHeaderImmediate()
 
     fun getHighlightUnreadPost(): Boolean = dataStore.getHighlightUnreadPostImmediate()
+
+    fun getHideLowRatedPosts(): Boolean = dataStore.getHideLowRatedPostsImmediate()
+
+    fun getLowRatingThreshold(): Int = dataStore.getLowRatingThresholdImmediate()
 
     fun getForumBlacklist(): List<ForumBlacklistedUser> = dataStore.getForumBlacklistImmediate()
 
@@ -58,6 +66,10 @@ class TopicPreferencesHolder(
     suspend fun setModernPostHeader(value: Boolean) = dataStore.setModernPostHeader(value)
 
     suspend fun setHighlightUnreadPost(value: Boolean) = dataStore.setHighlightUnreadPost(value)
+
+    suspend fun setHideLowRatedPosts(value: Boolean) = dataStore.setHideLowRatedPosts(value)
+
+    suspend fun setLowRatingThreshold(value: Int) = dataStore.setLowRatingThreshold(value)
 
     suspend fun setAnchorHistory(value: Boolean) = dataStore.setAnchorHistory(value)
 

@@ -50,6 +50,8 @@ class TopicPostsAdapter(
         fun onPostMenu(item: NativePostItem)
         /** The user tapped the «Шапка темы» collapse header → toggle the hat body. */
         fun onToggleHat()
+        /** Тап по плашке свёрнутого заминусованного поста → раскрыть его ([expand] = false → свернуть). */
+        fun onToggleLowRatedPost(item: NativePostItem, expand: Boolean)
         /** Long-press on a spoiler header → copy a deep link to that spoiler ([spoilNumber] is 1-based). */
         fun onSpoilerCopyLink(item: NativePostItem, spoilNumber: Int)
         /** Tap on an attachment image → open the swipeable image viewer over [galleryUrls] at [index]
@@ -93,6 +95,10 @@ class TopicPostsAdapter(
              * «Добавлено …» timestamps inside the post body.
              */
             val modernHeader: Boolean = false,
+            /** «Скрывать посты с низким рейтингом»: сворачивать заминусованные посты в плашку. */
+            val hideLowRatedPosts: Boolean = false,
+            /** Порог рейтинга для сворачивания («−1 и ниже» … «−10 и ниже»). */
+            val lowRatingThreshold: Int = LowRatedPostPolicy.DEFAULT_THRESHOLD,
     )
 
     private var displaySettings = PostDisplaySettings()
@@ -175,6 +181,30 @@ class TopicPostsAdapter(
     private val spoilerStates = HashMap<String, Boolean>()
 
     /**
+     * Посты, которые пользователь раскрыл вручную из плашки «низкий рейтинг», плюс те, на которые мы
+     * сами навели (переход по ссылке/упоминанию/цитате, посадка на непрочитанное, свежеотправленный
+     * пост) — показывать цель перехода заглушкой было бы издевательством.
+     *
+     * Живёт в адаптере, как [spoilerStates]: переживает переиспользование холдеров, догрузку страниц
+     * гибридным скроллом и DiffUtil-обновления, но сбрасывается при выходе из темы — как и на сайте.
+     */
+    private val lowRatingExpandedPostIds = HashSet<Int>()
+
+    /** Раскрыть свёрнутый заминусованный пост (тап по плашке / наведение на пост-цель). */
+    fun expandLowRatedPost(postId: Int) {
+        if (postId <= 0 || !lowRatingExpandedPostIds.add(postId)) return
+        val pos = currentList.indexOfFirst { it.postId == postId }
+        if (pos >= 0) notifyItemChanged(pos)
+    }
+
+    /** Свернуть обратно вручную раскрытый пост (ссылка «Свернуть» в его подвале). */
+    fun collapseLowRatedPost(postId: Int) {
+        if (!lowRatingExpandedPostIds.remove(postId)) return
+        val pos = currentList.indexOfFirst { it.postId == postId }
+        if (pos >= 0) notifyItemChanged(pos)
+    }
+
+    /**
      * The post to flash on open (target of a link/find/unread open), plus the wall-clock DEADLINE until
      * which the flash stays active. Tracking a deadline (not a one-shot boolean consumed on first bind)
      * makes the highlight survive the re-binds that happen right after open — the deferred
@@ -190,6 +220,9 @@ class TopicPostsAdapter(
     fun requestHighlight(postId: Int) {
         highlightTargetPostId = postId
         highlightDeadlineUptime = android.os.SystemClock.uptimeMillis() + HIGHLIGHT_TOTAL_MS
+        // Подсвечиваем всегда именно ЦЕЛЬ перехода — значит она должна быть раскрыта, даже если
+        // заминусована (иначе вспышка приходится на плашку «Показать»).
+        lowRatingExpandedPostIds.add(postId)
         val pos = currentList.indexOfFirst { it.postId == postId }
         if (pos >= 0) notifyItemChanged(pos)
     }
@@ -213,8 +246,29 @@ class TopicPostsAdapter(
         // The «Страница N» divider label is baked into the item at list assembly (see the fragment), so
         // DiffUtil rebinds the boundary post when a prepended page shifts it. Never on the hat.
         val pageDivider = item.pageDividerLabel?.takeIf { !isHat }
-        holder.bind(item, highlightRemainingMs, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider,
-                activeMatch?.takeIf { it.scopeId == item.postId })
+        val lowRatedCollapsed = LowRatedPostPolicy.shouldCollapse(
+                enabled = displaySettings.hideLowRatedPosts,
+                threshold = displaySettings.lowRatingThreshold,
+                postRating = item.postRating,
+                isOwnPost = LowRatedPostPolicy.isOwnPost(item.userId, authorized, memberId),
+                isHat = isHat,
+                manuallyExpanded = lowRatingExpandedPostIds.contains(item.postId),
+        )
+        // «Свернуть» показываем у ЛЮБОГО раскрытого поста, который иначе был бы свёрнут — и после тапа по
+        // плашке, и после посадки на него по ссылке. Иначе у авто-раскрытого поста не было бы пути назад.
+        val lowRatedExpandable = displaySettings.hideLowRatedPosts &&
+                !lowRatedCollapsed &&
+                lowRatingExpandedPostIds.contains(item.postId) &&
+                LowRatedPostPolicy.shouldCollapse(
+                        enabled = true,
+                        threshold = displaySettings.lowRatingThreshold,
+                        postRating = item.postRating,
+                        isOwnPost = LowRatedPostPolicy.isOwnPost(item.userId, authorized, memberId),
+                        isHat = isHat,
+                        manuallyExpanded = false,
+                )
+        holder.bind(item, highlightRemainingMs, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId,
+                pageDivider, activeMatch?.takeIf { it.scopeId == item.postId }, lowRatedCollapsed, lowRatedExpandable)
     }
 
     class PostViewHolder(
@@ -241,6 +295,12 @@ class TopicPostsAdapter(
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
         private val hatToggle: LinearLayout = itemView.findViewById(R.id.native_post_hat_toggle)
+        /** Однострочная плашка вместо свёрнутого заминусованного поста (GONE у обычных постов). */
+        private val lowRatingStub: LinearLayout = itemView.findViewById(R.id.native_post_low_rating_stub)
+        private val lowRatingIcon: ImageView = itemView.findViewById(R.id.native_post_low_rating_icon)
+        private val lowRatingLabel: TextView = itemView.findViewById(R.id.native_post_low_rating_label)
+        private val lowRatingValue: TextView = itemView.findViewById(R.id.native_post_low_rating_value)
+        private val lowRatingAction: TextView = itemView.findViewById(R.id.native_post_low_rating_action)
         private val pageDivider: TextView = itemView.findViewById(R.id.native_post_page_divider)
         /** The surface card inside the transparent wrapper — bg/highlight/density apply HERE, so the
          *  «Страница N» divider (a sibling above it) stays on the neutral list background. */
@@ -354,6 +414,8 @@ class TopicPostsAdapter(
                 memberId: Int = 0,
                 pageDividerLabel: String? = null,
                 activeMatch: BodyBlockViewFactory.ActiveMatch? = null,
+                lowRatedCollapsed: Boolean = false,
+                lowRatedExpandable: Boolean = false,
         ) {
             pageDivider.text = pageDividerLabel.orEmpty()
             pageDivider.visibility = if (pageDividerLabel != null) View.VISIBLE else View.GONE
@@ -386,9 +448,9 @@ class TopicPostsAdapter(
             bindRepBadge(item)
             bindPostCount(item)
             bindPostMenu(item)
-            bindFooter(item)
+            bindFooter(item, lowRatedExpandable)
             bindAuthorActions(item)
-            renderBody(item, isHat, hatCollapsed)
+            renderBody(item, isHat, hatCollapsed, lowRatedCollapsed)
             bindHatToggle(isHat, hatCollapsed)
             // Topic hat (WebView parity): the «ШАПКА ТЕМЫ» toggle bar is rendered ABOVE the author header
             // as a standalone block, and the whole post below it (author header + body + footer + actions)
@@ -406,10 +468,49 @@ class TopicPostsAdapter(
                 val top = if (hatFolded) 0 else (topDp * itemView.resources.displayMetrics.density).toInt()
                 if (lp.topMargin != top) { lp.topMargin = top; body.layoutParams = lp }
             }
+            // Свёрнутый заминусованный пост: плашка ВМЕСТО всего содержимого карточки. Ставится после
+            // блока шапки темы, чтобы перебить его видимости (шапку мы не сворачиваем, но порядок важен).
+            bindLowRatingStub(item, lowRatedCollapsed)
+            if (lowRatedCollapsed) {
+                header.visibility = View.GONE
+                body.visibility = View.GONE
+                footer.visibility = View.GONE
+                actions.visibility = View.GONE
+            }
             if (wantHighlight && !keepHighlight) {
                 highlightingPostId = item.postId
                 playHighlight(highlightRemainingMs)
             }
+        }
+
+        /**
+         * Плашка «пост скрыт из-за низкого рейтинга»: [иконка] ник · #N — рейтинг — «Показать».
+         * Тап по ВСЕЙ строке разворачивает пост (не только по слову «Показать»), иначе на неё пришлось бы
+         * прицеливаться.
+         */
+        private fun bindLowRatingStub(item: NativePostItem, collapsed: Boolean) {
+            if (!collapsed) {
+                lowRatingStub.visibility = View.GONE
+                lowRatingStub.setOnClickListener(null)
+                return
+            }
+            val ctx = itemView.context
+            lowRatingStub.visibility = View.VISIBLE
+            lowRatingLabel.text = ctx.getString(
+                    R.string.low_rated_post_stub_label,
+                    item.nick.orEmpty(),
+                    item.number)
+            lowRatingLabel.textSize = scaledSp(12f)
+            lowRatingValue.text = PostRatingFormatter.normalize(item.postRating).orEmpty()
+            lowRatingValue.textSize = scaledSp(12f)
+            lowRatingAction.textSize = scaledSp(12f)
+            lowRatingAction.setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
+            lowRatingIcon.setColorFilter(
+                    ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            val expand = View.OnClickListener { actionListener.onToggleLowRatedPost(item, expand = true) }
+            lowRatingStub.isClickable = true
+            lowRatingStub.setOnClickListener(expand)
+            lowRatingAction.setOnClickListener(expand)
         }
 
         /** Populate/toggle the standalone «ШАПКА ТЕМЫ ▾/▴» bar shown above the hat post (GONE otherwise). */
@@ -785,18 +886,18 @@ class TopicPostsAdapter(
             menuInline.setOnClickListener(open)
         }
 
-        private fun bindFooter(item: NativePostItem) {
+        private fun bindFooter(item: NativePostItem, lowRatedExpandable: Boolean = false) {
             // The post rating now lives inline in the action row (between 👍/👎), matching WebView,
             // so the separate footer text is unused.
             footer.visibility = View.GONE
-            bindActions(item)
+            bindActions(item, lowRatedExpandable)
         }
 
         /**
          * Post action row matching the WebView footer: 👍-icon · rating · 👎-icon · ↩-icon «Ответить» ·
          * ❝-icon «Цитировать». Icons are tinted with the accent colour; taps route to the fragment.
          */
-        private fun bindActions(item: NativePostItem) {
+        private fun bindActions(item: NativePostItem, lowRatedExpandable: Boolean = false) {
             actions.removeAllViews()
             // Resolve 👍/👎 visibility with the same fallback logic as the WebView (mobile HTML omits
             // the rating metadata, so a quotable non-own post still gets the controls).
@@ -835,6 +936,17 @@ class TopicPostsAdapter(
                 // Right group: reply (speech bubble) · quote (⇄) — ICONS ONLY, exact WebView icons.
                 actions.addView(iconAction(R.drawable.ic_post_reply, null) { actionListener.onReply(item) })
                 actions.addView(iconAction(R.drawable.ic_post_quote, null) { actionListener.onQuote(item) })
+            }
+            // «Свернуть» — обратный ход для поста, который пользователь сам раскрыл из плашки низкого
+            // рейтинга. Без цитирования справа спейсера ещё не было — добавляем, чтобы ссылка встала к краю.
+            if (lowRatedExpandable) {
+                if (!item.canQuote) {
+                    actions.addView(View(itemView.context), LinearLayout.LayoutParams(0,
+                            LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+                }
+                actions.addView(textAction(itemView.context.getString(R.string.low_rated_post_hide)) {
+                    actionListener.onToggleLowRatedPost(item, expand = false)
+                })
             }
             actions.visibility = if (actions.childCount > 0) View.VISIBLE else View.GONE
         }
@@ -884,6 +996,25 @@ class TopicPostsAdapter(
             }
         }
 
+        /** Текстовое действие в подвале поста (без иконки) — акцентная ссылка вроде «Свернуть». */
+        private fun textAction(label: String, onClick: () -> Unit): TextView {
+            val ctx = itemView.context
+            val dm = ctx.resources.displayMetrics
+            val superCompact =
+                    settings.density == forpdateam.ru.forpda.common.Preferences.Main.TopicPostDensity.SUPER_COMPACT
+            return TextView(ctx).apply {
+                text = label
+                textSize = scaledSp(13f)
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
+                val padH = (8 * dm.density).toInt()
+                val padV = ((if (superCompact) 2 else 5) * dm.density).toInt()
+                setPadding(padH, padV, padH, padV)
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setOnClickListener { onClick() }
+            }
+        }
+
         /** The post-rating number shown between the 👍/👎 vote icons. */
         private fun ratingLabel(rating: String): TextView {
             val ctx = itemView.context
@@ -906,12 +1037,20 @@ class TopicPostsAdapter(
             return GroupColorHarmonizer.parse(raw, night)
         }
 
-        private fun renderBody(item: NativePostItem, isHat: Boolean = false, hatCollapsed: Boolean = false) {
+        private fun renderBody(
+                item: NativePostItem,
+                isHat: Boolean = false,
+                hatCollapsed: Boolean = false,
+                lowRatedCollapsed: Boolean = false,
+        ) {
             body.removeAllViews()
             // The «ШАПКА ТЕМЫ» toggle is no longer rendered inside the body — it sits above the whole post
             // (see bindHatToggle). A collapsed hat hides the body entirely, so skip rendering its (often
             // huge) content until it's expanded.
             if (isHat && hatCollapsed) return
+            // То же для свёрнутого заминусованного поста: тело не рисуем вовсе, пока его не раскрыли —
+            // иначе сворачивание не экономило бы ни разметку, ни загрузку картинок.
+            if (lowRatedCollapsed) return
             blockFactory.textScale = settings.textScale
             blockFactory.searchQuery = searchQuery
             blockFactory.activeMatch = activeMatch

@@ -332,6 +332,23 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.HIDE_LOW_RATED_POSTS) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setHideLowRatedPosts(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.LOW_RATING_THRESHOLD) {
+            val threshold = forpdateam.ru.forpda.ui.fragments.theme.nativerender.LowRatedPostPolicy
+                    .normalizeThreshold(sharedPrefs.getString(key, null))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setLowRatingThreshold(threshold)
+                }
+            }
+        }
         if (key == AppUpdatePreferences.KEY_CHECK_ENABLED) {
             appUpdatePreferences.setCheckEnabled(sharedPrefs.getBoolean(key, true))
             appUpdateScheduler.reschedule()
@@ -434,6 +451,11 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = topicHolder.getModernPostHeader()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.HIGHLIGHT_UNREAD_POST)
                 ?.isChecked = topicHolder.getHighlightUnreadPost()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.HIDE_LOW_RATED_POSTS)
+                ?.isChecked = topicHolder.getHideLowRatedPosts()
+            // ListPreference.value рисует summary («−3 и ниже») сам через %s — достаточно выставить значение.
+            findPreference<ListPreference>(Preferences.Theme.LOW_RATING_THRESHOLD)
+                ?.value = topicHolder.getLowRatingThreshold().toString()
             // Lists preferences
             val listsHolder = forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder(requireContext())
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Lists.Topic.UNREAD_TOP)

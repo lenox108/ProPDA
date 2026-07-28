@@ -183,3 +183,6 @@ bugreport-*
 # Приватный ключ подписи ProPDA Pro — НИКОГДА не коммитить
 *propda_pro_private.key
 *.p8
+
+# Симлинк на каталог с ключами в worktree-сессиях (сам каталог уже игнорируется как signing/)
+signing

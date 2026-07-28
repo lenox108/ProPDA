@@ -56,6 +56,60 @@
             android:gravity="center_vertical"
             android:visibility="gone" />
 
+        <!-- Свёрнутый заминусованный пост («Скрывать посты с низким рейтингом»). Плашка занимает место
+             ВСЕГО поста: шапка/тело/действия при этом GONE, а сам элемент остаётся в списке, поэтому
+             цитаты, переходы по ссылке на пост, нумерация и граница прочитанного не ломаются.
+             Тап по всей строке разворачивает пост. GONE для обычных постов. -->
+        <LinearLayout
+            android:id="@+id/native_post_low_rating_stub"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:baselineAligned="false"
+            android:minHeight="28dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/native_post_low_rating_icon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginEnd="8dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_visibility_off" />
+
+            <TextView
+                android:id="@+id/native_post_low_rating_label"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textSize="12sp"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="Гость_77 · #413" />
+
+            <TextView
+                android:id="@+id/native_post_low_rating_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="-4" />
+
+            <TextView
+                android:id="@+id/native_post_low_rating_action"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="@string/low_rated_post_show"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
         <!-- Header: [avatar+rep] [nick / group / 💬count]  [date, #N ⋮] — layout parity with WebView. -->
         <LinearLayout
             android:id="@+id/native_post_header"

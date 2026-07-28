@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- «Hide low-rated posts» → threshold labels. Values live in values/arrays.xml (locale-independent). -->
+    <string-array name="entries_low_rating_threshold">
+        <item>−1 and below</item>
+        <item>−2 and below</item>
+        <item>−3 and below</item>
+        <item>−4 and below</item>
+        <item>−5 and below</item>
+        <item>−6 and below</item>
+        <item>−7 and below</item>
+        <item>−8 and below</item>
+        <item>−9 and below</item>
+        <item>−10 and below</item>
+    </string-array>
+</resources>
