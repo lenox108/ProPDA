@@ -165,9 +165,71 @@ class EditPostBodyNormalizeTest {
         """.trimIndent()
         val out = normalizeEditPostBodyFromDomHtml(html)
 
-        assertTrue(out.contains("[quote]Цитируемый текст[/quote]", ignoreCase = true))
+        assertTrue(out.contains("""[quote name="User" date="23.05.26, 10:00"]Цитируемый текст[/quote]"""))
         assertTrue(out.contains("Ответ автора"))
         assertFalse(out.contains("Развернуть цитату"))
+    }
+
+    /** Ник/дата/номер поста из шапки цитаты не должны теряться: иначе при вставке скопированного
+     *  BB-кода непонятно, кто это сказал. */
+    @Test
+    fun normalizeDomHtml_keepsQuoteAuthorDateAndPostId() {
+        val html = """
+            <div class="post-block quote">
+                <div class="block-title">Sanitar1000 @ 27.07.26, 21:35
+                    <a href="index.php?act=findpost&amp;pid=144410289"><img src="post_snapback.gif"></a>
+                </div>
+                <div class="block-body">поставил начисто</div>
+            </div>
+            тогда, ой!
+        """.trimIndent()
+        val out = normalizeEditPostBodyFromDomHtml(html)
+
+        assertTrue(
+                out,
+                out.contains(
+                        """[quote name="Sanitar1000" date="27.07.26, 21:35" post=144410289]поставил начисто[/quote]"""),
+        )
+    }
+
+    /** Разметка живой темы 4pda (снята с поста 144307457): «@» между ником и датой приходит
+     *  сущностью `&#064;`, а не символом — без её раскрытия весь заголовок уезжал в `name`.
+     *  Свой `<br />` после блока уже есть, поэтому лишнюю пустую строку не добавляем. */
+    @Test
+    fun normalizeDomHtml_realForumQuoteMarkup() {
+        val html = """<div class="post-block quote"><div class="block-title">OLEGA2007 &#064; 18.07.26,""" +
+                """ 20:32 <a href="/forum/index.php?act=findpost&amp;pid=144307457" target="_blank"""" +
+                """ title="Перейти к сообщению"><img src="https://4pda.to/s/x.gif" alt="*" border="0" /></a>""" +
+                """</div><div class="block-body">Что можно ещё посоветовать ?<br /></div></div>""" +
+                """<br />Можно ещё посмотреть OnePlus Nord CE5"""
+        val out = normalizeEditPostBodyFromDomHtml(html)
+
+        assertEquals(
+                """[quote name="OLEGA2007" date="18.07.26, 20:32" post=144307457]""" +
+                        "Что можно ещё посоветовать ?\n[/quote]\nМожно ещё посмотреть OnePlus Nord CE5",
+                out,
+        )
+    }
+
+    /** Текст после цитаты не должен слипаться с `[/quote]`: блочный `<div>` съедается заменой, и
+     *  перевод строки надо восстановить явно. */
+    @Test
+    fun normalizeDomHtml_keepsLineBreakAfterQuoteBlock() {
+        val html = """<div class="post-block quote"><div class="block-title">User</div>""" +
+                """<div class="block-body">цитата</div></div>ответ"""
+        val out = normalizeEditPostBodyFromDomHtml(html)
+
+        assertTrue(out, out.contains("[/quote]\nответ"))
+    }
+
+    /** Безымянная цитата: «Цитата» — подпись блока, а не ник. */
+    @Test
+    fun normalizeDomHtml_defaultQuoteLabelIsNotTreatedAsAuthor() {
+        val html = """<div class="post-block quote"><div class="block-title">Цитата</div>""" +
+                """<div class="block-body">текст</div></div>"""
+        val out = normalizeEditPostBodyFromDomHtml(html)
+
+        assertTrue(out, out.contains("[quote]текст[/quote]"))
     }
 
     @Test
@@ -188,7 +250,8 @@ class EditPostBodyNormalizeTest {
         """.trimIndent()
         val out = normalizeEditPostBodyFromDomHtml(html)
 
-        assertTrue(out.contains("[quote]", ignoreCase = true))
+        assertTrue(out, out.contains("""[quote name="Outer"]"""))
+        assertTrue(out, out.contains("""[quote name="Inner"]"""))
         assertTrue(out.contains("Внешняя цитата"))
         assertTrue(out.contains("Вложенная цитата"))
         assertFalse(out.contains("Развернуть цитату"))
