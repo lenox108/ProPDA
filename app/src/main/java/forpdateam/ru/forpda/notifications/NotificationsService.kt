@@ -48,6 +48,7 @@ class NotificationsService : Service() {
     @Inject lateinit var eventsRepository: EventsRepository
     @Inject lateinit var notificationPreferencesHolder: NotificationPreferencesHolder
     @Inject lateinit var authHolder: AuthHolder
+    @Inject lateinit var qmsMessagePreviewLoader: QmsMessagePreviewLoader
 
     private var mNotificationManager: NotificationManagerCompat? = null
     private var lastHardCheckTime = 0L
@@ -410,6 +411,7 @@ class NotificationsService : Service() {
         runCatching {
             NotificationGroups.SUMMARY_IDS.forEach { manager.cancel(it) }
             NotificationPublisher.forgetAllChildren()
+            QmsPreviewStore.clear()
             postedEventNotifyIds.toList().forEach { manager.cancel(it) }
             postedEventNotifyIds.clear()
             // Подметаем и то, что опубликовал фоновый EventsCheckWorker: он публикует
@@ -436,6 +438,7 @@ class NotificationsService : Service() {
 
     private fun cancelNotification(event: NotificationEvent) {
         val id = event.notifyId()
+        if (event.fromQms()) QmsPreviewStore.forget(event.sourceId)
         getNotificationManager().cancel(id)
         postedEventNotifyIds.remove(id)
         Log.i(NOTIFICATIONS_LOG_TAG, "Cancelled notification id=$id source=${event.source} sourceId=${event.sourceId}")
@@ -452,16 +455,22 @@ class NotificationsService : Service() {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip incoming notification: app preference disabled")
             return
         }
-        if (event.fromQms() && notificationPreferencesHolder.getMainAvatarsEnabled()) {
+        if (event.fromQms()) {
+            val avatarsEnabled = notificationPreferencesHolder.getMainAvatarsEnabled()
             val cacheKey = "user_${event.userId}"
-            avatarBitmapCache.get(cacheKey)?.let { cached ->
-                sendNotification(event, cached)
-                return
-            }
             val res: Resources = this.resources
             val height = res.getDimension(android.R.dimen.notification_large_icon_height).toInt()
             val width = res.getDimension(android.R.dimen.notification_large_icon_width).toInt()
             serviceScope.launch {
+                // Текст сообщения не приходит ни из WS, ни из инспектора — добираем его до
+                // публикации. Загрузчик сам решает, надо ли (настройка) и получится ли (сеть).
+                runCatching { qmsMessagePreviewLoader.enrich(this@NotificationsService, event) }
+                        .onFailure { Timber.w(it, "QMS message preview failed") }
+                val cached = if (avatarsEnabled) avatarBitmapCache.get(cacheKey) else null
+                if (cached != null || !avatarsEnabled) {
+                    sendNotification(event, cached)
+                    return@launch
+                }
                 runCatching {
                     // serviceScope живёт на Main.immediate: загрузка аватара и обрезка битмапа
                     // на нём подвешивали кадры ровно в момент прихода уведомления.

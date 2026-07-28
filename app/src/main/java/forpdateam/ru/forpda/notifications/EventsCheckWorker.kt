@@ -46,7 +46,9 @@ class EventsCheckWorker @AssistedInject constructor(
         private val hatWatcher: forpdateam.ru.forpda.notifications.hatwatch.HatVersionWatcher,
         private val mentionsRepository: MentionsRepository,
         private val webClient: IWebClient,
-        private val authHolder: AuthHolder
+        private val authHolder: AuthHolder,
+        private val qmsMessagePreviewLoader: QmsMessagePreviewLoader,
+        private val avatarRepository: forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -72,6 +74,9 @@ class EventsCheckWorker @AssistedInject constructor(
         // по ней отличает «система не запускает воркер» от «воркер запускается, но выходит пустым».
         prefs.setLastWorkerRunAt(System.currentTimeMillis())
 
+        // FCM-триггер (реальный push от сервера) читаем ДО гейтов: он авторитетнее любого из них.
+        val fcmTriggered = inputData.getBoolean(KEY_FCM_TRIGGER, false)
+
         // Скипаем ТОЛЬКО в foreground при живом сокете: там процесс активен, пинги OkHttp идут,
         // и «connected» надёжно означает доставку. В ФОНЕ «connected» может врать — тихий обрыв
         // сети в Doze или заморозка процесса оставляют сокет-зомби, который числится живым, но
@@ -79,10 +84,16 @@ class EventsCheckWorker @AssistedInject constructor(
         // приложении). Поэтому в фоне проверку НЕ пропускаем: она дёшева (дедуп last_check_at),
         // служит страховкой поверх сокета, а снапшот-дедуп не даст дубля, если сокет всё-таки
         // доставил событие сам. Прыжок на Main заодно прогоняет отложенные lifecycle-колбэки.
+        //
+        // Пуш этот гейт снимает и в foreground: «connected» врёт и здесь. Живой лог 28.07.26 —
+        // сокет числился подключённым (isConnected=true), пять QMS-сообщений подряд пришли
+        // пушем, а onMessage не случился ни разу: каждое пробуждение отбивалось как
+        // «skip (foreground websocket)», и уведомления не было вовсе. Сервер прислал пуш —
+        // значит событие есть; снапшот-дедуп не даст дубля, если сокет всё-таки оживёт.
         val uiForeground = withContext(Dispatchers.Main) {
             ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         }
-        if (uiForeground && eventsRepository.isWebSocketConnected()) {
+        if (!fcmTriggered && uiForeground && eventsRepository.isWebSocketConnected()) {
             if (BuildConfig.DEBUG) {
                 Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: foreground + websocket connected")
             }
@@ -99,10 +110,9 @@ class EventsCheckWorker @AssistedInject constructor(
             NotifDiagLog.log(applicationContext, "worker: skip (push disabled)")
             return@withContext Result.success()
         }
-        // FCM-триггер (реальный push от сервера) обходит гейт «фоновая проверка выключена»: в
-        // режиме доставки Push периодический опрос намеренно off, но пробуждение по push должно
-        // идти в сеть за авторитетным состоянием.
-        val fcmTriggered = inputData.getBoolean(KEY_FCM_TRIGGER, false)
+        // FCM-триггер обходит и гейт «фоновая проверка выключена»: в режиме доставки Push
+        // периодический опрос намеренно off, но пробуждение по push должно идти в сеть за
+        // авторитетным состоянием.
         if (!fcmTriggered && !prefs.getBgCheckEnabled()) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: background preference disabled")
             Timber.d("EventsCheckWorker: bgCheck disabled, skip")
@@ -159,6 +169,11 @@ class EventsCheckWorker @AssistedInject constructor(
         // Слот резервируем сразу (иначе параллельный триггер задвоил бы сеть), но при полном
         // сетевом фейле вернём назад — см. ниже.
         prefs.setLastCheckAt(now)
+
+        // Пуш = «состояние изменилось прямо сейчас», поэтому 8-секундный TTL инспектора для него
+        // не оптимизация, а потеря события: второй пуш подряд получал ответ, снятый ДО его
+        // сообщения, и выходил с new=0.
+        if (fcmTriggered) eventsApi.invalidateInspectorCaches()
 
         NotifDiagLog.log(applicationContext, "worker: run start")
         // Retry при сетевом сбое ЛЮБОГО источника, а не только когда упали все (P1 code review:
@@ -232,7 +247,7 @@ class EventsCheckWorker @AssistedInject constructor(
     }
 
     /** @return true, если реально сходили в сеть (для A-фикса «retry при сетевом фейле»). */
-    private fun checkSource(source: NotificationEvent.Source): Boolean {
+    private suspend fun checkSource(source: NotificationEvent.Source): Boolean {
         val channelEnabled = when (source) {
             NotificationEvent.Source.QMS -> prefs.getQmsEnabled()
             NotificationEvent.Source.THEME -> prefs.getFavEnabled()
@@ -336,12 +351,28 @@ class EventsCheckWorker @AssistedInject constructor(
         // Отслеживаем ФАКТ публикации (publish/publishStacked → null, если система заблокировала
         // доставку в окне между canDeliver и notify): если событие НЕ показалось — снапшот не
         // двигаем, оно переиграет (полностью закрывает P1 из code-review, а не только предпроверкой).
+        // Текста сообщения нет ни в inspector'е, ни в FCM-payload — добираем его отдельным
+        // запросом на диалог. Только для QMS и только для тех событий, что реально пойдут в
+        // шторку: это сеть, и на большой пачке она не нужна (там уведомления и так свернутся
+        // в сводку). PREVIEW_MAX_ENRICH зеркалит STACKED_MAX+1 — ровно то, что показывается
+        // отдельными карточками.
+        if (source == NotificationEvent.Source.QMS) {
+            for (event in toPublish.take(PREVIEW_MAX_ENRICH)) {
+                qmsMessagePreviewLoader.enrich(appContext, event)
+            }
+        }
         var publishBlocked = false
         if (toPublish.size > STACKED_MAX) {
             if (NotificationPublisher.publishBatch(appContext, prefs, toPublish) == null) publishBlocked = true
         } else {
             for (event in toPublish) {
-                if (NotificationPublisher.publish(appContext, prefs, event) == null) publishBlocked = true
+                // Аватар собеседника умел грузить только foreground-сервис, поэтому фоновое
+                // (и push-) уведомление QMS выходило с безликой заглушкой вместо лица — при
+                // MessagingStyle это особенно заметно.
+                val avatar = if (source == NotificationEvent.Source.QMS) loadQmsAvatar(event) else null
+                if (NotificationPublisher.publish(appContext, prefs, event, avatar = avatar) == null) {
+                    publishBlocked = true
+                }
             }
         }
         // Разбивка фильтров: published=0 при new>0 иначе не объясняет себя. Теперь видно, что
@@ -371,6 +402,22 @@ class EventsCheckWorker @AssistedInject constructor(
         }
         saveSnapshot(source, current)
         return true
+    }
+
+    /** Аватар собеседника для QMS-уведомления. Сбой не должен мешать публикации — просто null. */
+    private suspend fun loadQmsAvatar(event: NotificationEvent): android.graphics.Bitmap? {
+        if (!prefs.getMainAvatarsEnabled() || event.userId <= 0) return null
+        val res = appContext.resources
+        val height = res.getDimension(android.R.dimen.notification_large_icon_height).toInt()
+        val width = res.getDimension(android.R.dimen.notification_large_icon_width).toInt()
+        return runCatching {
+            val url = avatarRepository.getAvatar(event.userId, event.userNick)
+            val bitmap = forpdateam.ru.forpda.common.ForPdaCoil
+                    .loadBitmapForNotification(appContext, url, width, height)
+            val cropped = forpdateam.ru.forpda.common.BitmapUtils.centerCrop(bitmap, width, height, 1.0f)
+            forpdateam.ru.forpda.common.BitmapUtils.createAvatar(cropped, width, height, true)
+        }.onFailure { Timber.w(it, "EventsCheckWorker: avatar load failed for ${event.userId}") }
+                .getOrNull()
     }
 
     private fun saveSnapshot(source: NotificationEvent.Source, current: List<NotificationEvent>) {
@@ -447,6 +494,8 @@ class EventsCheckWorker @AssistedInject constructor(
         private const val MAX_NETWORK_RETRY_ATTEMPTS = 2
         /** Больше этого числа новых событий за раз — публикуем стопкой, а не по одному. Зеркалит foreground. */
         private const val STACKED_MAX = 4
+        /** Сколько QMS-событий за проход дообогащаем текстом (по одному запросу на диалог). */
+        private const val PREVIEW_MAX_ENRICH = 5
         /**
          * Process-level замок: periodic и alarm-воркеры живут в одном процессе, и Mutex сериализует
          * их проход, делая дедуп по lastCheckAt атомарным (P1 code review). tryLock → второй просто

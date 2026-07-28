@@ -396,6 +396,9 @@ object NotificationPublisher {
 
     fun cancel(context: Context, event: NotificationEvent) {
         val notifyId = event.notifyId()
+        // Диалог прочитан — накопленные тексты больше не показываем: иначе следующее
+        // сообщение притащило бы их обратно в шторку.
+        if (event.fromQms()) QmsPreviewStore.forget(event.sourceId)
         NotificationManagerCompat.from(context).cancel(notifyId)
         refreshGroupSummaries(context, excludeIds = setOf(notifyId))
     }
@@ -445,18 +448,31 @@ object NotificationPublisher {
             val me = androidx.core.app.Person.Builder()
                     .setName(context.getString(R.string.notification_qms_me))
                     .build()
-            return NotificationCompat.MessagingStyle(me)
-                    // Название диалога QMS; сообщение — счётчик, самого текста в событии нет.
+            val style = NotificationCompat.MessagingStyle(me)
                     .setConversationTitle(event.sourceTitle.takeIf { it.isNotBlank() })
-                    .addMessage(
-                            context.resources.getQuantityString(
-                                    R.plurals.notification_content_qms_count,
-                                    event.msgCount.coerceAtLeast(1),
-                                    event.msgCount.coerceAtLeast(1),
-                            ),
-                            System.currentTimeMillis(),
-                            sender,
-                    )
+            val previews = event.previewMessages.orEmpty().filter { it.isNotBlank() }
+            if (previews.isEmpty()) {
+                // Текст добрать не удалось (выключено настройкой, сеть, таймаут) — прежний
+                // счётчик: он хотя бы честно говорит, сколько всего непрочитано.
+                style.addMessage(
+                        context.resources.getQuantityString(
+                                R.plurals.notification_content_qms_count,
+                                event.msgCount.coerceAtLeast(1),
+                                event.msgCount.coerceAtLeast(1),
+                        ),
+                        System.currentTimeMillis(),
+                        sender,
+                )
+            } else {
+                // Время события — секунды инспектора и одно на всю пачку; разносим строки на
+                // секунду, иначе MessagingStyle показывает их как одновременные.
+                val baseTime = event.timeStamp.takeIf { it > 0 }?.times(1000L)
+                        ?: System.currentTimeMillis()
+                previews.forEachIndexed { index, message ->
+                    style.addMessage(message, baseTime - (previews.lastIndex - index) * 1000L, sender)
+                }
+            }
+            return style
         }
         return NotificationCompat.BigTextStyle()
                 .setBigContentTitle(title)
@@ -496,13 +512,16 @@ object NotificationPublisher {
     }
 
     fun textFor(context: Context, e: NotificationEvent): String = when {
-        e.fromQms() -> e.sourceTitle.ifBlank {
-            context.resources.getQuantityString(
-                    R.plurals.notification_content_qms_count,
-                    e.msgCount,
-                    e.msgCount
-            )
-        }
+        // Свёрнутая строка и строка сводки группы: сам текст сообщения информативнее
+        // заголовка диалога, поэтому он в приоритете, когда его удалось добрать.
+        e.fromQms() -> e.previewMessages?.lastOrNull()?.takeIf { it.isNotBlank() }
+                ?: e.sourceTitle.ifBlank {
+                    context.resources.getQuantityString(
+                            R.plurals.notification_content_qms_count,
+                            e.msgCount,
+                            e.msgCount
+                    )
+                }
         e.fromTheme() && e.isMention -> e.sourceTitle.ifBlank {
             context.getString(R.string.notification_content_mention_fallback)
         }

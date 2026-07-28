@@ -98,6 +98,14 @@ class MessagePanel(
     /** Вызывается только на смену состояния пользователем — для сохранения флага. */
     var collapsedChangeListener: ((Boolean) -> Unit)? = null
 
+    /**
+     * Не прятать клавиатуру и не гасить поле на время отправки. Включается в чате QMS: там пишут
+     * очередями, а каждая отправка выбрасывала клавиатуру — следующее сообщение приходилось
+     * начинать с тапа по полю. В остальных редакторах (пост темы, комментарий) отправка — это
+     * конец работы с формой, там прежнее поведение осмысленно и остаётся.
+     */
+    var keepImeOnSend: Boolean = false
+
     private val panelBehavior = MessagePanelBehavior()
     private var advancedPopup: AdvancedPopup? = null
     var attachmentsPopup: AttachmentsPopup? = null
@@ -496,11 +504,16 @@ class MessagePanel(
         if (state) {
             hidePopupWindows()
             attachmentsPopup?.dismiss()
-            hideImeFromEditor(clearFocus = false)
+            // Клавиатуру на время отправки прячем везде, кроме переписки: см. [keepImeOnSend].
+            if (!keepImeOnSend) hideImeFromEditor(clearFocus = false)
         }
         sendProgress.visibility = if (state) View.VISIBLE else View.GONE
         sendButton.visibility = if (state) View.GONE else View.VISIBLE
-        messageField.isEnabled = !state
+        // Гашение поля само по себе роняет фокус и уводит клавиатуру, поэтому в режиме
+        // переписки поле остаётся живым: печатать следующее сообщение можно, не дожидаясь
+        // ответа сервера. Отправленный текст всё равно затрётся только если не изменился —
+        // за это отвечает снапшот в clearIfUnchanged.
+        messageField.isEnabled = !state || keepImeOnSend
         advancedButton.isEnabled = !state
         attachmentsButton.isEnabled = !state
         fullButton.isEnabled = !state

@@ -25,6 +25,13 @@ data class NotificationEvent @JvmOverloads constructor(
         var sourceEventText: String? = null
 ) {
 
+    /**
+     * Тексты непрочитанных сообщений QMS, добранные [forpdateam.ru.forpda.notifications.QmsMessagePreviewLoader]
+     * перед публикацией уведомления. НЕ приходит ни из WS, ни из FCM, ни из инспектора и
+     * никогда не персистится: снапшот сравнения ([sourceEventText]) о нём не знает.
+     */
+    var previewMessages: List<String>? = null
+
 
     /*
     * short
