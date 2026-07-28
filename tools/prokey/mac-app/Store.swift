@@ -186,13 +186,30 @@ final class Store: ObservableObject {
 /// Намеренно переиспользуем уже проверенный Java-генератор, а не пишем криптографию заново:
 /// формат подписи обязан в точности совпадать с тем, что проверяет приложение на телефоне.
 enum Signer {
-    static let repoPath = "/Users/j.golt/Documents/Cursor01/ForPDA-master"
+    /// Запасной путь к репозиторию — на случай запуска из исходников на машине автора.
+    private static let repoFallback =
+        "/Users/j.golt/Documents/Cursor01/ForPDA-master/tools/prokey/ProKeyGen.java"
+
+    /// Генератор ищем ВНУТРИ приложения: иначе программа работала бы только там, где лежит
+    /// репозиторий, и на другом компьютере молча переставала бы выдавать ключи.
+    private static var generatorPath: String {
+        if let bundled = Bundle.main.url(forResource: "ProKeyGen", withExtension: "java"),
+           FileManager.default.fileExists(atPath: bundled.path) {
+            return bundled.path
+        }
+        return repoFallback
+    }
 
     static func sign(memberId: Int) throws -> String {
+        let generator = generatorPath
+        guard FileManager.default.fileExists(atPath: generator) else {
+            throw NSError(domain: "prokey", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Не найден генератор ключей внутри приложения"
+            ])
+        }
         let p = Process()
-        p.currentDirectoryURL = URL(fileURLWithPath: repoPath)
         p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        p.arguments = ["java", "tools/prokey/ProKeyGen.java", "raw", String(memberId)]
+        p.arguments = ["java", generator, "raw", String(memberId)]
         let pipe = Pipe(), errPipe = Pipe()
         p.standardOutput = pipe
         p.standardError = errPipe
