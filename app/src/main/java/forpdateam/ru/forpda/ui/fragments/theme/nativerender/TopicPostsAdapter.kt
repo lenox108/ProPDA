@@ -233,8 +233,8 @@ class TopicPostsAdapter(
                 isHat = isHat,
                 manuallyExpanded = lowRatingExpandedPostIds.contains(item.postId),
         )
-        // «Свернуть» в подвале показываем только у поста, который сам пользователь раскрыл из плашки —
-        // на посте, раскрытом за компанию с переходом по ссылке, такая ссылка была бы шумом.
+        // «Свернуть» показываем у ЛЮБОГО раскрытого поста, который иначе был бы свёрнут — и после тапа по
+        // плашке, и после посадки на него по ссылке. Иначе у авто-раскрытого поста не было бы пути назад.
         val lowRatedExpandable = displaySettings.hideLowRatedPosts &&
                 !lowRatedCollapsed &&
                 lowRatingExpandedPostIds.contains(item.postId) &&
