@@ -67,6 +67,12 @@ class ArticleCommentViewModel(
     // is immune to the double-apply.
     private var loadMoreBaselineSize: Int = 0
     private val pendingLikeCommentIds = mutableSetOf<Int>()
+
+    /**
+     * Форма правки комментария, загруженная в [loadEditCommentForm], для открытого листа
+     * редактирования. Держится здесь, а не в аргументах фрагмента: [Comment.Action] не Parcelable.
+     */
+    private var pendingEditForm: Comment.Action? = null
     private val _commentsState = MutableStateFlow<ArticleCommentsState>(ArticleCommentsState.NotLoaded)
     val commentsState: StateFlow<ArticleCommentsState> = _commentsState.asStateFlow()
 
@@ -872,6 +878,15 @@ class ArticleCommentViewModel(
         }
     }
 
+    /** Загруженная форма правки для открытого листа редактирования (см. [loadEditCommentForm]). */
+    fun hasPendingEditForm(): Boolean = pendingEditForm?.isValid() == true
+
+    fun submitPendingEditForm(text: String) {
+        val action = pendingEditForm ?: return
+        pendingEditForm = null
+        editComment(action, text)
+    }
+
     fun findComment(commentId: Int): Comment? =
             allComments.firstOrNull { it.id == commentId }
 
@@ -898,6 +913,9 @@ class ArticleCommentViewModel(
                 // «(отредактирован)», хотя в отображении он срезан (карандаш ✎). Без среза он подставлялся
                 // в форму и при повторной правке повторно уходил на сервер — маркер копился в контенте.
                 val text = stripNewsCommentEditedMarker(rawText)
+                // Форма правки не переживает Bundle (Comment.Action не Parcelable), поэтому её держит
+                // ViewModel: лист правки шлёт только текст через submitPendingEditForm.
+                pendingEditForm = formAction
                 _uiEvents.emit(ArticleCommentUiEvent.ShowEditComment(current, formAction, text))
             } catch (e: Throwable) {
                 errorHandler.handle(e)

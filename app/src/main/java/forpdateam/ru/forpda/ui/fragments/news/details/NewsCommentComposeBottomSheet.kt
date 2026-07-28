@@ -47,6 +47,9 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
     private lateinit var dragHandle: BottomSheetDragHandleView
     private lateinit var title: TextView
 
+    private val args: Bundle get() = arguments ?: Bundle.EMPTY
+    private val mode: Int get() = args.getInt(ARG_MODE, MODE_NEW)
+
     private val presenter: ArticleCommentViewModel by viewModels(
             ownerProducer = { requireParentFragment() },
     ) {
@@ -62,7 +65,22 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
         dragHandle = view.findViewById(R.id.drag_handle)
         title = view.findViewById(R.id.title)
 
-        val draft = savedInstanceState?.getString(STATE_DRAFT).orEmpty()
+        title.text = when (mode) {
+            MODE_REPLY -> {
+                val nick = args.getString(ARG_NICK).orEmpty()
+                if (nick.isBlank()) getString(R.string.reply) else "${getString(R.string.reply)} · $nick"
+            }
+            MODE_EDIT -> getString(R.string.edit)
+            else -> getString(R.string.write)
+        }
+        if (mode == MODE_EDIT) {
+            buttonSend.setText(R.string.save)
+        }
+
+        // Черновик из savedInstanceState важнее префилла: после поворота экрана в поле лежит
+        // уже отредактированный пользователем текст, а не исходный ник/тело комментария.
+        val draft = savedInstanceState?.getString(STATE_DRAFT)
+                ?: args.getString(ARG_PREFILL).orEmpty()
         if (draft.isNotBlank()) {
             messageField.setText(draft)
             messageField.setSelection(messageField.text.length)
@@ -82,6 +100,13 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
         applyComposePanelTheme(view)
         if (!authHolder.get().isAuth()) {
             Utils.showNeedAuthDialog(requireContext(), router)
+            dismissAllowingStateLoss()
+            return
+        }
+
+        // Правка живёт в форме, загруженной ViewModel (pendingEditAction). После смерти процесса
+        // лист восстановится, а форма — нет: отправлять было бы некуда.
+        if (mode == MODE_EDIT && !presenter.hasPendingEditForm()) {
             dismissAllowingStateLoss()
             return
         }
@@ -126,7 +151,14 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
     private fun send() {
         val text = messageField.text?.toString().orEmpty()
         if (text.isBlank()) return
-        presenter.replyComment(0, text)
+        if (mode == MODE_EDIT) {
+            // Правка не эмитит OnReplyComment (лист закрывается сразу — паритет с прежним диалогом),
+            // применение текста и обновление ленты доделывает ViewModel.
+            presenter.submitPendingEditForm(text)
+            dismissAllowingStateLoss()
+            return
+        }
+        presenter.replyComment(args.getInt(ARG_COMMENT_ID, 0), text)
     }
 
     /**
@@ -191,7 +223,47 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
 
     companion object {
         private const val STATE_DRAFT = "STATE_DRAFT"
+        private const val ARG_MODE = "ARG_MODE"
+        private const val ARG_COMMENT_ID = "ARG_COMMENT_ID"
+        private const val ARG_NICK = "ARG_NICK"
+        private const val ARG_PREFILL = "ARG_PREFILL"
+
+        private const val MODE_NEW = 0
+        private const val MODE_REPLY = 1
+        private const val MODE_EDIT = 2
+
         const val TAG = "NewsCommentComposeBottomSheet"
+
+        /** Новый комментарий к статье (карандаш в тулбаре). */
+        fun newComment(): NewsCommentComposeBottomSheet = create(MODE_NEW)
+
+        /** Ответ на комментарий: заголовок с ником, поле предзаполнено обращением. */
+        fun reply(commentId: Int, nick: String?): NewsCommentComposeBottomSheet = create(
+                mode = MODE_REPLY,
+                commentId = commentId,
+                nick = nick,
+                prefill = nick?.takeIf { it.isNotBlank() }?.let { "$it,\n" },
+        )
+
+        /**
+         * Правка своего комментария. Форма (`Comment.Action`) остаётся во ViewModel — лист
+         * отправляет её через [ArticleCommentViewModel.submitPendingEditForm].
+         */
+        fun edit(text: String): NewsCommentComposeBottomSheet = create(MODE_EDIT, prefill = text)
+
+        private fun create(
+                mode: Int,
+                commentId: Int = 0,
+                nick: String? = null,
+                prefill: String? = null,
+        ) = NewsCommentComposeBottomSheet().apply {
+            arguments = Bundle().apply {
+                putInt(ARG_MODE, mode)
+                putInt(ARG_COMMENT_ID, commentId)
+                putString(ARG_NICK, nick)
+                putString(ARG_PREFILL, prefill)
+            }
+        }
     }
 }
 

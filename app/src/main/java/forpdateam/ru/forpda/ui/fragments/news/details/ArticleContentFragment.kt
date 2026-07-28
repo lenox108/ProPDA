@@ -2395,7 +2395,7 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 }
             }
             is ArticleCommentUiEvent.ScrollToComment -> armPendingCommentScroll(event.commentId, event.index)
-            is ArticleCommentUiEvent.ShowEditComment -> showEditCommentDialog(event.action, event.text)
+            is ArticleCommentUiEvent.ShowEditComment -> showEditCommentDialog(event.text)
             is ArticleCommentUiEvent.UpdateCommentLike -> {
                 patchInlineCommentLike(
                         commentId = event.commentId,
@@ -2714,6 +2714,11 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
                 .showWithStyledButtons()
     }
 
+    /**
+     * Ответ и правка открывают ТОТ ЖЕ лист, что и карандаш в тулбаре ([NewsCommentComposeBottomSheet]),
+     * а не отдельный AlertDialog с голым EditText: одна панель ввода на все три входа.
+     * Лист живёт в childFragmentManager хозяина — он же владелец общей [ArticleCommentViewModel].
+     */
     private fun showReplyDialog(comment: Comment) {
         if (!authHolder.get().isAuth()) {
             Utils.showNeedAuthDialog(requireContext(), router)
@@ -2723,37 +2728,18 @@ class ArticleContentFragment : Fragment(), TabTopScroller {
             showSnackbar(R.string.comment_action_unavailable)
             return
         }
-        val input = EditText(requireContext()).apply {
-            minLines = 3
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            setText("${comment.userNick},\n")
-            setSelection(text.length)
-        }
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.reply)
-                .setView(input)
-                .setPositiveButton(R.string.send) { _, _ ->
-                    commentsViewModel.replyComment(comment.id, input.text.toString())
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+        showComposeSheet(NewsCommentComposeBottomSheet.reply(comment.id, comment.userNick))
     }
 
-    private fun showEditCommentDialog(action: Comment.Action, text: String) {
-        val input = EditText(requireContext()).apply {
-            minLines = 3
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            setText(forpdateam.ru.forpda.model.data.remote.api.ApiUtils.spannedFromHtml(text).toString())
-            setSelection(this.text.length)
-        }
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.edit)
-                .setView(input)
-                .setPositiveButton(R.string.send) { _, _ ->
-                    commentsViewModel.editComment(action, input.text.toString())
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .showWithStyledButtons()
+    private fun showEditCommentDialog(text: String) {
+        val plain = forpdateam.ru.forpda.model.data.remote.api.ApiUtils.spannedFromHtml(text).toString()
+        showComposeSheet(NewsCommentComposeBottomSheet.edit(plain))
+    }
+
+    private fun showComposeSheet(sheet: NewsCommentComposeBottomSheet) {
+        val manager = hostFragment().childFragmentManager
+        if (manager.findFragmentByTag(NewsCommentComposeBottomSheet.TAG) != null) return
+        sheet.show(manager, NewsCommentComposeBottomSheet.TAG)
     }
 
     private fun showDeleteCommentDialog(comment: Comment) {
