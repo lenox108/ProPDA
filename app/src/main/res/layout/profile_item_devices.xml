@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Карточка «Устройства» в профиле. В отличие от прочих под-списков профиля
+    (profile_item_list) это не RecyclerView, а ChipGroup: устройств почти всегда
+    единицы, они короткие и хорошо ложатся в строку, а вертикальный список из
+    одной-двух строк оставлял в карточке много воздуха.
+-->
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/CardStyle.Wide"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="@dimen/content_padding_vertical">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/profile_sub_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingTop="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:text="@string/profile_title_devices"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="@dimen/list_topic_meta_text_size"
+            android:textStyle="bold" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/profile_device_chips"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingTop="@dimen/dp8"
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            app:chipSpacingHorizontal="@dimen/dp8"
+            app:chipSpacingVertical="@dimen/dp4" />
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

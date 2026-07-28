@@ -2,7 +2,6 @@ package forpdateam.ru.forpda.ui.fragments.profile
 
 import javax.inject.Inject
 import forpdateam.ru.forpda.common.getColorFromAttr
-import forpdateam.ru.forpda.common.getVecDrawable
 import forpdateam.ru.forpda.databinding.FragmentProfileBinding
 import forpdateam.ru.forpda.databinding.ToolbarProfileBinding
 import android.annotation.TargetApi
@@ -68,7 +67,6 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
     private var hideProgressRunnable: Runnable? = null
 
     private lateinit var copyLinkMenuItem: MenuItem
-    private lateinit var writeMenuItem: MenuItem
 
     private lateinit var adapter: ProfileAdapter
 
@@ -199,13 +197,7 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
                     }
                     true
                 }
-        writeMenuItem = menu.add(R.string.write)
-                .setIcon(requireContext().getVecDrawable(R.drawable.ic_profile_toolbar_create))
-                .setOnMenuItemClickListener {
-                    presenter.navigateToQms()
-                    true
-                }
-                .setShowAsActionFlags(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        // «Написать» больше не дублируется карандашом в тулбаре — есть кнопка в карточке профиля.
         refreshToolbarMenuItems(false)
     }
 
@@ -238,7 +230,6 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
             copyLinkMenuItem.isEnabled = true
         } else {
             copyLinkMenuItem.isEnabled = false
-            writeMenuItem.isVisible = false
         }
     }
 
@@ -286,6 +277,10 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         presenter.onDeviceClick(item)
     }
 
+    override fun onWriteClick() {
+        presenter.navigateToQms()
+    }
+
     override fun onStatClick(item: ProfileModel.Stat) {
         presenter.onStatClick(item)
     }
@@ -297,6 +292,7 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
     private fun showProfile(data: ProfileModel) {
         refreshToolbarMenuItems(true)
         val oldCount = adapter.itemCount
+        adapter.isOwnProfile = data.id == authHolder.get().userId
         adapter.setProfile(data)
         // Delay adapter update to prevent RecyclerView crash during layout
         recyclerView.post {
@@ -320,11 +316,6 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
                     return linkHandler.handle(url, null)
                 }
             })
-        }
-
-        if (!data.contacts.isEmpty()) {
-            val isMe = data.id == authHolder.get().userId
-            writeMenuItem.isVisible = !isMe
         }
     }
 

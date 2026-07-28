@@ -666,6 +666,7 @@
     <string name="profile">Профиль</string>
     <string name="profile_title_about">О себе</string>
     <string name="profile_title_information">Информация</string>
+    <string name="profile_action_posts">Посты</string>
     <string name="profile_title_devices">Устройства</string>
     <string name="profile_title_contacts">Контакты</string>
     <string name="profile_title_warnings">Журнал предупреждений</string>

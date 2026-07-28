@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Чип профиля — устройство или контакт. Assist-чип, а не Filter: состояния
+    «выбрано» тут нет, тап просто открывает ссылку (DevDB / соцсеть / QMS).
+-->
+<com.google.android.material.chip.Chip
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/Widget.Material3.Chip.Assist"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:checkable="false"
+    android:textColor="?attr/colorOnSurface"
+    app:chipBackgroundColor="?attr/colorSecondaryContainer"
+    app:chipIconTint="?attr/colorOnSurfaceVariant"
+    app:chipIconVisible="true"
+    app:chipStrokeColor="?attr/colorOutline"
+    app:chipStrokeWidth="1dp"
+    app:ensureMinTouchTargetSize="false" />

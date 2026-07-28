@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.presentation.profile
 
 import android.content.Context
 import android.graphics.drawable.BitmapDrawable
+import androidx.core.graphics.drawable.toBitmap
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import forpdateam.ru.forpda.presentation.BaseViewModel
@@ -117,7 +118,11 @@ class ProfileViewModel @Inject constructor(
                         .allowHardware(false)
                         .build()
                 when (val r = ForPdaCoil.imageLoader.execute(req)) {
+                    // Анимированные аватарки (а на 4pda их полно — .gif) приходят
+                    // не BitmapDrawable, а Animated/MovieDrawable: приведение к
+                    // BitmapDrawable давало null, и аватар просто не появлялся.
                     is SuccessResult -> (r.drawable as? BitmapDrawable)?.bitmap
+                            ?: r.drawable.takeIf { it.intrinsicWidth > 0 && it.intrinsicHeight > 0 }?.toBitmap()
                     else -> null
                 }
             }.onSuccess { bitmap ->
