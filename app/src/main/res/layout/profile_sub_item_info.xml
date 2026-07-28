@@ -1,22 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Строка «Информации»: лейбл слева, значение справа. Двухэтажный вариант
+    (подпись над значением) растягивал карточку на пол-экрана ради шести полей.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
+    android:baselineAligned="false"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/dp12"
     android:paddingEnd="@dimen/content_padding_horizontal"
-    android:paddingStart="@dimen/content_padding_horizontal">
+    android:paddingBottom="@dimen/dp12">
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/item_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="@dimen/list_topic_meta_text_size" />
+        android:textSize="@dimen/list_topic_title_text_size" />
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/item_value"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/dp16"
+        android:layout_weight="1"
+        android:gravity="end"
         android:textColor="?attr/colorOnSurface"
         android:textSize="@dimen/list_topic_title_text_size" />
 </LinearLayout>

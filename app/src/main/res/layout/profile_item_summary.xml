@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Первая карточка профиля: действия + метрики.
+
+    Раньше тут был горизонтальный RecyclerView со статистикой — последняя метрика
+    всегда обрезалась краем экрана («КОММЕНТО…»), а действия («Написать») жили
+    только в оверфлоу тулбара. Теперь метрики раскладываются рядами по ширине
+    (строки добавляются кодом), а действия вынесены наверх.
+-->
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/CardStyle.Wide"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="@dimen/content_padding_vertical"
+        android:paddingBottom="@dimen/content_padding_vertical">
+
+        <LinearLayout
+            android:id="@+id/profile_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/content_padding_horizontal"
+            android:paddingEnd="@dimen/content_padding_horizontal"
+            android:visibility="gone">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/profile_action_write"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/dp8"
+                android:layout_weight="1"
+                android:text="@string/write"
+                android:textColor="?attr/colorOnPrimary"
+                app:backgroundTint="?attr/colorPrimary"
+                app:cornerRadius="@dimen/profile_action_corner_radius"
+                app:strokeWidth="0dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/profile_action_posts"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/profile_action_posts"
+                android:textColor="?attr/colorOnSurface"
+                app:cornerRadius="@dimen/profile_action_corner_radius"
+                app:strokeColor="?attr/colorOutline" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/profile_metrics"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

@@ -170,6 +170,8 @@
     <dimen name="device_grid_card_image_height">144dp</dimen>
     <dimen name="empty_state_title_text_size">20sp</dimen>
     <dimen name="empty_state_subtitle_text_size">16sp</dimen>
+    <!-- Кнопки действий в профиле — «пилюли» M3. -->
+    <dimen name="profile_action_corner_radius">24dp</dimen>
     <dimen name="profile_stat_value_text_size">24sp</dimen>
     <dimen name="attachment_preview_size">64dp</dimen>
     <dimen name="attachment_grid_column_width">160dp</dimen>

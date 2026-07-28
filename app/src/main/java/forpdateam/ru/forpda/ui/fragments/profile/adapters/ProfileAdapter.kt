@@ -1,7 +1,11 @@
 package forpdateam.ru.forpda.ui.fragments.profile.adapters
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
@@ -13,13 +17,12 @@ import forpdateam.ru.forpda.databinding.ProfileItemAboutBinding
 import forpdateam.ru.forpda.databinding.ProfileItemDevicesBinding
 import forpdateam.ru.forpda.databinding.ProfileItemListBinding
 import forpdateam.ru.forpda.databinding.ProfileItemNoteBinding
-import forpdateam.ru.forpda.databinding.ProfileItemStatsBinding
+import forpdateam.ru.forpda.databinding.ProfileItemSummaryBinding
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
+import forpdateam.ru.forpda.model.repository.temp.TempHelper
 import forpdateam.ru.forpda.presentation.ILinkHandler
-import forpdateam.ru.forpda.ui.fragments.devdb.brand.DevicesFragment
 import forpdateam.ru.forpda.ui.views.DividerItemDecoration
 import forpdateam.ru.forpda.ui.views.adapters.BaseViewHolder
-import java.util.Collections
 
 class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapter<BaseViewHolder<*>>() {
 
@@ -36,6 +39,9 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
     private val items = ArrayList<Int>()
     private var profileModel: ProfileModel? = null
     private var clickListener: ClickListener? = null
+
+    /** Свой профиль: «Написать» самому себе не предлагаем. */
+    var isOwnProfile: Boolean = false
 
     fun setClickListener(listener: ClickListener) {
         this.clickListener = listener
@@ -67,10 +73,10 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BaseViewHolder<*> {
         return when (viewType) {
             STATS_VIEW_TYPE -> {
-                val binding = ProfileItemStatsBinding.inflate(
+                val binding = ProfileItemSummaryBinding.inflate(
                     LayoutInflater.from(parent.context), parent, false
                 )
-                StatsHolder(binding)
+                SummaryHolder(binding)
             }
             ABOUT_VIEW_TYPE -> {
                 val binding = ProfileItemAboutBinding.inflate(
@@ -78,19 +84,18 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
                 )
                 AboutHolder(binding)
             }
-            DEVICES_VIEW_TYPE -> {
+            DEVICES_VIEW_TYPE, CONTACTS_VIEW_TYPE -> {
                 val binding = ProfileItemDevicesBinding.inflate(
                     LayoutInflater.from(parent.context), parent, false
                 )
-                DevicesHolder(binding)
+                if (viewType == DEVICES_VIEW_TYPE) DevicesHolder(binding) else ContactsHolder(binding)
             }
-            INFO_VIEW_TYPE, CONTACTS_VIEW_TYPE, WARNING_VIEW_TYPE -> {
+            INFO_VIEW_TYPE, WARNING_VIEW_TYPE -> {
                 val binding = ProfileItemListBinding.inflate(
                     LayoutInflater.from(parent.context), parent, false
                 )
                 when (viewType) {
                     INFO_VIEW_TYPE -> InfosHolder(binding)
-                    CONTACTS_VIEW_TYPE -> ContactsHolder(binding)
                     WARNING_VIEW_TYPE -> WarningsHolder(binding)
                     else -> throw IllegalArgumentException("Unknown view type: $viewType")
                 }
@@ -108,7 +113,7 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
     override fun onBindViewHolder(holder: BaseViewHolder<*>, position: Int) {
         val profile = profileModel ?: return
         when (getItemViewType(position)) {
-            STATS_VIEW_TYPE -> (holder as? StatsHolder)?.bind(profile)
+            STATS_VIEW_TYPE -> (holder as? SummaryHolder)?.bind(profile)
             ABOUT_VIEW_TYPE -> (holder as? AboutHolder)?.bind(profile)
             INFO_VIEW_TYPE -> (holder as? InfosHolder)?.bind(profile)
             DEVICES_VIEW_TYPE -> (holder as? DevicesHolder)?.bind(profile)
@@ -120,27 +125,61 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
 
     override fun getItemCount(): Int = items.size
 
-    private inner class StatsHolder(binding: ProfileItemStatsBinding) : BaseViewHolder<ProfileModel>(binding.root) {
-        private val list: RecyclerView = binding.profileStatsList
-        private val adapter: StatsAdapter
-
-        init {
-            list.setHasFixedSize(false)
-            list.layoutManager = LinearLayoutManager(list.context, LinearLayoutManager.HORIZONTAL, false)
-            adapter = StatsAdapter(object : StatsAdapter.StatHolder.Listener {
-                override fun onClick(item: ProfileModel.Stat) {
-                    clickListener?.onStatClick(item)
-                }
-            })
-            list.adapter = adapter
-            list.isNestedScrollingEnabled = false
-        }
+    private inner class SummaryHolder(private val binding: ProfileItemSummaryBinding) : BaseViewHolder<ProfileModel>(binding.root) {
 
         override fun bind(item: ProfileModel) {
-            if (adapter.itemCount == 0) {
-                val statsList = ArrayList(item.stats)
-                Collections.reverse(statsList)
-                adapter.addAll(statsList)
+            bindActions(item)
+            bindMetrics(item)
+        }
+
+        /** «Написать» доступно, только если есть куда (QMS-контакт) и это не свой профиль. */
+        private fun bindActions(item: ProfileModel) {
+            val canWrite = item.contacts.isNotEmpty() && !isOwnProfile
+            binding.profileActionWrite.isVisible = canWrite
+            binding.profileActionWrite.setOnClickListener { clickListener?.onWriteClick() }
+
+            val posts = item.stats.firstOrNull {
+                it.type == ProfileModel.StatType.FORUM_POSTS && !it.url.isNullOrEmpty()
+            }
+            binding.profileActionPosts.isVisible = posts != null
+            binding.profileActionPosts.setOnClickListener {
+                posts?.let { clickListener?.onStatClick(it) }
+            }
+            binding.profileActions.isVisible = canWrite || posts != null
+        }
+
+        private fun bindMetrics(item: ProfileModel) {
+            val metrics = binding.profileMetrics
+            metrics.removeAllViews()
+            val stats = item.stats.reversed().filter { it.type != null }
+            if (stats.isEmpty()) return
+            // Раскладываем ряды поровну: 3 колонки для 3/6 метрик, иначе до 4 в ряд —
+            // так последняя метрика не обрезается краем экрана, как было при скролле.
+            val columns = if (stats.size % 3 == 0) 3 else minOf(stats.size, 4)
+            val inflater = LayoutInflater.from(metrics.context)
+            stats.chunked(columns).forEach { rowStats ->
+                val row = LinearLayout(metrics.context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                rowStats.forEach { stat ->
+                    val cell = inflater.inflate(R.layout.profile_item_metric, row, false)
+                    (cell.layoutParams as LinearLayout.LayoutParams).weight = 1f
+                    cell.findViewById<TextView>(R.id.item_value).text = stat.value
+                    cell.findViewById<TextView>(R.id.item_title).setText(
+                        TempHelper.getTypeString(stat.type!!)
+                    )
+                    cell.setOnClickListener { clickListener?.onStatClick(stat) }
+                    row.addView(cell)
+                }
+                // Неполный последний ряд не должен растягивать свои ячейки на всю ширину.
+                repeat(columns - rowStats.size) {
+                    row.addView(View(metrics.context), LinearLayout.LayoutParams(0, 0, 1f))
+                }
+                metrics.addView(row)
             }
         }
     }
@@ -216,12 +255,7 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
             list.setHasFixedSize(false)
             list.layoutManager = LinearLayoutManager(list.context)
             list.isNestedScrollingEnabled = false
-            list.addItemDecoration(
-                DevicesFragment.SpacingItemDecoration(
-                    binding.root.context.resources.getDimensionPixelSize(R.dimen.dp16),
-                    true
-                )
-            )
+            list.addItemDecoration(DividerItemDecoration(list.context))
             adapter = InfoAdapter()
             list.adapter = adapter
             binding.profileSubTitle.setText(R.string.profile_title_information)
@@ -241,7 +275,7 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
             chips.removeAllViews()
             val inflater = LayoutInflater.from(chips.context)
             item.devices.forEach { device ->
-                val chip = inflater.inflate(R.layout.profile_device_chip, chips, false) as Chip
+                val chip = inflater.inflate(R.layout.profile_chip, chips, false) as Chip
                 chip.text = listOfNotNull(device.name, device.accessory)
                     .filter { it.isNotBlank() }
                     .joinToString(" ")
@@ -266,29 +300,26 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
             needles.any { contains(it) }
     }
 
-    private inner class ContactsHolder(binding: ProfileItemListBinding) : BaseViewHolder<ProfileModel>(binding.root) {
-        private val list: RecyclerView = binding.profileSubList
-        private val adapter: ContactsAdapter
+    private inner class ContactsHolder(binding: ProfileItemDevicesBinding) : BaseViewHolder<ProfileModel>(binding.root) {
+        private val chips: ChipGroup = binding.profileDeviceChips
 
         init {
-            list.setHasFixedSize(false)
-            list.layoutManager = LinearLayoutManager(list.context, LinearLayoutManager.HORIZONTAL, false)
-            adapter = ContactsAdapter(object : ContactsAdapter.InfoHolder.Listener {
-                override fun onClick(item: ProfileModel.Contact) {
-                    clickListener?.onContactClick(item)
-                }
-            })
-            list.adapter = adapter
-            list.isNestedScrollingEnabled = false
             binding.profileSubTitle.setText(R.string.profile_title_contacts)
         }
 
         override fun bind(item: ProfileModel) {
-            val contacts = item.contacts.toMutableList()
-            if (contacts.getOrNull(0)?.type == ProfileModel.ContactType.QMS) {
-                contacts.removeAt(0)
-            }
-            adapter.addAll(contacts)
+            chips.removeAllViews()
+            val inflater = LayoutInflater.from(chips.context)
+            // Первый контакт — всегда QMS, он же кнопка «Написать» в шапке.
+            item.contacts
+                .filter { it.type != ProfileModel.ContactType.QMS }
+                .forEach { contact ->
+                    val chip = inflater.inflate(R.layout.profile_chip, chips, false) as Chip
+                    chip.text = contact.title
+                    chip.setChipIconResource(TempHelper.getContactIcon(contact.type))
+                    chip.setOnClickListener { clickListener?.onContactClick(contact) }
+                    chips.addView(chip)
+                }
         }
     }
 
@@ -329,5 +360,6 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
         fun onContactClick(item: ProfileModel.Contact)
         fun onDeviceClick(item: ProfileModel.Device)
         fun onStatClick(item: ProfileModel.Stat)
+        fun onWriteClick()
     }
 }

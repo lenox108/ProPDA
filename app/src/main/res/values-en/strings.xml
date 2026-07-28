@@ -478,6 +478,7 @@
     <string name="profile">Profile</string>
     <string name="profile_title_about">About</string>
     <string name="profile_title_information">Info</string>
+    <string name="profile_action_posts">Posts</string>
     <string name="profile_title_devices">Devices</string>
     <string name="profile_title_contacts">Contacts</string>
     <string name="profile_title_warnings">Warnings log</string>

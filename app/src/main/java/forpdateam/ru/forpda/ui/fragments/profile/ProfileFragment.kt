@@ -286,6 +286,10 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         presenter.onDeviceClick(item)
     }
 
+    override fun onWriteClick() {
+        presenter.navigateToQms()
+    }
+
     override fun onStatClick(item: ProfileModel.Stat) {
         presenter.onStatClick(item)
     }
@@ -297,6 +301,7 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
     private fun showProfile(data: ProfileModel) {
         refreshToolbarMenuItems(true)
         val oldCount = adapter.itemCount
+        adapter.isOwnProfile = data.id == authHolder.get().userId
         adapter.setProfile(data)
         // Delay adapter update to prevent RecyclerView crash during layout
         recyclerView.post {
