@@ -1,10 +1,14 @@
 package forpdateam.ru.forpda.common
 
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.TextView
 import forpdateam.ru.forpda.common.AppToast as Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.view.ContextThemeWrapper
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.doOnAttach
@@ -13,6 +17,7 @@ import androidx.fragment.app.Fragment
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.snackbar.Snackbar
 import forpdateam.ru.forpda.R
+import forpdateam.ru.forpda.common.appicon.AppIconManager
 import timber.log.Timber
 import kotlin.math.max
 
@@ -44,52 +49,127 @@ fun Fragment.showSnackbarAboveSystemBars(@StringRes messageRes: Int, duration: I
     view?.showSnackbarAboveSystemBars(messageRes, duration)
 }
 
-fun View.showSnackbarAboveSystemBars(message: String, duration: Int = Snackbar.LENGTH_SHORT) {
-    showSnackbarSafely(message, duration)
+fun View.showSnackbarAboveSystemBars(
+        message: CharSequence,
+        duration: Int = Snackbar.LENGTH_SHORT,
+        configure: (Snackbar.() -> Unit)? = null,
+) {
+    showSnackbarSafely(message, duration, configure)
 }
 
-fun View.showSnackbarAboveSystemBars(@StringRes messageRes: Int, duration: Int = Snackbar.LENGTH_SHORT) {
-    showSnackbarSafely(context.getString(messageRes), duration)
+fun View.showSnackbarAboveSystemBars(
+        @StringRes messageRes: Int,
+        duration: Int = Snackbar.LENGTH_SHORT,
+        configure: (Snackbar.() -> Unit)? = null,
+) {
+    showSnackbarSafely(context.getString(messageRes), duration, configure)
 }
 
 /**
- * Показ Snackbar, который НЕ роняет приложение.
+ * Показ Snackbar, который НЕ роняет приложение и по возможности выглядит ОДИНАКОВО
+ * на всех устройствах.
  *
- * На некоторых устройствах/темах (зафиксирован краш на Samsung Galaxy S25 / Android 16) контекст
- * подходящего родителя Snackbar не содержит Material-атрибут `colorOnSurface`, и инфляция
- * `Snackbar$SnackbarLayout` падает с InflateException. [makeSnackbarAboveSystemBars] уже пытается
- * пересобрать снэк на корневом content-view (его тема — гарантированно Material). Здесь — последний
- * рубеж: если и это не помогло, тихо деградируем до Toast вместо вылета.
+ * На некоторых прошивках/палитрах (зафиксировано на Samsung Galaxy S25 / Android 16) в теме
+ * контекста не резолвятся Material-роли, и инфляция `Snackbar$SnackbarLayout` падает
+ * с InflateException. Раньше это сразу деградировало в [Toast] — плашку другой формы и без
+ * кнопки-действия, из-за чего одно и то же сообщение на разных телефонах выглядело
+ * по-разному («на одном полоска снизу, на другом пилюля с иконкой»).
+ *
+ * Порядок попыток:
+ *  1. тема view как есть — сохраняет динамику Material You / выбранной палитры;
+ *  2. тема приложения, наложенная ПРИНУДИТЕЛЬНО (force=true) — цвета чуть менее динамичные,
+ *     но все Material-роли гарантированно на месте, а виджет и вёрстка те же самые;
+ *  3. и только если даже это не собралось — [Toast] как последний рубеж (кнопки не будет).
  */
-private fun View.showSnackbarSafely(message: CharSequence, duration: Int) {
+private fun View.showSnackbarSafely(
+        message: CharSequence,
+        duration: Int,
+        configure: (Snackbar.() -> Unit)? = null,
+) {
     try {
-        makeSnackbarAboveSystemBars(message, duration).show()
+        makeSnackbarAboveSystemBars(message, duration).apply { configure?.invoke(this) }.show()
+        return
     } catch (e: Throwable) {
-        Timber.w(e, "Snackbar inflate/show failed; falling back to Toast")
-        runCatching { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
+        Timber.w(e, "Snackbar failed on the view theme; retrying with the app theme forced")
     }
+    try {
+        makeSnackbarAboveSystemBars(message, duration, forceAppTheme = true)
+                .apply { configure?.invoke(this) }
+                .show()
+        return
+    } catch (e: Throwable) {
+        Timber.w(e, "Snackbar failed with the app theme forced; falling back to Toast")
+    }
+    runCatching { Toast.makeText(context, message, Toast.LENGTH_LONG).show() }
 }
 
-fun View.makeSnackbarAboveSystemBars(message: CharSequence, duration: Int = Snackbar.LENGTH_SHORT): Snackbar {
-    // Инфлейтим снэк в контексте, у которого ГАРАНТИРОВАННО разрешимы Material-роли
-    // (colorSurface / colorOnSurface). Некоторые комбинации рантайм-оверлеев
-    // (Material You / движок акцент-палитр, см. MaterialYouApplier / AccentApplier)
-    // оставляют тему контекста текущего view без разрешимого colorOnSurface, и тогда
-    // инфляция Snackbar$SnackbarLayout падает с InflateException
-    // (MaterialColors.getColor → «requires a value for the colorOnSurface attribute»).
-    //
-    // ContextThemeWrapper(context, 0) копирует тему этого view (сохраняя динамический
-    // акцент/поверхность), а applyStyle(DayNightAppTheme, force=false) ДОБАВЛЯЕТ
-    // только НЕДОСТАЮЩИЕ роли, не затирая уже наложенную динамику. Snackbar.make с
-    // overload (context, view, …) инфлейтит в этом контексте, но остаётся привязан к
-    // view (Material 1.11+). Если что-то всё же пойдёт не так — showSnackbarSafely
-    // сверху деградирует до Toast.
-    val themed = ContextThemeWrapper(context, 0).apply {
-        theme.applyStyle(R.style.DayNightAppTheme, false)
-    }
+fun View.makeSnackbarAboveSystemBars(
+        message: CharSequence,
+        duration: Int = Snackbar.LENGTH_SHORT,
+        forceAppTheme: Boolean = false,
+): Snackbar {
+    val themed = snackbarThemedContext(forceAppTheme)
     return Snackbar.make(themed, this, message, duration)
             .applyThemedSurfaceColors(themed)
+            .applyAppIcon()
             .applyNavigationBarInset(this)
+}
+
+/**
+ * Значок приложения слева от текста — тот же, что рисует [AppToast], чтобы всплывающие
+ * сообщения выглядели одинаково независимо от того, каким виджетом их показали (снэкбар
+ * или аварийный тост) и на каком устройстве. Иконка берётся из выбранного пользователем
+ * лаунчер-алиаса ([AppIconManager]), поэтому следует за настройкой «Иконка приложения».
+ *
+ * У Material-снэкбара нет слота под иконку, поэтому вешаем её compound-drawable'ом на
+ * текстовую вью — так она центрируется по тексту и корректно ведёт себя при двух строках.
+ * Любая ошибка тут не должна ронять показ сообщения, отсюда runCatching.
+ */
+private fun Snackbar.applyAppIcon(): Snackbar {
+    runCatching {
+        val label = view.findViewById<TextView>(
+                com.google.android.material.R.id.snackbar_text) ?: return this
+        val density = view.resources.displayMetrics.density
+        val size = (24f * density).toInt()
+        val icon = ContextCompat.getDrawable(view.context, AppIconManager.selected(view.context).iconRes)
+                ?: return this
+        icon.setBounds(0, 0, size, size)
+        label.setCompoundDrawablesRelative(icon, null, null, null)
+        label.compoundDrawablePadding = (12f * density).toInt()
+    }
+    return this
+}
+
+/**
+ * Контекст, в котором инфлейтится снэк: тема текущего view + недостающие Material-роли.
+ *
+ * Некоторые комбинации рантайм-оверлеев (Material You / движок акцент-палитр, см.
+ * MaterialYouApplier / AccentApplier) оставляют тему без разрешимого `colorOnSurface`,
+ * и тогда инфляция `Snackbar$SnackbarLayout` падает с InflateException
+ * (MaterialColors.getColor → «requires a value for the colorOnSurface attribute»).
+ * `applyStyle(DayNightAppTheme, force = false)` дозаполняет ТОЛЬКО недостающее,
+ * не затирая уже наложенную динамику; `force = true` — аварийный режим (см.
+ * [showSnackbarSafely]), когда важнее собрать виджет, чем сохранить динамику.
+ *
+ * Тема копируется вручную (`newTheme().setTo(...)`) и передаётся в
+ * `ContextThemeWrapper(base, Resources.Theme)`. Соблазнительный вариант
+ * `ContextThemeWrapper(context, 0)` использовать НЕЛЬЗЯ: при нулевом themeResId
+ * appcompat подставляет свой дефолт и накладывает его force = true —
+ * `getTheme()` → `mThemeResource = R.style.Theme_AppCompat_Light`,
+ * `onApplyThemeResource()` → `theme.applyStyle(resid, true)`
+ * (androidx.appcompat.view.ContextThemeWrapper). В результате поверх темы приложения
+ * форсились светлые AppCompat-значения, в том числе `colorPrimary`
+ * (= `primary_material_light`, почти белый серый). Именно из него
+ * [applyThemedSurfaceColors] брала цвет кнопки действия — «Скачать» в проверке
+ * обновлений оказывалась блёкло-серой на светлой плашке, а акцент Material You
+ * до снэка вообще не доезжал.
+ */
+private fun View.snackbarThemedContext(forceAppTheme: Boolean): ContextThemeWrapper {
+    val theme = context.resources.newTheme().apply {
+        context.theme?.let { setTo(it) }
+        applyStyle(R.style.DayNightAppTheme, forceAppTheme)
+    }
+    return ContextThemeWrapper(context, theme)
 }
 
 /**
@@ -136,8 +216,24 @@ private fun Snackbar.applyNavigationBarInset(anchor: View): Snackbar {
         return this
     }
 
-    // Клавиатура открыта (снэк держим над IME) либо таббара нет (полноэкранные
-    // экраны) — поднимаем маржином на величину нижнего chrome + системного навбара.
+    // Клавиатура открыта (снэк держим над IME) либо таббара нет (экран настроек и
+    // прочие полноэкранные) — якорим снэк к невидимой распорке высотой с нижний
+    // системный бар / IME.
+    //
+    // Ручная маржин-математика здесь НЕ работает: Material в updateMargins()
+    // ПЕРЕЗАПИСЫВАЕТ bottomMargin (= originalMargins.bottom + extraBottomMargin…,
+    // проверено по байткоду material 1.13.0), затирая всё, что мы дописали в
+    // doOnAttach. А собственный инсет-слушатель снэка на экране настроек давал
+    // ноль — при трёхкнопочной навигации плашка уезжала ПОД кнопки (репро на
+    // эмуляторе + скриншот владельца с Xiaomi). Через anchorView Material считает
+    // отступ по координатам на экране и наш dp уже не теряет.
+    val spacer = anchor.ensureBottomInsetSpacer()
+    if (spacer != null) {
+        setAnchorView(spacer)
+        return this
+    }
+
+    // Крайний случай: не нашли content-контейнер, чтобы повесить распорку.
     view.doOnAttach { snackbarView ->
         val bottomInset = anchor.transientMessageBottomOffsetPx()
         if (bottomInset <= 0) return@doOnAttach
@@ -148,6 +244,33 @@ private fun Snackbar.applyNavigationBarInset(anchor: View): Snackbar {
     }
     return this
 }
+
+/**
+ * Невидимая распорка в `android.R.id.content` высотой с нижние системные бары (или IME):
+ * её верхняя граница — та линия, выше которой должен встать снэкбар. Живёт одна на активити,
+ * переиспользуется и пересчитывается на каждый показ. `INVISIBLE` (не `GONE`) — вью должна
+ * участвовать в разметке, чтобы у неё были координаты, но при этом не ловить касания.
+ */
+private fun View.ensureBottomInsetSpacer(): View? {
+    val content = rootView?.findViewById<View>(android.R.id.content) as? FrameLayout ?: return null
+    val height = transientMessageBottomOffsetPx()
+    if (height <= 0) return null
+
+    val existing = content.findViewWithTag<View>(BOTTOM_INSET_SPACER_TAG)
+    val spacer = existing ?: View(context).apply {
+        tag = BOTTOM_INSET_SPACER_TAG
+        visibility = View.INVISIBLE
+        isClickable = false
+        isFocusable = false
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        content.addView(this)
+    }
+    spacer.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM)
+    return spacer
+}
+
+private const val BOTTOM_INSET_SPACER_TAG = "forpda_snackbar_bottom_inset_spacer"
 
 private fun View.isImeVisible(): Boolean =
         ViewCompat.getRootWindowInsets(this)?.isVisible(WindowInsetsCompat.Type.ime()) == true

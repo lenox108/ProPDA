@@ -18,7 +18,7 @@ import forpdateam.ru.forpda.client.interceptors.ImageLoadingInterceptor
 import coil.size.Precision
 import forpdateam.ru.forpda.common.ForPdaCoil
 import forpdateam.ru.forpda.common.FourPdaImageUrls
-import forpdateam.ru.forpda.common.makeSnackbarAboveSystemBars
+import forpdateam.ru.forpda.common.showSnackbarAboveSystemBars
 import forpdateam.ru.forpda.databinding.ImgViewPageBinding
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.internal.http2.StreamResetException
@@ -116,12 +116,13 @@ class ImageViewerAdapter : PagerAdapter() {
                         hideProgress(binding)
                         autoRetryAttempts.remove(position)
                         logLoadError(data, result.throwable)
-                        container.makeSnackbarAboveSystemBars(errorMessageRes(result.throwable), Snackbar.LENGTH_LONG)
-                                .setAction(R.string.retry) {
-                                    autoRetryAttempts.remove(position)
-                                    loadImage(container, binding, position)
-                                }
-                                .show()
+                        container.showSnackbarAboveSystemBars(
+                                errorMessageRes(result.throwable), Snackbar.LENGTH_LONG) {
+                            setAction(R.string.retry) {
+                                autoRetryAttempts.remove(position)
+                                loadImage(container, binding, position)
+                            }
+                        }
                     }
 
                     override fun onCancel(request: ImageRequest) {
