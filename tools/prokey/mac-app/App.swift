@@ -12,6 +12,19 @@ struct ProPDAKeysApp: App {
     }
 }
 
+/// Цвета берём из системных семантических — они сами переключаются со светлой и тёмной
+/// темой macOS. Полупрозрачный серый, стоявший тут раньше, давал мутный фон: он подмешивался
+/// к подложке окна вместо того, чтобы задавать собственную поверхность.
+enum Palette {
+    /// Карточки и панели: белые в светлой теме, приподнятые тёмные — в тёмной.
+    static var card: Color { Color(nsColor: .controlBackgroundColor) }
+    /// Основная поверхность списка.
+    static var surface: Color { Color(nsColor: .textBackgroundColor) }
+    /// Шапка таблицы — на тон отличается от строк.
+    static var header: Color { Color(nsColor: .windowBackgroundColor) }
+    static var separator: Color { Color(nsColor: .separatorColor) }
+}
+
 struct RootView: View {
     @StateObject private var store = Store()
     @State private var input = ""
@@ -94,6 +107,7 @@ struct RootView: View {
             }
         }
         .padding(20)
+        .background(Palette.header)
         .alert("Ошибка", isPresented: .constant(store.lastError != nil)) {
             Button("Ок") { store.lastError = nil }
         } message: { Text(store.lastError ?? "") }
@@ -114,7 +128,8 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Palette.separator, lineWidth: 0.5))
     }
 
     private func issue() {
@@ -166,7 +181,7 @@ struct ClientTable: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Color.secondary.opacity(0.07))
+            .background(Palette.header)
 
             if clients.isEmpty {
                 Text("Пока никого. Введите номер покупателя и нажмите «Выдать ключ».")
@@ -184,14 +199,15 @@ struct ClientTable: View {
                 }
             }
         }
-        .background(Color.secondary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.25), lineWidth: 0.5))
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Palette.separator, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func row(_ c: Client) -> some View {
         HStack(spacing: 8) {
             Text(c.nick).frame(width: 150, alignment: .leading).lineLimit(1)
-            Text("\(c.memberId)").font(.system(.body, design: .monospaced))
+            Text(String(c.memberId)).font(.system(.body, design: .monospaced))
                 .foregroundStyle(.secondary).frame(width: 90, alignment: .leading)
             Text(String(c.date.suffix(5))).foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
