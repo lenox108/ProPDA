@@ -1383,4 +1383,43 @@
     <string name="pref_title_proxy_safety">Безопасность</string>
     <string name="pref_summary_proxy_safety">Через прокси идут ваши cookies авторизации 4PDA. Используйте только свой прокси — на публичных ваша сессия окажется у постороннего. Пароль хранится в зашифрованном виде. Темы рендерятся нативно, поэтому прокси для них работает полностью; новости и другие страницы на WebView всегда идут напрямую — кроме проверки Cloudflare, её надо решать тем же маршрутом. Прокси с логином и паролем WebView не поддерживает, в этом случае проверка тоже пойдёт напрямую</string>
 
+
+    <!-- Экран настроек: разделы корневого хаба -->
+    <string name="settings_group_sections">Разделы</string>
+    <string name="settings_group_recent">Недавно изменённые</string>
+    <string name="settings_search_hint">Поиск по настройкам</string>
+    <string name="settings_search_empty">Ничего не найдено</string>
+    <string name="settings_search_clear">Очистить</string>
+    <string name="settings_section_appearance_summary">Тема, цвета, шрифт, плотность, иконки</string>
+    <string name="settings_section_reading">Темы и чтение</string>
+    <string name="settings_section_reading_summary">Режим чтения, жесты, посты, редактор</string>
+    <string name="settings_section_lists">Списки и лента</string>
+    <string name="settings_section_lists_summary">Избранное, темы, счётчики</string>
+    <string name="settings_section_navigation">Навигация</string>
+    <string name="settings_section_navigation_summary">Экран запуска, нижнее меню</string>
+    <string name="settings_section_notifications_summary">Избранное, QMS, упоминания, фон</string>
+    <string name="settings_section_downloads">Загрузки и сеть</string>
+    <string name="settings_section_downloads_summary">Способ загрузки, папка, прокси</string>
+    <string name="settings_section_account_summary">Настройки форума, правила, выход</string>
+    <string name="settings_section_about_summary">Версия, обновления, резервная копия</string>
+    <string name="settings_section_icons">Иконки</string>
+    <string name="settings_section_icons_summary">Ярлык, статус-бар, уведомления</string>
+    <!-- Экран настроек: группы внутри разделов -->
+    <string name="settings_group_theme_colors">Тема и цвета</string>
+    <string name="settings_group_text">Текст</string>
+    <string name="settings_group_misc">Прочее</string>
+    <string name="settings_group_reading">Чтение</string>
+    <string name="settings_group_panels_gestures">Панели и жесты</string>
+    <string name="settings_group_posts">Посты</string>
+    <string name="settings_group_editor">Редактор</string>
+    <string name="settings_group_performance">Производительность</string>
+    <string name="settings_group_topic_lists">Списки тем</string>
+    <string name="settings_group_startup">Запуск</string>
+    <string name="settings_group_bottom_nav">Нижнее меню</string>
+    <string name="settings_group_network">Сеть</string>
+
+    <string name="pref_title_app_font_size">Размер шрифта приложения</string>
+    <string name="pref_summary_app_font_size">Сейчас %1$s · 100 %% = 16</string>
+    <string name="pref_app_font_size_restart_notice">Размер интерфейса применится после возврата из настроек</string>
+    <string name="pref_title_topic_text_size">Размер шрифта в темах</string>
 </resources>

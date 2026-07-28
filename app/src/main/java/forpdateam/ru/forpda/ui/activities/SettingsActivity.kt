@@ -9,6 +9,9 @@ import androidx.preference.PreferenceFragmentCompat
 import android.view.MenuItem
 import android.view.Menu
 import android.view.View
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import androidx.core.widget.doAfterTextChanged
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.LocaleHelper
 import forpdateam.ru.forpda.common.Preferences
@@ -22,11 +25,14 @@ import forpdateam.ru.forpda.ui.UiThemeStyles
 import forpdateam.ru.forpda.ui.AccentApplier
 import forpdateam.ru.forpda.ui.ContrastApplier
 import forpdateam.ru.forpda.ui.MaterialYouApplier
-import forpdateam.ru.forpda.ui.fragments.settings.NotificationsSettingsFragment
-import forpdateam.ru.forpda.ui.fragments.settings.ForumSettingsFragment
-import forpdateam.ru.forpda.ui.fragments.settings.ProxySettingsFragment
-import forpdateam.ru.forpda.ui.fragments.settings.SettingsFragment
 import forpdateam.ru.forpda.ui.fragments.settings.BaseSettingFragment
+import forpdateam.ru.forpda.ui.fragments.settings.ForumSettingsFragment
+import forpdateam.ru.forpda.ui.fragments.settings.NotificationsSettingsFragment
+import forpdateam.ru.forpda.ui.fragments.settings.ProxySettingsFragment
+import forpdateam.ru.forpda.ui.fragments.settings.RecentSettings
+import forpdateam.ru.forpda.ui.fragments.settings.SettingsFragment
+import forpdateam.ru.forpda.ui.fragments.settings.SettingsSearchIndex
+import forpdateam.ru.forpda.ui.fragments.settings.SettingsSection
 import forpdateam.ru.forpda.model.preferences.MainPreferencesHolder
 import forpdateam.ru.forpda.model.datastore.MainDataStore
 import forpdateam.ru.forpda.common.PermissionHelper
@@ -42,6 +48,7 @@ class SettingsActivity : AppCompatActivity() {
     @Inject lateinit var permissionHelper: PermissionHelper
 
     private var searchQuery: String? = null
+    private var searchMenuItem: MenuItem? = null
 
     private lateinit var appliedUiPalette: Preferences.Main.UiPalette
     private lateinit var appliedFontMode: forpdateam.ru.forpda.ui.AppFontMode
@@ -49,6 +56,20 @@ class SettingsActivity : AppCompatActivity() {
     private var appliedFlatUi: Boolean = false
     private lateinit var appliedAccent: Preferences.Main.AccentPalette
     private var appliedAccentStyle: Preferences.Main.AccentStyle = Preferences.Main.AccentStyle.TONAL
+
+    /**
+     * Любое изменение настройки → в «Недавно изменённые» на корневом экране. Слушаем здесь, а не
+     * во фрагменте: так попадают правки со всех экранов настроек, включая уведомления и прокси.
+     * Фильтр по индексу отсекает служебные ключи (состояние UI, внутренние флаги) — в блоке
+     * должны быть только настоящие настройки.
+     */
+    private val recentSettingsListener =
+            android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                val settingKey = key ?: return@OnSharedPreferenceChangeListener
+                if (SettingsSearchIndex.find(this, settingKey) != null) {
+                    RecentSettings.record(this, settingKey)
+                }
+            }
 
     override fun attachBaseContext(base: Context) {
         val localizedContext = LocaleHelper.onAttach(base)
@@ -96,16 +117,19 @@ class SettingsActivity : AppCompatActivity() {
         // Последний слой: усиление контраста по системной настройке (a11y, Android 14+).
         ContrastApplier.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
+        // Заголовки в индексе поиска — уже готовые строки: после смены языка/темы их надо пересобрать.
+        SettingsSearchIndex.invalidate()
         val barColor = chromeCanvasColor(R.attr.main_toolbar_accent_surface)
         setContentView(R.layout.activity_settings)
-        // activity_settings корень (fragment_content) в XML держит статический
+        // activity_settings корень (settings_root) в XML держит статический
         // colorSurfaceContainerLowest — под Material You перекрашиваем его в полотно
         // обоев (ChromeCanvas), вне MY fallback = тот же Lowest.
-        findViewById<View>(R.id.fragment_content)?.setBackgroundColor(
-                chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
+        val canvas = chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest)
+        findViewById<View>(R.id.settings_root)?.setBackgroundColor(canvas)
+        findViewById<View>(R.id.fragment_content)?.setBackgroundColor(canvas)
         EdgeToEdge.apply(
                 this,
-                findViewById(R.id.fragment_content),
+                findViewById(R.id.settings_root),
                 padTop = true,
                 padBottom = false,
                 topUnderlayColor = barColor,
@@ -122,20 +146,32 @@ class SettingsActivity : AppCompatActivity() {
             elevation = 0f
         }
 
+        setupRootSearchBar()
 
-        val fragment: PreferenceFragmentCompat = when (intent?.getStringExtra(ARG_NEW_PREFERENCE_SCREEN)) {
-            NotificationsSettingsFragment.PREFERENCE_SCREEN_NAME -> NotificationsSettingsFragment()
-            ForumSettingsFragment.PREFERENCE_SCREEN_NAME -> ForumSettingsFragment()
-            ProxySettingsFragment.PREFERENCE_SCREEN_NAME -> ProxySettingsFragment()
-            else -> SettingsFragment()
+        if (savedInstanceState == null) {
+            val highlightKey = intent?.getStringExtra(ARG_HIGHLIGHT_KEY)
+            val fragment: PreferenceFragmentCompat = when (intent?.getStringExtra(ARG_NEW_PREFERENCE_SCREEN)) {
+                NotificationsSettingsFragment.PREFERENCE_SCREEN_NAME -> NotificationsSettingsFragment()
+                ForumSettingsFragment.PREFERENCE_SCREEN_NAME -> ForumSettingsFragment()
+                ProxySettingsFragment.PREFERENCE_SCREEN_NAME -> ProxySettingsFragment()
+                else -> SettingsFragment.newInstance(SettingsSection.ROOT)
+            }
+            if (highlightKey != null && fragment.arguments?.containsKey(BaseSettingFragment.ARG_HIGHLIGHT_KEY) != true) {
+                fragment.arguments = (fragment.arguments ?: Bundle()).apply {
+                    putString(BaseSettingFragment.ARG_HIGHLIGHT_KEY, highlightKey)
+                }
+            }
+            supportFragmentManager.beginTransaction().replace(R.id.fragment_content, fragment).commit()
         }
 
-        supportFragmentManager.beginTransaction().replace(R.id.fragment_content, fragment).commit()
+        // Экран меняется без пересоздания активити (вложенные разделы) — хром обновляем по бэкстеку.
+        supportFragmentManager.addOnBackStackChangedListener { onSettingsScreenChanged() }
     }
-
 
     override fun onResume() {
         super.onResume()
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .registerOnSharedPreferenceChangeListener(recentSettingsListener)
         val paletteNow = mainPreferencesHolder.getUiPalette()
         val fontModeNow = FontController.getCurrentFontMode(mainPreferencesHolder)
         if (::appliedUiPalette.isInitialized && paletteNow != appliedUiPalette) {
@@ -176,6 +212,12 @@ class SettingsActivity : AppCompatActivity() {
         syncTopBarSystemBars(barColor)
     }
 
+    override fun onPause() {
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .unregisterOnSharedPreferenceChangeListener(recentSettingsListener)
+        super.onPause()
+    }
+
     private fun syncTopBarSystemBars(barColor: Int) {
         SystemBarAppearance.syncStatusBar(this, barColor)
         SystemBarAppearance.syncNavigationBar(this)
@@ -196,24 +238,69 @@ class SettingsActivity : AppCompatActivity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.settings_menu, menu)
         val item = menu.findItem(R.id.action_search)
+        searchMenuItem = item
         val sv = item.actionView as? SearchView
         sv?.queryHint = getString(R.string.search)
         sv?.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean = true
             override fun onQueryTextChange(newText: String?): Boolean {
-                searchQuery = newText
                 (supportFragmentManager.findFragmentById(R.id.fragment_content) as? BaseSettingFragment)
                         ?.applySearchQuery(newText)
                 return true
             }
         })
-        // Если вернулись в активити с уже набранным запросом
-        searchQuery?.takeIf { it.isNotBlank() }?.also {
-            item.expandActionView()
-            sv?.setQuery(it, false)
-        }
+        item.isVisible = !isRootScreen()
         return true
     }
+
+    // region Поиск на корневом экране
+
+    /**
+     * Постоянная строка поиска корневого экрана: ищет сразу по всем разделам (см.
+     * SettingsSearchIndex). На вложенных экранах она скрыта — там остаётся лупа в тулбаре,
+     * которая фильтрует открытый список.
+     */
+    private fun setupRootSearchBar() {
+        findViewById<EditText>(R.id.settingsSearchInput)?.doAfterTextChanged { text ->
+            val query = text?.toString().orEmpty()
+            searchQuery = query
+            findViewById<View>(R.id.settingsSearchClear)?.visibility =
+                    if (query.isEmpty()) View.GONE else View.VISIBLE
+            rootFragment()?.applyGlobalSearch(query)
+        }
+        findViewById<View>(R.id.settingsSearchClear)?.setOnClickListener {
+            findViewById<EditText>(R.id.settingsSearchInput)?.setText("")
+        }
+    }
+
+    /** Вызывается экранами настроек: показать/скрыть строку поиска и лупу под текущий экран. */
+    fun onSettingsScreenChanged() {
+        val root = isRootScreen()
+        findViewById<View>(R.id.settings_search_container)?.visibility =
+                if (root) View.VISIBLE else View.GONE
+        searchMenuItem?.isVisible = !root
+        if (root) {
+            // Вернулись на корень с непустым запросом — выдача должна остаться прежней.
+            searchQuery?.takeIf { it.isNotBlank() }?.let { rootFragment()?.applyGlobalSearch(it) }
+        } else {
+            hideKeyboard()
+        }
+    }
+
+    private fun rootFragment(): SettingsFragment? =
+            (supportFragmentManager.findFragmentById(R.id.fragment_content) as? SettingsFragment)
+                    ?.takeIf { it.section == SettingsSection.ROOT }
+
+    private fun isRootScreen(): Boolean = rootFragment() != null
+
+    private fun hideKeyboard() {
+        val input = findViewById<EditText>(R.id.settingsSearchInput) ?: return
+        input.clearFocus()
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                ?.hideSoftInputFromWindow(input.windowToken, 0)
+    }
+
+    // endregion
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -222,6 +309,10 @@ class SettingsActivity : AppCompatActivity() {
 
     companion object {
         const val ARG_NEW_PREFERENCE_SCREEN = "new_preference_screen"
+
+        /** Ключ настройки, к которой надо прокрутить и подсветить (переход из поиска). */
+        const val ARG_HIGHLIGHT_KEY = "highlight_key"
+
         private const val STATUS_BAR_UNDERLAY_TAG = "settings_status_bar_underlay"
     }
 }

@@ -1,6 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/fragment_content"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settings_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?attr/colorSurfaceContainerLowest" />
+    android:background="?attr/colorSurfaceContainerLowest"
+    android:orientation="vertical">
+
+    <!-- Строка поиска показывается только на корневом экране настроек. -->
+    <FrameLayout
+        android:id="@+id/settings_search_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingTop="@dimen/dp8"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingBottom="@dimen/dp4"
+        android:visibility="gone">
+
+        <include layout="@layout/settings_search_bar" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/fragment_content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="?attr/colorSurfaceContainerLowest" />
+
+</LinearLayout>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Строка раздела на корневом экране настроек: как preference_custom, но с видимой
+    иконкой в круглой подложке акцента (см. bg_settings_section_icon).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent"
+    android:clickable="true"
+    android:clipToPadding="false"
+    android:focusable="true"
+    android:foreground="?selectableItemBackground"
+    android:gravity="center_vertical"
+    android:minHeight="?attr/listPreferredItemHeightSmall"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingEnd="@dimen/content_padding_horizontal">
+
+    <LinearLayout
+        android:id="@+id/icon_frame"
+        android:layout_width="@dimen/dp40"
+        android:layout_height="@dimen/dp40"
+        android:layout_marginEnd="@dimen/content_padding_horizontal"
+        android:background="@drawable/bg_settings_section_icon"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <androidx.preference.internal.PreferenceImageView
+            android:id="@android:id/icon"
+            android:layout_width="@dimen/dp24"
+            android:layout_height="@dimen/dp24"
+            android:maxWidth="@dimen/dp24"
+            android:maxHeight="@dimen/dp24"
+            android:tint="?attr/colorAccent" />
+    </LinearLayout>
+
+    <RelativeLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:paddingTop="@dimen/content_block_padding_vertical"
+        android:paddingBottom="@dimen/content_block_padding_vertical">
+
+        <TextView
+            android:id="@android:id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="marquee"
+            android:singleLine="true"
+            android:textAppearance="?textAppearanceListItem"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="@dimen/list_topic_title_text_size" />
+
+        <TextView
+            android:id="@android:id/summary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@android:id/title"
+            android:layout_alignStart="@android:id/title"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="@dimen/list_topic_meta_text_size" />
+
+    </RelativeLayout>
+
+    <LinearLayout
+        android:id="@android:id/widget_frame"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:gravity="end|center_vertical"
+        android:orientation="vertical" />
+
+</LinearLayout>

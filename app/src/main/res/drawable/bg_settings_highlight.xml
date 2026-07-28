@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Подсветка пункта, к которому пришли из поиска или блока «Недавно изменённые».
+    Держится пару секунд, затем строка возвращается к обычной плашке.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="?attr/colorSurfaceContainerHighest" />
+    <stroke
+        android:width="@dimen/divider_thin"
+        android:color="?attr/colorAccent" />
+    <corners android:radius="@dimen/dp12" />
+</shape>
