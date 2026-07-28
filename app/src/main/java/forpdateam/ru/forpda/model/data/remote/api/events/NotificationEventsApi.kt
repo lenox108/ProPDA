@@ -145,6 +145,21 @@ class NotificationEventsApi(private val webClient: IWebClient) {
         qmsInspectorCache.invalidate()
     }
 
+    /**
+     * Сброс кэша одного источника. Нужен foreground-пути по той же причине, что и пушу:
+     * реальное WS-событие означает «состояние изменилось», и копия моложе TTL устарела по
+     * определению. Без сброса второе сообщение в диалоге, разнесённое с первым на 3–8 секунд
+     * (два окна агрегации, но один TTL), обогащалось СТАРЫМ ответом инспектора и выходило
+     * с new=0 — уведомление не обновлялось до следующего опроса.
+     */
+    fun invalidateInspectorCache(source: NotificationEvent.Source) {
+        when (source) {
+            NotificationEvent.Source.QMS -> qmsInspectorCache.invalidate()
+            NotificationEvent.Source.THEME -> favInspectorCache.invalidate()
+            else -> Unit
+        }
+    }
+
     fun parseWebSocketEvent(message: String): NotificationEvent? {
         val matcher = webSocketEventPattern.matcher(message)
         return parseWebSocketEvent(matcher)

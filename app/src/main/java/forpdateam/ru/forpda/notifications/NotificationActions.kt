@@ -61,6 +61,7 @@ object NotificationActions {
             data = actionUri(event.notifyId(), "mark_read")
             putExtra(NotificationActionReceiver.EXTRA_NOTIFY_ID, event.notifyId())
             putExtra(NotificationActionReceiver.EXTRA_IS_MENTION, marksAnswerReadFor(event))
+            putExtra(NotificationActionReceiver.EXTRA_IS_QMS, event.fromQms())
             putExtra(NotificationActionReceiver.EXTRA_TOPIC_ID, event.sourceId)
             putExtra(NotificationActionReceiver.EXTRA_POST_ID, event.messageId)
         }

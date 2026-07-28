@@ -54,6 +54,9 @@ class QmsMessagePreviewLoader @Inject constructor(
     suspend fun enrich(context: Context, event: NotificationEvent) {
         if (!event.fromQms() || event.isRead) return
         if (!prefs.getQmsPreviewEnabled()) return
+        // Системный диалог («Сообщения 4PDA», mid=0) не трогаем: get-thread-messages с mid=0
+        // не проверен, а молча пометить прочитанными СИСТЕМНЫЕ оповещения — худшая из побочек.
+        if (event.userId <= 0) return
         val themeId = event.sourceId
         if (themeId <= 0) return
 

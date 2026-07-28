@@ -45,6 +45,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val isMention = intent.getBooleanExtra(EXTRA_IS_MENTION, false)
         val topicId = intent.getIntExtra(EXTRA_TOPIC_ID, 0)
         val postId = intent.getIntExtra(EXTRA_POST_ID, 0)
+        // Снятие уведомления здесь идёт в обход NotificationsService.cancelNotification, поэтому
+        // буфер превью чистим сами — иначе «прочитанные» тексты воскресали со следующим сообщением.
+        if (intent.getBooleanExtra(EXTRA_IS_QMS, false) && topicId > 0) {
+            QmsPreviewStore.forget(topicId)
+        }
         if (!isMention || topicId <= 0 || postId <= 0) return
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -75,6 +80,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 qmsInteractor.sendMessage(userId, themeId, text, emptyList())
                 NotificationManagerCompat.from(context).cancel(notifyId)
                 NotificationPublisher.refreshGroupSummaries(context, excludeIds = setOf(notifyId))
+                // Ответ из шторки закрывает разговор так же, как «Прочитано»: буфер превью
+                // диалога больше не нужен (снимаем в обход cancelNotification сервиса).
+                QmsPreviewStore.forget(themeId)
             } catch (t: Throwable) {
                 Timber.e(t, "Notification quick-reply failed user=$userId theme=$themeId")
                 // Уведомление уже свернулось, и без этого текст пользователя пропадал молча:
@@ -95,6 +103,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_POST_ID = "extra_post_id"
         const val EXTRA_USER_ID = "extra_user_id"
         const val EXTRA_IS_MENTION = "extra_is_mention"
+        const val EXTRA_IS_QMS = "extra_is_qms"
 
         /** Сохранённый текст неотправленного ответа: несёт его действие «Повторить». */
         const val EXTRA_PENDING_TEXT = "extra_pending_text"
