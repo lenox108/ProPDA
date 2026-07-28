@@ -422,8 +422,8 @@ class MessagePanel(
             contentDescription = context.getString(R.string.msg_panel_collapse)
             setOnClickListener { collapse(byUser = true) }
         }
+        // Разворачивает любой тап по строке — отдельной кнопки в ней нет.
         collapsedBar?.setOnClickListener { expand(byUser = true, focusInput = true) }
-        quickBinding?.buttonExpand?.setOnClickListener { expand(byUser = true, focusInput = true) }
         if (!enabled) {
             applyCollapsedState(false)
             return
