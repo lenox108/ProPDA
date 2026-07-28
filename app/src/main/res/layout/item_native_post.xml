@@ -87,7 +87,7 @@
                 android:singleLine="true"
                 android:textSize="12sp"
                 android:textColor="?attr/colorOnSurfaceVariant"
-                tools:text="Гость_77 · #413" />
+                tools:text="Гость_77" />
 
             <TextView
                 android:id="@+id/native_post_low_rating_value"
