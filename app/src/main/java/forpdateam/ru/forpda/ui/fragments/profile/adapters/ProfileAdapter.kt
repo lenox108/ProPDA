@@ -7,7 +7,10 @@ import androidx.recyclerview.widget.RecyclerView
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.common.LinkMovementMethod
 import forpdateam.ru.forpda.common.getColorFromAttr
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import forpdateam.ru.forpda.databinding.ProfileItemAboutBinding
+import forpdateam.ru.forpda.databinding.ProfileItemDevicesBinding
 import forpdateam.ru.forpda.databinding.ProfileItemListBinding
 import forpdateam.ru.forpda.databinding.ProfileItemNoteBinding
 import forpdateam.ru.forpda.databinding.ProfileItemStatsBinding
@@ -75,13 +78,18 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
                 )
                 AboutHolder(binding)
             }
-            INFO_VIEW_TYPE, DEVICES_VIEW_TYPE, CONTACTS_VIEW_TYPE, WARNING_VIEW_TYPE -> {
+            DEVICES_VIEW_TYPE -> {
+                val binding = ProfileItemDevicesBinding.inflate(
+                    LayoutInflater.from(parent.context), parent, false
+                )
+                DevicesHolder(binding)
+            }
+            INFO_VIEW_TYPE, CONTACTS_VIEW_TYPE, WARNING_VIEW_TYPE -> {
                 val binding = ProfileItemListBinding.inflate(
                     LayoutInflater.from(parent.context), parent, false
                 )
                 when (viewType) {
                     INFO_VIEW_TYPE -> InfosHolder(binding)
-                    DEVICES_VIEW_TYPE -> DevicesHolder(binding)
                     CONTACTS_VIEW_TYPE -> ContactsHolder(binding)
                     WARNING_VIEW_TYPE -> WarningsHolder(binding)
                     else -> throw IllegalArgumentException("Unknown view type: $viewType")
@@ -226,26 +234,36 @@ class ProfileAdapter(private val linkHandler: ILinkHandler) : RecyclerView.Adapt
         }
     }
 
-    private inner class DevicesHolder(binding: ProfileItemListBinding) : BaseViewHolder<ProfileModel>(binding.root) {
-        private val list: RecyclerView = binding.profileSubList
-        private val adapter: DevicesAdapter
-
-        init {
-            list.setHasFixedSize(false)
-            list.layoutManager = LinearLayoutManager(list.context)
-            list.isNestedScrollingEnabled = false
-            adapter = DevicesAdapter(object : DevicesAdapter.InfoHolder.Listener {
-                override fun onClick(item: ProfileModel.Device) {
-                    clickListener?.onDeviceClick(item)
-                }
-            })
-            list.adapter = adapter
-            binding.profileSubTitle.setText(R.string.profile_title_devices)
-        }
+    private inner class DevicesHolder(binding: ProfileItemDevicesBinding) : BaseViewHolder<ProfileModel>(binding.root) {
+        private val chips: ChipGroup = binding.profileDeviceChips
 
         override fun bind(item: ProfileModel) {
-            adapter.addAll(item.devices)
+            chips.removeAllViews()
+            val inflater = LayoutInflater.from(chips.context)
+            item.devices.forEach { device ->
+                val chip = inflater.inflate(R.layout.profile_device_chip, chips, false) as Chip
+                chip.text = listOfNotNull(device.name, device.accessory)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                chip.setChipIconResource(deviceIconRes(device))
+                chip.setOnClickListener { clickListener?.onDeviceClick(device) }
+                chips.addView(chip)
+            }
         }
+
+        /** Тип устройства 4pda не отдаёт — угадываем по названию и слагу devdb-ссылки. */
+        private fun deviceIconRes(device: ProfileModel.Device): Int {
+            val hay = "${device.name.orEmpty()} ${device.url.orEmpty()}".lowercase()
+            return when {
+                hay.containsAny("watch", "band", "часы") -> R.drawable.ic_device_watch
+                hay.containsAny("tab", "pad", "планшет") -> R.drawable.ic_device_tablet
+                hay.containsAny("book", "laptop", "ноутбук") -> R.drawable.ic_device_laptop
+                else -> R.drawable.ic_device_phone
+            }
+        }
+
+        private fun String.containsAny(vararg needles: String): Boolean =
+            needles.any { contains(it) }
     }
 
     private inner class ContactsHolder(binding: ProfileItemListBinding) : BaseViewHolder<ProfileModel>(binding.root) {
