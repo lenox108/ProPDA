@@ -6,9 +6,12 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import forpdateam.ru.forpda.common.Preferences
 import forpdateam.ru.forpda.common.SecureCookiesPreferences
+import forpdateam.ru.forpda.entity.db.history.HistoryItemRoom
 import forpdateam.ru.forpda.entity.db.notes.AppDatabase
 import forpdateam.ru.forpda.entity.db.notes.NoteFolderRoom
 import forpdateam.ru.forpda.entity.db.notes.NoteItemRoom
+import forpdateam.ru.forpda.entity.db.readboundary.TopicReadBoundaryDatabase
+import forpdateam.ru.forpda.entity.db.readboundary.TopicReadBoundaryRoom
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -30,14 +33,25 @@ class SettingsBackupServiceTest {
         .allowMainThreadQueries()
         .build()
 
+    private val readBoundaryDatabase: TopicReadBoundaryDatabase = Room
+        .inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            TopicReadBoundaryDatabase::class.java,
+        )
+        .allowMainThreadQueries()
+        .build()
+
     private fun createService(): SettingsBackupService = SettingsBackupService(
         ApplicationProvider.getApplicationContext(),
         NotesBackupStore(database),
+        HistoryBackupStore(database),
+        ReadBoundaryBackupStore(readBoundaryDatabase),
     )
 
     @After
     fun tearDown() {
         database.close()
+        readBoundaryDatabase.close()
     }
 
     @Test
@@ -175,6 +189,91 @@ class SettingsBackupServiceTest {
         service.restore(Uri.fromFile(file))
 
         assertEquals(listOf(5L), database.noteItemDao().getAllNotesList().map { it.id })
+    }
+
+    @Test
+    fun backupRestoresHistoryAndReadBoundaries() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        database.historyItemDao().insertHistoryList(
+            listOf(
+                HistoryItemRoom(11, "https://4pda.to/forum/1", "вчера", "Тема один", 1000),
+                HistoryItemRoom(12, "https://4pda.to/forum/2", "сегодня", "Тема два", 2000),
+            ),
+        )
+        readBoundaryDatabase.topicReadBoundaryDao().upsert(
+            TopicReadBoundaryRoom(
+                topicId = 555,
+                lastSeenPostId = 900,
+                lastSeenPage = 3,
+                updatedAt = 4242,
+                maxLoadedPostId = 950,
+                maxLoadedPage = 4,
+            ),
+        )
+        val progress = context.getSharedPreferences("article_reading_progress", 0)
+        progress.edit().clear().putInt("article.scroll.777", 42).commit()
+
+        val file = File(context.cacheDir, "backup-with-local-state.json")
+        val service = createService()
+        service.write(Uri.fromFile(file), includeSession = false)
+
+        database.historyItemDao().deleteAllHistory()
+        database.historyItemDao().insertHistory(
+            HistoryItemRoom(99, "https://4pda.to/forum/9", "потом", "Лишняя", 3000),
+        )
+        readBoundaryDatabase.topicReadBoundaryDao().deleteAll()
+        progress.edit().clear().putInt("article.scroll.777", 5).commit()
+
+        service.restore(Uri.fromFile(file))
+
+        assertEquals(
+            listOf(12, 11),
+            database.historyItemDao().getAllHistoryList().map { it.id },
+        )
+        assertEquals(
+            listOf("Тема два", "Тема один"),
+            database.historyItemDao().getAllHistoryList().map { it.title },
+        )
+        val boundary = readBoundaryDatabase.topicReadBoundaryDao().get(555)
+        assertEquals(900, boundary?.lastSeenPostId)
+        assertEquals(3, boundary?.lastSeenPage)
+        assertEquals(950, boundary?.maxLoadedPostId)
+        assertEquals(4, boundary?.maxLoadedPage)
+        assertEquals(42, progress.getInt("article.scroll.777", 0))
+    }
+
+    @Test
+    fun oldBackupWithoutNewSectionsKeepsCurrentLocalState() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val file = File(context.cacheDir, "backup-v1-sections.json")
+        val service = createService()
+        service.write(Uri.fromFile(file), includeSession = false)
+        // Имитируем файл первой версии: ни закладок, ни истории, ни границ, ни прогресса.
+        val legacy = org.json.JSONObject(file.readText()).put("version", 1)
+        legacy.remove("bookmarks")
+        legacy.remove("history")
+        legacy.remove("read_boundary")
+        legacy.getJSONObject("shared_preferences").remove("article_reading_progress")
+        file.writeText(legacy.toString())
+
+        database.noteItemDao().insertNote(
+            NoteItemRoom(5, "Своя закладка", "link-5", "body-5", null, 50, 51, 0),
+        )
+        database.historyItemDao().insertHistory(
+            HistoryItemRoom(7, "https://4pda.to/forum/7", "сегодня", "Своя история", 7000),
+        )
+        readBoundaryDatabase.topicReadBoundaryDao().upsert(
+            TopicReadBoundaryRoom(topicId = 42, lastSeenPostId = 4200, lastSeenPage = 2),
+        )
+        val progress = context.getSharedPreferences("article_reading_progress", 0)
+        progress.edit().clear().putInt("article.scroll.123", 77).commit()
+
+        service.restore(Uri.fromFile(file))
+
+        assertEquals(listOf(5L), database.noteItemDao().getAllNotesList().map { it.id })
+        assertEquals(listOf(7), database.historyItemDao().getAllHistoryList().map { it.id })
+        assertEquals(4200, readBoundaryDatabase.topicReadBoundaryDao().get(42)?.lastSeenPostId)
+        assertEquals(77, progress.getInt("article.scroll.123", 0))
     }
 
     private companion object {

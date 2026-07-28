@@ -25,6 +25,8 @@ import javax.inject.Singleton
 class SettingsBackupService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val notesBackupStore: NotesBackupStore,
+    private val historyBackupStore: HistoryBackupStore,
+    private val readBoundaryBackupStore: ReadBoundaryBackupStore,
 ) {
     suspend fun write(uri: Uri, includeSession: Boolean) = withContext(Dispatchers.IO) {
         val root = JSONObject()
@@ -36,6 +38,8 @@ class SettingsBackupService @Inject constructor(
             .put("shared_preferences", createSharedPreferencesSnapshot(includeSession))
             .put("data_stores", createDataStoreSnapshot())
             .put(KEY_BOOKMARKS, notesBackupStore.export())
+            .put(KEY_HISTORY, historyBackupStore.export())
+            .put(KEY_READ_BOUNDARY, readBoundaryBackupStore.export())
             .put(
                 "auth_cookies",
                 encodeValues(
@@ -71,8 +75,11 @@ class SettingsBackupService @Inject constructor(
             .mapValues { (_, value) ->
                 value as? String ?: throw BackupException("Повреждён раздел авторизации")
             }
-        // Раздела закладок нет в бэкапах первой версии — тогда просто не трогаем их.
+        // Разделы, добавленные после первой версии формата: в старом файле их нет — тогда
+        // соответствующие данные просто не трогаем, а не затираем пустыми.
         val bookmarks = root.optJSONObject(KEY_BOOKMARKS)?.let(notesBackupStore::decode)
+        val history = root.optJSONArray(KEY_HISTORY)?.let(historyBackupStore::decode)
+        val readBoundary = root.optJSONArray(KEY_READ_BOUNDARY)?.let(readBoundaryBackupStore::decode)
 
         restoreSharedPreferences(sharedPrefs, containsSession)
         MainDataStore(context).restoreBackupValues(dataStores.required("main"))
@@ -80,6 +87,8 @@ class SettingsBackupService @Inject constructor(
         ListsDataStore(context).restoreBackupValues(dataStores.required("lists"))
         OtherDataStore(context).restoreBackupValues(dataStores.required("other"))
         bookmarks?.let { notesBackupStore.restore(it) }
+        history?.let { historyBackupStore.restore(it) }
+        readBoundary?.let { readBoundaryBackupStore.restore(it) }
         if (containsSession &&
             !SecureCookiesPreferences.getInstance(context).restoreAuthCookies(authCookies)
         ) {
@@ -113,7 +122,10 @@ class SettingsBackupService @Inject constructor(
         containsSession: Boolean,
     ) {
         SHARED_PREFS.forEach { name ->
-            val values = snapshots.required(name)
+            // Файлы настроек, появившиеся в бэкапе позже первой версии, в старом бэкапе
+            // отсутствуют — такой раздел пропускаем, оставляя текущие значения как есть.
+            val values = snapshots[name]
+                ?: if (name in OPTIONAL_SHARED_PREFS) return@forEach else snapshots.required(name)
             val preferences = prefs(name)
             val preservedKeys = when {
                 name == DEFAULT_PREFS && containsSession -> DEFAULT_EXCLUDED_KEYS
@@ -222,25 +234,31 @@ class SettingsBackupService @Inject constructor(
 
     companion object {
         private const val FORMAT = "propda-settings-backup"
-        // 2 — добавлен раздел закладок; файлы версии 1 читаем как раньше, без закладок.
-        private const val VERSION = 2
+        // 2 — добавлен раздел закладок; 3 — история, граница прочитанного и прогресс чтения
+        // новостей. Файлы прежних версий читаются как раньше: недостающие разделы не трогаем.
+        private const val VERSION = 3
         private val SUPPORTED_VERSIONS = 1..VERSION
         private const val KEY_FORMAT = "format"
         private const val KEY_VERSION = "version"
         private const val KEY_CONTAINS_SESSION = "contains_session"
         private const val KEY_BOOKMARKS = "bookmarks"
+        private const val KEY_HISTORY = "history"
+        private const val KEY_READ_BOUNDARY = "read_boundary"
         private const val MAX_BACKUP_BYTES = 16 * 1024 * 1024
 
         private const val DEFAULT_PREFS = "default"
         private const val MAIN_MIRROR_PREFS = "main_mirror"
         private const val MAIN_MIRROR_DOWNLOAD_FOLDER_KEY = "download_folder_uri"
+        private const val ARTICLE_PROGRESS_PREFS = "article_reading_progress"
         private val SHARED_PREFS = listOf(
             DEFAULT_PREFS,
             MAIN_MIRROR_PREFS,
             "topic_mirror",
             "lists_mirror",
             "other_mirror",
+            ARTICLE_PROGRESS_PREFS,
         )
+        private val OPTIONAL_SHARED_PREFS = setOf(ARTICLE_PROGRESS_PREFS)
         private val DEFAULT_EXCLUDED_KEYS = setOf(
             Preferences.Main.DOWNLOAD_FOLDER_URI,
             Preferences.Auth.COOKIE_MEMBER_ID,

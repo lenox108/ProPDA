@@ -17,6 +17,12 @@ interface TopicReadBoundaryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: TopicReadBoundaryRoom)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<TopicReadBoundaryRoom>)
+
     @Query("DELETE FROM topic_read_boundary WHERE topicId = :topicId")
     suspend fun delete(topicId: Int)
+
+    @Query("DELETE FROM topic_read_boundary")
+    suspend fun deleteAll()
 }
