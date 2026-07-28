@@ -108,6 +108,14 @@ class NotificationPreferencesHolder(
 
     fun getQmsEnabled(): Boolean = dataStore.getQmsEnabledSync()
 
+    // --- Текст сообщения QMS в уведомлении (дозагрузка отдельным запросом) ---
+    fun getQmsPreviewEnabled(): Boolean = dataStore.getQmsPreviewEnabledSync()
+
+    fun getQmsPreviewAnchor(themeId: Int): Int = dataStore.getQmsPreviewAnchorSync(themeId)
+
+    fun setQmsPreviewAnchor(themeId: Int, messageId: Int) =
+            dataStore.setQmsPreviewAnchorSync(themeId, messageId)
+
     fun getMentionsEnabled(): Boolean = dataStore.getMentionsEnabledSync()
 
     fun getDownloadsEnabled(): Boolean = dataStore.getDownloadsEnabledSync()

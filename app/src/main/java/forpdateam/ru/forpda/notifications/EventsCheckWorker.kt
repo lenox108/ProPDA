@@ -46,7 +46,8 @@ class EventsCheckWorker @AssistedInject constructor(
         private val hatWatcher: forpdateam.ru.forpda.notifications.hatwatch.HatVersionWatcher,
         private val mentionsRepository: MentionsRepository,
         private val webClient: IWebClient,
-        private val authHolder: AuthHolder
+        private val authHolder: AuthHolder,
+        private val qmsMessagePreviewLoader: QmsMessagePreviewLoader
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -232,7 +233,7 @@ class EventsCheckWorker @AssistedInject constructor(
     }
 
     /** @return true, если реально сходили в сеть (для A-фикса «retry при сетевом фейле»). */
-    private fun checkSource(source: NotificationEvent.Source): Boolean {
+    private suspend fun checkSource(source: NotificationEvent.Source): Boolean {
         val channelEnabled = when (source) {
             NotificationEvent.Source.QMS -> prefs.getQmsEnabled()
             NotificationEvent.Source.THEME -> prefs.getFavEnabled()
@@ -336,6 +337,16 @@ class EventsCheckWorker @AssistedInject constructor(
         // Отслеживаем ФАКТ публикации (publish/publishStacked → null, если система заблокировала
         // доставку в окне между canDeliver и notify): если событие НЕ показалось — снапшот не
         // двигаем, оно переиграет (полностью закрывает P1 из code-review, а не только предпроверкой).
+        // Текста сообщения нет ни в inspector'е, ни в FCM-payload — добираем его отдельным
+        // запросом на диалог. Только для QMS и только для тех событий, что реально пойдут в
+        // шторку: это сеть, и на большой пачке она не нужна (там уведомления и так свернутся
+        // в сводку). PREVIEW_MAX_ENRICH зеркалит STACKED_MAX+1 — ровно то, что показывается
+        // отдельными карточками.
+        if (source == NotificationEvent.Source.QMS) {
+            for (event in toPublish.take(PREVIEW_MAX_ENRICH)) {
+                qmsMessagePreviewLoader.enrich(appContext, event)
+            }
+        }
         var publishBlocked = false
         if (toPublish.size > STACKED_MAX) {
             if (NotificationPublisher.publishBatch(appContext, prefs, toPublish) == null) publishBlocked = true
@@ -447,6 +458,8 @@ class EventsCheckWorker @AssistedInject constructor(
         private const val MAX_NETWORK_RETRY_ATTEMPTS = 2
         /** Больше этого числа новых событий за раз — публикуем стопкой, а не по одному. Зеркалит foreground. */
         private const val STACKED_MAX = 4
+        /** Сколько QMS-событий за проход дообогащаем текстом (по одному запросу на диалог). */
+        private const val PREVIEW_MAX_ENRICH = 5
         /**
          * Process-level замок: periodic и alarm-воркеры живут в одном процессе, и Mutex сериализует
          * их проход, делая дедуп по lastCheckAt атомарным (P1 code review). tryLock → второй просто
