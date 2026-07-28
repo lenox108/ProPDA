@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom_top"
+        android:title="@string/settings_group_startup">
+
+        <ListPreference
+            android:defaultValue="NEWS"
+            android:dialogTitle="@string/pref_title_startup_screen"
+            android:entries="@array/entries_startup_screen"
+            android:entryValues="@array/entry_values_startup_screen"
+            android:key="main.startup_screen"
+            android:layout="@layout/preference_custom"
+            android:summary="%s"
+            android:title="@string/pref_title_startup_screen"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/settings_group_bottom_nav">
+
+        <Preference
+            android:key="bottom_nav_order"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_bottom_nav_order"
+            android:title="@string/pref_title_bottom_nav_order"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:defaultValue="6"
+            android:dialogTitle="@string/pref_title_bottom_nav_columns"
+            android:entries="@array/entries_bottom_nav_columns"
+            android:entryValues="@array/entry_values_bottom_nav_columns"
+            android:key="main.bottom_nav_columns"
+            android:layout="@layout/preference_custom"
+            android:summary="%s"
+            android:title="@string/pref_title_bottom_nav_columns"
+            app:iconSpaceReserved="false" />
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="false"
+            android:key="main.show_bottom_arrow"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_show_bottom_arrow"
+            android:title="@string/pref_title_show_bottom_arrow"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="clear_menu_sequence"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_clear_menu_sequence"
+            android:title="@string/pref_title_clear_menu_sequence"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Пилюля строки поиска на корневом экране настроек. Контур обязателен: в AMOLED-палитрах
+    чтения (Rosé Pine, Gruvbox и др.) контейнерные тона совпадают с фоном, и заливка одна
+    поле не показывает.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="?attr/colorSurfaceContainerHigh" />
+    <stroke
+        android:width="@dimen/divider_thin"
+        android:color="?attr/colorOutlineVariant" />
+    <corners android:radius="@dimen/dp24" />
+</shape>

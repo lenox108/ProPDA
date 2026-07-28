@@ -65,6 +65,39 @@ private const val PREF_BACKUP_INCLUDE_SESSION = "backup.include_session"
 
 @AndroidEntryPoint
 class SettingsFragment : BaseSettingFragment() {
+
+    companion object {
+        const val ARG_SECTION = "settings_section"
+
+        private const val KEY_SECTIONS_CATEGORY = "settings.category.sections"
+        private const val KEY_RECENT_CATEGORY = "settings.category.recent"
+        private const val KEY_SEARCH_EMPTY = "settings.search.empty"
+
+        /** Порядок «сверху вниз» на корневом экране: результаты поиска → недавние → разделы. */
+        private const val ORDER_SEARCH = -200
+        private const val ORDER_RECENT = -100
+
+        private const val MAX_SEARCH_RESULTS = 24
+
+        fun newInstance(
+                section: SettingsSection = SettingsSection.ROOT,
+                highlightKey: String? = null,
+        ): SettingsFragment = SettingsFragment().apply {
+            arguments = Bundle().apply {
+                putString(ARG_SECTION, section.id)
+                highlightKey?.let { putString(ARG_HIGHLIGHT_KEY, it) }
+            }
+        }
+    }
+
+    /** Какой раздел показывает этот экземпляр; корень — только навигация, поиск и «недавние». */
+    val section: SettingsSection by lazy { SettingsSection.byId(arguments?.getString(ARG_SECTION)) }
+
+    override fun searchSection(): SettingsSection = section
+
+    private var recentCategory: PreferenceCategory? = null
+    private val searchResultPreferences = mutableListOf<Preference>()
+
     @Inject lateinit var authHolder: AuthHolder
     @Inject lateinit var authRepository: AuthRepository
     @Inject lateinit var mainPreferencesHolder: MainPreferencesHolder
@@ -357,8 +390,11 @@ class SettingsFragment : BaseSettingFragment() {
     @SuppressLint("InflateParams")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        addPreferencesFromResource(R.xml.preferences)
-        addBackupPreferences()
+        addPreferencesFromResource(section.xmlRes)
+        // Строки-переходы («Иконки» внутри «Внешнего вида», разделы корня) есть не только на корне.
+        wireSectionRows()
+        if (section == SettingsSection.ROOT) rebuildRecentBlock()
+        if (section == SettingsSection.ABOUT) addBackupPreferences()
 
         // Синхронизируем DataStore → SwitchPreference, чтобы переключатели
         // показывали актуальные значения, а не XML-defaults.
@@ -516,6 +552,7 @@ class SettingsFragment : BaseSettingFragment() {
                 ) { picked ->
                     if (!isAdded) return@show
                     AppIconManager.select(requireContext(), picked)
+                    RecentSettings.record(requireContext(), Preferences.Main.APP_ICON)
                     updateAppIconSummary(this)
                     showSnackbarAboveSystemBars(R.string.app_icon_changed, Snackbar.LENGTH_LONG)
                 }
@@ -533,6 +570,7 @@ class SettingsFragment : BaseSettingFragment() {
                     if (!isAdded) return@show
                     val previous = AppIcons.notificationIconValue(requireContext())
                     prefs.edit().putString(Preferences.Main.NOTIFICATION_ICON, picked).apply()
+                    RecentSettings.record(requireContext(), Preferences.Main.NOTIFICATION_ICON)
                     if (BuildConfig.DEBUG) {
                         Timber.tag("NotificationIcon").d(
                             "preference changed previous=%s picked=%s stored=%s",
@@ -582,6 +620,7 @@ class SettingsFragment : BaseSettingFragment() {
                         }
                         mainPreferencesHolder.setAccentStyle(style)
                         mainPreferencesHolder.setAccentPalette(picked)
+                        RecentSettings.record(requireContext(), Preferences.Main.ACCENT_PALETTE)
                         updateAccentSummary(picked)
                         activity?.recreate()
                     }
@@ -648,6 +687,7 @@ class SettingsFragment : BaseSettingFragment() {
                         .setPositiveButton(R.string.ok) { _, _ ->
                             viewLifecycleOwner.lifecycleScope.launch {
                                 mainPreferencesHolder.setWebViewFontSize(seekBar.progress + 1 + 7)
+                                RecentSettings.record(requireContext(), Preferences.Main.WEBVIEW_FONT_SIZE)
                             }
                         }
                         .setNegativeButton(R.string.cancel, null)
@@ -665,14 +705,10 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
-        // Уточняем в коде, что существующий «Размер шрифта» — это размер текста именно в темах/постах.
-        findPreference<Preference>(Preferences.Main.WEBVIEW_FONT_SIZE)?.title = "Размер шрифта в темах"
-
         // НОВЫЙ отдельный ползунок: размер шрифта ВСЕГО приложения (интерфейс).
         findPreference<Preference>("main.app_font_size")?.apply {
-            fun appSizeSummary() =
-                "Весь интерфейс, 100% = 16 (сейчас ${mainPreferencesHolder.getAppFontSize()}); применится после возврата из настроек"
-            title = "Размер шрифта приложения"
+            fun appSizeSummary() = getString(
+                R.string.pref_summary_app_font_size, mainPreferencesHolder.getAppFontSize().toString())
             summary = appSizeSummary()
             setOnPreferenceClickListener {
                 val dialogView = requireActivity().layoutInflater.inflate(R.layout.dialog_font_size, null)
@@ -698,7 +734,11 @@ class SettingsFragment : BaseSettingFragment() {
                     .setPositiveButton(R.string.ok) { _, _ ->
                         viewLifecycleOwner.lifecycleScope.launch {
                             mainPreferencesHolder.setAppFontSize(seekBar.progress + 8)
+                            RecentSettings.record(requireContext(), "main.app_font_size")
                             summary = appSizeSummary()
+                            // Про «применится после возврата» теперь говорит снекбар, а не сводка.
+                            showSnackbarAboveSystemBars(
+                                R.string.pref_app_font_size_restart_notice, Snackbar.LENGTH_LONG)
                         }
                     }
                     .setNegativeButton(R.string.cancel, null)
@@ -774,6 +814,7 @@ class SettingsFragment : BaseSettingFragment() {
                         requireContext(), mainPreferencesHolder.getUiPalette()
                 ) { palette ->
                     updateUiPaletteSummary(palette)
+                    RecentSettings.record(requireContext(), Preferences.Main.UI_PALETTE)
                     lifecycleScope.launch {
                         mainPreferencesHolder.setUiPalette(palette)
                         activity?.recreate()
@@ -788,6 +829,10 @@ class SettingsFragment : BaseSettingFragment() {
                     requireContext(), FontController.getCurrentFontMode(mainPreferencesHolder)
             ) { mode ->
                 updateAppFontSummary(mode)
+                RecentSettings.record(requireContext(), Preferences.Main.APP_FONT_MODE)
+                // Сводка теперь показывает только название шрифта, поэтому про перезапуск
+                // говорим отдельно — иначе «шрифт применился наполовину» выглядит багом.
+                showAppFontRestartNotice()
                 lifecycleScope.launch {
                     mainPreferencesHolder.setAppFontMode(mode)
                     activity?.recreate()
@@ -895,6 +940,7 @@ class SettingsFragment : BaseSettingFragment() {
                 ) { mode ->
                     Timber.d("[THEME] Preference changed to: $mode")
                     updateThemeModeSummary(mode)
+                    RecentSettings.record(requireContext(), "main.theme.mode")
                     // 1. Save to DataStore asynchronously (suspend, no runBlocking), then restart
                     lifecycleScope.launch {
                         // Захватываем app-context ДО suspend/applyTheme: applyTheme →
@@ -921,6 +967,158 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
     }
+
+    // region Корневой экран: разделы, «Недавно изменённые», сквозной поиск
+
+    /**
+     * Любая строка, чей ключ соответствует разделу, открывает этот раздел. «Уведомления» и
+     * «Прокси» сюда не попадают: у них свои обработчики (общие с прежними точками входа).
+     */
+    private fun wireSectionRows() {
+        val screen = preferenceScreen ?: return
+        fun walk(group: androidx.preference.PreferenceGroup) {
+            for (i in 0 until group.preferenceCount) {
+                val pref = group.getPreference(i)
+                if (pref is androidx.preference.PreferenceGroup) {
+                    walk(pref)
+                    continue
+                }
+                val target = SettingsSection.byRowKey(pref.key) ?: continue
+                pref.setOnPreferenceClickListener {
+                    openSection(target)
+                    true
+                }
+            }
+        }
+        walk(screen)
+    }
+
+    /**
+     * Блок «Недавно изменённые»: набор не настраивается — это просто последние настройки,
+     * которых пользователь касался (см. [RecentSettings]). Пустой при первом запуске.
+     */
+    private fun rebuildRecentBlock() {
+        val screen = preferenceScreen ?: return
+        recentCategory?.let { screen.removePreference(it) }
+        recentCategory = null
+
+        val context = requireContext()
+        val entries = RecentSettings.keys(context)
+                .mapNotNull { SettingsSearchIndex.find(context, it) }
+                .take(RecentSettings.MAX_SHOWN)
+        // Верхняя плашка на экране должна быть с увеличенным отступом — им становится тот блок,
+        // который реально идёт первым.
+        findPreference<PreferenceCategory>(KEY_SECTIONS_CATEGORY)?.layoutResource =
+                if (entries.isEmpty()) R.layout.preference_category_custom_top
+                else R.layout.preference_category_custom
+        if (entries.isEmpty()) return
+
+        val category = PreferenceCategory(context).apply {
+            key = KEY_RECENT_CATEGORY
+            layoutResource = R.layout.preference_category_custom_top
+            title = getString(R.string.settings_group_recent)
+            order = ORDER_RECENT
+            isIconSpaceReserved = false
+        }
+        screen.addPreference(category)
+        entries.forEachIndexed { index, entry ->
+            category.addPreference(buildEntryPreference(entry).apply { order = index })
+        }
+        recentCategory = category
+    }
+
+    /**
+     * Сквозной поиск: ищет по всем разделам сразу, а не по открытому экрану. Переключатели в
+     * выдаче настоящие — меняются на месте, без перехода в раздел; остальные пункты ведут
+     * в свой раздел с подсветкой найденной строки.
+     */
+    fun applyGlobalSearch(rawQuery: String?) {
+        if (section != SettingsSection.ROOT) return
+        val screen = preferenceScreen ?: return
+        val context = requireContext()
+        val query = rawQuery?.trim().orEmpty()
+        val searching = query.isNotEmpty()
+
+        searchResultPreferences.forEach { screen.removePreference(it) }
+        searchResultPreferences.clear()
+
+        // Запрос стёрли — возвращаем обычный экран и заодно обновляем «недавние»:
+        // пока шёл поиск, пользователь мог что-то переключить прямо в выдаче.
+        if (!searching) rebuildRecentBlock()
+        findPreference<PreferenceCategory>(KEY_SECTIONS_CATEGORY)?.isVisible = !searching
+        recentCategory?.isVisible = !searching
+        findPreference<Preference>("about.support_author")?.isVisible = !searching
+        if (!searching) return
+
+        val results = SettingsSearchIndex.search(context, query).take(MAX_SEARCH_RESULTS)
+        if (results.isEmpty()) {
+            val empty = Preference(context).apply {
+                key = KEY_SEARCH_EMPTY
+                layoutResource = R.layout.preference_custom
+                isIconSpaceReserved = false
+                isPersistent = false
+                isSelectable = false
+                order = ORDER_SEARCH
+                title = getString(R.string.settings_search_empty)
+            }
+            screen.addPreference(empty)
+            searchResultPreferences += empty
+            return
+        }
+        results.forEachIndexed { index, entry ->
+            val pref = buildEntryPreference(entry).apply { order = ORDER_SEARCH + index }
+            screen.addPreference(pref)
+            searchResultPreferences += pref
+        }
+    }
+
+    /**
+     * Строка выдачи/«недавних». Для переключателя внутреннего раздела делаем настоящий
+     * SwitchPreference с тем же ключом: он пишет в те же SharedPreferences, а [prefsListener]
+     * зеркалит значение в DataStore — то есть переключение прямо тут работает как на экране раздела.
+     */
+    private fun buildEntryPreference(entry: SettingsSearchIndex.Entry): Preference {
+        val context = requireContext()
+        val pref: Preference = if (entry.isSwitch && entry.section.isInternal) {
+            forpdateam.ru.forpda.ui.views.SwitchPreference(context).apply {
+                key = entry.key
+                isChecked = preferences.getBoolean(entry.key, entry.defaultBoolean)
+            }
+        } else {
+            Preference(context).apply {
+                isPersistent = false
+                setOnPreferenceClickListener {
+                    openSection(entry.section, entry.key)
+                    true
+                }
+            }
+        }
+        return pref.apply {
+            layoutResource = R.layout.preference_custom
+            isIconSpaceReserved = false
+            title = entry.title
+            summary = entry.breadcrumb(context)
+        }
+    }
+
+    /** Переход в раздел: внутренние — вложенным фрагментом, уведомления и прокси — своей активити. */
+    private fun openSection(target: SettingsSection, highlightKey: String? = null) {
+        val external = target.externalScreen
+        if (external != null) {
+            val intent = Intent(activity, SettingsActivity::class.java).apply {
+                putExtra(SettingsActivity.ARG_NEW_PREFERENCE_SCREEN, external)
+                highlightKey?.let { putExtra(SettingsActivity.ARG_HIGHLIGHT_KEY, it) }
+            }
+            startActivity(intent)
+            return
+        }
+        parentFragmentManager.beginTransaction()
+                .replace(R.id.fragment_content, newInstance(target, highlightKey))
+                .addToBackStack(target.id)
+                .commit()
+    }
+
+    // endregion
 
     private fun addBackupPreferences() {
         val category = PreferenceCategory(requireContext()).apply {
@@ -1031,17 +1229,17 @@ class SettingsFragment : BaseSettingFragment() {
 
     private fun updateAppFontSummary(mode: AppFontMode) {
         findPreference<Preference>(Preferences.Main.APP_FONT_MODE)?.summary = when (mode) {
-            AppFontMode.SYSTEM -> getString(R.string.pref_summary_app_font_system)
-            AppFontMode.ROBOTO -> getString(R.string.pref_summary_app_font_roboto)
-            AppFontMode.INTER -> getString(R.string.pref_summary_app_font_inter)
-            AppFontMode.SOURCE_SANS_3 -> getString(R.string.pref_summary_app_font_source_sans_3)
-            AppFontMode.OPEN_SANS -> getString(R.string.pref_summary_app_font_open_sans)
-            AppFontMode.IBM_PLEX_SANS -> getString(R.string.pref_summary_app_font_ibm_plex_sans)
-            AppFontMode.GOLOS_TEXT -> getString(R.string.pref_summary_app_font_golos_text)
-            AppFontMode.LITERATA -> getString(R.string.pref_summary_app_font_literata)
-            AppFontMode.APPETITE_PRO -> getString(R.string.pref_summary_app_font_appetite_pro)
-            AppFontMode.MAYONEZ_ITALIC -> getString(R.string.pref_summary_app_font_mayonez_italic)
-            AppFontMode.ROBOTO_MONO -> getString(R.string.pref_summary_app_font_roboto_mono)
+            AppFontMode.SYSTEM -> getString(R.string.pref_value_app_font_system)
+            AppFontMode.ROBOTO -> getString(R.string.pref_value_app_font_roboto)
+            AppFontMode.INTER -> getString(R.string.pref_value_app_font_inter)
+            AppFontMode.SOURCE_SANS_3 -> getString(R.string.pref_value_app_font_source_sans_3)
+            AppFontMode.OPEN_SANS -> getString(R.string.pref_value_app_font_open_sans)
+            AppFontMode.IBM_PLEX_SANS -> getString(R.string.pref_value_app_font_ibm_plex_sans)
+            AppFontMode.GOLOS_TEXT -> getString(R.string.pref_value_app_font_golos_text)
+            AppFontMode.LITERATA -> getString(R.string.pref_value_app_font_literata)
+            AppFontMode.APPETITE_PRO -> getString(R.string.pref_value_app_font_appetite_pro)
+            AppFontMode.MAYONEZ_ITALIC -> getString(R.string.pref_value_app_font_mayonez_italic)
+            AppFontMode.ROBOTO_MONO -> getString(R.string.pref_value_app_font_roboto_mono)
         }
     }
 
@@ -1238,14 +1436,18 @@ class SettingsFragment : BaseSettingFragment() {
         }
     }
 
+    /**
+     * Сводка пунктов-выборов — это выбранное значение, а не абзац с объяснением: строка остаётся
+     * в одну линию, а развёрнутое описание пользователь видит в самом диалоге выбора.
+     */
     private fun updateThemeModeSummary(mode: Preferences.Main.ThemeMode) {
         findPreference<Preference>("main.theme.mode")?.setSummary(
                 when (mode) {
-                    Preferences.Main.ThemeMode.LIGHT -> R.string.pref_summary_theme_mode_light
-                    Preferences.Main.ThemeMode.DARK -> R.string.pref_summary_theme_mode_dark
-                    Preferences.Main.ThemeMode.AMOLED -> R.string.pref_summary_theme_mode_amoled
-                    Preferences.Main.ThemeMode.SYSTEM_AMOLED -> R.string.pref_summary_theme_mode_system_amoled
-                    else -> R.string.pref_summary_theme_mode_system
+                    Preferences.Main.ThemeMode.LIGHT -> R.string.pref_value_theme_mode_light
+                    Preferences.Main.ThemeMode.DARK -> R.string.pref_value_theme_mode_dark
+                    Preferences.Main.ThemeMode.AMOLED -> R.string.pref_value_theme_mode_amoled
+                    Preferences.Main.ThemeMode.SYSTEM_AMOLED -> R.string.pref_value_theme_mode_system_amoled
+                    else -> R.string.pref_value_theme_mode_system
                 }
         )
     }
@@ -1253,16 +1455,16 @@ class SettingsFragment : BaseSettingFragment() {
     private fun updateUiPaletteSummary(palette: Preferences.Main.UiPalette) {
         findPreference<Preference>(Preferences.Main.UI_PALETTE)?.setSummary(
                 when (palette) {
-                    Preferences.Main.UiPalette.SEPIA_READING -> R.string.pref_summary_ui_palette_sepia_reading
-                    Preferences.Main.UiPalette.SEPIA_BLUE -> R.string.pref_summary_ui_palette_sepia_blue
-                    Preferences.Main.UiPalette.MINIMAL_READER -> R.string.pref_summary_ui_palette_minimal_reader
+                    Preferences.Main.UiPalette.SEPIA_READING -> R.string.pref_value_ui_palette_sepia_reading
+                    Preferences.Main.UiPalette.SEPIA_BLUE -> R.string.pref_value_ui_palette_sepia_blue
+                    Preferences.Main.UiPalette.MINIMAL_READER -> R.string.pref_value_ui_palette_minimal_reader
                     Preferences.Main.UiPalette.GREEN_CARE -> R.string.pref_value_ui_palette_green_care
                     Preferences.Main.UiPalette.NORD -> R.string.pref_value_ui_palette_nord
                     Preferences.Main.UiPalette.SOLARIZED -> R.string.pref_value_ui_palette_solarized
                     Preferences.Main.UiPalette.GRUVBOX -> R.string.pref_value_ui_palette_gruvbox
                     Preferences.Main.UiPalette.ROSE_PINE -> R.string.pref_value_ui_palette_rose_pine
                     Preferences.Main.UiPalette.DRACULA -> R.string.pref_value_ui_palette_dracula
-                    else -> R.string.pref_summary_ui_palette_system
+                    else -> R.string.pref_value_ui_palette_system
                 }
         )
     }
@@ -1329,6 +1531,7 @@ class SettingsFragment : BaseSettingFragment() {
                         val picked = values[which]
                         val merged = if (classic) picked else current.withTop(picked.hasTop)
                         updateTopicPaginationPanelsSummary(merged, mode)
+                        RecentSettings.record(requireContext(), Preferences.Main.TOPIC_PAGINATION_PANELS)
                         lifecycleScope.launch { mainPreferencesHolder.setTopicPaginationPanels(merged) }
                         dialog.dismiss()
                     }
@@ -1340,9 +1543,9 @@ class SettingsFragment : BaseSettingFragment() {
     private fun updateTopicPostDensitySummary(density: Preferences.Main.TopicPostDensity) {
         findPreference<ListPreference>(Preferences.Main.TOPIC_POST_DENSITY)?.setSummary(
                 when (density) {
-                    Preferences.Main.TopicPostDensity.SUPER_COMPACT -> R.string.pref_summary_topic_post_density_super_compact
-                    Preferences.Main.TopicPostDensity.COMPACT -> R.string.pref_summary_topic_post_density_compact
-                    else -> R.string.pref_summary_topic_post_density_comfortable
+                    Preferences.Main.TopicPostDensity.SUPER_COMPACT -> R.string.pref_value_topic_post_density_super_compact
+                    Preferences.Main.TopicPostDensity.COMPACT -> R.string.pref_value_topic_post_density_compact
+                    else -> R.string.pref_value_topic_post_density_comfortable
                 }
         )
     }
@@ -1350,8 +1553,8 @@ class SettingsFragment : BaseSettingFragment() {
     private fun updateTopicToolbarBehaviorSummary(behavior: Preferences.Main.TopicToolbarBehavior) {
         findPreference<ListPreference>(Preferences.Main.TOPIC_TOOLBAR_BEHAVIOR)?.setSummary(
                 when (behavior) {
-                    Preferences.Main.TopicToolbarBehavior.HIDE_ON_SCROLL -> R.string.pref_topic_toolbar_behavior_hide_on_scroll_summary
-                    else -> R.string.pref_topic_toolbar_behavior_pinned_summary
+                    Preferences.Main.TopicToolbarBehavior.HIDE_ON_SCROLL -> R.string.pref_topic_toolbar_behavior_hide_on_scroll
+                    else -> R.string.pref_topic_toolbar_behavior_pinned
                 }
         )
     }
@@ -1375,24 +1578,16 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun updateStartupScreenSummary(startup: Preferences.Main.StartupScreen) {
-        findPreference<ListPreference>(Preferences.Main.STARTUP_SCREEN)?.setSummary(
-                when (startup) {
-                    Preferences.Main.StartupScreen.FAVORITES -> R.string.pref_summary_startup_screen_favorites
-                    Preferences.Main.StartupScreen.FORUM -> R.string.pref_summary_startup_screen_forum
-                    Preferences.Main.StartupScreen.REPLIES -> R.string.pref_summary_startup_screen_replies
-                    Preferences.Main.StartupScreen.QMS -> R.string.pref_summary_startup_screen_qms
-                    Preferences.Main.StartupScreen.HISTORY -> R.string.pref_summary_startup_screen_history
-                    Preferences.Main.StartupScreen.MENU -> R.string.pref_summary_startup_screen_menu
-                    else -> R.string.pref_summary_startup_screen_news
-                }
-        )
+        val pref = findPreference<ListPreference>(Preferences.Main.STARTUP_SCREEN) ?: return
+        val index = pref.findIndexOfValue(startup.name)
+        pref.summary = pref.entries?.getOrNull(index) ?: pref.entry
     }
 
     private fun updateTopicHeaderInitialStateSummary(state: Preferences.Main.TopicHeaderInitialState) {
         findPreference<ListPreference>(Preferences.Main.TOPIC_HEADER_INITIAL_STATE)?.setSummary(
                 when (state) {
-                    Preferences.Main.TopicHeaderInitialState.COLLAPSED -> R.string.pref_summary_topic_header_initial_state_collapsed
-                    else -> R.string.pref_summary_topic_header_initial_state_expanded
+                    Preferences.Main.TopicHeaderInitialState.COLLAPSED -> R.string.pref_value_topic_header_initial_state_collapsed
+                    else -> R.string.pref_value_topic_header_initial_state_expanded
                 }
         )
     }
@@ -1527,6 +1722,7 @@ class SettingsFragment : BaseSettingFragment() {
             showSnackbar(R.string.download_folder_unavailable)
             return
         }
+        RecentSettings.record(requireContext(), Preferences.Main.DOWNLOAD_FOLDER_URI)
         lifecycleScope.launch {
             mainPreferencesHolder.setDownloadFolderUri(uri.toString())
             updateDownloadFolderSummary(uri.toString())
@@ -1591,8 +1787,10 @@ class SettingsFragment : BaseSettingFragment() {
     override fun onResume() {
         super.onResume()
         (activity as? androidx.appcompat.app.AppCompatActivity)?.supportActionBar
-                ?.setTitle(R.string.activity_title_settings)
+                ?.setTitle(section.titleRes)
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        // Вернулись на корень после правки настройки — блок «Недавно изменённые» должен это увидеть.
+        if (section == SettingsSection.ROOT && searchResultPreferences.isEmpty()) rebuildRecentBlock()
     }
 
     override fun onPause() {

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Корневой экран настроек: только навигация по разделам, ни одного переключателя.
+    Блок «Недавно изменённые» и результаты поиска добавляются кодом (SettingsFragment).
+-->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        android:key="settings.category.sections"
+        android:layout="@layout/preference_category_custom_top"
+        android:title="@string/settings_group_sections">
+
+        <Preference
+            android:icon="@drawable/ic_palette"
+            android:key="settings.section.appearance"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_appearance_summary"
+            android:title="@string/pref_title_appereance" />
+
+        <Preference
+            android:icon="@drawable/ic_book_open"
+            android:key="settings.section.reading"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_reading_summary"
+            android:title="@string/settings_section_reading" />
+
+        <Preference
+            android:icon="@drawable/ic_view_list"
+            android:key="settings.section.lists"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_lists_summary"
+            android:title="@string/settings_section_lists" />
+
+        <Preference
+            android:icon="@drawable/ic_grid"
+            android:key="settings.section.navigation"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_navigation_summary"
+            android:title="@string/settings_section_navigation" />
+
+        <Preference
+            android:icon="@drawable/ic_notifications"
+            android:key="open_notifications"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_notifications_summary"
+            android:title="@string/pref_title_notifications" />
+
+        <Preference
+            android:icon="@drawable/ic_download"
+            android:key="settings.section.downloads"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_downloads_summary"
+            android:title="@string/settings_section_downloads" />
+
+        <Preference
+            android:icon="@drawable/ic_account_circle"
+            android:key="settings.section.account"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_account_summary"
+            android:title="@string/pref_title_account" />
+
+        <Preference
+            android:icon="@drawable/ic_info"
+            android:key="settings.section.about"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_about_summary"
+            android:title="@string/pref_title_about" />
+
+    </PreferenceCategory>
+
+    <Preference
+        android:key="about.support_author"
+        android:layout="@layout/preference_support_author"
+        android:title="@string/pref_title_support_author"
+        app:iconSpaceReserved="false" />
+
+</PreferenceScreen>

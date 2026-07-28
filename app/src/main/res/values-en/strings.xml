@@ -1005,4 +1005,43 @@
     <string name="pref_title_proxy_safety">Security</string>
     <string name="pref_summary_proxy_safety">Your 4PDA auth cookies travel through the proxy. Use your own server only — on a public one your session is exposed. The password is stored encrypted. Topics render natively, so the proxy fully applies to them; news and other WebView pages always go direct — except the Cloudflare check, which must use the same route. WebView does not support proxy credentials, so with a login set that check goes direct too</string>
 
+
+    <!-- Settings screen: root hub sections -->
+    <string name="settings_group_sections">Sections</string>
+    <string name="settings_group_recent">Recently changed</string>
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_empty">Nothing found</string>
+    <string name="settings_search_clear">Clear</string>
+    <string name="settings_section_appearance_summary">Theme, colors, font, density, icons</string>
+    <string name="settings_section_reading">Topics and reading</string>
+    <string name="settings_section_reading_summary">Reading mode, gestures, posts, editor</string>
+    <string name="settings_section_lists">Lists and feed</string>
+    <string name="settings_section_lists_summary">Favorites, topics, counters</string>
+    <string name="settings_section_navigation">Navigation</string>
+    <string name="settings_section_navigation_summary">Startup screen, bottom menu</string>
+    <string name="settings_section_notifications_summary">Favorites, QMS, mentions, background</string>
+    <string name="settings_section_downloads">Downloads and network</string>
+    <string name="settings_section_downloads_summary">Download method, folder, proxy</string>
+    <string name="settings_section_account_summary">Forum settings, rules, sign out</string>
+    <string name="settings_section_about_summary">Version, updates, backup</string>
+    <string name="settings_section_icons">Icons</string>
+    <string name="settings_section_icons_summary">Launcher, status bar, notifications</string>
+    <!-- Settings screen: groups inside sections -->
+    <string name="settings_group_theme_colors">Theme and colors</string>
+    <string name="settings_group_text">Text</string>
+    <string name="settings_group_misc">Other</string>
+    <string name="settings_group_reading">Reading</string>
+    <string name="settings_group_panels_gestures">Panels and gestures</string>
+    <string name="settings_group_posts">Posts</string>
+    <string name="settings_group_editor">Editor</string>
+    <string name="settings_group_performance">Performance</string>
+    <string name="settings_group_topic_lists">Topic lists</string>
+    <string name="settings_group_startup">Startup</string>
+    <string name="settings_group_bottom_nav">Bottom menu</string>
+    <string name="settings_group_network">Network</string>
+
+    <string name="pref_title_app_font_size">App font size</string>
+    <string name="pref_summary_app_font_size">Now %1$s · 100 %% = 16</string>
+    <string name="pref_app_font_size_restart_notice">The interface size applies after you leave settings</string>
+    <string name="pref_title_topic_text_size">Font size in topics</string>
 </resources>

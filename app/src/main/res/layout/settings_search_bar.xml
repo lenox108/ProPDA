@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+    Постоянная строка поиска корневого экрана настроек. Живёт в активити (над контейнером
+    фрагмента), а не в списке: EditText внутри RecyclerView теряет фокус при перебиндах.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settingsSearchBar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_settings_search"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/dp48"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/dp16"
+    android:paddingEnd="@dimen/dp8">
+
+    <ImageView
+        android:id="@+id/settingsSearchIcon"
+        android:layout_width="@dimen/dp24"
+        android:layout_height="@dimen/dp24"
+        android:contentDescription="@string/search"
+        android:src="@drawable/ic_search"
+        android:tint="?attr/colorOnSurfaceVariant" />
+
+    <EditText
+        android:id="@+id/settingsSearchInput"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/dp12"
+        android:layout_weight="1"
+        android:background="@null"
+        android:hint="@string/settings_search_hint"
+        android:imeOptions="actionSearch|flagNoExtractUi"
+        android:inputType="text"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:textColor="?attr/colorOnSurface"
+        android:textColorHint="?attr/colorOnSurfaceVariant"
+        android:textSize="@dimen/list_topic_title_text_size" />
+
+    <ImageView
+        android:id="@+id/settingsSearchClear"
+        android:layout_width="@dimen/dp40"
+        android:layout_height="@dimen/dp40"
+        android:background="?selectableItemBackgroundBorderless"
+        android:contentDescription="@string/settings_search_clear"
+        android:padding="@dimen/dp8"
+        android:src="@drawable/ic_clear"
+        android:tint="?attr/colorOnSurfaceVariant"
+        android:visibility="gone" />
+
+</LinearLayout>

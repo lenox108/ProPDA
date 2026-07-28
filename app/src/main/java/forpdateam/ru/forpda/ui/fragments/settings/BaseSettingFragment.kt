@@ -30,13 +30,22 @@ import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
 
 open class BaseSettingFragment : PreferenceFragmentCompat() {
 
-    private companion object {
+    companion object {
         // Тег, под которым androidx.preference показывает диалог настройки (константа фреймворка приватна).
-        const val PREF_DIALOG_TAG = "androidx.preference.PreferenceFragment.DIALOG"
+        private const val PREF_DIALOG_TAG = "androidx.preference.PreferenceFragment.DIALOG"
+
+        /** Ключ пункта, к которому надо прокрутить и подсветить — приходит из поиска и «Недавно изменённых». */
+        const val ARG_HIGHLIGHT_KEY = "highlight_key"
+
+        private const val HIGHLIGHT_DURATION_MS = 2600L
     }
 
     private var listScrollY = 0
     private var lastIsVisible = false
+    private var highlightedKey: String? = null
+
+    /** Раздел, который показывает экран (для хрома активити). null — экран вне схемы разделов. */
+    open fun searchSection(): SettingsSection? = null
 
     /**
      * Дополнительный отступ снизу под списком (помимо системной навбар-вставки).
@@ -108,6 +117,9 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
                     pref?.key == "about.support_author" -> bindSupportAuthorPlate(holder.itemView, prevPref, nextPref)
                     else -> bindPreferencePlate(holder.itemView, prevPref, nextPref)
                 }
+                if (pref != null && pref.key != null && pref.key == highlightedKey) {
+                    holder.itemView.setBackgroundResource(R.drawable.bg_settings_highlight)
+                }
             }
         }
     }
@@ -134,6 +146,35 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         }
         updateToolbarShadow()
         setDividerHeight(0)
+        consumeHighlightArgument()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (activity as? SettingsActivity)?.onSettingsScreenChanged()
+    }
+
+    /**
+     * Пришли из поиска или «Недавно изменённых»: прокручиваем к пункту и ненадолго подсвечиваем,
+     * иначе на длинном разделе непонятно, ради чего экран открылся. Аргумент одноразовый —
+     * после поворота или возврата назад подсветка не повторяется.
+     */
+    private fun consumeHighlightArgument() {
+        val key = arguments?.getString(ARG_HIGHLIGHT_KEY)?.takeIf { it.isNotBlank() } ?: return
+        arguments?.remove(ARG_HIGHLIGHT_KEY)
+        if (findPreference<Preference>(key) == null) return
+        highlightedKey = key
+        val list = view?.findViewById<RecyclerView>(androidx.preference.R.id.recycler_view)
+        list?.post {
+            if (!isAdded) return@post
+            scrollToPreference(key)
+            listView.adapter?.notifyDataSetChanged()
+            list.postDelayed({
+                if (!isAdded) return@postDelayed
+                highlightedKey = null
+                listView.adapter?.notifyDataSetChanged()
+            }, HIGHLIGHT_DURATION_MS)
+        }
     }
 
     private fun bindCategoryPlate(itemView: View) {
@@ -233,38 +274,8 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         return tokens.all { token -> haystack.contains(token) }
     }
 
-    private fun buildKeywordHints(key: String): List<String> {
-        if (key.isBlank()) return emptyList()
-        val out = ArrayList<String>(8)
-        fun addAll(vararg v: String) = v.forEach { out.add(it) }
-
-        // Редактор/клавиатура/вложения/BBCode/смайлы
-        if (key.contains("message") || key.contains("editor") || key.contains("panel")) {
-            addAll("редактор", "клава", "клавиатура", "bbcode", "смайлы", "emoji", "вложения", "attachments")
-        }
-        // Уведомления/аватары
-        if (key.contains("notif") || key.contains("notification")) {
-            addAll("уведомления", "notify", "push")
-        }
-        if (key.contains("avatar") || key.contains("image") || key.contains("coil")) {
-            addAll("аватар", "аватарки", "картинки", "изображения")
-        }
-        // Тема/шрифт/размер
-        if (key.contains("theme") || key.contains("font") || key.contains("text") || key.contains("size")) {
-            addAll("тема", "оформление", "шрифт", "размер текста")
-        }
-        if (key.contains("palette") || key.contains("ui.")) {
-            addAll("палитра", "цвета", "4pda", "классика", "ios", "системный", "accent")
-        }
-        // Сеть
-        if (key.contains("network") || key.contains("http") || key.contains("timeout")) {
-            addAll("сеть", "интернет", "таймаут", "повторы", "retry")
-        }
-        if (key.contains("bottom_nav") || key.contains("menu_sequence")) {
-            addAll("нижнее меню", "панель", "вкладки", "новости", "избранное", "порядок", "таб", "bottom", "nav", "tab bar")
-        }
-        return out
-    }
+    // Синонимы («клава», «пуш», «аватарки») общие с индексом сквозного поиска — см. SettingsSearchIndex.
+    private fun buildKeywordHints(key: String): List<String> = SettingsSearchIndex.keywordHints(key)
 
     private fun filterGroup(group: PreferenceGroup, q: String): Boolean {
         var anyVisible = false

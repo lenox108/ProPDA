@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom_top"
+        android:title="@string/downloads">
+
+        <ListPreference
+            android:defaultValue="SYSTEM"
+            android:dialogTitle="@string/pref_title_download_method"
+            android:entries="@array/entries_download_method"
+            android:entryValues="@array/entry_values_download_method"
+            android:key="main.download_method"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/download_method_system"
+            android:title="@string/pref_title_download_method"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="main.download_folder_uri"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_download_folder_default"
+            android:title="@string/pref_title_download_folder"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:layout="@layout/preference_category_custom"
+        android:title="@string/settings_group_network">
+
+        <Preference
+            android:key="open_proxy_settings"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_proxy"
+            android:title="@string/pref_title_proxy"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>
