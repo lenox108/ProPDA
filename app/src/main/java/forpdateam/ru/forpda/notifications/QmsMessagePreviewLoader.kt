@@ -84,9 +84,11 @@ class QmsMessagePreviewLoader @Inject constructor(
     ): List<String> = mutex.withLock {
         val anchor = prefs.getQmsPreviewAnchor(themeId)
         var fetched = fetch(userId, themeId, anchor)
-        if (fetched.isEmpty() && anchor > 0) {
-            // Якорь протух: сообщения удалены (удаление в QMS одностороннее) или диалог
-            // пересоздан. Один раз добираем диалог целиком, иначе превью молчало бы вечно.
+        // Пусто при живом якоре — это чаще всего «нового нет» (дубль события: WS и пуш об одном
+        // и том же). Тогда показываем то, что уже в буфере, и НЕ ходим за диалогом целиком.
+        // Полный перезабор только когда показывать реально нечего: буфер пуст после перезапуска
+        // процесса, либо якорь протух (сообщения удалены — удаление в QMS одностороннее).
+        if (fetched.isEmpty() && anchor > 0 && QmsPreviewStore.isEmpty(themeId)) {
             NotifDiagLog.log(context, "qms preview: t=$themeId anchor=$anchor stale, refetch from 0")
             fetched = fetch(userId, themeId, 0)
         }
@@ -154,6 +156,8 @@ object QmsPreviewStore {
             buffer.takeLast(limit.coerceIn(1, MAX_PER_THEME)).map { it.second }
         }
     }
+
+    fun isEmpty(themeId: Int): Boolean = buffers[themeId].isNullOrEmpty()
 
     /** Диалог прочитан/уведомление снято — накопленное больше не наше дело. */
     fun forget(themeId: Int) {

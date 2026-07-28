@@ -357,8 +357,20 @@ class EventsCheckWorker @AssistedInject constructor(
         // в сводку). PREVIEW_MAX_ENRICH зеркалит STACKED_MAX+1 — ровно то, что показывается
         // отдельными карточками.
         if (source == NotificationEvent.Source.QMS) {
+            val unreadBefore = toPublish.joinToString(",") { "${it.sourceId}:${it.msgCount}" }
             for (event in toPublish.take(PREVIEW_MAX_ENRICH)) {
                 qmsMessagePreviewLoader.enrich(appContext, event)
+            }
+            // ВРЕМЕННЫЙ ЗАМЕР (снять после проверки): не помечает ли дозагрузка сообщения
+            // прочитанными на сервере. Сверяем счётчик непрочитанных до и после запроса —
+            // если он упал, значит get-thread-messages для сервера равносилен прочтению.
+            if (toPublish.isNotEmpty()) {
+                runCatching {
+                    eventsApi.invalidateInspectorCaches()
+                    eventsApi.getQmsEvents().joinToString(",") { "${it.sourceId}:${it.msgCount}" }
+                }.onSuccess {
+                    NotifDiagLog.log(appContext, "qms unread probe: before=[$unreadBefore] after=[$it]")
+                }
             }
         }
         var publishBlocked = false
