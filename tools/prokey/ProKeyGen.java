@@ -143,6 +143,18 @@ public class ProKeyGen {
      * покупателя оказалось бы два разных рабочих ключа и в журнале был бы бардак.
      */
     private static void issue(String memberId) throws Exception {
+        // Приложение «Ключи ProPDA» хранит покупателей в clients.json и само перезаписывает
+        // markdown из него. Если писать сюда ещё и отсюда, строки, добавленные командой,
+        // будут молча стёрты при следующем сохранении в приложении. Поэтому уступаем ему.
+        Path appStore = LEDGER.getParent().resolve("clients.json");
+        if (Files.exists(appStore)) {
+            System.out.println("Список ведёт приложение «Ключи ProPDA» — выдавайте ключи в нём.");
+            System.out.println("Иначе запись потеряется при следующем сохранении.");
+            System.out.println();
+            System.out.println("Если ключ нужен без приложения (журнал не обновится):");
+            System.out.println("  java tools/prokey/ProKeyGen.java raw " + memberId);
+            return;
+        }
         if (!memberId.matches("\\d+")) {
             System.out.println("Номер должен состоять из цифр. Его видно в приложении:");
             System.out.println("Настройки -> Уведомления -> Активация push");
@@ -198,10 +210,14 @@ public class ProKeyGen {
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(15000);
             if (conn.getResponseCode() != 200) return null;
-            String html;
+            byte[] raw;
             try (InputStream in = conn.getInputStream()) {
-                html = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                raw = in.readAllBytes();
             }
+            // 4PDA объявляет в заголовке UTF-8, но реально отдаёт cp1251 — доверять заголовку
+            // нельзя, иначе кириллические ники превращаются в мусор. Латиница совпадает в обеих
+            // кодировках, поэтому баг долго не был заметен.
+            String html = new String(raw, java.nio.charset.Charset.forName("windows-1251"));
             int a = html.indexOf("<title>");
             int b = html.indexOf("</title>");
             if (a < 0 || b <= a) return null;

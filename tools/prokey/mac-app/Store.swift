@@ -138,8 +138,14 @@ final class Store: ObservableObject {
         var req = URLRequest(url: url)
         req.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 15
+        // 4PDA объявляет UTF-8, но отдаёт cp1251: заголовку тут верить нельзя, иначе
+        // кириллические ники приходят мусором (латиница совпадает, поэтому это не бросалось
+        // в глаза). Читаем как windows-1251, с откатом на UTF-8.
         guard let (data, _) = try? await URLSession.shared.data(for: req),
-              let html = String(data: data, encoding: .utf8),
+              let html = String(data: data, encoding: String.Encoding(
+                    rawValue: CFStringConvertEncodingToNSStringEncoding(
+                        CFStringEncoding(CFStringEncodings.windowsCyrillic.rawValue))))
+                    ?? String(data: data, encoding: .utf8),
               let a = html.range(of: "<title>"), let b = html.range(of: "</title>")
         else { return nil }
         var title = String(html[a.upperBound..<b.lowerBound]).trimmingCharacters(in: .whitespaces)

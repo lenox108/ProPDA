@@ -1,8 +1,25 @@
 import SwiftUI
 import AppKit
 
+/// Однооконная утилита: крестик должен завершать программу.
+///
+/// По умолчанию macOS оставляет приложение жить без окна, и клик по значку в Dock его не
+/// «будит» — открывать нечего. Со стороны это выглядит как зависшая программа, которую
+/// приходится снимать через Dock. Поэтому закрытие последнего окна = выход, а на случай
+/// повторного клика по значку окно восстанавливается.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { sender.windows.first?.makeKeyAndOrderFront(nil) }
+        return true
+    }
+}
+
 @main
 struct ProPDAKeysApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup("ProPDA — клиенты и ключи") {
             RootView()
