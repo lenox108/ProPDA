@@ -73,6 +73,9 @@ class EventsCheckWorker @AssistedInject constructor(
         // по ней отличает «система не запускает воркер» от «воркер запускается, но выходит пустым».
         prefs.setLastWorkerRunAt(System.currentTimeMillis())
 
+        // FCM-триггер (реальный push от сервера) читаем ДО гейтов: он авторитетнее любого из них.
+        val fcmTriggered = inputData.getBoolean(KEY_FCM_TRIGGER, false)
+
         // Скипаем ТОЛЬКО в foreground при живом сокете: там процесс активен, пинги OkHttp идут,
         // и «connected» надёжно означает доставку. В ФОНЕ «connected» может врать — тихий обрыв
         // сети в Doze или заморозка процесса оставляют сокет-зомби, который числится живым, но
@@ -80,10 +83,16 @@ class EventsCheckWorker @AssistedInject constructor(
         // приложении). Поэтому в фоне проверку НЕ пропускаем: она дёшева (дедуп last_check_at),
         // служит страховкой поверх сокета, а снапшот-дедуп не даст дубля, если сокет всё-таки
         // доставил событие сам. Прыжок на Main заодно прогоняет отложенные lifecycle-колбэки.
+        //
+        // Пуш этот гейт снимает и в foreground: «connected» врёт и здесь. Живой лог 28.07.26 —
+        // сокет числился подключённым (isConnected=true), пять QMS-сообщений подряд пришли
+        // пушем, а onMessage не случился ни разу: каждое пробуждение отбивалось как
+        // «skip (foreground websocket)», и уведомления не было вовсе. Сервер прислал пуш —
+        // значит событие есть; снапшот-дедуп не даст дубля, если сокет всё-таки оживёт.
         val uiForeground = withContext(Dispatchers.Main) {
             ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         }
-        if (uiForeground && eventsRepository.isWebSocketConnected()) {
+        if (!fcmTriggered && uiForeground && eventsRepository.isWebSocketConnected()) {
             if (BuildConfig.DEBUG) {
                 Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: foreground + websocket connected")
             }
@@ -100,10 +109,9 @@ class EventsCheckWorker @AssistedInject constructor(
             NotifDiagLog.log(applicationContext, "worker: skip (push disabled)")
             return@withContext Result.success()
         }
-        // FCM-триггер (реальный push от сервера) обходит гейт «фоновая проверка выключена»: в
-        // режиме доставки Push периодический опрос намеренно off, но пробуждение по push должно
-        // идти в сеть за авторитетным состоянием.
-        val fcmTriggered = inputData.getBoolean(KEY_FCM_TRIGGER, false)
+        // FCM-триггер обходит и гейт «фоновая проверка выключена»: в режиме доставки Push
+        // периодический опрос намеренно off, но пробуждение по push должно идти в сеть за
+        // авторитетным состоянием.
         if (!fcmTriggered && !prefs.getBgCheckEnabled()) {
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip background check: background preference disabled")
             Timber.d("EventsCheckWorker: bgCheck disabled, skip")
