@@ -303,6 +303,8 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         }
 
         messagePanel.addSendOnClickListener { presenter.onSendClick() }
+        // Переписка, а не форма: после отправки клавиатура и фокус остаются на месте.
+        messagePanel.keepImeOnSend = true
         messagePanel.setClearMessageClickListener { requestClearMessagePanelText() }
         // Свёрнутое поле ввода: состояние общее на приложение и переключается только руками
         // (по скроллу не сворачиваем — это дёргало бы паддинг списка во время подгрузки вверх).
