@@ -377,12 +377,70 @@ private fun replacePostBlockQuoteBlocksForBbcodeEdit(html: String): String {
             searchStart = quotePair.second
             continue
         }
-        val replacement = "[quote]${preprocessHtmlQuoteBlocksForBbcodeEdit(bodyInner)}[/quote]"
+        val openTag = quoteBbcodeOpenTag(extractDirectChildDivInnerByClass(quotePair.first, "block-title"))
+        // `<br>`, а не `\n`: перевод строки в исходном HTML для [HtmlCompat.fromHtml] — обычный пробел,
+        // и текст после цитаты слипался с `[/quote]`. Сам блок цитаты — блочный `<div>`, но мы съедаем
+        // его этой заменой, поэтому границу строки восстанавливаем явно — и только там, где рядом ещё
+        // нет своего `<br>`/`<p>`/`<div>`, иначе после цитаты появлялась лишняя пустая строка.
+        val lead = if (needsBreakBeforeQuote(s, m.range.first)) "<br>" else ""
+        val trail = if (needsBreakAfterQuote(s, quotePair.second)) "<br>" else ""
+        val replacement =
+                "$lead$openTag${preprocessHtmlQuoteBlocksForBbcodeEdit(bodyInner)}[/quote]$trail"
         s = s.replaceRange(m.range.first, quotePair.second, replacement)
         searchStart = m.range.first + replacement.length
     }
     return s
 }
+
+/** Граница строки перед цитатой нужна, только если слева уже не блочный тег (или вообще ничего). */
+private fun needsBreakBeforeQuote(html: String, quoteStart: Int): Boolean {
+    val before = html.substring(0, quoteStart).trimEnd()
+    if (before.isEmpty()) return false
+    return !Regex("(?is)<(?:br|/?p|/?div|/?li|/?blockquote)\\b[^>]*>$").containsMatchIn(before)
+}
+
+/** …и симметрично после неё: у `.post-block.quote` обычно уже стоит свой `<br />`. */
+private fun needsBreakAfterQuote(html: String, quoteEnd: Int): Boolean {
+    val after = html.substring(quoteEnd).trimStart()
+    if (after.isEmpty()) return false
+    return !Regex("(?is)^<(?:br|/?p|/?div|/?li|/?blockquote)\\b").containsMatchIn(after)
+}
+
+/**
+ * Шапка цитаты из `.block-title` («Ник @ дата» + snapback-ссылка на пост) → атрибуты открывающего
+ * `[quote name="Ник" date="дата" post=N]`, как их пишет сам форум и [onQuote]. Без этого копия/правка
+ * отдавала голый `[quote]`, и при вставке терялось, КТО это сказал.
+ *
+ * Разделитель ника и даты форум отдаёт сущностью (`&#064;`), а не символом, поэтому сначала
+ * раскрываем сущности — иначе « @ » не находилось и весь заголовок уезжал в `name`.
+ *
+ * Кавычки и скобки в нике/дате ломают разбор тега — заменяем, как в [spoilerBbcodeOpenTag].
+ */
+private fun quoteBbcodeOpenTag(titleInnerHtml: String?): String {
+    if (titleInnerHtml == null) return "[quote]"
+    val text = HtmlCompat.fromHtml(blockTitlePlainText(titleInnerHtml), HtmlCompat.FROM_HTML_MODE_LEGACY)
+            .toString()
+            .replace('\u00a0', ' ')
+            .trim()
+    val at = Regex("\\s+@\\s+").find(text)
+    val name = (if (at != null) text.substring(0, at.range.first) else text).sanitizedBbcodeAttrValue()
+    val date = (if (at != null) text.substring(at.range.last + 1) else "").sanitizedBbcodeAttrValue()
+    val postId = Regex("""(?i)(?:[?&;]|&amp;)(?:pid|p)=(\d+)|#entry(\d+)""")
+            .find(titleInnerHtml)
+            ?.let { it.groupValues[1].ifEmpty { it.groupValues[2] } }
+            ?.takeIf { it.isNotEmpty() }
+    // Цитата без автора: форум рисует «Цитата»/«Quote» — это подпись блока, а не ник.
+    val isDefaultLabel = name.equals("Цитата", ignoreCase = true) || name.equals("Quote", ignoreCase = true)
+    val attrs = buildString {
+        if (name.isNotEmpty() && !(isDefaultLabel && date.isEmpty() && postId == null)) append(" name=\"$name\"")
+        if (date.isNotEmpty()) append(" date=\"$date\"")
+        if (postId != null) append(" post=$postId")
+    }
+    return "[quote$attrs]"
+}
+
+private fun String.sanitizedBbcodeAttrValue(): String =
+        replace('"', '\'').replace('[', '(').replace(']', ')').trim()
 
 /**
  * Перед [HtmlCompat.fromHtml]: теги &lt;img&gt; превращаются в ImageSpan с U+FFFC (квадратик «OBJ»).

@@ -3109,6 +3109,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 cm?.setPrimaryClip(android.content.ClipData.newPlainText("post", postUrl))
                 Toast.makeText(requireContext(), "Ссылка скопирована", Toast.LENGTH_SHORT).show()
             })
+            add("Копировать BB code" to { copyPostBbCode(item) })
             add("Упоминания поста" to {
                 navigationUseCase.openPostMentions(pageForumId, item.topicId, item.postId)
             })
@@ -3186,6 +3187,31 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                                 e.message ?: "Не удалось отправить жалобу", Toast.LENGTH_SHORT).show()
                     })
         }
+    }
+
+    /**
+     * «Копировать BB code»: put the post's markup into the clipboard. Works for ANY post, including other
+     * users' — the source is reconstructed locally from the rendered body HTML ([NativePostItem.rawBodyHtml])
+     * by the same DOM→BBCode normalizer the editor uses, so there is no network call and no permission need
+     * (the server only hands out real sources via the edit form, i.e. own posts only).
+     *
+     * Unlike [onQuote] this keeps EVERYTHING: nested quotes stay quotes and spoilers stay spoilers. Those two
+     * are stripped/collapsed for quoting only because 4pda renders no block tag inside [quote] — irrelevant
+     * when the text goes to the clipboard.
+     */
+    private fun copyPostBbCode(item: NativePostItem) {
+        val bb = item.rawBodyHtml
+                ?.let { forpdateam.ru.forpda.common.normalizeEditPostBodyFromDomHtml(it) }
+                ?.trim()
+                .orEmpty()
+        if (bb.isEmpty()) {
+            Toast.makeText(requireContext(), "Не удалось получить разметку поста", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                as? android.content.ClipboardManager
+        cm?.setPrimaryClip(android.content.ClipData.newPlainText("bbcode", bb))
+        Toast.makeText(requireContext(), "BB code скопирован", Toast.LENGTH_SHORT).show()
     }
 
     /** «Цитировать из буфера»: wrap the current clipboard text in a quote from [item] (parity with the
