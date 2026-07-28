@@ -4,7 +4,6 @@ import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.RelativeLayout
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.RecyclerView
@@ -68,6 +67,19 @@ class NoteAdapterDelegate(
                 0.30f
         )
 
+        // Кружок под значком типа — тот же приём, но слабее: подложка должна читаться как
+        // мягкий акцентный контейнер, а не как второй элемент управления. Роль
+        // colorSecondaryContainer для этого не годится — в части палитр она приравнена к
+        // цвету карточки, и круг пропал бы.
+        private val typeIconBackColor = ColorUtils.blendARGB(
+                binding.root.context.getColorFromAttr(R.attr.content_card_surface),
+                binding.root.context.getColorFromAttr(androidx.appcompat.R.attr.colorAccent),
+                0.16f
+        )
+
+        private val typeIconTint = binding.root.context
+                .getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+
         init {
             binding.root.setOnClickListener {
                 clickListener.onItemClick(currentItem)
@@ -105,9 +117,8 @@ class NoteAdapterDelegate(
             currentItem = item
             applyPlate(segment)
             // В режиме выбора ⋮ гасим (действуют пакетные операции из тулбара), но именно
-            // INVISIBLE, а не GONE: заголовок и дата спозиционированы через toStartOf(item_more),
-            // и на GONE-якоре RelativeLayout схлопывал заголовок в нулевую ширину — в выделении
-            // от строки оставалась одна дата.
+            // INVISIBLE, а не GONE: иначе при входе в выделение текст строки прыгает вправо
+            // на ширину кнопки.
             binding.itemMore.visibility = if (selectionMode) View.INVISIBLE else View.VISIBLE
 
             val density = binding.root.context.currentUiDensityValues()
@@ -117,7 +128,10 @@ class NoteAdapterDelegate(
             // «comfortable»-паддинг раздувал блок. Вложенность рисуем отступом ВНУТРИ плашки:
             // сдвинуть строку марджином нельзя — она перестала бы стыковаться с папкой в один блок.
             val verticalPadding = res.getDimensionPixelSize(R.dimen.note_row_padding_vertical)
-            val nestedIndent = if (isNested) res.getDimensionPixelSize(R.dimen.dp32) else 0
+            // dp20 + значок (dp36) + зазор (dp12) = 68dp, ровно та же левая граница текста,
+            // что у названия папки (chevron 24 + 8 + иконка 24 + 12): вложенные закладки
+            // выстраиваются в одну колонку со своей папкой.
+            val nestedIndent = if (isNested) res.getDimensionPixelSize(R.dimen.dp20) else 0
             binding.root.setPaddingRelative(
                     density.itemHorizontalPaddingPx + nestedIndent,
                     verticalPadding,
@@ -137,7 +151,18 @@ class NoteAdapterDelegate(
                     if (isSelected) ColorStateList.valueOf(selectionRowColor) else null
             )
 
-            binding.itemTitle.text = item.title
+            val type = NoteLinkType.of(item.link)
+            binding.itemTypeIcon.setImageResource(type.iconRes)
+            binding.itemTypeIcon.imageTintList = ColorStateList.valueOf(typeIconTint)
+            // mutate() по той же причине, что и у фона строки: общий ConstantState иначе
+            // разнёс бы тинт по всем кружкам списка.
+            binding.itemTypeIcon.background?.mutate()
+            ViewCompat.setBackgroundTintList(
+                    binding.itemTypeIcon,
+                    ColorStateList.valueOf(typeIconBackColor)
+            )
+
+            binding.itemTitle.text = NoteLinkType.displayTitle(item.title, type)
             val content = item.content
             if (content.isNullOrEmpty()) {
                 binding.itemContent.visibility = View.GONE
@@ -153,41 +178,6 @@ class NoteAdapterDelegate(
                 binding.itemDate.visibility = View.VISIBLE
                 binding.itemDate.text = createdAt
             }
-            layoutDate(hasContent = !content.isNullOrEmpty())
-        }
-
-        /**
-         * Есть превью — дата уходит мета-строкой под него (как дата в строке форума).
-         * Превью нет — дата встаёт на базовую линию заголовка справа: иначе она висит
-         * отдельной строкой под коротким заголовком и блок читается пустым и рыхлым.
-         */
-        private fun layoutDate(hasContent: Boolean) {
-            val dateParams = binding.itemDate.layoutParams as RelativeLayout.LayoutParams
-            val titleParams = binding.itemTitle.layoutParams as RelativeLayout.LayoutParams
-            if (hasContent) {
-                dateParams.addRule(RelativeLayout.BELOW, R.id.item_content)
-                dateParams.removeRule(RelativeLayout.ALIGN_BASELINE)
-                // Правый край — по краю превью, то есть ровно перед кнопкой ⋮.
-                dateParams.removeRule(RelativeLayout.START_OF)
-                dateParams.addRule(RelativeLayout.ALIGN_END, R.id.item_content)
-                dateParams.topMargin = binding.root.resources.getDimensionPixelSize(R.dimen.note_row_line_spacing)
-                dateParams.marginStart = 0
-                titleParams.removeRule(RelativeLayout.START_OF)
-                titleParams.addRule(RelativeLayout.START_OF, R.id.item_more)
-                titleParams.width = ViewGroup.LayoutParams.MATCH_PARENT
-            } else {
-                dateParams.removeRule(RelativeLayout.BELOW)
-                dateParams.removeRule(RelativeLayout.ALIGN_END)
-                dateParams.addRule(RelativeLayout.ALIGN_BASELINE, R.id.item_title)
-                dateParams.addRule(RelativeLayout.START_OF, R.id.item_more)
-                dateParams.topMargin = 0
-                // Заголовок ужимается до даты — не даём им слипнуться.
-                dateParams.marginStart = binding.root.resources.getDimensionPixelSize(R.dimen.dp8)
-                titleParams.addRule(RelativeLayout.START_OF, R.id.item_date)
-                titleParams.width = ViewGroup.LayoutParams.WRAP_CONTENT
-            }
-            binding.itemDate.layoutParams = dateParams
-            binding.itemTitle.layoutParams = titleParams
         }
     }
 }
