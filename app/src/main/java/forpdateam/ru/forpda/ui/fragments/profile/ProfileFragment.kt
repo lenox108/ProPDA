@@ -141,7 +141,9 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         toolbarLayout.isTitleEnabled = true
         toolbarTitleView.visibility = View.GONE
 
-        val toolbarIconColor = requireContext().getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
+        // Развёрнутая шапка — это затемнённая картинка (@drawable/profile_header_scrim),
+        // поэтому иконки там белые; когда шапка схлопнулась в обычный тулбар, возвращаем
+        // штатный цвет темы.
         val scrimHelper = ScrimHelper(appBarLayout, toolbarLayout)
         scrimHelper.setScrimListener { scrim: Boolean ->
             isScrim = scrim
@@ -149,14 +151,14 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
                 toolbar.navigationIcon?.clearColorFilter()
                 toolbar.overflowIcon?.clearColorFilter()
             } else {
-                toolbar.navigationIcon?.setColorFilter(toolbarIconColor, PorterDuff.Mode.SRC_ATOP)
-                toolbar.overflowIcon?.setColorFilter(toolbarIconColor, PorterDuff.Mode.SRC_ATOP)
+                toolbar.navigationIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
+                toolbar.overflowIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
             }
             updateStatusBar()
         }
 
-        toolbar.navigationIcon?.setColorFilter(toolbarIconColor, PorterDuff.Mode.SRC_ATOP)
-        toolbar.overflowIcon?.setColorFilter(toolbarIconColor, PorterDuff.Mode.SRC_ATOP)
+        toolbar.navigationIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
+        toolbar.overflowIcon?.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
 
         presenter.start()
         observeViewModel()
@@ -217,7 +219,8 @@ class ProfileFragment : TabFragment(), ProfileAdapter.ClickListener {
         if (isResume) {
             SystemBarAppearance.syncStatusBarIconContrast(
                     requireActivity(),
-                    topBarSurfaceColor()
+                    // Пока шапка развёрнута, под статусбаром затемнённая картинка.
+                    if (isScrim) topBarSurfaceColor() else Color.BLACK
             )
         } else {
             SystemBarAppearance.syncStatusBarIconContrast(requireActivity())

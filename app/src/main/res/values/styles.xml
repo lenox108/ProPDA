@@ -1053,11 +1053,17 @@
     </style>
 
     <style name="ProfileToolbarTextStyle">
-        <item name="android:textColorLink">?link_color_contrast</item>
-        <item name="android:textColor">?link_color_contrast</item>
+        <!--
+            Текст лежит на размытой аватарке пользователя — яркость картинки
+            непредсказуема, а ?link_color_contrast на светлых палитрах давал
+            светло-серое по светлому. Держим белый с тенью поверх градиента
+            @drawable/profile_header_scrim: читается на любой картинке и теме.
+        -->
+        <item name="android:textColorLink">@android:color/white</item>
+        <item name="android:textColor">@android:color/white</item>
         <item name="android:shadowDy">1</item>
-        <item name="android:shadowRadius">5</item>
-        <item name="android:shadowColor">#4c000000</item>
+        <item name="android:shadowRadius">6</item>
+        <item name="android:shadowColor">#99000000</item>
         <!--<item name="android:textAlignment" tools:ignore="NewApi">center</item>-->
     </style>
 
