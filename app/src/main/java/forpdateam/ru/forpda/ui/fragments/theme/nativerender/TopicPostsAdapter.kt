@@ -470,10 +470,9 @@ class TopicPostsAdapter(
             }
             val ctx = itemView.context
             lowRatingStub.visibility = View.VISIBLE
-            lowRatingLabel.text = ctx.getString(
-                    R.string.low_rated_post_stub_label,
-                    item.nick.orEmpty(),
-                    item.number)
+            // Только ник: номер поста («#N») в шапке поста тоже скрыт по просьбе пользователя —
+            // в плашке он был бы единственным местом, где эта нумерация вылезает.
+            lowRatingLabel.text = item.nick.orEmpty()
             lowRatingLabel.textSize = scaledSp(12f)
             lowRatingValue.text = PostRatingFormatter.normalize(item.postRating).orEmpty()
             lowRatingValue.textSize = scaledSp(12f)

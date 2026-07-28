@@ -69,7 +69,8 @@ class TopicPostsAdapterLowRatingTest {
         assertEquals(View.GONE, holder.actions().visibility)
         // Тело не просто спрятано — оно вообще не построено (иначе сворачивание не экономило бы разметку).
         assertEquals(0, holder.body().childCount)
-        assertEquals("Гость_77 · #413", holder.stubLabel().text.toString())
+        // Только ник — номер поста в плашке не показываем (в шапке поста он тоже скрыт).
+        assertEquals("Гость_77", holder.stubLabel().text.toString())
         assertEquals("-4", holder.stubValue().text.toString())
     }
 
