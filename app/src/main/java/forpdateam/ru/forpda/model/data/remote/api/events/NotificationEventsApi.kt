@@ -133,6 +133,18 @@ class NotificationEventsApi(private val webClient: IWebClient) {
         favInspectorCache.invalidate()
     }
 
+    /**
+     * Сбрасывает ОБА кэша инспектора. Нужно пробуждению по push: сервер только что сообщил, что
+     * состояние изменилось, значит любая копия моложе TTL по определению устарела. Живой лог
+     * 28.07.26: два сообщения подряд → два пуша с разницей в 3 секунды, второй проход получил
+     * кэшированный ответ первого и отчитался `new=0` — второе сообщение ждало бы следующего
+     * опроса (до часа).
+     */
+    fun invalidateInspectorCaches() {
+        favInspectorCache.invalidate()
+        qmsInspectorCache.invalidate()
+    }
+
     fun parseWebSocketEvent(message: String): NotificationEvent? {
         val matcher = webSocketEventPattern.matcher(message)
         return parseWebSocketEvent(matcher)

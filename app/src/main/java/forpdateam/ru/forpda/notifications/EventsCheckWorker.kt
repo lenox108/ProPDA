@@ -47,7 +47,8 @@ class EventsCheckWorker @AssistedInject constructor(
         private val mentionsRepository: MentionsRepository,
         private val webClient: IWebClient,
         private val authHolder: AuthHolder,
-        private val qmsMessagePreviewLoader: QmsMessagePreviewLoader
+        private val qmsMessagePreviewLoader: QmsMessagePreviewLoader,
+        private val avatarRepository: forpdateam.ru.forpda.model.repository.avatar.AvatarRepository
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -168,6 +169,11 @@ class EventsCheckWorker @AssistedInject constructor(
         // Слот резервируем сразу (иначе параллельный триггер задвоил бы сеть), но при полном
         // сетевом фейле вернём назад — см. ниже.
         prefs.setLastCheckAt(now)
+
+        // Пуш = «состояние изменилось прямо сейчас», поэтому 8-секундный TTL инспектора для него
+        // не оптимизация, а потеря события: второй пуш подряд получал ответ, снятый ДО его
+        // сообщения, и выходил с new=0.
+        if (fcmTriggered) eventsApi.invalidateInspectorCaches()
 
         NotifDiagLog.log(applicationContext, "worker: run start")
         // Retry при сетевом сбое ЛЮБОГО источника, а не только когда упали все (P1 code review:
@@ -360,7 +366,13 @@ class EventsCheckWorker @AssistedInject constructor(
             if (NotificationPublisher.publishBatch(appContext, prefs, toPublish) == null) publishBlocked = true
         } else {
             for (event in toPublish) {
-                if (NotificationPublisher.publish(appContext, prefs, event) == null) publishBlocked = true
+                // Аватар собеседника умел грузить только foreground-сервис, поэтому фоновое
+                // (и push-) уведомление QMS выходило с безликой заглушкой вместо лица — при
+                // MessagingStyle это особенно заметно.
+                val avatar = if (source == NotificationEvent.Source.QMS) loadQmsAvatar(event) else null
+                if (NotificationPublisher.publish(appContext, prefs, event, avatar = avatar) == null) {
+                    publishBlocked = true
+                }
             }
         }
         // Разбивка фильтров: published=0 при new>0 иначе не объясняет себя. Теперь видно, что
@@ -390,6 +402,22 @@ class EventsCheckWorker @AssistedInject constructor(
         }
         saveSnapshot(source, current)
         return true
+    }
+
+    /** Аватар собеседника для QMS-уведомления. Сбой не должен мешать публикации — просто null. */
+    private suspend fun loadQmsAvatar(event: NotificationEvent): android.graphics.Bitmap? {
+        if (!prefs.getMainAvatarsEnabled() || event.userId <= 0) return null
+        val res = appContext.resources
+        val height = res.getDimension(android.R.dimen.notification_large_icon_height).toInt()
+        val width = res.getDimension(android.R.dimen.notification_large_icon_width).toInt()
+        return runCatching {
+            val url = avatarRepository.getAvatar(event.userId, event.userNick)
+            val bitmap = forpdateam.ru.forpda.common.ForPdaCoil
+                    .loadBitmapForNotification(appContext, url, width, height)
+            val cropped = forpdateam.ru.forpda.common.BitmapUtils.centerCrop(bitmap, width, height, 1.0f)
+            forpdateam.ru.forpda.common.BitmapUtils.createAvatar(cropped, width, height, true)
+        }.onFailure { Timber.w(it, "EventsCheckWorker: avatar load failed for ${event.userId}") }
+                .getOrNull()
     }
 
     private fun saveSnapshot(source: NotificationEvent.Source, current: List<NotificationEvent>) {
