@@ -10,7 +10,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
-import forpdateam.ru.forpda.common.makeSnackbarAboveSystemBars
+import forpdateam.ru.forpda.common.showSnackbarAboveSystemBars
 import forpdateam.ru.forpda.common.showSnackbar
 import forpdateam.ru.forpda.databinding.FragmentQmsChatBinding
 import androidx.activity.result.contract.ActivityResultContracts
@@ -924,7 +924,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         }
         contentController.showContent(TAG_QMS_ERROR)
         if (snackbarMessage != null) {
-            view?.makeSnackbarAboveSystemBars(snackbarMessage, Snackbar.LENGTH_SHORT)?.show()
+            view?.showSnackbarAboveSystemBars(snackbarMessage, Snackbar.LENGTH_SHORT)
         }
     }
 

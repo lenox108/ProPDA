@@ -19,7 +19,6 @@ import android.widget.SeekBar
 import android.widget.TextView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
-import forpdateam.ru.forpda.common.makeSnackbarAboveSystemBars
 import forpdateam.ru.forpda.common.showSnackbarAboveSystemBars
 import forpdateam.ru.forpda.common.showSnackbar
 import androidx.preference.ListPreference
@@ -1018,14 +1017,16 @@ class SettingsFragment : BaseSettingFragment() {
     }
 
     private fun showAppFontRestartNotice() {
-        view?.makeSnackbarAboveSystemBars(
+        view?.showSnackbarAboveSystemBars(
             R.string.pref_app_font_restart_notice,
             Snackbar.LENGTH_LONG
-        )?.setAction(R.string.restart) {
-            if (isAdded) {
-                MainActivity.restartApplication(requireActivity())
+        ) {
+            setAction(R.string.restart) {
+                if (isAdded) {
+                    MainActivity.restartApplication(requireActivity())
+                }
             }
-        }?.show()
+        }
     }
 
     private fun updateAppFontSummary(mode: AppFontMode) {
