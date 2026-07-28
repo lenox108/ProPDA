@@ -1735,7 +1735,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // dismisses the overlay first, so tapping a hat link (another topic, or another page of THIS topic)
         // reveals the destination immediately instead of leaving the hat hanging over it (user report).
         val popupAdapter = TopicPostsAdapter(overlayDismissingLinkHandler(reportAwareLinkHandler), this)
-        popupAdapter.setDisplaySettings(currentDisplaySettings())
+        // Сворачивание по низкому рейтингу в этом попапе не нужно: он открыт РАДИ этого поста, и адаптеру
+        // здесь не сообщают, что пост — шапка (setTopicHat не вызывается), так что защита по isHat не сработала бы.
+        popupAdapter.setDisplaySettings(currentDisplaySettings().copy(hideLowRatedPosts = false))
         val auth = authHolder.get()
         popupAdapter.setAuthContext(auth.isAuth(), auth.userId)
         val rv = androidx.recyclerview.widget.RecyclerView(ctx).apply {
@@ -1837,6 +1839,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val hatId = topicHatPostId ?: return
         hatCollapsed = !hatCollapsed
         postsAdapter.setTopicHat(hatId, hatCollapsed)
+    }
+
+    override fun onToggleLowRatedPost(item: NativePostItem, expand: Boolean) {
+        if (expand) postsAdapter.expandLowRatedPost(item.postId)
+        else postsAdapter.collapseLowRatedPost(item.postId)
     }
 
     /**
@@ -2824,6 +2831,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             animatedSmiles = topicPreferencesHolder.getAnimatedSmiles(),
             flatBlocks = topicPreferencesHolder.getFlatPosts(),
             modernHeader = topicPreferencesHolder.getModernPostHeader(),
+            hideLowRatedPosts = topicPreferencesHolder.getHideLowRatedPosts(),
+            lowRatingThreshold = topicPreferencesHolder.getLowRatingThreshold(),
     )
 
     override fun onRestoredAfterChildFragmentRemoved() {
@@ -5016,6 +5025,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         (!isUnreadStyleLanding || topicPreferencesHolder.getHighlightUnreadPost())) {
                     postsAdapter.requestHighlight(request.postId)
                 }
+                // Посадка на пост-цель всегда раскрывает его, даже если он заминусован: подсветка сюда не
+                // доходит, когда «Подсветка непрочитанного поста» выключена, а приезжать на плашку «Показать»
+                // после перехода по ссылке/упоминанию — бессмысленно.
+                if (request is AnchorRequest.Post) postsAdapter.expandLowRatedPost(request.postId)
                 // Лог 11_07-11-32: посадка на ПЕРВЫЙ НЕПРОЧИТАННЫЙ штампует границу прочитанного на сам
                 // якорный пост. [recordReadBoundaryAtRest] пишет только по жесту — но виз «открыл-глянул-
                 // закрыл» тогда не оставляет границы вовсе, а сам GET уже пометил страницу прочитанной на

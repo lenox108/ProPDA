@@ -6,11 +6,13 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import forpdateam.ru.forpda.common.Preferences as AppPreferences
 import forpdateam.ru.forpda.model.preferences.ForumBlacklistSerializer
 import forpdateam.ru.forpda.model.preferences.ForumBlacklistedUser
+import forpdateam.ru.forpda.ui.fragments.theme.nativerender.LowRatedPostPolicy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -52,6 +54,8 @@ class TopicDataStore(private val context: Context) {
         val FLAT_POSTS = booleanPreferencesKey("flat_posts")
         val MODERN_POST_HEADER = booleanPreferencesKey("modern_post_header")
         val HIGHLIGHT_UNREAD_POST = booleanPreferencesKey("highlight_unread_post")
+        val HIDE_LOW_RATED_POSTS = booleanPreferencesKey("hide_low_rated_posts")
+        val LOW_RATING_THRESHOLD = intPreferencesKey("low_rating_threshold")
         val ANCHOR_HISTORY = booleanPreferencesKey("anchor_history")
         val HAT_OPENED = booleanPreferencesKey("hat_opened")
         val FORUM_BLACKLIST = stringPreferencesKey("forum_blacklist")
@@ -100,6 +104,25 @@ class TopicDataStore(private val context: Context) {
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
                         .getBoolean(AppPreferences.Theme.HIGHLIGHT_UNREAD_POST, true)
             }, true)
+
+    fun observeHideLowRatedPostsFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.topicDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.HIDE_LOW_RATED_POSTS]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Theme.HIDE_LOW_RATED_POSTS, false)
+            }, false)
+
+    /**
+     * Порог рейтинга («−1 и ниже» … «−10 и ниже»). Legacy-фолбэк читает СТРОКУ: в
+     * `SharedPreferences` его пишет `ListPreference`, у которого значения строковые.
+     */
+    fun observeLowRatingThresholdFlow(): Flow<Int> =
+            safeDataStoreFlow(context.topicDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.LOW_RATING_THRESHOLD]
+                    ?: LowRatedPostPolicy.normalizeThreshold(
+                        context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                            .getString(AppPreferences.Theme.LOW_RATING_THRESHOLD, null))
+            }, LowRatedPostPolicy.DEFAULT_THRESHOLD)
 
     suspend fun getShowAvatars(): Boolean =
             observeShowAvatarsFlow().map { it }.first()
@@ -160,6 +183,26 @@ class TopicDataStore(private val context: Context) {
     }
 
     fun getHighlightUnreadPostImmediate(): Boolean = mirrorPrefs.getBoolean("highlight_unread_post", true)
+
+    suspend fun setHideLowRatedPosts(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.HIDE_LOW_RATED_POSTS] = value
+        }
+        mirrorPrefs.edit().putBoolean("hide_low_rated_posts", value).apply()
+    }
+
+    fun getHideLowRatedPostsImmediate(): Boolean = mirrorPrefs.getBoolean("hide_low_rated_posts", false)
+
+    suspend fun setLowRatingThreshold(value: Int) {
+        val normalized = LowRatedPostPolicy.normalizeThreshold(value)
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.LOW_RATING_THRESHOLD] = normalized
+        }
+        mirrorPrefs.edit().putInt("low_rating_threshold", normalized).apply()
+    }
+
+    fun getLowRatingThresholdImmediate(): Int = LowRatedPostPolicy.normalizeThreshold(
+            mirrorPrefs.getInt("low_rating_threshold", LowRatedPostPolicy.DEFAULT_THRESHOLD))
 
     suspend fun setAnchorHistory(value: Boolean) {
         safeEdit { preferences ->

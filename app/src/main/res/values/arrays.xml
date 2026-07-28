@@ -240,4 +240,30 @@
         <item>socks5</item>
         <item>http</item>
     </string-array>
+
+    <!-- «Скрывать посты с низким рейтингом» → порог. Значения строковые: их пишет ListPreference. -->
+    <string-array name="entries_low_rating_threshold">
+        <item>−1 и ниже</item>
+        <item>−2 и ниже</item>
+        <item>−3 и ниже</item>
+        <item>−4 и ниже</item>
+        <item>−5 и ниже</item>
+        <item>−6 и ниже</item>
+        <item>−7 и ниже</item>
+        <item>−8 и ниже</item>
+        <item>−9 и ниже</item>
+        <item>−10 и ниже</item>
+    </string-array>
+    <string-array name="entry_values_low_rating_threshold">
+        <item>-1</item>
+        <item>-2</item>
+        <item>-3</item>
+        <item>-4</item>
+        <item>-5</item>
+        <item>-6</item>
+        <item>-7</item>
+        <item>-8</item>
+        <item>-9</item>
+        <item>-10</item>
+    </string-array>
 </resources>

@@ -184,6 +184,10 @@ object Preferences {
         const val FLAT_POSTS = FLAT_UI
         const val MODERN_POST_HEADER = PREFIX + "modern_post_header"
         const val HIGHLIGHT_UNREAD_POST = PREFIX + "highlight_unread_post"
+        /** «Скрывать посты с низким рейтингом» — сворачивать заминусованные посты в плашку. */
+        const val HIDE_LOW_RATED_POSTS = PREFIX + "hide_low_rated_posts"
+        /** Порог рейтинга для сворачивания: «−1 и ниже» … «−10 и ниже». Хранится строкой (ListPreference). */
+        const val LOW_RATING_THRESHOLD = PREFIX + "low_rating_threshold"
         const val ANCHOR_HISTORY = PREFIX + "anchor_history"
         const val HAT_OPENED = PREFIX + "hat_opened"
         const val FORUM_BLACKLIST = PREFIX + "forum_blacklist"
