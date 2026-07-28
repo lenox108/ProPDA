@@ -1173,7 +1173,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
-    /** Popup with the full (untruncated) topic title, anchored under the toolbar title (WebView parity). */
+    /**
+     * Popup with the full (untruncated) topic title, anchored under the toolbar title (WebView parity).
+     * A tap on the popup itself copies that title to the clipboard and closes it.
+     */
     private fun showFullTopicTitle() {
         val topicTitle = getTitle().trim()
         if (topicTitle.isEmpty()) return
@@ -1191,6 +1194,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             maxLines = 4
             maxWidth = dm.widthPixels - dp16 * 2
             setPadding(dp16, dp8, dp16, dp8)
+            isClickable = true
+            setOnClickListener {
+                clipboardHelper.copyToClipboard(topicTitle)
+                Toast.makeText(ctx, forpdateam.ru.forpda.R.string.copied, Toast.LENGTH_SHORT).show()
+                topicTitlePopup?.dismiss()
+            }
         }
         topicTitlePopup = android.widget.PopupWindow(
                 contentView,

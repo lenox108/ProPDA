@@ -9,7 +9,7 @@ import timber.log.Timber
  * Why this exists:
  * - StrictMode is enabled only in debug builds (see [forpdateam.ru.forpda.App.setupStrictMode]).
  *   We have no release-side signal for "how long did cold start take on real devices".
- * - Sending data to AppMetrica requires explicit consent and is gated on the `store` flavor.
+ * - The app ships no external analytics, so there is nothing else to report timings to.
  *   We want a privacy-free, always-on fallback that does **not** leave the process.
  *
  * Usage:

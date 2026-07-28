@@ -4,10 +4,9 @@ import android.app.Application
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * stable/parallel канал (сайдлоад через 4pda): аналитика ОТКЛЮЧЕНА.
+ * Канал stable (сайдлоад через 4pda) — единственный в проекте: аналитика ОТКЛЮЧЕНА.
  *
- * AppMetrica здесь отсутствует на classpath (см. `storeImplementation` в build.gradle),
- * поэтому библиотека не пакуется в APK. [Analytics] остаётся с no-op репортером —
+ * Никаких аналитических SDK в зависимостях нет. [Analytics] остаётся с no-op репортером —
  * все вызовы [Analytics.reportError] из `main` тихо игнорируются.
  */
 object FlavorAnalytics {
