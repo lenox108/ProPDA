@@ -314,8 +314,21 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var searchBar: android.widget.LinearLayout? = null
     private var searchInput: android.widget.EditText? = null
     private var searchCountLabel: TextView? = null
-    /** Adapter positions (poll-header-offset applied) of posts matching the current query, in order. */
-    private val searchMatchPositions = ArrayList<Int>()
+    /** «на странице · загружено N–M» under the query field — the honest scope of the local search. */
+    private var searchScopeLabel: TextView? = null
+    /** The «Искать … по всей теме →» row that hands the query to the server-side topic search. */
+    private var searchAllRow: TextView? = null
+
+    /**
+     * One find-on-page hit: [position] is its post's adapter position (poll-header offset applied),
+     * [ordinal] the 0-based index of the occurrence WITHIN that post, counted in the render order that
+     * [TopicSearchScan] and [BodyBlockViewFactory] share. Occurrence-level (not post-level) because
+     * «3/17» must mean the third of seventeen matches, and ↑/↓ must step through them one by one.
+     */
+    private data class SearchMatch(val position: Int, val postId: Int, val ordinal: Int)
+
+    /** Every occurrence of the current query across the loaded posts, in document order. */
+    private val searchMatches = ArrayList<SearchMatch>()
     private var currentMatchIndex = -1
     /** The 1-based page shown in the pagination bar (best-effort as the user scrolls / jumps). */
     private var barCurrentPage: Int = 1
@@ -1837,6 +1850,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val hatId = topicHatPostId ?: return
         hatCollapsed = !hatCollapsed
         postsAdapter.setTopicHat(hatId, hatCollapsed)
+        // Expanding/collapsing the hat changes what find-on-page can actually show (a collapsed hat
+        // renders no body) — re-index so «k/N» matches what is on screen.
+        refreshSearchMatchesIfOpen()
     }
 
     /**
@@ -2305,6 +2321,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
         if (commit != null) postsAdapter.submitList(list, commit) else postsAdapter.submitList(list)
         prewarmBodyMarkup(list)
+        // Every change to the loaded set funnels through here, so this is the one place the open search
+        // bar has to re-index — appended pages join the count, and a prepended page can no longer shift
+        // the stored positions out from under ↑/↓.
+        refreshSearchMatchesIfOpen()
     }
 
     /**
@@ -3449,60 +3469,96 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     private fun closeSearch() {
         searchBar?.visibility = View.GONE
+        searchInput?.removeCallbacks(searchRecomputeRunnable)
         searchInput?.setText("")
         postsAdapter.setSearchQuery("")
-        searchMatchPositions.clear()
+        postsAdapter.setActiveMatch(null)
+        searchMatches.clear()
         currentMatchIndex = -1
         hideKeyboard()
         applyToolbarAutoHide() // restore auto-hide once search is closed
     }
 
-    /** Lazily builds the find-on-page bar: [query] «k/N» ↑ ↓ ✕, pinned just below the toolbar (top). */
+    /**
+     * Lazily builds the find-on-page bar, pinned just below the toolbar:
+     *
+     *     [ запрос              ]  k/N  ↑ ↓ ✕
+     *     [ на странице · загружено 412–413 ]
+     *     [ Искать «…» по всей теме                → ]
+     *
+     * The scope line under the field is the whole point of the redesign: the bar searches the posts that
+     * are LOADED, and staying silent about that made users read «0/0» as «в теме этого нет» (вопрос
+     * пользователя). The last row hands the same query to the server-side topic search, which is the
+     * only thing that CAN see the other 1000 pages — highlighted once the local pass comes up empty.
+     */
     private fun ensureSearchBar(): android.widget.LinearLayout {
         searchBar?.let { return it }
         val ctx = requireContext()
         val dm = ctx.resources.displayMetrics
+        fun dp(v: Float): Int = (v * dm.density).toInt()
+        val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
         val bar = android.widget.LinearLayout(ctx).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
+            orientation = android.widget.LinearLayout.VERTICAL
             setBackgroundColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHighest))
-            val p = (4 * dm.density).toInt()
-            setPadding(p, p, p, p)
+            setPadding(dp(4f), dp(4f), dp(4f), dp(4f))
             visibility = View.GONE
         }
+        val row = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val inputColumn = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(0,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
         val input = android.widget.EditText(ctx).apply {
-            hint = "Поиск по теме"
+            hint = "Найти на странице" // ...which is what the toolbar item promises; «по теме» misled
             textSize = 15f
             maxLines = 1
             isSingleLine = true
-            layoutParams = android.widget.LinearLayout.LayoutParams(0,
-                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(s: android.text.Editable?) = onSearchQueryChanged(s?.toString().orEmpty())
+                override fun afterTextChanged(s: android.text.Editable?) = onSearchQueryChanged()
             })
         }
+        val scope = TextView(ctx).apply {
+            textSize = 11f
+            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            setPadding(dp(4f), 0, dp(4f), dp(2f))
+        }
+        inputColumn.addView(input)
+        inputColumn.addView(scope)
         val count = TextView(ctx).apply {
             textSize = 13f
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
-            val ph = (8 * dm.density).toInt()
+            val ph = dp(8f)
             setPadding(ph, 0, ph, 0)
         }
         fun iconBtn(label: String, onClick: () -> Unit) = TextView(ctx).apply {
             text = label
             textSize = 18f
-            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
-            val ph = (10 * dm.density).toInt()
-            val pv = (6 * dm.density).toInt()
-            setPadding(ph, pv, ph, pv)
+            setTextColor(accent)
+            setPadding(dp(10f), dp(6f), dp(10f), dp(6f))
             setOnClickListener { onClick() }
         }
-        bar.addView(input)
-        bar.addView(count)
-        bar.addView(iconBtn("↑") { stepMatch(-1) })
-        bar.addView(iconBtn("↓") { stepMatch(1) })
-        bar.addView(iconBtn("✕") { closeSearch() })
+        row.addView(inputColumn)
+        row.addView(count)
+        row.addView(iconBtn("↑") { stepMatch(-1) })
+        row.addView(iconBtn("↓") { stepMatch(1) })
+        row.addView(iconBtn("✕") { closeSearch() })
+        val searchAll = TextView(ctx).apply {
+            textSize = 12f
+            setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+            setOnClickListener { openTopicSearchWithCurrentQuery() }
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(4f) }
+        }
+        bar.addView(row)
+        bar.addView(searchAll)
         // Add the bar to the app bar, right below the toolbar, pinned (no scroll flags) — parity with the
         // WebView find-on-page bar, which sits at the top. Hidden (GONE) it takes no space.
         appBarLayout.addView(bar, com.google.android.material.appbar.AppBarLayout.LayoutParams(
@@ -3512,57 +3568,180 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         searchBar = bar
         searchInput = input
         searchCountLabel = count
+        searchScopeLabel = scope
+        searchAllRow = searchAll
+        renderSearchChrome()
         return bar
     }
 
-    private fun onSearchQueryChanged(query: String) {
-        postsAdapter.setSearchQuery(query)
-        searchMatchPositions.clear()
-        currentMatchIndex = -1
-        val q = query.trim()
-        if (q.isNotBlank()) {
+    /** Typing recomputes on a short idle instead of per keystroke — a full page is ~20 bodies to scan. */
+    private val searchRecomputeRunnable = Runnable { recomputeSearchMatches(jumpToFirst = true) }
+
+    private fun onSearchQueryChanged() {
+        val input = searchInput ?: return
+        // The query reaches the adapter (a full re-render of every loaded post) from the debounced pass
+        // only — pushing it per keystroke re-rendered the page on every letter.
+        input.removeCallbacks(searchRecomputeRunnable)
+        input.postDelayed(searchRecomputeRunnable, SEARCH_DEBOUNCE_MS)
+    }
+
+    /**
+     * Rebuild the OCCURRENCE index over the currently loaded posts.
+     *
+     * Every hit is one entry — the counter used to say «1/3» for three matching POSTS while the page held
+     * seventeen actual matches. Called after any change to [loadedItems] as well (see [submitPosts]), so
+     * догрузка следующей страницы расширяет поиск вместо того, чтобы сдвинуть сохранённые позиции: the
+     * old code kept stale adapter indices and a prepended page sent ↑/↓ to unrelated posts.
+     */
+    private fun recomputeSearchMatches(jumpToFirst: Boolean) {
+        val q = searchInput?.text?.toString()?.trim().orEmpty()
+        val previous = searchMatches.getOrNull(currentMatchIndex)
+        postsAdapter.setSearchQuery(q)
+        searchMatches.clear()
+        if (q.isNotEmpty()) {
             val header = headerOffset()
             loadedItems.forEachIndexed { index, item ->
-                if (postMatchesQuery(item, q)) searchMatchPositions.add(index + header)
+                // A collapsed topic hat renders NO body, so its matches cannot be shown or highlighted.
+                // Counting them anyway would inflate «k/N» and send ↓ to a closed strip; expanding the hat
+                // (the toolbar/header toggle) re-indexes and brings them in.
+                if (hatCollapsed && item.postId == topicHatPostId) return@forEachIndexed
+                val hits = TopicSearchScan.countInBlocks(item.blocks, q) {
+                    BodyBlockViewFactory.plainForSearch(it)
+                }
+                for (ordinal in 0 until hits) {
+                    searchMatches.add(SearchMatch(index + header, item.postId, ordinal))
+                }
             }
         }
-        searchCountLabel?.text = if (q.isBlank()) "" else "${if (searchMatchPositions.isEmpty()) 0 else 1}/${searchMatchPositions.size}"
-        if (searchMatchPositions.isNotEmpty()) {
-            currentMatchIndex = 0
-            scrollToMatch(0)
+        // Keep the user standing where they were when the list merely grew; otherwise start from the top.
+        val restored = previous?.let { prev ->
+            searchMatches.indexOfFirst { it.postId == prev.postId && it.ordinal == prev.ordinal }
+        }?.takeIf { it >= 0 }
+        when {
+            searchMatches.isEmpty() -> {
+                currentMatchIndex = -1
+                postsAdapter.setActiveMatch(null)
+            }
+            restored != null -> currentMatchIndex = restored
+            jumpToFirst -> {
+                currentMatchIndex = 0
+                goToMatch(0)
+            }
+            else -> currentMatchIndex = currentMatchIndex.coerceIn(0, searchMatches.size - 1)
+        }
+        renderSearchChrome()
+    }
+
+    /** Refresh the counter, the scope line and the «по всей теме» row from the current state. */
+    private fun renderSearchChrome() {
+        val q = searchInput?.text?.toString()?.trim().orEmpty()
+        searchCountLabel?.text = when {
+            q.isEmpty() -> ""
+            searchMatches.isEmpty() -> "0/0"
+            else -> "${currentMatchIndex + 1}/${searchMatches.size}"
+        }
+        searchScopeLabel?.text = loadedPagesScopeLabel()
+        val empty = q.isNotEmpty() && searchMatches.isEmpty()
+        searchAllRow?.let { row ->
+            val ctx = row.context
+            val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+            row.text = if (empty) "Искать «$q» по всей теме  →" else "Искать по всей теме  →"
+            row.setTextColor(if (empty) accent else ctx.getColorFromAttr(
+                    com.google.android.material.R.attr.colorOnSurfaceVariant))
+            row.background = if (empty) {
+                android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = 8 * ctx.resources.displayMetrics.density
+                    setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x33))
+                }
+            } else {
+                null
+            }
         }
     }
 
-    /** Cycle to the previous (-1) / next (+1) matching post and scroll there. */
+    /** «на странице 412» / «на странице · загружено 412–413» — the honest boundary of the local search. */
+    private fun loadedPagesScopeLabel(): String {
+        val pages = loadedItems.mapNotNull { it.pageNumber.takeIf { p -> p > 0 } }
+        val min = pages.minOrNull() ?: return "на этой странице"
+        val max = pages.maxOrNull() ?: min
+        return if (min == max) "на странице $min" else "на странице · загружено $min–$max"
+    }
+
+    /** Cycle to the previous (-1) / next (+1) OCCURRENCE (not post) and land on it. */
     private fun stepMatch(dir: Int) {
-        if (searchMatchPositions.isEmpty()) return
-        currentMatchIndex = (currentMatchIndex + dir + searchMatchPositions.size) % searchMatchPositions.size
-        searchCountLabel?.text = "${currentMatchIndex + 1}/${searchMatchPositions.size}"
-        scrollToMatch(currentMatchIndex)
+        if (searchMatches.isEmpty()) return
+        goToMatch((currentMatchIndex + dir + searchMatches.size) % searchMatches.size)
     }
 
-    private fun scrollToMatch(matchIndex: Int) {
-        val pos = searchMatchPositions.getOrNull(matchIndex) ?: return
-        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(pos, 0)
+    private fun goToMatch(matchIndex: Int) {
+        val match = searchMatches.getOrNull(matchIndex) ?: return
+        currentMatchIndex = matchIndex
+        renderSearchChrome()
+        // Rebinding the owner post is what paints this occurrence solid AND opens the spoiler it may be
+        // sitting in (see BodyBlockViewFactory.spoilerView) — only then can the alignment pass find it.
+        postsAdapter.setActiveMatch(BodyBlockViewFactory.ActiveMatch(match.postId, match.ordinal))
+        (recyclerView.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(match.position, 0)
+        recyclerView.post { alignActiveMatch(match.position, retry = true) }
     }
 
-    /** Does any of [item]'s text (body, nested quotes/spoilers, code, attachments) contain [q]? */
-    private fun postMatchesQuery(item: NativePostItem, q: String): Boolean =
-            item.blocks.any { blockPlainText(it).contains(q, ignoreCase = true) }
-
-    private fun blockPlainText(block: BodyBlock): String = when (block) {
-        is BodyBlock.Text -> android.text.Html.fromHtml(block.html, android.text.Html.FROM_HTML_MODE_COMPACT).toString()
-        is BodyBlock.Code -> block.text
-        is BodyBlock.Quote -> block.inner.joinToString(" ") { blockPlainText(it) }
-        is BodyBlock.Spoiler -> block.inner.joinToString(" ") { blockPlainText(it) }
-        is BodyBlock.Hidden -> block.inner.joinToString(" ") { blockPlainText(it) }
-        is BodyBlock.FileAttachment -> block.name
-        is BodyBlock.Table -> block.rows.joinToString(" ") { row ->
-            row.joinToString(" ") { android.text.Html.fromHtml(it, android.text.Html.FROM_HTML_MODE_COMPACT).toString() }
+    /**
+     * Scroll so the ACTIVE occurrence itself sits about a third down the screen. Landing on the post's
+     * top edge (what the old code did) hid the match somewhere below the fold in a long post, which read
+     * as «поиск ничего не нашёл» even though it had.
+     */
+    private fun alignActiveMatch(position: Int, retry: Boolean) {
+        if (view == null || searchBar?.visibility != View.VISIBLE) return
+        val itemView = (recyclerView.layoutManager as? LinearLayoutManager)?.findViewByPosition(position)
+        val target = itemView?.let { findActiveMatchView(it) }
+        if (target == null) {
+            // The rebind that paints the active span may not have committed yet — one late retry.
+            if (retry) recyclerView.postDelayed({ alignActiveMatch(position, retry = false) }, 96)
+            return
         }
-        is BodyBlock.WebFallback -> android.text.Html.fromHtml(block.html, android.text.Html.FROM_HTML_MODE_COMPACT).toString()
-        is BodyBlock.Image -> ""
-        is BodyBlock.EditNote -> "" // system meta line — not searchable content
+        val text = target.text as? android.text.Spanned ?: return
+        val span = text.getSpans(0, text.length, BodyBlockViewFactory.ActiveSearchMatchSpan::class.java)
+                .firstOrNull() ?: return
+        val layout = target.layout ?: return
+        val line = layout.getLineForOffset(text.getSpanStart(span).coerceIn(0, text.length))
+        val rect = android.graphics.Rect(0, layout.getLineTop(line) + target.totalPaddingTop,
+                target.width, layout.getLineBottom(line) + target.totalPaddingTop)
+        recyclerView.offsetDescendantRectToMyCoords(target, rect)
+        val desired = (recyclerView.height * ACTIVE_MATCH_SCREEN_FRACTION).toInt()
+        val dy = rect.top - desired
+        if (dy != 0) recyclerView.scrollBy(0, dy)
+    }
+
+    /** First TextView under [root] carrying the active-match span (bodies nest quotes/spoilers deeply). */
+    private fun findActiveMatchView(root: View): TextView? {
+        if (root is TextView) {
+            val text = root.text
+            if (text is android.text.Spanned &&
+                    text.getSpans(0, text.length, BodyBlockViewFactory.ActiveSearchMatchSpan::class.java)
+                            .isNotEmpty()) {
+                return root
+            }
+        }
+        if (root is android.view.ViewGroup) {
+            for (i in 0 until root.childCount) {
+                findActiveMatchView(root.getChildAt(i))?.let { return it }
+            }
+        }
+        return null
+    }
+
+    /** Hand the current query to the server-side «Найти в теме» — the only search that sees every page. */
+    private fun openTopicSearchWithCurrentQuery() {
+        if (pageTopicId <= 0) return
+        val q = searchInput?.text?.toString()?.trim().orEmpty()
+        closeSearch()
+        navigationUseCase.openSearchInTopic(pageForumId, pageTopicId, nick = "", query = q)
+    }
+
+    /** Re-index the open find-on-page bar after [loadedItems] changed (page appended / prepended / edit). */
+    private fun refreshSearchMatchesIfOpen() {
+        if (searchBar?.visibility != View.VISIBLE) return
+        if (searchInput?.text.isNullOrBlank()) return
+        recomputeSearchMatches(jumpToFirst = false)
     }
 
     /**
@@ -5168,6 +5347,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     private companion object {
+        /** Idle after the last keystroke before the find-on-page index is rebuilt (ms). */
+        const val SEARCH_DEBOUNCE_MS = 160L
+
+        /** Where down the viewport the active occurrence is parked — clear of the pinned search bar. */
+        const val ACTIVE_MATCH_SCREEN_FRACTION = 0.3f
+
         /** `topicOpenSource` values that mean «opened from an external list», not an in-topic link tap.
          *  Reusing the topic tab for one of these must NOT push in-tab Back history — Back should exit the
          *  tab back to the list (search/«Мои сообщения»/избранное/…). Mirrors the source strings set by the

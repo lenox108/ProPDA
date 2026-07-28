@@ -140,6 +140,27 @@ class TopicPostsAdapter(
         notifyDataSetChanged()
     }
 
+    /** The occurrence the user is standing on — painted solid, everything else pale (see the factory). */
+    private var activeMatch: BodyBlockViewFactory.ActiveMatch? = null
+
+    /**
+     * Move the active occurrence. Rebinds only the two posts that can change appearance (the one losing
+     * the solid highlight and the one gaining it) — a full [notifyDataSetChanged] per ↑/↓ press would
+     * re-render every loaded post just to repaint two spans.
+     */
+    fun setActiveMatch(match: BodyBlockViewFactory.ActiveMatch?) {
+        if (match == activeMatch) return
+        val previous = activeMatch
+        activeMatch = match
+        fun rebind(postId: Int?) {
+            if (postId == null) return
+            val idx = currentList.indexOfFirst { it.postId == postId }
+            if (idx >= 0) notifyItemChanged(idx)
+        }
+        rebind(previous?.scopeId)
+        if (previous?.scopeId != match?.scopeId) rebind(match?.scopeId)
+    }
+
     init {
         setHasStableIds(true)
     }
@@ -192,7 +213,8 @@ class TopicPostsAdapter(
         // The «Страница N» divider label is baked into the item at list assembly (see the fragment), so
         // DiffUtil rebinds the boundary post when a prepended page shifts it. Never on the hat.
         val pageDivider = item.pageDividerLabel?.takeIf { !isHat }
-        holder.bind(item, highlightRemainingMs, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider)
+        holder.bind(item, highlightRemainingMs, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId, pageDivider,
+                activeMatch?.takeIf { it.scopeId == item.postId })
     }
 
     class PostViewHolder(
@@ -252,6 +274,9 @@ class TopicPostsAdapter(
 
         /** Find-on-page query for the current bind pass; matched substrings get a highlight span. */
         private var searchQuery: String = ""
+
+        /** Set when THIS post owns the active occurrence — it renders solid, the rest of the page pale. */
+        private var activeMatch: BodyBlockViewFactory.ActiveMatch? = null
 
         /** Auth context for the current bind pass, used to resolve 👍/👎 visibility (see bindActions). */
         private var authorized: Boolean = false
@@ -328,12 +353,14 @@ class TopicPostsAdapter(
                 authorized: Boolean = false,
                 memberId: Int = 0,
                 pageDividerLabel: String? = null,
+                activeMatch: BodyBlockViewFactory.ActiveMatch? = null,
         ) {
             pageDivider.text = pageDividerLabel.orEmpty()
             pageDivider.visibility = if (pageDividerLabel != null) View.VISIBLE else View.GONE
             boundItem = item
             this.settings = settings
             this.searchQuery = searchQuery
+            this.activeMatch = activeMatch
             this.authorized = authorized
             this.memberId = memberId
             // Keep a running highlight alive across a re-bind of the SAME post that is still within its
@@ -887,6 +914,7 @@ class TopicPostsAdapter(
             if (isHat && hatCollapsed) return
             blockFactory.textScale = settings.textScale
             blockFactory.searchQuery = searchQuery
+            blockFactory.activeMatch = activeMatch
             blockFactory.animatedSmiles = settings.animatedSmiles
             blockFactory.flatBlocks = settings.flatBlocks
             blockFactory.modernPostDates = settings.modernHeader
