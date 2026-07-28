@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.ui.fragments.news.details
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -9,9 +10,11 @@ import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageButton
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.google.android.material.bottomsheet.BottomSheetDragHandleView
 import forpdateam.ru.forpda.common.getColorFromAttr
 import com.google.android.material.button.MaterialButton
 import dagger.hilt.android.AndroidEntryPoint
@@ -41,6 +44,11 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
     private lateinit var buttonHide: AppCompatImageButton
     private lateinit var buttonSend: MaterialButton
     private lateinit var sendProgress: com.google.android.material.progressindicator.CircularProgressIndicator
+    private lateinit var dragHandle: BottomSheetDragHandleView
+    private lateinit var title: TextView
+
+    private val args: Bundle get() = arguments ?: Bundle.EMPTY
+    private val mode: Int get() = args.getInt(ARG_MODE, MODE_NEW)
 
     private val presenter: ArticleCommentViewModel by viewModels(
             ownerProducer = { requireParentFragment() },
@@ -54,8 +62,25 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
         buttonHide = view.findViewById(R.id.button_hide)
         buttonSend = view.findViewById(R.id.button_send)
         sendProgress = view.findViewById(R.id.send_progress)
+        dragHandle = view.findViewById(R.id.drag_handle)
+        title = view.findViewById(R.id.title)
 
-        val draft = savedInstanceState?.getString(STATE_DRAFT).orEmpty()
+        title.text = when (mode) {
+            MODE_REPLY -> {
+                val nick = args.getString(ARG_NICK).orEmpty()
+                if (nick.isBlank()) getString(R.string.reply) else "${getString(R.string.reply)} · $nick"
+            }
+            MODE_EDIT -> getString(R.string.edit)
+            else -> getString(R.string.write)
+        }
+        if (mode == MODE_EDIT) {
+            buttonSend.setText(R.string.save)
+        }
+
+        // Черновик из savedInstanceState важнее префилла: после поворота экрана в поле лежит
+        // уже отредактированный пользователем текст, а не исходный ник/тело комментария.
+        val draft = savedInstanceState?.getString(STATE_DRAFT)
+                ?: args.getString(ARG_PREFILL).orEmpty()
         if (draft.isNotBlank()) {
             messageField.setText(draft)
             messageField.setSelection(messageField.text.length)
@@ -75,6 +100,13 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
         applyComposePanelTheme(view)
         if (!authHolder.get().isAuth()) {
             Utils.showNeedAuthDialog(requireContext(), router)
+            dismissAllowingStateLoss()
+            return
+        }
+
+        // Правка живёт в форме, загруженной ViewModel (pendingEditAction). После смерти процесса
+        // лист восстановится, а форма — нет: отправлять было бы некуда.
+        if (mode == MODE_EDIT && !presenter.hasPendingEditForm()) {
             dismissAllowingStateLoss()
             return
         }
@@ -119,29 +151,69 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
     private fun send() {
         val text = messageField.text?.toString().orEmpty()
         if (text.isBlank()) return
-        presenter.replyComment(0, text)
+        if (mode == MODE_EDIT) {
+            // Правка не эмитит OnReplyComment (лист закрывается сразу — паритет с прежним диалогом),
+            // применение текста и обновление ленты доделывает ViewModel.
+            presenter.submitPendingEditForm(text)
+            dismissAllowingStateLoss()
+            return
+        }
+        presenter.replyComment(args.getInt(ARG_COMMENT_ID, 0), text)
     }
 
     /**
-     * BottomSheetDialog uses its own window theme; sync the sheet chrome with the active app palette
-     * (same surface as [article_comments] write panel — ?attr/colorPrimary).
+     * BottomSheetDialog инфлейтится со СВОЕЙ темой окна (`bottomSheetDialogTheme` →
+     * DayNightAppTheme.BottomSheetDialog). Это полная тема, она ложится поверх темы активити с
+     * force=true и пинит colorSurface = @color/light_colorPrimary — исторически «светлая подложка».
+     * Под Material You `colorPrimary` это ДИНАМИЧЕСКИЙ акцент обоев, поэтому панель заливалась
+     * сплошным цветным слэбом (коричневым на скрине пользователя), а текст/кнопки на нём тонули.
+     *
+     * Поэтому все цвета берём из темы АКТИВИТИ (там уже применён DynamicColors + оверлеи палитры)
+     * и по M3-ролям, а не по `colorPrimary`: поверхность панели = colorSurface (та же, что у
+     * MessagePanel в теме и QMS), поле ввода — контейнер чуть выше по лестнице, акценты — colorAccent.
      */
     private fun applyComposePanelTheme(view: View) {
         val themed = requireActivity()
-        val panelColor = themed.getColorFromAttr(R.attr.colorPrimary)
+        val panelColor = themed.getColorFromAttr(com.google.android.material.R.attr.colorSurface)
+        val fieldColor = themed.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh)
         val textColor = themed.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val hintColor = themed.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
-        val linkColor = themed.getColorFromAttr(com.google.android.material.R.attr.colorSecondary)
+        val accentColor = themed.getColorFromAttr(R.attr.colorAccent)
 
-        view.setBackgroundColor(panelColor)
-        (dialog as? BottomSheetDialog)
+        // Фон рисует САМ лист (MaterialShapeDrawable со скруглённым верхом из
+        // ShapeAppearance.ForPDA.BottomSheet). Красим его тинтом, а не setBackgroundColor:
+        // подмена фона плоским цветом срезала бы скругления. Контент при этом прозрачный.
+        val sheet = (dialog as? BottomSheetDialog)
                 ?.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-                ?.setBackgroundColor(panelColor)
+        val sheetBackground = sheet?.background
+        if (sheetBackground != null) {
+            sheetBackground.mutate().setTintList(ColorStateList.valueOf(panelColor))
+            view.background = null
+        } else {
+            sheet?.setBackgroundColor(panelColor)
+            view.setBackgroundColor(panelColor)
+        }
 
+        dragHandle.imageTintList = ColorStateList.valueOf(hintColor)
+        title.setTextColor(textColor)
+        buttonHide.imageTintList = ColorStateList.valueOf(hintColor)
+
+        // Контейнер поля ввода. Заливка + обводка: в AMOLED-палитрах роли colorSurface и
+        // colorSurfaceContainerHigh схлопываются в один тон, и одна заливка была бы неотличима
+        // от панели — границу поля держит обводка.
+        messageField.background = GradientDrawable().apply {
+            cornerRadius = resources.getDimension(R.dimen.dp12)
+            setColor(fieldColor)
+            setStroke(
+                    resources.getDimensionPixelSize(R.dimen.divider_thin).coerceAtLeast(1),
+                    themed.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant),
+            )
+        }
         messageField.setTextColor(textColor)
         messageField.setHintTextColor(hintColor)
-        buttonSend.setTextColor(linkColor)
-        buttonSend.iconTint = ColorStateList.valueOf(linkColor)
+        buttonSend.setTextColor(accentColor)
+        buttonSend.iconTint = ColorStateList.valueOf(accentColor)
+        sendProgress.setIndicatorColor(accentColor)
     }
 
     private fun hostFragment(): NewsDetailsFragment {
@@ -151,7 +223,47 @@ class NewsCommentComposeBottomSheet : BottomSheetDialogFragment() {
 
     companion object {
         private const val STATE_DRAFT = "STATE_DRAFT"
+        private const val ARG_MODE = "ARG_MODE"
+        private const val ARG_COMMENT_ID = "ARG_COMMENT_ID"
+        private const val ARG_NICK = "ARG_NICK"
+        private const val ARG_PREFILL = "ARG_PREFILL"
+
+        private const val MODE_NEW = 0
+        private const val MODE_REPLY = 1
+        private const val MODE_EDIT = 2
+
         const val TAG = "NewsCommentComposeBottomSheet"
+
+        /** Новый комментарий к статье (карандаш в тулбаре). */
+        fun newComment(): NewsCommentComposeBottomSheet = create(MODE_NEW)
+
+        /** Ответ на комментарий: заголовок с ником, поле предзаполнено обращением. */
+        fun reply(commentId: Int, nick: String?): NewsCommentComposeBottomSheet = create(
+                mode = MODE_REPLY,
+                commentId = commentId,
+                nick = nick,
+                prefill = nick?.takeIf { it.isNotBlank() }?.let { "$it,\n" },
+        )
+
+        /**
+         * Правка своего комментария. Форма (`Comment.Action`) остаётся во ViewModel — лист
+         * отправляет её через [ArticleCommentViewModel.submitPendingEditForm].
+         */
+        fun edit(text: String): NewsCommentComposeBottomSheet = create(MODE_EDIT, prefill = text)
+
+        private fun create(
+                mode: Int,
+                commentId: Int = 0,
+                nick: String? = null,
+                prefill: String? = null,
+        ) = NewsCommentComposeBottomSheet().apply {
+            arguments = Bundle().apply {
+                putInt(ARG_MODE, mode)
+                putInt(ARG_COMMENT_ID, commentId)
+                putString(ARG_NICK, nick)
+                putString(ARG_PREFILL, prefill)
+            }
+        }
     }
 }
 

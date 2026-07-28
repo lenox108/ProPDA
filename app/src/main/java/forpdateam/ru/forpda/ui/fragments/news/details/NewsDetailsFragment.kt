@@ -226,11 +226,15 @@ class NewsDetailsFragment : TabFragment(), TabTopScroller {
     override fun addBaseToolbarMenu(menu: Menu) {
         super.addBaseToolbarMenu(menu)
         menu.add(R.string.write).apply {
-            setIcon(R.drawable.ic_comment_outline)
+            // Карандаш — единая иконка «открыть редактор» по всему приложению
+            // (тема: NativeTopicFragment MENU_CREATE, профиль: ProfileFragment).
+            setIcon(R.drawable.ic_toolbar_create)
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
             setOnMenuItemClickListener {
-                NewsCommentComposeBottomSheet()
-                        .show(childFragmentManager, NewsCommentComposeBottomSheet.TAG)
+                if (childFragmentManager.findFragmentByTag(NewsCommentComposeBottomSheet.TAG) == null) {
+                    NewsCommentComposeBottomSheet.newComment()
+                            .show(childFragmentManager, NewsCommentComposeBottomSheet.TAG)
+                }
                 true
             }
         }
