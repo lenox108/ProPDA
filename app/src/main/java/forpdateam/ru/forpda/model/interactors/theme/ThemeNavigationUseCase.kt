@@ -87,13 +87,19 @@ class ThemeNavigationUseCase @Inject constructor(
         linkHandler.handle("https://4pda.to/forum/index.php?showforum=$forumId", router)
     }
 
-    fun openSearchInTopic(forumId: Int, topicId: Int, nick: String, userId: Int = 0) {
+    /**
+     * Server-side search restricted to one topic. [query] pre-fills the search field — the find-on-page
+     * bar hands its own query over when the local pass (loaded pages only) comes up empty, so the user
+     * continues the same search instead of retyping it on a blank screen.
+     */
+    fun openSearchInTopic(forumId: Int, topicId: Int, nick: String, userId: Int = 0, query: String = "") {
         linkHandler.handle(SearchSettings().apply {
             addForum(Integer.toString(forumId))
             addTopic(Integer.toString(topicId))
             source = SearchSettings.SOURCE_CONTENT.first
             this.nick = nick
             this.userId = userId
+            if (query.isNotBlank()) this.query = query
             result = SearchSettings.RESULT_POSTS.first
             subforums = SearchSettings.SUB_FORUMS_FALSE
         }.toUrl(), router)

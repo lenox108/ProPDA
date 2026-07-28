@@ -101,6 +101,14 @@ class BodyBlockViewFactory(
     ) {
         var spoilerSeq: Int = 0
 
+        /**
+         * Running count of find-on-page occurrences met while rendering this body, in document order.
+         * Identifies the active occurrence without threading char offsets around: the block being
+         * painted knows that its k-th match is the `searchSeq + k`-th of the post (see
+         * [TopicSearchScan], which counts the same units in the same order).
+         */
+        var searchSeq: Int = 0
+
         /** 1-based-ish counter of quotes within the body, in document order (incl. nested) —
          *  keys the collapse state of long quotes in [spoilerStates] as `"scopeId:q<seq>"`. */
         var quoteSeq: Int = 0
@@ -171,6 +179,25 @@ class BodyBlockViewFactory(
     /** Find-on-page query; matched substrings get a highlight background when non-blank. */
     var searchQuery: String = ""
 
+    /**
+     * The ONE occurrence the user is currently standing on, painted solid instead of the pale
+     * background every other match gets — «видно, куда именно привело», like a browser's find bar.
+     * [ActiveMatch.ordinal] counts occurrences within the post in the [TopicSearchScan] traversal order,
+     * which is also the order the renderer meets them, so the two sides agree without passing offsets.
+     * null = a plain query with no active occurrence (nothing found, or the bar was just opened).
+     */
+    var activeMatch: ActiveMatch? = null
+
+    /** Which occurrence of [searchQuery] is the active one: [ordinal]-th match inside post [scopeId]. */
+    data class ActiveMatch(val scopeId: Int, val ordinal: Int)
+
+    /**
+     * Marks the active occurrence's background span so the host can find the exact TextView (and line)
+     * it landed on and scroll it into view — a bare [android.text.style.BackgroundColorSpan] would be
+     * indistinguishable from the pale ones.
+     */
+    class ActiveSearchMatchSpan(color: Int) : android.text.style.BackgroundColorSpan(color)
+
     /** «Анимированные смайлы»: render smile spans as live GIFs instead of a static first frame.
      *  Set by the host before each bind pass (topic mirrors the pref; hosts that never set it get
      *  the static behaviour). Playback needs API 28+ — below that the flag silently degrades. */
@@ -237,9 +264,9 @@ class BodyBlockViewFactory(
                 is BodyBlock.Quote -> quoteView(ctx, block, scope)
                 is BodyBlock.Spoiler -> spoilerView(ctx, block, scope)
                 is BodyBlock.Hidden -> hiddenView(ctx, block, scope)
-                is BodyBlock.Code -> codeView(ctx, block)
-                is BodyBlock.FileAttachment -> fileAttachmentView(ctx, block)
-                is BodyBlock.Table -> tableView(ctx, block)
+                is BodyBlock.Code -> codeView(ctx, block, scope)
+                is BodyBlock.FileAttachment -> fileAttachmentView(ctx, block, scope)
+                is BodyBlock.Table -> tableView(ctx, block, scope)
                 is BodyBlock.WebFallback -> bindFallback(ctx, block, scope)
             }
             // Uniform spacing at EVERY block boundary. The per-block factories only ever set a TOP margin, so
@@ -371,6 +398,34 @@ class BodyBlockViewFactory(
             addView(chevron)
             addView(title)
         }
+        // A collapsed spoiler used to swallow its matches silently: find-on-page counted them, jumped
+        // here and showed nothing. Say how many are inside, right in the header.
+        val hiddenMatches = if (searchQuery.isBlank()) {
+            0
+        } else {
+            TopicSearchScan.countInBlocks(block.inner, searchQuery) { plainForSearch(it) }
+        }
+        if (hiddenMatches > 0) {
+            header.addView(TextView(ctx).apply {
+                text = hiddenMatches.toString()
+                textSize = scaledSp(11f)
+                // The count sits on a translucent-accent pill: accent-on-accent survives a dark palette but
+                // washes out on a light one (pale blue on pale blue), so the digit takes the body colour,
+                // which is contrast-guaranteed against every surface the pill can sit on.
+                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
+                val ph = (7 * dm.density).toInt()
+                setPadding(ph, 0, ph, 0)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                    cornerRadius = 999f
+                    setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, PASSIVE_MATCH_ALPHA))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { marginStart = (6 * dm.density).toInt() }
+            })
+        }
         val bodyContainer = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, (8 * dm.density).toInt(), 0, 0)
@@ -379,7 +434,17 @@ class BodyBlockViewFactory(
             chevron.rotation = if (open) 90f else 0f
             bodyContainer.visibility = if (open) View.VISIBLE else View.GONE
         }
+        // Render first, then decide: the inner pass consumes the occurrence ordinals, so the seq range
+        // it spans tells us whether the ACTIVE occurrence lives in here — if it does, the spoiler opens
+        // itself, otherwise stepping onto that match would scroll to a closed strip.
+        val seqBefore = scope.searchSeq
         renderBlocksOnSurface(ctx, bodyContainer, block.inner, scope, blockFillColor(ctx))
+        activeMatch?.let { active ->
+            if (active.scopeId == scope.scopeId && active.ordinal in seqBefore until scope.searchSeq) {
+                open = true
+                spoilerStates[key] = true
+            }
+        }
         applyState()
         // Toggle on the whole card, not just the header row — a collapsed spoiler is a thin strip and
         // the title alone is too small a touch target. When open, inner links/selectable text consume
@@ -811,7 +876,7 @@ class BodyBlockViewFactory(
      * when both are absent the row is a single name line. Consecutive files are grouped tightly by the
      * spacing rule in [renderBlocksInto].
      */
-    private fun fileAttachmentView(ctx: Context, block: BodyBlock.FileAttachment): View {
+    private fun fileAttachmentView(ctx: Context, block: BodyBlock.FileAttachment, scope: RenderScope): View {
         val dm = ctx.resources.displayMetrics
         fun dp(v: Float): Int = (v * dm.density).toInt()
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
@@ -858,7 +923,7 @@ class BodyBlockViewFactory(
                     .apply { marginStart = dp(12f) }
         }
         texts.addView(TextView(ctx).apply {
-            text = block.name
+            setText(highlightSearchMatches(ctx, block.name, scope))
             // Bold, one step above the 14sp spoiler header: the plain-weight 14sp name read «совсем
             // мелко» next to its own badge and the surrounding body text (user).
             setTypeface(typeface, Typeface.BOLD)
@@ -976,7 +1041,7 @@ class BodyBlockViewFactory(
      * Native code block: monospace text in a horizontal scroller (long lines don't wrap) on a
      * distinct panel, with a "Копировать" action that puts the raw code on the clipboard.
      */
-    private fun codeView(ctx: Context, block: BodyBlock.Code): View {
+    private fun codeView(ctx: Context, block: BodyBlock.Code, scope: RenderScope): View {
         val dm = ctx.resources.displayMetrics
         val pad = (8 * dm.density).toInt()
         val card = LinearLayout(ctx).apply {
@@ -1004,7 +1069,7 @@ class BodyBlockViewFactory(
             isHorizontalScrollBarEnabled = false
         }
         val code = TextView(ctx).apply {
-            text = block.text
+            setText(highlightSearchMatches(ctx, block.text, scope))
             typeface = android.graphics.Typeface.MONOSPACE
             textSize = scaledSp(13f)
             setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
@@ -1022,7 +1087,7 @@ class BodyBlockViewFactory(
      * Spannable TextView. Ragged rows are left-aligned. Merged cells aren't modelled — text
      * still shows in its origin cell.
      */
-    private fun tableView(ctx: Context, block: BodyBlock.Table): View {
+    private fun tableView(ctx: Context, block: BodyBlock.Table, scope: RenderScope): View {
         val dm = ctx.resources.displayMetrics
         val cellPad = (8 * dm.density).toInt()
         val borderColor = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOutlineVariant)
@@ -1041,7 +1106,7 @@ class BodyBlockViewFactory(
             }
             row.forEachIndexed { colIndex, cellHtml ->
                 val cell = TextView(ctx).apply {
-                    setText(highlightSearchMatches(ctx, spanned(ctx, cellHtml)))
+                    setText(highlightSearchMatches(ctx, spanned(ctx, cellHtml), scope))
                     SmileProvider.startAnimations(this)
                     textSize = scaledSp(14f)
                     setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
@@ -1085,7 +1150,7 @@ class BodyBlockViewFactory(
         val surface = blockFillColor(ctx)
         val content = selectableTextView(ctx, scope).apply {
             val text = neutralizeLowContrastColors(surface, stripLinkColors(spanned(ctx, block.html)))
-            setText(text)
+            setText(highlightSearchMatches(ctx, text, scope))
             SmileProvider.startAnimations(this)
             // Fallback body = same 16sp reference as the normal paragraph (see textView()).
             textSize = scaledSp(16f)
@@ -1212,6 +1277,7 @@ class BodyBlockViewFactory(
             setText(highlightSearchMatches(
                     ctx,
                     neutralizeLowContrastColors(surface, stripLinkColors(displayedText)),
+                    scope,
             ))
             SmileProvider.startAnimations(this)
             // Body base = 16sp so at «Размер шрифта в темах» = N (textScale = N/16) the paragraph
@@ -1414,20 +1480,43 @@ class BodyBlockViewFactory(
         }
     }
 
-    /** Wrap each case-insensitive [searchQuery] match in [text] with a highlight background span. */
-    private fun highlightSearchMatches(ctx: Context, text: CharSequence): CharSequence {
+    /**
+     * Wrap each case-insensitive [searchQuery] match in [text] with a highlight background span, and
+     * consume one [RenderScope.searchSeq] ordinal per match so the occurrence the host is standing on
+     * ([activeMatch]) can be told apart from the rest: active = solid accent, the others = a pale wash
+     * that stays legible without stealing the eye.
+     *
+     * EVERY call site that renders searchable text must go through here, even when the query cannot
+     * match — skipping one would desynchronise the ordinals from [TopicSearchScan]'s count.
+     */
+    private fun highlightSearchMatches(ctx: Context, text: CharSequence, scope: RenderScope?): CharSequence {
         val q = searchQuery
         if (q.isBlank()) return text
         val out = android.text.SpannableStringBuilder(text)
         val hay = out.toString()
-        val color = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-        val onPrimary = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnPrimary)
+        val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+        // Contrast against the ACCENT fill, picked by its luminance — not colorOnPrimary, which is paired
+        // with colorPrimary and diverges from colorAccent on the Material You palettes (Android 14+ slot
+        // divergence), leaving the active match's text unreadable on its own highlight.
+        val onAccent = if (androidx.core.graphics.ColorUtils.calculateLuminance(accent) > 0.5) {
+            0xFF000000.toInt()
+        } else {
+            0xFFFFFFFF.toInt()
+        }
+        val pale = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, PASSIVE_MATCH_ALPHA)
+        val active = activeMatch?.takeIf { scope != null && it.scopeId == scope.scopeId }
         var i = hay.indexOf(q, ignoreCase = true)
         while (i >= 0) {
-            out.setSpan(android.text.style.BackgroundColorSpan(color), i, i + q.length,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            out.setSpan(android.text.style.ForegroundColorSpan(onPrimary),
-                    i, i + q.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val ordinal = scope?.searchSeq ?: -1
+            if (scope != null) scope.searchSeq++
+            if (active != null && active.ordinal == ordinal) {
+                out.setSpan(ActiveSearchMatchSpan(accent), i, i + q.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                out.setSpan(android.text.style.ForegroundColorSpan(onAccent),
+                        i, i + q.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            } else {
+                out.setSpan(android.text.style.BackgroundColorSpan(pale), i, i + q.length,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
             i = hay.indexOf(q, i + q.length, ignoreCase = true)
         }
         return out
@@ -1469,6 +1558,24 @@ class BodyBlockViewFactory(
 
     companion object {
         internal data class ImageBox(val widthPx: Int, val heightPx: Int)
+
+        /** Alpha of the background behind a NON-active find-on-page match (the active one is solid). */
+        private const val PASSIVE_MATCH_ALPHA = 0x59 // ~35%
+
+        /**
+         * The characters a markup run renders to, for match counting — the same parse the views use
+         * ([spanned]) minus the smile pass, which only overlays image spans and never edits text. Goes
+         * through the shared [HTML_CACHE], so counting a page costs nothing once its posts are warmed.
+         */
+        fun plainForSearch(html: String): CharSequence = try {
+            HTML_CACHE.get(html) ?: Html
+                    .fromHtml(html, Html.FROM_HTML_MODE_COMPACT or Html.FROM_HTML_OPTION_USE_CSS_COLORS, null, null)
+                    .trimTrailingNewlines()
+                    .let { SpannedString(it) }
+                    .also { HTML_CACHE.put(html, it) }
+        } catch (t: Throwable) {
+            html
+        }
 
         /**
          * Stable layout box for an in-post content image. The returned dimensions never depend on the
