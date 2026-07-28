@@ -409,7 +409,10 @@ class BodyBlockViewFactory(
             header.addView(TextView(ctx).apply {
                 text = hiddenMatches.toString()
                 textSize = scaledSp(11f)
-                setTextColor(accent)
+                // The count sits on a translucent-accent pill: accent-on-accent survives a dark palette but
+                // washes out on a light one (pale blue on pale blue), so the digit takes the body colour,
+                // which is contrast-guaranteed against every surface the pill can sit on.
+                setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface))
                 val ph = (7 * dm.density).toInt()
                 setPadding(ph, 0, ph, 0)
                 background = android.graphics.drawable.GradientDrawable().apply {
@@ -1492,7 +1495,14 @@ class BodyBlockViewFactory(
         val out = android.text.SpannableStringBuilder(text)
         val hay = out.toString()
         val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
-        val onPrimary = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnPrimary)
+        // Contrast against the ACCENT fill, picked by its luminance — not colorOnPrimary, which is paired
+        // with colorPrimary and diverges from colorAccent on the Material You palettes (Android 14+ slot
+        // divergence), leaving the active match's text unreadable on its own highlight.
+        val onAccent = if (androidx.core.graphics.ColorUtils.calculateLuminance(accent) > 0.5) {
+            0xFF000000.toInt()
+        } else {
+            0xFFFFFFFF.toInt()
+        }
         val pale = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, PASSIVE_MATCH_ALPHA)
         val active = activeMatch?.takeIf { scope != null && it.scopeId == scope.scopeId }
         var i = hay.indexOf(q, ignoreCase = true)
@@ -1501,7 +1511,7 @@ class BodyBlockViewFactory(
             if (scope != null) scope.searchSeq++
             if (active != null && active.ordinal == ordinal) {
                 out.setSpan(ActiveSearchMatchSpan(accent), i, i + q.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                out.setSpan(android.text.style.ForegroundColorSpan(onPrimary),
+                out.setSpan(android.text.style.ForegroundColorSpan(onAccent),
                         i, i + q.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             } else {
                 out.setSpan(android.text.style.BackgroundColorSpan(pale), i, i + q.length,

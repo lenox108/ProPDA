@@ -2820,6 +2820,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         gestureOverlayGlyph = null
         gestureOverlayLabel = null
         gestureOverlayProgress = null
+        // The find-on-page bar is built ONCE and cached, with its palette colours baked into the views at
+        // build time. Holding the old views across a view-recreate (tab back-navigation, theme/palette
+        // switch, rotation) would both leak the dead hierarchy and re-attach controls painted in the
+        // PREVIOUS palette — drop them so the next ensureSearchBar() builds against the current theme.
+        searchInput?.removeCallbacks(searchRecomputeRunnable)
+        searchBar = null
+        searchInput = null
+        searchCountLabel = null
+        searchScopeLabel = null
+        searchAllRow = null
+        searchAllContainer = null
+        searchAllGlyphs = emptyList()
+        searchMatches.clear()
+        currentMatchIndex = -1
+        topPaginationBar = null
+        topPaginationLabel = null
         super.onDestroyView()
     }
 
