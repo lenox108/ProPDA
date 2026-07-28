@@ -3142,7 +3142,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      *  the WebView createNote). */
     private fun createNoteForPost(item: NativePostItem) {
         val themeTitle = arguments?.getString(TabFragment.ARG_TITLE).orEmpty()
-        val title = "пост $themeTitle ${item.nick.orEmpty()} ${item.postId}"
+        // Без служебного префикса «пост»: в списке закладок тип показывает значок
+        // (NoteLinkType), а префикс только отъедал ширину у названия темы.
+        val title = "$themeTitle ${item.nick.orEmpty()} ${item.postId}".trim()
         val url = "https://4pda.to/forum/index.php?s=&showtopic=${item.topicId}&view=findpost&p=${item.postId}"
         forpdateam.ru.forpda.ui.fragments.notes.NotesAddPopup
                 .showAddNoteDialog(requireContext(), title, url, notesRepository)

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Подложка значка типа закладки. Белая заливка — цвет ставит делегат тинтом (он выводится
+    из палитры смешением фона плашки с акцентом, как цвет выделенной строки), поэтому круг
+    остаётся различимым и в светлой теме, и в AMOLED.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@android:color/white" />
+</shape>

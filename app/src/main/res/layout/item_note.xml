@@ -4,32 +4,81 @@
     и без отступов вокруг каждой заметки. Фон, скругления и вертикальные зазоры группы
     ставит NoteAdapterDelegate через applyListRowPlate(); паддинги здесь — дефолт для
     превью, в bind() их переопределяет плотность интерфейса.
+
+    Раскладка одна для всех закладок: значок типа — заголовок — превью — дата. Раньше
+    строка ветвилась (без превью дата уезжала на базовую линию заголовка), и закладки
+    без описания читались как другой стиль списка.
 -->
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:clickable="true"
     android:focusable="true"
     android:foreground="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
     android:paddingBottom="@dimen/note_row_padding_vertical"
     android:paddingEnd="@dimen/list_row_padding_horizontal"
     android:paddingStart="@dimen/list_row_padding_horizontal"
     android:paddingTop="@dimen/note_row_padding_vertical">
 
-    <androidx.appcompat.widget.AppCompatCheckBox
-        android:id="@+id/item_selection"
-        style="@style/Widget.ForPDA.RadioButton"
-        android:layout_width="@dimen/dp32"
-        android:layout_height="@dimen/dp32"
-        android:layout_alignParentStart="true"
-        android:layout_centerVertical="true"
-        android:layout_marginEnd="@dimen/dp8"
-        android:buttonTint="?attr/colorAccent"
-        android:clickable="false"
-        android:focusable="false"
-        android:visibility="gone"
-        tools:visibility="visible" />
+    <!--
+        Значок типа (пост, тема, новость, QMS, устройство, ссылка). Он же снимает с
+        заголовка служебный префикс «пост …»: тип теперь виден значком, а название
+        получает обратно отъеденную префиксом ширину.
+    -->
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/item_type_icon"
+        android:layout_width="@dimen/dp36"
+        android:layout_height="@dimen/dp36"
+        android:background="@drawable/bg_note_type_circle"
+        android:contentDescription="@null"
+        android:padding="@dimen/dp8"
+        android:src="@drawable/ic_link" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/dp12"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/item_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="@dimen/list_topic_title_text_size"
+            tools:text="@string/test_topic_title" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/item_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/note_row_line_spacing"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="@dimen/list_topic_meta_text_size" />
+
+        <!--
+            Дата создания — мета-строка снизу, как в темах форума и избранном
+            (topic_item.xml). Всегда на своём месте, есть превью или нет.
+        -->
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/item_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/note_row_line_spacing"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="@dimen/list_topic_meta_text_size"
+            android:visibility="gone"
+            tools:text="@string/test_topic_date"
+            tools:visibility="visible" />
+    </LinearLayout>
 
     <!--
         Меню действий закладки — тот же ⋮, что у папки (item_note_folder.xml): «Переместить
@@ -40,54 +89,9 @@
         android:id="@+id/item_more"
         android:layout_width="@dimen/dp40"
         android:layout_height="@dimen/dp40"
-        android:layout_alignParentEnd="true"
-        android:layout_centerVertical="true"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/note_actions"
         android:padding="@dimen/dp8"
         android:src="@drawable/ic_more_vert" />
 
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/item_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
-        android:layout_toStartOf="@+id/item_more"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="?attr/colorOnSurface"
-        android:textSize="@dimen/list_topic_title_text_size"
-        tools:text="@string/test_topic_title" />
-
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/item_content"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/item_title"
-        android:layout_toStartOf="@+id/item_more"
-        android:layout_marginTop="@dimen/note_row_line_spacing"
-        android:ellipsize="end"
-        android:maxLines="2"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="@dimen/list_topic_meta_text_size" />
-
-    <!--
-        Дата создания — мета-строка снизу справа, как в темах форума и избранном
-        (topic_item.xml). Отдельной строкой, а не рядом с заголовком: заголовки закладок
-        длинные и дата воровала бы у них ширину. layout_below работает и когда превью
-        скрыто — GONE-вью в RelativeLayout имеет нулевую высоту под заголовком.
-    -->
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/item_date"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/item_content"
-        android:layout_toStartOf="@+id/item_more"
-        android:layout_marginTop="@dimen/note_row_line_spacing"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="@dimen/list_topic_meta_text_size"
-        android:visibility="gone"
-        tools:text="@string/test_topic_date"
-        tools:visibility="visible" />
-
-</RelativeLayout>
+</LinearLayout>
