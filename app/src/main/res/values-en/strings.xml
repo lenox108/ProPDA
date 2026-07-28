@@ -842,7 +842,7 @@
     <string name="pref_title_mentions">Mentions</string>
     <string name="pref_title_pm_qms">QMS private messages</string>
     <string name="pref_title_qms_message_text">Show message text</string>
-    <string name="pref_summary_qms_message_text">The app fetches the text with a separate request; otherwise the shade shows only a counter</string>
+    <string name="pref_summary_qms_message_text">The shade shows the message itself instead of a counter. The cost: fetching the text requires requesting the dialog, and 4PDA marks it read — the badge and the unread state on other devices go out before you open the message</string>
     <string name="notification_qms_image">[image]</string>
     <string name="pref_title_app_updates">App updates</string>
     <string name="pref_title_notify">Notify</string>

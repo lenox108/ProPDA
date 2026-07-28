@@ -1193,7 +1193,7 @@
     <string name="pref_title_mentions">Ответы</string>
     <string name="pref_title_pm_qms">Личные сообщения QMS</string>
     <string name="pref_title_qms_message_text">Показывать текст сообщения</string>
-    <string name="pref_summary_qms_message_text">Приложение подгружает сам текст отдельным запросом; иначе в шторке только счётчик</string>
+    <string name="pref_summary_qms_message_text">В шторке будет сам текст, а не счётчик. Цена: чтобы получить текст, приложение запрашивает диалог, и 4PDA считает его прочитанным — бейдж и непрочитанное на других устройствах погаснут до того, как вы откроете сообщение</string>
     <string name="notification_qms_image">[изображение]</string>
     <string name="pref_title_app_updates">Обновления программы</string>
     <string name="pref_title_notify">Уведомлять</string>

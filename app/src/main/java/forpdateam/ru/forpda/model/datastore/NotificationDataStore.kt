@@ -29,6 +29,7 @@ class NotificationDataStore(private val context: Context) {
         private const val KEY_FAV_LIVE_TAB = "notifications.fav.live_tab"
         private const val KEY_QMS_ENABLED = "notifications.qms.enabled"
         // Показывать в уведомлении сам текст сообщения (дозагружается отдельным запросом).
+        // По умолчанию ВЫКЛ: дозагрузка помечает диалог прочитанным на сервере (замер 28.07.26).
         private const val KEY_QMS_PREVIEW_ENABLED = "notifications.qms.preview_enabled"
         // Последний id сообщения диалога, попавший в превью: следующий запрос инкрементальный.
         private const val KEY_QMS_PREVIEW_ANCHOR_PREFIX = "notifications.qms_preview_anchor_"
@@ -282,7 +283,7 @@ class NotificationDataStore(private val context: Context) {
         prefs.edit().putString(KEY_HAT_SNAPSHOT_PREFIX + topicId, value.joinToString(",")).apply()
     }
 
-    fun getQmsPreviewEnabledSync(): Boolean = prefs.getBoolean(KEY_QMS_PREVIEW_ENABLED, true)
+    fun getQmsPreviewEnabledSync(): Boolean = prefs.getBoolean(KEY_QMS_PREVIEW_ENABLED, false)
 
     fun getQmsPreviewAnchorSync(themeId: Int): Int =
             prefs.getInt(KEY_QMS_PREVIEW_ANCHOR_PREFIX + themeId, 0)
