@@ -691,12 +691,24 @@ class MessagePanel(
      * получить другое состояние, оно не теряется при позднем ответе сервера.
      */
     fun clearIfUnchanged(snapshot: MessagePanelSnapshot): Boolean {
-        val isSame = message == snapshot.message &&
-            attachments.map(AttachmentSnapshot::from) == snapshot.attachments
-        if (!isSame) return false
-        clearMessage()
-        clearAttachments()
-        return true
+        val sameAttachments = attachments.map(AttachmentSnapshot::from) == snapshot.attachments
+        val current = message
+        if (sameAttachments && current == snapshot.message) {
+            clearMessage()
+            clearAttachments()
+            return true
+        }
+        // Поле живёт во время отправки ([keepImeOnSend]): пользователь мог уже начать следующее
+        // сообщение. Тогда затираем ровно отправленный префикс, а добитое остаётся — иначе
+        // отправленный текст оставался в поле и приклеивался к новому.
+        if (sameAttachments && snapshot.message.isNotEmpty() && current.startsWith(snapshot.message)) {
+            val remainder = current.removePrefix(snapshot.message).trimStart()
+            messageField?.setText(remainder)
+            messageField?.setSelection(remainder.length)
+            clearAttachments()
+            return true
+        }
+        return false
     }
     
     fun clearMessage() {

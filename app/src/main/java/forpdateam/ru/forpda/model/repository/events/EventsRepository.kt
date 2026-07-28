@@ -1273,6 +1273,14 @@ class EventsRepository(
         }
 
         repoScope.launch(ioDispatcher) {
+            // Пришли РЕАЛЬНЫЕ WS-события (не периодический hard-check): кэш инспектора этого
+            // источника устарел по определению — сервер только что сообщил об изменении. Без
+            // сброса второе сообщение в диалоге через 3-8 секунд после первого попадало в два
+            // разных окна агрегации, но в ОДИН TTL кэша (8с): второй проход обогащался старым
+            // ответом и выходил с new=0 (тот же баг, что чинился для FCM-пути).
+            if (events.isNotEmpty()) {
+                eventsApi.invalidateInspectorCache(source)
+            }
             val loadedResult = runCatching<List<NotificationEvent>> {
                 if (NotificationEvent.fromQms(source)) {
                     eventsApi.getQmsEvents()
