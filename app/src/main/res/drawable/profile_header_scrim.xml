@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Затемнение шапки профиля. Раньше это был полупрозрачный чёрный из темы
+    (#44000000) плюс текст цвета ?link_color_contrast — на светлых палитрах и
+    светлых аватарках ник, группа и подпись становились светло-серыми по
+    светлому и не читались. Под текстом лежит чужая картинка произвольной
+    яркости, поэтому контраст обеспечиваем сами: градиент гуще к низу, где
+    текст, и заметный сверху, где иконки тулбара и статусбар.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:centerColor="#4D000000"
+        android:endColor="#B3000000"
+        android:startColor="#73000000"
+        android:type="linear" />
+</shape>
