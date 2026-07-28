@@ -79,9 +79,6 @@
 
 -keep public class androidx.browser.customtabs.CustomTabsService
 
-# AppMetrica
--keep class io.appmetrica.** { *; }
--dontwarn io.appmetrica.**
 
 # WorkManager - keepnames for shrinking
 -keepnames class androidx.work.** { *; }

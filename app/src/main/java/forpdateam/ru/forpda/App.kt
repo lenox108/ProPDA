@@ -173,9 +173,8 @@ class App : Application(), androidx.work.Configuration.Provider {
             Timber.plant(Timber.DebugTree())
         }
 
-        // Ставим локальный обработчик краша КАК МОЖНО РАНЬШЕ и до setupAppMetrica:
-        // тогда обработчик AppMetrica (store-флейвор) встанет поверх и вызовет наш в цепочке,
-        // а на dev/beta/parallel/stable наш останется единственным, кто фиксирует падение.
+        // Ставим локальный обработчик краша КАК МОЖНО РАНЬШЕ: он единственный, кто фиксирует
+        // падение (внешних репортеров в сборке нет), и должен успеть до остальной инициализации.
         forpdateam.ru.forpda.diagnostic.CrashReporter.install(this)
         // Краш прошлой сессии (если был) дослать боту в фоне — сам процесс на момент падения
         // уже умер, поэтому отправляем при следующем запуске. No-op, если бот не настроен/выключен.
@@ -185,7 +184,7 @@ class App : Application(), androidx.work.Configuration.Provider {
 
         setupStrictMode()
         setupMaterialYouMigration()
-        setupAppMetrica()
+        setupAnalytics()
         setupThemeObserver()
         setupVersionHistory()
         setupCoil()
@@ -282,11 +281,9 @@ class App : Application(), androidx.work.Configuration.Provider {
         }
     }
 
-    private fun setupAppMetrica() {
-        // Аналитика живёт только во флейворе `store` (публикация в Google Play).
-        // FlavorAnalytics — no-op в stable/parallel, при этом библиотека AppMetrica
-        // туда даже не пакуется (зависимость `storeImplementation`). Вся инициализация
-        // и UncaughtExceptionHandler инкапсулированы во flavor-специфичной реализации.
+    private fun setupAnalytics() {
+        // Внешней аналитики в сборке нет: FlavorAnalytics — no-op, репортер в
+        // [forpdateam.ru.forpda.analytics.Analytics] не устанавливается.
         FlavorAnalytics.setup(this, appScope)
     }
     
