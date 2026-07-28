@@ -765,6 +765,58 @@ class PostBodyRendererTest {
         assertTrue(texts.contains("After media"))
     }
 
+    @Test
+    fun strikeWrappingQuoteAndSpoiler_keepsNativeBlocks_andStrikesEveryTextRun() {
+        // Живой пост 4pda #144439459: `[s]` пришёл как <del>, ОБЁРНУТЫЙ вокруг цитаты, прозы и спойлера.
+        // Раньше peel обёртки терял <del> целиком — в приложении зачёркивания не было вообще, хотя на сайте
+        // перечёркнуто всё (репорт: «внутрь тега [s] попали цитата и спойлер»).
+        val html = "<del>" +
+                "<div class=\"post-block quote\"><div class=\"block-title\">Lenox30 @ Сегодня, 19:12</div>" +
+                "<div class=\"block-body\">меню профиля</div></div>" +
+                "да и там я тоже смотрел и не нашел" +
+                "<div class=\"post-block spoil close\"><div class=\"block-title\"></div>" +
+                "<div class=\"block-body\">содержимое спойлера</div></div>" +
+                "и решил что все таки в меню поста<br /></del>" +
+                "все, пардон, нашел"
+
+        val blocks = renderer.render(html)
+
+        // Цитата и спойлер остаются НАТИВНЫМИ карточками, а не уезжают в WebView.
+        assertTrue(blocks.none { it is BodyBlock.WebFallback })
+        val quote = blocks.filterIsInstance<BodyBlock.Quote>().single()
+        val spoiler = blocks.filterIsInstance<BodyBlock.Spoiler>().single()
+        // Текст внутри блоков зачёркнут — как в браузере, где text-decoration наследуется вглубь.
+        assertTrue(quote.inner.filterIsInstance<BodyBlock.Text>().single().html.contains("<del>"))
+        assertTrue(spoiler.inner.filterIsInstance<BodyBlock.Text>().single().html.contains("<del>"))
+        // Проза ВНУТРИ обёртки зачёркнута, проза ПОСЛЕ неё — нет.
+        val struck = blocks.filterIsInstance<BodyBlock.Text>().filter { it.html.contains("<del>") }
+        assertTrue(struck.any { it.html.contains("да и там я тоже смотрел") })
+        assertTrue(struck.any { it.html.contains("и решил что все таки") })
+        val plain = blocks.filterIsInstance<BodyBlock.Text>().single { !it.html.contains("<del>") }
+        assertTrue(plain.html.contains("все, пардон, нашел"))
+    }
+
+    @Test
+    fun boldWrappingQuote_keepsNativeQuote_andBoldsQuotedText() {
+        val html = "<b><div class=\"post-block quote\"><div class=\"block-title\">User @ today</div>" +
+                "<div class=\"block-body\">текст цитаты</div></div></b>"
+
+        val blocks = renderer.render(html)
+
+        val quote = blocks.filterIsInstance<BodyBlock.Quote>().single()
+        val inner = quote.inner.filterIsInstance<BodyBlock.Text>().single()
+        assertTrue(inner.html.contains("<b>") && inner.html.contains("текст цитаты"))
+        assertTrue(blocks.none { it is BodyBlock.WebFallback })
+    }
+
+    @Test
+    fun strikeAroundPlainTextOnly_staysInlineInTheSameTextBlock() {
+        // Обычный случай `[s]` без блоков внутри не должен измениться: одна Text-нода с <del> внутри.
+        val blocks = renderer.render("до <del>зачёркнуто</del> после")
+        val text = blocks.filterIsInstance<BodyBlock.Text>().single()
+        assertTrue(text.html.contains("<del>зачёркнуто</del>"))
+    }
+
     private fun fixture(name: String): String {
         val path = "renderer/postbody/$name"
         return javaClass.classLoader?.getResource(path)?.readText()

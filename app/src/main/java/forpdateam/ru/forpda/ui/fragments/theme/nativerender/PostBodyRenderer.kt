@@ -141,19 +141,38 @@ class PostBodyRenderer {
      * Carries an outer offtop style through native structural blocks. Only visible text is decorated:
      * quote/spoiler chrome, code, attachments and other controls keep their normal readable sizing.
      */
-    private fun applyOfftopFormatting(block: BodyBlock): BodyBlock = when (block) {
-        is BodyBlock.Text -> block.copy(
-                html = "<small><span style=\"color:#808080\">${block.html}</span></small>",
-        )
-        is BodyBlock.Quote -> block.copy(inner = block.inner.map(::applyOfftopFormatting))
-        is BodyBlock.Spoiler -> block.copy(inner = block.inner.map(::applyOfftopFormatting))
-        is BodyBlock.Hidden -> block.copy(inner = block.inner.map(::applyOfftopFormatting))
+    private fun applyOfftopFormatting(block: BodyBlock): BodyBlock =
+            wrapTextIn(block, "<small><span style=\"color:#808080\">", "</span></small>")
+
+    /**
+     * Re-applies an inline formatting wrapper ([open]…[close]) to every VISIBLE text run of a block tree.
+     * Only text is decorated — quote/spoiler chrome, code and attachment controls keep their own styling,
+     * exactly as with [applyOfftopFormatting] (which is this function with the offtop tags).
+     */
+    private fun wrapTextIn(block: BodyBlock, open: String, close: String): BodyBlock = when (block) {
+        is BodyBlock.Text -> block.copy(html = "$open${block.html}$close")
+        is BodyBlock.Quote -> block.copy(inner = block.inner.map { wrapTextIn(it, open, close) })
+        is BodyBlock.Spoiler -> block.copy(inner = block.inner.map { wrapTextIn(it, open, close) })
+        is BodyBlock.Hidden -> block.copy(inner = block.inner.map { wrapTextIn(it, open, close) })
         is BodyBlock.Table -> block.copy(
-                rows = block.rows.map { row ->
-                    row.map { cell -> "<small><span style=\"color:#808080\">$cell</span></small>" }
-                },
+                rows = block.rows.map { row -> row.map { cell -> "$open$cell$close" } },
         )
         else -> block
+    }
+
+    /**
+     * `[s]`/`[b]`/`[i]`/`[u]` around a WHOLE run of a post arrive as a single inline element (`<del>`, `<b>`, …)
+     * wrapping everything the author selected — including quotes/spoilers/tables. Such a wrapper is classified
+     * complex (because of its descendants), and both complex paths used to LOSE it: peeling its children
+     * ([wrapsProseAroundComplexBlock]) dropped the tag outright, so the post rendered with no strike-through at
+     * all while the site draws every line struck (user report: «в этом посте не видно перечёркнутого текста,
+     * потому что внутрь тега [s] попали цитата и спойлер»). In a browser `text-decoration` propagates into
+     * in-flow block descendants; natively we reproduce that by re-applying the wrapper to each text run the
+     * peel produces — the quote/spoiler stay NATIVE cards and their content is struck through too.
+     */
+    private fun Element.inlineFormattingWrapperOrNull(): Pair<String, String>? {
+        if (normalName() !in INLINE_FORMAT_TAGS) return null
+        return "<${normalName()}${attributes().html()}>" to "</${normalName()}>"
     }
 
     /**
@@ -268,6 +287,12 @@ class PostBodyRenderer {
                     // may appear as plain/empty text. Peel the structural blocks from inside the wrapper and
                     // apply the offtop presentation to their textual content recursively.
                     blocks.addAll(renderNodes(offtopContent.childNodes()).map(::applyOfftopFormatting))
+                } else if (element.inlineFormattingWrapperOrNull() != null) {
+                    // `[s]`/`[b]`/… wrapped around content that happens to contain a quote/spoiler/table.
+                    // Peel the structural blocks out of the wrapper (so they keep their native cards) and put
+                    // the formatting back on every text run inside them — see [inlineFormattingWrapperOrNull].
+                    val (open, close) = element.inlineFormattingWrapperOrNull()!!
+                    blocks.addAll(renderNodes(element.childNodes()).map { wrapTextIn(it, open, close) })
                 } else if (wrapsProseAroundComplexBlock(element)) {
                     // The node is not itself the complex block — it merely WRAPS one, together with prose
                     // (4pda puts an attach table / `a.ipb-attach` right inside the div that also holds the
@@ -704,6 +729,14 @@ class PostBodyRenderer {
         const val EDIT_MARKER = "✎"
         val EDIT_TIME = Regex("""\b(?:[01]?\d|2[0-3]):[0-5]\d\b""")
         const val OFFTOP_MARKER_ATTR = "data-native-offtop"
+
+        /**
+         * Purely PRESENTATIONAL inline tags a BB-code wrapper can produce (`[s]`→`<del>`, `[b]`, `[i]`, `[u]`).
+         * Re-emitting one of these around a text run is always safe: it carries no layout, no links and no
+         * structure, and [forpdateam.ru.forpda.common.Html] maps each to a character span. Deliberately NOT
+         * `span`/`font` — those carry arbitrary CSS whose block-vs-inline semantics we do not want to guess.
+         */
+        val INLINE_FORMAT_TAGS = setOf("del", "s", "strike", "b", "strong", "i", "em", "u", "ins")
         const val MIN_INLINE_LIST_ICON_REPETITIONS = 2
 
         /**
