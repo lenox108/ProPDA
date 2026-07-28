@@ -1,4 +1,8 @@
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.time.LocalDate;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,6 +29,7 @@ import java.util.Base64;
  * Запуск (JDK 17+, без зависимостей):
  *   java tools/prokey/ProKeyGen.java genkey                     — один раз, создать пару ключей
  *   java tools/prokey/ProKeyGen.java sign <файл_ключа> <member_id>  — выдать активацию покупателю
+ *   java tools/prokey/ProKeyGen.java issue <member_id>              — то же + ник, журнал, буфер обмена
  */
 public class ProKeyGen {
 
@@ -38,6 +43,13 @@ public class ProKeyGen {
         }
         switch (args[0]) {
             case "genkey" -> genkey(args.length > 1 ? args[1] : "propda_pro_private.key");
+            case "issue" -> {
+                if (args.length < 2) {
+                    usage();
+                    return;
+                }
+                issue(args[1]);
+            }
             case "sign" -> {
                 if (args.length < 3) {
                     usage();
@@ -53,12 +65,12 @@ public class ProKeyGen {
         System.out.println("""
                 ProPDA Pro — генератор ключей активации
 
+                  issue <id>                 выдать ключ: ник + журнал + буфер обмена
                   genkey [файл]              создать пару ключей (делается ОДИН раз)
-                  sign <файл_ключа> <id>     выдать активацию для member_id покупателя
+                  sign <файл_ключа> <id>     только подписать, без журнала
 
                 Пример:
-                  java ProKeyGen.java genkey ~/propda_pro_private.key
-                  java ProKeyGen.java sign ~/propda_pro_private.key 12501957
+                  java ProKeyGen.java issue 12501957
                 """);
     }
 
@@ -106,5 +118,131 @@ public class ProKeyGen {
         System.out.println(license);
         System.out.println();
         System.out.println("Отправь эту строку покупателю. Настройки → Уведомления → ProPDA Pro.");
+    }
+
+    // ---------- выдача ключа с журналом ----------
+
+    private static final Path KEY_FILE =
+            Paths.get(System.getProperty("user.home"), "propda_pro_private.key");
+    private static final Path LEDGER =
+            Paths.get(System.getProperty("user.home"), "Documents", "ProPDA-Pro-keys", "выданные-ключи.md");
+
+    /**
+     * Полный цикл выдачи: определяет ник по id, подписывает ключ, дописывает строку в журнал
+     * и кладёт ключ в буфер обмена.
+     *
+     * Журнал лежит РЯДОМ С КЛЮЧОМ, а не в репозитории: в нём ники покупателей, а репозиторий
+     * публичный (проект под GPL).
+     *
+     * Повторная выдача тому же id не плодит строк — возвращает уже выданный ключ, иначе у
+     * покупателя оказалось бы два разных рабочих ключа и в журнале был бы бардак.
+     */
+    private static void issue(String memberId) throws Exception {
+        if (!memberId.matches("\\d+")) {
+            System.out.println("Номер должен состоять из цифр. Его видно в приложении:");
+            System.out.println("Настройки -> Уведомления -> Активация push");
+            return;
+        }
+        if (!Files.exists(KEY_FILE)) {
+            System.out.println("Не найден приватный ключ: " + KEY_FILE);
+            System.out.println("Без него выпускать активации нечем.");
+            return;
+        }
+
+        String existing = findInLedger(memberId);
+        if (existing != null) {
+            System.out.println("Этому номеру ключ уже выдавался — он же и нужен:");
+            System.out.println();
+            System.out.println(existing);
+            copyToClipboard(existing);
+            System.out.println();
+            System.out.println("(скопирован в буфер обмена)");
+            return;
+        }
+
+        String nick = lookupNick(memberId);
+        String license = signWith(KEY_FILE, memberId);
+
+        appendToLedger(memberId, nick, license);
+        copyToClipboard(license);
+
+        System.out.println("Ник:   " + (nick == null ? "не определился" : nick));
+        System.out.println("Номер: " + memberId);
+        System.out.println();
+        System.out.println(license);
+        System.out.println();
+        System.out.println("Ключ скопирован в буфер обмена — вставляй покупателю.");
+        System.out.println("Записан в " + LEDGER);
+    }
+
+    private static String signWith(Path keyFile, String memberId) throws Exception {
+        byte[] der = Base64.getDecoder().decode(Files.readString(keyFile).trim());
+        PrivateKey priv = KeyFactory.getInstance("EC").generatePrivate(new PKCS8EncodedKeySpec(der));
+        Signature sig = Signature.getInstance("SHA256withECDSA");
+        sig.initSign(priv);
+        sig.update((MESSAGE_PREFIX + memberId).getBytes(StandardCharsets.UTF_8));
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(sig.sign());
+    }
+
+    /** Ник с публичной страницы профиля. Не критично: не вышло — журнал просто без ника. */
+    private static String lookupNick(String memberId) {
+        try {
+            URL url = new URL("https://4pda.to/forum/index.php?showuser=" + memberId);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            if (conn.getResponseCode() != 200) return null;
+            String html;
+            try (InputStream in = conn.getInputStream()) {
+                html = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            int a = html.indexOf("<title>");
+            int b = html.indexOf("</title>");
+            if (a < 0 || b <= a) return null;
+            String title = html.substring(a + 7, b).trim();
+            int dash = title.lastIndexOf(" - 4PDA");
+            return dash > 0 ? title.substring(0, dash).trim() : title;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String findInLedger(String memberId) throws IOException {
+        if (!Files.exists(LEDGER)) return null;
+        for (String line : Files.readAllLines(LEDGER)) {
+            String[] cells = line.split("\\|");
+            if (cells.length >= 5 && cells[2].trim().equals(memberId)) return cells[4].trim();
+        }
+        return null;
+    }
+
+    private static void appendToLedger(String memberId, String nick, String license) throws IOException {
+        Files.createDirectories(LEDGER.getParent());
+        if (!Files.exists(LEDGER)) {
+            Files.writeString(LEDGER, """
+                    # Выданные ключи ProPDA
+
+                    Ники покупателей — держать вне публичного репозитория.
+
+                    | Дата | ID | Ник | Ключ |
+                    |---|---|---|---|
+                    """);
+        }
+        String row = "| " + LocalDate.now() + " | " + memberId + " | "
+                + (nick == null ? "?" : nick) + " | " + license + " |\n";
+        Files.writeString(LEDGER, row, java.nio.file.StandardOpenOption.APPEND);
+    }
+
+    private static void copyToClipboard(String text) {
+        try {
+            Process p = new ProcessBuilder("pbcopy").start();
+            try (var os = p.getOutputStream()) {
+                os.write(text.getBytes(StandardCharsets.UTF_8));
+            }
+            p.waitFor();
+        } catch (Exception ignored) {
+            // не macOS или pbcopy недоступен — ключ всё равно напечатан на экран
+        }
     }
 }
