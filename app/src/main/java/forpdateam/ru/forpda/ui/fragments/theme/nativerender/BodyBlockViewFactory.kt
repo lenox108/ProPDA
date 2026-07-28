@@ -250,12 +250,19 @@ class BodyBlockViewFactory(
         var index = 0
         while (index < blocks.size) {
             val block = blocks[index]
-            val inlineIconText = if (block is BodyBlock.Image && block.inlineListIcon) {
+            // A RUN of viewable pictures (a wallpaper/screenshot spoiler posts dozens back to back) becomes
+            // ONE grid instead of one full-width row each — stacked singly they left the rest of the line
+            // empty and made browsing a long series a scroll marathon (user report).
+            val gridRun = imageGridRunLength(blocks, index)
+            val inlineIconText = if (gridRun == 0 && block is BodyBlock.Image && block.inlineListIcon) {
                 blocks.getOrNull(index + 1) as? BodyBlock.Text
             } else {
                 null
             }
-            val child = if (block is BodyBlock.Image && inlineIconText != null) {
+            val child = if (gridRun > 0) {
+                val run = (index until index + gridRun).map { blocks[it] as BodyBlock.Image }
+                imageGridView(ctx, run, scope)
+            } else if (block is BodyBlock.Image && inlineIconText != null) {
                 inlineListIconView(ctx, block, inlineIconText, scope)
             } else when (block) {
                 is BodyBlock.Text -> textView(ctx, spanned(ctx, block.html), scope)
@@ -296,7 +303,105 @@ class BodyBlockViewFactory(
             }
             child.layoutParams = lp
             container.addView(child)
-            index += if (inlineIconText != null) 2 else 1
+            index += when {
+                gridRun > 0 -> gridRun
+                inlineIconText != null -> 2
+                else -> 1
+            }
+        }
+    }
+
+    /**
+     * [Companion.imageGridRunLength], skipped entirely in a content-measured host (a QMS chat bubble,
+     * [textBlockMaxWidthPx] > 0): its width comes FROM its children, so a MATCH_PARENT grid would have
+     * no column to divide.
+     */
+    private fun imageGridRunLength(blocks: List<BodyBlock>, start: Int): Int =
+            if (textBlockMaxWidthPx > 0) 0 else Companion.imageGridRunLength(blocks, start)
+
+    /**
+     * A run of gallery pictures laid out as an even grid of uniform cells. The column count adapts to the
+     * width — about [IMAGE_GRID_TARGET_CELL_DP] per cell, so a phone gets 3, a narrow screen 2 and a
+     * landscape/tablet column 4–6 — which keeps every row symmetric on any device without a user setting.
+     *
+     * Cells are a fixed [IMAGE_GRID_CELL_RATIO] portrait box filled CENTER_CROP: the row lines up
+     * regardless of what the sources measure, and the full frame is one tap away in the viewer. A partial
+     * last row is padded with empty weighted spacers so its pictures keep the column width instead of
+     * stretching across the line. Cell height is derived from the measured width, so the grid is correct in
+     * a spoiler/quote card too — narrower than the post column — and it is known BEFORE the bitmaps load,
+     * which keeps the scroll anchor from sliding as the images arrive.
+     */
+    private fun imageGridView(ctx: Context, images: List<BodyBlock.Image>, scope: RenderScope): View {
+        val dm = ctx.resources.displayMetrics
+        val horizontalChromePx = (40 * dm.density).toInt() // card margins + paddings
+        val columnWidthPx = (dm.widthPixels - horizontalChromePx).coerceAtLeast(1)
+        val columns = resolveImageGridColumns(columnWidthPx, dm.density)
+        val gapPx = (IMAGE_GRID_GAP_DP * dm.density).toInt()
+        val cornerPx = IMAGE_GRID_CORNER_DP * dm.density
+        val grid = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+        images.chunked(columns).forEachIndexed { rowIndex, row ->
+            val rowView = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+            for (column in 0 until columns) {
+                val cell = row.getOrNull(column)
+                        ?.let { imageGridCell(ctx, it, cornerPx, scope) }
+                        ?: View(ctx)
+                rowView.addView(
+                        cell,
+                        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                            if (column > 0) marginStart = gapPx
+                        },
+                )
+            }
+            grid.addView(
+                    rowView,
+                    LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply { if (rowIndex > 0) topMargin = gapPx },
+            )
+        }
+        return grid
+    }
+
+    /** One cell of [imageGridView]: a rounded portrait thumbnail wired to the body-wide gallery. */
+    private fun imageGridCell(
+            ctx: Context,
+            block: BodyBlock.Image,
+            cornerPx: Float,
+            scope: RenderScope,
+    ): View {
+        val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
+        val viewerUrl = FourPdaImageUrls.resolveViewerUrl(tapUrl)
+        // Same running gallery as the single-image path: a tap opens the whole body, starting here.
+        val index = scope.galleryUrls.size
+        scope.galleryUrls.add(viewerUrl)
+        val cell = object : ImageView(ctx) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val width = MeasureSpec.getSize(widthMeasureSpec)
+                if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED || width <= 0) {
+                    super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+                    return
+                }
+                setMeasuredDimension(width, (width * IMAGE_GRID_CELL_RATIO).toInt())
+            }
+        }
+        return cell.apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = cornerPx
+                setColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceVariant))
+            }
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            clipToOutline = true
+            ForPdaCoil.loadInto(this, block.imageUrl)
+            setOnClickListener { callbacks.onImageClick(scope.galleryUrls, index) }
+            setOnLongClickListener { callbacks.onImageLongClick(viewerUrl); true }
         }
     }
 
@@ -1677,6 +1782,54 @@ class BodyBlockViewFactory(
                 Pattern.compile("""https?://4pda\.(?:to|ru)/forum/dl/post/\d+/(.+\.([^./?#]+))(?:[?#]|$)""")
 
         const val DEFAULT_IMAGE_RATIO = 0.66f
+
+        /** How many pictures must stand back to back before they are laid out as a grid. */
+        const val IMAGE_GRID_MIN_COUNT = 3
+
+        /** Preferred grid cell width (dp). The column count is the width divided by this and rounded,
+         *  so the same rule yields 3 columns on a phone, 2 on a narrow screen and 4–6 in landscape. */
+        const val IMAGE_GRID_TARGET_CELL_DP = 112f
+        const val IMAGE_GRID_MIN_COLUMNS = 2
+        const val IMAGE_GRID_MAX_COLUMNS = 6
+
+        /** Cell height as a multiple of its width — a portrait 3:4 preview, the shape wallpapers and
+         *  phone screenshots (the usual grid content) lose the least of when cropped to fit. */
+        const val IMAGE_GRID_CELL_RATIO = 4f / 3f
+        const val IMAGE_GRID_GAP_DP = 4f
+        const val IMAGE_GRID_CORNER_DP = 8f
+
+        /**
+         * Length of the run of consecutive gallery pictures starting at [start], or 0 when this position
+         * does not open a grid. Only real, viewer-openable pictures qualify: decorative list glyphs,
+         * «СКАЧАТЬ»/«UPDATE» button graphics and off-site images keep their own row, since they are read as
+         * part of the text flow rather than browsed as a series. A run shorter than [IMAGE_GRID_MIN_COUNT]
+         * also stays as-is — one or two pictures read better at their authored size than shrunk into cells.
+         */
+        fun imageGridRunLength(blocks: List<BodyBlock>, start: Int): Int {
+            var end = start
+            while (end < blocks.size && isGalleryPicture(blocks[end])) end++
+            val length = end - start
+            return if (length >= IMAGE_GRID_MIN_COUNT) length else 0
+        }
+
+        /** True for an image that belongs in the browsable gallery grid (see [imageGridRunLength]). */
+        fun isGalleryPicture(block: BodyBlock): Boolean {
+            if (block !is BodyBlock.Image) return false
+            if (block.inlineListIcon || block.attachmentButton) return false
+            val tapUrl = block.linkUrl?.takeIf { it.isNotBlank() } ?: block.imageUrl
+            return FourPdaImageUrls.isViewableInViewer(FourPdaImageUrls.resolveViewerUrl(tapUrl))
+        }
+
+        /**
+         * Column count for a picture grid filling [columnWidthPx]: as many cells of about
+         * [IMAGE_GRID_TARGET_CELL_DP] as fit, clamped to [IMAGE_GRID_MIN_COLUMNS]…[IMAGE_GRID_MAX_COLUMNS].
+         * One rule covers every screen — 3 on a typical phone, 2 on a narrow one, 4–6 in landscape and on
+         * tablets — so no user setting is needed to keep rows symmetric.
+         */
+        fun resolveImageGridColumns(columnWidthPx: Int, density: Float): Int =
+                Math.round(columnWidthPx / (IMAGE_GRID_TARGET_CELL_DP * density))
+                        .coerceIn(IMAGE_GRID_MIN_COLUMNS, IMAGE_GRID_MAX_COLUMNS)
+
         private const val INLINE_LIST_ICON_SIZE_DP = 20f
         private const val INLINE_LIST_ICON_GAP_DP = 6f
         private const val INLINE_LIST_ICON_TOP_DP = 1f
