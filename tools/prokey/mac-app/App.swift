@@ -168,6 +168,21 @@ struct ClientTable: View {
 
     @State private var editing: Int?
     @State private var noteDraft = ""
+    @FocusState private var noteFocused: Bool
+
+    private func beginEditing(_ c: Client) {
+        noteDraft = c.note
+        editing = c.memberId
+        // Фокус ставим следующим кадром: поле появляется в этом же обновлении и до конца
+        // отрисовки принять фокус не может.
+        DispatchQueue.main.async { noteFocused = true }
+    }
+
+    private func commitNote(_ memberId: Int) {
+        guard editing == memberId else { return }
+        store.updateNote(memberId, note: noteDraft)
+        editing = nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -206,25 +221,40 @@ struct ClientTable: View {
 
     private func row(_ c: Client) -> some View {
         HStack(spacing: 8) {
+            // Выделение текста включено во всех колонках: номер и ник часто нужно скопировать
+            // руками — например, чтобы найти человека на форуме или вставить в переписку.
             Text(c.nick).frame(width: 150, alignment: .leading).lineLimit(1)
+                .textSelection(.enabled)
             Text(String(c.memberId)).font(.system(.body, design: .monospaced))
                 .foregroundStyle(.secondary).frame(width: 90, alignment: .leading)
+                .textSelection(.enabled)
             Text(String(c.date.suffix(5))).foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
+                .textSelection(.enabled)
 
             if editing == c.memberId {
-                TextField("заметка", text: $noteDraft, onCommit: {
-                    store.updateNote(c.memberId, note: noteDraft)
-                    editing = nil
-                })
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: .infinity)
+                TextField("заметка", text: $noteDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: .infinity)
+                    .focused($noteFocused)
+                    .onSubmit { commitNote(c.memberId) }
+                    // Сохраняем и при уходе фокуса: щелчок мимо поля раньше терял набранное.
+                    .onChange(of: noteFocused) { focused in
+                        if !focused { commitNote(c.memberId) }
+                    }
             } else {
-                Text(c.note.isEmpty ? "—" : c.note)
+                // Правка по ДВОЙНОМУ клику: одиночный отдан выделению текста, иначе жесты
+                // конфликтуют и выделить заметку становится невозможно.
+                Text(c.note.isEmpty ? "добавить заметку" : c.note)
                     .foregroundStyle(c.note.isEmpty ? .tertiary : .primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .lineLimit(1)
-                    .onTapGesture { noteDraft = c.note; editing = c.memberId }
+                    .textSelection(.enabled)
+                    // Без contentShape кликабельным был только сам текст: по пустой заметке
+                    // приходилось попадать в один символ. Теперь цель — вся колонка.
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { beginEditing(c) }
+                    .help("Двойной клик — изменить заметку")
             }
 
             Button {
@@ -234,7 +264,14 @@ struct ClientTable: View {
                 .help("Скопировать ключ")
 
             Menu {
+                Button("Скопировать ключ") { onCopy(c.key, "Ключ \(c.nick) скопирован") }
                 Button("Скопировать номер") { onCopy(String(c.memberId), "Номер скопирован") }
+                Button("Скопировать ник") { onCopy(c.nick, "Ник скопирован") }
+                Button("Скопировать строку") {
+                    onCopy("\(c.nick)\t\(c.memberId)\t\(c.date)\t\(c.key)", "Строка скопирована")
+                }
+                Divider()
+                Button("Изменить заметку") { beginEditing(c) }
                 Divider()
                 Button("Удалить из списка", role: .destructive) { store.remove(c.memberId) }
             } label: { Image(systemName: "ellipsis") }
@@ -243,5 +280,12 @@ struct ClientTable: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .contentShape(Rectangle())
+        .contextMenu {
+            Button("Скопировать ключ") { onCopy(c.key, "Ключ \(c.nick) скопирован") }
+            Button("Скопировать номер") { onCopy(String(c.memberId), "Номер скопирован") }
+            Button("Скопировать ник") { onCopy(c.nick, "Ник скопирован") }
+            Divider()
+            Button("Изменить заметку") { beginEditing(c) }
+        }
     }
 }
