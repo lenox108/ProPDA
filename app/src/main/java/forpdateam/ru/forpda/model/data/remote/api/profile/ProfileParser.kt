@@ -2,6 +2,7 @@ package forpdateam.ru.forpda.model.data.remote.api.profile
 
 import forpdateam.ru.forpda.entity.remote.profile.ProfileModel
 import forpdateam.ru.forpda.model.data.remote.ParserPatterns
+import forpdateam.ru.forpda.model.data.remote.api.ApiUtils
 import forpdateam.ru.forpda.model.data.remote.parser.BaseParser
 import forpdateam.ru.forpda.model.data.storage.IPatternProvider
 import java.util.regex.Matcher
@@ -14,6 +15,23 @@ import java.util.regex.Pattern
 private fun Matcher.groupInt(group: Int): Int? {
     val value = this.group(group) ?: return null
     return value.toIntOrNull()
+}
+
+/** Кусок разметки из блока «Устройства» → плоский текст: теги и HTML-сущности снимаются. */
+private fun String?.cleanDeviceText(): String =
+        ApiUtils.fromHtml(this).orEmpty().replace('\u00A0', ' ').trim()
+
+/** `https://4pda.to/devdb/oneplus_open` → `Oneplus Open`: запасное имя, когда текст ссылки пуст. */
+private fun String.devDbSlugAsName(): String {
+    val marker = "/devdb/"
+    val start = indexOf(marker).takeIf { it >= 0 }?.plus(marker.length) ?: return ""
+    val slug = substring(start).substringBefore('?').substringBefore('#').trim('/')
+    return slug
+            .replace('_', ' ')
+            .replace('-', ' ')
+            .split(' ')
+            .filter { it.isNotEmpty() }
+            .joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
 }
 
 class ProfileParser(
@@ -98,10 +116,24 @@ class ProfileParser(
                             .getPattern(scope.scope, scope.devices)
                             .matcher(mainMatcher.group(9))
                             .findAll { matcher ->
+                                val deviceUrl = matcher.group(1)?.trim().orEmpty()
+                                val linkText = matcher.group(2).cleanDeviceText()
+                                val tailText = matcher.group(3).cleanDeviceText()
+                                // Пустой текст ссылки — не редкость: имя может лежать за
+                                // пределами <a> (кнопки правки в своём профиле), а сама
+                                // ссылка быть служебной. Берём первое непустое, иначе
+                                // достаём имя из слага devdb-ссылки — строка в карточке
+                                // «Устройства» не должна оставаться пустой.
+                                val deviceName = when {
+                                    linkText.isNotBlank() -> linkText
+                                    tailText.isNotBlank() -> tailText
+                                    else -> deviceUrl.devDbSlugAsName()
+                                }
+                                if (deviceName.isBlank()) return@findAll
                                 profile.addDevice(ProfileModel.Device().apply {
-                                    url = matcher.group(1)?.trim()
-                                    name = matcher.group(2)?.trim()
-                                    accessory = matcher.group(3)?.trim()
+                                    url = deviceUrl
+                                    name = deviceName
+                                    accessory = tailText.takeIf { it.isNotBlank() && it != deviceName }
                                 })
                             }
 
