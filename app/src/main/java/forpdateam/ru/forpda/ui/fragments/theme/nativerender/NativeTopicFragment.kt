@@ -832,7 +832,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * Apply the «При открытии темы» setting (Первая страница / Первое непрочитанное) to the initial URL,
+     * Apply the «При открытии темы» setting (Первая страница / Первое непрочитанное / Серверная закладка)
+     * to the initial URL,
      * exactly as the WebView ViewModel does via [TopicOpenTargetResolver]: with «Первое непрочитанное» and
      * an unread hint from the list, this yields a `view=getnewpost`/find-post URL so the topic opens on the
      * first unread post instead of always page 1. Only used for the very first load.
@@ -4801,7 +4802,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      *
      * Фаер строго один раз за открытие ([boundaryResumeArmed] гасится сразу), явные findpost-дип-линки и
      * переходы по страницам не переопределяем. При отсутствии границы (cold-miss) — фолбэк на текущее
-     * серверное поведение (безопасно).
+     * серверное поведение (безопасно). При настройке «Серверная закладка» не работает вовсе: там
+     * пользователь сознательно выбрал позицию сервера, включая её уход вниз.
      *
      * @return true, если запущен findpost-резюм (эту загрузку рендерить не нужно — return у вызывающего).
      */
@@ -4812,6 +4814,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (!boundaryResumeArmed) return false
         boundaryResumeArmed = false // один раз за открытие, что бы дальше ни решили
         if (page.id <= 0) return false
+        // «Серверная закладка»: пользователь явно попросил доверять отметке 4PDA. Клиентская граница
+        // продолжает копиться (переключение настройки обратно не теряет прогресс), но якорь не трогает.
+        if (mainPreferencesHolder.getTopicOpenTarget() ==
+                forpdateam.ru.forpda.common.Preferences.Main.TopicOpenTarget.SERVER_BOOKMARK) {
+            return false
+        }
         // Явный findpost-дип-линк (упоминание/закладка на конкретный пост) или наш собственный резюм —
         // не переопределяем; переход по страницам тоже.
         if (url.contains("view=findpost", ignoreCase = true) ||

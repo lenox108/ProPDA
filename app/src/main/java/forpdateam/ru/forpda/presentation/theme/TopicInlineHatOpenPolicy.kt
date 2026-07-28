@@ -68,7 +68,7 @@ internal object TopicInlineHatOpenPolicy {
             requestedTopicId: Int?,
             currentPage: ThemePage?,
     ): Boolean =
-            topicOpenTarget == AppPreferences.Main.TopicOpenTarget.LAST_UNREAD &&
+            topicOpenTarget.usesServerNavigation &&
                     isExplicitInSessionPageNavigation(sourceScreen, requestedTopicId, currentPage)
 
     fun shouldForceCollapsedForLoad(
@@ -78,7 +78,7 @@ internal object TopicInlineHatOpenPolicy {
             sourceScreen: String?,
             currentPage: ThemePage?,
     ): Boolean =
-            topicOpenTarget == AppPreferences.Main.TopicOpenTarget.LAST_UNREAD &&
+            topicOpenTarget.usesServerNavigation &&
                     isFirstPageTopicUrl(url) &&
                     isExplicitInSessionPageNavigation(sourceScreen, requestedTopicId, currentPage)
 

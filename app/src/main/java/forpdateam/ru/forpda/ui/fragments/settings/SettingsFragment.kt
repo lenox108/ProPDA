@@ -1369,6 +1369,7 @@ class SettingsFragment : BaseSettingFragment() {
         findPreference<ListPreference>(Preferences.Main.TOPIC_OPEN_TARGET)?.setSummary(
                 when (target) {
                     Preferences.Main.TopicOpenTarget.FIRST_PAGE -> R.string.pref_summary_topic_open_target_first_page
+                    Preferences.Main.TopicOpenTarget.SERVER_BOOKMARK -> R.string.pref_summary_topic_open_target_server_bookmark
                     else -> R.string.pref_summary_topic_open_target_last_unread
                 }
         )

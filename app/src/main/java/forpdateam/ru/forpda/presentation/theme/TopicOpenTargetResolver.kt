@@ -22,6 +22,8 @@ enum class TopicOpenTargetType {
     SETTING_LAST_UNREAD,
     /** Read list row under LAST_UNREAD: server `view=getlastpost` to resume at last-read post. */
     READ_RESUME,
+    /** SERVER_BOOKMARK setting: plain `view=getnewpost`, land wherever the server's own mark says. */
+    SETTING_SERVER_BOOKMARK,
     SERVER_UNREAD_FALLBACK,
     SAFE_FALLBACK
 }
@@ -170,6 +172,19 @@ object TopicOpenTargetResolver {
                         reason = "setting_first_page"
                 )
             }
+            // «Серверная закладка»: единственный источник истины — отметка прочитанного на 4PDA.
+            // Всегда `view=getnewpost` и для непрочитанных, и для прочитанных строк списка: сервер сам
+            // отдаст первый непрочитанный, а в дочитанной теме уведёт на свою закладку (низ). Списочные
+            // хинты (`unreadUrlFromList`/`lastReadUrlFromList`) сознательно игнорируем — они несут
+            // клиентское представление о прочитанности, а этот режим ему как раз не доверяет.
+            AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK -> {
+                return TopicOpenResolution(
+                        url = normalizeLastUnreadNavigationUrl(url),
+                        targetType = TopicOpenTargetType.SETTING_SERVER_BOOKMARK,
+                        suppressScrollRestore = true,
+                        reason = "setting_server_bookmark"
+                )
+            }
             AppPreferences.Main.TopicOpenTarget.LAST_UNREAD -> {
                 TopicUnreadOpenPolicy.resolveListOpen(context, info)?.let { return it }
                 // Legacy list hints may still carry last-read post id — findpost&p= lands on read post, not first unread.
@@ -269,14 +284,15 @@ object TopicOpenTargetResolver {
 
     /**
      * Non-zero `st` and `view=getlastpost` in list hrefs are resume hints, not explicit pagination.
-     * Honor them only for in-app pagination ([sourceScreen]=pagination) or non-LAST_UNREAD settings.
+     * Honor them only for in-app pagination ([sourceScreen]=pagination) or settings that do not
+     * navigate through the server ([TopicOpenTarget.usesServerNavigation]).
      */
     private fun shouldHonorExplicitPage(
             context: TopicOpenContext,
             url: String,
             info: ThemeUrlInfo
     ): Boolean {
-        if (context.setting != AppPreferences.Main.TopicOpenTarget.LAST_UNREAD) return true
+        if (!context.setting.usesServerNavigation) return true
         if (hasExplicitPageIntentSource(context.sourceScreen)) return true
         if (topicUrlHasNonZeroStParameter(url)) return false
         return !isListingResumeTopicUrl(url, info)

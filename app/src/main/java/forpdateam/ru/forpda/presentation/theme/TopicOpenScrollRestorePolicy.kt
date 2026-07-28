@@ -58,9 +58,7 @@ object TopicOpenScrollRestorePolicy {
         if (loadAction != ThemeLoadAction.Normal) {
             return loadAction == ThemeLoadAction.Refresh
         }
-        if (TopicOpenIntentClassifier.isFreshOpenIntent(openIntentRaw) &&
-                setting == AppPreferences.Main.TopicOpenTarget.LAST_UNREAD
-        ) {
+        if (TopicOpenIntentClassifier.isFreshOpenIntent(openIntentRaw) && setting.usesServerNavigation) {
             return false
         }
         return true
@@ -77,8 +75,7 @@ object TopicOpenScrollRestorePolicy {
         }
         return when {
             suppressScrollRestoreForOpen -> "blocked_open_suppress_scroll"
-            TopicOpenIntentClassifier.isFreshOpenIntent(openIntentRaw) &&
-                    setting == AppPreferences.Main.TopicOpenTarget.LAST_UNREAD ->
+            TopicOpenIntentClassifier.isFreshOpenIntent(openIntentRaw) && setting.usesServerNavigation ->
                 "blocked_fresh_last_unread"
             else -> "blocked_policy"
         }
@@ -108,7 +105,7 @@ object TopicOpenScrollRestorePolicy {
         if (suppressScrollRestoreForOpen || pendingUnreadOpenSuppressScroll) return true
         if (loadAction != ThemeLoadAction.Normal) return false
         if (!themeUrl.contains("view=getnewpost", ignoreCase = true)) return false
-        return topicOpenTarget == AppPreferences.Main.TopicOpenTarget.LAST_UNREAD
+        return topicOpenTarget.usesServerNavigation
     }
 
     fun detectSavedScrollOverrodeUnread(

@@ -74,10 +74,12 @@
     <string-array name="entries_topic_open_target">
         <item>@string/pref_value_topic_open_target_first_page</item>
         <item>@string/pref_value_topic_open_target_last_unread</item>
+        <item>@string/pref_value_topic_open_target_server_bookmark</item>
     </string-array>
     <string-array name="entry_values_topic_open_target">
         <item>FIRST_PAGE</item>
         <item>LAST_UNREAD</item>
+        <item>SERVER_BOOKMARK</item>
     </string-array>
 
     <string-array name="entries_topic_header_initial_state">
