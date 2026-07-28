@@ -466,6 +466,30 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var lastContentLinkSourcePostId: Int = 0
 
     /**
+     * Текущий [pendingRestorePostId] пришёл из back-по-истории ([onBackPressed]), а не из пересоздания
+     * вью. Различать важно: если пост-цель не нашёлся в загруженном окне, back обязан ДОЕХАТЬ до него
+     * findpost-перезагрузкой ([backRestoreFindpostRetryPostId]), а не молча провалиться в серверный
+     * якорь — это и был симптом «назад кидает на последнюю страницу». Потребляется в [applyInitialAnchor].
+     */
+    private var pendingRestoreIsHistoryBack: Boolean = false
+
+    /**
+     * Пост, ради которого back-restore уже сделал ОДНУ findpost-перезагрузку — защита от цикла, если
+     * пост удалён/перенесён и findpost на него так и не приводит. Сбрасывается удачным restore и
+     * следующим переходом вперёд ([captureThemeBackEntry]).
+     */
+    private var backRestoreFindpostRetryPostId: Int = 0
+
+    /**
+     * Back-по-истории промахнулся мимо своего поста и сел на серверный якорь (обычно — низ последней
+     * страницы). Такая посадка НЕ «дочитал до конца»: [maybeMarkTopicReadAtEnd] иначе метит тему
+     * прочитанной по одному лишь dwell и стирает границу прочитанного (жалоба «назад кидает на
+     * последнюю страницу, и она засчитывается прочитанной»). Жёстче [suppressEndMarkReadUntilUserScroll]:
+     * dwell доказательством не считается, гасится только реальным жестом пользователя.
+     */
+    private var suppressEndMarkReadForMissedBackRestore: Boolean = false
+
+    /**
      * Post id the open anchored to the BOTTOM (last post of an already-read topic). The async metadata
      * enrichment (post counts / reputation) grows posts AFTER the anchor is applied, which would push the
      * last post's action buttons back below the fold — so [enrichLoadedPage] re-bottom-anchors while the
@@ -566,6 +590,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (entry.postId > 0) {
                 pendingRestorePostId = entry.postId
                 pendingRestoreOffset = entry.offset
+                pendingRestoreIsHistoryBack = true
             }
             boundaryResumeArmed = false // возврат в историю, не свежее открытие
             loadTopic(entry.url)
@@ -670,6 +695,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // → mark-read-в-конце снова разрешён: теперь «низ виден» = юзер сам туда пришёл.
                 if (newState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
                     suppressEndMarkReadUntilUserScroll = false
+                    // ...и промахнувшийся back перестаёт быть «я сюда не собирался»: юзер сам поехал.
+                    suppressEndMarkReadForMissedBackRestore = false
                     userScrollGestureThisSession = true
                 }
                 // Границу прочитанного двигаем ТОЛЬКО по устоявшемуся вьюпорту: покадровая запись из
@@ -720,6 +747,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                                 (kotlin.math.abs(e.x - downX) > touchSlop ||
                                         kotlin.math.abs(e.y - downY) > touchSlop)) {
                             userDraggedListThisSession = true
+                            // Протяжка пальцем = юзер принял эту позицию (overscroll внизу может не дать
+                            // DRAGGING) → гейт промахнувшегося back снимаем здесь же.
+                            suppressEndMarkReadForMissedBackRestore = false
                         }
                     }
                 }
@@ -2696,27 +2726,61 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Snapshot the current url + scroll anchor for the in-tab Back history. */
     private fun captureThemeBackEntry(): ThemeBackEntry? {
         val url = loadedUrl ?: return null
+        // Переход ВПЕРЁД — прошлая промашка back-restore больше не актуальна, разрешаем новую попытку.
+        backRestoreFindpostRetryPostId = 0
         // Prefer the post whose in-content link was just tapped over the topmost-visible post: a link
         // low in a post makes findFirstVisibleItemPosition() report an EARLIER post peeking at the top,
         // so Back would land above the source. Consume the flag regardless so it never leaks forward.
         val tappedSource = lastContentLinkSourcePostId.also { lastContentLinkSourcePostId = 0 }
-        if (view == null) return ThemeBackEntry(url, tappedSource.coerceAtLeast(0), 0)
+        if (view == null) return backEntryOf(url, tappedSource.coerceAtLeast(0), 0)
         val lm = recyclerView.layoutManager as? LinearLayoutManager
-                ?: return ThemeBackEntry(url, tappedSource.coerceAtLeast(0), 0)
+                ?: return backEntryOf(url, tappedSource.coerceAtLeast(0), 0)
         if (tappedSource > 0) {
             val idx = loadedItems.indexOfFirst { it.postId == tappedSource }
             if (idx >= 0) {
                 // The source post's own on-screen top → restore re-aligns to exactly where the link was
                 // tapped. If it is not the first-visible post, `top` is positive (it sits below the edge).
                 val top = lm.findViewByPosition(idx + headerOffset())?.top ?: 0
-                return ThemeBackEntry(url, tappedSource, top)
+                return backEntryOf(url, tappedSource, top)
             }
         }
         val firstPos = lm.findFirstVisibleItemPosition()
-        if (firstPos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return ThemeBackEntry(url, 0, 0)
+        if (firstPos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return backEntryOf(url, 0, 0)
         val item = loadedItems.getOrNull(firstPos - headerOffset())
         val top = lm.findViewByPosition(firstPos)?.top ?: 0
-        return ThemeBackEntry(url, item?.postId ?: 0, top)
+        return backEntryOf(url, item?.postId ?: 0, top)
+    }
+
+    private fun backEntryOf(loadedUrl: String, postId: Int, offset: Int): ThemeBackEntry =
+            ThemeBackEntry(backEntryUrl(loadedUrl, postId), postId, offset)
+
+    /**
+     * URL back-записи = ДЕТЕРМИНИРОВАННАЯ страница с постом-якорем, а НЕ [loadedUrl] (который для
+     * открытий из списков — серверный редирект `getnewpost`/`getlastpost`, приколоченный ко входной
+     * странице). Решение принимает [ThemeBackEntryUrlPolicy] — там же разбор самого бага.
+     */
+    private fun backEntryUrl(fallbackUrl: String, anchorPostId: Int): String {
+        val topicId = pagination.topicId.takeIf { it > 0 }
+                ?: pageTopicId.takeIf { it > 0 }
+                ?: ThemeApi.extractTopicIdFromUrl(fallbackUrl)?.takeIf { it > 0 }
+                ?: 0
+        val target = ThemeBackEntryUrlPolicy.resolve(
+                loadedUrl = fallbackUrl,
+                anchorPostId = anchorPostId,
+                anchorPostPage = loadedItems.firstOrNull { it.postId == anchorPostId }?.pageNumber ?: 0,
+                topicId = topicId,
+                // pageUrl() строит адрес по СВОЕМУ topicId — сверяем, иначе получили бы чужую тему.
+                paginationReady = pagination.isInitialised && pagination.topicId > 0 &&
+                        pagination.topicId == topicId,
+                loadedPage = pagination.loadedPage,
+        )
+        return when (target) {
+            is ThemeBackEntryUrlPolicy.Target.Page -> pagination.pageUrl(target.pageNumber)
+            is ThemeBackEntryUrlPolicy.Target.FindPost ->
+                forpdateam.ru.forpda.presentation.theme.TopicUnreadFindPostReloadPolicy
+                        .buildFindPostUrl(target.topicId, target.postId.toString())
+            ThemeBackEntryUrlPolicy.Target.KeepLoadedUrl -> fallbackUrl
+        }
     }
 
     override fun onTabStackBecameCurrent() {
@@ -4689,6 +4753,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                                 page,
                         )
         pendingSuppressEndMarkReadForResume = false
+        // Новая сессия просмотра: гейт «промахнувшийся back» взводится заново в [applyInitialAnchor],
+        // если эта загрузка и есть промахнувшееся back-восстановление.
+        suppressEndMarkReadForMissedBackRestore = false
         closeSearch() // matches from a previous page are stale after a reload
         updatePaginationBar()
         applyInitialHatCollapsedState(topicHatPostId)
@@ -5203,18 +5270,43 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (pendingRestorePostId > 0) {
             val restoreId = pendingRestorePostId
             val restoreOffset = pendingRestoreOffset
+            val isHistoryBack = pendingRestoreIsHistoryBack
             pendingRestorePostId = 0
             pendingRestoreOffset = 0
+            pendingRestoreIsHistoryBack = false
             pendingJumpToBottom = false
             pendingJumpToTop = false
             val idx = ids.indexOf(restoreId)
             if (idx >= 0) {
                 (recyclerView.layoutManager as? LinearLayoutManager)
                         ?.scrollToPositionWithOffset(idx + headerOffset(), restoreOffset)
+                backRestoreFindpostRetryPostId = 0
                 recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
                 return
             }
-            // Пост не в загруженном окне (findpost вернул другую страницу) — падаем в обычный якорь ниже.
+            // Пост не в загруженном окне (страница сдвинулась удалёнными постами, findpost увёл в другое
+            // место). Для back-по-истории это НЕ повод молча сесть на серверный якорь: именно так юзер и
+            // оказывался на низу последней страницы вместо поста, с которого уходил. Доезжаем findpost'ом
+            // на сам пост — ровно один раз ([backRestoreFindpostRetryPostId]), чтобы не зациклиться на
+            // удалённом/перенесённом посте.
+            if (isHistoryBack && pageTopicId > 0 && backRestoreFindpostRetryPostId != restoreId) {
+                backRestoreFindpostRetryPostId = restoreId
+                pendingRestorePostId = restoreId
+                pendingRestoreOffset = restoreOffset
+                pendingRestoreIsHistoryBack = true
+                val retryUrl = forpdateam.ru.forpda.presentation.theme.TopicUnreadFindPostReloadPolicy
+                        .buildFindPostUrl(pageTopicId, restoreId.toString())
+                if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                    android.util.Log.i("FPDA_CLEAR", "back_restore miss post=$restoreId → findpost retry")
+                }
+                // Из колбэка коммита адаптера — следующим кадром, чтобы не перезапускать загрузку прямо
+                // посреди submitList.
+                recyclerView.post { if (view != null) loadTopic(retryUrl) }
+                return
+            }
+            // Доехать не вышло (или это обычный restore после пересоздания вью) — падаем в серверный
+            // якорь ниже. Но посадку промахнувшегося back нельзя засчитывать как «дочитал до конца».
+            if (isHistoryBack) suppressEndMarkReadForMissedBackRestore = true
         }
         // «В конец темы» / открытие прочитанной темы (getlastpost): последний пост. Если он ВМЕЩАЕТСЯ —
         // показываем целиком у нижнего края (кнопки над таббаром, без пустого блока); если он ВЫШЕ экрана —
@@ -5424,6 +5516,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private fun maybeMarkTopicReadAtEnd() {
         if (markedTopicReadAtEnd || pageTopicId <= 0) return
+        // Промахнувшийся back-restore сел на серверный якорь (низ последней страницы) — это посадка,
+        // которую юзер не выбирал, а не «дочитал». Не метим прочитанной и не стираем границу, пока он
+        // сам куда-нибудь не поедет (dwell здесь доказательством не считается — см. флаг).
+        if (suppressEndMarkReadForMissedBackRestore) return
         if (pagination.hasNextPage()) return // ещё есть незагруженные страницы ниже — это не конец темы
         if (loadedItems.isEmpty()) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
