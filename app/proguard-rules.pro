@@ -7,7 +7,12 @@
 # org.ccil.cowan.tagsoup уезжает с родного имени и НЕ коллизит с системной
 # копией TagSoup в /system/framework/ext.jar на Samsung/OEM (иначе фатальный
 # NoSuchMethodError при старте App.onCreate). НЕ возвращать -dontobfuscate.
--keepnames class forpdateam.ru.forpda.** { *; }
+# ИСКЛЮЧЕНИЕ — пакет .pro: проверка лицензии обфусцируется вместе с библиотеками.
+# Читаемые имена нужны для стектрейсов, но `ProLicense.isUnlocked` в открытом виде — это
+# указатель «патчить здесь»: взломщику достаточно поиска по имени в jadx. Крашей в этом
+# пакете ждать неоткуда (две небольшие проверки без рефлексии и без сериализации), поэтому
+# читаемость стектрейсов здесь не нужна. Синтаксис с `!` — исключение из шаблона.
+-keepnames class !forpdateam.ru.forpda.pro.**,forpdateam.ru.forpda.** { *; }
 # Prevent crashes on API < 30 where getWindowInsetsController() doesn't exist.
 -keepclassmembers class android.view.View {
     public android.view.WindowInsetsController getWindowInsetsController();
