@@ -4884,6 +4884,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val index = loadedItems.indexOfFirst { it.postId == postId }
         if (index < 0) return
         anchorPost(index + headerOffset(), isLast = false, topAlign = true)
+        // Дозагрузка карточек переверстала список и подвезла юзера к посту заново. Если вспышка «вот сюда
+        // ты приехал» к этому моменту уже догорела (тяжёлая страница верстается дольше окна подсветки) —
+        // показываем её ещё раз: иначе посадка вообще остаётся без визуального маркера. Метод сам
+        // проверяет, что подсветка вообще запрашивалась (т.е. настройка её не запрещала) и что окно
+        // закрыто, так что двойной вспышки подряд не будет.
+        if (postsAdapter.highlightExpiredFor(postId)) postsAdapter.requestHighlight(postId)
     }
 
     /**
