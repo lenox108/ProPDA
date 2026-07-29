@@ -1119,7 +1119,6 @@
     <string name="pref_summary_delivery_push">Push: события приходят мгновенно, даже в спящем режиме, и почти не расходуют батарею. Рекомендуется.</string>
     <string name="pref_summary_delivery_socket">Постоянное соединение: приложение держит непрерывный канал с форумом (как мессенджеры). Мгновенно, но заметно расходует батарею и держит значок в шторке.</string>
     <string name="pref_summary_delivery_off">В фоне ничего не проверяется. Уведомления приходят, только когда приложение открыто.</string>
-    <string name="pref_title_pro">Активация ProPDA Pro</string>
     <string name="pref_title_pro_section">Дополнительные функции</string>
     <string name="settings_section_pro_summary">Push-уведомления, прокси, ключ активации</string>
     <string name="pref_title_pro_activation">Активация</string>
