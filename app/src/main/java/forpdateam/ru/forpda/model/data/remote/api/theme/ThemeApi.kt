@@ -100,7 +100,7 @@ class ThemeApi(
         }
         if (viaProxy.posts.isEmpty()) return page // и через прокси пусто — тема правда удалена/перенесена
         val resolvedId = viaProxy.id.takeIf { it > 0 } ?: topicId
-        registry.remember(resolvedId)
+        registry.remember(resolvedId, viaProxy.title)
         return viaProxy
     }
 
