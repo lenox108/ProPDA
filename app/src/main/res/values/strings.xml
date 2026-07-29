@@ -1384,6 +1384,7 @@
     <string name="pref_summary_proxy_blocked_list_empty">Список пуст — заблокированные темы ещё не встречались</string>
     <string name="pref_summary_proxy_blocked_list_more">%1$s и ещё %2$d</string>
     <string name="pref_proxy_blocked_topic_unnamed">Тема №%1$d</string>
+    <string name="pref_proxy_blocked_list_hint">Нажмите на тему, чтобы убрать её из списка — дальше она пойдёт напрямую</string>
     <string name="pref_proxy_blocked_topic_removed">«%1$s» — снова напрямую</string>
     <string name="pref_proxy_blocked_list_clear_all">Очистить всё</string>
     <string name="pref_proxy_blocked_list_cleared">Список очищен</string>

@@ -1004,6 +1004,7 @@
     <string name="pref_summary_proxy_blocked_list_empty">Empty — no blocked topics seen yet</string>
     <string name="pref_summary_proxy_blocked_list_more">%1$s and %2$d more</string>
     <string name="pref_proxy_blocked_topic_unnamed">Topic #%1$d</string>
+    <string name="pref_proxy_blocked_list_hint">Tap a topic to drop it from the list — it will go direct again</string>
     <string name="pref_proxy_blocked_topic_removed">“%1$s” goes direct again</string>
     <string name="pref_proxy_blocked_list_clear_all">Clear all</string>
     <string name="pref_proxy_blocked_list_cleared">List cleared</string>

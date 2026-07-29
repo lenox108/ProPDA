@@ -38,6 +38,9 @@ class ProxySettingsFragment : BaseSettingFragment() {
     @Inject lateinit var proxySettings: ProxySettings
     @Inject lateinit var blockedTopics: BlockedTopicRegistry
 
+    /** Только для имён тем, попавших в список до того, как мы стали их сохранять. */
+    @Inject lateinit var historyDao: forpdateam.ru.forpda.entity.db.history.HistoryItemDao
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         addPreferencesFromResource(R.xml.preferences_proxy)
@@ -50,7 +53,7 @@ class ProxySettingsFragment : BaseSettingFragment() {
 
     override fun onResume() {
         super.onResume()
-        updateBlockedTopicsSummary()
+        refreshBlockedTopics()
     }
 
     /**
@@ -135,37 +138,116 @@ class ProxySettingsFragment : BaseSettingFragment() {
      */
     private fun configureBlockedTopicsList() {
         findPreference<Preference>(KEY_BLOCKED_LIST)?.setOnPreferenceClickListener {
-            val topics = blockedTopics.topics()
-            if (topics.isEmpty()) return@setOnPreferenceClickListener true
-            MaterialAlertDialogBuilder(requireContext())
-                    .setTitle(R.string.pref_title_proxy_blocked_list)
-                    // Нажатие по теме убирает её из списка. Подтверждения нет намеренно: если тема
-                    // и правда закрыта, следующий заход по заглушке вернёт её обратно сам.
-                    .setItems(topics.map { it.displayName() }.toTypedArray()) { _, which ->
-                        val topic = topics[which]
-                        blockedTopics.forget(topic.id)
-                        updateBlockedTopicsSummary()
-                        Toast.makeText(
-                                requireContext(),
-                                getString(R.string.pref_proxy_blocked_topic_removed, topic.displayName()),
-                                Toast.LENGTH_SHORT,
-                        ).show()
-                    }
-                    .setNegativeButton(R.string.cancel, null)
-                    .setPositiveButton(R.string.pref_proxy_blocked_list_clear_all) { _, _ ->
-                        blockedTopics.clear()
-                        updateBlockedTopicsSummary()
-                        Toast.makeText(requireContext(), R.string.pref_proxy_blocked_list_cleared, Toast.LENGTH_SHORT).show()
-                    }
-                    .showWithStyledButtons()
+            if (blockedTopics.size() > 0) showBlockedTopicsDialog()
             true
         }
         updateBlockedTopicsSummary()
     }
 
+    /**
+     * Полный список отдельным диалогом: названия тем длинные, в summary они не помещаются, а по
+     * одному номеру («Тема №1050118») понять, что это за тема, невозможно. Строим свои View, а не
+     * `setItems`: тот режет названия в одну строку многоточием — ровно то, чего здесь нельзя.
+     */
+    private fun showBlockedTopicsDialog() {
+        val context = context ?: return
+        val topics = blockedTopics.topics()
+        if (topics.isEmpty()) return
+
+        val density = resources.displayMetrics.density
+        val pad = (density * 16).toInt()
+        val rows = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        val content = android.widget.ScrollView(context).apply { addView(rows) }
+
+        val dialog = MaterialAlertDialogBuilder(context)
+                .setTitle(R.string.pref_title_proxy_blocked_list)
+                .setView(content)
+                .setNegativeButton(R.string.close, null)
+                .setPositiveButton(R.string.pref_proxy_blocked_list_clear_all) { _, _ ->
+                    blockedTopics.clear()
+                    updateBlockedTopicsSummary()
+                    Toast.makeText(context, R.string.pref_proxy_blocked_list_cleared, Toast.LENGTH_SHORT).show()
+                }
+                .showWithStyledButtons()
+
+        rows.addView(android.widget.TextView(context).apply {
+            text = getString(R.string.pref_proxy_blocked_list_hint)
+            textSize = 12f
+            alpha = 0.7f
+            setPadding(pad, pad / 2, pad, pad / 2)
+        })
+        topics.forEach { topic ->
+            rows.addView(blockedTopicRow(context, topic, pad, density) { row ->
+                blockedTopics.forget(topic.id)
+                rows.removeView(row)
+                updateBlockedTopicsSummary()
+                Toast.makeText(
+                        context,
+                        getString(R.string.pref_proxy_blocked_topic_removed, topic.displayName()),
+                        Toast.LENGTH_SHORT,
+                ).show()
+                if (blockedTopics.size() == 0) dialog.dismiss()
+            })
+        }
+    }
+
+    /** Строка списка: полное название в несколько строк + номер темы под ним. */
+    private fun blockedTopicRow(
+            context: android.content.Context,
+            topic: BlockedTopicRegistry.BlockedTopic,
+            pad: Int,
+            density: Float,
+            onRemove: (android.view.View) -> Unit,
+    ): android.view.View {
+        val title = android.widget.TextView(context).apply {
+            text = topic.displayName()
+            textSize = 16f
+        }
+        val row = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, (density * 12).toInt(), pad, (density * 12).toInt())
+            val outValue = android.util.TypedValue()
+            context.theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
+            setBackgroundResource(outValue.resourceId)
+            addView(title)
+            // Номер показываем только рядом с названием: без названия он и так в заголовке строки.
+            if (topic.title != null) {
+                addView(android.widget.TextView(context).apply {
+                    text = getString(R.string.pref_proxy_blocked_topic_unnamed, topic.id)
+                    textSize = 12f
+                    alpha = 0.7f
+                })
+            }
+        }
+        row.setOnClickListener { onRemove(row) }
+        return row
+    }
+
     /** Темы из старых версий сохранены без имени — показываем хотя бы номер. */
     private fun BlockedTopicRegistry.BlockedTopic.displayName(): String =
             title ?: getString(R.string.pref_proxy_blocked_topic_unnamed, id)
+
+    /**
+     * Имя темы сохраняется с версии, где появился этот список, — у тех, кто пользовался прокси
+     * раньше, в списке остались одни номера. Достаём названия из «Истории»: закрытую тему
+     * пользователь открывал сам, иначе она бы в список не попала, поэтому запись там почти всегда
+     * есть. Сеть не трогаем.
+     */
+    private fun refreshBlockedTopics() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                blockedTopics.topics()
+                        .filter { it.title == null }
+                        .forEach { topic ->
+                            val title = runCatching { historyDao.getHistoryById(topic.id)?.title }.getOrNull()
+                            blockedTopics.rememberTitle(topic.id, title)
+                        }
+            }
+            updateBlockedTopicsSummary()
+        }
+    }
 
     private fun updateBlockedTopicsSummary() {
         val preference = findPreference<Preference>(KEY_BLOCKED_LIST) ?: return
