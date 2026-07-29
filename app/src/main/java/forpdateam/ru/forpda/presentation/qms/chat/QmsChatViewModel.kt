@@ -59,6 +59,19 @@ class QmsChatViewModel @Inject constructor(
          * cadence so exactly one tick is skipped right after a live update (no redundant re-fetch).
          */
         private const val WS_EVENT_FRESHNESS_MS = 25_000L
+
+        /**
+         * Тик страховочного опроса, когда realtime-сокет ЖИВ: он и так доставляет, опрос нужен
+         * только на случай «подключён, но молчит».
+         */
+        const val AUTO_REFRESH_SOCKET_ALIVE_MS = 15_000L
+
+        /**
+         * Тик, когда сокета нет (кулдаун circuit breaker'а, сеть/DPI режет ws, уведомления
+         * выключены). Тогда опрос — единственный шанс увидеть сообщение вовремя, поэтому он
+         * заметно чаще. Ограничен открытым чатом на переднем плане: цикл живёт только в STARTED.
+         */
+        const val AUTO_REFRESH_SOCKET_DEAD_MS = 5_000L
         /**
          * If the in-memory QMS chat cache is fresher than this, a second open of the same dialog
          * within the [QmsChatMemoryCache.MAX_AGE_MS] window skips the background network refresh
@@ -110,6 +123,14 @@ class QmsChatViewModel @Inject constructor(
     private var lastRealtimeMessageAtMs = 0L
     /** Экран чата на переднем плане (между [onScreenVisible] и [onScreenHidden]). */
     private var screenVisible = false
+    /**
+     * Сигнал «в треде есть новое» пришёл, когда дочитывать было нечем (тред ещё грузится) или
+     * пока уже шла загрузка новых. Отрабатываем его сразу после того, как освободимся, иначе
+     * сообщение ждало бы следующего тика опроса.
+     */
+    private var pendingNewMessagesCheck = false
+    /** Тред, зарегистрированный в [EventsRepository] как «открыт на экране» (для снятия гейта). */
+    private var viewedThreadId = 0
     /** Trace whose `render_visible` marker has already been logged (one per dialog open). */
     private var renderReportedForTrace: String? = null
 
@@ -167,6 +188,18 @@ class QmsChatViewModel @Inject constructor(
             eventsRepository.observeEventsTab()
                     .collect { handleEvent(it) }
         }
+
+        // Второй, более широкий канал: сюда пишет ВСЁ, что узнало о новом сообщении, — опрос
+        // inspector'а и фоновый воркер (он же пробуждение по push). Без него открытый диалог знал
+        // только про WS-события, и при мёртвом сокете уведомление приходило в шторку раньше, чем
+        // сообщение — в сам диалог.
+        scope.launch {
+            eventsRepository.observeQmsThreadActivity().collect { threadId ->
+                if (threadId == themeId && themeId > 0) {
+                    requestNewMessagesCheck()
+                }
+            }
+        }
         nick?.let { n -> title?.let { t -> scope.launch { _uiEvents.emit(QmsChatUiEvent.SetTitles(t, n)) } } }
 
         updateMode()
@@ -186,6 +219,8 @@ class QmsChatViewModel @Inject constructor(
             realtimeAcquired = false
             eventsRepository.releaseRealtimeForScreen(realtimeOwnerKey)
         }
+        screenVisible = false
+        syncViewedThreadRegistration()
         super.onCleared()
     }
 
@@ -208,6 +243,9 @@ class QmsChatViewModel @Inject constructor(
         avatarUrl = newData.avatarUrl
         loadedChatKey = chatKey(userId, themeId)
         updateMode()
+        // themeId мог только что появиться (создание темы) или смениться — регистрация «диалог на
+        // экране» должна ехать за ним, иначе гейт пуша остался бы на прежнем треде.
+        syncViewedThreadRegistration()
     }
 
     /** Ники, которым уже создавали темы: подставляются в выпадающий список поля ника. */
@@ -258,6 +296,8 @@ class QmsChatViewModel @Inject constructor(
     fun onChatIdentityChanged() {
         val key = chatKey(userId, themeId)
         logChat("identity_check", mapOf("requestKey" to key))
+        pendingNewMessagesCheck = false
+        syncViewedThreadRegistration()
         if (key == loadedChatKey && currentData != null) {
             publishVisibleMessages(scrollToBottom = true)
             return
@@ -389,7 +429,10 @@ class QmsChatViewModel @Inject constructor(
                             "skipThresholdMs" to QMS_BACKGROUND_REFRESH_SKIP_MS
                     )
             )
-            scope.launch { applyInstantCacheOutcome(instantCache!!, requestId, traceId) }
+            scope.launch {
+                applyInstantCacheOutcome(instantCache!!, requestId, traceId)
+                drainPendingNewMessagesCheck()
+            }
             if (inFlightLoadKey == requestKey) {
                 inFlightLoadKey = null
             }
@@ -497,6 +540,7 @@ class QmsChatViewModel @Inject constructor(
                         inFlightLoadKey = null
                     }
                     _refreshing.value = false
+                    drainPendingNewMessagesCheck()
                 }
             }
         }
@@ -812,40 +856,67 @@ class QmsChatViewModel @Inject constructor(
     fun shouldSkipAutoRefreshPoll(): Boolean =
             System.currentTimeMillis() - lastRealtimeMessageAtMs < WS_EVENT_FRESHNESS_MS
 
+    /**
+     * Пауза до следующего страховочного опроса. Мёртвый сокет (кулдаун circuit breaker'а, сеть режет
+     * ws-эндпоинт) означает, что мгновенных путей доставки может не остаться вовсе, — тогда тик
+     * заметно чаще, чтобы сообщение появлялось за секунды, а не за четверть минуты. Живой сокет
+     * доставляет сам, и почти каждый его тик всё равно скипается по свежести события.
+     */
+    fun autoRefreshDelayMs(): Long =
+            if (eventsRepository.isWebSocketConnected()) {
+                AUTO_REFRESH_SOCKET_ALIVE_MS
+            } else {
+                AUTO_REFRESH_SOCKET_DEAD_MS
+            }
+
+    /** Отрабатывает сигнал, пришедший пока тред грузился (см. [requestNewMessagesCheck]). */
+    private fun drainPendingNewMessagesCheck() {
+        if (!pendingNewMessagesCheck) return
+        pendingNewMessagesCheck = false
+        checkNewMessages(silent = true)
+    }
+
     private fun markRealtimeMessageActivity() {
         lastRealtimeMessageAtMs = System.currentTimeMillis()
     }
 
     fun handleEvent(event: TabNotification) {
+        // Шина вкладок общая на всё приложение: без проверки источника событие темы форума с
+        // номером, совпавшим с id диалога, дёргало бы чат (и наоборот).
+        if (!event.event.fromQms()) return
         val tid = event.event.sourceId
-        currentData?.let {
-            if (tid == it.themeId) {
-                when (event.type) {
-                    NotificationEvent.Type.NEW -> {
-                        markRealtimeMessageActivity()
-                        onNewWsMessage(tid)
-                    }
-                    NotificationEvent.Type.READ -> markAllMessagesRead()
-                    NotificationEvent.Type.MENTION -> {
-                    }
-                    NotificationEvent.Type.HAT_EDITED -> {
-                    }
-                    null -> {
-                    }
-                }
+        if (tid <= 0 || tid != themeId) return
+        when (event.type) {
+            NotificationEvent.Type.NEW -> {
+                markRealtimeMessageActivity()
+                requestNewMessagesCheck()
+            }
+            NotificationEvent.Type.READ -> markAllMessagesRead()
+            NotificationEvent.Type.MENTION -> {
+            }
+            NotificationEvent.Type.HAT_EDITED -> {
+            }
+            null -> {
             }
         }
     }
 
-    private fun onNewWsMessage(themeId: Int) {
-        currentData?.let {
-            val lastMessId = it.messages.lastOrNull()?.id ?: 0
-            scope.launch {
-                runCatching { qmsInteractor.getMessagesAfter(userId, themeId, lastMessId) }
-                        .onSuccess { onNewMessages(it) }
-                        .onFailure { errorHandler.handle(it) }
-            }
+    /**
+     * Единая точка «сходи за новыми сообщениями прямо сейчас» для всех мгновенных сигналов
+     * (WS-событие, опрос inspector'а, фоновый воркер/push). Сигналы приходят пачками и с разных
+     * путей об одном и том же сообщении, поэтому запрос склеивается: пока один в полёте, второй
+     * не стартует, а взводит [pendingNewMessagesCheck] — и отработает сразу после, чтобы ни один
+     * сигнал не пропал (раньше он просто терялся до следующего тика опроса).
+     */
+    private fun requestNewMessagesCheck() {
+        if (themeId <= 0 || userId == QmsChatModel.NOT_CREATED) return
+        // Тред ещё грузится: догружать «после последнего» нечего, но и забывать сигнал нельзя —
+        // первичная загрузка и так принесёт свежий список, а если не принесёт, доберём следом.
+        if (currentData == null || _refreshing.value || _messageRefreshing.value || _newMessagesRefreshing.value) {
+            pendingNewMessagesCheck = true
+            return
         }
+        checkNewMessages(silent = true)
     }
 
     fun checkNewMessages() {
@@ -860,6 +931,7 @@ class QmsChatViewModel @Inject constructor(
         if (_refreshing.value || _messageRefreshing.value || _newMessagesRefreshing.value) return
         currentData?.let {
             val lastMessId = it.messages.lastOrNull()?.id ?: 0
+            pendingNewMessagesCheck = false
             scope.launch {
                 try {
                     _newMessagesRefreshing.value = true
@@ -873,6 +945,12 @@ class QmsChatViewModel @Inject constructor(
                     }
                 } finally {
                     _newMessagesRefreshing.value = false
+                    // Сигнал, пришедший пока мы были в полёте, отрабатываем сразу — иначе он ждал
+                    // бы следующего тика (до 15с) при уже висящем уведомлении в шторке.
+                    if (pendingNewMessagesCheck) {
+                        pendingNewMessagesCheck = false
+                        checkNewMessages(silent = true)
+                    }
                 }
             }
         }
@@ -924,11 +1002,26 @@ class QmsChatViewModel @Inject constructor(
     /** Экран чата стал видимым: всё, что в нём есть, пользователь читает — уведомлений быть не должно. */
     fun onScreenVisible() {
         screenVisible = true
+        syncViewedThreadRegistration()
         dropThreadNotifications()
     }
 
     fun onScreenHidden() {
         screenVisible = false
+        syncViewedThreadRegistration()
+    }
+
+    /**
+     * Держит в [EventsRepository] актуальный «открытый на экране диалог»: пока он открыт, пуш о
+     * сообщении именно в нём не публикуется — пользователь и так его видит. Регистрацию двигаем и
+     * при смене диалога в той же вкладке (одиночная QMS-вкладка переиспользуется).
+     */
+    private fun syncViewedThreadRegistration() {
+        val target = if (screenVisible && themeId > 0) themeId else 0
+        if (target == viewedThreadId) return
+        if (viewedThreadId > 0) eventsRepository.clearViewedQmsThread(viewedThreadId)
+        viewedThreadId = target
+        if (target > 0) eventsRepository.setViewedQmsThread(target)
     }
 
     private fun dropThreadNotifications() {
