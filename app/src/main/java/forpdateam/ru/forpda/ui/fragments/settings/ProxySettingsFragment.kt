@@ -66,10 +66,6 @@ class ProxySettingsFragment : BaseSettingFragment() {
      * [ProxySettings.config] и в [forpdateam.ru.forpda.client.Client].
      */
     private fun configureProEntry() {
-        findPreference<Preference>(KEY_PRO_ENTRY)?.setOnPreferenceClickListener {
-            openProScreen()
-            true
-        }
         findPreference<Preference>(ProxySettings.KEY_ENABLED)?.onPreferenceChangeListener =
                 Preference.OnPreferenceChangeListener { _, newValue ->
                     if (newValue != true || proxySettings.isUnlocked()) return@OnPreferenceChangeListener true
@@ -95,7 +91,6 @@ class ProxySettingsFragment : BaseSettingFragment() {
         val unlocked = proxySettings.isUnlocked()
         // Активация могла пропасть (сменился аккаунт) — снимаем платные функции, а не только UI.
         ProDialog.revokeIfLocked(context)
-        findPreference<Preference>(KEY_PRO_ENTRY)?.summary = ProDialog.statusSummary(context)
         findPreference<Preference>(ProxySettings.KEY_ENABLED)?.apply {
             if (!unlocked) {
                 summary = getString(R.string.pref_summary_proxy_pro_locked)
@@ -317,7 +312,6 @@ class ProxySettingsFragment : BaseSettingFragment() {
 
     companion object {
         const val PREFERENCE_SCREEN_NAME = "proxy"
-        private const val KEY_PRO_ENTRY = "pro.license_entry"
         private const val KEY_TEST = "net.proxy.test"
         private const val KEY_BLOCKED_LIST = "net.proxy.blocked_list"
 

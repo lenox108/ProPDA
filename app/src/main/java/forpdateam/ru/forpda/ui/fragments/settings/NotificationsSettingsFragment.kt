@@ -52,7 +52,6 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     override fun onResume() {
         super.onResume()
         updateVersionAwareUi()
-        updateProSummary()
         syncDeliveryWithLicense()
         realtimeStatusHandler.postDelayed(realtimeStatusTick, REALTIME_STATUS_REFRESH_MS)
     }
@@ -257,24 +256,12 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
      * ([forpdateam.ru.forpda.notifications.push.PushSetupController]): app-логин за login_key +
      * регистрация FCM-токена. При провале/отмене откатываем значение обратно на «Опрос».
      */
-    /** Строка статуса Pro: показывает member_id (его покупатель сообщает автору) и открывает ввод ключа. */
-    private fun configureProEntry() {
-        val pref = preferenceScreen.findPreference<Preference>("pro.license_entry") ?: return
-        updateProSummary(pref)
-        pref.setOnPreferenceClickListener { showProDialog(); true }
-    }
-
-    private fun updateProSummary(pref: Preference? =
-            preferenceScreen.findPreference("pro.license_entry")) {
-        val ctx = context ?: return
-        pref?.summary = ProDialog.statusSummary(ctx)
-    }
-
     /**
-     * Ключ общий для push и прокси, поэтому активация вынесена отдельным разделом настроек — там
-     * же перечислено, что она открывает. Отсюда просто ведём туда.
+     * Ключ общий для push и прокси, поэтому активация живёт отдельным разделом настроек — там же
+     * перечислено, что она открывает, и там же её состояние. Дублировать строку статуса здесь
+     * незачем: сюда попадают, только когда пытаются выбрать push без ключа.
      */
-    private fun showProDialog() {
+    private fun openProScreen() {
         val ctx = context ?: return
         startActivity(android.content.Intent(ctx, forpdateam.ru.forpda.ui.activities.SettingsActivity::class.java)
                 .putExtra(forpdateam.ru.forpda.ui.activities.SettingsActivity.ARG_NEW_PREFERENCE_SCREEN,
@@ -300,7 +287,6 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     }
 
     private fun configureDeliveryMethod() {
-        configureProEntry()
         val pref = preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
                 ?: return
         // Приводим список в соответствие с реальными флагами (миграция старых установок, где
@@ -333,7 +319,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                 // Push — платная функция: без действующего ключа даже не начинаем настройку.
                 if (!forpdateam.ru.forpda.pro.ProLicense.isUnlocked(requireContext())) {
                     toast(getString(R.string.pro_required))
-                    showProDialog()
+                    openProScreen()
                     return@OnPreferenceChangeListener false
                 }
                 // Push принимаем только после успешной регистрации токена.

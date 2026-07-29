@@ -130,13 +130,6 @@
         android:layout="@layout/preference_category_custom"
         android:title="@string/pref_title_bg_check">
 
-        <!-- Статус Pro и ввод ключа активации: push доступен только с ним. -->
-        <Preference
-            android:key="pro.license_entry"
-            android:layout="@layout/preference_custom"
-            android:title="@string/pref_title_pro"
-            app:iconSpaceReserved="false" />
-
         <ListPreference
             android:defaultValue="poll"
             android:dependency="notifications.main.enabled"

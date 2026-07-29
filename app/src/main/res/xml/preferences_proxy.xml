@@ -7,13 +7,6 @@
         android:layout="@layout/preference_category_custom_top"
         android:title="@string/pref_title_proxy_connection">
 
-        <!-- Статус Pro и ввод ключа: прокси доступен только с ним (ключ общий с push). -->
-        <Preference
-            android:key="pro.license_entry"
-            android:layout="@layout/preference_custom"
-            android:title="@string/pref_title_pro"
-            app:iconSpaceReserved="false" />
-
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="false"
             android:key="net.proxy.enabled"
