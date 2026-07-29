@@ -21,15 +21,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:minHeight="@dimen/dp64"
-        android:paddingBottom="@dimen/dp12"
+        android:paddingBottom="@dimen/dp10"
         android:paddingEnd="@dimen/content_padding_horizontal"
         android:paddingStart="@dimen/content_padding_horizontal"
-        android:paddingTop="@dimen/dp12">
+        android:paddingTop="@dimen/dp10">
 
         <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/profileAvatar"
-            android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp48"
+            android:layout_width="@dimen/dp44"
+            android:layout_height="@dimen/dp44"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"

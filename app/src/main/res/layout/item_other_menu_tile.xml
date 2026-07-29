@@ -27,8 +27,8 @@
 
         <FrameLayout
             android:id="@+id/otherMenuIconHolder"
-            android:layout_width="@dimen/dp40"
-            android:layout_height="@dimen/dp40"
+            android:layout_width="@dimen/dp36"
+            android:layout_height="@dimen/dp36"
             android:background="@drawable/bg_menu_tile_icon"
             app:layout_constraintBottom_toTopOf="@+id/otherMenuTitle"
             app:layout_constraintEnd_toEndOf="parent"

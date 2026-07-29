@@ -22,9 +22,9 @@
         android:minHeight="@dimen/other_menu_continue_row_min_height"
         android:orientation="horizontal"
         android:paddingStart="@dimen/content_padding_horizontal"
-        android:paddingTop="@dimen/dp8"
+        android:paddingTop="@dimen/dp6"
         android:paddingEnd="@dimen/content_padding_horizontal"
-        android:paddingBottom="@dimen/dp8">
+        android:paddingBottom="@dimen/dp6">
 
         <!-- The tonal circle behind the icon is built in the delegate: it is the accent at low alpha, so it
              stays visible on every palette (a static M3 container role collapses into the card on AMOLED). -->
@@ -32,7 +32,7 @@
             android:id="@+id/otherContinueIconCircle"
             android:layout_width="@dimen/other_menu_continue_icon_size"
             android:layout_height="@dimen/other_menu_continue_icon_size"
-            android:layout_marginEnd="@dimen/dp16">
+            android:layout_marginEnd="@dimen/dp12">
 
             <ImageView
                 android:layout_width="@dimen/dp24"

@@ -6,7 +6,7 @@ import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.RecyclerView
 import com.hannesdorfmann.adapterdelegates4.AdapterDelegate
 import forpdateam.ru.forpda.databinding.ItemOtherExitButtonBinding
-import forpdateam.ru.forpda.ui.dp12
+import forpdateam.ru.forpda.ui.dp4
 import forpdateam.ru.forpda.ui.dp16
 import forpdateam.ru.forpda.ui.views.drawers.adapters.ListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuExitListItem
@@ -40,8 +40,10 @@ class ExitMenuItemDelegate(
             binding.root.updateLayoutParams<RecyclerView.LayoutParams> {
                 leftMargin = binding.root.dp16
                 rightMargin = binding.root.dp16
-                topMargin = binding.root.dp16
-                bottomMargin = binding.root.dp12
+                // Строка идёт сразу за быстрыми настройками и замыкает экран: лишний воздух
+                // сверху и снизу — ровно то, из-за чего она не влезала целиком.
+                topMargin = binding.root.dp4
+                bottomMargin = binding.root.dp4
             }
         }
     }
