@@ -1030,7 +1030,9 @@
     <string name="pref_value_topic_open_target_first_page">Первая страница</string>
     <string name="pref_value_topic_open_target_last_unread">Первое непрочитанное</string>
     <string name="pref_summary_topic_open_target_first_page">Обычные темы из списков открываются с первой страницы.</string>
+    <string name="pref_value_topic_open_target_server_bookmark">Серверная закладка</string>
     <string name="pref_summary_topic_open_target_last_unread">Обычные темы из списков открываются с первого непрочитанного сообщения.</string>
+    <string name="pref_summary_topic_open_target_server_bookmark">Как на сайте: тема открывается там, где её пометил прочитанной сервер 4PDA. Приложение не поправляет позицию своей границей прочитанного.</string>
     <string name="pref_title_topic_header_initial_state">Шапка темы при открытии</string>
     <string name="pref_value_topic_header_initial_state_expanded">Открыта</string>
     <string name="pref_value_topic_header_initial_state_collapsed">Скрыта</string>

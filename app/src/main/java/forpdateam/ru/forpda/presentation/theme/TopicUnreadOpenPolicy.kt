@@ -145,12 +145,18 @@ object TopicUnreadOpenPolicy {
 
     /**
      * Read list rows use `getlastpost`; plain LAST_UNREAD opens still use `getnewpost`.
+     *
+     * Под [AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK] хинт всегда false: он существует, чтобы
+     * НЕ доверять нижнему редиректу сервера (тот может оказаться закладкой «всё прочитано», а не первым
+     * непрочитанным). Этот режим как раз хочет сесть на серверную закладку, поэтому редирект принимается
+     * как есть — так же, как при открытии без списочных хинтов.
      */
     fun parserTrustsGetNewPostUnread(
             hints: TopicOpenListHints?,
             fetchUrl: String,
             setting: AppPreferences.Main.TopicOpenTarget,
     ): Boolean {
+        if (setting == AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK) return false
         if (!fetchUrl.contains("view=getnewpost", ignoreCase = true)) return false
         if (parserTrustsListUnread(hints, fetchUrl)) return true
         return setting == AppPreferences.Main.TopicOpenTarget.LAST_UNREAD
