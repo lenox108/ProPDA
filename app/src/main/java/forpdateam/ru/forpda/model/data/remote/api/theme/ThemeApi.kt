@@ -9,6 +9,7 @@ import forpdateam.ru.forpda.entity.remote.theme.ThemePage
 import forpdateam.ru.forpda.entity.remote.theme.ThemePost
 import forpdateam.ru.forpda.model.data.remote.IWebClient
 import forpdateam.ru.forpda.model.data.remote.api.NetworkRequest
+import forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy
 import forpdateam.ru.forpda.common.Cp1251Codec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -28,11 +29,19 @@ class ThemeApi(
         private val blockedTopics: forpdateam.ru.forpda.client.proxy.BlockedTopicRegistry? = null
 ) {
 
+    /**
+     * [anchorTrust] — режим доверия к серверной подсказке `view=getnewpost` при выборе якоря. По
+     * умолчанию выводится из булева [openFromUnreadListHint] (чейн WebView-пути и prefetch-ключа);
+     * нативный рендер зовёт этот метод напрямую и передаёт режим явно — иначе «Серверная закладка»
+     * до парсера не доезжала. См. [TopicUnreadOpenPolicy.resolveAnchorTrustForOpen].
+     */
     fun getTheme(
             url: String,
             hatOpen: Boolean,
             pollOpen: Boolean,
-            openFromUnreadListHint: Boolean = false
+            openFromUnreadListHint: Boolean = false,
+            anchorTrust: TopicUnreadOpenPolicy.GetNewPostAnchorTrust =
+                    TopicUnreadOpenPolicy.anchorTrustOf(openFromUnreadListHint)
     ): ThemePage {
         // Если ID темы уже известен как «перенесённый» (resolved в этом процессе),
         // сразу подменяем showtopic=OLD на showtopic=NEW — экономим лишний 404/302 раунд.
@@ -42,9 +51,9 @@ class ThemeApi(
                 hatOpen,
                 pollOpen,
                 relocationAttemptsLeft = 2,
-                openFromUnreadListHint = openFromUnreadListHint
+                anchorTrust = anchorTrust
         )
-        return retryViaProxyIfBlocked(effectiveUrl, page, hatOpen, pollOpen, openFromUnreadListHint)
+        return retryViaProxyIfBlocked(effectiveUrl, page, hatOpen, pollOpen, anchorTrust)
     }
 
     /**
@@ -65,7 +74,7 @@ class ThemeApi(
             page: ThemePage,
             hatOpen: Boolean,
             pollOpen: Boolean,
-            openFromUnreadListHint: Boolean
+            anchorTrust: TopicUnreadOpenPolicy.GetNewPostAnchorTrust
     ): ThemePage {
         val registry = blockedTopics ?: return page
         val topicId = page.id.takeIf { it > 0 } ?: extractTopicIdFromUrl(url) ?: 0
@@ -82,7 +91,7 @@ class ThemeApi(
                     hatOpen,
                     pollOpen,
                     relocationAttemptsLeft = 2,
-                    openFromUnreadListHint = openFromUnreadListHint,
+                    anchorTrust = anchorTrust,
                     viaProxy = true
             )
         }.getOrElse {
@@ -121,7 +130,8 @@ class ThemeApi(
             hatOpen: Boolean,
             pollOpen: Boolean,
             relocationAttemptsLeft: Int,
-            openFromUnreadListHint: Boolean = false,
+            anchorTrust: TopicUnreadOpenPolicy.GetNewPostAnchorTrust =
+                    TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT,
             viaProxy: Boolean = false
     ): ThemePage {
         val response = fetchTopicHtml(url, viaProxy)
@@ -153,7 +163,8 @@ class ThemeApi(
                 hatOpen,
                 pollOpen,
                 initialRequestUrl = url,
-                openFromUnreadListHint = openFromUnreadListHint
+                openFromUnreadListHint = anchorTrust.isListUnread,
+                anchorTrust = anchorTrust
         )
         Timber.d(
                 "ThemeApi.getTheme parsed: anchor=%s anchors=%d posts=%d pagCur=%d/%d topicId=%d",
@@ -217,7 +228,7 @@ class ThemeApi(
                         hatOpen,
                         pollOpen,
                         relocationAttemptsLeft - 1,
-                        openFromUnreadListHint = openFromUnreadListHint,
+                        anchorTrust = anchorTrust,
                         viaProxy = viaProxy
                 )
             }
@@ -247,7 +258,7 @@ class ThemeApi(
                             hatOpen,
                             pollOpen,
                             relocationAttemptsLeft - 1,
-                            openFromUnreadListHint = openFromUnreadListHint,
+                            anchorTrust = anchorTrust,
                             viaProxy = viaProxy
                     )
                 }

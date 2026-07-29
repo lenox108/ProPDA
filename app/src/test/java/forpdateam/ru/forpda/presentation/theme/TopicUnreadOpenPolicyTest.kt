@@ -239,7 +239,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1103268&st=24380#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
                 hatEntryIdToSkip = hatId,
         )
@@ -314,7 +314,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1121483&st=1140#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
                 hatEntryIdToSkip = hatId,
         )
@@ -338,7 +338,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1103268&st=24320#entry143801181",
                 entryIds = listOf(135617646, 143801181),
                 redirectHashId = 143801181,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
                 hatEntryIdToSkip = 135617646,
         )
@@ -360,7 +360,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1103268&st=24300#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
         )
         assertNull(resolution.anchorEntry)
@@ -384,7 +384,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topicId&st=1140#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
                 hatEntryIdToSkip = hatId,
         )
@@ -408,7 +408,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topicId&st=203600#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
         )
         assertNull(resolution.anchorEntry)
@@ -431,7 +431,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topicId&st=104160#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
         )
         assertNull(resolution.anchorEntry)
@@ -452,7 +452,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}112900&st=13280#entry143801147",
                 entryIds = listOf(143801146, 143801147),
                 redirectHashId = 143801147,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
         )
         assertNull(resolution.anchorEntry)
@@ -474,7 +474,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1103268&st=24300#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = false,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT,
                 onLastTopicPage = false,
         )
         assertEquals("entry$firstId", resolution.anchorEntry)
@@ -493,7 +493,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1103268&st=24360#entry143805384",
                 entryIds = entries,
                 redirectHashId = 143805384,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
         )
         assertNull(resolution.anchorEntry)
@@ -524,7 +524,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1121483&st=1140#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = false,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT,
                 onLastTopicPage = true,
                 hatEntryIdToSkip = hatId,
         )
@@ -552,7 +552,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1121483&st=1140#entry$lastId",
                 entryIds = entryIds,
                 redirectHashId = lastId,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = true,
                 hatEntryIdToSkip = hatId,
         )
@@ -560,6 +560,158 @@ class TopicUnreadOpenPolicyTest {
         assertEquals("all_read_bottom_redirect", resolution.reason)
         assertFalse(resolution.hasUnreadTarget)
         assertTrue(resolution.ambiguousBottomRedirect)
+    }
+
+    // --- «Серверная закладка»: редирект принимается как есть (GetNewPostAnchorTrust.SERVER_REDIRECT) ---
+
+    /**
+     * Главный баг режима: mid-topic закладка. Сервер отдал `#entry` на ПОСЛЕДНИЙ пост НЕ последней
+     * страницы, HTML-маркеров непрочитанного нет. Под DEFAULT bottom-reject сбрасывал якорь на первый пост
+     * страницы (см. [anchor_withoutListHint_manyPostsBottomReject_usesNonBottomFallback]) — «Серверная
+     * закладка» обязана сесть ровно на редирект.
+     */
+    @Test
+    fun anchor_serverBookmark_midTopicBottomRedirect_keepsRedirect() {
+        val lastId = 143801118
+        val entryIds = (0 until 21).map { 143801098 + it }
+        val html = entryIds.joinToString("\n") { id ->
+            """<a name="entry$id"></a><div class="post_container">post</div>"""
+        }
+        val resolution = anchor(
+                html = "<script>var topic_id = parseInt($topic1103268);</script>\n$html",
+                finalUrl = "${base}$topic1103268&st=24300#entry$lastId",
+                entryIds = entryIds,
+                redirectHashId = lastId,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.SERVER_REDIRECT,
+                onLastTopicPage = false,
+        )
+        assertEquals("entry$lastId", resolution.anchorEntry)
+        assertEquals("redirect_hash", resolution.reason)
+        assertTrue(resolution.hasUnreadTarget)
+        assertFalse(resolution.bottomHashRejected)
+        assertFalse(resolution.ambiguousBottomRedirect)
+    }
+
+    /**
+     * Нижний редирект на ПОСЛЕДНЕЙ странице — закладка «всё прочитано». Списочный хинт объявляет её
+     * неоднозначной и якоря не даёт; «Серверная закладка» садится на неё (как открытие без хинтов).
+     */
+    @Test
+    fun anchor_serverBookmark_lastPageBottomRedirect_anchorsWithoutAmbiguous() {
+        val entries = listOf(135617646, 143804664, 143804839, 143804939, 143805384)
+        val html = entries.joinToString("\n") { id ->
+            """<a name="entry$id"></a><div class="post_container">post</div>"""
+        }
+        val resolution = anchor(
+                html = "<script>var topic_id = parseInt($topic1103268);</script>\n$html",
+                finalUrl = "${base}$topic1103268&st=24360#entry143805384",
+                entryIds = entries,
+                redirectHashId = 143805384,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.SERVER_REDIRECT,
+                onLastTopicPage = true,
+        )
+        assertEquals("entry143805384", resolution.anchorEntry)
+        assertEquals("all_read_bottom_redirect", resolution.reason)
+        assertFalse(resolution.hasUnreadTarget)
+        assertFalse(resolution.ambiguousBottomRedirect)
+    }
+
+    /** Верхний редирект (`#entry` на первый пост страницы) тоже принимается — это позиция сервера. */
+    @Test
+    fun anchor_serverBookmark_pageTopRedirect_keepsRedirect() {
+        val entries = listOf(143804664, 143804839, 143804939, 143805384)
+        val html = entries.joinToString("\n") { id ->
+            """<a name="entry$id"></a><div class="post_container">post</div>"""
+        }
+        val resolution = anchor(
+                html = "<script>var topic_id = parseInt($topic1103268);</script>\n$html",
+                finalUrl = "${base}$topic1103268&st=0#entry143804664",
+                entryIds = entries,
+                redirectHashId = 143804664,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.SERVER_REDIRECT,
+                onLastTopicPage = false,
+        )
+        assertEquals("entry143804664", resolution.anchorEntry)
+        assertEquals("redirect_hash", resolution.reason)
+        assertTrue(resolution.hasUnreadTarget)
+    }
+
+    /** HTML-маркеры непрочитанного остаются авторитетными и в этом режиме. */
+    @Test
+    fun anchor_serverBookmark_htmlUnreadMarkerStillWins() {
+        val entries = listOf(143804664, 143804839, 143804939, 143805384)
+        val html = entries.joinToString("\n") { id ->
+            if (id == 143804939) {
+                """<div class="post_wrap unread"><a name="entry$id"></a></div>"""
+            } else {
+                """<a name="entry$id"></a><div class="post_container">post</div>"""
+            }
+        }
+        val resolution = anchor(
+                html = "<script>var topic_id = parseInt($topic1103268);</script>\n$html",
+                finalUrl = "${base}$topic1103268&st=24360#entry143805384",
+                entryIds = entries,
+                redirectHashId = 143805384,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.SERVER_REDIRECT,
+                onLastTopicPage = true,
+        )
+        assertEquals("entry143804939", resolution.anchorEntry)
+        assertEquals("html_unread_marker", resolution.reason)
+        assertTrue(resolution.hasUnreadTarget)
+    }
+
+    // --- resolveAnchorTrustForOpen: какой режим получает первичная загрузка открытия ---
+
+    @Test
+    fun anchorTrustForOpen_serverBookmarkSetting_isServerRedirect() {
+        assertEquals(
+                TopicUnreadOpenPolicy.GetNewPostAnchorTrust.SERVER_REDIRECT,
+                TopicUnreadOpenPolicy.resolveAnchorTrustForOpen(
+                        hints = null,
+                        fetchUrl = "${base}$topic1103268&view=getnewpost",
+                        setting = AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK,
+                )
+        )
+    }
+
+    @Test
+    fun anchorTrustForOpen_lastUnreadSetting_isListUnread() {
+        assertEquals(
+                TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
+                TopicUnreadOpenPolicy.resolveAnchorTrustForOpen(
+                        hints = null,
+                        fetchUrl = "${base}$topic1103268&view=getnewpost",
+                        setting = AppPreferences.Main.TopicOpenTarget.LAST_UNREAD,
+                )
+        )
+    }
+
+    @Test
+    fun anchorTrustForOpen_listUnreadRow_isListUnreadEvenOnFirstPageSetting() {
+        assertEquals(
+                TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
+                TopicUnreadOpenPolicy.resolveAnchorTrustForOpen(
+                        hints = TopicOpenListHints(topicMarkedUnread = true),
+                        fetchUrl = "${base}$topic1103268&view=getnewpost",
+                        setting = AppPreferences.Main.TopicOpenTarget.FIRST_PAGE,
+                )
+        )
+    }
+
+    /** findpost/restore/«Обновить»/пагинация — не getnewpost, серверной подсказке доверия нет. */
+    @Test
+    fun anchorTrustForOpen_nonGetNewPostUrl_isDefault() {
+        for (setting in AppPreferences.Main.TopicOpenTarget.values()) {
+            assertEquals(
+                    "setting=$setting",
+                    TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT,
+                    TopicUnreadOpenPolicy.resolveAnchorTrustForOpen(
+                            hints = TopicOpenListHints(topicMarkedUnread = true),
+                            fetchUrl = "${base}$topic1103268&view=findpost&p=143805384",
+                            setting = setting,
+                    )
+            )
+        }
     }
 
     @Test
@@ -587,7 +739,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1103268&st=24380#entry143808466",
                 entryIds = entries,
                 redirectHashId = 143808466,
-                listUnreadHint = false,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT,
                 onLastTopicPage = true,
         )
         assertEquals("entry143808466", resolution.anchorEntry)
@@ -607,7 +759,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}$topic1121483&st=1140#entry143784679",
                 entryIds = listOf(143784670, 143784679),
                 redirectHashId = 143784679,
-                listUnreadHint = false,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT,
                 onLastTopicPage = true,
         )
         assertEquals("entry143784679", resolution.anchorEntry)
@@ -627,7 +779,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}1&st=20#entry200",
                 entryIds = listOf(200, 201),
                 redirectHashId = 200,
-                listUnreadHint = false,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT,
                 onLastTopicPage = false,
         )
         assertEquals("entry201", resolution.anchorEntry)
@@ -646,7 +798,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}1&st=20#entry100",
                 entryIds = listOf(100, 101),
                 redirectHashId = 100,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = false,
         )
         assertEquals("entry101", resolution.anchorEntry)
@@ -670,7 +822,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}1&st=20#entry101",
                 entryIds = listOf(100, 101, 102, 103),
                 redirectHashId = 101,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = false,
         )
         assertEquals("entry101", resolution.anchorEntry)
@@ -693,7 +845,7 @@ class TopicUnreadOpenPolicyTest {
                 finalUrl = "${base}1&st=20#entry102",
                 entryIds = listOf(100, 101, 102),
                 redirectHashId = 102,
-                listUnreadHint = true,
+                trust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.LIST_UNREAD,
                 onLastTopicPage = false,
         )
         assertEquals("entry101", resolution.anchorEntry)
@@ -740,7 +892,7 @@ class TopicUnreadOpenPolicyTest {
             finalUrl: String,
             entryIds: List<Int>,
             redirectHashId: Int?,
-            listUnreadHint: Boolean,
+            trust: TopicUnreadOpenPolicy.GetNewPostAnchorTrust,
             onLastTopicPage: Boolean,
             hatEntryIdToSkip: Int? = null,
     ): TopicUnreadOpenPolicy.AnchorResolution = TopicUnreadOpenPolicy.resolveGetNewPostAnchor(
@@ -751,7 +903,7 @@ class TopicUnreadOpenPolicyTest {
                     redirectHashId = redirectHashId,
                     hatEntryIdToSkip = hatEntryIdToSkip,
                     onLastTopicPage = onLastTopicPage,
-                    listUnreadHint = listUnreadHint,
+                    trust = trust,
             )
     )
 
