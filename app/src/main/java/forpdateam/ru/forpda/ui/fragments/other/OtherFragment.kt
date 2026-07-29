@@ -70,6 +70,7 @@ class OtherFragment : TabFragment() {
                 removeShortcutClickListener,
                 continueClickListener,
                 quickSettingsRowClickListener,
+                bottomNavColumnsClickListener,
                 blockVisibilityClickListener,
                 blockConfigureClickListener,
                 topicPreferencesHolder
@@ -79,6 +80,8 @@ class OtherFragment : TabFragment() {
     @Inject lateinit var mainPreferencesHolder: MainPreferencesHolder
 
     @Inject lateinit var appUpdateRepository: AppUpdateRepository
+
+    @Inject lateinit var preferences: android.content.SharedPreferences
 
     private var listScrollY = 0
     private var listBaseBottomPadding = 0
@@ -353,6 +356,15 @@ class OtherFragment : TabFragment() {
                 },
                 onAllSettings = { startActivity(Intent(requireContext(), SettingsActivity::class.java)) },
         )
+    }
+
+    /**
+     * Размер нижней панели меняется прямо под её слотами. Значение пишем и в SharedPreferences:
+     * оттуда его читает ListPreference на экране настроек, иначе два места разъехались бы.
+     */
+    private val bottomNavColumnsClickListener: (Int) -> Unit = { columns ->
+        preferences.edit().putString(Preferences.Main.BOTTOM_NAV_COLUMNS, columns.toString()).apply()
+        lifecycleScope.launch { mainPreferencesHolder.setBottomNavColumns(columns) }
     }
 
     /** Сводка для строки меню: тема, шрифт и плотность — то, что меняют чаще всего. */

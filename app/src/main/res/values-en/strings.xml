@@ -1063,4 +1063,6 @@
     <string name="other_menu_quick_settings_edit">Change items</string>
     <string name="other_menu_section_bottom_bar">Bottom bar</string>
     <string name="other_menu_bottom_bar_hint">Drag a tile here to put it in the bottom bar</string>
+    <string name="other_menu_bottom_columns_5">5</string>
+    <string name="other_menu_bottom_columns_6">6</string>
 </resources>

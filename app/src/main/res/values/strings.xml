@@ -1455,4 +1455,6 @@
     <string name="other_menu_quick_settings_edit">Изменить состав</string>
     <string name="other_menu_section_bottom_bar">Нижняя панель</string>
     <string name="other_menu_bottom_bar_hint">Перетащите плитку сюда, чтобы поставить её в нижнюю панель</string>
+    <string name="other_menu_bottom_columns_5">5</string>
+    <string name="other_menu_bottom_columns_6">6</string>
 </resources>

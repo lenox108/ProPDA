@@ -27,6 +27,7 @@ class OtherAdapter(
         private val removeShortcutListener: (DrawerMenuItem) -> Unit,
         private val continueClickListener: (HistoryItem) -> Unit,
         private val quickSettingsRowListener: () -> Unit,
+        private val bottomNavColumnsListener: (Int) -> Unit,
         private val blockVisibilityListener: (OtherMenuBlock) -> Unit,
         private val blockConfigureListener: (OtherMenuBlock) -> Unit,
         topicPreferencesHolder: TopicPreferencesHolder
@@ -96,6 +97,7 @@ class OtherAdapter(
             addDelegate(OtherMenuHeaderDelegate(blockVisibilityListener, blockConfigureListener))
             addDelegate(OtherMenuContinueDelegate(continueClickListener))
             addDelegate(OtherMenuQuickSettingsDelegate(quickSettingsRowListener))
+            addDelegate(OtherMenuBottomColumnsDelegate(bottomNavColumnsListener))
         }
     }
 
@@ -153,6 +155,7 @@ class OtherAdapter(
             // Отдельный высокий диапазон: id тем большие и легко наехали бы на плитки меню.
             is OtherMenuContinueListItem -> 1_000_000L + item.item.id.toLong()
             is OtherMenuQuickSettingsListItem -> 94_000L
+            is OtherMenuBottomColumnsListItem -> 96_000L
             is OtherMenuExitListItem -> 95_000L
             is MenuListItem -> 100_000L + item.menuItem.appItem.id.toLong()
             else -> RecyclerView.NO_ID
@@ -361,6 +364,9 @@ class OtherAdapter(
         addAll(barItems.map {
             MenuListItem(MenuMapper.mapToDrawer(it), OtherMenuSection.BOTTOM, barItems.size)
         })
+        // Размер панели меняется здесь же: раньше за это отвечал отдельный пункт настроек,
+        // и было неочевидно, почему слотов пять, а не шесть.
+        add(OtherMenuBottomColumnsListItem(barItems.size + 1))
     }
 
     /**

@@ -44,6 +44,9 @@ class OtherMenuEditBarListItem : ListItem()
  */
 class OtherMenuDropZoneListItem(val section: OtherMenuSection) : ListItem()
 
+/** Переключатель числа мест в нижней панели — под её слотами в режиме редактирования. */
+class OtherMenuBottomColumnsListItem(val columns: Int) : ListItem()
+
 /** Плитка «+ Добавить» в конце секции — только в режиме редактирования. */
 class OtherMenuAddTileListItem(val section: OtherMenuSection, val columns: Int = 3) : ListItem()
 

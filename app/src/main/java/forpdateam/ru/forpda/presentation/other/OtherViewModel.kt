@@ -165,7 +165,10 @@ class OtherViewModel @Inject constructor(
                     .catch { }
                     .collect { columns ->
                         bottomNavColumns = columns
-                        publishMenu()
+                        // force: размер панели меняют прямо в режиме редактирования, а обычная
+                        // публикация в нём подавлена, чтобы не рвать перетаскивание. Без force
+                        // ряд слотов остался бы прежней длины до выхода из режима.
+                        publishMenu(force = true)
                     }
         }
         scope.launch {
