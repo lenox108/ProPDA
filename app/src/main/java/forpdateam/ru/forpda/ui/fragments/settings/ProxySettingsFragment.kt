@@ -93,6 +93,8 @@ class ProxySettingsFragment : BaseSettingFragment() {
     private fun updateProState() {
         val context = context ?: return
         val unlocked = proxySettings.isUnlocked()
+        // Активация могла пропасть (сменился аккаунт) — снимаем платные функции, а не только UI.
+        ProDialog.revokeIfLocked(context)
         findPreference<Preference>(KEY_PRO_ENTRY)?.summary = ProDialog.statusSummary(context)
         findPreference<Preference>(ProxySettings.KEY_ENABLED)?.apply {
             if (!unlocked) {

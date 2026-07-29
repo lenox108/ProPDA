@@ -35,10 +35,6 @@ class ProSettingsFragment : BaseSettingFragment() {
             ProDialog.show(requireContext(), onChanged = { updateState() })
             true
         }
-        findPreference<Preference>(KEY_REMOVE_KEY)?.setOnPreferenceClickListener {
-            confirmRemoval()
-            true
-        }
         (activity as? SettingsActivity)?.supportActionBar?.title = preferenceScreen.title
     }
 
@@ -48,33 +44,13 @@ class ProSettingsFragment : BaseSettingFragment() {
         updateState()
     }
 
-    /**
-     * Удаление — через подтверждение: ключ выдаётся под конкретный аккаунт, и случайное нажатие
-     * заставило бы пользователя искать письмо с ключом заново.
-     */
-    private fun confirmRemoval() {
-        MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.pro_deactivate)
-                .setMessage(R.string.pref_summary_pro_remove_key)
-                .setNegativeButton(R.string.cancel, null)
-                .setPositiveButton(R.string.ok) { _, _ ->
-                    ProDialog.deactivate(requireContext())
-                    Toast.makeText(requireContext(), R.string.pro_removed, Toast.LENGTH_SHORT).show()
-                    updateState()
-                }
-                .showWithStyledButtons()
-    }
-
     private fun updateState() {
         val context = context ?: return
-        val unlocked = ProLicense.isUnlocked(context)
         findPreference<Preference>(KEY_STATUS)?.summary = ProDialog.statusSummary(context)
         findPreference<Preference>(KEY_MEMBER_ID)?.summary =
                 ProLicense.currentMemberId(context)
                         ?.let { getString(R.string.pref_summary_pro_member_id, it) }
                         ?: getString(R.string.pro_status_not_logged)
-        // Удалять нечего, пока ключа нет — не показываем пункт вовсе.
-        findPreference<Preference>(KEY_REMOVE_KEY)?.isVisible = unlocked
     }
 
     override fun searchSection(): SettingsSection = SettingsSection.PRO
@@ -84,6 +60,5 @@ class ProSettingsFragment : BaseSettingFragment() {
         private const val KEY_STATUS = "pro.status"
         private const val KEY_MEMBER_ID = "pro.member_id"
         private const val KEY_ENTER_KEY = "pro.enter_key"
-        private const val KEY_REMOVE_KEY = "pro.remove_key"
     }
 }
