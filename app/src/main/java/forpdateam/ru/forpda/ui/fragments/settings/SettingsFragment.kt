@@ -110,10 +110,6 @@ class SettingsFragment : BaseSettingFragment() {
     @Inject lateinit var clipboardHelper: ClipboardHelper
     @Inject lateinit var settingsBackupService: SettingsBackupService
 
-    // Запас под последней плашкой («Аккаунт» с правилами форума), чтобы она не липла к низу.
-    override val extraBottomPaddingPx: Int
-        get() = resources.getDimensionPixelSize(R.dimen.dp24)
-
     private var logoutJob: kotlinx.coroutines.Job? = null
     private var pendingBackupIncludesSession = false
     private val prefs by lazy { preferences }
