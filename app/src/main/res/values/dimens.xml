@@ -140,6 +140,9 @@
     <!-- 6sp: «18566/18566» в центральной вкладке (~40% ширины) без ellipsize -->
     <dimen name="pagination_page_autosize_min_text_size">6sp</dimen>
     <dimen name="content_block_padding_vertical">@dimen/dp16</dimen>
+    <!-- Настройки: строка чуть просторнее общего блока, и запас под последней плашкой списка -->
+    <dimen name="settings_row_padding_vertical">20dp</dimen>
+    <dimen name="settings_list_bottom_padding">@dimen/dp32</dimen>
     <dimen name="toolbar_avatar_size">40dp</dimen>
     <dimen name="list_avatar_two_line_size">40dp</dimen>
     <dimen name="list_avatar_compact_size">24dp</dimen>

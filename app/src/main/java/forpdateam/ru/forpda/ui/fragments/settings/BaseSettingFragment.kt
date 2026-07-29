@@ -38,6 +38,16 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         const val ARG_HIGHLIGHT_KEY = "highlight_key"
 
         private const val HIGHLIGHT_DURATION_MS = 2600L
+
+        /** Кнопка «Поддержать автора» — рисуется без плашки, поэтому рвёт группу как заголовок. */
+        private const val KEY_SUPPORT_AUTHOR = "about.support_author"
+
+        /**
+         * Граница плашки: заголовок категории, край списка или пункт без собственной плашки.
+         * Соседство с таким элементом = у плашки здесь скруглённый край.
+         */
+        private fun isPlateBreak(pref: Preference?): Boolean =
+                pref == null || pref is PreferenceCategory || pref.key == KEY_SUPPORT_AUTHOR
     }
 
     private var listScrollY = 0
@@ -48,11 +58,11 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
     open fun searchSection(): SettingsSection? = null
 
     /**
-     * Дополнительный отступ снизу под списком (помимо системной навбар-вставки).
-     * По умолчанию 0; экраны переопределяют, если нужен запас под последней плашкой.
+     * Дополнительный отступ снизу под списком (помимо системной навбар-вставки),
+     * чтобы последняя плашка не липла к краю экрана и не срезалась. Экраны могут увеличить.
      */
     protected open val extraBottomPaddingPx: Int
-        get() = 0
+        get() = resources.getDimensionPixelSize(R.dimen.settings_list_bottom_padding)
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
 
@@ -114,7 +124,7 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
 
                 when {
                     pref is PreferenceCategory -> bindCategoryPlate(holder.itemView)
-                    pref?.key == "about.support_author" -> bindSupportAuthorPlate(holder.itemView, prevPref, nextPref)
+                    pref?.key == KEY_SUPPORT_AUTHOR -> bindSupportAuthorPlate(holder.itemView, prevPref, nextPref)
                     else -> bindPreferencePlate(holder.itemView, prevPref, nextPref)
                 }
                 if (pref != null && pref.key != null && pref.key == highlightedKey) {
@@ -130,6 +140,10 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
         // page = background_base, plates = cards_background (see pref_plate_*.xml).
         view.setBackgroundColor(view.context.chromeCanvasColor(com.google.android.material.R.attr.colorSurfaceContainerLowest))
         view.findViewById<androidx.recyclerview.widget.RecyclerView>(androidx.preference.R.id.recycler_view)?.also { list ->
+            // Запас снизу ставим сразу: если окно не отдаёт insets списку (навбар уже съеден
+            // декором активити), листенер ниже может не сработать — а воздух под последней
+            // плашкой нужен в любом случае, иначе она упирается в край экрана.
+            list.setPadding(list.paddingLeft, list.paddingTop, list.paddingRight, extraBottomPaddingPx)
             // Fix: Add padding for navigation bar to prevent bottom items from being covered
             ViewCompat.setOnApplyWindowInsetsListener(list) { v, insets ->
                 val navBarInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
@@ -184,8 +198,8 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
     }
 
     private fun bindPreferencePlate(itemView: View, prevPref: Preference?, nextPref: Preference?) {
-        val prevIsCategory = prevPref == null || prevPref is PreferenceCategory
-        val nextIsCategory = nextPref == null || nextPref is PreferenceCategory
+        val prevIsCategory = isPlateBreak(prevPref)
+        val nextIsCategory = isPlateBreak(nextPref)
 
         // Rounded "plates" grouping (like in the design screenshot).
         itemView.setBackgroundResource(drawableForPrefPlate(prevIsCategory, nextIsCategory))
@@ -196,8 +210,8 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
     }
 
     private fun bindSupportAuthorPlate(itemView: View, prevPref: Preference?, nextPref: Preference?) {
-        val prevIsCategory = prevPref == null || prevPref is PreferenceCategory
-        val nextIsCategory = nextPref == null || nextPref is PreferenceCategory
+        val prevIsCategory = isPlateBreak(prevPref)
+        val nextIsCategory = isPlateBreak(nextPref)
 
         itemView.background = null
         setListItemMargins(itemView, isCategory = false, prevIsCategory = prevIsCategory, nextIsCategory = nextIsCategory)
