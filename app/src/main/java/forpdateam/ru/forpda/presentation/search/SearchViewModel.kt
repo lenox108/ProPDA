@@ -300,10 +300,13 @@ class SearchViewModel @Inject constructor(
     }
 
     fun openTopicBegin(item: IBaseForumPost) {
+        // `st=0` — явный маркер «с первой страницы»: итоговый url перерезолвится ещё раз при открытии
+        // темы уже с НАСТОЯЩЕЙ настройкой пользователя, и без маркера LAST_UNREAD/SERVER_BOOKMARK
+        // превращали «Открыть тему с начала» в getnewpost (см. explicit_zero_st_source в резолвере).
         linkHandler.handle(
                 TopicOpenTargetResolver.resolve(
                         TopicOpenContext(
-                                rawUrl = "https://4pda.to/forum/index.php?showtopic=${item.topicId}",
+                                rawUrl = "https://4pda.to/forum/index.php?showtopic=${item.topicId}&st=0",
                                 setting = forpdateam.ru.forpda.common.Preferences.Main.TopicOpenTarget.FIRST_PAGE,
                                 sourceScreen = "search",
                                 userAction = TopicUserOpenAction.FIRST_PAGE

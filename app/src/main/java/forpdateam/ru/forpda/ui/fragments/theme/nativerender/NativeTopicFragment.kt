@@ -448,6 +448,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private var pendingRestoreOffset: Int = 0
 
     /**
+     * Ручное «Обновить» ([refreshInPlace]) в УЖЕ дочитанной теме: перенести флаг «дочитал до конца»
+     * через перезагрузку, если она не принесла новых постов. Иначе сессионный сброс в
+     * [renderThemePage] снова разрешил бы [recordReadBoundaryAtRest] пересоздать стёртую границу
+     * прочитанного при прокрутке вверх — тот же откат назад, что чинит гейт в этом методе.
+     */
+    private var pendingPreserveMarkedReadForRefresh: Boolean = false
+
+    /**
      * In-tab navigation history for «Поведение кнопки Назад в темах» = HISTORY: each time the navigator
      * reuses this tab for a NEW url (a link to another post/topic), we push where we were (url + scroll
      * anchor) so Back returns there instead of closing the tab. Empty → Back leaves the tab as before.
@@ -774,7 +782,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         postsAdapter.setAuthContext(authorized = auth.isAuth(), memberId = auth.userId)
         installPageSwipeDetector()
         installBottomRefreshDetector()
-        refreshLayout.setOnRefreshListener { loadTopic(loadedUrl ?: topicUrl) }
+        refreshLayout.setOnRefreshListener { refreshInPlace() }
         setupMessagePanel()
         // Lift the reply panel above the keyboard by reading the REAL ime inset on every window-inset pass
         // and setting the host's bottom margin directly. The shared DimensionHelper path lags/sticks on
@@ -862,7 +870,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     }
 
     /**
-     * Apply the «При открытии темы» setting (Первая страница / Первое непрочитанное) to the initial URL,
+     * Apply the «При открытии темы» setting (Первая страница / Первое непрочитанное / Серверная закладка)
+     * to the initial URL,
      * exactly as the WebView ViewModel does via [TopicOpenTargetResolver]: with «Первое непрочитанное» and
      * an unread hint from the list, this yields a `view=getnewpost`/find-post URL so the topic opens on the
      * first unread post instead of always page 1. Only used for the very first load.
@@ -1581,7 +1590,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun showOverflowMenu() {
         val ctx = requireContext()
         val actions = buildList<Pair<String, () -> Unit>> {
-            add("Обновить" to { loadTopic(loadedUrl ?: topicUrl) })
+            add("Обновить" to { refreshInPlace() })
             // Add/remove from favorites (parity with the WebView fav menu). Visible once a topic id is known.
             if (pageTopicId > 0) {
                 if (pageIsInFavorite) {
@@ -2278,10 +2287,60 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private fun refreshFromBottom() {
         val url = if (pagination.isInitialised) pagination.pageUrl(pagination.loadedPage) else (loadedUrl ?: topicUrl)
+        // Ручная навигация — не свежее открытие: если флаг резюма пережил НЕУДАЧНУЮ первую загрузку,
+        // он не должен выстрелить здесь и увести обновление на границу прочитанного.
+        boundaryResumeArmed = false
         pendingJumpToBottom = true
         pendingRefreshSeenUpToPostId = loadedItems.maxOfOrNull { it.postId } ?: 0
         refreshFollowNextPageArmed = !isClassicMode()
         loadTopic(url, preserveRefreshIntent = true)
+    }
+
+    /**
+     * Ручное «Обновить» (пункт overflow-меню и pull-to-refresh в классике) — перечитать ТО, ЧТО СЕЙЧАС
+     * на экране, ничего не потеряв.
+     *
+     * Раньше это был голый `loadTopic(loadedUrl ?: topicUrl)`, и оба его слагаемых врали:
+     *  - [loadedUrl] — url ЗАПРОСА, которым тема ОТКРЫВАЛАСЬ, и в гибриде он приколочен ко входной
+     *    странице (infinite-scroll его не двигает). Обновление посреди темы отбрасывало на неё;
+     *  - позиция не сохранялась вообще: у обычного постраничного url серверного якоря нет, поэтому
+     *    [applyInitialAnchor] падал в [AnchorRequest.Top] — «обновил и уехал на верх страницы».
+     *
+     * Теперь: грузим страницу, которую юзер РЕАЛЬНО читает ([barCurrentPage]), и садимся обратно:
+     *  - стоял в самом низу → та же логика, что у жеста снизу ([refreshFromBottom]): якорь на первый
+     *    пост новее виденного, а если новых нет — на низ (иначе новое уезжает вверх и тут же метится
+     *    прочитанным);
+     *  - стоял в середине → возвращаемся на тот же пост с тем же пиксельным offset'ом
+     *    ([pendingRestorePostId] — ветка с наивысшим приоритетом в [applyInitialAnchor]).
+     */
+    private fun refreshInPlace() {
+        val url = if (pagination.isInitialised) pagination.pageUrl(barCurrentPage) else (loadedUrl ?: topicUrl)
+        boundaryResumeArmed = false // ручное обновление — не свежее открытие (см. refreshFromBottom)
+        pendingRefreshSeenUpToPostId = loadedItems.maxOfOrNull { it.postId } ?: 0
+        // Тема уже дочитана и обновление не принесёт нового → не давать сессионному сбросу в
+        // [renderThemePage] заново открыть окно, в котором прокрутка вверх пересоздаёт стёртую границу
+        // прочитанного (см. [recordReadBoundaryAtRest]). Флаг снимается там же, как только видно, что
+        // новые посты всё-таки пришли.
+        pendingPreserveMarkedReadForRefresh = markedTopicReadAtEnd
+        if (!recyclerView.canScrollVertically(1)) {
+            pendingJumpToBottom = true
+            refreshFollowNextPageArmed = !isClassicMode()
+        } else {
+            captureInPlaceRefreshAnchor()
+        }
+        loadTopic(url, preserveRefreshIntent = true)
+    }
+
+    /** Первый видимый пост и его пиксельный offset — точка, куда обновление обязано вернуть. */
+    private fun captureInPlaceRefreshAnchor() {
+        if (loadedItems.isEmpty()) return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val firstPos = lm.findFirstVisibleItemPosition()
+        if (firstPos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return
+        val item = loadedItems.getOrNull(firstPos - headerOffset()) ?: return
+        if (item.postId <= 0) return
+        pendingRestorePostId = item.postId
+        pendingRestoreOffset = lm.findViewByPosition(firstPos)?.top ?: 0
     }
 
     /**
@@ -4121,6 +4180,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (!pagination.isInitialised) return
         val target = pageNumber.coerceIn(1, pagination.totalPages)
         if (target == barCurrentPage && loadedItems.isNotEmpty()) return
+        boundaryResumeArmed = false // явный переход по страницам — резюм не для него
         pendingJumpToTop = true
         barCurrentPage = target
         loadTopic(pagination.pageUrl(target))
@@ -4171,6 +4231,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             return
         }
+        boundaryResumeArmed = false // явный «В конец темы» — резюм на границу его не перекрывает
         pendingJumpToBottom = true
         barCurrentPage = last
         loadTopic(pagination.pageUrl(last))
@@ -4675,6 +4736,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 refreshFollowNextPageArmed = false
                 pendingSuppressEndMarkReadForResume = false // мостик резюма не должен утечь в чужую загрузку
                 pendingSilentResumeLanding = false
+                // Restore-якорь тоже не должен пережить неудачную загрузку: иначе следующее открытие
+                // (реюз таба под другую цель) съест его в applyInitialAnchor и перебьёт серверный якорь
+                // сохранённой позицией. Сам restore-url — findpost на этот же пост, посадка не страдает.
+                pendingRestorePostId = 0
+                pendingRestoreOffset = 0
                 Toast.makeText(requireContext(), "Ошибка загрузки темы: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
@@ -4762,7 +4828,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         loadedItems.clear()
         loadedItems.addAll(items)
         mentionScannedPostIds.clear()
-        markedTopicReadAtEnd = false
+        // Обновление дочитанной темы, не принёсшее новых постов, сохраняет «дочитал до конца»
+        // (см. [pendingPreserveMarkedReadForRefresh]). Пришло новое — сбрасываем как обычно, иначе
+        // дочитка свежих постов не отметилась бы.
+        val refreshBroughtNothingNew = pendingPreserveMarkedReadForRefresh &&
+                pendingRefreshSeenUpToPostId > 0 &&
+                items.none { it.postId > pendingRefreshSeenUpToPostId }
+        pendingPreserveMarkedReadForRefresh = false
+        markedTopicReadAtEnd = refreshBroughtNothingNew
         userScrollGestureThisSession = false // новая сессия просмотра — жестов ещё не было
         userDraggedListThisSession = false // ...и протягиваний списка тоже
         sessionRenderedAtMs = android.os.SystemClock.elapsedRealtime()
@@ -4894,7 +4967,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      *
      * Фаер строго один раз за открытие ([boundaryResumeArmed] гасится сразу), явные findpost-дип-линки и
      * переходы по страницам не переопределяем. При отсутствии границы (cold-miss) — фолбэк на текущее
-     * серверное поведение (безопасно).
+     * серверное поведение (безопасно). При настройке «Серверная закладка» не работает вовсе: там
+     * пользователь сознательно выбрал позицию сервера, включая её уход вниз.
      *
      * @return true, если запущен findpost-резюм (эту загрузку рендерить не нужно — return у вызывающего).
      */
@@ -4905,6 +4979,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (!boundaryResumeArmed) return false
         boundaryResumeArmed = false // один раз за открытие, что бы дальше ни решили
         if (page.id <= 0) return false
+        // Учесть СКАЧАННОЕ окно ДО решения о резюме. Если резюм сработает, эта getnewpost-страница
+        // будет отброшена без рендера — recordMaxLoaded из renderThemePage для неё не вызовется. Но
+        // сервер уже пометил её прочитанной самим GET'ом, и его следующий getnewpost уйдёт на +1 от НЕЁ.
+        // Без записи maxLoaded* отставал, и следующее открытие ложно детектило кросс-девайс
+        // (serverPage > maxLoadedPage+1) → стирало границу → сажало на серверный якорь, проскакивая
+        // невиденные посты. Воспроизведено 29.07.2026 (тема 934059): fetch окна стр. 10426 отброшен
+        // резюмом, maxLoadedPage остался 10425, переоткрытие: server 10427 → «cross_device» без второго
+        // устройства, посадка на 144332054 при границе 144324769. Запись монотонна — для рендерящихся
+        // страниц повторный вызов в renderThemePage безвреден (no-op).
+        recordMaxLoaded(page)
+        // Резюм на границу — механизм ТОЛЬКО режима «Первое непрочитанное». «Серверная закладка» ему
+        // явно не доверяет (юзер попросил позицию сервера), а «Первая страница» открывает верх темы —
+        // раньше она не исключалась, и на короткой (одностраничной) теме lastLoadedPostId оказывался
+        // выше границы → тему уносило findpost'ом на границу вместо стр. 1. Граница при этом копится
+        // во всех режимах (переключение настройки не теряет прогресс).
+        if (mainPreferencesHolder.getTopicOpenTarget() !=
+                forpdateam.ru.forpda.common.Preferences.Main.TopicOpenTarget.LAST_UNREAD) {
+            return false
+        }
         // Явный findpost-дип-линк (упоминание/закладка на конкретный пост) или наш собственный резюм —
         // не переопределяем; переход по страницам тоже.
         if (url.contains("view=findpost", ignoreCase = true) ||
@@ -4943,6 +5036,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 lastLoadedPostId = lastLoadedId,
                 firstUnseenPostId = firstUnseenId,
                 boundaryPostOnPage = boundaryOnPage,
+                maxLoadedPostId = readBoundaryStore.maxLoadedPostId(page.id),
         ) ?: return false
         // Резюм — findpost на границу. Гасим «в конец/на верх», чтобы вложенная загрузка села на границу.
         pendingJumpToBottom = false
@@ -5290,6 +5384,39 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // всегда. Захватываем и гасим флаг здесь; он взводится только в [maybeResumeToReadBoundary].
         val silentResumeLanding = pendingSilentResumeLanding
         pendingSilentResumeLanding = false
+        // ЛЮБОЕ обновление темы (жест сверху, жест снизу, пункт «Обновить»), принёсшее новые посты,
+        // садится на ПЕРВЫЙ из них и подсвечивает его по настройке «Подсветка непрочитанного поста» —
+        // ради этого обновление и делают.
+        //
+        // Раньше так вёл себя только жест СНИЗУ (ветка [pendingJumpToBottom] ниже). Верхний свайп и
+        // тулбарное «Обновить» перезагружали url ОТКРЫТИЯ и садились куда придётся: у обычного
+        // постраничного url серверного якоря нет → [AnchorRequest.Top], а `view=getnewpost` из
+        // избранного переспрашивал сервер и уезжал вниз по walk-down. Отсюда жалобы «свайпом сверху
+        // переходит рандомно ближе к последней странице» и «в классике после обновления сверху
+        // подсветка не срабатывает». Следом [recordReadBoundaryAtRest] фиксировал эту случайную
+        // позицию как границу прочитанного — «вышел и зашёл заново, открывается рандомный пост»
+        // (при посадке с подсветкой граница вставала верно, что юзер и заметил).
+        //
+        // [refreshSeenUpTo] > 0 только на обновлениях ([loadTopic] гасит его для обычных загрузок),
+        // поэтому обычные открытия темы этой веткой не задеты.
+        val refreshFirstUnseen = forpdateam.ru.forpda.presentation.theme.TopicRefreshAnchorPolicy
+                .firstUnseenPostId(ids, refreshSeenUpTo)
+        if (refreshFirstUnseen != null) {
+            pendingRestorePostId = 0
+            pendingRestoreOffset = 0
+            pendingJumpToBottom = false
+            pendingJumpToTop = false
+            val idx = ids.indexOf(refreshFirstUnseen)
+            if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                android.util.Log.i("FPDA_REFRESH_ANCHOR", "topic=$pageTopicId seenUpTo=$refreshSeenUpTo " +
+                        "firstUnseen=$refreshFirstUnseen idx=$idx newCount=${ids.count { it > refreshSeenUpTo }}")
+            }
+            anchoredBottomPostId = null
+            anchorPost(idx + headerOffset(), isLast = idx == ids.size - 1)
+            if (topicPreferencesHolder.getHighlightUnreadPost()) postsAdapter.requestHighlight(refreshFirstUnseen)
+            recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
+            return
+        }
         // Restore-scroll «где остановился»: вернуться на сохранённый пост и его точный offset (после
         // пересоздания фрагмента). Приоритетнее серверного якоря и границы прочитанного — это ровно то
         // место, где стоял пользователь.
@@ -5339,22 +5466,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // выравниваем по верху (не режем с обеих сторон) — см. [anchorPost].
         if (pendingJumpToBottom) {
             pendingJumpToBottom = false
-            // Обновление снизу принесло новые посты → садимся на ПЕРВЫЙ непрочитанный, а не на низ
-            // (иначе новое уезжает вверх и тут же метится прочитанным).
-            val firstUnseen = forpdateam.ru.forpda.presentation.theme.TopicRefreshAnchorPolicy
-                    .firstUnseenPostId(ids, refreshSeenUpTo)
+            // Новые посты обработаны выше (общая ветка обновления) — сюда доходим, когда их нет:
+            // обычное «вернуться на низ».
             if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
                 android.util.Log.i("FPDA_REFRESH_ANCHOR", "topic=$pageTopicId seenUpTo=$refreshSeenUpTo " +
-                        "firstUnseen=$firstUnseen lastOnPage=${ids.lastOrNull()} " +
-                        "newCount=${ids.count { it > refreshSeenUpTo }}")
-            }
-            if (firstUnseen != null) {
-                val idx = ids.indexOf(firstUnseen)
-                anchoredBottomPostId = null
-                anchorPost(idx + headerOffset(), isLast = idx == ids.size - 1)
-                if (topicPreferencesHolder.getHighlightUnreadPost()) postsAdapter.requestHighlight(firstUnseen)
-                recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
-                return
+                        "firstUnseen=null lastOnPage=${ids.lastOrNull()} newCount=0")
             }
             val lastPos = (ids.size - 1 + headerOffset()).coerceAtLeast(0)
             anchoredBottomPostId = ids.lastOrNull()
@@ -5509,6 +5625,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private fun recordReadBoundaryAtRest() {
         if (pageTopicId <= 0) return
+        // Тема уже помечена дочитанной в этой сессии → [maybeMarkTopicReadAtEnd] СТЁР границу. Любая
+        // следующая запись создала бы её заново с нуля, и монотонность [recordSeen] не спасает: сравнивать
+        // не с чем, принимается любой id. Прокрутка вверх «перечитать» после дочитывания (в гибриде она ещё
+        // и подтягивает предыдущую страницу) записывала границу на пост ВЫШЕ конца, и следующее открытие
+        // резюмило findpost'ом туда — жалоба «открывается пост примерно страницу назад, который уже был
+        // прочитан» / «читал 10-ю страницу, а открывает 9-ю». Воспроизведено 28.07.2026 на теме 377461:
+        // граница 144435865 (низ) → 144403080 после скролла вверх, переоткрытие село на пост трёхдневной
+        // давности вместо конца темы. Флаг снимается, когда низ темы вырос (новые посты) или началась новая
+        // загрузка, поэтому легальный прогресс по свежим постам не теряется.
+        if (markedTopicReadAtEnd) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         val header = headerOffset()
         var deepestSeen = 0

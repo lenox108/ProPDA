@@ -22,6 +22,8 @@ enum class TopicOpenTargetType {
     SETTING_LAST_UNREAD,
     /** Read list row under LAST_UNREAD: server `view=getlastpost` to resume at last-read post. */
     READ_RESUME,
+    /** SERVER_BOOKMARK setting: plain `view=getnewpost`, land wherever the server's own mark says. */
+    SETTING_SERVER_BOOKMARK,
     SERVER_UNREAD_FALLBACK,
     SAFE_FALLBACK
 }
@@ -157,17 +159,56 @@ object TopicOpenTargetResolver {
             return TopicOpenResolution(url, TopicOpenTargetType.EXPLICIT_PAGE, reason = "explicit_act")
         }
 
+        // Явные намерения из НЕ-списковых источников (внешняя ссылка, пункты поиска «Открыть тему
+        // с начала»/«с конца») настройка перекрывать не должна — иначе «с конца» под LAST_UNREAD
+        // апгрейдился в getnewpost, а «с начала» уезжал на непрочитанное. Списки (favorites/topics)
+        // сюда не попадают: их getlastpost/getnewpost — резюм-хинты строки, а не намерение.
+        if (hasExplicitPageIntentSource(context.sourceScreen)) {
+            if (topicViewParam(url)?.equals("getlastpost", ignoreCase = true) == true) {
+                return TopicOpenResolution(
+                        url = url,
+                        targetType = TopicOpenTargetType.EXPLICIT_PAGE,
+                        reason = "explicit_getlastpost_source"
+                )
+            }
+            if (hasExplicitZeroSt(url)) {
+                return TopicOpenResolution(
+                        url = url,
+                        targetType = TopicOpenTargetType.EXPLICIT_PAGE,
+                        resolvedPageSt = 0,
+                        reason = "explicit_zero_st_source"
+                )
+            }
+        }
+
         context.userAction?.let { action ->
             return resolveUserAction(url, action)
         }
 
         when (context.setting) {
             AppPreferences.Main.TopicOpenTarget.FIRST_PAGE -> {
+                // Href строки списка несёт серверные резюм-хинты (`view=getnewpost`/`getlastpost`) —
+                // под «Первой страницей» их надо срезать, иначе тема из списка форума открывалась по
+                // серверной закладке, а не со стр. 1. Явные не-списковые getlastpost-намерения уже
+                // обработаны выше ([explicit_getlastpost_source]) и сюда не доходят.
                 return TopicOpenResolution(
-                        url = url,
+                        url = stripUnreadNavigationParams(url),
                         targetType = TopicOpenTargetType.SETTING_FIRST_PAGE,
                         resolvedPageSt = info.page?.takeIf { it > 0 } ?: 0,
                         reason = "setting_first_page"
+                )
+            }
+            // «Серверная закладка»: единственный источник истины — отметка прочитанного на 4PDA.
+            // Всегда `view=getnewpost` и для непрочитанных, и для прочитанных строк списка: сервер сам
+            // отдаст первый непрочитанный, а в дочитанной теме уведёт на свою закладку (низ). Списочные
+            // хинты (`unreadUrlFromList`/`lastReadUrlFromList`) сознательно игнорируем — они несут
+            // клиентское представление о прочитанности, а этот режим ему как раз не доверяет.
+            AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK -> {
+                return TopicOpenResolution(
+                        url = normalizeLastUnreadNavigationUrl(url),
+                        targetType = TopicOpenTargetType.SETTING_SERVER_BOOKMARK,
+                        suppressScrollRestore = true,
+                        reason = "setting_server_bookmark"
                 )
             }
             AppPreferences.Main.TopicOpenTarget.LAST_UNREAD -> {
@@ -269,14 +310,15 @@ object TopicOpenTargetResolver {
 
     /**
      * Non-zero `st` and `view=getlastpost` in list hrefs are resume hints, not explicit pagination.
-     * Honor them only for in-app pagination ([sourceScreen]=pagination) or non-LAST_UNREAD settings.
+     * Honor them only for in-app pagination ([sourceScreen]=pagination) or settings that do not
+     * navigate through the server ([TopicOpenTarget.usesServerNavigation]).
      */
     private fun shouldHonorExplicitPage(
             context: TopicOpenContext,
             url: String,
             info: ThemeUrlInfo
     ): Boolean {
-        if (context.setting != AppPreferences.Main.TopicOpenTarget.LAST_UNREAD) return true
+        if (!context.setting.usesServerNavigation) return true
         if (hasExplicitPageIntentSource(context.sourceScreen)) return true
         if (topicUrlHasNonZeroStParameter(url)) return false
         return !isListingResumeTopicUrl(url, info)
@@ -382,6 +424,10 @@ object TopicOpenTargetResolver {
     private fun hasExplicitAct(rawUrl: String): Boolean {
         return Regex("""(?i)(?:[?&])act=""").containsMatchIn(rawUrl)
     }
+
+    /** `st=0` в url — явная «первая страница» (пункт поиска «Открыть тему с начала», внешняя ссылка). */
+    private fun hasExplicitZeroSt(rawUrl: String): Boolean =
+            Regex("""(?i)[?&]st=0(?!\d)""").containsMatchIn(rawUrl)
 
     private fun hasBlockingTopicView(rawUrl: String): Boolean {
         val view = topicViewParam(rawUrl)?.lowercase() ?: return false

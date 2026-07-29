@@ -54,11 +54,68 @@ class TopicOpenTargetResolverTest {
         )
     }
 
+    /** Списочный getlastpost-хинт — не намерение: «Первая страница» его срезает и открывает стр. 1. */
     @Test
-    fun firstPageKeepsGetLastPost() {
+    fun firstPageStripsListGetLastPost() {
+        val resolution = resolve(
+                "https://4pda.to/forum/index.php?showtopic=123&view=getlastpost",
+                AppPreferences.Main.TopicOpenTarget.FIRST_PAGE
+        )
+        assertEquals("https://4pda.to/forum/index.php?showtopic=123", resolution.url)
+        assertEquals(TopicOpenTargetType.SETTING_FIRST_PAGE, resolution.targetType)
+    }
+
+    /** Href непрочитанной строки списка форума несёт getnewpost — «Первая страница» открывает стр. 1. */
+    @Test
+    fun firstPageStripsListGetNewPost() {
+        val resolution = resolve(
+                "https://4pda.to/forum/index.php?showtopic=123&view=getnewpost",
+                AppPreferences.Main.TopicOpenTarget.FIRST_PAGE
+        )
+        assertEquals("https://4pda.to/forum/index.php?showtopic=123", resolution.url)
+        assertEquals(TopicOpenTargetType.SETTING_FIRST_PAGE, resolution.targetType)
+    }
+
+    /** Внешняя ссылка/пункт «с конца»: getlastpost из явного источника настройка не перекрывает. */
+    @Test
+    fun linkSourceGetLastPostIsExplicitUnderAnySetting() {
         val url = "https://4pda.to/forum/index.php?showtopic=123&view=getlastpost"
-        val resolution = resolve(url, AppPreferences.Main.TopicOpenTarget.FIRST_PAGE)
-        assertEquals(url, resolution.url)
+        for (setting in AppPreferences.Main.TopicOpenTarget.values()) {
+            val resolution = TopicOpenTargetResolver.resolve(
+                    TopicOpenContext(rawUrl = url, setting = setting, sourceScreen = "link")
+            )
+            assertEquals(url, resolution.url)
+            assertEquals(TopicOpenTargetType.EXPLICIT_PAGE, resolution.targetType)
+        }
+    }
+
+    /** «Открыть тему с начала» из поиска (st=0, источник link) — стр. 1 при любой настройке. */
+    @Test
+    fun linkSourceZeroStIsExplicitFirstPageUnderAnySetting() {
+        val url = "https://4pda.to/forum/index.php?showtopic=123&st=0"
+        for (setting in AppPreferences.Main.TopicOpenTarget.values()) {
+            val resolution = TopicOpenTargetResolver.resolve(
+                    TopicOpenContext(rawUrl = url, setting = setting, sourceScreen = "link")
+            )
+            assertEquals(url, resolution.url)
+            assertEquals(TopicOpenTargetType.EXPLICIT_PAGE, resolution.targetType)
+            assertEquals(0, resolution.resolvedPageSt)
+        }
+    }
+
+    /** st=0 не должен путаться с st=0N (например st=04 не бывает, но st=0 в конце и в середине). */
+    @Test
+    fun zeroStMarkerDoesNotMatchLargerSt() {
+        val resolution = TopicOpenTargetResolver.resolve(
+                TopicOpenContext(
+                        rawUrl = "https://4pda.to/forum/index.php?showtopic=123&st=2000",
+                        setting = AppPreferences.Main.TopicOpenTarget.LAST_UNREAD,
+                        sourceScreen = "link"
+                )
+        )
+        // Ненулевой st из явного источника — явная страница (прежнее поведение), не «стр. 1».
+        assertEquals(TopicOpenTargetType.EXPLICIT_PAGE, resolution.targetType)
+        assertEquals("https://4pda.to/forum/index.php?showtopic=123&st=2000", resolution.url)
     }
 
     @Test

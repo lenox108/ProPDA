@@ -145,7 +145,23 @@ object Preferences {
         enum class TopicPostDensity { COMFORTABLE, COMPACT, SUPER_COMPACT }
         enum class TopicToolbarBehavior { PINNED, HIDE_ON_SCROLL }
         enum class TopicBackBehavior { HISTORY, ORIGIN }
-        enum class TopicOpenTarget { FIRST_PAGE, LAST_UNREAD }
+        /**
+         * Куда садиться при открытии темы из списка.
+         *
+         * [SERVER_BOOKMARK] — доверять отметке прочитанного самого 4PDA: всегда идём `view=getnewpost`
+         * и садимся туда, куда увёл сервер (первый непрочитанный, либо низ темы, если сервер считает её
+         * дочитанной). Клиентская граница ([TopicReadBoundaryStore]) при этом НЕ переопределяет якорь —
+         * в отличие от [LAST_UNREAD], где она страхует от серверного walk-down.
+         */
+        enum class TopicOpenTarget {
+            FIRST_PAGE,
+            LAST_UNREAD,
+            SERVER_BOOKMARK;
+
+            /** Открытие идёт через серверную навигацию (getnewpost/getlastpost), а не на страницу 1. */
+            val usesServerNavigation: Boolean
+                get() = this == LAST_UNREAD || this == SERVER_BOOKMARK
+        }
         enum class TopicHeaderInitialState { EXPANDED, COLLAPSED }
         enum class StartupScreen { NEWS, FAVORITES, FORUM, REPLIES, QMS, HISTORY, MENU }
     }
