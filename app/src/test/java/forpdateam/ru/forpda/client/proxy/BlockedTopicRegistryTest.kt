@@ -59,6 +59,26 @@ class BlockedTopicRegistryTest {
         assertEquals("Zona", registry.topics().single().title)
     }
 
+    /** Имя из «Истории» дописывается задним числом — оно не должно продлевать ревалидацию. */
+    @Test
+    fun `remembering a title keeps the confirmation time`() {
+        registry.remember(777, nowMs = 1_000L)
+        registry.rememberTitle(777, "OnePlus 15 - Обсуждение")
+
+        assertEquals(
+                BlockedTopicRegistry.BlockedTopic(777, "OnePlus 15 - Обсуждение", 1_000L),
+                registry.topics().single(),
+        )
+    }
+
+    /** Тема не в списке — имя не пишем, иначе в файле копились бы записи ни о чём. */
+    @Test
+    fun `title for an unknown topic is not stored`() {
+        registry.rememberTitle(555, "Zona")
+
+        assertEquals(0, registry.size())
+    }
+
     @Test
     fun `forget removes the title too`() {
         registry.remember(777, "Zona", nowMs = 1_000L)

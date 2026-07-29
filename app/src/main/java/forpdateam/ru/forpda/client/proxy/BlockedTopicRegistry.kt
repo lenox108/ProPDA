@@ -52,6 +52,18 @@ class BlockedTopicRegistry(context: Context) {
         Timber.tag(LOG_TAG).i("topic %d routed via proxy", topicId)
     }
 
+    /**
+     * Дописать имя теме, которая уже в списке. Отметку времени НЕ трогаем: имя может подтянуться
+     * из «Истории» через месяцы после того, как тема попала в список, и это не повод откладывать
+     * ревалидацию ещё на 30 дней.
+     */
+    fun rememberTitle(topicId: Int, title: String?) {
+        val clean = title?.trim().orEmpty()
+        if (topicId <= 0 || clean.isEmpty()) return
+        if (!prefs.contains(topicId.toString())) return
+        prefs.edit().putString(titleKey(topicId), clean).apply()
+    }
+
     /** Тема снова открывается напрямую — маршрут больше не нужен. */
     fun forget(topicId: Int) {
         if (topicId <= 0) return
