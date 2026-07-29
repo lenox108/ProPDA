@@ -1002,8 +1002,10 @@
     <string name="pref_summary_proxy_only_blocked">Regular topics load directly. If a topic returns a stub page, the request is retried through the proxy and that topic keeps using it. Turn off to route all app traffic through the proxy</string>
     <string name="pref_title_proxy_blocked_list">Topics via proxy</string>
     <string name="pref_summary_proxy_blocked_list_empty">Empty — no blocked topics seen yet</string>
-    <string name="pref_summary_proxy_blocked_list">Topics in list: %1$d</string>
-    <string name="pref_proxy_blocked_list_clear">Clear the list?</string>
+    <string name="pref_summary_proxy_blocked_list_more">%1$s and %2$d more</string>
+    <string name="pref_proxy_blocked_topic_unnamed">Topic #%1$d</string>
+    <string name="pref_proxy_blocked_topic_removed">“%1$s” goes direct again</string>
+    <string name="pref_proxy_blocked_list_clear_all">Clear all</string>
     <string name="pref_proxy_blocked_list_cleared">List cleared</string>
     <string name="pref_title_proxy_safety">Security</string>
     <string name="pref_summary_proxy_safety">Your 4PDA cookies travel through the proxy — use your own server only, or your session is exposed. The password is stored encrypted. News and other WebView pages go direct: WebView does not support proxy credentials</string>

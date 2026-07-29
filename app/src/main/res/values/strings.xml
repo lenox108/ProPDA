@@ -1382,8 +1382,10 @@
     <string name="pref_summary_proxy_only_blocked">Обычные темы грузятся напрямую. Если тема отдаёт заглушку, запрос повторяется через прокси, и дальше она сразу идёт этим маршрутом. Выключено — через прокси идёт весь трафик приложения</string>
     <string name="pref_title_proxy_blocked_list">Темы через прокси</string>
     <string name="pref_summary_proxy_blocked_list_empty">Список пуст — заблокированные темы ещё не встречались</string>
-    <string name="pref_summary_proxy_blocked_list">В списке тем: %1$d</string>
-    <string name="pref_proxy_blocked_list_clear">Очистить список?</string>
+    <string name="pref_summary_proxy_blocked_list_more">%1$s и ещё %2$d</string>
+    <string name="pref_proxy_blocked_topic_unnamed">Тема №%1$d</string>
+    <string name="pref_proxy_blocked_topic_removed">«%1$s» — снова напрямую</string>
+    <string name="pref_proxy_blocked_list_clear_all">Очистить всё</string>
     <string name="pref_proxy_blocked_list_cleared">Список очищен</string>
     <string name="pref_title_proxy_safety">Безопасность</string>
     <string name="pref_summary_proxy_safety">Через прокси идут ваши cookies 4PDA — используйте только свой, иначе сессия достанется постороннему. Пароль хранится в зашифрованном виде. Новости и другие страницы на WebView идут напрямую: там прокси с логином и паролем не поддерживается</string>

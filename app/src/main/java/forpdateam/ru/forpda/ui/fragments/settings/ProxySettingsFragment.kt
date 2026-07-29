@@ -128,14 +128,31 @@ class ProxySettingsFragment : BaseSettingFragment() {
         }
     }
 
+    /**
+     * Список ведётся автоматически, поэтому пользователю важно видеть НЕ количество, а какие именно
+     * темы ходят мимо прямого маршрута: только так понятно, за что отвечает прокси и не осталось ли
+     * в списке лишнего. Имена показываем прямо в summary, полный список с удалением — по нажатию.
+     */
     private fun configureBlockedTopicsList() {
         findPreference<Preference>(KEY_BLOCKED_LIST)?.setOnPreferenceClickListener {
-            if (blockedTopics.size() == 0) return@setOnPreferenceClickListener true
+            val topics = blockedTopics.topics()
+            if (topics.isEmpty()) return@setOnPreferenceClickListener true
             MaterialAlertDialogBuilder(requireContext())
                     .setTitle(R.string.pref_title_proxy_blocked_list)
-                    .setMessage(R.string.pref_proxy_blocked_list_clear)
+                    // Нажатие по теме убирает её из списка. Подтверждения нет намеренно: если тема
+                    // и правда закрыта, следующий заход по заглушке вернёт её обратно сам.
+                    .setItems(topics.map { it.displayName() }.toTypedArray()) { _, which ->
+                        val topic = topics[which]
+                        blockedTopics.forget(topic.id)
+                        updateBlockedTopicsSummary()
+                        Toast.makeText(
+                                requireContext(),
+                                getString(R.string.pref_proxy_blocked_topic_removed, topic.displayName()),
+                                Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                     .setNegativeButton(R.string.cancel, null)
-                    .setPositiveButton(R.string.ok) { _, _ ->
+                    .setPositiveButton(R.string.pref_proxy_blocked_list_clear_all) { _, _ ->
                         blockedTopics.clear()
                         updateBlockedTopicsSummary()
                         Toast.makeText(requireContext(), R.string.pref_proxy_blocked_list_cleared, Toast.LENGTH_SHORT).show()
@@ -146,13 +163,21 @@ class ProxySettingsFragment : BaseSettingFragment() {
         updateBlockedTopicsSummary()
     }
 
+    /** Темы из старых версий сохранены без имени — показываем хотя бы номер. */
+    private fun BlockedTopicRegistry.BlockedTopic.displayName(): String =
+            title ?: getString(R.string.pref_proxy_blocked_topic_unnamed, id)
+
     private fun updateBlockedTopicsSummary() {
         val preference = findPreference<Preference>(KEY_BLOCKED_LIST) ?: return
-        val count = blockedTopics.size()
-        preference.summary = if (count == 0) {
-            getString(R.string.pref_summary_proxy_blocked_list_empty)
-        } else {
-            getString(R.string.pref_summary_proxy_blocked_list, count)
+        val topics = blockedTopics.topics()
+        preference.summary = when {
+            topics.isEmpty() -> getString(R.string.pref_summary_proxy_blocked_list_empty)
+            topics.size <= SUMMARY_TOPICS -> topics.joinToString { it.displayName() }
+            else -> getString(
+                    R.string.pref_summary_proxy_blocked_list_more,
+                    topics.take(SUMMARY_TOPICS).joinToString { it.displayName() },
+                    topics.size - SUMMARY_TOPICS,
+            )
         }
     }
 
@@ -160,5 +185,8 @@ class ProxySettingsFragment : BaseSettingFragment() {
         const val PREFERENCE_SCREEN_NAME = "proxy"
         private const val KEY_TEST = "net.proxy.test"
         private const val KEY_BLOCKED_LIST = "net.proxy.blocked_list"
+
+        /** Сколько имён показывать в summary, пока строка не превратилась в простыню. */
+        private const val SUMMARY_TOPICS = 3
     }
 }

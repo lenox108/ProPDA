@@ -34,10 +34,21 @@ class BlockedTopicRegistry(context: Context) {
         return age < REVALIDATE_AFTER_MS || age < 0
     }
 
-    /** Запомнить/освежить тему, которая открылась только через прокси. */
-    fun remember(topicId: Int, nowMs: Long = System.currentTimeMillis()) {
+    /**
+     * Запомнить/освежить тему, которая открылась только через прокси.
+     *
+     * [title] сохраняем рядом, чтобы на экране настроек список был читаемым: «в списке 2 темы»
+     * ничего не говорит о том, что именно ходит мимо прямого маршрута.
+     */
+    fun remember(topicId: Int, title: String? = null, nowMs: Long = System.currentTimeMillis()) {
         if (topicId <= 0) return
-        prefs.edit().putLong(topicId.toString(), nowMs).apply()
+        prefs.edit()
+                .putLong(topicId.toString(), nowMs)
+                .apply {
+                    // Пустой заголовок не затирает прежний: имя темы полезнее пустой строки.
+                    title?.trim()?.takeIf { it.isNotEmpty() }?.let { putString(titleKey(topicId), it) }
+                }
+                .apply()
         Timber.tag(LOG_TAG).i("topic %d routed via proxy", topicId)
     }
 
@@ -45,22 +56,35 @@ class BlockedTopicRegistry(context: Context) {
     fun forget(topicId: Int) {
         if (topicId <= 0) return
         if (!prefs.contains(topicId.toString())) return
-        prefs.edit().remove(topicId.toString()).apply()
+        prefs.edit().remove(topicId.toString()).remove(titleKey(topicId)).apply()
         Timber.tag(LOG_TAG).i("topic %d back to direct route", topicId)
     }
 
     /** Сколько тем сейчас в списке (включая протухшие — они видны пользователю как «в списке»). */
-    fun size(): Int = prefs.all.size
+    fun size(): Int = topics().size
 
-    fun topicIds(): List<Int> = prefs.all.keys.mapNotNull { it.toIntOrNull() }.sorted()
+    /** Список для экрана настроек: свежие сверху. */
+    fun topics(): List<BlockedTopic> = prefs.all.entries
+            .mapNotNull { (key, value) ->
+                val id = key.toIntOrNull() ?: return@mapNotNull null // отсеиваем ключи заголовков
+                val confirmedAt = value as? Long ?: return@mapNotNull null
+                BlockedTopic(id, prefs.getString(titleKey(id), null)?.takeIf { it.isNotBlank() }, confirmedAt)
+            }
+            .sortedByDescending { it.confirmedAt }
 
     fun clear() {
         prefs.edit().clear().apply()
     }
 
+    private fun titleKey(topicId: Int) = "$topicId$TITLE_SUFFIX"
+
+    /** @property title null для тем, попавших в список до того, как мы стали сохранять имя. */
+    data class BlockedTopic(val id: Int, val title: String?, val confirmedAt: Long)
+
     companion object {
         private const val STORE_NAME = "proxy_blocked_topics"
         private const val LOG_TAG = "ProxyRoute"
+        private const val TITLE_SUFFIX = ".title"
 
         /** Раз в 30 дней пробуем тему напрямую — вдруг ограничение сняли. */
         const val REVALIDATE_AFTER_MS = 30L * 24 * 60 * 60 * 1000
