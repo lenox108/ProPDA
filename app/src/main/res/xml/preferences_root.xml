@@ -60,6 +60,13 @@
             android:title="@string/pref_title_account" />
 
         <Preference
+            android:icon="@drawable/ic_star"
+            android:key="open_pro_settings"
+            android:layout="@layout/preference_section"
+            android:summary="@string/settings_section_pro_summary"
+            android:title="@string/pref_title_pro_section" />
+
+        <Preference
             android:icon="@drawable/ic_info"
             android:key="settings.section.about"
             android:layout="@layout/preference_section"

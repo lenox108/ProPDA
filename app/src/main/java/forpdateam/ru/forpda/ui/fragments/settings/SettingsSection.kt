@@ -40,6 +40,12 @@ enum class SettingsSection(
             R.xml.preferences_proxy,
             R.string.pref_title_proxy,
             externalScreen = ProxySettingsFragment.PREFERENCE_SCREEN_NAME,
+    ),
+    PRO(
+            "pro",
+            R.xml.preferences_pro,
+            R.string.pref_title_pro_section,
+            externalScreen = ProSettingsFragment.PREFERENCE_SCREEN_NAME,
     );
 
     /** Раздел рисует [SettingsFragment] — значит, его переключатели можно менять прямо в выдаче поиска. */

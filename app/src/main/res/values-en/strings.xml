@@ -983,6 +983,8 @@
     <string name="pref_title_proxy_connection">Connection</string>
     <string name="pref_title_proxy_enabled">Use proxy</string>
     <string name="pref_summary_proxy_enabled">Applies to this app only — no system VPN needed</string>
+    <string name="pref_summary_proxy_pro_locked">Requires ProPDA Pro — the same key that unlocks push notifications</string>
+    <string name="pref_proxy_pro_required">The proxy needs activation first</string>
     <string name="pref_title_proxy_type">Type</string>
     <string name="pref_title_proxy_host">Host</string>
     <string name="pref_title_proxy_port">Port</string>

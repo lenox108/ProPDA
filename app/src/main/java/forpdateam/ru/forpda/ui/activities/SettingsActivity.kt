@@ -154,6 +154,8 @@ class SettingsActivity : AppCompatActivity() {
                 NotificationsSettingsFragment.PREFERENCE_SCREEN_NAME -> NotificationsSettingsFragment()
                 ForumSettingsFragment.PREFERENCE_SCREEN_NAME -> ForumSettingsFragment()
                 ProxySettingsFragment.PREFERENCE_SCREEN_NAME -> ProxySettingsFragment()
+                forpdateam.ru.forpda.ui.fragments.settings.ProSettingsFragment.PREFERENCE_SCREEN_NAME ->
+                    forpdateam.ru.forpda.ui.fragments.settings.ProSettingsFragment()
                 else -> SettingsFragment.newInstance(SettingsSection.ROOT)
             }
             if (highlightKey != null && fragment.arguments?.containsKey(BaseSettingFragment.ARG_HIGHLIGHT_KEY) != true) {

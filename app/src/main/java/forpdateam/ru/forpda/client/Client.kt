@@ -218,6 +218,9 @@ class Client(
     override fun isProxyConfigured(): Boolean = proxySettingsStore.config() != null
 
     private fun currentProxyClients(): ProxyClients? {
+        // Вторая, независимая проверка оплаты (первая — в ProxySettings.config): как и у push,
+        // патч одной точки не должен открывать функцию целиком.
+        if (!forpdateam.ru.forpda.pro.ProLicense.isUnlocked(context)) return null
         val config = proxySettingsStore.config() ?: return null
         val version = proxySettingsStore.version
         proxyClients?.let { if (it.configVersion == version && it.config == config) return it }

@@ -52,6 +52,8 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     override fun onResume() {
         super.onResume()
         updateVersionAwareUi()
+        updateProSummary()
+        syncDeliveryWithLicense()
         realtimeStatusHandler.postDelayed(realtimeStatusTick, REALTIME_STATUS_REFRESH_MS)
     }
 
@@ -265,109 +267,31 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     private fun updateProSummary(pref: Preference? =
             preferenceScreen.findPreference("pro.license_entry")) {
         val ctx = context ?: return
-        val memberId = forpdateam.ru.forpda.pro.ProLicense.currentMemberId(ctx)
-        pref?.summary = when {
-            forpdateam.ru.forpda.pro.ProLicense.isUnlocked(ctx) -> getString(R.string.pro_status_active)
-            memberId == null -> getString(R.string.pro_status_not_logged)
-            else -> getString(R.string.pro_status_locked, memberId)
-        }
+        pref?.summary = ProDialog.statusSummary(ctx)
     }
 
-    /** Копирует ID аккаунта — его нужно передать автору для выпуска ключа. */
-    private fun copyMemberId(ctx: android.content.Context, memberId: Int) {
-        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                as? android.content.ClipboardManager ?: return
-        cm.setPrimaryClip(android.content.ClipData.newPlainText("4PDA ID", memberId.toString()))
-        // Android 13+ сам показывает всплывающее подтверждение копирования — свой тост был бы дублем.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            toast(getString(R.string.pro_id_copied))
-        }
-    }
-
+    /**
+     * Ключ общий для push и прокси, поэтому активация вынесена отдельным разделом настроек — там
+     * же перечислено, что она открывает. Отсюда просто ведём туда.
+     */
     private fun showProDialog() {
         val ctx = context ?: return
-        val memberId = forpdateam.ru.forpda.pro.ProLicense.currentMemberId(ctx)
-        if (memberId == null) {
-            toast(getString(R.string.pro_status_not_logged))
-            return
-        }
-        val input = android.widget.EditText(ctx).apply {
-            hint = getString(R.string.pro_dialog_hint)
-            setSingleLine(false)
-            maxLines = 3
-            setText(androidx.preference.PreferenceManager.getDefaultSharedPreferences(ctx)
-                    .getString(forpdateam.ru.forpda.pro.ProLicense.KEY_LICENSE, "").orEmpty())
-        }
-        val density = resources.displayMetrics.density
-        val pad = (24 * density).toInt()
-        // Пояснение и ID — своими View, а не setMessage(): текст диалога не кликабелен, а ID
-        // пользователю нужно передать автору, поэтому он должен копироваться одним касанием.
-        val explanation = android.widget.TextView(ctx).apply {
-            text = getString(R.string.pro_dialog_message)
-            setPadding(0, 0, 0, (12 * density).toInt())
-        }
-        val idView = android.widget.TextView(ctx).apply {
-            text = getString(R.string.pro_dialog_id, memberId)
-            textSize = 18f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            isClickable = true
-            isFocusable = true
-            // Штатный фон «нажимаемого» элемента, чтобы касание давало отклик.
-            val outValue = android.util.TypedValue()
-            ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
-            setBackgroundResource(outValue.resourceId)
-            val vp = (8 * density).toInt()
-            setPadding(vp, vp, vp, vp)
-            setOnClickListener { copyMemberId(ctx, memberId) }
-        }
-        val hintView = android.widget.TextView(ctx).apply {
-            text = getString(R.string.pro_dialog_id_hint)
-            textSize = 12f
-            alpha = 0.7f
-            setPadding(0, 0, 0, (12 * density).toInt())
-        }
-        val container = android.widget.LinearLayout(ctx).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(pad, pad / 2, pad, 0)
-            addView(explanation)
-            addView(idView)
-            addView(hintView)
-            addView(input)
-        }
-        val builder = androidx.appcompat.app.AlertDialog.Builder(ctx)
-                .setTitle(R.string.pro_dialog_title)
-                .setView(container)
-                .setPositiveButton(R.string.pro_activate) { _, _ ->
-                    when (forpdateam.ru.forpda.pro.ProLicense.activate(ctx, input.text.toString())) {
-                        forpdateam.ru.forpda.pro.ProLicense.Result.Activated -> {
-                            toast(getString(R.string.pro_activated))
-                            updateProSummary()
-                        }
-                        forpdateam.ru.forpda.pro.ProLicense.Result.Invalid ->
-                            toast(getString(R.string.pro_invalid))
-                        forpdateam.ru.forpda.pro.ProLicense.Result.NotLoggedIn ->
-                            toast(getString(R.string.pro_status_not_logged))
+        startActivity(android.content.Intent(ctx, forpdateam.ru.forpda.ui.activities.SettingsActivity::class.java)
+                .putExtra(forpdateam.ru.forpda.ui.activities.SettingsActivity.ARG_NEW_PREFERENCE_SCREEN,
+                        ProSettingsFragment.PREFERENCE_SCREEN_NAME))
+    }
+
+    /** Ключ могли удалить в разделе активации — приводим способ доставки в соответствие. */
+    private fun syncDeliveryWithLicense() {
+        if (forpdateam.ru.forpda.pro.ProLicense.isUnlocked(context ?: return)) return
+        preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
+                ?.let { dm ->
+                    if (dm.value == "push") {
+                        dm.value = "poll"
+                        applyDeliveryMethod("poll")
+                        updateDeliveryMethodSummary(dm, "poll")
                     }
                 }
-                .setNegativeButton(android.R.string.cancel, null)
-        if (forpdateam.ru.forpda.pro.ProLicense.isUnlocked(ctx)) {
-            builder.setNeutralButton(R.string.pro_deactivate) { _, _ ->
-                forpdateam.ru.forpda.pro.ProLicense.deactivate(ctx)
-                // Ключ убрали — push больше не положен, возвращаем бесплатный канал.
-                disablePush()
-                preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
-                        ?.let { dm ->
-                            if (dm.value == "push") {
-                                dm.value = "poll"
-                                applyDeliveryMethod("poll")
-                                updateDeliveryMethodSummary(dm, "poll")
-                            }
-                        }
-                toast(getString(R.string.pro_removed))
-                updateProSummary()
-            }
-        }
-        builder.show()
     }
 
     private fun configureDeliveryMethod() {
