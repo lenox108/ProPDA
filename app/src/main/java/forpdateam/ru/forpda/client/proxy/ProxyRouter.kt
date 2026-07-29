@@ -35,6 +35,16 @@ object ProxyRouter {
         return isTopicBlocked(topicId)
     }
 
+    /**
+     * Маршрут для клиентов, которые не разбирают запрос: картинки и загрузка файлов. Тему по URL
+     * картинки не определить, поэтому «только заблокированные темы» для них означает прямой путь,
+     * а прокси включается лишь в режиме «весь трафик приложения».
+     *
+     * @return конфиг, если этим клиентам сейчас положено идти через прокси, иначе null.
+     */
+    fun proxyForAllTraffic(config: ProxyConfig?, mode: ProxyMode): ProxyConfig? =
+            config?.takeIf { mode == ProxyMode.ALL }
+
     /** id темы из URL запроса, если он вообще относится к теме. */
     fun extractTopicId(url: String?): Int? {
         if (url.isNullOrBlank()) return null

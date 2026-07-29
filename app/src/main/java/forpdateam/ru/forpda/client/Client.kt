@@ -99,6 +99,9 @@ class Client(
         private val LOG_TAG = Client::class.java.simpleName
         private const val PROXY_LOG_TAG = "ProxyRoute"
 
+        /** Ответ ProxySelector'а «идти напрямую». */
+        private val DIRECT = listOf(java.net.Proxy.NO_PROXY)
+
         /** Актуальный мобильный Chrome на Android — ближе к WebView и к типичному браузеру пользователя. */
         private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -164,6 +167,8 @@ class Client(
             .dns(cachedDns)
             .cookieJar(cookieJar)
             .cache(httpCache)
+            .proxySelector(allTrafficProxySelector)
+            .proxyAuthenticator(allTrafficProxyAuthenticator)
             .addInterceptor(BlocklistInterceptor(authHolder, userHolder, blocklistGuard))
             .addInterceptor(AuthInterceptor())
             .addInterceptor(ImageLoadingInterceptor { url -> cookieJar.loadForRequest(url).isNotEmpty() })
@@ -173,6 +178,12 @@ class Client(
             .addNetworkInterceptor(CacheControlInterceptor())
             .addNetworkInterceptor(RequestGovernorInterceptor())
             .build()
+            .also { built ->
+                // Смена настроек должна применяться сразу: живые соединения пула переживают
+                // переключение маршрута (адрес клиента не меняется), и картинки ещё несколько минут
+                // грузились бы старым путём. Закрываем простаивающие — активные доработают сами.
+                proxySettingsStore.addChangeListener { built.connectionPool.evictAll() }
+            }
     }
 
     // region Прокси
@@ -269,6 +280,51 @@ class Client(
             }
         })
         Timber.tag(PROXY_LOG_TAG).i("SOCKS authenticator installed")
+    }
+
+    /**
+     * Маршрут для клиентов, которые не разбирают запрос сами: картинки (Coil) и загрузка файлов
+     * (DownloadWorker) берут ОДИН клиент на весь процесс, а настройка обещает «через прокси идёт
+     * весь трафик приложения». Поэтому решение принимается не при сборке клиента, а на каждое
+     * соединение — иначе прокси включался бы для картинок только после перезапуска.
+     *
+     * В режиме «только заблокированные темы» отдаём системный маршрут: по URL картинки тему не
+     * определить, а гнать через чужой прокси всё подряд пользователь не просил. Именно системный,
+     * а не `NO_PROXY` — иначе мы бы сломали тех, у кого прокси задан в настройках Wi-Fi Android.
+     */
+    private val allTrafficProxySelector = object : java.net.ProxySelector() {
+
+        override fun select(uri: java.net.URI?): List<java.net.Proxy> {
+            val config = ProxyRouter.proxyForAllTraffic(proxySettingsStore.config(), proxySettingsStore.mode)
+                    ?: return systemSelect(uri)
+            if (config.type == ProxyType.SOCKS5 && config.hasCredentials) installSocksAuthenticator()
+            if (BuildConfig.DEBUG) Timber.tag(PROXY_LOG_TAG).d("via proxy (all traffic): %s", uri)
+            return listOf(config.toJavaProxy())
+        }
+
+        override fun connectFailed(uri: java.net.URI?, address: java.net.SocketAddress?, failure: IOException?) {
+            Timber.tag(PROXY_LOG_TAG).w(failure, "connect failed: %s via %s", uri, address)
+        }
+
+        private fun systemSelect(uri: java.net.URI?): List<java.net.Proxy> {
+            val system = getDefault() ?: return DIRECT
+            return runCatching { uri?.let { system.select(it) } }.getOrNull()?.takeIf { it.isNotEmpty() } ?: DIRECT
+        }
+    }
+
+    /**
+     * Логин/пароль для HTTP-прокси на том же «всём трафике». Срабатывает только на 407 от прокси,
+     * поэтому клиенту без прокси ничего не стоит. SOCKS сюда не попадает — там свой путь
+     * ([installSocksAuthenticator]).
+     */
+    private val allTrafficProxyAuthenticator = okhttp3.Authenticator { _, response ->
+        // Не зацикливаемся: если прокси снова просит авторизацию — сдаёмся.
+        if (response.request.header("Proxy-Authorization") != null) return@Authenticator null
+        val config = proxySettingsStore.config()?.takeIf { it.type == ProxyType.HTTP && it.hasCredentials }
+                ?: return@Authenticator null
+        response.request.newBuilder()
+                .header("Proxy-Authorization", Credentials.basic(config.login, config.password))
+                .build()
     }
 
     /**
