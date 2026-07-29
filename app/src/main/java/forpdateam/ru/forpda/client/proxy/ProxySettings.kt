@@ -59,9 +59,17 @@ class ProxySettings(context: Context) {
     val mode: ProxyMode
         get() = if (prefs.getBoolean(KEY_ONLY_BLOCKED, true)) ProxyMode.ONLY_BLOCKED_TOPICS else ProxyMode.ALL
 
-    /** null — прокси выключен или настроен не полностью (нет хоста/порта). */
+    /**
+     * Прокси — платная функция ProPDA Pro, тем же ключом, что и push-уведомления
+     * ([forpdateam.ru.forpda.pro.ProLicense]). Проверка стоит здесь, в источнике конфига, а не
+     * только на экране настроек: так без ключа маршрут не поднимется, даже если тумблер остался
+     * включённым с прошлых версий или из бэкапа настроек.
+     */
+    fun isUnlocked(): Boolean = forpdateam.ru.forpda.pro.ProLicense.isUnlocked(appContext)
+
+    /** null — прокси выключен, не оплачен или настроен не полностью (нет хоста/порта). */
     fun config(): ProxyConfig? {
-        if (!isEnabled) return null
+        if (!isEnabled || !isUnlocked()) return null
         return ProxyConfig.from(
                 type = ProxyType.fromKey(prefs.getString(KEY_TYPE, ProxyType.SOCKS5.key)),
                 host = prefs.getString(KEY_HOST, ""),
@@ -71,8 +79,12 @@ class ProxySettings(context: Context) {
         )
     }
 
-    /** Конфиг без учёта выключателя — для кнопки «Проверить», когда прокси ещё не включён. */
-    fun configIgnoringEnabled(): ProxyConfig? = ProxyConfig.from(
+    /**
+     * Конфиг без учёта выключателя — для кнопки «Проверить», когда прокси ещё не включён.
+     * Ключ Pro проверяется и здесь: «Проверить» ходит в сеть через прокси, то есть пользуется
+     * ровно той функцией, за которую платят.
+     */
+    fun configIgnoringEnabled(): ProxyConfig? = if (!isUnlocked()) null else ProxyConfig.from(
             type = ProxyType.fromKey(prefs.getString(KEY_TYPE, ProxyType.SOCKS5.key)),
             host = prefs.getString(KEY_HOST, ""),
             port = prefs.getString(KEY_PORT, ""),

@@ -44,6 +44,7 @@ class ProxySettingsFragment : BaseSettingFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         addPreferencesFromResource(R.xml.preferences_proxy)
+        configureProEntry()
         configureTextFields()
         configurePasswordField()
         configureProbe()
@@ -53,7 +54,56 @@ class ProxySettingsFragment : BaseSettingFragment() {
 
     override fun onResume() {
         super.onResume()
+        // Ключ могли ввести на экране уведомлений — статус пересобираем при каждом возврате.
+        updateProState()
         refreshBlockedTopics()
+    }
+
+    /**
+     * Прокси — платная функция ProPDA Pro, и ключ ТОТ ЖЕ, что и для push: активировал одно —
+     * доступно и другое, отдельной покупки нет. Здесь только UI-часть: не даём включить тумблер
+     * без ключа и сразу открываем окно активации. Сам маршрут закрыт независимо — в
+     * [ProxySettings.config] и в [forpdateam.ru.forpda.client.Client].
+     */
+    private fun configureProEntry() {
+        findPreference<Preference>(KEY_PRO_ENTRY)?.setOnPreferenceClickListener {
+            openProScreen()
+            true
+        }
+        findPreference<Preference>(ProxySettings.KEY_ENABLED)?.onPreferenceChangeListener =
+                Preference.OnPreferenceChangeListener { _, newValue ->
+                    if (newValue != true || proxySettings.isUnlocked()) return@OnPreferenceChangeListener true
+                    Toast.makeText(requireContext(), R.string.pref_proxy_pro_required, Toast.LENGTH_SHORT).show()
+                    openProScreen()
+                    false // тумблер не включаем: без ключа он всё равно ничего не даст
+                }
+        updateProState()
+    }
+
+    /** Активация живёт отдельным разделом — там же написано, что именно она открывает. */
+    private fun openProScreen() {
+        startActivity(android.content.Intent(requireContext(), SettingsActivity::class.java)
+                .putExtra(SettingsActivity.ARG_NEW_PREFERENCE_SCREEN, ProSettingsFragment.PREFERENCE_SCREEN_NAME))
+    }
+
+    /**
+     * Пока ключа нет, платные пункты гасим — иначе экран выглядит рабочим, а прокси молча не
+     * поднимается. Поля адреса остаются доступными: заполнить их заранее не мешает.
+     */
+    private fun updateProState() {
+        val context = context ?: return
+        val unlocked = proxySettings.isUnlocked()
+        findPreference<Preference>(KEY_PRO_ENTRY)?.summary = ProDialog.statusSummary(context)
+        findPreference<Preference>(ProxySettings.KEY_ENABLED)?.apply {
+            if (!unlocked) {
+                summary = getString(R.string.pref_summary_proxy_pro_locked)
+                // Значение могло остаться с активного ключа — не показываем «включено» вхолостую.
+                (this as? androidx.preference.TwoStatePreference)?.isChecked = false
+            } else {
+                summary = getString(R.string.pref_summary_proxy_enabled)
+            }
+        }
+        findPreference<Preference>(KEY_TEST)?.isEnabled = unlocked
     }
 
     /**
@@ -265,6 +315,7 @@ class ProxySettingsFragment : BaseSettingFragment() {
 
     companion object {
         const val PREFERENCE_SCREEN_NAME = "proxy"
+        private const val KEY_PRO_ENTRY = "pro.license_entry"
         private const val KEY_TEST = "net.proxy.test"
         private const val KEY_BLOCKED_LIST = "net.proxy.blocked_list"
 
