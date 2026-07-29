@@ -854,7 +854,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         boundaryResumeArmed = restorePostId <= 0
         val openUrl = if (restorePostId > 0) buildRestoreUrl(restorePostId) else resolveInitialOpenUrl()
         armOpenAnchorTrust(openUrl, openListHintsFromArgs())
-        loadTopic(openUrl)
+        loadTopic(url = openUrl, isRestoreOpen = restorePostId > 0)
 
         // Live-toggle «Панель страниц темы»: re-evaluate both bars when the setting flips while the topic
         // tab stays alive in the background stack (the collector re-emits the current value immediately).
@@ -863,6 +863,28 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (view != null && pagination.isInitialised) updatePaginationBar()
             }
         }
+    }
+
+    /**
+     * Восстановление позиции провалилось (сохранённый пост удалён или перенесён в другую тему) —
+     * открываем тему как обычно, по настройке «При открытии темы». Сбрасываем restore-состояние, чтобы
+     * оно не применилось к новой посадке, и снова разрешаем резюм к границе прочитанного: это уже
+     * полноценное открытие, а не восстановление. Вложенная загрузка идёт БЕЗ [isRestoreOpen], поэтому
+     * её собственный провал уйдёт в обычную ошибку — зацикливания нет.
+     */
+    private fun fallbackFromFailedRestore(reason: String) {
+        pendingRestorePostId = 0
+        pendingRestoreOffset = 0
+        pendingJumpToBottom = false
+        pendingJumpToTop = false
+        boundaryResumeArmed = true
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_READ_BOUNDARY", "restore_open failed ($reason) → open by setting")
+        }
+        // Полноценное открытие по настройке — значит и хинт якоря ему положен (как boundaryResumeArmed).
+        val openUrl = resolveInitialOpenUrl()
+        armOpenAnchorTrust(openUrl, openListHintsFromArgs())
+        loadTopic(openUrl)
     }
 
     /** URL, ведущий на конкретный пост (findpost) для restore-scroll; фолбэк — обычное открытие. */
@@ -4675,7 +4697,17 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         return "$base${sep}_cb=${System.nanoTime()}$frag"
     }
 
-    private fun loadTopic(url: String, preserveRefreshIntent: Boolean = false) {
+    /**
+     * @param isRestoreOpen загрузка восстановления после пересоздания фрагмента (findpost на сохранённый
+     * пост, см. [buildRestoreUrl]). Если такой пост за время отсутствия удалили или модераторы перенесли
+     * его в другую тему, findpost падает/отдаёт чужую страницу — вместо ошибки и пустого экрана
+     * открываем тему обычным путём по настройке ([fallbackFromFailedRestore]).
+     */
+    private fun loadTopic(
+            url: String,
+            preserveRefreshIntent: Boolean = false,
+            isRestoreOpen: Boolean = false,
+    ) {
         if (url.isBlank()) {
             setRefreshing(false)
             return
@@ -4772,6 +4804,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         return@onSuccess
                     }
                 }
+                // Восстановление позиции после пересоздания фрагмента: сохранённого поста может уже не
+                // быть (удалён) или он ПЕРЕНЕСЁН модераторами в другую тему — findpost тогда отдаёт пустую
+                // страницу либо страницу чужой темы. Не показываем пустоту и не уводим из запрошенной темы:
+                // открываем её обычным путём по настройке.
+                if (isRestoreOpen) {
+                    val expectedTopicId = ThemeApi.extractTopicIdFromUrl(topicUrl) ?: 0
+                    val movedToForeignTopic = expectedTopicId > 0 && page.id > 0 && page.id != expectedTopicId
+                    if (page.posts.isEmpty() || movedToForeignTopic) {
+                        fallbackFromFailedRestore(
+                                if (movedToForeignTopic) "post moved to topic ${page.id}" else "empty page")
+                        return@onSuccess // индикатор держим: вложенная загрузка его снимет
+                    }
+                }
                 // Клиентская граница прочитанного: на ПЕРВОМ открытии, если серверный якорь сел бы НИЖЕ
                 // самого дальнего реально-виденного поста, перезагрузиться findpost'ом на границу (иначе
                 // проскочим непрочитанное — walk-down 4PDA). Фаер один раз за открытие; findpost-резюм не
@@ -4797,6 +4842,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     }
                     renderThemePage(fbUrl, fb)
                     return@onFailure
+                }
+                // Сохранённый пост удалён из темы — findpost падает исключением («Пост #… не найден»).
+                // Вместо ошибки и пустого экрана открываем тему обычным путём по настройке.
+                if (isRestoreOpen) {
+                    fallbackFromFailedRestore(error.message ?: "error")
+                    return@onFailure // индикатор держим: вложенная загрузка его снимет
                 }
                 setRefreshing(false)
                 pendingRefreshSeenUpToPostId = 0 // не переживать неудачную загрузку — иначе стухнет
