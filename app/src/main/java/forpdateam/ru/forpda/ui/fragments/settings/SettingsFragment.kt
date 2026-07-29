@@ -531,6 +531,8 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }
 
+        // Экран порядка панели пока остаётся: перетаскивание плитки в зону панели прямо в меню
+        // ещё не подтверждено живьём, и без этого пункта состав панели было бы нечем менять.
         findPreference<Preference>("bottom_nav_order")?.setOnPreferenceClickListener {
             requireActivity().supportFragmentManager.beginTransaction()
                     .replace(R.id.fragment_content, BottomNavOrderFragment())

@@ -1061,4 +1061,6 @@
     <string name="other_menu_exit_app">Exit the app</string>
     <string name="other_menu_quick_settings_all">All settings</string>
     <string name="other_menu_quick_settings_edit">Change items</string>
+    <string name="other_menu_section_bottom_bar">Bottom bar</string>
+    <string name="other_menu_bottom_bar_hint">Drag a tile here to put it in the bottom bar</string>
 </resources>

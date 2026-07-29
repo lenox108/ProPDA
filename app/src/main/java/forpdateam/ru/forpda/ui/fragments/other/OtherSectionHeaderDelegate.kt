@@ -34,6 +34,7 @@ class OtherSectionHeaderDelegate : AdapterDelegate<MutableList<ListItem>>() {
                     when (section) {
                         // Секция теперь одна («Разделы»); QUICK остался её носителем, чтобы не
                         // ломать сохранённые раскладки и код перетаскивания.
+                        OtherMenuSection.BOTTOM -> R.string.other_menu_section_bottom_bar
                         OtherMenuSection.QUICK -> R.string.other_menu_section_all
                         OtherMenuSection.PERSONAL -> R.string.other_menu_section_personal
                         OtherMenuSection.TOOLS -> R.string.other_menu_section_tools

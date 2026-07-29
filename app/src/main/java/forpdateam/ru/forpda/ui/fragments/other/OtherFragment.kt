@@ -142,7 +142,14 @@ class OtherFragment : TabFragment() {
                             // post: пересборка списка (зоны пустых секций) прилетает из clearView,
                             // когда RecyclerView ещё может считать layout.
                             listRecycler.post {
-                                viewModel.onChangeMenuSequence(otherAdapter.commitDragLayout())
+                                val layout = otherAdapter.commitDragLayout()
+                                // Панель и сетка — одна последовательность: сначала пункты панели,
+                                // потом остальные. Сохраняем оба порядка одним движением.
+                                viewModel.onChangeBottomNav(
+                                        otherAdapter.currentBottomNavIds(),
+                                        otherAdapter.currentMenuNavIds(),
+                                )
+                                viewModel.onChangeMenuSequence(layout)
                             }
                         }
                     }
@@ -184,6 +191,7 @@ class OtherFragment : TabFragment() {
                             state.infoList,
                             state.menu,
                             state.bottomNavDuplicateIds,
+                            state.bottomNavIds,
                             state.continueItems,
                             state.quickSettings,
                             quickSettingsSummary(),

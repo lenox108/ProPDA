@@ -65,6 +65,8 @@ class OtherViewModel @Inject constructor(
             val menu: List<List<AppMenuItem>> = emptyList(),
             val menuTileLayout: Map<OtherMenuSection, List<Int>> = emptyMap(),
             val bottomNavDuplicateIds: Set<Int> = emptySet(),
+            /** Порядок разделов, стоящих в нижней панели — зона слотов в режиме редактирования. */
+            val bottomNavIds: List<Int> = emptyList(),
             val shortcuts: List<MenuShortcut> = emptyList(),
             val continueItems: List<HistoryItem> = emptyList(),
             val quickSettings: List<QuickSetting> = QuickSetting.DEFAULT,
@@ -217,7 +219,8 @@ class OtherViewModel @Inject constructor(
                 infoList = localCloseableInfo.toList(),
                 menu = menuMap.map { it.value },
                 menuTileLayout = menuTileLayout,
-                bottomNavDuplicateIds = resolveBottomNavDuplicateIds(),
+                bottomNavDuplicateIds = resolveBottomNavIds().toSet(),
+                bottomNavIds = resolveBottomNavIds(),
                 shortcuts = shortcuts,
                 continueItems = continueItems,
                 quickSettings = quickSettings,
@@ -271,14 +274,27 @@ class OtherViewModel @Inject constructor(
         linkHandler.handle(url, router, mapOf(Screen.ARG_TITLE to item.title.orEmpty()))
     }
 
-    private fun resolveBottomNavDuplicateIds(): Set<Int> {
+    /** Разделы, занявшие места в нижней панели: первые (колонки − 1) пунктов главной группы. */
+    private fun resolveBottomNavIds(): List<Int> {
         val visibleBottomSlots = (bottomNavColumns - 1).coerceAtLeast(0)
         return menuMap[MenuRepository.group_main]
                 .orEmpty()
                 .filter { it.id != MenuRepository.item_auth }
                 .take(visibleBottomSlots)
                 .map { it.id }
-                .toSet()
+    }
+
+    /**
+     * Состав нижней панели меняется перетаскиванием прямо в меню: панель — это первые N
+     * пунктов той же последовательности, что и сетка, поэтому сохраняем их одним списком.
+     * Пользовательские ярлыки (отрицательные id) в панель не попадают — их отсекает
+     * [MenuRepository.setMainMenuSequence] по составу главной группы.
+     */
+    fun onChangeBottomNav(barIds: List<Int>, restIds: List<Int>) {
+        val allItems = menuMap[MenuRepository.group_main].orEmpty()
+        val ordered = (barIds + restIds).mapNotNull { id -> allItems.firstOrNull { it.id == id } }
+        if (ordered.isEmpty()) return
+        menuRepository.setMainMenuSequence(ordered)
     }
 
     fun signOut() {

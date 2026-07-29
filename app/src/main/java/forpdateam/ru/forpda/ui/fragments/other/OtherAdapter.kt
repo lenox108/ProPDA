@@ -39,11 +39,19 @@ class OtherAdapter(
     private var hasBoundMenuOnce = false
     private var lastBind: BindArgs? = null
 
+    /**
+     * Id плитки, которую только что перетащили: её нельзя выталкивать из панели при
+     * переполнении. Именно id, а не ссылка — список между drag и commit могли пересобрать,
+     * и сравнение по объекту молча переставало работать.
+     */
+    private var lastMovedItemId: Int? = null
+
     private class BindArgs(
             val profileItem: ProfileModel?,
             val infoList: List<CloseableInfo>,
             val menuItems: List<List<AppMenuItem>>,
             val bottomNavDuplicateIds: Set<Int>,
+            val bottomNavIds: List<Int>,
             val continueItems: List<HistoryItem>,
             val quickSettings: List<QuickSetting>,
             val quickSettingsSummary: String,
@@ -172,6 +180,7 @@ class OtherAdapter(
             infoList: List<CloseableInfo>,
             newItems: List<List<AppMenuItem>>,
             bottomNavDuplicateIds: Set<Int>,
+            bottomNavIds: List<Int>,
             continueItems: List<HistoryItem>,
             quickSettings: List<QuickSetting>,
             quickSettingsSummary: String,
@@ -182,6 +191,7 @@ class OtherAdapter(
                 infoList,
                 newItems,
                 bottomNavDuplicateIds,
+                bottomNavIds,
                 continueItems,
                 quickSettings,
                 quickSettingsSummary,
@@ -217,6 +227,12 @@ class OtherAdapter(
             // отрицательные id, поэтому и порядок, и секции хранятся тем же механизмом.
             val flatItems = args.menuItems.flatten() +
                     shortcuts.map { AppMenuItem(it.id, null, it) }
+            // Зона нижней панели живёт только в режиме редактирования: в обычном виде панель
+            // и так на экране, и дублировать её сверху незачем. Зато при перетаскивании нужна
+            // цель, куда плитку класть, и источник, откуда её забирать.
+            if (isEditMode && args.bottomNavIds.isNotEmpty()) {
+                addBottomBarZone(args.bottomNavIds, flatItems)
+            }
             SECTIONS.forEach { section ->
                 addSection(section, columns = MENU_COLUMNS, flatItems, args.bottomNavDuplicateIds)
             }
@@ -333,6 +349,88 @@ class OtherAdapter(
         if (!hidden && hasContent) content()
     }
 
+    private fun MutableList<ListItem>.addBottomBarZone(
+            bottomNavIds: List<Int>,
+            sourceItems: List<AppMenuItem>,
+    ) {
+        val itemsById = sourceItems.associateBy { it.id }
+        val barItems = bottomNavIds.mapNotNull { itemsById[it] }
+        if (barItems.isEmpty()) return
+        add(OtherMenuSectionListItem(OtherMenuSection.BOTTOM))
+        // Колонок ровно столько, сколько мест в панели — слоты встают одним рядом.
+        addAll(barItems.map {
+            MenuListItem(MenuMapper.mapToDrawer(it), OtherMenuSection.BOTTOM, barItems.size)
+        })
+    }
+
+    /**
+     * В панели всегда ровно столько плиток, сколько в ней мест: лишняя уезжает в начало сетки,
+     * а освободившееся место занимает первая плитка сетки. Иначе перетаскивание оставило бы
+     * панель полупустой, а лишний пункт — невидимым.
+     */
+    private fun normalizeBottomZone() {
+        val currentItems = items ?: return
+        val slots = lastBind?.bottomNavIds?.size ?: return
+        if (slots <= 0) return
+        while (true) {
+            val bar = currentItems.filterIsInstance<MenuListItem>()
+                    .filter { it.section == OtherMenuSection.BOTTOM }
+            if (bar.size == slots) return
+            if (bar.size > slots) {
+                // Выталкиваем не только что перетащенную плитку, а вытесненную ею: сначала
+                // пользовательский ярлык (в панель он не встаёт вовсе), потом просто последнюю.
+                val extra = bar.lastOrNull { it.menuItem.appItem.shortcut != null }
+                        ?: bar.lastOrNull { it.menuItem.appItem.id != lastMovedItemId }
+                        ?: bar.last()
+                extra.section = MENU_SECTION
+            } else {
+                val donor = currentItems.filterIsInstance<MenuListItem>()
+                        .firstOrNull { it.section == MENU_SECTION && it.menuItem.appItem.shortcut == null }
+                        ?: return
+                donor.section = OtherMenuSection.BOTTOM
+            }
+            reorderZones()
+        }
+    }
+
+    /** Плитки зоны должны идти подряд после своего заголовка — после смены секции пересобираем. */
+    private fun reorderZones() {
+        val currentItems = items ?: return
+        val barHeader = currentItems.indexOfFirst {
+            it is OtherMenuSectionListItem && it.section == OtherMenuSection.BOTTOM
+        }
+        if (barHeader < 0) return
+        val menuHeader = currentItems.indexOfFirst {
+            it is OtherMenuSectionListItem && it.section == MENU_SECTION
+        }
+        if (menuHeader < 0) return
+        val tiles = currentItems.filterIsInstance<MenuListItem>()
+        val bar = tiles.filter { it.section == OtherMenuSection.BOTTOM }
+        val rest = tiles.filter { it.section != OtherMenuSection.BOTTOM }
+        currentItems.removeAll(tiles.toSet())
+        val newBarHeader = currentItems.indexOfFirst {
+            it is OtherMenuSectionListItem && it.section == OtherMenuSection.BOTTOM
+        }
+        currentItems.addAll(newBarHeader + 1, bar)
+        val newMenuHeader = currentItems.indexOfFirst {
+            it is OtherMenuSectionListItem && it.section == MENU_SECTION
+        }
+        currentItems.addAll(newMenuHeader + 1, rest)
+        notifyDataSetChanged()
+    }
+
+    /** Порядок пунктов панели после перетаскивания — сохраняется как начало главной группы. */
+    fun currentBottomNavIds(): List<Int> = items.orEmpty()
+            .filterIsInstance<MenuListItem>()
+            .filter { it.section == OtherMenuSection.BOTTOM }
+            .map { it.menuItem.appItem.id }
+
+    /** Остальные штатные пункты (без ярлыков) — хвост той же последовательности. */
+    fun currentMenuNavIds(): List<Int> = items.orEmpty()
+            .filterIsInstance<MenuListItem>()
+            .filter { it.section != OtherMenuSection.BOTTOM && it.menuItem.appItem.shortcut == null }
+            .map { it.menuItem.appItem.id }
+
     private fun MutableList<ListItem>.addSection(
             section: OtherMenuSection,
             columns: Int,
@@ -397,7 +495,8 @@ class OtherAdapter(
     fun moveItem(fromPosition: Int, toPosition: Int): Boolean {
         val currentItems = items ?: return false
         if (!canMoveItem(fromPosition, toPosition)) return false
-        val item = currentItems.removeAt(fromPosition) as MenuListItem
+        val item = (currentItems.removeAt(fromPosition) as MenuListItem)
+                .also { lastMovedItemId = it.menuItem.appItem.id }
         val adjustedTargetPosition = if (fromPosition < toPosition) toPosition - 1 else toPosition
         val target = currentItems.getOrNull(adjustedTargetPosition)
         val insertPosition = when (target) {
@@ -421,6 +520,7 @@ class OtherAdapter(
      * пункты под авторизацией) остаются в своих секциях. Возвращает видимую раскладку для VM.
      */
     fun commitDragLayout(): Map<OtherMenuSection, List<AppMenuItem>> {
+        normalizeBottomZone()
         val visible = currentVisibleMenuLayout()
         val visibleIds = visible.values.flatten().map { it.id }.toSet()
         setCustomLayout(SECTIONS.associateWith { section ->
