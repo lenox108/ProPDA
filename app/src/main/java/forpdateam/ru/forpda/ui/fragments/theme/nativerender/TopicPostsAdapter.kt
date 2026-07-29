@@ -214,22 +214,67 @@ class TopicPostsAdapter(
      * deadline it never re-flashes (one flash per open — cf. the WebView "double-flash"/"stuck-lit" fixes).
      */
     private var highlightTargetPostId: Int = 0
+
+    /**
+     * 0 = окно вспышки взведено, но ещё НЕ начато: отсчёт стартует с первой привязки целевого поста
+     * ([highlightRemainingMsFor]), а не с момента запроса.
+     *
+     * Почему так: запрос приходит из [applyInitialAnchor] — в этот момент якорный скролл только ЗАКАЗАН,
+     * список ещё верстается, а карточки доезжают отложенным обогащением (картинки/метаданные). На тяжёлой
+     * странице всё это дольше [HIGHLIGHT_TOTAL_MS], и вспышка догорала вхолостую ДО того, как юзер видел
+     * пост: «подсветка срабатывает не постоянно, появляется со 2-3 раза» (на прогретом кэше рендер
+     * быстрее — успеваешь увидеть). Старт по первой привязке привязывает вспышку к появлению поста
+     * на экране, а не к таймеру загрузки.
+     */
     private var highlightDeadlineUptime: Long = 0L
+
+    /** Момент взвода — для страховки от вспышки «задним числом» (см. [highlightRemainingMsFor]). */
+    private var highlightArmedAtUptime: Long = 0L
+
+    /**
+     * @return true, если вспышка для [postId] была взведена, УЖЕ отыграла и окно закрылось. Нужно точке
+     * повторного якорения после дозагрузки карточек: там список переверстался и юзера снова подвезли к
+     * посту — если вспышка к тому моменту догорела, её имеет смысл показать заново (двойной вспышки не
+     * будет: окно закрыто, значит прошло не меньше [HIGHLIGHT_TOTAL_MS]).
+     */
+    fun highlightExpiredFor(postId: Int): Boolean =
+            postId > 0 && postId == highlightTargetPostId && highlightDeadlineUptime != 0L &&
+                    android.os.SystemClock.uptimeMillis() >= highlightDeadlineUptime
 
     /** Arm the open-highlight for [postId]; fires when that post binds (now if already visible). */
     fun requestHighlight(postId: Int) {
         highlightTargetPostId = postId
-        highlightDeadlineUptime = android.os.SystemClock.uptimeMillis() + HIGHLIGHT_TOTAL_MS
+        highlightDeadlineUptime = 0L
+        highlightArmedAtUptime = android.os.SystemClock.uptimeMillis()
         // Подсвечиваем всегда именно ЦЕЛЬ перехода — значит она должна быть раскрыта, даже если
         // заминусована (иначе вспышка приходится на плашку «Показать»).
         lowRatingExpandedPostIds.add(postId)
         val pos = currentList.indexOfFirst { it.postId == postId }
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_HIGHLIGHT", "request post=$postId pos=$pos listSize=${currentList.size}")
+        }
         if (pos >= 0) notifyItemChanged(pos)
     }
 
-    /** Remaining flash time (ms) for [postId], or 0 when it is not the (still-active) highlight target. */
+    /**
+     * Remaining flash time (ms) for [postId], or 0 when it is not the (still-active) highlight target.
+     * Первый вызов для взведённой цели ЗАПУСКАЕТ окно (см. [highlightDeadlineUptime]) — то есть отсчёт
+     * идёт от появления поста на экране, а не от запроса подсветки.
+     */
     private fun highlightRemainingMsFor(postId: Int): Long {
         if (postId <= 0 || postId != highlightTargetPostId) return 0L
+        if (highlightDeadlineUptime == 0L) {
+            // Страховка: цель могла вообще не оказаться в загруженном окне (якорь не на этой странице).
+            // Тогда взведённая вспышка иначе висела бы до тех пор, пока юзер сам не долистает до поста, и
+            // сработала бы много позже открытия — как непрошеная вспышка посреди чтения. Ждём появления
+            // поста ограниченное время, дальше снимаем взвод.
+            if (android.os.SystemClock.uptimeMillis() - highlightArmedAtUptime > HIGHLIGHT_ARM_MAX_WAIT_MS) {
+                highlightTargetPostId = 0
+                return 0L
+            }
+            highlightDeadlineUptime = android.os.SystemClock.uptimeMillis() + HIGHLIGHT_TOTAL_MS
+            return HIGHLIGHT_TOTAL_MS
+        }
         return (highlightDeadlineUptime - android.os.SystemClock.uptimeMillis()).coerceAtLeast(0L)
     }
 
@@ -479,6 +524,9 @@ class TopicPostsAdapter(
             }
             if (wantHighlight && !keepHighlight) {
                 highlightingPostId = item.postId
+                if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                    android.util.Log.i("FPDA_HIGHLIGHT", "play post=${item.postId} remainingMs=$highlightRemainingMs")
+                }
                 playHighlight(highlightRemainingMs)
             }
         }
@@ -1102,6 +1150,9 @@ class TopicPostsAdapter(
          *  clearly noticeable even after the post-open enrichment re-binds the target post, but short so
          *  the flash reads as ~1s (halved from the old 2.6s per user request). */
         const val HIGHLIGHT_TOTAL_MS = 1300L
+
+        /** Сколько ждём появления цели на экране, прежде чем снять взвод вспышки. */
+        private const val HIGHLIGHT_ARM_MAX_WAIT_MS = 10_000L
 
         val ONLINE_DOT_COLOR = android.graphics.Color.parseColor("#4CAF50")
 
