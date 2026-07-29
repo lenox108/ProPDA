@@ -2257,6 +2257,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private fun refreshFromBottom() {
         val url = if (pagination.isInitialised) pagination.pageUrl(pagination.loadedPage) else (loadedUrl ?: topicUrl)
+        // Ручная навигация — не свежее открытие: если флаг резюма пережил НЕУДАЧНУЮ первую загрузку,
+        // он не должен выстрелить здесь и увести обновление на границу прочитанного.
+        boundaryResumeArmed = false
         pendingJumpToBottom = true
         pendingRefreshSeenUpToPostId = loadedItems.maxOfOrNull { it.postId } ?: 0
         refreshFollowNextPageArmed = !isClassicMode()
@@ -2282,6 +2285,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private fun refreshInPlace() {
         val url = if (pagination.isInitialised) pagination.pageUrl(barCurrentPage) else (loadedUrl ?: topicUrl)
+        boundaryResumeArmed = false // ручное обновление — не свежее открытие (см. refreshFromBottom)
         pendingRefreshSeenUpToPostId = loadedItems.maxOfOrNull { it.postId } ?: 0
         // Тема уже дочитана и обновление не принесёт нового → не давать сессионному сбросу в
         // [renderThemePage] заново открыть окно, в котором прокрутка вверх пересоздаёт стёртую границу
@@ -4086,6 +4090,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (!pagination.isInitialised) return
         val target = pageNumber.coerceIn(1, pagination.totalPages)
         if (target == barCurrentPage && loadedItems.isNotEmpty()) return
+        boundaryResumeArmed = false // явный переход по страницам — резюм не для него
         pendingJumpToTop = true
         barCurrentPage = target
         loadTopic(pagination.pageUrl(target))
@@ -4136,6 +4141,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             return
         }
+        boundaryResumeArmed = false // явный «В конец темы» — резюм на границу его не перекрывает
         pendingJumpToBottom = true
         barCurrentPage = last
         loadTopic(pagination.pageUrl(last))
@@ -4640,6 +4646,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 refreshFollowNextPageArmed = false
                 pendingSuppressEndMarkReadForResume = false // мостик резюма не должен утечь в чужую загрузку
                 pendingSilentResumeLanding = false
+                // Restore-якорь тоже не должен пережить неудачную загрузку: иначе следующее открытие
+                // (реюз таба под другую цель) съест его в applyInitialAnchor и перебьёт серверный якорь
+                // сохранённой позицией. Сам restore-url — findpost на этот же пост, посадка не страдает.
+                pendingRestorePostId = 0
+                pendingRestoreOffset = 0
                 Toast.makeText(requireContext(), "Ошибка загрузки темы: ${error.message}", Toast.LENGTH_LONG).show()
             }
         }
@@ -4885,10 +4896,13 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // устройства, посадка на 144332054 при границе 144324769. Запись монотонна — для рендерящихся
         // страниц повторный вызов в renderThemePage безвреден (no-op).
         recordMaxLoaded(page)
-        // «Серверная закладка»: пользователь явно попросил доверять отметке 4PDA. Клиентская граница
-        // продолжает копиться (переключение настройки обратно не теряет прогресс), но якорь не трогает.
-        if (mainPreferencesHolder.getTopicOpenTarget() ==
-                forpdateam.ru.forpda.common.Preferences.Main.TopicOpenTarget.SERVER_BOOKMARK) {
+        // Резюм на границу — механизм ТОЛЬКО режима «Первое непрочитанное». «Серверная закладка» ему
+        // явно не доверяет (юзер попросил позицию сервера), а «Первая страница» открывает верх темы —
+        // раньше она не исключалась, и на короткой (одностраничной) теме lastLoadedPostId оказывался
+        // выше границы → тему уносило findpost'ом на границу вместо стр. 1. Граница при этом копится
+        // во всех режимах (переключение настройки не теряет прогресс).
+        if (mainPreferencesHolder.getTopicOpenTarget() !=
+                forpdateam.ru.forpda.common.Preferences.Main.TopicOpenTarget.LAST_UNREAD) {
             return false
         }
         // Явный findpost-дип-линк (упоминание/закладка на конкретный пост) или наш собственный резюм —

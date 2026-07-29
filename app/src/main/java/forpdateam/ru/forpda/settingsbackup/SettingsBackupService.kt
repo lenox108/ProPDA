@@ -27,6 +27,7 @@ class SettingsBackupService @Inject constructor(
     private val notesBackupStore: NotesBackupStore,
     private val historyBackupStore: HistoryBackupStore,
     private val readBoundaryBackupStore: ReadBoundaryBackupStore,
+    private val readBoundaryStore: forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore,
 ) {
     suspend fun write(uri: Uri, includeSession: Boolean) = withContext(Dispatchers.IO) {
         val root = JSONObject()
@@ -88,7 +89,12 @@ class SettingsBackupService @Inject constructor(
         OtherDataStore(context).restoreBackupValues(dataStores.required("other"))
         bookmarks?.let { notesBackupStore.restore(it) }
         history?.let { historyBackupStore.restore(it) }
-        readBoundary?.let { readBoundaryBackupStore.restore(it) }
+        readBoundary?.let {
+            readBoundaryBackupStore.restore(it)
+            // Иначе живой процесс продолжает работать по старому in-memory кэшу и первой же записью
+            // REPLACE'ом затирает только что восстановленные строки в Room.
+            readBoundaryStore.rehydrateAfterRestore()
+        }
         if (containsSession &&
             !SecureCookiesPreferences.getInstance(context).restoreAuthCookies(authCookies)
         ) {

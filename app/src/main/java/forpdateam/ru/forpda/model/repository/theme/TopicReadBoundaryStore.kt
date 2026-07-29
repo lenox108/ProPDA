@@ -34,9 +34,45 @@ class TopicReadBoundaryStore @Inject constructor(
     private val cache: MutableMap<Int, TopicReadBoundaryRoom> = ConcurrentHashMap()
 
     init {
+        hydrateAsync()
+    }
+
+    /**
+     * Прогрев кэша из Room — с ПОМЕРЖИВАНИЕМ, а не слепой записью. На холодном старте открытие темы
+     * может успеть записать в кэш свежую строку ДО завершения прогрева (recordSeen/recordLoaded создают
+     * её «с нуля», без знаний о персистентных значениях): слепой `cache[it] = db` затирал этот свежий
+     * прогресс стухшей строкой из БД, а свежая строка «с нуля», наоборот, теряла накопленные
+     * maxLoaded-поля и lastSeen и REPLACE'ом уносила их и из Room. Мерж по-полевому монотонен (max), так что
+     * оба направления гонки схлопываются в корректный результат; если память оказалась свежее БД —
+     * доливаем мерж обратно в Room.
+     */
+    private fun hydrateAsync() {
         appScope.launch(Dispatchers.IO) {
-            runCatching { dao.getAll() }.getOrNull()?.forEach { cache[it.topicId] = it }
+            runCatching { dao.getAll() }.getOrNull()?.forEach { db ->
+                val merged = cache.merge(db.topicId, db) { mem, dbRow -> mergeRows(mem, dbRow) }
+                if (merged != null && merged != db) {
+                    runCatching { dao.upsert(merged) }
+                }
+            }
         }
+    }
+
+    /** Бэкап восстановил таблицу под живым процессом — перечитать её в кэш (мерж тот же). */
+    fun rehydrateAfterRestore() {
+        cache.clear()
+        hydrateAsync()
+    }
+
+    private fun mergeRows(a: TopicReadBoundaryRoom, b: TopicReadBoundaryRoom): TopicReadBoundaryRoom {
+        val seenWinner = if (a.lastSeenPostId >= b.lastSeenPostId) a else b
+        return TopicReadBoundaryRoom(
+            topicId = a.topicId,
+            lastSeenPostId = seenWinner.lastSeenPostId,
+            lastSeenPage = seenWinner.lastSeenPage,
+            updatedAt = maxOf(a.updatedAt, b.updatedAt),
+            maxLoadedPostId = maxOf(a.maxLoadedPostId, b.maxLoadedPostId),
+            maxLoadedPage = maxOf(a.maxLoadedPage, b.maxLoadedPage),
+        )
     }
 
     /** Наибольший реально-виденный пост темы, либо null если границы ещё нет. */

@@ -46,6 +46,10 @@ class SettingsBackupServiceTest {
         NotesBackupStore(database),
         HistoryBackupStore(database),
         ReadBoundaryBackupStore(readBoundaryDatabase),
+        forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore(
+            readBoundaryDatabase.topicReadBoundaryDao(),
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+        ),
     )
 
     @After
