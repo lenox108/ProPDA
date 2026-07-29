@@ -28,6 +28,7 @@ import forpdateam.ru.forpda.client.proxy.ProxyConfig
 import forpdateam.ru.forpda.client.proxy.ProxyRouter
 import forpdateam.ru.forpda.client.proxy.ProxySettings
 import forpdateam.ru.forpda.client.proxy.ProxyType
+import forpdateam.ru.forpda.client.proxy.SocksProxyAuth
 import okhttp3.Cache
 import okhttp3.Cookie
 import okhttp3.Credentials
@@ -195,6 +196,9 @@ class Client(
     @Volatile
     private var proxyClients: ProxyClients? = null
 
+    /** Глобальный [java.net.Authenticator] для SOCKS ставится один раз — см. [installSocksAuthenticator]. */
+    private val socksAuthenticatorInstalled = java.util.concurrent.atomic.AtomicBoolean(false)
+
     /** Список тем, ходящих через прокси — для экрана настроек и автоповтора в ThemeApi. */
     fun blockedTopicRegistry(): BlockedTopicRegistry = blockedTopicsStore
 
@@ -236,7 +240,7 @@ class Client(
                                 .build()
                         }
                     } else {
-                        installSocksAuthenticator(config)
+                        installSocksAuthenticator()
                     }
                 }
             }
@@ -244,17 +248,27 @@ class Client(
 
     /**
      * SOCKS5-авторизация в Java идёт через глобальный [java.net.Authenticator] — другого способа
-     * передать логин/пароль в SOCKS-хендшейк у OkHttp нет. Ставим один раз на процесс и отвечаем
-     * только на запросы от прокси (RequestorType.PROXY), чтобы не подсунуть эти данные сайту.
+     * передать логин/пароль в SOCKS-хендшейк у OkHttp нет.
+     *
+     * Authenticator ставим ОДИН на процесс, а логин с паролем он берёт из настроек в момент
+     * вопроса ([SocksProxyAuth]): иначе кнопка «Проверить» с другим адресом оставляла бы за собой
+     * чужой экземпляр, а сохранённый прокси молча ходил бы без пароля. Настройки читаем без учёта
+     * выключателя — той же пробе прокси ещё не включён.
      */
-    private fun installSocksAuthenticator(config: ProxyConfig) {
+    private fun installSocksAuthenticator() {
+        if (!socksAuthenticatorInstalled.compareAndSet(false, true)) return
         java.net.Authenticator.setDefault(object : java.net.Authenticator() {
             override fun getPasswordAuthentication(): java.net.PasswordAuthentication? {
-                if (requestorType != RequestorType.PROXY) return null
-                if (!requestingHost.equals(config.host, ignoreCase = true)) return null
-                return java.net.PasswordAuthentication(config.login, config.password.toCharArray())
+                val credentials = SocksProxyAuth.credentialsFor(
+                    config = proxySettingsStore.configIgnoringEnabled(),
+                    requestingProtocol = requestingProtocol,
+                    requestingHost = requestingHost,
+                    requestingPort = requestingPort,
+                ) ?: return null
+                return java.net.PasswordAuthentication(credentials.first, credentials.second.toCharArray())
             }
         })
+        Timber.tag(PROXY_LOG_TAG).i("SOCKS authenticator installed")
     }
 
     /**
