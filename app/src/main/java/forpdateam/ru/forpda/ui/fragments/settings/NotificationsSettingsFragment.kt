@@ -281,9 +281,14 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                         ProSettingsFragment.PREFERENCE_SCREEN_NAME))
     }
 
-    /** Ключ могли удалить в разделе активации — приводим способ доставки в соответствие. */
+    /**
+     * Активация могла пропасть (ключ выпущен под другой аккаунт 4PDA) — возвращаем бесплатный
+     * канал, иначе push остался бы выбранным, а доставки по нему уже нет.
+     */
     private fun syncDeliveryWithLicense() {
-        if (forpdateam.ru.forpda.pro.ProLicense.isUnlocked(context ?: return)) return
+        val ctx = context ?: return
+        if (forpdateam.ru.forpda.pro.ProLicense.isUnlocked(ctx)) return
+        ProDialog.revokeIfLocked(ctx)
         preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
                 ?.let { dm ->
                     if (dm.value == "push") {

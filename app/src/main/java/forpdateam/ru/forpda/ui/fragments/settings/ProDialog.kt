@@ -19,12 +19,10 @@ import kotlinx.coroutines.launch
 object ProDialog {
 
     /**
-     * @param onChanged вызывается после активации или удаления ключа — экрану нужно обновить
-     *   свои подписи и доступность пунктов.
-     * @param onDeactivated вызывается ТОЛЬКО при удалении ключа: экран должен выключить свою
-     *   платную функцию, чтобы не остался включённый тумблер, который больше ничего не делает.
+     * @param onChanged вызывается после успешной активации — экрану нужно обновить свои подписи и
+     *   доступность пунктов.
      */
-    fun show(context: Context, onChanged: () -> Unit = {}, onDeactivated: () -> Unit = {}) {
+    fun show(context: Context, onChanged: () -> Unit = {}) {
         val memberId = ProLicense.currentMemberId(context)
         if (memberId == null) {
             toast(context, R.string.pro_status_not_logged)
@@ -87,27 +85,26 @@ object ProDialog {
                     }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-        if (ProLicense.isUnlocked(context)) {
-            builder.setNeutralButton(R.string.pro_deactivate) { _, _ ->
-                deactivate(context)
-                onDeactivated()
-                toast(context, R.string.pro_removed)
-                onChanged()
-            }
-        }
         builder.show()
     }
 
     /**
-     * Снятие активации: гасим ВСЕ платные функции сразу, откуда бы ключ ни удалили.
+     * Приводит платные функции в соответствие с ключом: если активации нет, выключает их.
      *
-     * Иначе остаётся push, который больше не доставляется (сообщения отбрасывает
-     * [forpdateam.ru.forpda.notifications.push.FcmMessagingReceiver]) — и пользователь молча
-     * сидит без уведомлений; и включённый тумблер прокси, который ничего не делает.
+     * Кнопки «удалить ключ» намеренно нет — покупка разовая и привязана к аккаунту, удалять его
+     * пользователю незачем. Но активация может пропасть сама: ключ выпущен под конкретный
+     * member_id, и после смены аккаунта 4PDA он перестаёт подходить. Тогда остался бы push,
+     * который больше не доставляется (сообщения отбрасывает
+     * [forpdateam.ru.forpda.notifications.push.FcmMessagingReceiver]) — и пользователь молча сидел
+     * бы без уведомлений; и включённый тумблер прокси, который ничего не делает.
      */
-    fun deactivate(context: Context) {
-        ProLicense.deactivate(context)
-        PreferenceManager.getDefaultSharedPreferences(context).edit()
+    fun revokeIfLocked(context: Context) {
+        if (ProLicense.isUnlocked(context)) return
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        val hasSomethingToTurnOff = prefs.getBoolean(ProxySettings.KEY_ENABLED, false) ||
+                prefs.getString(KEY_DELIVERY_METHOD, DELIVERY_POLL) == DELIVERY_PUSH
+        if (!hasSomethingToTurnOff) return
+        prefs.edit()
                 .putBoolean(ProxySettings.KEY_ENABLED, false)
                 // Возвращаем бесплатный канал доставки — те же значения, что ставит
                 // NotificationsSettingsFragment.applyDeliveryMethod("poll").
@@ -149,6 +146,7 @@ object ProDialog {
 
     private const val KEY_DELIVERY_METHOD = "notifications.delivery_method"
     private const val DELIVERY_POLL = "poll"
+    private const val DELIVERY_PUSH = "push"
     private const val KEY_BG_ENABLED = "notifications.bg.enabled"
     private const val KEY_PERSISTENT_WS = "notifications.bg.persistent_ws"
 }

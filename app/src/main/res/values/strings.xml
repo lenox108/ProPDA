@@ -1128,7 +1128,6 @@
     <string name="pref_summary_pro_member_id">%1$d — нажмите, чтобы скопировать</string>
     <string name="pref_title_pro_enter_key">Ввести ключ</string>
     <string name="pref_summary_pro_enter_key">Вставьте ключ, полученный после оплаты</string>
-    <string name="pref_summary_pro_remove_key">Ключ будет удалён с этого устройства, платные функции выключатся. Ввести его снова можно в любой момент</string>
     <string name="pref_title_pro_features">Что даёт активация</string>
     <string name="pref_title_pro_feature_push">Push-уведомления</string>
     <string name="pref_summary_pro_feature_push">Мгновенная доставка ответов, упоминаний и QMS без постоянного опроса — телефон меньше тратит батарею</string>
@@ -1146,10 +1145,8 @@
     <string name="pro_id_copied">ID скопирован</string>
     <string name="pro_dialog_hint">Ключ активации</string>
     <string name="pro_activate">Активировать</string>
-    <string name="pro_deactivate">Удалить ключ</string>
     <string name="pro_activated">Активировано — push и прокси доступны</string>
     <string name="pro_invalid">Ключ не подходит к вашему аккаунту</string>
-    <string name="pro_removed">Ключ удалён</string>
     <string name="pro_required">Push доступен после активации</string>
     <string name="pref_title_push_safety_net">Резервная проверка</string>
     <string name="pref_summary_push_safety_net">Push доставляет события мгновенно. Резервная проверка нужна только на редкий случай, когда push потерялся: не было сети, сбой Google или прошивка выгрузила приложение. Выключите, если хотите максимум экономии батареи и полностью полагаетесь на push.</string>
