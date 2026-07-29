@@ -49,7 +49,9 @@ class FcmMessagingReceiver : BroadcastReceiver() {
 
         // Третья, независимая точка проверки Pro (первые две — экран настроек и PushRegistrar).
         // Обход только настроек не даёт работающих уведомлений: входящий push здесь отбрасывается.
-        if (!forpdateam.ru.forpda.pro.ProLicense.isUnlocked(context.applicationContext)) {
+        // Спрашиваем ДРУГУЮ реализацию проверки (LicenseGuard), не ту, что в PushRegistrar:
+        // патч одного «разрешающего» метода не должен открывать всю цепочку.
+        if (!forpdateam.ru.forpda.pro.LicenseGuard.allowed(context.applicationContext)) {
             Timber.d("FCM push ignored: pro license missing")
             return
         }

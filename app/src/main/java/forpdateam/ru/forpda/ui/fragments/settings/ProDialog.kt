@@ -77,6 +77,9 @@ object ProDialog {
                 .setPositiveButton(R.string.pro_activate) { _, _ ->
                     when (ProLicense.activate(context, input.text.toString())) {
                         ProLicense.Result.Activated -> {
+                            // Сетевой слой держит результат проверки в коротком кэше — сбрасываем,
+                            // чтобы функции открылись сразу, а не через минуту.
+                            forpdateam.ru.forpda.pro.LicenseGuard.invalidate()
                             toast(context, R.string.pro_activated)
                             onChanged()
                         }
