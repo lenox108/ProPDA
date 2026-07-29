@@ -34,6 +34,7 @@ import forpdateam.ru.forpda.model.data.remote.api.theme.ThemeApi
  * On plain/resume opens a bottom redirect can be the **last-read bookmark**.
  * For `LAST_UNREAD`/list-unread opens this redirect is ambiguous: keep diagnostics, but do not
  * expose it as an unread scroll target because it skips older unread posts when server state lagged.
+ * Под `SERVER_BOOKMARK` редирект принимается как есть — см. [GetNewPostAnchorTrust].
  *
  * ## getnewpost anchor (read list row, no list hint)
  * On last page with bottom redirect and no HTML unread → last-read resume (`hasUnreadTarget=false`).
@@ -88,6 +89,45 @@ object TopicUnreadOpenPolicy {
         )
     }
 
+    /**
+     * Насколько парсер доверяет серверной подсказке (`#entry` редиректа `view=getnewpost`, `p=`,
+     * canonical) при выборе якоря. Трёхзначный, потому что два требования конфликтуют:
+     *
+     * | Режим | нижний `#entry` НЕ на последней стр. | нижний `#entry` на последней стр. |
+     * |---|---|---|
+     * | [DEFAULT] | отвергается (вероятная закладка last-read) | якорь на него, `hasUnreadTarget=false` |
+     * | [LIST_UNREAD] | принимается (первое непрочитанное) | **ambiguous**: якоря нет, вниз не уводим |
+     * | [SERVER_REDIRECT] | принимается | якорь на него, `hasUnreadTarget=false` |
+     *
+     * То есть «Серверная закладка» — не подвид списочного хинта: ей нужен приём нижнего редиректа
+     * (как у [LIST_UNREAD]) БЕЗ ambiguous-обработки (как у [DEFAULT]). Одним флагом это не выражалось —
+     * отсюда отдельный режим.
+     */
+    enum class GetNewPostAnchorTrust {
+        /** Открытие без списочных хинтов: серверная подсказка проверяется эвристиками top/bottom-hint. */
+        DEFAULT,
+
+        /**
+         * Строка списка помечена непрочитанной либо настройка [AppPreferences.Main.TopicOpenTarget.LAST_UNREAD]:
+         * ищем ПЕРВОЕ НЕПРОЧИТАННОЕ. Нижний редирект на последней странице неоднозначен — см. таблицу выше.
+         */
+        LIST_UNREAD,
+
+        /**
+         * [AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK]: единственный источник истины — отметка
+         * прочитанного на 4PDA. Редирект принимается КАК ЕСТЬ: ни bottom-reject, ни top-reject, ни
+         * ambiguous. Иначе mid-topic закладка (нижний `#entry` НЕ последней страницы без HTML-маркеров)
+         * отвергалась и якорь падал на верх/второй пост страницы.
+         */
+        SERVER_REDIRECT;
+
+        /** Списочная семантика «первое непрочитанное» (ambiguous-обработка нижнего редиректа). */
+        val isListUnread: Boolean get() = this == LIST_UNREAD
+
+        /** Серверная подсказка принимается без эвристик top/bottom-hint. */
+        val trustsServerHintVerbatim: Boolean get() = this == SERVER_REDIRECT
+    }
+
     data class GetNewPostAnchorContext(
             val html: String,
             val finalUrl: String,
@@ -95,8 +135,8 @@ object TopicUnreadOpenPolicy {
             val redirectHashId: Int?,
             val hatEntryIdToSkip: Int?,
             val onLastTopicPage: Boolean,
-            /** [parserTrustsListUnread] for this fetch. */
-            val listUnreadHint: Boolean,
+            /** Режим доверия к серверной подсказке — см. [resolveAnchorTrustForOpen]. */
+            val trust: GetNewPostAnchorTrust,
     )
 
     /** Row renders as unread for navigation (not legacy [FavItem.isNew] alone). */
@@ -146,10 +186,10 @@ object TopicUnreadOpenPolicy {
     /**
      * Read list rows use `getlastpost`; plain LAST_UNREAD opens still use `getnewpost`.
      *
-     * Под [AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK] хинт всегда false: он существует, чтобы
-     * НЕ доверять нижнему редиректу сервера (тот может оказаться закладкой «всё прочитано», а не первым
-     * непрочитанным). Этот режим как раз хочет сесть на серверную закладку, поэтому редирект принимается
-     * как есть — так же, как при открытии без списочных хинтов.
+     * Под [AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK] хинт всегда false: списочная семантика
+     * «первое непрочитанное» этому режиму чужда (он клиентскому представлению о прочитанности как раз не
+     * доверяет). Для якоря у него СВОЙ режим [GetNewPostAnchorTrust.SERVER_REDIRECT] — не путать с
+     * «нет хинта»: там серверная подсказка ещё и проверяется top/bottom-эвристиками.
      */
     fun parserTrustsGetNewPostUnread(
             hints: TopicOpenListHints?,
@@ -167,6 +207,35 @@ object TopicUnreadOpenPolicy {
             prefetchUrl: String,
             setting: AppPreferences.Main.TopicOpenTarget,
     ): Boolean = parserTrustsGetNewPostUnread(hints, prefetchUrl, setting)
+
+    /**
+     * Режим доверия для ПЕРВИЧНОЙ загрузки открытия темы (нативный рендер зовёт `themeApi.getTheme`
+     * напрямую, мимо [ThemeRepository], поэтому хинт надо считать здесь и прокинуть руками).
+     *
+     * Только для открытия: findpost-дип-линки, «Обновить», переходы по страницам и infinite-scroll
+     * серверной подсказки не разрешают — их URL не `view=getnewpost`, и функция вернёт [GetNewPostAnchorTrust.DEFAULT].
+     *
+     * [AppPreferences.Main.TopicOpenTarget.FIRST_PAGE] сюда не доходит: её URL не несёт `view=getnewpost`.
+     */
+    fun resolveAnchorTrustForOpen(
+            hints: TopicOpenListHints?,
+            fetchUrl: String,
+            setting: AppPreferences.Main.TopicOpenTarget,
+    ): GetNewPostAnchorTrust {
+        if (!fetchUrl.contains("view=getnewpost", ignoreCase = true)) return GetNewPostAnchorTrust.DEFAULT
+        if (setting == AppPreferences.Main.TopicOpenTarget.SERVER_BOOKMARK) {
+            return GetNewPostAnchorTrust.SERVER_REDIRECT
+        }
+        return if (parserTrustsGetNewPostUnread(hints, fetchUrl, setting)) {
+            GetNewPostAnchorTrust.LIST_UNREAD
+        } else {
+            GetNewPostAnchorTrust.DEFAULT
+        }
+    }
+
+    /** Мост для чейна с булевым [parserTrustsGetNewPostUnread] (WebView-путь, prefetch-ключ). */
+    fun anchorTrustOf(listUnreadHint: Boolean): GetNewPostAnchorTrust =
+            if (listUnreadHint) GetNewPostAnchorTrust.LIST_UNREAD else GetNewPostAnchorTrust.DEFAULT
 
     /**
      * Log 486: [resolveTopicOpenUrl] sets [pendingParserListUnreadHint]=true, then [loadData]
@@ -491,10 +560,7 @@ object TopicUnreadOpenPolicy {
                         val redirectPos = entryIds.indexOf(hashId)
                         redirectPos in 0 until markerPos
                     }
-                    ?.takeIf { hashId ->
-                        !ThemeApi.isLikelyLastReadPageTopHint(hashId, entryIds, hatSkip) &&
-                                !rejectsBottomHash(hashId, entryIds, hatSkip, ctx.listUnreadHint)
-                    }
+                    ?.takeIf { hashId -> !rejectsServerHint(hashId, entryIds, hatSkip, ctx.trust) }
             if (redirectAboveMarker != null) {
                 return AnchorResolution(
                         anchorEntry = "entry$redirectAboveMarker",
@@ -509,7 +575,10 @@ object TopicUnreadOpenPolicy {
                 ThemeApi.isLikelyAllReadGetNewPostBottomRedirect(redirectHashId, entryIds)
         ) {
             redirectHashId?.let { hashPostId ->
-                val ambiguous = ctx.listUnreadHint
+                // «Серверная закладка» сюда доходит намеренно: нижний редирект на ПОСЛЕДНЕЙ странице —
+                // это и есть закладка сервера, садимся ровно на неё (hasUnreadTarget=false: непрочитанного
+                // нет). Ambiguous — только для списочного «первого непрочитанного».
+                val ambiguous = ctx.trust.isListUnread
                 return AnchorResolution(
                         anchorEntry = if (ambiguous) null else "entry$hashPostId",
                         hasUnreadTarget = false,
@@ -521,10 +590,7 @@ object TopicUnreadOpenPolicy {
 
         redirectHashId
                 ?.takeIf { hashId -> hatSkip == null || hashId != hatSkip }
-                ?.takeIf { hashId ->
-                    !ThemeApi.isLikelyLastReadPageTopHint(hashId, entryIds, hatSkip) &&
-                            !rejectsBottomHash(hashId, entryIds, hatSkip, ctx.listUnreadHint)
-                }
+                ?.takeIf { hashId -> !rejectsServerHint(hashId, entryIds, hatSkip, ctx.trust) }
                 ?.let { hashPostId ->
                     return AnchorResolution(
                             anchorEntry = "entry$hashPostId",
@@ -538,10 +604,7 @@ object TopicUnreadOpenPolicy {
         }
 
         ThemeApi.extractLastReadStylePostIdFromTopicUrl(ctx.finalUrl)?.toIntOrNull()
-                ?.takeIf { queryPostId ->
-                    !ThemeApi.isLikelyLastReadPageTopHint(queryPostId, entryIds, hatSkip) &&
-                            !rejectsBottomHash(queryPostId, entryIds, hatSkip, ctx.listUnreadHint)
-                }
+                ?.takeIf { queryPostId -> !rejectsServerHint(queryPostId, entryIds, hatSkip, ctx.trust) }
                 ?.let { queryPostId ->
                     return AnchorResolution(
                             anchorEntry = "entry$queryPostId",
@@ -557,8 +620,7 @@ object TopicUnreadOpenPolicy {
                     }
                     ThemeApi.extractLastReadStylePostIdFromTopicUrl(href)?.toIntOrNull()
                             ?.takeIf { queryPostId ->
-                                !ThemeApi.isLikelyLastReadPageTopHint(queryPostId, entryIds, hatSkip) &&
-                                        !rejectsBottomHash(queryPostId, entryIds, hatSkip, ctx.listUnreadHint)
+                                !rejectsServerHint(queryPostId, entryIds, hatSkip, ctx.trust)
                             }
                             ?.let { cid ->
                                 return AnchorResolution(
@@ -582,17 +644,17 @@ object TopicUnreadOpenPolicy {
                     anchorEntry = null,
                     hasUnreadTarget = false,
                     reason = "page_top_redirect_no_unread",
-                    ambiguousBottomRedirect = ctx.listUnreadHint
+                    ambiguousBottomRedirect = ctx.trust.isListUnread
             )
         }
 
         val bottomHashRejected = redirectHashId != null &&
-                rejectsBottomHash(redirectHashId, entryIds, hatSkip, ctx.listUnreadHint)
+                rejectsBottomHash(redirectHashId, entryIds, hatSkip, ctx.trust)
         val fallbackEntry = resolveEntryFallback(
                 entryIds = entryIds,
                 hatSkip = hatSkip,
                 bottomHashRejected = bottomHashRejected,
-                listUnreadHint = ctx.listUnreadHint,
+                listUnreadHint = ctx.trust.isListUnread,
                 redirectHashId = redirectHashId,
         )
         fallbackEntry?.let { entry ->
@@ -601,7 +663,7 @@ object TopicUnreadOpenPolicy {
                     hasUnreadTarget = true,
                     reason = when {
                         bottomHashRejected -> "fallback_after_bottom_reject"
-                        ctx.listUnreadHint -> "list_unread_entry_fallback"
+                        ctx.trust.isListUnread -> "list_unread_entry_fallback"
                         else -> "fallback_entry_list"
                     },
                     bottomHashRejected = bottomHashRejected
@@ -648,6 +710,22 @@ object TopicUnreadOpenPolicy {
     }
 
     /**
+     * Отвергнуть серверную подсказку (`#entry` редиректа, `p=`, canonical) как позицию «последнее
+     * прочитанное», а не «первое непрочитанное». Под [GetNewPostAnchorTrust.SERVER_REDIRECT] эвристики
+     * выключены целиком: пользователь просил позицию сервера — она и есть ответ.
+     */
+    private fun rejectsServerHint(
+            postId: Int,
+            entryIds: List<Int>,
+            hatSkip: Int?,
+            trust: GetNewPostAnchorTrust,
+    ): Boolean {
+        if (trust.trustsServerHintVerbatim) return false
+        return ThemeApi.isLikelyLastReadPageTopHint(postId, entryIds, hatSkip) ||
+                rejectsBottomHash(postId, entryIds, hatSkip, trust)
+    }
+
+    /**
      * Bottom `#entry` on a multi-post page without HTML unread markers is not a reliable unread
      * target. List-unread opens are handled earlier as ambiguous all-read redirects.
      */
@@ -655,9 +733,9 @@ object TopicUnreadOpenPolicy {
             postId: Int,
             entryIds: List<Int>,
             hatSkip: Int?,
-            listUnreadHint: Boolean,
+            trust: GetNewPostAnchorTrust,
     ): Boolean {
-        if (listUnreadHint) return false
+        if (trust != GetNewPostAnchorTrust.DEFAULT) return false
         if (!ThemeApi.isLikelyLastReadPageBottomHint(postId, entryIds)) return false
         val contentEntries = if (hatSkip != null) entryIds.filter { it != hatSkip } else entryIds
         return contentEntries.size > 1

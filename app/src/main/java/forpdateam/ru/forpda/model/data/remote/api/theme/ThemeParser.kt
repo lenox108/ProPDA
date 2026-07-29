@@ -96,7 +96,15 @@ class ThemeParser(
             hatOpen: Boolean = false,
             pollOpen: Boolean = false,
             initialRequestUrl: String? = null,
-            openFromUnreadListHint: Boolean = false
+            openFromUnreadListHint: Boolean = false,
+            /**
+             * Режим доверия к серверной подсказке для `view=getnewpost`. По умолчанию выводится из
+             * [openFromUnreadListHint] (булев чейн WebView-пути и prefetch-ключа); нативный рендер
+             * передаёт его явно, чтобы прокинуть «Серверную закладку» — см.
+             * [TopicUnreadOpenPolicy.resolveAnchorTrustForOpen].
+             */
+            anchorTrust: TopicUnreadOpenPolicy.GetNewPostAnchorTrust =
+                    TopicUnreadOpenPolicy.anchorTrustOf(openFromUnreadListHint)
     ): ThemePage = ThemePage().also { page ->
         page.isHatOpen = hatOpen
         page.isPollOpen = pollOpen
@@ -319,7 +327,7 @@ class ThemeParser(
         if (page.poll == null) {
             page.poll = parseGenericPoll(response, argUrl)
         }
-        ensureGetNewPostScrollAnchor(page, response, initialRequestUrl, openFromUnreadListHint)
+        ensureGetNewPostScrollAnchor(page, response, initialRequestUrl, anchorTrust)
         page.openSessionKind = TopicUnreadOpenPolicy.resolveOpenSessionKindFromPage(
                 page = page,
                 initialRequestUrl = initialRequestUrl,
@@ -457,8 +465,9 @@ class ThemeParser(
             page: ThemePage,
             html: String,
             initialRequestUrl: String?,
-            openFromUnreadListHint: Boolean
+            anchorTrust: TopicUnreadOpenPolicy.GetNewPostAnchorTrust
     ) {
+        val openFromUnreadListHint = anchorTrust.isListUnread
         val openUrl = initialRequestUrl.orEmpty()
         if (!openUrl.contains("view=getnewpost", ignoreCase = true)) return
         val finalUrl = page.url.orEmpty()
@@ -487,7 +496,7 @@ class ThemeParser(
                         redirectHashId = redirectHashId,
                         hatEntryIdToSkip = hatEntryIdToSkip,
                         onLastTopicPage = onLastTopicPage,
-                        listUnreadHint = openFromUnreadListHint,
+                        trust = anchorTrust,
                 )
         )
         if (resolution.ambiguousBottomRedirect && listProvidedAnchor != null) {
@@ -500,6 +509,7 @@ class ThemeParser(
                     anchor = page.anchor,
                     hasUnreadTarget = true,
                     openFromUnreadListHint = openFromUnreadListHint,
+                    anchorTrust = anchorTrust,
                     redirectHashId = redirectHashId,
                     entryIds = entryIds,
                     page = page,
@@ -521,6 +531,7 @@ class ThemeParser(
                     anchor = page.anchor,
                     hasUnreadTarget = resolution.hasUnreadTarget,
                     openFromUnreadListHint = openFromUnreadListHint,
+                    anchorTrust = anchorTrust,
                     redirectHashId = redirectHashId,
                     entryIds = entryIds,
                     page = page,
@@ -540,6 +551,7 @@ class ThemeParser(
                     anchor = page.anchor,
                     hasUnreadTarget = true,
                     openFromUnreadListHint = openFromUnreadListHint,
+                    anchorTrust = anchorTrust,
                     redirectHashId = redirectHashId,
                     entryIds = entryIds,
                     page = page,
@@ -555,6 +567,7 @@ class ThemeParser(
                     anchor = page.anchor,
                     hasUnreadTarget = resolution.hasUnreadTarget,
                     openFromUnreadListHint = openFromUnreadListHint,
+                    anchorTrust = anchorTrust,
                     redirectHashId = redirectHashId,
                     entryIds = entryIds,
                     page = page,
@@ -570,6 +583,7 @@ class ThemeParser(
             anchor: String?,
             hasUnreadTarget: Boolean,
             openFromUnreadListHint: Boolean,
+            anchorTrust: TopicUnreadOpenPolicy.GetNewPostAnchorTrust,
             redirectHashId: Int?,
             entryIds: List<Int>,
             page: ThemePage,
@@ -595,6 +609,7 @@ class ThemeParser(
                 redirectEntryId = redirectHashId,
                 parsedPostCount = page.posts.size,
                 extra = mapOf(
+                        "anchorTrust" to anchorTrust.name,
                         "bottomHashRejected" to bottomHashRejected,
                         "ambiguousBottomRedirect" to ambiguousBottomRedirect,
                         "entryCount" to entryIds.size,
@@ -616,6 +631,7 @@ class ThemeParser(
                 pageCurrent = page.pagination.current,
                 pageTotal = page.pagination.all,
                 extra = mapOf(
+                        "anchorTrust" to anchorTrust.name,
                         "bottomHashRejected" to bottomHashRejected,
                         "redirectIsBottomEntry" to anchorDiagnostics.redirectIsBottomEntry,
                         "ambiguousBottomRedirect" to ambiguousBottomRedirect,
@@ -641,12 +657,12 @@ class ThemeParser(
         }
         if (BuildConfig.DEBUG) {
             Timber.tag(UNREAD_OPEN_ANCHOR_TAG).i(
-                    "ensureGetNewPostAnchor reason=%s anchor=%s hasUnreadTarget=%s listUnreadHint=%s " +
+                    "ensureGetNewPostAnchor reason=%s anchor=%s hasUnreadTarget=%s trust=%s " +
                             "pagCur=%d pagAll=%d redirectHash=%s bottomRejected=%s ambiguousBottom=%s entryCount=%d hatSkip=%s",
                     reason,
                     anchor,
                     hasUnreadTarget,
-                    openFromUnreadListHint,
+                    anchorTrust.name,
                     page.pagination.current,
                     page.pagination.all,
                     redirectHashId?.toString().orEmpty(),

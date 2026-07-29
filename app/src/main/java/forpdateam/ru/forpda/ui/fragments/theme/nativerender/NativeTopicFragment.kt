@@ -14,6 +14,7 @@ import android.text.Editable
 import androidx.activity.result.contract.ActivityResultContracts
 import forpdateam.ru.forpda.common.FilePickHelper
 import forpdateam.ru.forpda.common.TopicOpenListHints
+import forpdateam.ru.forpda.presentation.theme.TopicUnreadOpenPolicy
 import forpdateam.ru.forpda.common.simple.SimpleTextWatcher
 import forpdateam.ru.forpda.common.dedupeAttachmentsById
 import forpdateam.ru.forpda.common.mergeAttachmentIdsFromPostText
@@ -365,6 +366,23 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * не запускали override повторно и не зациклили.
      */
     private var boundaryResumeArmed: Boolean = false
+
+    /**
+     * Режим доверия к серверной подсказке `view=getnewpost` для СЛЕДУЮЩЕЙ первичной загрузки открытия.
+     *
+     * Нативный рендер грузит страницы напрямую [ThemeApi.getTheme], минуя [ThemeRepository]/[ThemeUseCase],
+     * где для WebView-пути хинт считался сам. Из-за этого парсер всегда видел
+     * [TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT]: mid-topic закладка сервера (нижний `#entry`
+     * НЕ последней страницы без HTML-маркеров непрочитанного) отвергалась как «позиция last-read», и якорь
+     * падал на верх/второй пост страницы, а ветка ambiguous-редиректа была недостижима.
+     *
+     * Взводится ТОЛЬКО точками открытия ([onViewCreated], навигаторный реюз таба, ленивая загрузка при
+     * показе таба) и потребляется (читается + сбрасывается) на входе в [loadTopic] — синхронно, до ухода
+     * в корутину. Поэтому findpost-дип-линки, «Обновить», переходы по страницам, вложенный резюм на
+     * границу прочитанного и infinite-scroll его не получают.
+     */
+    private var pendingOpenAnchorTrust: TopicUnreadOpenPolicy.GetNewPostAnchorTrust =
+            TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT
 
     /**
      * Гейт мгновенного mark-read при открытии на первом непрочитанном (порт WebView-guard'а
@@ -834,10 +852,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
         // Arm the client read-boundary resume only for a genuinely fresh open (nothing to restore).
         boundaryResumeArmed = restorePostId <= 0
-        loadTopic(
-                url = if (restorePostId > 0) buildRestoreUrl(restorePostId) else resolveInitialOpenUrl(),
-                isRestoreOpen = restorePostId > 0,
-        )
+        val openUrl = if (restorePostId > 0) buildRestoreUrl(restorePostId) else resolveInitialOpenUrl()
+        armOpenAnchorTrust(openUrl, openListHintsFromArgs())
+        loadTopic(url = openUrl, isRestoreOpen = restorePostId > 0)
 
         // Live-toggle «Панель страниц темы»: re-evaluate both bars when the setting flips while the topic
         // tab stays alive in the background stack (the collector re-emits the current value immediately).
@@ -864,7 +881,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             android.util.Log.i("FPDA_READ_BOUNDARY", "restore_open failed ($reason) → open by setting")
         }
-        loadTopic(resolveInitialOpenUrl())
+        // Полноценное открытие по настройке — значит и хинт якоря ему положен (как boundaryResumeArmed).
+        val openUrl = resolveInitialOpenUrl()
+        armOpenAnchorTrust(openUrl, openListHintsFromArgs())
+        loadTopic(openUrl)
     }
 
     /** URL, ведущий на конкретный пост (findpost) для restore-scroll; фолбэк — обычное открытие. */
@@ -945,6 +965,38 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         return runCatching {
             forpdateam.ru.forpda.presentation.theme.TopicOpenTargetResolver.resolve(context).url
         }.getOrDefault(rawUrl)
+    }
+
+    /**
+     * Списочные хинты открытия из arguments — то же, чем [resolveInitialOpenUrl] кормит
+     * [TopicOpenTargetResolver], в форме [TopicOpenListHints] для [armOpenAnchorTrust]. Отдельного
+     * аргумента «строка помечена непрочитанной» у фрагмента нет: под «Первым непрочитанным» решение
+     * всё равно принимает сама настройка ([TopicUnreadOpenPolicy.parserTrustsGetNewPostUnread]).
+     */
+    private fun openListHintsFromArgs(): TopicOpenListHints? {
+        val args = arguments ?: return null
+        return TopicOpenListHints(
+                unreadUrlFromList = args.getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_UNREAD_URL_FROM_LIST),
+                unreadPostIdFromList = args.getInt(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_UNREAD_POST_ID_FROM_LIST)
+                        .takeIf { it > 0 },
+                inspectorMarkedUnread = args.getBoolean(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_INSPECTOR_MARKED_UNREAD),
+                lastReadUrlFromList = args.getString(forpdateam.ru.forpda.presentation.Screen.Theme.ARG_LAST_READ_URL_FROM_LIST),
+        )
+    }
+
+    /**
+     * Взвести [pendingOpenAnchorTrust] по ИТОГОВОМУ url первичной загрузки открытия. Зовётся только из
+     * трёх точек открытия; для findpost/restore-url политика сама вернёт
+     * [TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT] (в url нет `view=getnewpost`).
+     */
+    private fun armOpenAnchorTrust(fetchUrl: String, listHints: TopicOpenListHints?) {
+        pendingOpenAnchorTrust = runCatching {
+            TopicUnreadOpenPolicy.resolveAnchorTrustForOpen(
+                    hints = listHints,
+                    fetchUrl = fetchUrl,
+                    setting = mainPreferencesHolder.getTopicOpenTarget(),
+            )
+        }.getOrDefault(TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT)
     }
 
     /**
@@ -2789,6 +2841,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // last left it in — the exact «once collapsed, always collapsed» report. Echo/dedup opens
                 // never reach this branch, so an in-place reload still can't clobber a mid-session toggle.
                 hatInitialStateAppliedTopicId = 0
+                armOpenAnchorTrust(resolved, listHints)
                 loadTopic(resolved)
             }
         }
@@ -2871,7 +2924,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // loadedUrl here fired a redundant bare page-1 load in parallel (the «page 1 → jump» flash). Also
         // resolve the open target so this safety-net path never lands on page 1 either.
         if (lastRequestedUrl == null && view != null) {
-            loadTopic(resolveInitialOpenUrl())
+            val openUrl = resolveInitialOpenUrl()
+            armOpenAnchorTrust(openUrl, openListHintsFromArgs())
+            loadTopic(openUrl)
         }
         // The user may have changed font/avatar prefs while away — re-apply on return.
         if (view != null) {
@@ -4657,6 +4712,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             setRefreshing(false)
             return
         }
+        // Хинт открытия для парсера — ОДНА загрузка, та, которую взвела точка открытия. Читаем и гасим
+        // синхронно, до ухода в корутину: вложенные перезагрузки (findpost-резюм на границу, шаг на
+        // следующую страницу), «Обновить», переходы по страницам и infinite-scroll должны видеть DEFAULT.
+        val anchorTrust = pendingOpenAnchorTrust
+        pendingOpenAnchorTrust = TopicUnreadOpenPolicy.GetNewPostAnchorTrust.DEFAULT
         if (!preserveRefreshIntent) {
             // Любая загрузка, кроме обновления снизу и его шага на следующую страницу, гасит
             // refresh-намерение. Иначе взведённые флаги пережили бы её и применились к чужому рендеру:
@@ -4698,7 +4758,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 // CDN на origin; 4PDA его игнорирует и роняет при 302 (getnewpost/getlastpost/findpost),
                 // так что page.url остаётся чистым. Только для главной загрузки (открытие/рефреш/переход/
                 // резюм) — infinite-scroll старых страниц остаётся на CDN.
-                runCatching { themeApi.getTheme(topicFetchUrlWithCacheBuster(url), hatOpen = false, pollOpen = false) }
+                runCatching {
+                    themeApi.getTheme(
+                            topicFetchUrlWithCacheBuster(url),
+                            hatOpen = false,
+                            pollOpen = false,
+                            anchorTrust = anchorTrust,
+                    )
+                }
             }
             if (view == null) return@launch
             // Latest-wins: a newer loadTopic (refresh, page jump, tab reuse for another topic via
