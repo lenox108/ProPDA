@@ -65,7 +65,7 @@ class ProxySettings(context: Context) {
      * только на экране настроек: так без ключа маршрут не поднимется, даже если тумблер остался
      * включённым с прошлых версий или из бэкапа настроек.
      */
-    fun isUnlocked(): Boolean = forpdateam.ru.forpda.pro.ProLicense.isUnlocked(appContext)
+    fun isUnlocked(): Boolean = forpdateam.ru.forpda.pro.LicenseGuard.allowed(appContext)
 
     /** null — прокси выключен, не оплачен или настроен не полностью (нет хоста/порта). */
     fun config(): ProxyConfig? {

@@ -241,6 +241,15 @@ class Client(
     private fun buildProxyClient(base: OkHttpClient, config: ProxyConfig): OkHttpClient =
         base.newBuilder()
             .proxy(config.toJavaProxy())
+            // Проверка активации на КАЖДЫЙ запрос, уже внутри собранного клиента: снять маршрут
+            // одним патчем «разрешающего» метода не выйдет — этот интерцептор спрашивает
+            // независимую реализацию (LicenseGuard), и без него прокси-клиент просто не отвечает.
+            .addInterceptor { chain ->
+                if (!forpdateam.ru.forpda.pro.LicenseGuard.allowed(context)) {
+                    throw IOException("proxy route unavailable")
+                }
+                chain.proceed(chain.request())
+            }
             .apply {
                 if (config.hasCredentials) {
                     // SOCKS5 с логином/паролем OkHttp сам не умеет — только HTTP-прокси через
@@ -336,6 +345,9 @@ class Client(
      */
     private fun clientFor(request: NetworkRequest, desktop: Boolean): OkHttpClient {
         val direct = if (desktop) desktopClient else client
+        // Третья независимая проверка оплаты на пути запроса (см. также ProxySettings.config и
+        // интерцептор прокси-клиента): точки намеренно разные и спрашивают разные реализации.
+        if (!forpdateam.ru.forpda.pro.LicenseGuard.allowed(context)) return direct
         val proxied = currentProxyClients() ?: return direct
         val useProxy = ProxyRouter.shouldUseProxy(
             hasConfig = true,
