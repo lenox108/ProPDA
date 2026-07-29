@@ -1006,7 +1006,7 @@
     <string name="pref_proxy_blocked_list_clear">Clear the list?</string>
     <string name="pref_proxy_blocked_list_cleared">List cleared</string>
     <string name="pref_title_proxy_safety">Security</string>
-    <string name="pref_summary_proxy_safety">Your 4PDA auth cookies travel through the proxy. Use your own server only — on a public one your session is exposed. The password is stored encrypted. Topics render natively, so the proxy fully applies to them; news and other WebView pages always go direct — except the Cloudflare check, which must use the same route. WebView does not support proxy credentials, so with a login set that check goes direct too</string>
+    <string name="pref_summary_proxy_safety">Your 4PDA cookies travel through the proxy — use your own server only, or your session is exposed. The password is stored encrypted. News and other WebView pages go direct: WebView does not support proxy credentials</string>
 
 
     <!-- Settings screen: root hub sections -->

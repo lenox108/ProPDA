@@ -31,6 +31,18 @@ class ProxyRouterTest {
             isTopicBlocked = ::isBlocked,
     )
 
+    /**
+     * Картинки и загрузки идут через прокси только в режиме «весь трафик»: тему по URL картинки не
+     * определить, поэтому в режиме «только заблокированные темы» им остаётся прямой маршрут.
+     */
+    @Test
+    fun `images and downloads follow the proxy only in all-traffic mode`() {
+        val config = ProxyConfig(ProxyType.SOCKS5, "proxy.example", 1080)
+        assertEquals(config, ProxyRouter.proxyForAllTraffic(config, ProxyMode.ALL))
+        assertNull(ProxyRouter.proxyForAllTraffic(config, ProxyMode.ONLY_BLOCKED_TOPICS))
+        assertNull(ProxyRouter.proxyForAllTraffic(null, ProxyMode.ALL))
+    }
+
     @Test
     fun `without config everything goes direct`() {
         assertFalse(route(url = "https://4pda.to/forum/index.php?showtopic=777", hasConfig = false))

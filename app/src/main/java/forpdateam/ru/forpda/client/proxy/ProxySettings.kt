@@ -26,8 +26,10 @@ class ProxySettings(context: Context) {
     private val securePrefs: SharedPreferences? = createSecurePrefs()
     private val versionCounter = AtomicInteger(0)
 
+    private val changeListeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
+
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key != null && key.startsWith(KEY_PREFIX)) versionCounter.incrementAndGet()
+        if (key != null && key.startsWith(KEY_PREFIX)) notifyChanged()
     }
 
     init {
@@ -36,6 +38,19 @@ class ProxySettings(context: Context) {
 
     /** Меняется при каждой правке настроек — сигнал «пересобери клиент». */
     val version: Int get() = versionCounter.get()
+
+    /**
+     * Подписка на правку настроек. Нужна тем, кто не спрашивает [version] сам: клиент с пулом
+     * соединений должен закрыть простаивающие, иначе маршрут сменится только через несколько минут.
+     */
+    fun addChangeListener(listener: () -> Unit) {
+        changeListeners += listener
+    }
+
+    private fun notifyChanged() {
+        versionCounter.incrementAndGet()
+        changeListeners.forEach { runCatching { it() } }
+    }
 
     var isEnabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)
@@ -72,7 +87,8 @@ class ProxySettings(context: Context) {
     fun writePassword(value: String) {
         val store = securePrefs ?: prefs
         store.edit().putString(KEY_PASSWORD, value).apply()
-        versionCounter.incrementAndGet()
+        // Зашифрованное хранилище — отдельный файл, слушатель обычных prefs про него не узнает.
+        if (store !== prefs) notifyChanged()
     }
 
     private fun createSecurePrefs(): SharedPreferences? = try {
