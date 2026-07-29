@@ -806,8 +806,6 @@
     <string name="pref_summary_startup_screen_qms">При запуске открывается раздел «QMS».</string>
     <string name="pref_summary_startup_screen_history">При запуске открывается раздел «История».</string>
     <string name="pref_summary_startup_screen_menu">При запуске открывается экран «Меню».</string>
-    <string name="pref_title_bottom_nav_order">Порядок нижнего меню</string>
-    <string name="pref_summary_bottom_nav_order">Выберите, какие разделы первыми показываются на нижней панели; остальные остаются в полном меню.</string>
     <string name="pref_title_accent">Цвет акцента</string>
     <string name="pref_summary_accent">Выберите цвет кнопок, ссылок и выделения</string>
     <string name="pref_summary_accent_active">%1$s · только для палитры «Системный стиль»</string>
@@ -899,12 +897,10 @@
     <string name="pref_summary_use_material_you_unsupported">Не поддерживается на вашей версии Android.</string>
     <string name="pref_title_haptic_feedback">Тактильный отклик</string>
     <string name="pref_summary_haptic_feedback">Лёгкая вибрация при переключении вкладок, отправке и других действиях. Учитывает системную настройку вибрации.</string>
-    <string name="bottom_nav_order_hint">Первые четыре пункта из списка показываются на нижней панели (ещё один значок открывает полное меню). Удерживайте строку и перетащите вверх или вниз.</string>
     <string name="pref_title_bottom_nav_columns">Пункты в нижнем меню</string>
-    <string name="pref_summary_bottom_nav_columns">Сколько основных разделов показывать на нижней панели: 5 или 6. Старый порядок меню сохраняется.</string>
+    <string name="pref_summary_bottom_nav_columns">Сколько основных разделов показывать на нижней панели: 5 или 6. Какие именно — на экране «Меню» по карандашу.</string>
     <string name="pref_value_bottom_nav_columns_5">5 колонок</string>
     <string name="pref_value_bottom_nav_columns_6">6 колонок</string>
-    <string name="bottom_nav_order_drag_hint">Перетащить</string>
     <string name="pref_title_system_downloader">Системный загрузчик</string>
     <string name="pref_summary_system_downloader">Использовать системный загрузчик файлов</string>
     <string name="pref_title_download_method">Способ загрузки файлов</string>

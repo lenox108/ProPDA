@@ -597,10 +597,6 @@
     <string name="pref_summary_startup_screen_replies">Opens the Replies section on launch.</string>
     <string name="pref_summary_startup_screen_qms">Opens the QMS section on launch.</string>
     <string name="pref_summary_startup_screen_history">Opens the History section on launch.</string>
-    <string name="pref_title_bottom_nav_order">Bottom bar order</string>
-    <string name="pref_summary_bottom_nav_order">Choose which sections appear first on the bottom bar; the rest remain in the full menu.</string>
-    <string name="bottom_nav_order_hint">The first four items appear on the bottom bar; another icon opens the full menu. Hold a row and drag up or down.</string>
-    <string name="bottom_nav_order_drag_hint">Reorder</string>
     <string name="pref_title_main">General</string>
     <string name="pref_title_system_downloader">System downloader</string>
     <string name="pref_summary_system_downloader">Use system downloader</string>
