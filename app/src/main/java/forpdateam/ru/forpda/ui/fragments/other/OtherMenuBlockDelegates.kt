@@ -17,6 +17,8 @@ import forpdateam.ru.forpda.entity.app.history.HistoryItem
 import forpdateam.ru.forpda.entity.app.other.OtherMenuBlock
 import forpdateam.ru.forpda.entity.app.other.QuickSetting
 import forpdateam.ru.forpda.ui.FlatUi
+import forpdateam.ru.forpda.ui.dp4
+import forpdateam.ru.forpda.ui.dp16
 import forpdateam.ru.forpda.ui.views.drawers.adapters.ListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuContinueListItem
 import forpdateam.ru.forpda.ui.views.drawers.adapters.OtherMenuHeaderListItem
@@ -148,7 +150,7 @@ class OtherMenuContinueDelegate(
 
 /** Ряд быстрых настроек. Состав задаёт пользователь, поэтому чипы строятся динамически. */
 class OtherMenuQuickSettingsDelegate(
-        private val clickListener: (QuickSetting) -> Unit
+        private val rowClickListener: () -> Unit
 ) : AdapterDelegate<MutableList<ListItem>>() {
 
     override fun isForViewType(items: MutableList<ListItem>, position: Int): Boolean =
@@ -157,7 +159,7 @@ class OtherMenuQuickSettingsDelegate(
     override fun onCreateViewHolder(parent: ViewGroup): RecyclerView.ViewHolder =
             ViewHolder(
                     ItemOtherMenuQuickSettingsBinding.inflate(LayoutInflater.from(parent.context), parent, false),
-                    clickListener
+                    rowClickListener
             )
 
     override fun onBindViewHolder(
@@ -171,25 +173,22 @@ class OtherMenuQuickSettingsDelegate(
 
     private class ViewHolder(
             private val binding: ItemOtherMenuQuickSettingsBinding,
-            private val clickListener: (QuickSetting) -> Unit
+            private val rowClickListener: () -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
+        init {
+            binding.root.setOnClickListener { rowClickListener() }
+        }
+
         fun bind(item: OtherMenuQuickSettingsListItem) {
-            val group = binding.otherQuickChips
-            group.removeAllViews()
-            item.items.forEach { setting ->
-                val chip = Chip(group.context).apply {
-                    text = context.getString(quickSettingTitle(setting))
-                    if (FlatUi.isEnabled(context)) {
-                        chipStrokeWidth = 0f
-                        elevation = 0f
-                        chipBackgroundColor = ColorStateList.valueOf(
-                                context.getColorFromAttr(R.attr.content_card_surface),
-                        )
-                    }
-                    setOnClickListener { clickListener(setting) }
-                }
-                group.addView(chip)
+            binding.otherQuickSummary.text = item.summary
+            binding.otherQuickSummary.visibility =
+                    if (item.summary.isBlank()) View.GONE else View.VISIBLE
+            binding.root.updateLayoutParams<RecyclerView.LayoutParams> {
+                leftMargin = binding.root.dp16
+                rightMargin = binding.root.dp16
+                topMargin = binding.root.dp4
+                bottomMargin = binding.root.dp4
             }
         }
     }

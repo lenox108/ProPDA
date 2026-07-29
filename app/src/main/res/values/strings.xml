@@ -31,7 +31,7 @@
     <string name="bottom_nav_state_not_selected">Не выбрано</string>
     <string name="bottom_nav_toggle_open_tabs">Показать открытые вкладки</string>
     <string name="other_menu_edit_mode_state">Режим настройки меню</string>
-    <string name="other_menu_edit_bar_title">Перетаскивайте плитки между разделами</string>
+    <string name="other_menu_edit_bar_title">Перетащите плитки, чтобы изменить порядок</string>
     <string name="other_menu_edit_done">Готово</string>
     <string name="other_menu_edit_reset">Сбросить</string>
     <string name="other_menu_drop_zone">Перетащите плитку сюда</string>
@@ -1444,4 +1444,13 @@
     <string name="pref_summary_app_font_size">Сейчас %1$s · 100 %% = 16</string>
     <string name="pref_app_font_size_restart_notice">Размер интерфейса применится после возврата из настроек</string>
     <string name="pref_title_topic_text_size">Размер шрифта в темах</string>
+    <string name="other_menu_section_all">Разделы</string>
+    <string name="other_menu_edit_layout">Настроить меню</string>
+    <string name="other_menu_profile_stats_separator">·</string>
+    <string name="other_menu_profile_open">Перейти в профиль</string>
+    <string name="other_menu_profile_guest">Гость</string>
+    <string name="other_menu_profile_guest_action">Войти на 4PDA</string>
+    <string name="other_menu_exit_app">Выйти из приложения</string>
+    <string name="other_menu_quick_settings_all">Все настройки</string>
+    <string name="other_menu_quick_settings_edit">Изменить состав</string>
 </resources>

@@ -33,7 +33,7 @@ class ExitMenuItemDelegate(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         init {
-            binding.otherExitButton.setOnClickListener { clickListener() }
+            binding.root.setOnClickListener { clickListener() }
         }
 
         fun bind() {

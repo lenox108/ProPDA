@@ -1052,4 +1052,13 @@
     <string name="pref_summary_app_font_size">Now %1$s · 100 %% = 16</string>
     <string name="pref_app_font_size_restart_notice">The interface size applies after you leave settings</string>
     <string name="pref_title_topic_text_size">Font size in topics</string>
+    <string name="other_menu_section_all">Sections</string>
+    <string name="other_menu_edit_layout">Customize menu</string>
+    <string name="other_menu_profile_stats_separator">·</string>
+    <string name="other_menu_profile_open">Open profile</string>
+    <string name="other_menu_profile_guest">Guest</string>
+    <string name="other_menu_profile_guest_action">Sign in to 4PDA</string>
+    <string name="other_menu_exit_app">Exit the app</string>
+    <string name="other_menu_quick_settings_all">All settings</string>
+    <string name="other_menu_quick_settings_edit">Change items</string>
 </resources>

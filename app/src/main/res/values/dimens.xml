@@ -21,7 +21,7 @@
     <dimen name="other_menu_continue_icon_size">40dp</dimen>
     <dimen name="other_menu_continue_divider_inset">72dp</dimen>
     <dimen name="other_menu_continue_divider_height">1dp</dimen>
-    <dimen name="other_menu_tile_height">76dp</dimen>
+    <dimen name="other_menu_tile_height">84dp</dimen>
     <dimen name="other_menu_tile_title_height">26dp</dimen>
     <dimen name="other_menu_action_row_height">@dimen/dp56</dimen>
     <dimen name="pager_bullet_indicator_height">52dp</dimen>

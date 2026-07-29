@@ -26,7 +26,7 @@ class OtherAdapter(
         private val addShortcutListener: (OtherMenuSection) -> Unit,
         private val removeShortcutListener: (DrawerMenuItem) -> Unit,
         private val continueClickListener: (HistoryItem) -> Unit,
-        private val quickSettingClickListener: (QuickSetting) -> Unit,
+        private val quickSettingsRowListener: () -> Unit,
         private val blockVisibilityListener: (OtherMenuBlock) -> Unit,
         private val blockConfigureListener: (OtherMenuBlock) -> Unit,
         topicPreferencesHolder: TopicPreferencesHolder
@@ -46,6 +46,7 @@ class OtherAdapter(
             val bottomNavDuplicateIds: Set<Int>,
             val continueItems: List<HistoryItem>,
             val quickSettings: List<QuickSetting>,
+            val quickSettingsSummary: String,
             val hiddenBlocks: Set<OtherMenuBlock>
     )
 
@@ -75,7 +76,7 @@ class OtherAdapter(
     init {
         items = mutableListOf()
         delegatesManager.apply {
-            addDelegate(ProfileItemDelegate(profileClickListener, topicPreferencesHolder))
+            addDelegate(ProfileItemDelegate(profileClickListener, { setEditMode(true) }, topicPreferencesHolder))
             addDelegate(DividerShadowItemDelegate())
             addDelegate(MenuItemDelegate(::onMenuItemClick, ::onMenuItemLongClick, ::isMenuEditMode, removeShortcutListener))
             addDelegate(ExitMenuItemDelegate(exitClickListener))
@@ -86,7 +87,7 @@ class OtherAdapter(
             addDelegate(OtherMenuAddTileDelegate(addShortcutListener))
             addDelegate(OtherMenuHeaderDelegate(blockVisibilityListener, blockConfigureListener))
             addDelegate(OtherMenuContinueDelegate(continueClickListener))
-            addDelegate(OtherMenuQuickSettingsDelegate(quickSettingClickListener))
+            addDelegate(OtherMenuQuickSettingsDelegate(quickSettingsRowListener))
         }
     }
 
@@ -155,8 +156,11 @@ class OtherAdapter(
     }
 
     fun setCustomLayout(layout: Map<OtherMenuSection, List<Int>>) {
-        customLayout = layout
-        customOrderIds = layout.values.flatten()
+        // Сохранённые раскладки старых версий разложены по трём секциям — склеиваем их в одну
+        // в прежнем порядке, иначе плитки «Личного» и «Инструментов» просто исчезли бы.
+        val flat = LEGACY_SECTION_ORDER.flatMap { layout[it].orEmpty() }.distinct()
+        customLayout = if (flat.isEmpty()) emptyMap() else mapOf(MENU_SECTION to flat)
+        customOrderIds = flat
     }
 
     fun setShortcuts(items: List<MenuShortcut>) {
@@ -170,6 +174,7 @@ class OtherAdapter(
             bottomNavDuplicateIds: Set<Int>,
             continueItems: List<HistoryItem>,
             quickSettings: List<QuickSetting>,
+            quickSettingsSummary: String,
             hiddenBlocks: Set<OtherMenuBlock>
     ) {
         lastBind = BindArgs(
@@ -179,6 +184,7 @@ class OtherAdapter(
                 bottomNavDuplicateIds,
                 continueItems,
                 quickSettings,
+                quickSettingsSummary,
                 hiddenBlocks
         )
         rebuild()
@@ -214,14 +220,22 @@ class OtherAdapter(
             SECTIONS.forEach { section ->
                 addSection(section, columns = MENU_COLUMNS, flatItems, args.bottomNavDuplicateIds)
             }
-            addBlock(
-                    block = OtherMenuBlock.QUICK_SETTINGS,
-                    titleRes = R.string.other_menu_section_quick_settings,
-                    hidden = args.hiddenBlocks.contains(OtherMenuBlock.QUICK_SETTINGS),
-                    hasContent = args.quickSettings.isNotEmpty(),
-                    configurable = true
-            ) {
-                add(OtherMenuQuickSettingsListItem(args.quickSettings))
+            // У быстрых настроек теперь своя строка с названием — отдельный заголовок над ней
+            // был бы вторым «Быстрые настройки» подряд. Заголовок остаётся только в режиме
+            // редактирования: он несёт кнопки «Изменить состав» и «Скрыть».
+            val quickHidden = args.hiddenBlocks.contains(OtherMenuBlock.QUICK_SETTINGS)
+            if (isEditMode) {
+                addBlock(
+                        block = OtherMenuBlock.QUICK_SETTINGS,
+                        titleRes = R.string.other_menu_section_quick_settings,
+                        hidden = quickHidden,
+                        hasContent = args.quickSettings.isNotEmpty(),
+                        configurable = true
+                ) {
+                    add(OtherMenuQuickSettingsListItem(args.quickSettings, args.quickSettingsSummary))
+                }
+            } else if (!quickHidden && args.quickSettings.isNotEmpty()) {
+                add(OtherMenuQuickSettingsListItem(args.quickSettings, args.quickSettingsSummary))
             }
             add(OtherMenuExitListItem())
         }
@@ -433,30 +447,42 @@ class OtherAdapter(
             builtInIdsFor(section) + shortcuts.filter { it.section == section }.map { it.id }
 
     private fun builtInIdsFor(section: OtherMenuSection): List<Int> = when (section) {
-        OtherMenuSection.QUICK -> listOf(
+        MENU_SECTION -> listOf(
                 MenuRepository.item_article_list,
+                MenuRepository.item_favorites,
                 MenuRepository.item_forum,
                 MenuRepository.item_qms_contacts,
-                MenuRepository.item_search,
-                MenuRepository.item_favorites,
                 MenuRepository.item_mentions,
-        )
-        OtherMenuSection.PERSONAL -> listOf(
+                MenuRepository.item_search,
+                MenuRepository.item_downloads,
                 MenuRepository.item_notes,
                 MenuRepository.item_history,
                 MenuRepository.item_my_messages,
-        )
-        OtherMenuSection.TOOLS -> listOf(
-                MenuRepository.item_downloads,
                 MenuRepository.item_dev_db,
                 MenuRepository.item_settings,
         )
-        OtherMenuSection.LEGACY -> emptyList()
+        else -> emptyList()
     }
 
     private companion object {
-        const val MENU_COLUMNS = 3
+        const val MENU_COLUMNS = 4
 
-        val SECTIONS = listOf(OtherMenuSection.QUICK, OtherMenuSection.PERSONAL, OtherMenuSection.TOOLS)
+        /**
+         * Секция одна: три группы («Быстрый доступ», «Личное», «Инструменты») давали ряды по
+         * две плитки из трёх — то, что уже стоит в нижней панели, из сетки прячется, и группы
+         * выглядели обрезанными. [OtherMenuSection.QUICK] остался её носителем, чтобы не
+         * переписывать хранение раскладки и перетаскивание.
+         */
+        val MENU_SECTION = OtherMenuSection.QUICK
+
+        val SECTIONS = listOf(MENU_SECTION)
+
+        /** Порядок склейки старых трёхсекционных раскладок в одну. */
+        val LEGACY_SECTION_ORDER = listOf(
+                OtherMenuSection.QUICK,
+                OtherMenuSection.PERSONAL,
+                OtherMenuSection.TOOLS,
+                OtherMenuSection.LEGACY,
+        )
     }
 }

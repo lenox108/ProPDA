@@ -1,41 +1,47 @@
-<?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?><!--
+    Выход из приложения: обычная строка с подписью. Раньше это был безымянный кружок по центру —
+    единственный элемент экрана без текста, и при этом самый разрушительный.
+-->
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/otherExitButton"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardBackgroundColor="?attr/colorSurface"
+    app:cardCornerRadius="@dimen/card_corner_radius"
+    app:cardElevation="0dp"
+    app:strokeColor="?attr/list_plate_stroke_color"
+    app:strokeWidth="?attr/list_plate_stroke_width">
 
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/otherExitButton"
-        android:layout_width="@dimen/dp56"
-        android:layout_height="@dimen/dp56"
-        android:layout_gravity="center_horizontal"
-        android:clickable="true"
-        android:contentDescription="@string/menu_item_exit"
-        android:focusable="true"
-        android:foreground="?attr/selectableItemBackground"
-        app:cardBackgroundColor="?attr/colorSurface"
-        app:cardCornerRadius="28dp"
-        app:cardElevation="0dp"
-        app:strokeColor="?attr/list_plate_stroke_color"
-        app:strokeWidth="?attr/list_plate_stroke_width">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="@dimen/dp48"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/content_padding_horizontal"
+        android:paddingTop="@dimen/dp12"
+        android:paddingEnd="@dimen/content_padding_horizontal"
+        android:paddingBottom="@dimen/dp12">
 
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent">
+        <ImageView
+            android:id="@+id/otherExitIcon"
+            android:layout_width="@dimen/dp24"
+            android:layout_height="@dimen/dp24"
+            android:contentDescription="@null"
+            app:srcCompat="@drawable/ic_power_settings_new"
+            app:tint="?attr/icon_base" />
 
-            <ImageView
-                android:id="@+id/otherExitIcon"
-                android:layout_width="@dimen/dp24"
-                android:layout_height="@dimen/dp24"
-                android:contentDescription="@null"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:srcCompat="@drawable/ic_power_settings_new"
-                app:tint="?attr/icon_base"
-                tools:ignore="ImageContrastCheck" />
-        </androidx.constraintlayout.widget.ConstraintLayout>
-    </com.google.android.material.card.MaterialCardView>
-</FrameLayout>
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/content_padding_horizontal"
+            android:layout_weight="1"
+            android:text="@string/other_menu_exit_app"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="@dimen/list_topic_title_text_size" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

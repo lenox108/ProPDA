@@ -32,7 +32,9 @@ class OtherSectionHeaderDelegate : AdapterDelegate<MutableList<ListItem>>() {
         fun bind(section: OtherMenuSection) {
             binding.otherSectionTitle.setText(
                     when (section) {
-                        OtherMenuSection.QUICK -> R.string.other_menu_section_quick
+                        // Секция теперь одна («Разделы»); QUICK остался её носителем, чтобы не
+                        // ломать сохранённые раскладки и код перетаскивания.
+                        OtherMenuSection.QUICK -> R.string.other_menu_section_all
                         OtherMenuSection.PERSONAL -> R.string.other_menu_section_personal
                         OtherMenuSection.TOOLS -> R.string.other_menu_section_tools
                         OtherMenuSection.LEGACY -> R.string.undefined

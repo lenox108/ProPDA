@@ -1,4 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?><!--
+    Плитка меню: круглая иконка и подпись под ней. Карточка-обёртка осталась (её рамку
+    подсвечивает режим редактирования), но в обычном виде она прозрачная и без обводки —
+    вес плитке даёт кружок иконки, а не плашка во всю ячейку.
+-->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -8,32 +12,39 @@
     android:clickable="true"
     android:focusable="true"
     android:foreground="?attr/selectableItemBackground"
-    app:cardBackgroundColor="?attr/colorSurface"
+    app:cardBackgroundColor="@android:color/transparent"
     app:cardCornerRadius="@dimen/card_corner_radius"
     app:cardElevation="0dp"
-    app:strokeColor="?attr/list_plate_stroke_color"
-    app:strokeWidth="?attr/list_plate_stroke_width">
+    app:strokeWidth="0dp">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingStart="@dimen/dp6"
-        android:paddingEnd="@dimen/dp6"
+        android:paddingStart="@dimen/dp4"
+        android:paddingEnd="@dimen/dp4"
         android:paddingTop="@dimen/dp6"
         android:paddingBottom="@dimen/dp6">
 
-        <ImageView
-            android:id="@+id/otherMenuIcon"
-            android:layout_width="@dimen/dp24"
-            android:layout_height="@dimen/dp24"
-            android:contentDescription="@null"
-            app:tint="?attr/menu_tile_icon"
+        <FrameLayout
+            android:id="@+id/otherMenuIconHolder"
+            android:layout_width="@dimen/dp40"
+            android:layout_height="@dimen/dp40"
+            android:background="@drawable/bg_menu_tile_icon"
             app:layout_constraintBottom_toTopOf="@+id/otherMenuTitle"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_chainStyle="packed"
-            tools:src="@drawable/ic_star" />
+            app:layout_constraintVertical_chainStyle="packed">
+
+            <ImageView
+                android:id="@+id/otherMenuIcon"
+                android:layout_width="@dimen/dp24"
+                android:layout_height="@dimen/dp24"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                app:tint="?attr/menu_tile_icon"
+                tools:src="@drawable/ic_star" />
+        </FrameLayout>
 
         <TextView
             android:id="@+id/otherMenuTitle"
@@ -41,16 +52,15 @@
             android:layout_height="@dimen/other_menu_tile_title_height"
             android:layout_marginTop="@dimen/dp4"
             android:ellipsize="end"
-            android:gravity="center"
+            android:gravity="center_horizontal|top"
             android:includeFontPadding="false"
             android:maxLines="2"
             android:textColor="?attr/colorOnSurface"
             android:textSize="11sp"
-            android:textStyle="bold"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/otherMenuIcon"
+            app:layout_constraintTop_toBottomOf="@+id/otherMenuIconHolder"
             tools:text="Избранное" />
 
         <ImageView
@@ -61,8 +71,8 @@
             android:src="@drawable/ic_close"
             android:visibility="gone"
             app:tint="?attr/colorAccent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="@+id/otherMenuIconHolder"
+            app:layout_constraintTop_toTopOf="@+id/otherMenuIconHolder"
             tools:visibility="visible" />
 
         <TextView
@@ -78,8 +88,8 @@
             android:textSize="@dimen/attachment_error_text_size"
             android:textStyle="bold"
             android:visibility="gone"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="@+id/otherMenuIconHolder"
+            app:layout_constraintTop_toTopOf="@+id/otherMenuIconHolder"
             tools:text="22"
             tools:visibility="visible" />
     </androidx.constraintlayout.widget.ConstraintLayout>

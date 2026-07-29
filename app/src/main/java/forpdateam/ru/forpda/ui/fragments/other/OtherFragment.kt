@@ -69,7 +69,7 @@ class OtherFragment : TabFragment() {
                 addShortcutClickListener,
                 removeShortcutClickListener,
                 continueClickListener,
-                quickSettingClickListener,
+                quickSettingsRowClickListener,
                 blockVisibilityClickListener,
                 blockConfigureClickListener,
                 topicPreferencesHolder
@@ -186,6 +186,7 @@ class OtherFragment : TabFragment() {
                             state.bottomNavDuplicateIds,
                             state.continueItems,
                             state.quickSettings,
+                            quickSettingsSummary(),
                             state.hiddenBlocks
                     )
                 }
@@ -325,6 +326,74 @@ class OtherFragment : TabFragment() {
     }
 
     private val continueClickListener: (HistoryItem) -> Unit = { item -> viewModel.onContinueClick(item) }
+
+    /**
+     * Строка «Быстрые настройки» разворачивается в лист со значениями: ряд чипсов не показывал,
+     * что именно сейчас выбрано, и занимал две строки экрана.
+     */
+    private val quickSettingsRowClickListener: () -> Unit = {
+        QuickSettingsSheet.show(
+                context = requireContext(),
+                items = viewModel.uiState.value.quickSettings,
+                valueProvider = ::quickSettingValue,
+                onPick = quickSettingClickListener,
+                onEditComposition = {
+                    QuickSettingsPickerDialog.show(
+                            requireContext(),
+                            viewModel.uiState.value.quickSettings
+                    ) { picked -> viewModel.onChangeQuickSettings(picked) }
+                },
+                onAllSettings = { startActivity(Intent(requireContext(), SettingsActivity::class.java)) },
+        )
+    }
+
+    /** Сводка для строки меню: тема, шрифт и плотность — то, что меняют чаще всего. */
+    private fun quickSettingsSummary(): String = listOfNotNull(
+            quickSettingValue(QuickSetting.THEME),
+            quickSettingValue(QuickSetting.FONT),
+            quickSettingValue(QuickSetting.DENSITY),
+    ).joinToString(" · ")
+
+    /** Текущее значение настройки; null — у действий, у которых значения нет (ЧС, обновления). */
+    private fun quickSettingValue(setting: QuickSetting): String? = when (setting) {
+        QuickSetting.THEME -> getString(when (mainPreferencesHolder.getThemeMode()) {
+            Preferences.Main.ThemeMode.LIGHT -> R.string.pref_value_theme_mode_light
+            Preferences.Main.ThemeMode.DARK -> R.string.pref_value_theme_mode_dark
+            Preferences.Main.ThemeMode.AMOLED -> R.string.pref_value_theme_mode_amoled
+            Preferences.Main.ThemeMode.SYSTEM_AMOLED -> R.string.pref_value_theme_mode_system_amoled
+            else -> R.string.pref_value_theme_mode_system
+        })
+        QuickSetting.PALETTE -> getString(when (mainPreferencesHolder.getUiPalette()) {
+            Preferences.Main.UiPalette.SEPIA_READING -> R.string.pref_value_ui_palette_sepia_reading
+            Preferences.Main.UiPalette.SEPIA_BLUE -> R.string.pref_value_ui_palette_sepia_blue
+            Preferences.Main.UiPalette.MINIMAL_READER -> R.string.pref_value_ui_palette_minimal_reader
+            Preferences.Main.UiPalette.GREEN_CARE -> R.string.pref_value_ui_palette_green_care
+            Preferences.Main.UiPalette.NORD -> R.string.pref_value_ui_palette_nord
+            Preferences.Main.UiPalette.SOLARIZED -> R.string.pref_value_ui_palette_solarized
+            Preferences.Main.UiPalette.GRUVBOX -> R.string.pref_value_ui_palette_gruvbox
+            Preferences.Main.UiPalette.ROSE_PINE -> R.string.pref_value_ui_palette_rose_pine
+            Preferences.Main.UiPalette.DRACULA -> R.string.pref_value_ui_palette_dracula
+            else -> R.string.pref_value_ui_palette_system
+        })
+        QuickSetting.ACCENT -> getString(
+                AccentPickerDialog.titleRes(mainPreferencesHolder.getAccentPalette()))
+        QuickSetting.FONT -> getString(when (FontController.getCurrentFontMode(mainPreferencesHolder)) {
+            forpdateam.ru.forpda.ui.AppFontMode.ROBOTO -> R.string.pref_value_app_font_roboto
+            forpdateam.ru.forpda.ui.AppFontMode.INTER -> R.string.pref_value_app_font_inter
+            forpdateam.ru.forpda.ui.AppFontMode.SOURCE_SANS_3 -> R.string.pref_value_app_font_source_sans_3
+            forpdateam.ru.forpda.ui.AppFontMode.OPEN_SANS -> R.string.pref_value_app_font_open_sans
+            forpdateam.ru.forpda.ui.AppFontMode.IBM_PLEX_SANS -> R.string.pref_value_app_font_ibm_plex_sans
+            forpdateam.ru.forpda.ui.AppFontMode.GOLOS_TEXT -> R.string.pref_value_app_font_golos_text
+            forpdateam.ru.forpda.ui.AppFontMode.LITERATA -> R.string.pref_value_app_font_literata
+            forpdateam.ru.forpda.ui.AppFontMode.APPETITE_PRO -> R.string.pref_value_app_font_appetite_pro
+            forpdateam.ru.forpda.ui.AppFontMode.MAYONEZ_ITALIC -> R.string.pref_value_app_font_mayonez_italic
+            forpdateam.ru.forpda.ui.AppFontMode.ROBOTO_MONO -> R.string.pref_value_app_font_roboto_mono
+            else -> R.string.pref_value_app_font_system
+        })
+        QuickSetting.DENSITY -> getString(densityLabel(mainPreferencesHolder.getTopicPostDensity()))
+        QuickSetting.PAGINATION -> getString(paginationLabel(mainPreferencesHolder.getTopicPaginationPanels()))
+        QuickSetting.BLACKLIST, QuickSetting.NOTIFICATIONS, QuickSetting.UPDATE -> null
+    }
 
     // Действия те же, что в настройках: смена темы перезапускает приложение, палитра/акцент/шрифт
     // пересоздают активити, тумблеры применяются мгновенно.

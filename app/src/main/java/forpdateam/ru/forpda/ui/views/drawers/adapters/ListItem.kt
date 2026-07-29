@@ -64,7 +64,9 @@ class OtherMenuContinueListItem(val item: forpdateam.ru.forpda.entity.app.histor
 
 /** Ряд быстрых настроек: состав выбирает пользователь (см. QuickSetting). */
 class OtherMenuQuickSettingsListItem(
-        val items: List<forpdateam.ru.forpda.entity.app.other.QuickSetting>
+        val items: List<forpdateam.ru.forpda.entity.app.other.QuickSetting>,
+        /** Текущие значения строкой: «AMOLED · Inter · Комфортная». */
+        val summary: String = ""
 ) : ListItem()
 class DividerShadowListItem : ListItem()
 

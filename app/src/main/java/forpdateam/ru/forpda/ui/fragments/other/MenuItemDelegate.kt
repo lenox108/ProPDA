@@ -125,14 +125,11 @@ class MenuItemDelegate(
                     if (isEditMode) binding.root.context.getString(R.string.other_menu_edit_mode_state) else null
             )
             binding.root.cardElevation = 0f
-            binding.root.strokeWidth = if (isEditMode) {
-                binding.root.resources.getDimensionPixelSize(R.dimen.dp2)
-            } else {
-                binding.root.context.getDimensionFromAttr(R.attr.list_plate_stroke_width).toInt()
-            }
-            binding.root.strokeColor = binding.root.context.getColorFromAttr(
-                    if (isEditMode) R.attr.colorAccent else R.attr.list_plate_stroke_color
-            )
+            // Вне режима редактирования плитка — это кружок с подписью, без плашки и рамки:
+            // обводку показываем только когда ячейку можно тащить.
+            binding.root.strokeWidth =
+                    if (isEditMode) binding.root.resources.getDimensionPixelSize(R.dimen.dp2) else 0
+            binding.root.strokeColor = binding.root.context.getColorFromAttr(R.attr.colorAccent)
             if (isEditMode) {
                 if (binding.root.animation == null) {
                     binding.root.startAnimation(editModeAnimation())

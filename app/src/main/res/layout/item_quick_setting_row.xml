@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?><!-- Строка листа быстрых настроек: название и текущее значение. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/dp48"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/content_padding_horizontal"
+    android:paddingTop="@dimen/dp12"
+    android:paddingEnd="@dimen/content_padding_horizontal"
+    android:paddingBottom="@dimen/dp12">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/quickSettingTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="@dimen/list_topic_title_text_size"
+            tools:text="Тема" />
+
+        <TextView
+            android:id="@+id/quickSettingValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="@dimen/list_topic_meta_text_size"
+            android:visibility="gone"
+            tools:text="AMOLED"
+            tools:visibility="visible" />
+    </LinearLayout>
+
+    <ImageView
+        android:layout_width="@dimen/dp24"
+        android:layout_height="@dimen/dp24"
+        android:contentDescription="@null"
+        app:srcCompat="@drawable/ic_arrow_right"
+        app:tint="?attr/icon_base" />
+</LinearLayout>
