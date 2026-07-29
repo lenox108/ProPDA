@@ -256,17 +256,50 @@ class QmsChatViewModelLoadTest {
         assertFalse(vm.shouldSkipAutoRefreshPoll())
     }
 
+    /**
+     * Cadence follows PROVEN delivery, not `isConnected()`: a connected-but-silent socket (measured
+     * live on the emulator — onConnected, subscription sent, zero events for arriving messages) must
+     * get the fast tick, because then the poll is the only delivery path left.
+     */
     @Test
-    fun `poll cadence follows the socket state`() = runTest {
-        val interactor = mockk<QmsInteractor>(relaxed = true)
-        val alive = viewModel(interactor, mockEventsRepository(webSocketConnected = true))
-        val dead = viewModel(interactor, mockEventsRepository(webSocketConnected = false))
+    fun `poll cadence follows proven delivery not mere connectivity`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val initial = chatWithMessages()
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
+        coEvery { interactor.getMessagesAfter(1, 2, 1) } returns emptyList()
+        val vm = viewModel(interactor, mockEventsRepository(webSocketConnected = true))
+        vm.start()
+        advanceUntilIdle()
 
-        assertEquals(QmsChatViewModel.AUTO_REFRESH_SOCKET_ALIVE_MS, alive.autoRefreshDelayMs())
-        assertEquals(QmsChatViewModel.AUTO_REFRESH_SOCKET_DEAD_MS, dead.autoRefreshDelayMs())
+        assertEquals(
+                "подключён, но молчит — опрос единственный путь",
+                QmsChatViewModel.AUTO_REFRESH_REALTIME_SILENT_MS,
+                vm.autoRefreshDelayMs()
+        )
+
+        vm.handleEvent(TabNotification(
+                source = NotificationEvent.Source.QMS,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(
+                        type = NotificationEvent.Type.NEW,
+                        source = NotificationEvent.Source.QMS,
+                        messageId = 2,
+                        sourceId = 2,
+                        userId = 999
+                ),
+                isWebSocket = true
+        ))
+        advanceUntilIdle()
+
+        assertEquals(
+                "сокет доказал доставку — можно реже",
+                QmsChatViewModel.AUTO_REFRESH_REALTIME_TRUSTED_MS,
+                vm.autoRefreshDelayMs()
+        )
         assertTrue(
-                "без сокета опрос должен быть заметно чаще",
-                QmsChatViewModel.AUTO_REFRESH_SOCKET_DEAD_MS < QmsChatViewModel.AUTO_REFRESH_SOCKET_ALIVE_MS
+                QmsChatViewModel.AUTO_REFRESH_REALTIME_SILENT_MS < QmsChatViewModel.AUTO_REFRESH_REALTIME_TRUSTED_MS
         )
     }
 

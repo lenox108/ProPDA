@@ -348,6 +348,9 @@ class EventsRepository(
                 // Сигнал сервису: сокет ожил — если персистентный фон, снова держать FGS
                 // (после кулдауна FGS мог быть отпущен ради экономии батареи).
                 foregroundRealtimeFlow.tryEmit(ForegroundRealtimeChange(true, "ws_connected"))
+                if (BuildConfig.DEBUG) {
+                    Timber.d("WS subscribe: sv id=${webSocketController.getCurrentId()} ea u${authHolder.get().userId}")
+                }
                 webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
                 webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
                 // Соединение живо — запускаем/перезапускаем idle-таймер относительно него.

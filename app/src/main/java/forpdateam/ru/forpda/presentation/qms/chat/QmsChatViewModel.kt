@@ -61,17 +61,19 @@ class QmsChatViewModel @Inject constructor(
         private const val WS_EVENT_FRESHNESS_MS = 25_000L
 
         /**
-         * Тик страховочного опроса, когда realtime-сокет ЖИВ: он и так доставляет, опрос нужен
-         * только на случай «подключён, но молчит».
+         * Тик страховочного опроса, когда сокет РЕАЛЬНО доставляет в этот тред: он и так приносит
+         * сообщения мгновенно, а сам этот тик всё равно будет пропущен по свежести события.
          */
-        const val AUTO_REFRESH_SOCKET_ALIVE_MS = 15_000L
+        const val AUTO_REFRESH_REALTIME_TRUSTED_MS = 15_000L
 
         /**
-         * Тик, когда сокета нет (кулдаун circuit breaker'а, сеть/DPI режет ws, уведомления
-         * выключены). Тогда опрос — единственный шанс увидеть сообщение вовремя, поэтому он
-         * заметно чаще. Ограничен открытым чатом на переднем плане: цикл живёт только в STARTED.
+         * Тик, когда сокет ничего не доставил: его может не быть вовсе (кулдаун circuit breaker'а,
+         * сеть/DPI режет ws) ЛИБО он «подключён, но молчит» — на эмуляторе живьём видно именно это:
+         * onConnected есть, подписка ушла, а ни одного события по сообщениям сервер не прислал.
+         * Тогда опрос — единственный путь доставки, поэтому он заметно чаще. Ограничен открытым
+         * чатом на переднем плане: цикл живёт только в STARTED.
          */
-        const val AUTO_REFRESH_SOCKET_DEAD_MS = 5_000L
+        const val AUTO_REFRESH_REALTIME_SILENT_MS = 5_000L
         /**
          * If the in-memory QMS chat cache is fresher than this, a second open of the same dialog
          * within the [QmsChatMemoryCache.MAX_AGE_MS] window skips the background network refresh
@@ -853,21 +855,25 @@ class QmsChatViewModel @Inject constructor(
      * minutes, so an open dialog received nothing until the user exited and re-entered. Gating on
      * WS-event freshness instead means: socket delivering → skip; socket silent/half-dead → poll.
      */
-    fun shouldSkipAutoRefreshPoll(): Boolean =
-            System.currentTimeMillis() - lastRealtimeMessageAtMs < WS_EVENT_FRESHNESS_MS
+    fun shouldSkipAutoRefreshPoll(): Boolean = realtimeDeliveringNow()
 
     /**
-     * Пауза до следующего страховочного опроса. Мёртвый сокет (кулдаун circuit breaker'а, сеть режет
-     * ws-эндпоинт) означает, что мгновенных путей доставки может не остаться вовсе, — тогда тик
-     * заметно чаще, чтобы сообщение появлялось за секунды, а не за четверть минуты. Живой сокет
-     * доставляет сам, и почти каждый его тик всё равно скипается по свежести события.
+     * Пауза до следующего страховочного опроса. Гейт тот же, что у [shouldSkipAutoRefreshPoll], и
+     * это принципиально: считать сокет рабочим по `isConnected()` нельзя — живой замер на
+     * эмуляторе (29.07.2026) показал onConnected + ушедшую подписку и НИ ОДНОГО события по
+     * пришедшим сообщениям, то есть «подключён» не значит «доставляет». Пока сокет не доказал
+     * доставку в этот тред, опрос — единственный путь, поэтому тик короткий; как только доказал,
+     * тик длинный и всё равно пропускается по свежести.
      */
     fun autoRefreshDelayMs(): Long =
-            if (eventsRepository.isWebSocketConnected()) {
-                AUTO_REFRESH_SOCKET_ALIVE_MS
+            if (realtimeDeliveringNow()) {
+                AUTO_REFRESH_REALTIME_TRUSTED_MS
             } else {
-                AUTO_REFRESH_SOCKET_DEAD_MS
+                AUTO_REFRESH_REALTIME_SILENT_MS
             }
+
+    private fun realtimeDeliveringNow(): Boolean =
+            System.currentTimeMillis() - lastRealtimeMessageAtMs < WS_EVENT_FRESHNESS_MS
 
     /** Отрабатывает сигнал, пришедший пока тред грузился (см. [requestNewMessagesCheck]). */
     private fun drainPendingNewMessagesCheck() {
