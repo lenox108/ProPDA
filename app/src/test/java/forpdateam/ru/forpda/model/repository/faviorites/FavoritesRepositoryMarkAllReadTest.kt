@@ -9,8 +9,10 @@ import forpdateam.ru.forpda.entity.remote.favorites.FavoriteReadState
 import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.CountersHolder
 import forpdateam.ru.forpda.model.data.cache.favorites.FavoritesCacheRoom
+import forpdateam.ru.forpda.entity.remote.events.NotificationEvent
 import forpdateam.ru.forpda.model.data.remote.api.events.NotificationEventsApi
 import forpdateam.ru.forpda.model.data.remote.api.favorites.FavoritesApi
+import forpdateam.ru.forpda.model.data.remote.api.favorites.Sorting
 import forpdateam.ru.forpda.model.preferences.ListsPreferencesHolder
 import forpdateam.ru.forpda.model.preferences.NotificationPreferencesHolder
 import forpdateam.ru.forpda.model.repository.theme.TopicReadBoundaryStore
@@ -249,6 +251,65 @@ class FavoritesRepositoryMarkAllReadTest {
         verify(exactly = 0) { readBoundaryStore.clear(43) }
     }
 
+    /**
+     * Жалоба: нажал «Прочитать все темы» — строки погасли, потом вручную обновил избранное (свайп)
+     * и ВСЕ темы снова стали непрочитанными. Сервер обрабатывает `view=getlastpost` с задержкой
+     * (об этом и текст пункта меню), поэтому первый рефреш после отметки приносит и HTML со «+N»,
+     * и инспектор с last_post_ts > last_read_ts. Единственная защита от такого перезажигания —
+     * маркеры локального прочтения ([FavItem.localReadPostId]/[FavItem.localReadPostDateMillis]),
+     * которые одиночный [FavoritesRepository.markRead] взводит, а пакетная отметка — нет.
+     */
+    @Test
+    fun `mark all favorites read survives manual refresh while server still reports unread`() = runTest {
+        val favoritesCache = FavoritesCacheRoom(FakeFavItemDao())
+        favoritesCache.saveFavorites(
+                listOf(
+                        favoriteTopic(favId = 1, topicId = 42, isNew = true, unreadPostCount = 3),
+                        favoriteTopic(favId = 2, topicId = 43, isNew = true, unreadPostCount = 1)
+                )
+        )
+        val sorting = Sorting()
+        // Момент последнего поста строк (см. favoriteTopic.date) в серверных секундах: инспектор
+        // отдаёт ровно его как last_post_ts, ничего нового после отметки не появилось.
+        val lastPostSeconds = (forpdateam.ru.forpda.common.Utils.parseForumDateTime("01.01.2026, 10:00")!!.time) / 1000L
+        val favoritesApi = mockk<FavoritesApi> {
+            coEvery { markFavoriteTopicRead(42) } returns true
+            coEvery { markFavoriteTopicRead(43) } returns true
+            // Рефреш сразу после отметки: список 4pda ещё показывает темы непрочитанными.
+            every { getFavorites(0, true, sorting, true) } returns favData(
+                    favoriteTopic(favId = 1, topicId = 42, isNew = true, unreadPostCount = 3),
+                    favoriteTopic(favId = 2, topicId = 43, isNew = true, unreadPostCount = 1)
+            )
+        }
+        val eventsApi = mockk<NotificationEventsApi>(relaxed = true) {
+            every { invalidateFavoritesInspectorCache() } just Runs
+            // Инспектор тоже отстаёт: last_read_ts=0 (трекинг ещё не обновлён) => «непрочитано».
+            every { getFavoritesEvents() } returns listOf(
+                    themeEvent(topicId = 42, msgCount = 3, timeStamp = lastPostSeconds, lastTimeStamp = 0),
+                    themeEvent(topicId = 43, msgCount = 1, timeStamp = lastPostSeconds, lastTimeStamp = 0)
+            )
+        }
+        val repository = createRepository(favoritesCache, favoritesApi = favoritesApi, eventsApi = eventsApi)
+
+        repository.markFavoriteTopicsRead(
+                entries = listOf(
+                        FavoriteMarkReadEntry(favId = 1, topicId = 42),
+                        FavoriteMarkReadEntry(favId = 2, topicId = 43)
+                ),
+                onProgress = { /* no-op */ }
+        )
+        repository.loadFavorites(0, all = true, sorting = sorting, forceRefresh = true)
+
+        val items = favoritesCache.getItems()
+        assertEquals(
+                "ручной рефреш не должен перезажигать явно отмеченные прочитанными темы",
+                listOf(false, false),
+                items.map { it.isNew }
+        )
+        assertEquals(listOf(FavoriteReadState.READ, FavoriteReadState.READ), items.map { it.readState })
+        assertEquals(listOf(0, 0), items.map { it.unreadPostCount })
+    }
+
     private fun createRepository(
             favoritesCache: FavoritesCacheRoom,
             favoritesApi: FavoritesApi = mockk<FavoritesApi>(relaxed = true),
@@ -286,6 +347,26 @@ class FavoritesRepositoryMarkAllReadTest {
             every { getString(any(), any()) } answers { secondArg() }
             every { edit() } returns editor
         }
+    }
+
+    private fun favData(vararg items: FavItem) = forpdateam.ru.forpda.entity.remote.favorites.FavData().apply {
+        this.items.addAll(items)
+    }
+
+    private fun themeEvent(
+            topicId: Int,
+            userId: Int = 2,
+            userNick: String = "User",
+            msgCount: Int = 0,
+            timeStamp: Long = 0,
+            lastTimeStamp: Long = 0
+    ) = NotificationEvent(NotificationEvent.Type.NEW, NotificationEvent.Source.THEME).apply {
+        sourceId = topicId
+        this.userId = userId
+        this.userNick = userNick
+        this.msgCount = msgCount
+        this.timeStamp = timeStamp
+        this.lastTimeStamp = lastTimeStamp
     }
 
     private fun favoriteTopic(
