@@ -5652,6 +5652,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 (recyclerView.layoutManager as? LinearLayoutManager)
                         ?.scrollToPositionWithOffset(idx + headerOffset(), restoreOffset)
                 backRestoreFindpostRetryPostId = 0
+                // Восстановление позиции — тоже посадка «вот сюда тебя вернули», и без метки её не
+                // отличить от «тема открылась непонятно где» (особенно после смерти процесса, когда
+                // экран собирается заново). Единственная ветка [applyInitialAnchor], которая раньше
+                // молчала. Не самостоятельное действие юзера, поэтому подчиняется «Подсветке
+                // непрочитанного поста», как резюм к границе и посадка на первый непрочитанный.
+                if (topicPreferencesHolder.getHighlightUnreadPost()) postsAdapter.requestHighlight(restoreId)
                 recyclerView.post { markVisiblePostsRead(); maybeMarkTopicReadAtEnd() }
                 return
             }
