@@ -149,6 +149,8 @@ class QmsChatViewModel @Inject constructor(
     private var pendingNewMessagesCheck = false
     /** Когда последний раз просили у сервера свежий статус прочтения своих сообщений. */
     private var lastReadStatusProbeAtMs = 0L
+    /** Счётчик публикаций окна — см. [QmsVisibleMessages.revision]. */
+    private var visibleRevision = 0L
     /** Тред, зарегистрированный в [EventsRepository] как «открыт на экране» (для снятия гейта). */
     private var viewedThreadId = 0
     /** Trace whose `render_visible` marker has already been logged (one per dialog open). */
@@ -306,6 +308,7 @@ class QmsChatViewModel @Inject constructor(
         _visibleMessages.value = QmsVisibleMessages(
                 messages = data.messages.subList(start, end).toList(),
                 hasMoreAbove = start > 0,
+                revision = ++visibleRevision,
         )
         if (scrollToBottom) {
             scope.launch { _scrollToBottom.emit(Unit) }
@@ -1151,6 +1154,14 @@ data class QmsVisibleMessages(
         val messages: List<QmsMessage> = emptyList(),
         /** True while older messages remain above the window (drives the scroll-to-top pagination). */
         val hasMoreAbove: Boolean = false,
+        /**
+         * Номер публикации. Нужен потому, что [QmsMessage] изменяемый и правится НА МЕСТЕ (статус
+         * прочтения собеседником, [QmsChatViewModel.markAllMessagesRead]): новый список содержит те
+         * же самые объекты, поэтому равен прежнему — и StateFlow глушил бы эмиссию, а экран остался
+         * бы со старой отрисовкой. Живой замер 30.07.2026: модель уже знала, что сообщение
+         * прочитано, а красная точка на экране висела.
+         */
+        val revision: Long = 0,
 )
 
 sealed class QmsChatUiEvent {

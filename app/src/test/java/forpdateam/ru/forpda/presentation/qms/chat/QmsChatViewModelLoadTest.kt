@@ -303,6 +303,54 @@ class QmsChatViewModelLoadTest {
     }
 
     /**
+     * Собеседник прочитал моё сообщение, пока диалог открыт: сервер отдаёт ту же строку со свежим
+     * статусом, и окно ОБЯЗАНО переопубликоваться. [QmsMessage] изменяемый и правится на месте,
+     * поэтому новый список равен прежнему — без счётчика ревизии StateFlow глушил эмиссию, модель
+     * знала про прочтение, а на экране висела красная точка (замер 30.07.2026).
+     */
+    @Test
+    fun `read status update republishes the window`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val chat = QmsChatModel().apply {
+            userId = 1
+            themeId = 2
+            messages.add(QmsMessage().apply {
+                id = 10
+                content = "моё"
+                isMyMessage = true
+                readStatus = false
+            })
+        }
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(chat, fromCache = false, pageKind = mockk(relaxed = true))
+        // Тот же id, но собеседник уже прочитал — новых сообщений нет, меняется только статус.
+        coEvery { interactor.getMessagesAfter(1, 2, 10) } returns listOf(QmsMessage().apply {
+            id = 10
+            content = "моё"
+            isMyMessage = true
+            readStatus = true
+        })
+        val activity = MutableSharedFlow<Int>(extraBufferCapacity = 8)
+        val vm = viewModel(interactor, mockEventsRepository(threadActivity = activity))
+        vm.start()
+        advanceUntilIdle()
+        assertTrue("исходно не прочитано", vm.visibleMessages.value.messages.single().readStatus.not())
+
+        // Сравниваем НЕ содержимое (QmsMessage правится на месте, поэтому списки равны), а факт
+        // публикации: ревизия растёт только в publishVisibleMessages.
+        val revisionBefore = vm.visibleMessages.value.revision
+        activity.emit(2)
+        advanceUntilIdle()
+
+        assertTrue("статус применён", vm.visibleMessages.value.messages.single().readStatus)
+        assertTrue(
+                "окно должно переопубликоваться, иначе экран останется со старой отрисовкой",
+                vm.visibleMessages.value.revision > revisionBefore
+        )
+    }
+
+    /**
      * Открытый чат = активная переписка, поэтому частый тик держится всё время, пока экран виден, —
      * без всяких окон активности: ПЕРВОЕ сообщение после тишины должно приходить так же быстро, как
      * остальные (прямое решение владельца, 30.07.2026). Ограничитель — жизненный цикл: с погасшим
