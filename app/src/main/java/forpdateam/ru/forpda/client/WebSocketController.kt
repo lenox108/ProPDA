@@ -31,7 +31,7 @@ class WebSocketController(
 
         override fun onMessage(webSocket: WebSocket, text: String) {
             val shouldNotify = synchronized(lock) {
-                if (BuildConfig.DEBUG) Timber.d("WSListener onMessage: hasPayload=${text.isNotEmpty()}; current=$currentId")
+                if (BuildConfig.DEBUG) Timber.d("WSListener onMessage: hasPayload=${text.isNotEmpty()}; current=$currentId; raw=${text.take(200)}")
                 markCurrentLocked(webSocket)
             }
             if (shouldNotify) {

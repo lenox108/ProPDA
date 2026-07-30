@@ -23,16 +23,24 @@
             android:title="@string/pref_title_pro_member_id"
             app:iconSpaceReserved="false" />
 
-        <!--
-            Пункта «Удалить ключ» здесь намеренно нет: покупка разовая и привязана к аккаунту,
-            удалять ключ пользователю незачем — это только способ случайно лишить себя оплаченного.
-            Активация снимается сама, если сменить аккаунт 4PDA (ключ выпущен под другой member_id).
-        -->
         <Preference
             android:key="pro.enter_key"
             android:layout="@layout/preference_custom"
             android:summary="@string/pref_summary_pro_enter_key"
             android:title="@string/pref_title_pro_enter_key"
+            app:iconSpaceReserved="false" />
+
+        <!--
+            Удаление ключа — с обязательным подтверждением (пункт стоит рядом с вводом, случайный
+            тап не должен лишать оплаченного). Нужен потому, что «ключ активен» и «push работает» —
+            разные вещи: push держится ещё и на сессии входа, которая может протухнуть. Снять ключ и
+            ввести заново — чистый способ пройти активацию push с нуля.
+        -->
+        <Preference
+            android:key="pro.remove_key"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_pro_remove_key"
+            android:title="@string/pref_title_pro_remove_key"
             app:iconSpaceReserved="false" />
 
     </PreferenceCategory>

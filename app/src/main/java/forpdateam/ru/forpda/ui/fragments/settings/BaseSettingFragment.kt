@@ -104,7 +104,12 @@ open class BaseSettingFragment : PreferenceFragmentCompat() {
                 .setTitle(preference.dialogTitle ?: preference.title)
                 .setSingleChoiceItems(entries, checked) { dialog, which ->
                     val picked = values[which].toString()
-                    if (picked != preference.value && preference.callChangeListener(picked)) {
+                    // callChangeListener зовём ВСЕГДА, даже когда выбрано текущее значение —
+                    // ровно так делает штатный androidx-диалог. Условие `picked != value` здесь
+                    // молча съедало осмысленное действие: у «Способа доставки» повторный выбор
+                    // «Push» означает «переактивируй» (сессия могла протухнуть), и пользователь
+                    // не мог ни запустить вход, ни увидеть ошибку — тап не делал ничего.
+                    if (preference.callChangeListener(picked)) {
                         preference.value = picked
                     }
                     dialog.dismiss()

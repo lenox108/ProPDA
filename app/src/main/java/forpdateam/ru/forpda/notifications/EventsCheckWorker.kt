@@ -333,6 +333,17 @@ class EventsCheckWorker @AssistedInject constructor(
                     (loaded.timeStamp == sameSaved.timeStamp && loaded.msgCount > sameSaved.msgCount)
         }
 
+        // Открытому QMS-диалогу сообщаем о новом ДО всех нотификационных фильтров и до самой
+        // публикации: воркер работает и в foreground (сокет мёртв/врёт, push-пробуждение), и до
+        // этого он был немым для UI — уведомление уходило в шторку, а открытый диалог узнавал о
+        // сообщении только на следующем тике страховочного опроса. Репозиторий — @Singleton, тот
+        // же инстанс, что у экранов, так что сигнал доходит до чата в этом же процессе.
+        if (source == NotificationEvent.Source.QMS) {
+            for (event in newEvents) {
+                eventsRepository.notifyQmsThreadActivity(event.sourceId)
+            }
+        }
+
         val mutedIds: Set<Int> = if (source == NotificationEvent.Source.THEME) prefs.getMutedTopics() else emptySet()
         val onlyImportant = source == NotificationEvent.Source.THEME && prefs.getFavOnlyImportant()
         val afterMute = newEvents.filterNot { it.sourceId in mutedIds }
@@ -340,10 +351,15 @@ class EventsCheckWorker @AssistedInject constructor(
         val finalEvents = afterMute.filter { !onlyImportant || it.isImportant }
         val notImportantCount = afterMute.size - finalEvents.size
 
-        // Тема прямо сейчас на экране (foreground с мёртвым сокетом — воркер работает и там):
-        // пуш о том, что пользователь читает в этот момент, — шум.
+        // Тема/диалог прямо сейчас на экране (foreground с мёртвым сокетом — воркер работает и там):
+        // пуш о том, что пользователь читает в этот момент, — шум. Для QMS гейта раньше не было:
+        // именно так уведомление о сообщении оказывалось в шторке при открытом диалоге.
         val toPublish = finalEvents.filterNot {
-            source == NotificationEvent.Source.THEME && eventsRepository.isTopicOnScreen(it.sourceId)
+            when (source) {
+                NotificationEvent.Source.THEME -> eventsRepository.isTopicOnScreen(it.sourceId)
+                NotificationEvent.Source.QMS -> eventsRepository.isQmsThreadOnScreen(it.sourceId)
+                else -> false
+            }
         }
         val onScreenSkipped = finalEvents.size - toPublish.size
         // Стопкой при большой пачке (как foreground-путь): иначе долгое отсутствие = десятки

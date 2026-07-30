@@ -18,6 +18,9 @@ import forpdateam.ru.forpda.ui.TemplateManager
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -90,9 +93,13 @@ class QmsChatViewModelLoadTest {
         }
     }
 
-    private fun mockEventsRepository(webSocketConnected: Boolean = false): EventsRepository {
+    private fun mockEventsRepository(
+            webSocketConnected: Boolean = false,
+            threadActivity: Flow<Int> = flowOf(),
+    ): EventsRepository {
         val events = mockk<EventsRepository>(relaxed = true)
         every { events.observeEventsTab() } returns flowOf()
+        every { events.observeQmsThreadActivity() } returns threadActivity
         every { events.isWebSocketConnected() } returns webSocketConnected
         return events
     }
@@ -230,8 +237,13 @@ class QmsChatViewModelLoadTest {
         }
     }
 
+    /**
+     * A connected-but-silent socket must NOT suppress the safety-net poll: `isConnected()` is true
+     * right after onOpen and says nothing about delivery. Suppression is earned by an actual WS event
+     * (see the freshness tests below) — that is the whole point of the P2 gate.
+     */
     @Test
-    fun `shouldSkipAutoRefreshPoll when websocket connected`() = runTest {
+    fun `connected but silent websocket does not suppress the poll`() = runTest {
         val interactor = mockk<QmsInteractor>()
         val initial = chatWithMessages()
         coEvery {
@@ -241,7 +253,216 @@ class QmsChatViewModelLoadTest {
         val vm = viewModel(interactor, events)
         vm.start()
         advanceUntilIdle()
-        assertTrue(vm.shouldSkipAutoRefreshPoll())
+        assertFalse(vm.shouldSkipAutoRefreshPoll())
+    }
+
+    /**
+     * Cadence follows PROVEN delivery, not `isConnected()`: a connected-but-silent socket (measured
+     * live — onConnected, subscription acked by the server, zero events for arriving messages) must
+     * get the fast tick while the user is in the dialog, because then the poll is the only delivery
+     * path left. As soon as the socket proves it delivers, the cadence relaxes.
+     */
+    @Test
+    fun `poll cadence follows proven delivery not mere connectivity`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val initial = chatWithMessages()
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
+        coEvery { interactor.getMessagesAfter(1, 2, 1) } returns emptyList()
+        val vm = viewModel(interactor, mockEventsRepository(webSocketConnected = true))
+        vm.start()
+        advanceUntilIdle()
+
+        assertEquals(
+                "подключён, но молчит — опрос единственный путь",
+                QmsChatViewModel.AUTO_REFRESH_ACTIVE_MS,
+                vm.autoRefreshDelayMs()
+        )
+
+        vm.handleEvent(TabNotification(
+                source = NotificationEvent.Source.QMS,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(
+                        type = NotificationEvent.Type.NEW,
+                        source = NotificationEvent.Source.QMS,
+                        messageId = 2,
+                        sourceId = 2,
+                        userId = 999
+                ),
+                isWebSocket = true
+        ))
+        advanceUntilIdle()
+
+        assertEquals(
+                "сокет доказал доставку — можно реже",
+                QmsChatViewModel.AUTO_REFRESH_IDLE_MS,
+                vm.autoRefreshDelayMs()
+        )
+        assertTrue(QmsChatViewModel.AUTO_REFRESH_ACTIVE_MS < QmsChatViewModel.AUTO_REFRESH_IDLE_MS)
+    }
+
+    /**
+     * Собеседник прочитал моё сообщение, пока диалог открыт: сервер отдаёт ту же строку со свежим
+     * статусом, и окно ОБЯЗАНО переопубликоваться. [QmsMessage] изменяемый и правится на месте,
+     * поэтому новый список равен прежнему — без счётчика ревизии StateFlow глушил эмиссию, модель
+     * знала про прочтение, а на экране висела красная точка (замер 30.07.2026).
+     */
+    @Test
+    fun `read status update republishes the window`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val chat = QmsChatModel().apply {
+            userId = 1
+            themeId = 2
+            messages.add(QmsMessage().apply {
+                id = 10
+                content = "моё"
+                isMyMessage = true
+                readStatus = false
+            })
+        }
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(chat, fromCache = false, pageKind = mockk(relaxed = true))
+        // Тот же id, но собеседник уже прочитал — новых сообщений нет, меняется только статус.
+        coEvery { interactor.getMessagesAfter(1, 2, 10) } returns listOf(QmsMessage().apply {
+            id = 10
+            content = "моё"
+            isMyMessage = true
+            readStatus = true
+        })
+        val activity = MutableSharedFlow<Int>(extraBufferCapacity = 8)
+        val vm = viewModel(interactor, mockEventsRepository(threadActivity = activity))
+        vm.start()
+        advanceUntilIdle()
+        assertTrue("исходно не прочитано", vm.visibleMessages.value.messages.single().readStatus.not())
+
+        // Сравниваем НЕ содержимое (QmsMessage правится на месте, поэтому списки равны), а факт
+        // публикации: ревизия растёт только в publishVisibleMessages.
+        val revisionBefore = vm.visibleMessages.value.revision
+        activity.emit(2)
+        advanceUntilIdle()
+
+        assertTrue("статус применён", vm.visibleMessages.value.messages.single().readStatus)
+        assertTrue(
+                "окно должно переопубликоваться, иначе экран останется со старой отрисовкой",
+                vm.visibleMessages.value.revision > revisionBefore
+        )
+    }
+
+    /**
+     * Открытый чат = активная переписка, поэтому частый тик держится всё время, пока экран виден, —
+     * без всяких окон активности: ПЕРВОЕ сообщение после тишины должно приходить так же быстро, как
+     * остальные (прямое решение владельца, 30.07.2026). Ограничитель — жизненный цикл: с погасшим
+     * экраном цикл опроса не работает вовсе.
+     */
+    @Test
+    fun `silent socket keeps the fast cadence with no user activity at all`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val initial = chatWithMessages()
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
+        val vm = viewModel(interactor, mockEventsRepository(webSocketConnected = true))
+        vm.start()
+        advanceUntilIdle()
+
+        assertEquals(QmsChatViewModel.AUTO_REFRESH_ACTIVE_MS, vm.autoRefreshDelayMs())
+    }
+
+    /**
+     * The gap behind the field report «уведомление в шторке есть, а в диалоге сообщения ещё нет»:
+     * the inspector poll and the background worker (the push wake-up path) learn about the message
+     * without any WebSocket event. They now signal the open dialog, which must fetch immediately
+     * instead of waiting for its next poll tick.
+     */
+    @Test
+    fun `thread activity signal fetches new messages without a websocket event`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val initial = chatWithMessages()
+        val appended = QmsMessage().apply {
+            id = 2
+            content = "доставлено воркером"
+            isMyMessage = false
+        }
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
+        coEvery { interactor.getMessagesAfter(1, 2, 1) } returns listOf(appended)
+        val activity = MutableSharedFlow<Int>(extraBufferCapacity = 8)
+        val vm = viewModel(interactor, mockEventsRepository(threadActivity = activity))
+        vm.start()
+        advanceUntilIdle()
+
+        activity.emit(2)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { interactor.getMessagesAfter(1, 2, 1) }
+        assertEquals(2, vm.visibleMessages.value.messages.size)
+    }
+
+    @Test
+    fun `thread activity for another dialog is ignored`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val initial = chatWithMessages()
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
+        val activity = MutableSharedFlow<Int>(extraBufferCapacity = 8)
+        val vm = viewModel(interactor, mockEventsRepository(threadActivity = activity))
+        vm.start()
+        advanceUntilIdle()
+
+        activity.emit(4242)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { interactor.getMessagesAfter(any(), any(), any()) }
+    }
+
+    /** Событие темы форума с номером, совпавшим с id диалога, не должно дёргать чат. */
+    @Test
+    fun `forum theme event with the same source id does not touch the chat`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val initial = chatWithMessages()
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
+        val vm = viewModel(interactor)
+        vm.start()
+        advanceUntilIdle()
+
+        vm.handleEvent(TabNotification(
+                source = NotificationEvent.Source.THEME,
+                type = NotificationEvent.Type.NEW,
+                event = NotificationEvent(
+                        type = NotificationEvent.Type.NEW,
+                        source = NotificationEvent.Source.THEME,
+                        messageId = 2,
+                        sourceId = 2,
+                        userId = 999
+                ),
+                isWebSocket = true
+        ))
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { interactor.getMessagesAfter(any(), any(), any()) }
+        assertFalse(vm.shouldSkipAutoRefreshPoll())
+    }
+
+    /** Пока диалог на экране, уведомление о сообщении именно в нём не публикуется. */
+    @Test
+    fun `open dialog registers itself as viewed and releases it when hidden`() = runTest {
+        val interactor = mockk<QmsInteractor>(relaxed = true)
+        val events = mockEventsRepository()
+        val vm = viewModel(interactor, events)
+
+        vm.onScreenVisible()
+        advanceUntilIdle()
+        verify(exactly = 1) { events.setViewedQmsThread(2) }
+
+        vm.onScreenHidden()
+        advanceUntilIdle()
+        verify(exactly = 1) { events.clearViewedQmsThread(2) }
     }
 
     @Test

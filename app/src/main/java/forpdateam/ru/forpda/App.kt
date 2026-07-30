@@ -452,6 +452,15 @@ class App : Application(), androidx.work.Configuration.Provider {
         val registrar = forpdateam.ru.forpda.notifications.push.PushRegistrar(this, notificationPreferencesHolder)
         appScope.launch {
             runCatching { registrar.register(force = false) }
+                    .onSuccess { result ->
+                        // Раньше молчали обо всём, кроме исключения: при NoSession/NotPro/NoGms
+                        // регистрация тихо не происходила, push не работал, и понять это снаружи
+                        // было нельзя (login_key лежит в шифрованном хранилище). Пишем исход и в
+                        // журнал уведомлений — им пользуется самодиагностика в настройках.
+                        Timber.i("PushRegistrar result: %s", result.javaClass.simpleName)
+                        forpdateam.ru.forpda.notifications.NotifDiagLog.log(
+                                this@App, "push: register -> ${result.javaClass.simpleName}")
+                    }
                     .onFailure { Timber.w(it, "push token refresh failed") }
         }
         // Смена ЛЮБОГО семейства уведомлений меняет битмаск, который сервер использует для

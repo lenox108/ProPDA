@@ -190,6 +190,26 @@ class EventsRepository(
 
     fun isTopicOnScreen(topicId: Int): Boolean = topicId > 0 && viewedTopicId == topicId
 
+    /**
+     * QMS-диалог, открытый на экране прямо сейчас (0 — никакой). Ведёт
+     * [forpdateam.ru.forpda.presentation.qms.chat.QmsChatViewModel] (onScreenVisible/onScreenHidden) —
+     * полный аналог [viewedTopicId] для тем форума. Пуш о сообщении в диалоге, который пользователь
+     * читает в этот момент, — шум: сообщение и так появится в списке, а уведомление о нём мозолит
+     * глаза до тех пор, пока чат не успеет сходить в сеть и снять его через markThreadRead.
+     */
+    @Volatile
+    private var viewedQmsThreadId = 0
+
+    fun setViewedQmsThread(themeId: Int) {
+        if (themeId > 0) viewedQmsThreadId = themeId
+    }
+
+    fun clearViewedQmsThread(themeId: Int) {
+        if (viewedQmsThreadId == themeId) viewedQmsThreadId = 0
+    }
+
+    fun isQmsThreadOnScreen(themeId: Int): Boolean = themeId > 0 && viewedQmsThreadId == themeId
+
     // --- Статус «мгновенного канала» для экрана настроек ---
     fun isWsCoolingDown(): Boolean = isWsInCooldown()
 
@@ -206,11 +226,16 @@ class EventsRepository(
 
     // Idle-disconnect state (foreground WS). idleDisconnected=true означает, что WS сознательно
     // закрыт из-за бездействия, хотя foregroundRealtimeEnabled ещё true — реконнект делает только
-    // notifyUserActive(). lastInteractionAt — монотонная метка последнего касания.
+    // notifyUserActive(). ВАЖНО про lastInteractionAt: это служебный дедлайн сторожа бездействия, а
+    // НЕ метка касания — его переписывает не только касание, но и сам сторож, когда откладывает
+    // паузу (открытый realtime-экран, идущий реконнект). Как признак «человек за телефоном» он
+    // поэтому не годится: опёршись на него, экран получает «активность», оживающую сама собой
+    // каждые 5 минут без единого касания (проверено замером 30.07.2026).
     @Volatile
     private var idleDisconnected = false
     @Volatile
     private var lastInteractionAt = SystemClock.elapsedRealtime()
+
     private var idleJob: Job? = null
     private var backgroundGraceJob: Job? = null
 
@@ -263,6 +288,31 @@ class EventsRepository(
             onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
+    /**
+     * «В диалоге [themeId] есть что-то новое — сходи проверь». Отдельная шина от [notifyTabFlow]
+     * специально для ОТКРЫТОГО чата: счётчики/бейджи её не слушают, поэтому сигнал можно слать из
+     * любого места, узнавшего о новом сообщении, не рискуя задвоить непрочитанные.
+     *
+     * Зачем: до неё единственным «мгновенным» путём в открытый диалог был WS-эвент. Всё остальное,
+     * что узнаёт о новом сообщении — периодический опрос inspector'а и фоновый
+     * [forpdateam.ru.forpda.notifications.EventsCheckWorker] (он же путь push-пробуждения), —
+     * публиковало уведомление в шторку и НИЧЕГО не сообщало чату. Отсюда полевой симптом: диалог
+     * открыт, уведомление о новом сообщении уже висит вверху, а в самом диалоге сообщения ещё нет
+     * (ждало следующего тика страховочного опроса).
+     */
+    private val qmsThreadActivityFlow = MutableSharedFlow<Int>(
+            extraBufferCapacity = 64,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    fun observeQmsThreadActivity(): Flow<Int> = qmsThreadActivityFlow.asSharedFlow()
+
+    /** Любой источник, узнавший о новом сообщении в QMS-треде, зовёт это — открытый чат дочитает сам. */
+    fun notifyQmsThreadActivity(themeId: Int) {
+        if (themeId <= 0) return
+        qmsThreadActivityFlow.tryEmit(themeId)
+    }
+
     data class ForegroundRealtimeChange(val enabled: Boolean, val reason: String)
 
     private val foregroundRealtimeFlow = MutableSharedFlow<ForegroundRealtimeChange>(
@@ -303,6 +353,9 @@ class EventsRepository(
                 // Сигнал сервису: сокет ожил — если персистентный фон, снова держать FGS
                 // (после кулдауна FGS мог быть отпущен ради экономии батареи).
                 foregroundRealtimeFlow.tryEmit(ForegroundRealtimeChange(true, "ws_connected"))
+                if (BuildConfig.DEBUG) {
+                    Timber.d("WS subscribe: sv id=${webSocketController.getCurrentId()} ea u${authHolder.get().userId}")
+                }
                 webSocketController.send("""[${webSocketController.getCurrentId()}, "sv"]""")
                 webSocketController.send("""[0, "ea", "u${authHolder.get().userId}"]""")
                 // Соединение живо — запускаем/перезапускаем idle-таймер относительно него.
@@ -1021,6 +1074,13 @@ class EventsRepository(
             if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: topic on screen")
             return
         }
+        // То же для QMS: диалог открыт на экране — сообщение появится в нём само, уведомление о
+        // нём было бы шумом. Раньше гейта не было, и пуш успевал в шторку раньше, чем чат сходит
+        // в сеть и снимет его через markThreadRead — «уведомление есть, а в диалоге пусто».
+        if (event.fromQms() && isQmsThreadOnScreen(event.sourceId)) {
+            if (BuildConfig.DEBUG) Log.i(NOTIFICATIONS_LOG_TAG, "Skip ${event.notificationLogCategory()} event: qms thread on screen")
+            return
+        }
         feedMentionUnreadFromEvent(event)
         eventsHistory[event.notifyId()] = event
         if (!checkNotify(event, event.source)) {
@@ -1300,6 +1360,16 @@ class EventsRepository(
             saveEvents(loadedEvents, source)
             val newEvents = compareEvents(savedEvents, loadedEvents, events, source)
             val stackedNewEvents = newEvents.toMutableList()
+
+            // Открытому чату сообщаем СРАЗУ, до всей нотификационной обвязки: периодический опрос
+            // inspector'а приходит с events=[] и раньше эмитил только синтетическую TabNotification
+            // с sourceId=-1, которую диалог игнорирует — про своё новое сообщение он узнавал лишь
+            // на следующем тике страховочного опроса.
+            if (NotificationEvent.fromQms(source)) {
+                for (newEvent in newEvents) {
+                    notifyQmsThreadActivity(newEvent.sourceId)
+                }
+            }
 
             checkOldEvents(loadedEvents, source)
 

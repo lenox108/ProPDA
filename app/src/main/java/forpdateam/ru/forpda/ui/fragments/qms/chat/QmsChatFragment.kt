@@ -654,15 +654,17 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
                     }
                 }
                 launch {
-                    // Open-dialog safety net (P2): a FIXED short tick while the chat is on screen
-                    // (this loop only runs in the STARTED lifecycle). Each tick fetches new messages
-                    // unless the realtime socket delivered one for this thread very recently
+                    // Open-dialog safety net (P2): a short tick while the chat is on screen (this loop
+                    // only runs in the STARTED lifecycle). Each tick fetches new messages unless the
+                    // realtime socket delivered one for this thread very recently
                     // (shouldSkipAutoRefreshPoll = WS-event freshness). No exponential back-off: an
                     // idle-but-connected socket no longer balloons the interval to minutes, so worst-case
-                    // staleness stays ~one tick instead of «выйти и зайти». Bounded to a visible chat;
-                    // when the socket is actively delivering, nearly every tick is skipped.
+                    // staleness stays ~one tick instead of «выйти и зайти». The cadence follows the
+                    // socket (autoRefreshDelayMs): with no socket at all the poll is the only delivery
+                    // path left, so it runs several times faster. Bounded to a visible chat; when the
+                    // socket is actively delivering, nearly every tick is skipped.
                     while (isActive) {
-                        delay(QMS_AUTO_REFRESH_FAST_MS)
+                        delay(presenter.autoRefreshDelayMs())
                         if (!isActive || !networkState.getState()) continue
                         if (presenter.shouldSkipAutoRefreshPoll()) continue
                         presenter.checkNewMessagesSilently()
@@ -1258,8 +1260,6 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     companion object {
         private const val TAG_QMS_EMPTY = "QMS_EMPTY"
         private const val TAG_QMS_ERROR = "QMS_ERROR"
-        /** Open-dialog safety-net poll cadence while the chat is on screen (P2). */
-        private const val QMS_AUTO_REFRESH_FAST_MS = 15_000L
         private const val MENU_COPY_MESSAGE = 1
 
         /** Font-size pref value that maps to textScale 1.0 (matches the native topic renderer). */

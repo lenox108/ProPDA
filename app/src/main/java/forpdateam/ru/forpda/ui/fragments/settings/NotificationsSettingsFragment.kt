@@ -53,6 +53,10 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         super.onResume()
         updateVersionAwareUi()
         syncDeliveryWithLicense()
+        // Ключ могли удалить/ввести, а push — активировать на другом экране: строка способа
+        // доставки обязана показывать текущую правду, а не снимок момента открытия.
+        preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
+                ?.let { updateDeliveryMethodSummary(it, currentDeliveryMethod()) }
         realtimeStatusHandler.postDelayed(realtimeStatusTick, REALTIME_STATUS_REFRESH_MS)
     }
 
@@ -421,6 +425,14 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
     }
 
     private fun updateDeliveryMethodSummary(pref: androidx.preference.ListPreference, value: String) {
+        // «Push» в этой строке раньше означал лишь «так записано в настройке»: фактическую
+        // регистрацию никто не проверял. Живой случай — способ доставки «Push», а сессии нет
+        // (login_key протух, сменился аккаунт, чистились данные): пуши не приходят, а экран
+        // уверенно показывает push. Поэтому спрашиваем реальное состояние и говорим правду.
+        if (value == "push" && !hasPushSession()) {
+            pref.summary = getString(R.string.pref_summary_delivery_push_inactive)
+            return
+        }
         pref.summary = getString(
                 when (value) {
                     "push" -> R.string.pref_summary_delivery_push
@@ -429,6 +441,14 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                     else -> R.string.pref_summary_delivery_poll
                 }
         )
+    }
+
+    /** Есть ли app-протокольная сессия, без которой FCM-токен на сервер не уходит. */
+    private fun hasPushSession(): Boolean {
+        val ctx = context ?: return false
+        return runCatching {
+            forpdateam.ru.forpda.notifications.push.PushSessionStore(ctx).hasSession()
+        }.getOrDefault(false)
     }
 
     private fun startPushSetup(pref: androidx.preference.ListPreference) {
