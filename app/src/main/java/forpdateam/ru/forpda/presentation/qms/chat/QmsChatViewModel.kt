@@ -87,6 +87,19 @@ class QmsChatViewModel @Inject constructor(
 
         /** Messages revealed per upward page (and in the initial window). */
         private const val MESSAGES_PAGE_SIZE = 30
+
+        /**
+         * Как часто перепроверять статус «собеседник прочитал» у СВОИХ сообщений.
+         *
+         * Догрузка `after-message=<последний id>` по определению не возвращает уже показанные
+         * сообщения, поэтому их статус в открытом чате не обновлялся никогда: точка «не прочитано»
+         * висела, пока диалог не переоткроют (замер 30.07.2026 — собеседник прочитал, точка жила
+         * ещё полчаса; кнопка «Обновить» зовёт ту же догрузку и тоже не помогала). Раз в этот
+         * интервал якорь догрузки сдвигается на позицию перед самым старым своим непрочитанным —
+         * сервер отдаёт те же строки со свежим статусом. Реже, чем тик доставки: галочка
+         * прочтения не требует секундной точности, а ответ тяжелее пустого.
+         */
+        private const val READ_STATUS_PROBE_INTERVAL_MS = 15_000L
     }
 
     private var subscriptionsStarted = false
@@ -134,6 +147,8 @@ class QmsChatViewModel @Inject constructor(
      * сообщение ждало бы следующего тика опроса.
      */
     private var pendingNewMessagesCheck = false
+    /** Когда последний раз просили у сервера свежий статус прочтения своих сообщений. */
+    private var lastReadStatusProbeAtMs = 0L
     /** Тред, зарегистрированный в [EventsRepository] как «открыт на экране» (для снятия гейта). */
     private var viewedThreadId = 0
     /** Trace whose `render_visible` marker has already been logged (one per dialog open). */
@@ -934,7 +949,7 @@ class QmsChatViewModel @Inject constructor(
     private fun checkNewMessages(silent: Boolean) {
         if (_refreshing.value || _messageRefreshing.value || _newMessagesRefreshing.value) return
         currentData?.let {
-            val lastMessId = it.messages.lastOrNull()?.id ?: 0
+            val lastMessId = messagesAnchorId(it)
             pendingNewMessagesCheck = false
             scope.launch {
                 try {
@@ -958,6 +973,25 @@ class QmsChatViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * С какого id просить догрузку. Обычно — последний известный (сервер вернёт только новое).
+     * Но раз в [READ_STATUS_PROBE_INTERVAL_MS], если есть СВОИ сообщения без отметки о прочтении,
+     * якорь сдвигается на позицию перед самым старым из них: тогда сервер вернёт и их — со свежим
+     * статусом, который [onNewMessages] применит к уже показанным. Иначе отметка «прочитано»
+     * появлялась только после переоткрытия диалога.
+     */
+    private fun messagesAnchorId(data: QmsChatModel): Int {
+        val lastId = data.messages.lastOrNull { !it.isDate }?.id ?: 0
+        val oldestUnreadMine = data.messages
+                .firstOrNull { !it.isDate && it.isMyMessage && !it.readStatus }
+                ?: return lastId
+        val now = System.currentTimeMillis()
+        if (now - lastReadStatusProbeAtMs < READ_STATUS_PROBE_INTERVAL_MS) return lastId
+        lastReadStatusProbeAtMs = now
+        // -1: запрос отдаёт строго ПОСЛЕ указанного id, а нам нужно само это сообщение.
+        return (oldestUnreadMine.id - 1).coerceAtLeast(0)
     }
 
     /** Resets the window to the newest [MESSAGES_PAGE_SIZE] messages and pins the list to the bottom. */
@@ -989,10 +1023,26 @@ class QmsChatViewModel @Inject constructor(
 
     private fun onNewMessages(items: List<QmsMessage>, forceScroll: Boolean = true) {
         currentData?.let { data ->
+            // Ответ может содержать и уже показанные сообщения (см. [messagesAnchorId]) — у них
+            // берём только статус прочтения: он мог смениться с тех пор, как мы их отрисовали.
+            var readStatusChanged = false
+            val known = data.messages.asSequence().filter { !it.isDate }.associateBy { it.id }
+            for (incoming in items) {
+                if (incoming.isDate) continue
+                val existing = known[incoming.id] ?: continue
+                if (existing.readStatus != incoming.readStatus) {
+                    existing.readStatus = incoming.readStatus
+                    readStatusChanged = true
+                }
+            }
             val result = items.filter { new ->
                 data.messages.none { it.id == new.id }
             }
-            if (result.isEmpty()) return
+            if (result.isEmpty()) {
+                // Новых сообщений нет, но отметка «прочитано» могла появиться — перерисуем.
+                if (readStatusChanged) publishVisibleMessages(scrollToBottom = false)
+                return
+            }
             data.messages.addAll(result)
             publishVisibleMessages(scrollToBottom = forceScroll)
             // Сообщение пришло, пока диалог открыт на экране: пользователь видит его прямо сейчас,
