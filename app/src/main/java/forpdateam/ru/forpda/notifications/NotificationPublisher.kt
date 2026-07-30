@@ -88,7 +88,10 @@ object NotificationPublisher {
                 context,
                 event.notifyId(),
                 notifyIntent,
-                NotificationsService.activityPendingIntentFlags(0)
+                // FLAG_UPDATE_CURRENT — как у действий шторки: notifyId упоминания не зависит от
+                // поста, и без него система переиспользовала бы ранее созданный PendingIntent с
+                // тем же requestCode (extras он игнорирует), открывая прошлую цель.
+                NotificationsService.activityPendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT)
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
@@ -545,8 +548,13 @@ object NotificationPublisher {
     }
 
     fun intentUrlFor(e: NotificationEvent): String = when {
-        e.isMention && e.fromTheme() ->
+        // `p=0` — не «пост неизвестен», а рабочая ссылка, которую сервер разворачивает в начало
+        // темы: тап уводил на старые посты вместо упоминания. Без поста открываем тему обычным
+        // путём (настройка «Открывать тему на…»), а не ложным якорем.
+        e.isMention && e.fromTheme() && e.messageId > 0 ->
             "https://4pda.to/forum/index.php?showtopic=${e.sourceId}&view=findpost&p=${e.messageId}"
+        e.isMention && e.fromTheme() ->
+            "https://4pda.to/forum/index.php?showtopic=${e.sourceId}"
         e.isMention && e.fromSite() && e.sourceId > 0 && e.messageId > 0 ->
             "https://4pda.to/index.php?p=${e.sourceId}/#comment${e.messageId}"
         e.fromQms() -> "https://4pda.to/forum/index.php?act=qms&mid=${e.userId}&t=${e.sourceId}"
