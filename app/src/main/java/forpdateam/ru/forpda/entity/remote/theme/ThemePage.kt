@@ -16,6 +16,12 @@ class ThemePage {
     var url: String? = null
     var id = 0
     var forumId = 0
+    /**
+     * Путь по разделам от корня форума до раздела темы (сама тема в него не входит). Пустой, если
+     * навигационной строки на странице нет — тогда UI остаётся на прежнем поведении «на уровень выше».
+     * См. [forpdateam.ru.forpda.model.data.remote.api.theme.TopicForumPathParser].
+     */
+    var forumPath: List<TopicForumPathItem> = emptyList()
     var favId = 0
     /*public boolean isCurator() {
         return curator;

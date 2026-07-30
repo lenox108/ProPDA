@@ -340,6 +340,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /** Topic context for posting a reply (from the loaded page). */
     private var pageForumId = 0
+
+    /** Путь по разделам текущей страницы — источник подменю «Раздел темы» в «Ещё». */
+    private var pageForumPath: List<forpdateam.ru.forpda.entity.remote.theme.TopicForumPathItem> = emptyList()
     private var pageTopicId = 0
     private var pageSt = 0
     private var isSending = false
@@ -1809,7 +1812,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (pageTopicId > 0) navigationUseCase.openSearchMyPosts(pageTopicId, pageForumId)
             })
             add("Перейти на страницу" to { showPagePicker() })
-            add("Открыть форум темы" to { if (pageForumId > 0) navigationUseCase.openForum(pageForumId) })
+            // «Раздел темы» — весь путь от корня форума, а не только непосредственный раздел (им был
+            // прежний пункт «Открыть форум темы»). Путь приходит из навигационной строки страницы;
+            // если её нет (гостевая заглушка, урезанная вёрстка) — открываем раздел темы как раньше.
+            if (pageForumPath.isNotEmpty()) {
+                add("Раздел темы" to { showForumPathMenu() })
+            } else if (pageForumId > 0) {
+                add("Раздел темы" to { navigationUseCase.openForum(pageForumId) })
+            }
             // «Следить за новыми версиями» — пуш, когда в шапку добавят новый apk.
             if (pageTopicId > 0) {
                 val watched = notificationPreferencesHolder.isHatWatched(pageTopicId)
@@ -1834,6 +1844,29 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 )
             })
         }
+        showToolbarActionsPopup(actions)
+    }
+
+    /**
+     * Подменю «Раздел темы»: весь путь от корня форума до раздела темы, каждый уровень открывается тапом.
+     * Строится из [pageForumPath] (навигационная строка страницы). Отступы показывают вложенность —
+     * названия разделов на 4PDA длинные, и строка вида «A › B › C» не поместилась бы без обрезки.
+     */
+    private fun showForumPathMenu() {
+        if (pageForumPath.isEmpty()) return
+        val actions = pageForumPath.mapIndexed { index, item ->
+            val indent = if (index == 0) "" else " ".repeat(index * 3)
+            "$indent${item.title}" to {
+                if (item.isForumRoot) navigationUseCase.openForumRoot() else navigationUseCase.openForum(item.forumId)
+            }
+        }
+        showToolbarActionsPopup(actions)
+    }
+
+    /** Общий стиль выпадающих меню тулбара (см. [showOverflowMenu] и [showForumPathMenu]). */
+    private fun showToolbarActionsPopup(actions: List<Pair<String, () -> Unit>>) {
+        if (actions.isEmpty()) return
+        val ctx = requireContext()
         val dm = resources.displayMetrics
         val onSurface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurface)
         val surface = ctx.getColorFromAttr(com.google.android.material.R.attr.colorSurfaceContainerHigh)
@@ -5009,6 +5042,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
         loadedUrl = url
         pageForumId = page.forumId
+        pageForumPath = page.forumPath
         pageTopicId = page.id
         // pageTopicId становится известен только после загрузки — onResume мог пройти раньше
         // с нулём. Обновляем метку «тема на экране» здесь, если вкладка сейчас видима.

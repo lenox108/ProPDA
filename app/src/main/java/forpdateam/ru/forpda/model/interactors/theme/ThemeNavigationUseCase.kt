@@ -87,6 +87,11 @@ class ThemeNavigationUseCase @Inject constructor(
         linkHandler.handle("https://4pda.to/forum/index.php?showforum=$forumId", router)
     }
 
+    /** Корень форума (список разделов) — первое звено пути темы, у него нет showforum. */
+    fun openForumRoot() {
+        linkHandler.handle("https://4pda.to/forum/index.php?act=idx", router)
+    }
+
     /**
      * Server-side search restricted to one topic. [query] pre-fills the search field — the find-on-page
      * bar hands its own query over when the local pass (loaded pages only) comes up empty, so the user
