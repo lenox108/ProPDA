@@ -576,7 +576,7 @@ class EventsRepository(
      */
     fun onAppBackgrounded() {
         if (!foregroundRealtimeEnabled) return
-        // Режим «Постоянное соединение»: сокет живёт и в фоне (его держит FGS,
+        // Режим «Push без Google»: сокет живёт и в фоне (его держит FGS,
         // который поднимает App при уходе с переднего плана). Отложенный разрыв не взводим.
         if (notificationPreferencesHolder.getBgPersistentWs()) {
             BatteryDebugLogger.logState("EventsRepository", "persistentWs", "keep realtime in background")
@@ -670,7 +670,7 @@ class EventsRepository(
     private fun armIdleTimer() {
         idleJob?.cancel()
         if (!foregroundRealtimeEnabled) return
-        // «Постоянное соединение» несовместимо с idle-паузой: в фоне пользователь не касается
+        // «Push без Google» несовместимо с idle-паузой: в фоне пользователь не касается
         // экрана по определению, и сторож бездействия убил бы сокет через 5 минут. Пользователь
         // явно выбрал платить батареей за постоянный realtime — уважаем выбор и в foreground.
         if (notificationPreferencesHolder.getBgPersistentWs()) {
@@ -697,7 +697,7 @@ class EventsRepository(
                     continue
                 }
                 if (notificationPreferencesHolder.getBgPersistentWs()) {
-                    // «Постоянное соединение» включили уже после взвода сторожа — не гасим сокет.
+                    // «Push без Google» включили уже после взвода сторожа — не гасим сокет.
                     lastInteractionAt = SystemClock.elapsedRealtime()
                     continue
                 }

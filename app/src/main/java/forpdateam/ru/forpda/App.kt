@@ -623,7 +623,7 @@ class App : Application(), androidx.work.Configuration.Provider {
             // Выбранная иконка применяется именно здесь: в фоне уже нечего ронять
             // (см. AppIconManager — выключение активного псевдонима рушит задачу).
             forpdateam.ru.forpda.common.appicon.AppIconManager.applyIfNeeded(this@App)
-            // Режим «Постоянное соединение»: приложение уходит в фон, а сокет должен жить —
+            // Режим «Push без Google»: приложение уходит в фон, а сокет должен жить —
             // поднимаем сервис как FGS (только FGS удержит процесс и соединение вне UI).
             // Окно после ухода с переднего плана позволяет старт FGS из фона.
             if (notificationPreferencesHolder.getBgPersistentWs()

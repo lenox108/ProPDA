@@ -329,6 +329,18 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                 // Push принимаем только после успешной регистрации токена.
                 startPushSetup(pref)
                 false
+            } else if (value == "socket") {
+                // «Push без Google» — та же платная мгновенная доставка, только события приходят
+                // по собственному каналу 4PDA, а не через сервисы Google. Поэтому и гейты те же:
+                // ключ активации и разовый вход в аккаунт (канал живёт на app-сессии, без неё
+                // сервер события не шлёт — проверено живьём).
+                if (!forpdateam.ru.forpda.pro.ProLicense.isUnlocked(requireContext())) {
+                    toast(getString(R.string.pro_required_socket))
+                    openProScreen()
+                    return@OnPreferenceChangeListener false
+                }
+                startSocketSetup(pref)
+                false
             } else {
                 disablePush()
                 applyDeliveryMethod(value)
@@ -477,6 +489,34 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                     }
                     toast(msg)
                 }
+            }
+        }
+    }
+
+    /**
+     * «Push без Google»: режиму нужна app-сессия — на ней держится канал событий. Если сессии нет
+     * (или она осталась от push — тогда вход не спросят), проводим тот же разовый вход. Способ
+     * доставки принимаем только после успеха: иначе пользователь остался бы с включённым
+     * постоянным соединением, которое ничего не доставляет.
+     */
+    private fun startSocketSetup(pref: androidx.preference.ListPreference) {
+        val activity = activity ?: return
+        val controller = forpdateam.ru.forpda.notifications.push.PushSetupController(activity)
+        val defaultLogin = preferenceScreen.sharedPreferences?.getString("auth_login", null)
+        lifecycleScope.launch {
+            when (val outcome = controller.ensureSession(defaultLogin)) {
+                is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Registered -> {
+                    // Токен FCM этому режиму не нужен: события приходят по сокету. Если push был
+                    // включён раньше, снимаем регистрацию, чтобы не приходило дважды.
+                    runCatching { controller.disablePush() }
+                    pref.value = "socket"
+                    applyDeliveryMethod("socket")
+                    updateDeliveryMethodSummary(pref, "socket")
+                }
+                is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Cancelled ->
+                    toast(getString(R.string.socket_setup_needs_login))
+                is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Failed ->
+                    toast(getString(R.string.push_setup_failed, outcome.message))
             }
         }
     }
