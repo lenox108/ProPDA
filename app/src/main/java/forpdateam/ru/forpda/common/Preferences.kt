@@ -46,6 +46,8 @@ object Preferences {
         const val TOPIC_TOOLBAR_BEHAVIOR = PREFIX + "topic_toolbar_behavior"
         const val TOPIC_PAGE_SWIPE_ENABLE = PREFIX + "topic_page_swipe.enable"
         const val TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE = PREFIX + "topic_bottom_refresh_gesture.enable"
+        /** Показывать ли под последним постом плашку «Сейчас читают тему» (только классический режим). */
+        const val TOPIC_ACTIVE_READERS_ENABLE = PREFIX + "topic_active_readers.enable"
         const val TOPIC_BACK_BEHAVIOR = PREFIX + "topic_back_behavior"
         const val TOPIC_OPEN_TARGET = PREFIX + "topic_open_target"
         const val TOPIC_HEADER_INITIAL_STATE = PREFIX + "topic_header_initial_state"

@@ -30,6 +30,8 @@ class MainPreferencesHolder(
 
     fun observeTopicBottomRefreshGestureEnabledFlow(): Flow<Boolean> = dataStore.observeTopicBottomRefreshGestureEnabledFlow()
 
+    fun observeTopicActiveReadersEnabledFlow(): Flow<Boolean> = dataStore.observeTopicActiveReadersEnabledFlow()
+
     fun observeTopicBackBehaviorFlow(): Flow<AppPreferences.Main.TopicBackBehavior> = dataStore.observeTopicBackBehaviorFlow()
 
     fun observeTopicOpenTargetFlow(): Flow<AppPreferences.Main.TopicOpenTarget> = dataStore.observeTopicOpenTargetFlow()
@@ -99,6 +101,8 @@ class MainPreferencesHolder(
     fun getTopicPageSwipeEnabled(): Boolean = dataStore.getTopicPageSwipeEnabledImmediate()
 
     fun getTopicBottomRefreshGestureEnabled(): Boolean = dataStore.getTopicBottomRefreshGestureEnabledImmediate()
+
+    fun getTopicActiveReadersEnabled(): Boolean = dataStore.getTopicActiveReadersEnabledImmediate()
 
     fun getTopicBackBehavior(): AppPreferences.Main.TopicBackBehavior = dataStore.getTopicBackBehaviorImmediate()
 
@@ -171,6 +175,8 @@ class MainPreferencesHolder(
     suspend fun setTopicToolbarBehavior(value: AppPreferences.Main.TopicToolbarBehavior) = dataStore.setTopicToolbarBehavior(value)
 
     suspend fun setTopicPageSwipeEnabled(value: Boolean) = dataStore.setTopicPageSwipeEnabled(value)
+
+    suspend fun setTopicActiveReadersEnabled(value: Boolean) = dataStore.setTopicActiveReadersEnabled(value)
 
     suspend fun setTopicBottomRefreshGestureEnabled(value: Boolean) = dataStore.setTopicBottomRefreshGestureEnabled(value)
 

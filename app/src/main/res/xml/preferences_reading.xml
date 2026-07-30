@@ -99,6 +99,14 @@
 
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="true"
+            android:key="main.topic_active_readers.enable"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_topic_active_readers"
+            android:title="@string/pref_title_topic_active_readers"
+            app:iconSpaceReserved="false" />
+
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
             android:key="main.scroll_button.enable"
             android:layout="@layout/preference_custom"
             android:summary="@string/pref_summary_scroll_button"

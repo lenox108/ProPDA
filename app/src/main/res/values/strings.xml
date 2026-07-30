@@ -1017,6 +1017,9 @@
     <string name="pref_summary_topic_page_swipe_disabled">Доступно только в классическом режиме чтения тем.</string>
     <string name="pref_title_topic_bottom_refresh_gesture">Обновление свайпом снизу</string>
     <string name="pref_summary_topic_bottom_refresh_gesture">В теме: коротко потяните вверх от нижней границы, чтобы обновить текущую страницу. Жест можно выключить здесь.</string>
+    <string name="pref_title_topic_active_readers">Кто читает тему</string>
+    <string name="pref_summary_topic_active_readers">Плашка со списком читателей под последним постом</string>
+    <string name="pref_summary_topic_active_readers_disabled">Доступно только в классическом режиме чтения тем.</string>
     <string name="pref_title_topic_back_behavior">Поведение кнопки \"Назад\" в темах</string>
     <string name="pref_value_topic_back_behavior_history">По истории переходов</string>
     <string name="pref_value_topic_back_behavior_origin">К исходному разделу</string>

@@ -28,10 +28,14 @@ class TopicReadersFooterAdapter(
 
     private var readers: TopicActiveReaders? = null
 
-    /** @param enabled режим чтения допускает подвал (классический); в гибриде — false. */
+    /** Развёрнут ли полный список ников (свернулся обратно, как только приехал новый снимок). */
+    private var expanded = false
+
+    /** @param enabled подвал разрешён (классический режим + настройка); в гибриде — false. */
     fun setReaders(readers: TopicActiveReaders?, enabled: Boolean) {
         val next = readers?.takeIf { enabled && it.total > 1 }
         val had = this.readers != null
+        if (next != this.readers) expanded = false
         this.readers = next
         val has = next != null
         when {
@@ -87,7 +91,12 @@ class TopicReadersFooterAdapter(
     }
 
     override fun onBindViewHolder(holder: ReadersViewHolder, position: Int) {
-        readers?.let { holder.bind(it, onMemberClick) }
+        readers?.let {
+            holder.bind(it, expanded, onMemberClick) {
+                expanded = true
+                notifyItemChanged(0)
+            }
+        }
     }
 
     /** Фон карточки поста (см. [PollHeaderAdapter.postCardBackground]) — подвал не должен выбиваться. */
@@ -117,13 +126,23 @@ class TopicReadersFooterAdapter(
         return androidx.core.graphics.ColorUtils.blendARGB(outline, onSurface, 0.30f)
     }
 
+    private companion object {
+        /** Сколько ников показываем в свёрнутом виде — дальше «и ещё N». */
+        const val MAX_COLLAPSED_MEMBERS = 12
+    }
+
     class ReadersViewHolder(
             root: View,
             private val title: TextView,
             private val members: TextView,
     ) : RecyclerView.ViewHolder(root) {
 
-        fun bind(readers: TopicActiveReaders, onMemberClick: (userId: Int) -> Unit) {
+        fun bind(
+                readers: TopicActiveReaders,
+                expanded: Boolean,
+                onMemberClick: (userId: Int) -> Unit,
+                onExpand: () -> Unit,
+        ) {
             title.text = buildString {
                 append("Сейчас читают тему: ")
                 append(readers.total)
@@ -140,20 +159,40 @@ class TopicReadersFooterAdapter(
             }
             members.visibility = View.VISIBLE
             val accent = members.context.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+            // У популярной темы читателей бывает больше сотни — целиком такой список превращает
+            // подвал в стену текста, поэтому по умолчанию показываем первые [MAX_COLLAPSED_MEMBERS],
+            // а остальных прячем за «и ещё N» (тап разворачивает).
+            val shown = if (expanded) readers.members else readers.members.take(MAX_COLLAPSED_MEMBERS)
+            val hiddenCount = readers.members.size - shown.size
             val text = SpannableStringBuilder()
-            readers.members.forEachIndexed { index, member ->
+            shown.forEachIndexed { index, member ->
                 if (index > 0) text.append(", ")
                 val start = text.length
                 text.append(member.nick)
-                text.setSpan(object : ClickableSpan() {
-                    override fun onClick(widget: View) = onMemberClick(member.userId)
-                    override fun updateDrawState(ds: android.text.TextPaint) {
-                        ds.color = accent
-                        ds.isUnderlineText = false
-                    }
-                }, start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                text.setSpan(clickable(accent) { onMemberClick(member.userId) },
+                        start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            if (hiddenCount > 0) {
+                // Кликабельна вся связка «и ещё N», а не одно число: цель в одну цифру рядом с ручкой
+                // панели вкладок промахивается (проверено на эмуляторе — тап открывал список вкладок).
+                val start = text.length
+                text.append(" и ещё ").append(hiddenCount.toString())
+                text.setSpan(clickable(accent) { onExpand() },
+                        start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
             members.text = text
+            // Дублирующая цель: тап по любому свободному месту плашки тоже разворачивает список
+            // (ClickableSpan на никах перехватывает свои касания сам).
+            itemView.setOnClickListener(if (hiddenCount > 0) View.OnClickListener { onExpand() } else null)
+            itemView.isClickable = hiddenCount > 0
+        }
+
+        private fun clickable(color: Int, action: () -> Unit) = object : ClickableSpan() {
+            override fun onClick(widget: View) = action()
+            override fun updateDrawState(ds: android.text.TextPaint) {
+                ds.color = color
+                ds.isUnderlineText = false
+            }
         }
     }
 }

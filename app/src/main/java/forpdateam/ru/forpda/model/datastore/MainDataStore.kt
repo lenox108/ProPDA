@@ -73,6 +73,7 @@ class MainDataStore(private val context: Context) {
         val TOPIC_TOOLBAR_BEHAVIOR = stringPreferencesKey("topic_toolbar_behavior")
         val TOPIC_PAGE_SWIPE_ENABLE = booleanPreferencesKey("topic_page_swipe_enable")
         val TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE = booleanPreferencesKey("topic_bottom_refresh_gesture_enable")
+        val TOPIC_ACTIVE_READERS_ENABLE = booleanPreferencesKey("topic_active_readers_enable")
         val TOPIC_BACK_BEHAVIOR = stringPreferencesKey("topic_back_behavior")
         val TOPIC_OPEN_TARGET = stringPreferencesKey("topic_open_target")
         val TOPIC_HEADER_INITIAL_STATE = stringPreferencesKey("topic_header_initial_state")
@@ -182,6 +183,13 @@ class MainDataStore(private val context: Context) {
                 preferences[PreferencesKeys.TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE]
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
                         .getBoolean(AppPreferences.Main.TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE, true)
+            }, true)
+
+    fun observeTopicActiveReadersEnabledFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TOPIC_ACTIVE_READERS_ENABLE]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Main.TOPIC_ACTIVE_READERS_ENABLE, true)
             }, true)
 
     fun observeTopicBackBehaviorFlow(): Flow<AppPreferences.Main.TopicBackBehavior> =
@@ -477,6 +485,28 @@ class MainDataStore(private val context: Context) {
             preferences[PreferencesKeys.TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE] = value
         }
         mirrorPrefs.edit().putBoolean("topic_bottom_refresh_gesture_enable", value).apply()
+    }
+
+    suspend fun setTopicActiveReadersEnabled(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.TOPIC_ACTIVE_READERS_ENABLE] = value
+        }
+        mirrorPrefs.edit().putBoolean("topic_active_readers_enable", value).apply()
+    }
+
+    /** Легаси-ключ авторитетнее зеркала: androidx-переключатель пишет живой выбор именно туда. */
+    fun getTopicActiveReadersEnabledImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.TOPIC_ACTIVE_READERS_ENABLE)) {
+            return legacy.getBoolean(AppPreferences.Main.TOPIC_ACTIVE_READERS_ENABLE, true)
+        }
+        if (mirrorPrefs.contains("topic_active_readers_enable")) {
+            return mirrorPrefs.getBoolean("topic_active_readers_enable", true)
+        }
+        return true
     }
 
     fun getTopicBottomRefreshGestureEnabledImmediate(): Boolean {

@@ -119,6 +119,47 @@ class TopicActiveUsersParserTest {
         assertEquals(listOf("Nick"), readers.members.map { it.nick })
     }
 
+    /** Популярная тема: сотня ссылок на профили — это ~9 КБ разметки, окно поиска не должно её резать. */
+    @Test
+    fun `hundred readers are all parsed`() {
+        val nicks = (1..120).joinToString("\n") { i ->
+            """<a href="https://4pda.to/forum/index.php?showuser=$i"><span>nick$i</span></a>"""
+        }
+        val html = """
+            <div class="borderwrap">
+              <div class="formsubtitle"><b>137</b> чел. читают эту тему (гостей: 17, скрытых пользователей: 0)</div>
+              <div class="row1">Пользователей: <b>120</b>
+                $nicks
+              </div>
+            </div>
+            <div id="gfooter">подвал</div>
+        """.trimIndent()
+
+        val readers = requireNotNull(parser.parse(html))
+
+        assertEquals(137, readers.total)
+        assertEquals(17, readers.guests)
+        assertEquals(120, readers.members.size)
+        assertEquals("nick120", readers.members.last().nick)
+    }
+
+    /** Живой случай: форум экранирует апостроф, и в списке висело «I&#39;m legends». */
+    @Test
+    fun `html entities in nicks are decoded`() {
+        val html = """
+            <div class="formsubtitle"><b>2</b> чел. читают эту тему (гостей: 0)</div>
+            <div class="row1">
+              <a href="index.php?showuser=1"><span>I&#39;m legends</span></a>
+              <a href="index.php?showuser=2"><span>Tom &amp; Jerry</span></a>
+            </div>
+            <div id="gfooter"></div>
+        """.trimIndent()
+
+        val readers = requireNotNull(parser.parse(html))
+
+        assertEquals(listOf("I'm legends", "Tom & Jerry"), readers.members.map { it.nick })
+    }
+
     @Test
     fun `guest page without the block yields null`() {
         val html = """

@@ -228,9 +228,18 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * если новая страница блок не принесла (разлогинились / другой скин).
      */
     private fun applyActiveReaders(page: ThemePage, reset: Boolean = false) {
-        if (reset) pageActiveReaders = page.activeReaders
-        else page.activeReaders?.let { pageActiveReaders = it }
-        readersFooterAdapter.setReaders(pageActiveReaders, enabled = isClassicMode())
+        // Снимок обнуляем только при смене ТЕМЫ. Обычный переход по страницам одной темы приходит
+        // раньше обогащения (счётчик едет с десктопным ответом), и сброс в null заставлял плашку
+        // мигать: исчезнуть на секунду и вернуться с тем же числом.
+        if (reset && page.id != activeReadersTopicId) pageActiveReaders = null
+        if (page.id > 0) activeReadersTopicId = page.id
+        page.activeReaders?.let { pageActiveReaders = it }
+        // Подвал — вещь опциональная («Кто читает тему» в настройках чтения); счётчик в меню темы
+        // настройка не трогает, он там не мешает.
+        readersFooterAdapter.setReaders(
+                pageActiveReaders,
+                enabled = isClassicMode() && mainPreferencesHolder.getTopicActiveReadersEnabled(),
+        )
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             // Блока нет у гостя — без этого лога «счётчик не появился» не отличить от ошибки парсера.
             android.util.Log.i("FPDA_READERS", "topic=${page.id} total=${pageActiveReaders?.total ?: -1} " +
@@ -296,6 +305,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      * печатает блок) — тогда счётчик нигде не показывается.
      */
     private var pageActiveReaders: forpdateam.ru.forpda.entity.remote.theme.TopicActiveReaders? = null
+
+    /** Тема, к которой относится [pageActiveReaders] — снимок переживает смену страницы, но не темы. */
+    private var activeReadersTopicId = 0
 
     /** Loaded-page flags driving the toolbar poll / hat icon visibility (see [refreshToolbarState]). */
     private var pageHasPoll = false
@@ -1710,9 +1722,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             // тоже нет. Тап показывает ники видимых читателей, если сервер их прислал.
             pageActiveReaders?.let { readers ->
                 add("Читают тему: ${readers.total}" to {
-                    val nicks = readers.members.joinToString(", ") { it.nick }
+                    // В популярной теме читателей бывает сотня — тост с сотней ников нечитаем,
+                    // поэтому показываем первую дюжину и «и ещё N».
+                    val shown = readers.members.take(MENU_READERS_NICK_LIMIT)
+                    val rest = readers.members.size - shown.size
+                    val nicks = shown.joinToString(", ") { it.nick } +
+                            if (rest > 0) " и ещё $rest" else ""
                     val details = buildList {
-                        if (nicks.isNotEmpty()) add(nicks)
+                        if (shown.isNotEmpty()) add(nicks)
                         if (readers.guests > 0) add("гостей: ${readers.guests}")
                         if (readers.hidden > 0) add("скрытых: ${readers.hidden}")
                     }
@@ -3004,6 +3021,12 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Метка «эта тема сейчас на экране»: пуш о читаемой прямо сейчас теме — шум, и
         // EventsRepository/EventsCheckWorker глушат его по этой метке. Снимается в onPause.
         if (pageTopicId > 0) eventsRepository.setViewedTopic(pageTopicId)
+        // Настройку «Кто читает тему» могли переключить, пока тема висела в фоне — перечитываем её
+        // здесь, иначе подвал появился бы/исчез только со следующей загрузкой страницы.
+        readersFooterAdapter.setReaders(
+                pageActiveReaders,
+                enabled = isClassicMode() && mainPreferencesHolder.getTopicActiveReadersEnabled(),
+        )
     }
 
     /**
@@ -5972,5 +5995,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         private const val MENU_POLL = 0x4E07
         private const val MENU_HAT = 0x4E08
         private const val MENU_OVERFLOW = 0x4E0C
+
+        /** Сколько ников читателей влезает в тост из меню, дальше — «и ещё N». */
+        private const val MENU_READERS_NICK_LIMIT = 12
     }
 }

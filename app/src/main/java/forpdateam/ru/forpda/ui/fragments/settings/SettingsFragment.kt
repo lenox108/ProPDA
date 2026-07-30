@@ -200,6 +200,7 @@ class SettingsFragment : BaseSettingFragment() {
             }
             updateTopicScrollModeSummary(mode)
             updateTopicPageSwipePreferenceState(mode)
+            updateTopicActiveReadersPreferenceState(mode)
             updateTopicPaginationPanelsSummary(mainPreferencesHolder.getTopicPaginationPanels(), mode)
         }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_POST_DENSITY) {
@@ -225,6 +226,14 @@ class SettingsFragment : BaseSettingFragment() {
             if (isAdded) {
                 lifecycleScope.launch {
                     mainPreferencesHolder.setTopicPageSwipeEnabled(value)
+                }
+            }
+        }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_ACTIVE_READERS_ENABLE) {
+            val value = sharedPrefs.getBoolean(key, true)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicActiveReadersEnabled(value)
                 }
             }
         }
@@ -425,6 +434,8 @@ class SettingsFragment : BaseSettingFragment() {
                     it.value = mode.name
                     updateTopicScrollModeSummary(mode)
                     updateTopicPageSwipePreferenceState(mode)
+                    updateTopicActiveReadersPreferenceState(mode)
+            updateTopicActiveReadersPreferenceState(mode)
                 }
             findPreference<ListPreference>(Preferences.Main.TOPIC_POST_DENSITY)
                 ?.let {
@@ -442,6 +453,8 @@ class SettingsFragment : BaseSettingFragment() {
                 ?.isChecked = mainPreferencesHolder.observeTopicPageSwipeEnabledFlow().first()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE)
                 ?.isChecked = mainPreferencesHolder.observeTopicBottomRefreshGestureEnabledFlow().first()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_ACTIVE_READERS_ENABLE)
+                ?.isChecked = mainPreferencesHolder.observeTopicActiveReadersEnabledFlow().first()
             findPreference<ListPreference>(Preferences.Main.TOPIC_BACK_BEHAVIOR)
                 ?.let {
                     val behavior = mainPreferencesHolder.observeTopicBackBehaviorFlow().first()
@@ -467,7 +480,9 @@ class SettingsFragment : BaseSettingFragment() {
                     it.value = state.name
                     updateTopicHeaderInitialStateSummary(state)
                 }
-            updateTopicPageSwipePreferenceState(mainPreferencesHolder.observeTopicScrollModeFlow().first())
+            val scrollMode = mainPreferencesHolder.observeTopicScrollModeFlow().first()
+            updateTopicPageSwipePreferenceState(scrollMode)
+            updateTopicActiveReadersPreferenceState(scrollMode)
             // Topic preferences
             val topicHolder = forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext())
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Theme.SHOW_AVATARS)
@@ -847,6 +862,7 @@ class SettingsFragment : BaseSettingFragment() {
             val mode = SettingsPreferenceParsers.parseTopicScrollMode(newValue as? String)
             updateTopicScrollModeSummary(mode)
             updateTopicPageSwipePreferenceState(mode)
+            updateTopicActiveReadersPreferenceState(mode)
             // The pagination-panels summary depends on the mode (hybrid hides the bottom bit).
             updateTopicPaginationPanelsSummary(mainPreferencesHolder.getTopicPaginationPanels(), mode)
             lifecycleScope.launch {
@@ -1605,6 +1621,22 @@ class SettingsFragment : BaseSettingFragment() {
                     else -> R.string.download_method_system
                 }
         )
+    }
+
+    /**
+     * Плашка «кто читает тему» живёт только в классическом режиме (в гибриде страницы склеены в
+     * ленту, и подвалу там нет места) — гасим переключатель так же, как «Свайпы страниц», чтобы
+     * включённая настройка не обещала того, чего не будет.
+     */
+    private fun updateTopicActiveReadersPreferenceState(mode: Preferences.Main.TopicScrollMode) {
+        findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_ACTIVE_READERS_ENABLE)?.apply {
+            val isClassic = mode == Preferences.Main.TopicScrollMode.CLASSIC
+            isEnabled = isClassic
+            setSummary(
+                    if (isClassic) R.string.pref_summary_topic_active_readers
+                    else R.string.pref_summary_topic_active_readers_disabled
+            )
+        }
     }
 
     private fun updateTopicPageSwipePreferenceState(mode: Preferences.Main.TopicScrollMode) {
