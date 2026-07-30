@@ -459,14 +459,23 @@ class App : Application(), androidx.work.Configuration.Provider {
                     Timber.i("PROTOPROBE: сессии нет, слушать нечем")
                     return@runCatching
                 }
-                forpdateam.ru.forpda.notifications.push.AppProtocolClient.connectAny().use { client ->
-                    val ok = client.resume(session.memberId, session.loginKey!!)
-                    Timber.i("PROTOPROBE: resume=%s, слушаю 10 минут", ok)
-                    client.listenForEvents(10 * 60_000L) { doc ->
-                        Timber.i("PROTOPROBE: <- %s", doc.joinToString(prefix = "[", postfix = "]"))
-                    }
-                    Timber.i("PROTOPROBE: окно закрыто")
+                // Переподключаемся, пока идёт окно наблюдения: сервер рвёт сокет по бездействию.
+                val until = System.currentTimeMillis() + 40 * 60_000L
+                var round = 0
+                while (System.currentTimeMillis() < until) {
+                    round++
+                    runCatching {
+                        forpdateam.ru.forpda.notifications.push.AppProtocolClient.connectAny().use { client ->
+                            val ok = client.resume(session.memberId, session.loginKey!!)
+                            Timber.i("PROTOPROBE: раунд %d, resume=%s", round, ok)
+                            client.listenForEvents(until - System.currentTimeMillis()) { doc ->
+                                Timber.i("PROTOPROBE: <- %s", doc.joinToString(prefix = "[", postfix = "]"))
+                            }
+                        }
+                    }.onFailure { Timber.i("PROTOPROBE: раунд %d оборвался: %s", round, it.javaClass.simpleName) }
+                    Thread.sleep(2_000L)
                 }
+                Timber.i("PROTOPROBE: окно закрыто")
             }.onFailure { Timber.w(it, "PROTOPROBE: упало") }
         }
     }
