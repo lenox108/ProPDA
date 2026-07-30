@@ -142,7 +142,7 @@
             app:iconSpaceReserved="false" />
 
         <!--
-          «Работать в фоне» и «Постоянное соединение» больше не отдельные тумблеры: они
+          «Работать в фоне» и «Push без Google» больше не отдельные тумблеры: они
           ВЫВОДЯТСЯ из выбранного способа доставки (см. NotificationsSettingsFragment.
           applyDeliveryMethod), чтобы взаимоисключающие каналы не мешали друг другу.
           Ключи сохранены — их читают EventsRepository/NotificationsService/воркеры.

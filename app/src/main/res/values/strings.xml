@@ -1118,7 +1118,7 @@
     <string name="pref_title_delivery_method">Способ доставки</string>
     <string name="pref_summary_delivery_poll">Опрос: приложение само проверяет форум раз в интервал. Экономно, но уведомления приходят с задержкой.</string>
     <string name="pref_summary_delivery_push">Push: события приходят мгновенно, даже в спящем режиме, и почти не расходуют батарею. Рекомендуется.</string>
-    <string name="pref_summary_delivery_socket">Постоянное соединение: приложение держит непрерывный канал с форумом (как мессенджеры). Мгновенно, но заметно расходует батарею и держит значок в шторке.</string>
+    <string name="pref_summary_delivery_socket">То же мгновенное получение сообщений, что и обычный push, только без сервисов Google: приложение само держит соединение с 4PDA. Для Huawei и прошивок без Google Play. Нужен разовый вход в аккаунт 4PDA. Батарею расходует заметнее обычного push и держит значок в шторке.</string>
     <string name="pref_summary_delivery_off">В фоне ничего не проверяется. Уведомления приходят, только когда приложение открыто.</string>
     <string name="pref_title_pro_section">Дополнительные функции</string>
     <string name="settings_section_pro_summary">Push-уведомления, прокси, ключ активации</string>
@@ -1155,6 +1155,8 @@
     <string name="pro_remove_key_done">Ключ удалён</string>
     <string name="pref_summary_delivery_push_inactive">Push выбран, но НЕ активирован: вход не выполнен или ключ сессии устарел, поэтому события не приходят. Нажмите и выберите «Push (Google)», чтобы войти заново.</string>
     <string name="pro_required">Push доступен после активации</string>
+    <string name="pro_required_socket">Push без Google доступен после активации</string>
+    <string name="socket_setup_needs_login">Нужен разовый вход в аккаунт 4PDA</string>
     <string name="pref_title_push_safety_net">Резервная проверка</string>
     <string name="pref_summary_push_safety_net">Push доставляет события мгновенно. Резервная проверка нужна только на редкий случай, когда push потерялся: не было сети, сбой Google или прошивка выгрузила приложение. Выключите, если хотите максимум экономии батареи и полностью полагаетесь на push.</string>
     <string name="pref_title_bg_check_interval_safety">Резервная проверка</string>
@@ -1184,7 +1186,7 @@
     <string name="diagnostics_section_log">Журнал фоновых проверок</string>
     <string name="pref_title_oem_autostart">Автозапуск (настройки производителя)</string>
     <string name="pref_summary_oem_autostart">На этой прошивке есть отдельный список автозапуска: без разрешения система не будит приложение в фоне, даже с исключением из оптимизации батареи</string>
-    <string name="pref_title_persistent_ws">Постоянное соединение</string>
+    <string name="pref_title_persistent_ws">Push без Google</string>
     <string name="pref_summary_persistent_ws">Мгновенные уведомления через непрерывное соединение с форумом (как у мессенджеров). Заметно расходует батарею и держит значок в шторке. Работает надёжнее вместе с «Разрешить работу в фоне без ограничений»</string>
     <string name="pref_title_bg_stalled_warning">Фоновые проверки блокируются системой</string>
     <string name="pref_summary_bg_stalled_warning">Последняя проверка была %1$d мин назад при интервале %2$d мин. Нажмите и разрешите работу в фоне; на прошивках с автозапуском включите и его.</string>

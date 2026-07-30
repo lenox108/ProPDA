@@ -40,7 +40,7 @@ class NotificationDataStore(private val context: Context) {
         // Фоновая проверка уведомлений (WorkManager polling, когда сервис убит).
         private const val KEY_BG_CHECK_ENABLED = "notifications.bg.enabled"
         private const val KEY_BG_CHECK_INTERVAL_MIN = "notifications.bg.interval_min"
-        // Опция «Постоянное соединение»: держать WebSocket и в фоне (FGS). По умолчанию ВЫКЛ.
+        // Опция «Push без Google»: держать WebSocket и в фоне (FGS). По умолчанию ВЫКЛ.
         private const val KEY_BG_PERSISTENT_WS = "notifications.bg.persistent_ws"
         // Самодиагностика: отметки последнего запуска воркера и момента планирования.
         private const val KEY_BG_LAST_WORKER_RUN_AT = "notifications.bg.last_worker_run_at"

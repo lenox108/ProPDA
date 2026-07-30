@@ -113,7 +113,7 @@
     <!-- Способ доставки уведомлений (как «фоновая активность» у офиц. клиента) -->
     <string-array name="entries_notify_delivery_method">
         <item>Push (Google) — мгновенно, экономно</item>
-        <item>Постоянное соединение — мгновенно, ест батарею</item>
+        <item>Push без Google — мгновенно, для телефонов без GMS</item>
         <item>Опрос — с задержкой, экономно</item>
         <item>Не проверять в фоне</item>
     </string-array>
