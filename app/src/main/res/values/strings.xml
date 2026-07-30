@@ -1142,6 +1142,13 @@
     <string name="pro_activate">Активировать</string>
     <string name="pro_activated">Активировано — push и прокси доступны</string>
     <string name="pro_invalid">Ключ не подходит к вашему аккаунту</string>
+    <string name="pref_title_pro_remove_key">Удалить ключ</string>
+    <string name="pref_summary_pro_remove_key">Снимает активацию на этом устройстве. Нужно, чтобы включить push заново, если он перестал приходить. Ключ у вас останется — введёте его снова</string>
+    <string name="pro_remove_key_title">Удалить ключ активации?</string>
+    <string name="pro_remove_key_message">Push и прокси на этом устройстве выключатся, доставка вернётся к обычному опросу. Сам ключ никуда не денется — введите его снова, чтобы активировать всё заново.</string>
+    <string name="pro_remove_key_confirm">Удалить</string>
+    <string name="pro_remove_key_done">Ключ удалён</string>
+    <string name="pref_summary_delivery_push_inactive">Push выбран, но НЕ активирован: вход не выполнен или ключ сессии устарел, поэтому события не приходят. Нажмите и выберите «Push (Google)», чтобы войти заново.</string>
     <string name="pro_required">Push доступен после активации</string>
     <string name="pref_title_push_safety_net">Резервная проверка</string>
     <string name="pref_summary_push_safety_net">Push доставляет события мгновенно. Резервная проверка нужна только на редкий случай, когда push потерялся: не было сети, сбой Google или прошивка выгрузила приложение. Выключите, если хотите максимум экономии батареи и полностью полагаетесь на push.</string>

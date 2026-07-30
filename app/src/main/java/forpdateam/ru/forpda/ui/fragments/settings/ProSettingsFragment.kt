@@ -35,6 +35,10 @@ class ProSettingsFragment : BaseSettingFragment() {
             ProDialog.show(requireContext(), onChanged = { updateState() })
             true
         }
+        findPreference<Preference>(KEY_REMOVE_KEY)?.setOnPreferenceClickListener {
+            ProDialog.confirmRemoveKey(requireContext(), onChanged = { updateState() })
+            true
+        }
         (activity as? SettingsActivity)?.supportActionBar?.title = preferenceScreen.title
     }
 
@@ -51,6 +55,8 @@ class ProSettingsFragment : BaseSettingFragment() {
                 ProLicense.currentMemberId(context)
                         ?.let { getString(R.string.pref_summary_pro_member_id, it) }
                         ?: getString(R.string.pro_status_not_logged)
+        // Удалять нечего, пока ключа нет — пункт только путал бы.
+        findPreference<Preference>(KEY_REMOVE_KEY)?.isVisible = ProLicense.isUnlocked(context)
     }
 
     override fun searchSection(): SettingsSection = SettingsSection.PRO
@@ -60,5 +66,6 @@ class ProSettingsFragment : BaseSettingFragment() {
         private const val KEY_STATUS = "pro.status"
         private const val KEY_MEMBER_ID = "pro.member_id"
         private const val KEY_ENTER_KEY = "pro.enter_key"
+        private const val KEY_REMOVE_KEY = "pro.remove_key"
     }
 }
