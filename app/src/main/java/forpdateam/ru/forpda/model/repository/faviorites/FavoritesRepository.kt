@@ -185,11 +185,17 @@ class FavoritesRepository(
         runCatching { favoritesApi.markFavoriteTopicRead(topicId) }.getOrDefault(false)
     }
 
-    suspend fun markRead(topicId: Int) = withContext(Dispatchers.IO) {
-        cacheMutex.withLock { markReadLocked(topicId) }
+    /**
+     * @param clearReadBoundary снимать ли клиентскую границу прочитанного. true — для ЯВНОЙ отметки
+     * «прочитано» из списка (юзер тему не читал, позиции нет и не должно быть). false — когда тему
+     * ДОЧИТАЛИ на экране темы: там граница только что зафиксирована на последнем посте и означает
+     * «где закончил», её нужно сохранить для «Продолжить чтение»/«Истории».
+     */
+    suspend fun markRead(topicId: Int, clearReadBoundary: Boolean = true) = withContext(Dispatchers.IO) {
+        cacheMutex.withLock { markReadLocked(topicId, clearReadBoundary) }
     }
 
-    private suspend fun markReadLocked(topicId: Int) {
+    private suspend fun markReadLocked(topicId: Int, clearReadBoundary: Boolean = true) {
         val favItem = favoritesCache.getItemByTopicId(topicId)
         if (favItem == null) {
             // Тема ещё не в кэше (избранное ни разу не грузили / только что добавлена): не роняем
@@ -224,7 +230,7 @@ class FavoritesRepository(
         // открытии TopicReadBoundaryPolicy резюмнёт findpost'ом на старую границу (последний реально
         // виденный пост), и юзера отбросит на позавчерашний пост вместо свежих. См.
         // [TopicReadBoundaryStore]/[maybeResumeToReadBoundary].
-        readBoundaryStore.clear(topicId)
+        if (clearReadBoundary) readBoundaryStore.clear(topicId)
         syncFavoritesCounter(favoritesCache.getItems(), source = "favorites_mark_read")
         // Debug #2: фиксируем фактическое изменение (было/стало) для последующего аудита.
         ThemePostReadStateDiagnostics.markReadApplied(
