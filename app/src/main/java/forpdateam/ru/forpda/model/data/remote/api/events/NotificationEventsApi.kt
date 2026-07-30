@@ -86,6 +86,9 @@ class NotificationEventsApi(private val webClient: IWebClient) {
                 // Кэш-бастер: CDN 4PDA кэширует даже авторизованные GET (см. фикс bottom-refresh
                 // с «&s=»). Без него фоновый опрос мог получать стейл-ответ «ничего нового».
                 val response: NetworkResponse = webClient.get("$url&s=${System.currentTimeMillis()}")
+                if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+                    timber.log.Timber.d("INSPECTOR raw [%s]: %s", url.substringAfter("CODE="), response.body.take(300))
+                }
                 val parsed = parse(response.body)
                 // Пустой список + признаки НЕ-inspector-страницы (login/Cloudflare/HTML) = не
                 // «событий нет», а гость/защита/сменившийся формат. Бросаем, чтобы воркер НЕ затёр

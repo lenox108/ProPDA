@@ -435,7 +435,14 @@ object NotificationPublisher {
             avatar: android.graphics.Bitmap?,
             conversationShortcutId: String?,
     ): NotificationCompat.Style {
-        if (event.fromQms() && event.userNick.isNotEmpty()) {
+        // MessagingStyle годится ТОЛЬКО когда есть настоящие строки переписки: систему не
+        // обманешь — свою сводку («прислал 1 сообщение») она считает по числу добавленных
+        // сообщений, а не по нашему тексту. Полевой случай: пришло 3 сообщения, наш текст
+        // «3 непрочитанных сообщения» лежал одной строкой (android.messages=[1]), и шторка
+        // уверенно показывала «1». Когда текста нет (дозагрузка выключена/не удалась) —
+        // обычный BigTextStyle, где наш счётчик виден как есть.
+        val qmsPreviews = event.previewMessages.orEmpty().filter { it.isNotBlank() }
+        if (event.fromQms() && event.userNick.isNotEmpty() && qmsPreviews.isNotEmpty()) {
             val sender = androidx.core.app.Person.Builder()
                     .setName(event.userNick)
                     .setKey(conversationShortcutId ?: QmsConversationShortcuts.shortcutId(event.userId))
@@ -450,27 +457,12 @@ object NotificationPublisher {
                     .build()
             val style = NotificationCompat.MessagingStyle(me)
                     .setConversationTitle(event.sourceTitle.takeIf { it.isNotBlank() })
-            val previews = event.previewMessages.orEmpty().filter { it.isNotBlank() }
-            if (previews.isEmpty()) {
-                // Текст добрать не удалось (выключено настройкой, сеть, таймаут) — прежний
-                // счётчик: он хотя бы честно говорит, сколько всего непрочитано.
-                style.addMessage(
-                        context.resources.getQuantityString(
-                                R.plurals.notification_content_qms_count,
-                                event.msgCount.coerceAtLeast(1),
-                                event.msgCount.coerceAtLeast(1),
-                        ),
-                        System.currentTimeMillis(),
-                        sender,
-                )
-            } else {
-                // Время события — секунды инспектора и одно на всю пачку; разносим строки на
-                // секунду, иначе MessagingStyle показывает их как одновременные.
-                val baseTime = event.timeStamp.takeIf { it > 0 }?.times(1000L)
-                        ?: System.currentTimeMillis()
-                previews.forEachIndexed { index, message ->
-                    style.addMessage(message, baseTime - (previews.lastIndex - index) * 1000L, sender)
-                }
+            // Время события — секунды инспектора и одно на всю пачку; разносим строки на
+            // секунду, иначе MessagingStyle показывает их как одновременные.
+            val baseTime = event.timeStamp.takeIf { it > 0 }?.times(1000L)
+                    ?: System.currentTimeMillis()
+            qmsPreviews.forEachIndexed { index, message ->
+                style.addMessage(message, baseTime - (qmsPreviews.lastIndex - index) * 1000L, sender)
             }
             return style
         }
@@ -515,12 +507,22 @@ object NotificationPublisher {
         // Свёрнутая строка и строка сводки группы: сам текст сообщения информативнее
         // заголовка диалога, поэтому он в приоритете, когда его удалось добрать.
         e.fromQms() -> e.previewMessages?.lastOrNull()?.takeIf { it.isNotBlank() }
-                ?: e.sourceTitle.ifBlank {
+        // Пачка без текста: количество информативнее заголовка диалога — он и так в заголовке
+        // уведомления, а вопрос «сколько написали» иначе остаётся без ответа.
+                ?: if (e.msgCount > 1) {
                     context.resources.getQuantityString(
                             R.plurals.notification_content_qms_count,
                             e.msgCount,
                             e.msgCount
                     )
+                } else {
+                    e.sourceTitle.ifBlank {
+                        context.resources.getQuantityString(
+                                R.plurals.notification_content_qms_count,
+                                e.msgCount.coerceAtLeast(1),
+                                e.msgCount.coerceAtLeast(1)
+                        )
+                    }
                 }
         e.fromTheme() && e.isMention -> e.sourceTitle.ifBlank {
             context.getString(R.string.notification_content_mention_fallback)

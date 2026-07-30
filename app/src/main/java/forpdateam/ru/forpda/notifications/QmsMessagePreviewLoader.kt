@@ -61,7 +61,7 @@ class QmsMessagePreviewLoader @Inject constructor(
         if (themeId <= 0) return
 
         val startedAt = System.currentTimeMillis()
-        val texts = runCatching { load(context, event.userId, themeId, event.msgCount) }
+        val texts = runCatching { load(context, event.userId, themeId) }
                 .onFailure {
                     Timber.w(it, "QMS preview load failed for theme %d", themeId)
                     NotifDiagLog.log(context, "qms preview: t=$themeId failed ${it.javaClass.simpleName}")
@@ -90,7 +90,6 @@ class QmsMessagePreviewLoader @Inject constructor(
             context: Context,
             userId: Int,
             themeId: Int,
-            unreadCount: Int,
     ): List<String> = mutex.withLock {
         val anchor = prefs.getQmsPreviewAnchor(themeId)
         var fetched = fetch(userId, themeId, anchor)
@@ -117,9 +116,12 @@ class QmsMessagePreviewLoader @Inject constructor(
                             ?.let { message.id to it }
                 }
         QmsPreviewStore.append(themeId, incoming)
-        // Показываем ровно столько, сколько сервер считает непрочитанным (но не больше буфера):
-        // иначе уведомление про одно сообщение притащило бы в шторку и уже прочитанные.
-        QmsPreviewStore.take(themeId, unreadCount.coerceAtLeast(1))
+        // Показываем ВСЁ накопленное с прошлого прочтения, а не `unreadCount` последних.
+        // Ограничивать счётчиком инспектора нельзя: этот же запрос засчитывается сервером как
+        // прочтение диалога (см. предупреждение выше), поэтому к следующему пушу счётчик уже
+        // схлопывается — и в шторке оставалось одно последнее сообщение вместо всей пачки.
+        // Буфер и так живёт только до прочтения/снятия уведомления (QmsPreviewStore.forget).
+        QmsPreviewStore.takeAll(themeId)
     }
 
     private suspend fun fetch(userId: Int, themeId: Int, afterMessageId: Int): List<QmsMessage> =
@@ -166,6 +168,9 @@ object QmsPreviewStore {
             buffer.takeLast(limit.coerceIn(1, MAX_PER_THEME)).map { it.second }
         }
     }
+
+    /** Всё накопленное с последнего прочтения — ровно то, о чём и есть уведомление. */
+    fun takeAll(themeId: Int): List<String> = take(themeId, MAX_PER_THEME)
 
     fun isEmpty(themeId: Int): Boolean = buffers[themeId].isNullOrEmpty()
 
