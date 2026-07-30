@@ -31,6 +31,12 @@ class NotificationDataStore(private val context: Context) {
         // Показывать в уведомлении сам текст сообщения (дозагружается отдельным запросом).
         // По умолчанию ВЫКЛ: дозагрузка помечает диалог прочитанным на сервере (замер 28.07.26).
         private const val KEY_QMS_PREVIEW_ENABLED = "notifications.qms.preview_enabled"
+        /**
+         * Системные сообщения QMS («Сообщения 4PDA»: репутация, состояние аккаунта). Отдельный
+         * бит в push-битмаске (б1), поэтому и настройка отдельная — как у офиц. клиента, где эти
+         * события отключаются независимо от обычной переписки.
+         */
+        private const val KEY_QMS_SYSTEM_ENABLED = "notifications.qms_system.enabled"
         // Последний id сообщения диалога, попавший в превью: следующий запрос инкрементальный.
         private const val KEY_QMS_PREVIEW_ANCHOR_PREFIX = "notifications.qms_preview_anchor_"
         private const val KEY_MENTIONS_ENABLED = "notifications.mentions.enabled"
@@ -282,6 +288,8 @@ class NotificationDataStore(private val context: Context) {
     fun setHatApkSnapshotSync(topicId: Int, value: Set<String>) {
         prefs.edit().putString(KEY_HAT_SNAPSHOT_PREFIX + topicId, value.joinToString(",")).apply()
     }
+
+    fun getQmsSystemEnabledSync(): Boolean = prefs.getBoolean(KEY_QMS_SYSTEM_ENABLED, true)
 
     fun getQmsPreviewEnabledSync(): Boolean = prefs.getBoolean(KEY_QMS_PREVIEW_ENABLED, false)
 

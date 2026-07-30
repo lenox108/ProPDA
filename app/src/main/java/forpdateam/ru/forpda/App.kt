@@ -96,6 +96,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         private val PUSH_BITMASK_KEYS = setOf(
                 "notifications.main.enabled",
                 "notifications.qms.enabled",
+                "notifications.qms_system.enabled",
                 "notifications.fav.enabled",
                 "notifications.fav.only_important",
                 "notifications.mentions.enabled"

@@ -107,7 +107,10 @@ class PushRegistrar(
         var mask = 0
         val mainOn = notifPrefs.getMainEnabled()
         if (!mainOn) return 0
-        if (notifPrefs.getQmsEnabled()) mask = mask or 0b00001 or 0b00010 // QMS + системные QMS
+        if (notifPrefs.getQmsEnabled()) mask = mask or 0b00001              // переписка QMS
+        // Системные события QMS — отдельный бит и отдельная настройка: у офиц. клиента они тоже
+        // отключаются независимо (репутация, состояние аккаунта приходят в «Сообщения 4PDA»).
+        if (notifPrefs.getQmsSystemEnabled()) mask = mask or 0b00010
         if (notifPrefs.getFavEnabled()) {
             mask = if (notifPrefs.getFavOnlyImportant()) mask or 0b01000 // только важные темы
             else mask or 0b00100 or 0b01000                             // все избранные + важные
