@@ -16,17 +16,35 @@ class TabController {
     private var currentTag = EMPTY_TAG
     private val tabs = mutableListOf<TabItem>()
 
+    /**
+     * Порядок строк в списке открытых вкладок — отдельно от дерева навигации.
+     * Пользователь может перетащить строки как ему удобно, и это НЕ должно менять
+     * parent/children (от них зависят «назад», закрытие ветки и выбор вкладки после закрытия).
+     * Список самоочищается и дополняется в [getDisplayList]; новые вкладки попадают в конец,
+     * как и раньше (список брался в порядке появления фрагментов).
+     */
+    private val displayOrder = mutableListOf<String>()
+
     fun onRestoreInstanceState(savedInstanceState: JSONObject) {
         currentTag = savedInstanceState.getString("currentTag")
 
         val jsonTabs = savedInstanceState.getJSONArray("tabs")
         restoreFromInstance(tabs, jsonTabs)
+
+        displayOrder.clear()
+        // Ключа нет в состоянии, сохранённом прошлыми версиями — порядок просто соберётся из дерева.
+        savedInstanceState.optJSONArray("displayOrder")?.also { jsonOrder ->
+            (0 until jsonOrder.length()).forEach { index ->
+                displayOrder.add(jsonOrder.getString(index))
+            }
+        }
     }
 
     fun onSaveInstanceState(): JSONObject {
         return JSONObject().apply {
             put("currentTag", currentTag)
             put("tabs", getListForSave(tabs))
+            put("displayOrder", JSONArray().apply { displayOrder.forEach { put(it) } })
         }
     }
 
@@ -109,6 +127,12 @@ class TabController {
         return findTabItem(tag)?.screen?.key
     }
 
+    /** Экран, которым вкладка была открыта (см. [TabItem.origin]); null после пересоздания процесса. */
+    fun getOrigin(tag: String?): Screen? {
+        if (tag == null) return null
+        return findTabItem(tag)?.origin
+    }
+
     fun getThemeChainTagsToOrigin(tag: String?): List<String> {
         val result = mutableListOf<String>()
         var item = tag?.let { findTabItem(it) } ?: return emptyList()
@@ -126,6 +150,40 @@ class TabController {
             result.addAll(getListTree(it))
         }
         return result
+    }
+
+    /**
+     * Список вкладок в порядке показа: сначала то, что пользователь расставил сам
+     * ([displayOrder]), затем всё новое в порядке обхода дерева. Побочно чистит порядок
+     * от закрытых вкладок — иначе он бы рос до конца сессии.
+     */
+    fun getDisplayList(): List<TabItem> {
+        val rest = LinkedHashMap<String, TabItem>()
+        getList().forEach { rest[it.tag] = it }
+
+        val result = mutableListOf<TabItem>()
+        displayOrder.forEach { tag -> rest.remove(tag)?.also { result.add(it) } }
+        result.addAll(rest.values)
+
+        displayOrder.clear()
+        result.forEach { displayOrder.add(it.tag) }
+        return result
+    }
+
+    /** Перетаскивание строк: меняется только порядок показа, дерево навигации не трогаем. */
+    fun setDisplayOrder(tags: List<String>) {
+        displayOrder.clear()
+        displayOrder.addAll(tags)
+    }
+
+    /** Глубина вложенности вкладки в дереве переходов (0 — корневая). */
+    fun getDepth(tag: String?): Int {
+        var item = tag?.let { findTabItem(it) } ?: return 0
+        var depth = 0
+        while (true) {
+            item = item.parent ?: return depth
+            depth++
+        }
     }
 
     private fun getListTree(item: TabItem): List<TabItem> {
@@ -154,6 +212,7 @@ class TabController {
         val newItem = TabItem().also {
             it.tag = tag
             it.screen = TabScreen.fromScreen(screen)
+            it.origin = screen
         }
         if (item != null) {
             item.children.add(newItem.apply {
@@ -207,6 +266,7 @@ class TabController {
             val newItem = TabItem().also {
                 it.tag = tag
                 it.screen = TabScreen.fromScreen(screen)
+                it.origin = screen
             }
             val parentList = item.parent?.children ?: tabs
             val index = parentList.indexOf(item)

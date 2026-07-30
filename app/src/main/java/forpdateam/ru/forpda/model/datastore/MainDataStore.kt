@@ -80,6 +80,7 @@ class MainDataStore(private val context: Context) {
         val BOTTOM_NAV_COLUMNS = stringPreferencesKey("bottom_nav_columns")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val SHOW_BOTTOM_ARROW = booleanPreferencesKey("show_bottom_arrow")
+        val TABS_TREE_VIEW = booleanPreferencesKey("tabs_tree_view")
         val UI_PALETTE = stringPreferencesKey("ui_palette")
         val ACCENT_PALETTE = stringPreferencesKey("accent_palette")
         val ACCENT_CUSTOM_COLOR = intPreferencesKey("accent_custom_color")
@@ -256,6 +257,13 @@ class MainDataStore(private val context: Context) {
                 preferences[PreferencesKeys.SHOW_BOTTOM_ARROW]
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
                         .getBoolean(AppPreferences.Main.SHOW_BOTTOM_ARROW, false)
+            }, false)
+
+    fun observeTabsTreeViewFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.TABS_TREE_VIEW]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Main.TABS_TREE_VIEW, false)
             }, false)
 
     fun observeBottomNavColumnsFlow(): Flow<Int> =
@@ -591,6 +599,27 @@ class MainDataStore(private val context: Context) {
             preferences[PreferencesKeys.SHOW_BOTTOM_ARROW] = value
         }
         mirrorPrefs.edit().putBoolean("show_bottom_arrow", value).apply()
+    }
+
+    suspend fun setTabsTreeView(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.TABS_TREE_VIEW] = value
+        }
+        mirrorPrefs.edit().putBoolean("tabs_tree_view", value).apply()
+    }
+
+    fun getTabsTreeViewImmediate(): Boolean {
+        val legacy = context.getSharedPreferences(
+                context.packageName + "_preferences",
+                Context.MODE_PRIVATE
+        )
+        if (legacy.contains(AppPreferences.Main.TABS_TREE_VIEW)) {
+            return legacy.getBoolean(AppPreferences.Main.TABS_TREE_VIEW, false)
+        }
+        if (mirrorPrefs.contains("tabs_tree_view")) {
+            return mirrorPrefs.getBoolean("tabs_tree_view", false)
+        }
+        return false
     }
 
     fun getShowBottomArrowImmediate(): Boolean {

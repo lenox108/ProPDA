@@ -194,8 +194,26 @@ open class TabFragment : Fragment() {
         return subtitleText
     }
 
+    /**
+     * Подзаголовок для строки в списке открытых вкладок (раздел, страница темы, собеседник).
+     * В отличие от [getSubtitle] — публичный: список вкладок живёт в активити, а не во фрагменте.
+     */
+    fun getTabSubtitle(): String? = subtitleText
+
+    /**
+     * Список открытых вкладок показывает подзаголовок второй строкой, поэтому его смена должна
+     * обновлять список так же, как смена заголовка. Только по факту изменения текста: нативный
+     * экран темы переставляет подзаголовок часто (страница, счётчик читающих).
+     */
+    private fun notifyTabSubtitleChanged(previous: String?) {
+        if (previous == subtitleText) return
+        (activity as? MainActivity)?.tabNavigator?.notifyUpdate(this)
+    }
+
     fun setSubtitle(newSubtitle: String?) {
+        val previous = subtitleText
         this.subtitleText = newSubtitle
+        notifyTabSubtitleChanged(previous)
         if (subtitleText == null) {
             if (toolbarSubtitleView.visibility != View.GONE)
                 toolbarSubtitleView.visibility = View.GONE
@@ -212,7 +230,9 @@ open class TabFragment : Fragment() {
      * поэтому всё, что смотрит на подзаголовок как на строку, работает по-прежнему.
      */
     fun setSubtitleSpanned(newSubtitle: CharSequence?) {
+        val previous = subtitleText
         this.subtitleText = newSubtitle?.toString()
+        notifyTabSubtitleChanged(previous)
         if (newSubtitle == null) {
             if (toolbarSubtitleView.visibility != View.GONE)
                 toolbarSubtitleView.visibility = View.GONE

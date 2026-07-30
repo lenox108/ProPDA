@@ -29,6 +29,7 @@
     <dimen name="pager_bullet_indicator_active_dot_diameter">12dp</dimen>
     <dimen name="pager_bullet_indicator_inactive_dot_diameter">8dp</dimen>
     <dimen name="dp0">0dp</dimen>
+    <dimen name="dp1">1dp</dimen>
     <dimen name="dp2">2dp</dimen>
     <dimen name="dp4">4dp</dimen>
     <dimen name="dp6">6dp</dimen>

@@ -178,6 +178,14 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TABS_TREE_VIEW) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTabsTreeView(value)
+                }
+            }
+        }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.SCROLL_BUTTON_ENABLE) {
             val value = sharedPrefs.getBoolean(key, true)
             if (isAdded) {
@@ -414,6 +422,8 @@ class SettingsFragment : BaseSettingFragment() {
         lifecycleScope.launch {
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.SHOW_BOTTOM_ARROW)
                 ?.isChecked = mainPreferencesHolder.observeShowBottomArrowFlow().first()
+            findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TABS_TREE_VIEW)
+                ?.isChecked = mainPreferencesHolder.observeTabsTreeViewFlow().first()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.IS_EDITOR_MONOSPACE)
                 ?.isChecked = mainPreferencesHolder.observeEditorMonospaceFlow().first()
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.IS_EDITOR_DEFAULT_HIDDEN)

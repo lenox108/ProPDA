@@ -53,6 +53,8 @@ object Preferences {
         const val TOPIC_HEADER_INITIAL_STATE = PREFIX + "topic_header_initial_state"
         const val SHOW_BOTTOM_ARROW = PREFIX + "show_bottom_arrow"
         const val BOTTOM_NAV_COLUMNS = PREFIX + "bottom_nav_columns"
+        /** Список открытых вкладок: деревом переходов вместо плоского списка. */
+        const val TABS_TREE_VIEW = PREFIX + "tabs_tree_view"
         const val UI_PALETTE = PREFIX + "ui.palette"
         const val ACCENT_PALETTE = PREFIX + "accent"
         const val ACCENT_CUSTOM_COLOR = PREFIX + "accent_custom_color"

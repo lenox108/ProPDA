@@ -59,8 +59,16 @@ class TabNavigator(
     private val _subscribersFlow = MutableStateFlow<List<TabFragment>>(emptyList())
     val subscribersFlow: StateFlow<List<TabFragment>> = _subscribersFlow.asStateFlow()
     
+    /**
+     * Порядок списка задаёт [TabController.getDisplayList] (дерево + пользовательская сортировка).
+     * Фрагменты, которых нет в дереве (рассинхрон после restore), не теряем — они идут в хвост.
+     */
     private fun updateSubscribersFlow() {
-        _subscribersFlow.value = subscribersMap.values.toList()
+        val orderedTags = tabController.getDisplayList().map { it.tag }
+        val ordered = orderedTags.mapNotNull { subscribersMap[it] }
+        val knownTags = orderedTags.toHashSet()
+        val rest = subscribersMap.filterKeys { it !in knownTags }.values
+        _subscribersFlow.value = ordered + rest
     }
 
     init {
@@ -148,12 +156,17 @@ class TabNavigator(
         return true
     }
 
-    fun close(tabTag: String?) {
-        if (tabTag == null) return
+    /**
+     * @return [Screen], которым вкладка была открыта — для «Отменить» в снэкбаре. null, если
+     * закрытия не было либо экран не сохранился (пересоздание процесса, см. [TabItem.origin]).
+     */
+    fun close(tabTag: String?): Screen? {
+        if (tabTag == null) return null
         val fragment = getByTag(tabTag)
         if (tabController.getList().size <= 1) {
             exit()
         } else if (fragment != null && fragment.isAdded) {
+            val origin = tabController.getOrigin(tabTag)
             fragmentManager
                     .beginTransaction()
                     .remove(fragment)
@@ -164,7 +177,38 @@ class TabNavigator(
             updateSubscribersFlow()
             updateFragmentsState()
             notifyThemeFragmentAfterChildRemoved()
+            return origin
         }
+        return null
+    }
+
+    /**
+     * Закрыть перечисленные вкладки одной транзакцией («закрыть ниже» из контекстного меню).
+     * Последнюю вкладку не закрываем — из списка это выглядело бы как выход из приложения.
+     */
+    fun closeTabs(tabTags: List<String>) {
+        if (tabTags.isEmpty()) return
+        val closing = tabTags.toHashSet()
+        if (tabController.getList().none { it.tag !in closing }) return
+
+        val transaction = fragmentManager.beginTransaction()
+        closing.forEach { tag ->
+            getByTag(tag)?.also { transaction.remove(it) }
+            tabController.remove(tag)
+            subscribersMap.remove(tag)
+        }
+        transaction.commit()
+        updateSubscribersFlow()
+        updateFragmentsState()
+        notifyThemeFragmentAfterChildRemoved()
+    }
+
+    fun isTabOpen(tabTag: String): Boolean = tabController.getList().any { it.tag == tabTag }
+
+    /** Порядок строк после перетаскивания в списке вкладок: дерево переходов не меняется. */
+    fun setTabOrder(tags: List<String>) {
+        tabController.setDisplayOrder(tags)
+        updateSubscribersFlow()
     }
 
     fun closeThemeChainToOrigin(tabTag: String?): Boolean {

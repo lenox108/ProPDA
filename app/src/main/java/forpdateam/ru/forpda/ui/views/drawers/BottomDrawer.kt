@@ -40,12 +40,19 @@ import forpdateam.ru.forpda.ui.navigation.TabHelper
 import forpdateam.ru.forpda.ui.navigation.TabNavigator
 import forpdateam.ru.forpda.ui.BottomNavWindowInset
 import forpdateam.ru.forpda.ui.tuneForListPerformance
-import forpdateam.ru.forpda.ui.views.adapters.BaseAdapter
 import forpdateam.ru.forpda.ui.views.control.BottomSheetBehaviorFixed
 import forpdateam.ru.forpda.ui.views.control.BottomSheetBehaviorRecyclerManager
 import forpdateam.ru.forpda.ui.views.dialog.showWithStyledButtons
-import forpdateam.ru.forpda.ui.views.drawers.adapters.TabSwipeToDeleteCallback
+import forpdateam.ru.forpda.ui.views.drawers.adapters.TabTouchCallback
 import forpdateam.ru.forpda.ui.views.drawers.adapters.TabAdapter
+import forpdateam.ru.forpda.ui.views.drawers.adapters.TabRowItem
+import forpdateam.ru.forpda.ui.views.drawers.adapters.TabScreenIcons
+import forpdateam.ru.forpda.common.showSnackbarAboveSystemBars
+import com.google.android.material.snackbar.Snackbar
+import androidx.appcompat.widget.PopupMenu
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import forpdateam.ru.forpda.databinding.ActivityMainBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -115,7 +122,33 @@ class BottomDrawer(
 
     private var drawerListener: DrawerListener? = null
 
-    private val tabsAdapter = TabAdapter()
+    private val tabsAdapter = TabAdapter(object : TabAdapter.Listener {
+        override fun onTabClick(tag: String) {
+            tabNavigator.selectOpenedTab(tag)
+            hide()
+        }
+
+        override fun onTabClose(tag: String) {
+            closeTab(tag)
+        }
+
+        override fun onTabMenu(tag: String, anchor: View) {
+            showTabMenu(tag, anchor)
+        }
+
+        override fun onTabDragStart(holder: RecyclerView.ViewHolder) {
+            if (treeView) return
+            tabsTouchHelper?.startDrag(holder)
+        }
+    })
+
+    private var tabsTouchHelper: ItemTouchHelper? = null
+
+    /**
+     * Список вкладок деревом переходов вместо плоского («Вкладки деревом переходов» в настройках).
+     * В этом режиме порядок задаёт само дерево, поэтому перетаскивание выключено.
+     */
+    private var treeView = mainPreferencesHolder.getTabsTreeView()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
@@ -243,36 +276,33 @@ class BottomDrawer(
                 tuneForListPerformance()
 
                 val color = context.getColorFromAttr(R.attr.item_tab_close_color)
-                val swipeHandler = object : TabSwipeToDeleteCallback(color) {
-                    override fun onSwiped(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder, p1: Int) {
-                        val tab = tabsAdapter.getItem(viewHolder.bindingAdapterPosition)
-                        tabNavigator.close(tab.tag)
+                val touchCallback = object : TabTouchCallback(context, color) {
+                    override fun onSwiped(viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder, direction: Int) {
+                        val position = viewHolder.bindingAdapterPosition
+                        val row = tabsAdapter.getItem(position) ?: return
+                        if (!closeTab(row.tag)) {
+                            // Вкладка не закрылась — возвращаем строку на место, иначе она останется «уехавшей».
+                            tabsAdapter.notifyItemChanged(position)
+                        }
+                    }
+
+                    override fun getDragDirs(
+                            recyclerView: androidx.recyclerview.widget.RecyclerView,
+                            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+                    ): Int = if (treeView) 0 else ItemTouchHelper.UP or ItemTouchHelper.DOWN
+
+                    override fun onRowMoved(from: Int, to: Int): Boolean {
+                        if (treeView) return false
+                        tabsAdapter.moveRow(from, to)
+                        return true
+                    }
+
+                    override fun onRowMoveFinished() {
+                        tabNavigator.setTabOrder(tabsAdapter.currentRows().map { it.tag })
                     }
                 }
-                val itemTouchHelper = ItemTouchHelper(swipeHandler)
-                itemTouchHelper.attachToRecyclerView(this)
+                tabsTouchHelper = ItemTouchHelper(touchCallback).also { it.attachToRecyclerView(this) }
             }
-
-            tabsAdapter.setItemClickListener(object : BaseAdapter.OnItemClickListener<TabFragment> {
-                override fun onItemClick(item: TabFragment) {
-                    tabNavigator.selectOpenedTab(item.tag)
-                    hide()
-                }
-
-                override fun onItemLongClick(item: TabFragment): Boolean {
-                    return false
-                }
-            })
-
-            tabsAdapter.setCloseClickListener(object : BaseAdapter.OnItemClickListener<TabFragment> {
-                override fun onItemClick(item: TabFragment) {
-                    tabNavigator.close(item.tag)
-                }
-
-                override fun onItemLongClick(item: TabFragment): Boolean {
-                    return false
-                }
-            })
 
             // Force refresh tabs when drawer opens
             bottomSheetBehavior.addBottomSheetCallback(object : BottomSheetBehaviorFixed.BottomSheetCallback() {
@@ -287,6 +317,14 @@ class BottomDrawer(
             scope.launch {
                 mainPreferencesHolder.observeShowBottomArrowFlow().collect {
                     updateArrowVisible(it)
+                }
+            }
+
+            scope.launch {
+                mainPreferencesHolder.observeTabsTreeViewFlow().collect { enabled ->
+                    if (treeView == enabled) return@collect
+                    treeView = enabled
+                    submitTabs(tabNavigator.subscribersFlow.value)
                 }
             }
 
@@ -318,8 +356,7 @@ class BottomDrawer(
                 // Force sync and get initial value
                 tabNavigator.syncSubscribers()
                 tabNavigator.subscribersFlow.collect { tabs ->
-                    tabsAdapter.submitTabs(tabs, tabNavigator.getCurrentFragment()?.tag)
-                    binding.bottomTabsRecycler.requestLayout()
+                    submitTabs(tabs)
                 }
             }
         }
@@ -474,6 +511,145 @@ class BottomDrawer(
                 }
                 .setNegativeButton(R.string.no, null)
                 .showWithStyledButtons()
+    }
+
+    /** Строки списка вкладок + счётчик в заголовке секции. */
+    private fun submitTabs(tabs: List<TabFragment>) {
+        val rows = buildRows(tabs)
+        tabsAdapter.submitRows(rows)
+        binding.bottomMenuViewTabs.text = if (rows.isEmpty()) {
+            activity.getString(R.string.bottom_nav_open_tabs_section)
+        } else {
+            activity.getString(R.string.bottom_nav_open_tabs_section_count, rows.size)
+        }
+    }
+
+    private fun buildRows(tabs: List<TabFragment>): List<TabRowItem> {
+        val controller = tabNavigator.tabController
+        val currentTag = tabNavigator.getCurrentFragment()?.tag
+        // В режиме дерева порядок строк задаёт само дерево (обход в глубину), иначе отступы
+        // «поехали» бы: потомок мог оказаться выше своего родителя.
+        val ordered = if (treeView) orderByTree(tabs) else tabs
+        return ordered.mapNotNull { fragment ->
+            val tag = fragment.tag ?: return@mapNotNull null
+            val screenKey = controller.getScreenKey(tag)
+            val title = fragment.getTabTitle()
+            val sectionRes = TabScreenIcons.sectionTitleFor(screenKey)
+            TabRowItem(
+                    tag = tag,
+                    title = title,
+                    subtitle = buildSubtitle(
+                            section = if (sectionRes != 0) activity.getString(sectionRes) else null,
+                            detail = fragment.getTabSubtitle()?.takeIf { it.isNotBlank() },
+                            title = title,
+                    ),
+                    iconRes = TabScreenIcons.iconFor(screenKey),
+                    isActive = tag == currentTag,
+                    depth = controller.getDepth(tag),
+                    showTree = treeView,
+            )
+        }
+    }
+
+    /** Порядок обхода дерева переходов; вкладки, которых в дереве нет, — в хвост. */
+    private fun orderByTree(tabs: List<TabFragment>): List<TabFragment> {
+        val byTag = tabs.mapNotNull { fragment -> fragment.tag?.let { it to fragment } }.toMap()
+        val treeTags = tabNavigator.tabController.getList().map { it.tag }
+        val ordered = treeTags.mapNotNull { byTag[it] }
+        val known = treeTags.toHashSet()
+        return ordered + tabs.filter { it.tag !in known }
+    }
+
+    /** «Раздел · подробности». Раздел не повторяем, если он и так стоит заголовком строки. */
+    private fun buildSubtitle(section: String?, detail: String?, title: String): String? {
+        val head = section?.takeIf { !title.equals(it, ignoreCase = true) }
+        return when {
+            head != null && detail != null -> "$head · $detail"
+            head != null -> head
+            else -> detail
+        }
+    }
+
+    /**
+     * Закрытие одной вкладки — со снэкбаром «Отменить»: раньше промах по крестику или случайный
+     * свайп уносили вкладку безвозвратно. Восстанавливаем тем же [Screen], которым вкладку открыли
+     * ([forpdateam.ru.forpda.ui.navigation.TabItem.origin]); после пересоздания процесса его нет —
+     * тогда просто закрываем без предложения отмены.
+     */
+    private fun closeTab(tag: String): Boolean {
+        val origin = tabNavigator.close(tag)
+        val closed = !tabNavigator.isTabOpen(tag)
+        if (closed && origin != null) {
+            binding.bottomSheet2.showSnackbarAboveSystemBars(
+                    activity.getString(R.string.tab_closed_message),
+                    Snackbar.LENGTH_LONG,
+            ) {
+                setAction(R.string.msg_panel_undo) {
+                    // Восстановление — это явный запрос новой вкладки, поэтому в обход правил переиспользования.
+                    origin.forceNewTab = true
+                    router.navigateTo(origin)
+                }
+            }
+        }
+        return closed
+    }
+
+    private fun showTabMenu(tag: String, anchor: View) {
+        val rows = tabsAdapter.currentRows()
+        val index = rows.indexOfFirst { it.tag == tag }
+        val popup = PopupMenu(anchor.context, anchor)
+
+        tabNavigator.tabController.getOrigin(tag)?.tabUrl()?.also { url ->
+            popup.menu.add(R.string.tab_menu_copy_link).setOnMenuItemClickListener {
+                copyToClipboard(url)
+                true
+            }
+        }
+
+        popup.menu.add(R.string.tab_menu_close).setOnMenuItemClickListener {
+            closeTab(tag)
+            true
+        }
+
+        if (tabNavigator.canCloseThemeChainToOrigin(tag)) {
+            popup.menu.add(R.string.tab_menu_close_branch).setOnMenuItemClickListener {
+                tabNavigator.closeThemeChainToOrigin(tag)
+                true
+            }
+        }
+
+        if (index >= 0 && index < rows.size - 1) {
+            popup.menu.add(R.string.tab_menu_close_below).setOnMenuItemClickListener {
+                tabNavigator.closeTabs(rows.drop(index + 1).map { it.tag })
+                true
+            }
+        }
+
+        if (rows.size > 1) {
+            popup.menu.add(R.string.close_other_tabs).setOnMenuItemClickListener {
+                removeAllTabs()
+                true
+            }
+        }
+
+        popup.show()
+    }
+
+    /** Ссылка на содержимое вкладки, если экран её знает (иначе пункта меню нет). */
+    private fun Screen.tabUrl(): String? = when (this) {
+        is Screen.Theme -> themeUrl
+        is Screen.ArticleDetail -> articleUrl
+        is Screen.Profile -> profileUrl
+        is Screen.Search -> searchUrl
+        is Screen.SiteUserContent -> url
+        is Screen.Reputation -> reputationUrl
+        else -> null
+    }?.takeIf { it.startsWith("http") }
+
+    private fun copyToClipboard(url: String) {
+        val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        clipboard.setPrimaryClip(ClipData.newPlainText(url, url))
+        binding.bottomSheet2.showSnackbarAboveSystemBars(R.string.link_copied)
     }
 
     interface DrawerListener {
