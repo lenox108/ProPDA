@@ -206,6 +206,23 @@ open class TabFragment : Fragment() {
         }
     }
 
+    /**
+     * Подзаголовок с разметкой (нативный экран темы вставляет туда значок-глаз счётчика читающих
+     * через `ImageSpan`). [getSubtitle] и восстановление состояния продолжают видеть обычный текст,
+     * поэтому всё, что смотрит на подзаголовок как на строку, работает по-прежнему.
+     */
+    fun setSubtitleSpanned(newSubtitle: CharSequence?) {
+        this.subtitleText = newSubtitle?.toString()
+        if (newSubtitle == null) {
+            if (toolbarSubtitleView.visibility != View.GONE)
+                toolbarSubtitleView.visibility = View.GONE
+        } else {
+            if (toolbarSubtitleView.visibility != View.VISIBLE)
+                toolbarSubtitleView.visibility = View.VISIBLE
+            toolbarSubtitleView.text = newSubtitle
+        }
+    }
+
     fun getTabTitle(): String {
         return tabTitleText ?: getTitle()
     }

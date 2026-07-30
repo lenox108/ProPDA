@@ -11,6 +11,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import dagger.hilt.android.AndroidEntryPoint
 import android.app.Activity
 import android.text.Editable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import androidx.activity.result.contract.ActivityResultContracts
 import forpdateam.ru.forpda.common.FilePickHelper
 import forpdateam.ru.forpda.common.TopicOpenListHints
@@ -224,6 +226,49 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun lastPostAdapterPosition(): Int = headerOffset() + loadedItems.size - 1
 
     /**
+     * Подзаголовок тулбара: «12 / 40 · 👁 66». Слева позиция в теме, справа — сколько человек читают
+     * её прямо сейчас (снимок с последней загрузки, см. [applyActiveReaders]).
+     *
+     * Счётчика может не быть вовсе — у гостя сервер блок не печатает, а после открытия темы он
+     * приезжает лишь с обогащением, — тогда строка остаётся прежней «12 / 40», без заглушки: иначе
+     * при каждом открытии в шапке моргал бы плейсхолдер. Значок рисуем `ImageSpan`'ом в той же
+     * строке, чтобы не менять устройство тулбара.
+     */
+    private fun buildToolbarSubtitle(totalPages: Int): CharSequence? {
+        val pages = if (totalPages > 1) "$barCurrentPage / $totalPages" else null
+        // «Читают: 1» — это ты сам; показываем только когда есть кто-то ещё.
+        val readers = pageActiveReaders?.total?.takeIf { it > 1 }
+        if (pages == null && readers == null) return null
+        if (readers == null) return pages
+
+        val text = SpannableStringBuilder()
+        if (pages != null) text.append(pages).append(" · ")
+        val icon = readersSubtitleIcon()
+        if (icon != null) {
+            val start = text.length
+            text.append(" ") // носитель для ImageSpan
+            text.setSpan(android.text.style.ImageSpan(icon, android.text.style.ImageSpan.ALIGN_BASELINE),
+                    start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            text.append(" ")
+        }
+        // Трёхзначные счётчики бывают, но строка от них разъезжается — клампим.
+        text.append(if (readers > 99) "99+" else readers.toString())
+        return text
+    }
+
+    /** Глаз для подзаголовка: размер по кеглю строки, цвет — её же `colorOnSurfaceVariant`. */
+    private fun readersSubtitleIcon(): android.graphics.drawable.Drawable? {
+        val ctx = context ?: return null
+        val drawable = androidx.appcompat.content.res.AppCompatResources
+                .getDrawable(ctx, forpdateam.ru.forpda.R.drawable.ic_visibility)
+                ?.mutate() ?: return null
+        val size = (toolbarSubtitleView.textSize * 1.05f).toInt().coerceAtLeast(1)
+        drawable.setBounds(0, 0, size, size)
+        drawable.setTint(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+        return drawable
+    }
+
+    /**
      * Принять снимок «сейчас читают тему» из свежего ответа сервера и переприменить подвал.
      *
      * @param reset полная (пере)загрузка темы: снимок предыдущей темы/страницы больше не наш, даже
@@ -242,6 +287,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 pageActiveReaders,
                 enabled = isClassicMode() && mainPreferencesHolder.getTopicActiveReadersEnabled(),
         )
+        // Счётчик приезжает позже страницы (с обогащением) — перерисовываем подзаголовок, иначе он
+        // показал бы только «N / M» до следующего скролла.
+        if (view != null) updatePaginationBar()
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             // Блока нет у гостя — без этого лога «счётчик не появился» не отличить от ошибки парсера.
             android.util.Log.i("FPDA_READERS", "topic=${page.id} total=${pageActiveReaders?.total ?: -1} " +
@@ -1724,27 +1772,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun showOverflowMenu() {
         val ctx = requireContext()
         val actions = buildList<Pair<String, () -> Unit>> {
-            // «Сейчас читают тему» — счётчик из последней загруженной страницы (снимок, не живой тик).
-            // Первым пунктом и без действия: это справка, а не команда. У гостя блока в HTML нет → пункта
-            // тоже нет. Тап показывает ники видимых читателей, если сервер их прислал.
-            pageActiveReaders?.let { readers ->
-                add("Читают тему: ${readers.total}" to {
-                    // В популярной теме читателей бывает сотня — тост с сотней ников нечитаем,
-                    // поэтому показываем первую дюжину и «и ещё N».
-                    val shown = readers.members.take(MENU_READERS_NICK_LIMIT)
-                    val rest = readers.members.size - shown.size
-                    val nicks = shown.joinToString(", ") { it.nick } +
-                            if (rest > 0) " и ещё $rest" else ""
-                    val details = buildList {
-                        if (shown.isNotEmpty()) add(nicks)
-                        if (readers.guests > 0) add("гостей: ${readers.guests}")
-                        if (readers.hidden > 0) add("скрытых: ${readers.hidden}")
-                    }
-                    if (details.isNotEmpty()) {
-                        Toast.makeText(ctx, details.joinToString(" · "), Toast.LENGTH_LONG).show()
-                    }
-                })
-            }
+            // Счётчик читающих переехал в подзаголовок тулбара («12 / 40 · 👁 66»), в меню его нет:
+            // строка дублировала бы то, что и так всегда на виду. Ники — в подвале классического режима.
             add("Обновить" to { refreshInPlace() })
             // Add/remove from favorites (parity with the WebView fav menu). Visible once a topic id is known.
             if (pageTopicId > 0) {
@@ -4219,8 +4248,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         applyPaginationArrowStates(topPaginationBar, total)
         topPaginationBar?.visibility = if (panels.hasTop && total > 1 && !editorOpen) View.VISIBLE else View.GONE
         // Top-toolbar subtitle mirrors the page position — digits only, no «Страница … из …» text
-        // (parity with the WebView toolbar: «1348 / 1349»).
-        setSubtitle(if (total > 1) "$barCurrentPage / $total" else null)
+        // (parity with the WebView toolbar: «1348 / 1349»), плюс счётчик читающих тему справа.
+        setSubtitleSpanned(buildToolbarSubtitle(total))
         // The bottom pagination bar belongs to CLASSIC reading mode only; HYBRID (default) uses continuous
         // infinite scroll with no bar. Also gone while the reply editor is open. When it IS enabled it lives
         // permanently below the end of the page and rides in with the scroll — see
@@ -6024,8 +6053,5 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         private const val MENU_POLL = 0x4E07
         // 0x4E08 (MENU_HAT) retired: «Шапка темы» is opened by tapping the toolbar title.
         private const val MENU_OVERFLOW = 0x4E0C
-
-        /** Сколько ников читателей влезает в тост из меню, дальше — «и ещё N». */
-        private const val MENU_READERS_NICK_LIMIT = 12
     }
 }
