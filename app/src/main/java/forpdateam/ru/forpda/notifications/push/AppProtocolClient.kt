@@ -142,29 +142,6 @@ class AppProtocolClient(
         return (r.getOrNull(1) as? Int) == 0
     }
 
-    /**
-     * ВРЕМЕННО (диагностика 30.07.2026): слушает сокет и отдаёт КАЖДЫЙ входящий документ.
-     * Нужно, чтобы выяснить, шлёт ли сервер события авторизованной сессии по этому каналу, или
-     * события существуют только в виде FCM-пуша. Читается тем же путём, что и ответы, поэтому
-     * ping/pong обслуживаются автоматически.
-     */
-    fun listenForEvents(durationMs: Long, onDoc: (List<Any?>) -> Unit) {
-        val deadline = System.currentTimeMillis() + durationMs
-        var lastPing = System.currentTimeMillis()
-        while (System.currentTimeMillis() < deadline) {
-            // Сервер рвёт соединение по бездействию (замер: ровно 60с и EOF), поэтому шлём ping —
-            // так же, как легаси-канал.
-            if (System.currentTimeMillis() - lastPing > PING_INTERVAL_MS) {
-                lastPing = System.currentTimeMillis()
-                runCatching { writeFrame(ByteArray(0), compress = false, opcode = OPCODE_PING) }
-            }
-            val doc = runCatching { readMessage() }.getOrElse {
-                if (it is java.net.SocketTimeoutException) continue else throw it
-            }
-            onDoc(doc)
-        }
-    }
-
     override fun close() {
         runCatching { socket.close() }
     }
@@ -380,7 +357,6 @@ class AppProtocolClient(
         private const val CLIENT_VERSION = "1.9.43"
         private val CP1251: Charset = Charset.forName("windows-1251")
         private val SYNC_FLUSH = byteArrayOf(0, 0, 0xFF.toByte(), 0xFF.toByte())
-        private const val PING_INTERVAL_MS = 20_000L
         private const val OPCODE_TEXT = 0x1
         private const val OPCODE_CLOSE = 0x8
         private const val OPCODE_PING = 0x9

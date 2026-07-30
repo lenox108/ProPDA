@@ -193,7 +193,6 @@ class App : Application(), androidx.work.Configuration.Provider {
         setupBackgroundEventsCheck()
         setupRealtimePushToggle()
         setupPushTokenRefresh()
-        if (BuildConfig.DEBUG) probeAppProtocolEvents()
         setupAppUpdateCheck()
 
         // Ярлык обязан существовать при любом старте процесса — даже если процесс
@@ -447,39 +446,6 @@ class App : Application(), androidx.work.Configuration.Provider {
      * битмаску, поэтому лишний `ai` не шлётся). Также реагирует на изменение семейств уведомлений
      * (меняется битмаск). Требует уже полученной сессии (login_key из настроек) — иначе no-op.
      */
-    /**
-     * ВРЕМЕННО: слушаем app-протокольный сокет авторизованной сессией и логируем всё, что
-     * сервер пришлёт сам. Задача — понять, есть ли у 4PDA канал событий кроме FCM.
-     */
-    private fun probeAppProtocolEvents() {
-        appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching {
-                val session = forpdateam.ru.forpda.notifications.push.PushSessionStore(this@App)
-                if (!session.hasSession()) {
-                    Timber.i("PROTOPROBE: сессии нет, слушать нечем")
-                    return@runCatching
-                }
-                // Переподключаемся, пока идёт окно наблюдения: сервер рвёт сокет по бездействию.
-                val until = System.currentTimeMillis() + 40 * 60_000L
-                var round = 0
-                while (System.currentTimeMillis() < until) {
-                    round++
-                    runCatching {
-                        forpdateam.ru.forpda.notifications.push.AppProtocolClient.connectAny().use { client ->
-                            val ok = client.resume(session.memberId, session.loginKey!!)
-                            Timber.i("PROTOPROBE: раунд %d, resume=%s", round, ok)
-                            client.listenForEvents(until - System.currentTimeMillis()) { doc ->
-                                Timber.i("PROTOPROBE: <- %s", doc.joinToString(prefix = "[", postfix = "]"))
-                            }
-                        }
-                    }.onFailure { Timber.i("PROTOPROBE: раунд %d оборвался: %s", round, it.javaClass.simpleName) }
-                    Thread.sleep(2_000L)
-                }
-                Timber.i("PROTOPROBE: окно закрыто")
-            }.onFailure { Timber.w(it, "PROTOPROBE: упало") }
-        }
-    }
-
     private fun setupPushTokenRefresh() {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         if (prefs.getString("notifications.delivery_method", "poll") != "push") return
