@@ -24,6 +24,12 @@ data class NativePostItem(
     val reputation: String?,
     /** Author's total forum post count (from the page / merged profile fetch) — the 💬 header badge. */
     val userPostCount: Int?,
+    /**
+     * Личная подпись автора (инлайновый HTML), «Показывать подписи пользователей». Приезжает вместе с
+     * рейтингами из десктопного обогащения — до него `null`, поэтому подпись появляется тем же патчем,
+     * что и «👍 N». Пустая/`null` — блок подписи в карточке не рисуется вовсе.
+     */
+    val signatureHtml: String? = null,
     val postRating: String?,
     val isCurator: Boolean,
     val isOnline: Boolean,

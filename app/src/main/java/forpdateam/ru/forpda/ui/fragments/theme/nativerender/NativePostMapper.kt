@@ -25,9 +25,11 @@ class NativePostMapper(
         groupColor = post.groupColor,
         date = post.date,
         reputation = post.reputation,
-        // userPostCount lives only on the concrete ThemePost (populated by getTheme's profile merge);
-        // read it via a safe cast so the mapper still compiles against the Android-free interface.
+        // userPostCount/signatureHtml live only on the concrete ThemePost (populated by the deferred
+        // desktop merge); read them via a safe cast so the mapper still compiles against the
+        // Android-free interface.
         userPostCount = (post as? forpdateam.ru.forpda.entity.remote.theme.ThemePost)?.userPostCount,
+        signatureHtml = (post as? forpdateam.ru.forpda.entity.remote.theme.ThemePost)?.signatureHtml,
         postRating = post.postRating,
         isCurator = post.isCurator,
         isOnline = post.isOnline,

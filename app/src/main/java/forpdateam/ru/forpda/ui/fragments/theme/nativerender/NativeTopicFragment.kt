@@ -3175,6 +3175,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             animatedSmiles = topicPreferencesHolder.getAnimatedSmiles(),
             flatBlocks = topicPreferencesHolder.getFlatPosts(),
             modernHeader = topicPreferencesHolder.getModernPostHeader(),
+            showSignatures = topicPreferencesHolder.getShowSignatures(),
             hideLowRatedPosts = topicPreferencesHolder.getHideLowRatedPosts(),
             lowRatingThreshold = topicPreferencesHolder.getLowRatingThreshold(),
     )

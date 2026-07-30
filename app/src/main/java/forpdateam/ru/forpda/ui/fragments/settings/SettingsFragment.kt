@@ -369,6 +369,14 @@ class SettingsFragment : BaseSettingFragment() {
                 }
             }
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Theme.SHOW_SIGNATURES) {
+            val value = sharedPrefs.getBoolean(key, false)
+            if (isAdded) {
+                lifecycleScope.launch {
+                    forpdateam.ru.forpda.model.preferences.TopicPreferencesHolder(requireContext()).setShowSignatures(value)
+                }
+            }
+        }
         if (key == forpdateam.ru.forpda.common.Preferences.Theme.HIDE_LOW_RATED_POSTS) {
             val value = sharedPrefs.getBoolean(key, false)
             if (isAdded) {
