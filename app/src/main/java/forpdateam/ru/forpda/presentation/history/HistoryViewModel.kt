@@ -198,6 +198,12 @@ class HistoryViewModel @Inject constructor(
     private fun openHistoryItem(item: HistoryItem) {
         val topicId = item.id
         val boundaryPostId = if (topicId > 0) readBoundaryStore.lastSeenPostId(topicId) else 0
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            // Без этого «сел на границу» и «упал в фолбэк из-за непрогретого кэша» в логе неразличимы —
+            // а это ровно две ветки жалобы «периодически открывает не туда».
+            android.util.Log.i("FPDA_CONTINUE_OPEN",
+                    "history topic=$topicId boundary=$boundaryPostId hydrated=${readBoundaryStore.isHydrated}")
+        }
         if (topicId > 0 && boundaryPostId > 0) {
             router.navigateTo(Screen.Theme().apply {
                 themeUrl = TopicUnreadFindPostReloadPolicy.buildFindPostUrl(topicId, boundaryPostId.toString())

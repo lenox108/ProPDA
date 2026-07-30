@@ -238,6 +238,18 @@ class TopicPostsAdapter(
     private var highlightArmedAtUptime: Long = 0L
 
     /**
+     * Номер ОКНА вспышки: растёт на каждый явный запрос/перевзвод. Держатель запоминает номер, под
+     * которым проиграл анимацию, и «сохранение живой вспышки при перепривязке» (`keepHighlight` в
+     * `bind`) работает только В ПРЕДЕЛАХ одного номера.
+     *
+     * Без этого перевзвод после дозаполнения короткой последней страницы был бесполезен: аниматор
+     * старого (догорающего под невидимым списком) окна ещё «жив», `keepHighlight` видел ту же цель и
+     * оставлял его — пользователю доставались жалкие остатки вместо полных [HIGHLIGHT_TOTAL_MS].
+     * Обычные перепривязки (обогащение карточек, DiffUtil) номер не меняют и вспышку по-прежнему не рвут.
+     */
+    private var highlightWindowToken: Int = 0
+
+    /**
      * @return true, если вспышка для [postId] была взведена, УЖЕ отыграла и окно закрылось. Нужно точке
      * повторного якорения после дозагрузки карточек: там список переверстался и юзера снова подвезли к
      * посту — если вспышка к тому моменту догорела, её имеет смысл показать заново (двойной вспышки не
@@ -252,6 +264,7 @@ class TopicPostsAdapter(
         highlightTargetPostId = postId
         highlightDeadlineUptime = 0L
         highlightArmedAtUptime = android.os.SystemClock.uptimeMillis()
+        highlightWindowToken++
         // Подсвечиваем всегда именно ЦЕЛЬ перехода — значит она должна быть раскрыта, даже если
         // заминусована (иначе вспышка приходится на плашку «Показать»).
         lowRatingExpandedPostIds.add(postId)
@@ -280,6 +293,9 @@ class TopicPostsAdapter(
         if (postId <= 0) return
         highlightDeadlineUptime = 0L
         highlightArmedAtUptime = android.os.SystemClock.uptimeMillis()
+        // Новое окно ⇒ новый номер: догорающий аниматор прошлого окна больше не «сохраняется» при
+        // перепривязке, а честно уступает место полной вспышке (см. [highlightWindowToken]).
+        highlightWindowToken++
         val pos = currentList.indexOfFirst { it.postId == postId }
         if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
             android.util.Log.i("FPDA_HIGHLIGHT", "rearm post=$postId pos=$pos")
@@ -354,7 +370,8 @@ class TopicPostsAdapter(
                         manuallyExpanded = false,
                 )
         holder.bind(item, highlightRemainingMs, displaySettings, searchQuery, isHat, hatCollapsed, authorized, memberId,
-                pageDivider, activeMatch?.takeIf { it.scopeId == item.postId }, lowRatedCollapsed, lowRatedExpandable)
+                pageDivider, activeMatch?.takeIf { it.scopeId == item.postId }, lowRatedCollapsed, lowRatedExpandable,
+                highlightWindowToken)
     }
 
     class PostViewHolder(
@@ -416,6 +433,9 @@ class TopicPostsAdapter(
         /** Post id the running highlight belongs to, so a re-bind of the SAME post (e.g. the async
          *  userPostCount/rating enrichment) doesn't cancel a mid-fade highlight. */
         private var highlightingPostId: Int = 0
+        /** Номер окна ([highlightWindowToken]), под которым проиграна текущая вспышка: новое окно ту же
+         *  цель не «сохраняет», а перезапускает с полной длительностью. */
+        private var highlightingToken: Int = -1
 
         /** Display prefs for the current bind pass, read by the body-render helpers below. */
         private var settings = PostDisplaySettings()
@@ -504,6 +524,7 @@ class TopicPostsAdapter(
                 activeMatch: BodyBlockViewFactory.ActiveMatch? = null,
                 lowRatedCollapsed: Boolean = false,
                 lowRatedExpandable: Boolean = false,
+                highlightToken: Int = 0,
         ) {
             pageDivider.text = pageDividerLabel.orEmpty()
             pageDivider.visibility = if (pageDividerLabel != null) View.VISIBLE else View.GONE
@@ -519,7 +540,10 @@ class TopicPostsAdapter(
             // brief start-delay isRunning is false and a re-bind would wrongly cancel it. Reset the border
             // only when this holder is reused for a DIFFERENT post, or the flash window has elapsed.
             val wantHighlight = highlightRemainingMs > 0L
-            val keepHighlight = highlightAnimator != null && highlightingPostId == item.postId && wantHighlight
+            // ...но только в пределах ОДНОГО окна ([highlightWindowToken]): перевзвод после дозаполнения
+            // короткой последней страницы обязан перезапустить вспышку, а не донести догорающий остаток.
+            val keepHighlight = highlightAnimator != null && highlightingPostId == item.postId &&
+                    highlightingToken == highlightToken && wantHighlight
             if (!keepHighlight) {
                 highlightAnimator?.cancel()
                 highlightAnimator = null
@@ -570,6 +594,7 @@ class TopicPostsAdapter(
             renderSignature(item, hidden = hatFolded || lowRatedCollapsed)
             if (wantHighlight && !keepHighlight) {
                 highlightingPostId = item.postId
+                highlightingToken = highlightToken
                 if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
                     android.util.Log.i("FPDA_HIGHLIGHT", "play post=${item.postId} remainingMs=$highlightRemainingMs")
                 }

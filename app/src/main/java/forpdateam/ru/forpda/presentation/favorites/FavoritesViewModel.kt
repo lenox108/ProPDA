@@ -328,10 +328,24 @@ class FavoritesViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Эхо «тему дочитали на экране темы» ([CrossScreenInteractor.observeTopic]) — НЕ явная отметка
+     * «прочитано» из списка.
+     *
+     * `clearReadBoundary = false` обязателен. [ThemeUseCase.markTopicRead] уже вызывает
+     * `favoritesRepository.markRead(topicId, clearReadBoundary = false)` — специально, чтобы клиентская
+     * граница ([TopicReadBoundaryStore]) пережила дочитывание: она и есть «где закончил» для
+     * «Продолжить чтение» и «Истории». Но тот же метод шлёт ещё и это кросс-экранное уведомление, а
+     * оно приходило сюда и звало `markRead` с дефолтным `true` — граница стиралась «вторым заходом»,
+     * сводя на нет фикс f362582b. Ловится только когда экран избранного жив (обычный путь: юзер пришёл
+     * в тему из избранного) — отсюда недетерминизм «то открывает где остановился, то на верху страницы,
+     * и подсветки нет» (у открытия без границы нет якорного поста → вспышка не запрашивается вовсе).
+     * Явные отметки из списка идут мимо этого метода ([runMarkReadEntries]) и чистят границу как раньше.
+     */
     private fun markRead(topicId: Int) {
         scope.launch {
             runCatching {
-                favoritesRepository.markRead(topicId)
+                favoritesRepository.markRead(topicId, clearReadBoundary = false)
             }
                     .onFailure { errorHandler.handle(it) }
         }

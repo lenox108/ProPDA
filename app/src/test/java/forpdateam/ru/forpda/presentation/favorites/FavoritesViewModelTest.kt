@@ -25,6 +25,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -47,6 +48,9 @@ class FavoritesViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val itemsFlow = MutableStateFlow<List<FavItem>>(emptyList())
+
+    /** Кросс-экранное эхо «тему дочитали на экране темы» — см. тест про границу прочитанного. */
+    private val crossScreenTopics = MutableSharedFlow<Int>(extraBufferCapacity = 4)
 
     @Before
     fun setUp() {
@@ -115,7 +119,7 @@ class FavoritesViewModelTest {
         val eventsRepository = mockk<EventsRepository>(relaxed = true)
         every { eventsRepository.observeEventsTab() } returns emptyFlow()
         val crossScreenInteractor = mockk<CrossScreenInteractor>(relaxed = true)
-        every { crossScreenInteractor.observeTopic() } returns emptyFlow()
+        every { crossScreenInteractor.observeTopic() } returns crossScreenTopics
         themeUseCase = mockk<ThemeUseCase>(relaxed = true)
         authHolder = mockk<AuthHolder>(relaxed = true)
         return FavoritesViewModel(
@@ -134,6 +138,26 @@ class FavoritesViewModelTest {
                 mockk<MainPreferencesHolder>(relaxed = true),
                 themeUseCase,
         )
+    }
+
+    /**
+     * Эхо «тему дочитали на экране темы» НЕ должно стирать клиентскую границу прочитанного: она и есть
+     * «где закончил» для «Продолжить чтение» и «Истории». [ThemeUseCase.markTopicRead] уже зовёт
+     * `markRead(clearReadBoundary = false)`, но шлёт ещё и это кросс-экранное уведомление — и оно
+     * приходило сюда с дефолтным `true`, стирая границу «вторым заходом». Ловилось только при живом
+     * экране избранного, отсюда «периодически открывает не туда, и подсветки нет».
+     */
+    @Test
+    fun `cross-screen read echo keeps the client read boundary`() = runTest {
+        val vm = createViewModel()
+        vm.start()
+        advanceUntilIdle()
+
+        crossScreenTopics.emit(1121483)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { favoritesRepository.markRead(1121483, clearReadBoundary = false) }
+        coVerify(exactly = 0) { favoritesRepository.markRead(1121483, clearReadBoundary = true) }
     }
 
     @Test

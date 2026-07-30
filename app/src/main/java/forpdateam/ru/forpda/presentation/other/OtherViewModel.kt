@@ -282,6 +282,12 @@ class OtherViewModel @Inject constructor(
         val url = item.url ?: return
         val topicId = item.id
         val boundaryPostId = if (topicId > 0) readBoundaryStore.lastSeenPostId(topicId) else 0
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            // Различает «сел на границу» и «упал в фолбэк из-за непрогретого кэша» — две ветки жалобы
+            // «периодически открывает не туда». См. [HistoryViewModel.openHistoryItem].
+            android.util.Log.i("FPDA_CONTINUE_OPEN",
+                    "continue topic=$topicId boundary=$boundaryPostId hydrated=${readBoundaryStore.isHydrated}")
+        }
         if (topicId > 0 && boundaryPostId > 0) {
             router.navigateTo(Screen.Theme().apply {
                 themeUrl = "https://4pda.to/forum/index.php?showtopic=$topicId&view=findpost&p=$boundaryPostId"
