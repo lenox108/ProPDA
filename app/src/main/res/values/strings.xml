@@ -1211,6 +1211,8 @@
     <string name="pref_title_only_important">Только закрепленные темы</string>
     <string name="pref_title_mentions">Ответы</string>
     <string name="pref_title_pm_qms">Личные сообщения QMS</string>
+    <string name="pref_title_qms_system">Системные события</string>
+    <string name="pref_summary_qms_system">Сообщения от 4PDA: репутация, состояние аккаунта. Приходят в диалог «Сообщения 4PDA»</string>
     <string name="pref_title_qms_message_text">Показывать текст сообщения</string>
     <string name="pref_summary_qms_message_text">Вместо счётчика — сам текст. Цена: 4PDA пометит диалог прочитанным ещё до того, как вы его откроете</string>
     <string name="notification_qms_image">[изображение]</string>

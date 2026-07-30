@@ -1176,7 +1176,12 @@ class EventsRepository(
             return false
         }
         if (NotificationEvent.fromQms(source)) {
-            if (!notificationPreferencesHolder.getQmsEnabled()) {
+            // Системный диалог «Сообщения 4PDA» (репутация, состояние аккаунта) отличается от
+            // переписки нулевым id и управляется своей настройкой — как у офиц. клиента.
+            val systemDialog = event != null && event.sourceId == 0
+            if (systemDialog) {
+                if (!notificationPreferencesHolder.getQmsSystemEnabled()) return false
+            } else if (!notificationPreferencesHolder.getQmsEnabled()) {
                 return false
             }
         } else if (NotificationEvent.fromTheme(source)) {

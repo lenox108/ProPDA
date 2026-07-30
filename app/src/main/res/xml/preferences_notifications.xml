@@ -93,6 +93,15 @@
             android:title="@string/pref_title_notify"
             app:iconSpaceReserved="false" />
 
+        <forpdateam.ru.forpda.ui.views.SwitchPreference
+            android:defaultValue="true"
+            android:dependency="notifications.main.enabled"
+            android:key="notifications.qms_system.enabled"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_summary_qms_system"
+            android:title="@string/pref_title_qms_system"
+            app:iconSpaceReserved="false" />
+
         <!--
           По умолчанию ВЫКЛ, и это не осторожность, а измеренная цена: текст сообщения
           существует только внутри диалога, а любой запрос за ним сервер засчитывает как
