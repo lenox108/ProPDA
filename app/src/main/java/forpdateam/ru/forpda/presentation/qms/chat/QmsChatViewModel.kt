@@ -983,15 +983,18 @@ class QmsChatViewModel @Inject constructor(
      * появлялась только после переоткрытия диалога.
      */
     private fun messagesAnchorId(data: QmsChatModel): Int {
-        val lastId = data.messages.lastOrNull { !it.isDate }?.id ?: 0
-        val oldestUnreadMine = data.messages
-                .firstOrNull { !it.isDate && it.isMyMessage && !it.readStatus }
-                ?: return lastId
+        val real = data.messages.filter { !it.isDate }
+        val lastId = real.lastOrNull()?.id ?: 0
+        val oldestUnreadIndex = real.indexOfFirst { it.isMyMessage && !it.readStatus }
+        // Якорем годится только СУЩЕСТВУЮЩЕЕ в этом диалоге сообщение: id сквозные по всему QMS,
+        // и на «id − 1» сервер отвечает пустотой (проверено живьём 30.07.2026). Поэтому берём id
+        // предыдущего сообщения ленты; если непрочитанное — самое первое, зонд пропускаем, чтобы
+        // не тянуть весь тред.
+        if (oldestUnreadIndex <= 0) return lastId
         val now = System.currentTimeMillis()
         if (now - lastReadStatusProbeAtMs < READ_STATUS_PROBE_INTERVAL_MS) return lastId
         lastReadStatusProbeAtMs = now
-        // -1: запрос отдаёт строго ПОСЛЕ указанного id, а нам нужно само это сообщение.
-        return (oldestUnreadMine.id - 1).coerceAtLeast(0)
+        return real[oldestUnreadIndex - 1].id
     }
 
     /** Resets the window to the newest [MESSAGES_PAGE_SIZE] messages and pins the list to the bottom. */
