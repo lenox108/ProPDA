@@ -373,14 +373,9 @@ class EventsRepository(
             } ?: return
             forpdateam.ru.forpda.notifications.NotifDiagLog.log(
                     application, "ws: event ${event.source} ${event.type} id=${event.sourceId}")
-            if (event.type == NotificationEvent.Type.HAT_EDITED) {
-                // Сервер сообщил, что в теме тронули шапку. Точечно пере-сканируем именно её
-                // на предмет нового apk (фича «Следить за новыми версиями»). Раньше это
-                // событие молча выбрасывалось.
-                onHatEditedEvent(event)
-                return
-            }
-            repoScope.launch { handleWebSocketEvent(event) }
+            // HAT_EDITED уходит в точечный пере-скан шапки (фича «Следить за новыми версиями»),
+            // остальное — в общий обработчик. Маршрутизация общая с app-каналом.
+            dispatchRealtimeEvent(event)
         }
 
         override fun onDisconnected(throwable: Throwable, response: Response?) {
@@ -427,6 +422,42 @@ class EventsRepository(
     }
 
     private val webSocketController = WebSocketController(webClient, controllerListener)
+
+    /**
+     * Настоящий канал событий (app-протокол, подписка `ea` на авторизованной сессии). Легаси-сокет
+     * события НЕ доставляет вообще — см. [RealtimeEventClient]. Поэтому при наличии сессии
+     * поднимаем только его, а легаси-сокет не открываем: это ещё и экономия (у него был ping/мин
+     * ради канала, по которому никогда ничего не приходило).
+     */
+    private val realtimeEventClient by lazy {
+        RealtimeEventClient(
+                session = forpdateam.ru.forpda.notifications.push.PushSessionStore(application),
+                onEventDoc = { text -> onRealtimeEventText(text) },
+                onConnectedChanged = { connected ->
+                    forpdateam.ru.forpda.notifications.NotifDiagLog.log(
+                            application, "realtime: ${if (connected) "канал открыт" else "канал закрыт"}")
+                }
+        )
+    }
+
+    /** Событие пришло по app-каналу: разбираем тем же парсером, что и легаси-текст. */
+    private fun onRealtimeEventText(text: String) {
+        val event = runCatching { eventsApi.parseWebSocketEvent(text) }
+                .onFailure { Timber.e(it, "Realtime event parse error") }
+                .getOrNull() ?: return
+        forpdateam.ru.forpda.notifications.NotifDiagLog.log(
+                application, "realtime: событие ${event.source} ${event.type} id=${event.sourceId}")
+        dispatchRealtimeEvent(event)
+    }
+
+    /** Общая маршрутизация события для обоих каналов. */
+    private fun dispatchRealtimeEvent(event: NotificationEvent) {
+        if (event.type == NotificationEvent.Type.HAT_EDITED) {
+            onHatEditedEvent(event)
+            return
+        }
+        repoScope.launch { handleWebSocketEvent(event) }
+    }
 
     init {
         // История неудач WS переживает рестарт процесса — иначе статус «Мгновенный канал»
@@ -576,7 +607,14 @@ class EventsRepository(
 
     fun isForegroundRealtimeActive(): Boolean = foregroundRealtimeEnabled
 
-    fun isWebSocketConnected(): Boolean = webSocketController.isConnected()
+    /**
+     * «Realtime-канал жив». Настоящий канал — app-протокольный ([RealtimeEventClient]); легаси-сокет
+     * учитываем только когда сессии нет и поднимать нечего. ВАЖНО: даже true здесь не означает
+     * «доставляет» — легаси-канал подключён всегда и не доставляет никогда, поэтому опросы должны
+     * гейтиться по факту прихода события, а не по этому флагу.
+     */
+    fun isWebSocketConnected(): Boolean =
+            realtimeEventClient.isConnected() || webSocketController.isConnected()
 
     fun setForegroundRealtimeEnabled(enabled: Boolean, reason: String) {
         if (foregroundRealtimeEnabled == enabled) {
@@ -667,6 +705,7 @@ class EventsRepository(
                 reconnectAttempts = 0
                 BatteryDebugLogger.logState("EventsRepository", "idleDisconnect", "timeoutMs=$FOREGROUND_IDLE_TIMEOUT_MS")
                 cancelTimer()
+                realtimeEventClient.stop()
                 webSocketController.disconnectAll()
                 break
             }
@@ -961,6 +1000,10 @@ class EventsRepository(
                 if (webSocketController.isConnected()) {
                     stop("notifications_disabled")
                 }
+            } else if (realtimeEventClient.isUsable()) {
+                // Есть авторизованная сессия — поднимаем НАСТОЯЩИЙ канал событий и не трогаем
+                // легаси-сокет: он ничего не доставляет, а пинги жрёт.
+                realtimeEventClient.start()
             } else if (!webSocketController.hasActiveSocket()) {
                 // hasActiveSocket, а не isConnected: «в полёте» попытку не перезапускаем.
                 // Circuit breaker: пока активен кулдаун — не подключаемся. ОДНА проба сквозь кулдаун
@@ -1028,6 +1071,7 @@ class EventsRepository(
         reconnectJob?.cancel()
         reconnectJob = null
         cancelTimer()
+        realtimeEventClient.stop()
         webSocketController.disconnectAll()
     }
 

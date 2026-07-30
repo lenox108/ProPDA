@@ -53,9 +53,18 @@ class PushSetupController(private val context: Context) {
         return loginThenRegister(defaultLogin)
     }
 
+    /**
+     * Выключение push: снимаем регистрацию токена на сервере, но СЕССИЮ СОХРАНЯЕМ.
+     *
+     * Раньше здесь стоял `session.clear()`, и это ломало соседнюю функцию: на той же сессии
+     * (`ma` по `login_key`) держится живой канал событий
+     * ([forpdateam.ru.forpda.model.repository.events.RealtimeEventClient]) — а он-то как раз и
+     * нужен тем, кто отказался от push или у кого нет сервисов Google. Стирать `login_key`
+     * уместно там, где сессия действительно перестаёт быть нашей: выход из аккаунта
+     * ([PushLogout]) и удаление ключа активации.
+     */
     suspend fun disablePush() {
         runCatching { registrar.unregister() }
-        session.clear()
     }
 
     private suspend fun loginThenRegister(defaultLogin: String?): Outcome {
