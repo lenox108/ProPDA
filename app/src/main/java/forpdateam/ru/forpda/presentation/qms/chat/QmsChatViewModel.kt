@@ -61,19 +61,26 @@ class QmsChatViewModel @Inject constructor(
         private const val WS_EVENT_FRESHNESS_MS = 25_000L
 
         /**
-         * Тик страховочного опроса, когда сокет РЕАЛЬНО доставляет в этот тред: он и так приносит
-         * сообщения мгновенно, а сам этот тик всё равно будет пропущен по свежести события.
+         * Обычный тик страховочного опроса: сокет доставляет сам ЛИБО в диалоге ничего не
+         * происходит и никто на него не смотрит.
          */
-        const val AUTO_REFRESH_REALTIME_TRUSTED_MS = 15_000L
+        const val AUTO_REFRESH_IDLE_MS = 15_000L
 
         /**
-         * Тик, когда сокет ничего не доставил: его может не быть вовсе (кулдаун circuit breaker'а,
-         * сеть/DPI режет ws) ЛИБО он «подключён, но молчит» — на эмуляторе живьём видно именно это:
-         * onConnected есть, подписка ушла, а ни одного события по сообщениям сервер не прислал.
-         * Тогда опрос — единственный путь доставки, поэтому он заметно чаще. Ограничен открытым
-         * чатом на переднем плане: цикл живёт только в STARTED.
+         * Частый тик — только когда сокет молчит И в диалоге прямо сейчас живая переписка.
+         *
+         * Сокет молчит — это не редкость, а норма на замере 29.07.2026: onConnected есть, подписка
+         * `ea u<userId>` подтверждена сервером, и за шесть часов ни одного события о сообщениях.
+         * Тогда опрос — единственный путь доставки, и четверть минуты ожидания заметна.
          */
-        const val AUTO_REFRESH_REALTIME_SILENT_MS = 5_000L
+        const val AUTO_REFRESH_ACTIVE_MS = 5_000L
+
+        /**
+         * Окно «в диалоге живая переписка»: считается от последнего касания экрана и от последнего
+         * пришедшего сообщения. Без него частый тик работал бы всё время, пока диалог просто
+         * открыт — тот же замер дал 679 запросов за час на негаснущем экране.
+         */
+        private const val ACTIVE_DIALOG_WINDOW_MS = 2 * 60_000L
         /**
          * If the in-memory QMS chat cache is fresher than this, a second open of the same dialog
          * within the [QmsChatMemoryCache.MAX_AGE_MS] window skips the background network refresh
@@ -133,6 +140,8 @@ class QmsChatViewModel @Inject constructor(
     private var pendingNewMessagesCheck = false
     /** Тред, зарегистрированный в [EventsRepository] как «открыт на экране» (для снятия гейта). */
     private var viewedThreadId = 0
+    /** Когда в тред последний раз пришло сообщение — держит частый темп опроса живой переписки. */
+    private var lastIncomingMessageAtMs = 0L
     /** Trace whose `render_visible` marker has already been logged (one per dialog open). */
     private var renderReportedForTrace: String? = null
 
@@ -858,22 +867,35 @@ class QmsChatViewModel @Inject constructor(
     fun shouldSkipAutoRefreshPoll(): Boolean = realtimeDeliveringNow()
 
     /**
-     * Пауза до следующего страховочного опроса. Гейт тот же, что у [shouldSkipAutoRefreshPoll], и
-     * это принципиально: считать сокет рабочим по `isConnected()` нельзя — живой замер на
-     * эмуляторе (29.07.2026) показал onConnected + ушедшую подписку и НИ ОДНОГО события по
-     * пришедшим сообщениям, то есть «подключён» не значит «доставляет». Пока сокет не доказал
-     * доставку в этот тред, опрос — единственный путь, поэтому тик короткий; как только доказал,
-     * тик длинный и всё равно пропускается по свежести.
+     * Пауза до следующего страховочного опроса. Частый тик стоит на ДВУХ условиях, и оба нужны:
+     *
+     * - сокет не доказал доставку в этот тред. Верить `isConnected()` нельзя — живой замер
+     *   (29.07.2026) показал onConnected, подтверждённую сервером подписку и ни одного события за
+     *   шесть часов: «подключён» не значит «доставляет». Гейт тот же, что у
+     *   [shouldSkipAutoRefreshPoll], поэтому доказавший себя сокет сам обнуляет частый опрос;
+     * - в диалоге живая переписка ([dialogActiveNow]). Иначе диалог, просто оставленный открытым,
+     *   опрашивался бы каждые 5с бесконечно (замер: 679 запросов за час на негаснущем экране).
      */
     fun autoRefreshDelayMs(): Long =
-            if (realtimeDeliveringNow()) {
-                AUTO_REFRESH_REALTIME_TRUSTED_MS
+            if (!realtimeDeliveringNow() && dialogActiveNow()) {
+                AUTO_REFRESH_ACTIVE_MS
             } else {
-                AUTO_REFRESH_REALTIME_SILENT_MS
+                AUTO_REFRESH_IDLE_MS
             }
 
     private fun realtimeDeliveringNow(): Boolean =
             System.currentTimeMillis() - lastRealtimeMessageAtMs < WS_EVENT_FRESHNESS_MS
+
+    /**
+     * «Человек прямо сейчас в этом диалоге»: либо недавно касался экрана (метку ведёт
+     * `MainActivity.onUserInteraction` → [EventsRepository.notifyUserActive]), либо только что
+     * пришло сообщение — переписка идёт, следующее ждём с минуты на минуту.
+     */
+    private fun dialogActiveNow(): Boolean {
+        if (eventsRepository.msSinceUserInteraction() < ACTIVE_DIALOG_WINDOW_MS) return true
+        val lastIncoming = lastIncomingMessageAtMs
+        return lastIncoming > 0L && System.currentTimeMillis() - lastIncoming < ACTIVE_DIALOG_WINDOW_MS
+    }
 
     /** Отрабатывает сигнал, пришедший пока тред грузился (см. [requestNewMessagesCheck]). */
     private fun drainPendingNewMessagesCheck() {
@@ -996,6 +1018,7 @@ class QmsChatViewModel @Inject constructor(
             }
             if (result.isEmpty()) return
             data.messages.addAll(result)
+            lastIncomingMessageAtMs = System.currentTimeMillis()
             publishVisibleMessages(scrollToBottom = forceScroll)
             // Сообщение пришло, пока диалог открыт на экране: пользователь видит его прямо сейчас,
             // а пуш о нём уже успел уехать в шторку — снимаем.

@@ -96,11 +96,13 @@ class QmsChatViewModelLoadTest {
     private fun mockEventsRepository(
             webSocketConnected: Boolean = false,
             threadActivity: Flow<Int> = flowOf(),
+            msSinceUserInteraction: Long = 0L,
     ): EventsRepository {
         val events = mockk<EventsRepository>(relaxed = true)
         every { events.observeEventsTab() } returns flowOf()
         every { events.observeQmsThreadActivity() } returns threadActivity
         every { events.isWebSocketConnected() } returns webSocketConnected
+        every { events.msSinceUserInteraction() } returns msSinceUserInteraction
         return events
     }
 
@@ -258,8 +260,9 @@ class QmsChatViewModelLoadTest {
 
     /**
      * Cadence follows PROVEN delivery, not `isConnected()`: a connected-but-silent socket (measured
-     * live on the emulator — onConnected, subscription sent, zero events for arriving messages) must
-     * get the fast tick, because then the poll is the only delivery path left.
+     * live — onConnected, subscription acked by the server, zero events for arriving messages) must
+     * get the fast tick while the user is in the dialog, because then the poll is the only delivery
+     * path left. As soon as the socket proves it delivers, the cadence relaxes.
      */
     @Test
     fun `poll cadence follows proven delivery not mere connectivity`() = runTest {
@@ -275,7 +278,7 @@ class QmsChatViewModelLoadTest {
 
         assertEquals(
                 "подключён, но молчит — опрос единственный путь",
-                QmsChatViewModel.AUTO_REFRESH_REALTIME_SILENT_MS,
+                QmsChatViewModel.AUTO_REFRESH_ACTIVE_MS,
                 vm.autoRefreshDelayMs()
         )
 
@@ -295,12 +298,58 @@ class QmsChatViewModelLoadTest {
 
         assertEquals(
                 "сокет доказал доставку — можно реже",
-                QmsChatViewModel.AUTO_REFRESH_REALTIME_TRUSTED_MS,
+                QmsChatViewModel.AUTO_REFRESH_IDLE_MS,
                 vm.autoRefreshDelayMs()
         )
-        assertTrue(
-                QmsChatViewModel.AUTO_REFRESH_REALTIME_SILENT_MS < QmsChatViewModel.AUTO_REFRESH_REALTIME_TRUSTED_MS
+        assertTrue(QmsChatViewModel.AUTO_REFRESH_ACTIVE_MS < QmsChatViewModel.AUTO_REFRESH_IDLE_MS)
+    }
+
+    /**
+     * Диалог, просто оставленный открытым (никто не касается экрана, сообщений нет), не должен
+     * опрашиваться в частом темпе: живой замер дал 679 запросов за час на негаснущем экране.
+     */
+    @Test
+    fun `abandoned open dialog falls back to the idle cadence`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val initial = chatWithMessages()
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
+        val idle = mockEventsRepository(msSinceUserInteraction = 10 * 60_000L)
+        val vm = viewModel(interactor, idle)
+        vm.start()
+        advanceUntilIdle()
+
+        assertEquals(QmsChatViewModel.AUTO_REFRESH_IDLE_MS, vm.autoRefreshDelayMs())
+    }
+
+    /** Пришло сообщение — переписка живая, следующее ждём в частом темпе даже без касаний. */
+    @Test
+    fun `incoming message re-arms the fast cadence without touches`() = runTest {
+        val interactor = mockk<QmsInteractor>()
+        val initial = chatWithMessages()
+        val appended = QmsMessage().apply {
+            id = 2
+            content = "ответ собеседника"
+            isMyMessage = false
+        }
+        coEvery {
+            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
+        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
+        coEvery { interactor.getMessagesAfter(1, 2, 1) } returns listOf(appended)
+        val activity = MutableSharedFlow<Int>(extraBufferCapacity = 8)
+        val vm = viewModel(
+                interactor,
+                mockEventsRepository(threadActivity = activity, msSinceUserInteraction = 10 * 60_000L)
         )
+        vm.start()
+        advanceUntilIdle()
+        assertEquals(QmsChatViewModel.AUTO_REFRESH_IDLE_MS, vm.autoRefreshDelayMs())
+
+        activity.emit(2)
+        advanceUntilIdle()
+
+        assertEquals(QmsChatViewModel.AUTO_REFRESH_ACTIVE_MS, vm.autoRefreshDelayMs())
     }
 
     /**
