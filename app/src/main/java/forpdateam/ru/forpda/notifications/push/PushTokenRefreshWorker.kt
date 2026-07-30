@@ -39,6 +39,7 @@ class PushTokenRefreshWorker @AssistedInject constructor(
                 Result.success()
             }
             is PushRegistrar.Result.NoGms -> Result.success()
+                is PushRegistrar.Result.NoHms -> Result.success()
             // Ключ Pro убрали — обновлять токен незачем, это не ошибка.
             is PushRegistrar.Result.NotPro -> Result.success()
             is PushRegistrar.Result.Error -> {

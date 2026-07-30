@@ -282,7 +282,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         ProDialog.revokeIfLocked(ctx)
         preferenceScreen.findPreference<androidx.preference.ListPreference>("notifications.delivery_method")
                 ?.let { dm ->
-                    if (dm.value == "push") {
+                    if (isPushMethod(dm.value)) {
                         dm.value = "poll"
                         applyDeliveryMethod("poll")
                         updateDeliveryMethodSummary(dm, "poll")
@@ -295,6 +295,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                 ?: return
         // Приводим список в соответствие с реальными флагами (миграция старых установок, где
         // способ выбирался двумя отдельными тумблерами).
+        filterHuaweiEntry(pref)
         val current = resolveCurrentMethod(pref.value)
         if (pref.value != current) pref.value = current
         applyDeliveryMethod(current)
@@ -328,6 +329,19 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                 }
                 // Push принимаем только после успешной регистрации токена.
                 startPushSetup(pref)
+                false
+            } else if (value == "push_hms") {
+                // Huawei-пуш — та же платная мгновенная доставка, только токен выдаёт HMS.
+                if (!forpdateam.ru.forpda.pro.ProLicense.isUnlocked(requireContext())) {
+                    toast(getString(R.string.pro_required_push_hms))
+                    openProScreen()
+                    return@OnPreferenceChangeListener false
+                }
+                if (!forpdateam.ru.forpda.notifications.push.PicoHms.isAvailable(requireContext())) {
+                    toast(getString(R.string.push_setup_no_hms))
+                    return@OnPreferenceChangeListener false
+                }
+                startPushSetup(pref, method = "push_hms")
                 false
             } else if (value == "socket") {
                 // «Push без Google» — та же платная мгновенная доставка, только события приходят
@@ -365,11 +379,11 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         val safetyNetOn = sp.getBoolean(KEY_PUSH_SAFETY_NET, true)
         val bgEnabled = when (method) {
             "off" -> false
-            "push" -> safetyNetOn
+            "push", "push_hms" -> safetyNetOn
             else -> true
         }
         val persistentWs = method == "socket"
-        preferenceScreen.findPreference<Preference>(KEY_PUSH_SAFETY_NET)?.isVisible = method == "push"
+        preferenceScreen.findPreference<Preference>(KEY_PUSH_SAFETY_NET)?.isVisible = isPushMethod(method)
         sp.edit()
                 .putBoolean(KEY_BG_ENABLED, bgEnabled)
                 .putBoolean(KEY_PERSISTENT_WS, persistentWs)
@@ -389,15 +403,15 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         // Интервал имеет смысл только там, где приложение реально опрашивает форум: при «Опросе»
         // всегда, при «Push» — лишь пока включена резервная проверка.
         val safetyNetOn = preferenceScreen.sharedPreferences?.getBoolean(KEY_PUSH_SAFETY_NET, true) ?: true
-        pref.isVisible = method == "poll" || (method == "push" && safetyNetOn)
+        pref.isVisible = method == "poll" || (isPushMethod(method) && safetyNetOn)
         if (!pref.isVisible) return
         val currentEntry = pref.entry?.toString() ?: pref.value.orEmpty()
         pref.title = getString(
-                if (method == "push") R.string.pref_title_bg_check_interval_safety
+                if (isPushMethod(method)) R.string.pref_title_bg_check_interval_safety
                 else R.string.pref_title_bg_check_interval
         )
         pref.summary = getString(
-                if (method == "push") R.string.pref_summary_bg_interval_safety
+                if (isPushMethod(method)) R.string.pref_summary_bg_interval_safety
                 else R.string.pref_summary_bg_interval_poll,
                 currentEntry
         )
@@ -427,7 +441,7 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
 
     /** Текущий способ: push авторитетен (нужна регистрация), остальное выводим из флагов. */
     private fun resolveCurrentMethod(stored: String?): String {
-        if (stored == "push") return "push"
+        if (stored == "push" || stored == "push_hms") return stored
         val sp = preferenceScreen.sharedPreferences ?: return stored ?: "poll"
         return when {
             !sp.getBoolean(KEY_BG_ENABLED, true) -> "off"
@@ -441,18 +455,37 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         // регистрацию никто не проверял. Живой случай — способ доставки «Push», а сессии нет
         // (login_key протух, сменился аккаунт, чистились данные): пуши не приходят, а экран
         // уверенно показывает push. Поэтому спрашиваем реальное состояние и говорим правду.
-        if (value == "push" && !hasPushSession()) {
+        if (isPushMethod(value) && !hasPushSession()) {
             pref.summary = getString(R.string.pref_summary_delivery_push_inactive)
             return
         }
         pref.summary = getString(
                 when (value) {
                     "push" -> R.string.pref_summary_delivery_push
+                    "push_hms" -> R.string.pref_summary_delivery_push_hms
                     "socket" -> R.string.pref_summary_delivery_socket
                     "off" -> R.string.pref_summary_delivery_off
                     else -> R.string.pref_summary_delivery_poll
                 }
         )
+    }
+
+    /** Оба push-режима (Google и Huawei) ведут себя одинаково во всём, кроме источника токена. */
+    private fun isPushMethod(method: String?): Boolean = method == "push" || method == "push_hms"
+
+    /**
+     * Пункт «Push (Huawei)» показываем только там, где есть HMS Core — ровно как офиц. клиент,
+     * который рисует свою радиокнопку по той же проверке. Предлагать доставку, которой на
+     * устройстве неоткуда взяться, — обман.
+     */
+    private fun filterHuaweiEntry(pref: androidx.preference.ListPreference) {
+        val ctx = context ?: return
+        if (forpdateam.ru.forpda.notifications.push.PicoHms.isAvailable(ctx)) return
+        val entries = pref.entries ?: return
+        val values = pref.entryValues ?: return
+        val keep = values.indices.filter { values[it] != "push_hms" }
+        pref.entries = keep.map { entries[it] }.toTypedArray()
+        pref.entryValues = keep.map { values[it] }.toTypedArray()
     }
 
     /** Есть ли app-протокольная сессия, без которой FCM-токен на сервер не уходит. */
@@ -463,17 +496,17 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         }.getOrDefault(false)
     }
 
-    private fun startPushSetup(pref: androidx.preference.ListPreference) {
+    private fun startPushSetup(pref: androidx.preference.ListPreference, method: String = "push") {
         val activity = activity ?: return
         val controller = forpdateam.ru.forpda.notifications.push.PushSetupController(activity)
         val defaultLogin = preferenceScreen.sharedPreferences?.getString("auth_login", null)
         lifecycleScope.launch {
             when (val outcome = controller.enablePush(defaultLogin)) {
                 is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Registered -> {
-                    pref.value = "push"
+                    pref.value = method
                     relaxSafetyNetInterval()
-                    applyDeliveryMethod("push")
-                    updateDeliveryMethodSummary(pref, "push")
+                    applyDeliveryMethod(method)
+                    updateDeliveryMethodSummary(pref, method)
                     toast(getString(R.string.push_setup_registered))
                 }
                 is forpdateam.ru.forpda.notifications.push.PushSetupController.Outcome.Cancelled -> Unit
@@ -481,6 +514,8 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                     val msg = when (outcome.message) {
                         forpdateam.ru.forpda.notifications.push.PushSetupController.NO_GMS ->
                             getString(R.string.push_setup_no_gms)
+                        forpdateam.ru.forpda.notifications.push.PushSetupController.NO_HMS ->
+                            getString(R.string.push_setup_no_hms)
                         forpdateam.ru.forpda.notifications.push.PushSetupController.ACCOUNT_MISMATCH ->
                             getString(R.string.push_setup_account_mismatch)
                         forpdateam.ru.forpda.notifications.push.PushSetupController.NOT_PRO ->

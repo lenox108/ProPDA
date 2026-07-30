@@ -57,6 +57,7 @@ class PushSetupController(private val context: Context) {
                 is PushRegistrar.Result.Success -> Outcome.Registered
                 is PushRegistrar.Result.NoSession -> loginThenRegister(defaultLogin)
                 is PushRegistrar.Result.NoGms -> Outcome.Failed(NO_GMS)
+                is PushRegistrar.Result.NoHms -> Outcome.Failed(NO_HMS)
                 is PushRegistrar.Result.NotPro -> Outcome.Failed(NOT_PRO)
                 is PushRegistrar.Result.Error -> Outcome.Failed(r.reason)
             }
@@ -83,6 +84,7 @@ class PushSetupController(private val context: Context) {
                 when (val r = registrar.register(force = true)) {
                     is PushRegistrar.Result.Success -> Outcome.Registered
                     is PushRegistrar.Result.NoGms -> Outcome.Failed(NO_GMS)
+                    is PushRegistrar.Result.NoHms -> Outcome.Failed(NO_HMS)
                     is PushRegistrar.Result.NoSession -> Outcome.Failed("session lost")
                     is PushRegistrar.Result.NotPro -> Outcome.Failed(NOT_PRO)
                     is PushRegistrar.Result.Error -> Outcome.Failed(r.reason)
@@ -229,6 +231,7 @@ class PushSetupController(private val context: Context) {
 
     companion object {
         const val NO_GMS = "no_gms"
+        const val NO_HMS = "no_hms"
         const val ACCOUNT_MISMATCH = "account_mismatch"
         const val NOT_PRO = "not_pro"
     }
