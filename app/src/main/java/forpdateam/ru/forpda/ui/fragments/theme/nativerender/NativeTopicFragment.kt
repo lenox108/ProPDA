@@ -5922,12 +5922,25 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 "dwellMs=${android.os.SystemClock.elapsedRealtime() - sessionRenderedAtMs} " +
                 "→ ${if (!(suppressEndMarkReadUntilUserScroll && !hasReadEvidence)) "FIRE" else "hold"}")
         if (suppressEndMarkReadUntilUserScroll && !hasReadEvidence) return
+        // Тема дочитана до конца — фиксируем границу на ПОСЛЕДНЕМ посте, а не стираем её.
+        //
+        // Раньше здесь был clear(), и это ломало «Продолжить чтение»/«Историю»: они открывают тему
+        // findpost'ом по границе, а без неё падали на сохранённый url ПРОШЛОГО визита — то есть на
+        // страницу, с которой юзер в прошлый раз ВОШЁЛ (в гибриде она вообще не двигается при
+        // бесконечной прокрутке). Отсюда жалоба «открыл 10-ю, долистал до 11-й, вышел, снова открыл —
+        // опять 10-я». Тот же промах гасил и подсветку: у голого постраничного url нет якорного поста,
+        // applyInitialAnchor уходит в AnchorRequest.Top, а вспышка запрашивается только для якоря-поста —
+        // «подсветка срабатывает через раз» (работает, пока граница есть; пропадает, как только тема
+        // дочитана и граница стёрта).
+        //
+        // Записать надо ДО [markedTopicReadAtEnd] — иначе гейт в [recordReadBoundaryAtRest] отсечёт.
+        // На открытии эта граница ведёт себя как отсутствующая: она равна maxLoadedPostId, а
+        // [TopicReadBoundaryPolicy.resumeAnchorPostId] в этом случае отдаёт null и доверяет серверу
+        // (пропускать нечего). Прокрутка вверх после дочитывания границу не двигает — тот же гейт.
+        loadedItems.lastOrNull { it.postId > 0 }?.postId
+                ?.let { readBoundaryStore.recordSeen(pageTopicId, it, barCurrentPage) }
         markedTopicReadAtEnd = true
         themeUseCase.markTopicRead(pageTopicId, reason = "last_page_bottom_reached", source = "native")
-        // Тема реально дочитана до конца — клиентская граница больше не нужна: следующее открытие пусть
-        // идёт по серверу (getnewpost → первый непрочитанный, если появятся новые посты). Иначе стухшая
-        // граница удерживала бы якорь на старом посте.
-        readBoundaryStore.clear(pageTopicId)
     }
 
     private companion object {

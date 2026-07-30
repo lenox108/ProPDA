@@ -190,9 +190,24 @@ class HistoryViewModel @Inject constructor(
             })
             return
         }
+        // Границы нет — открываем ЧИСТЫЙ url темы (сработает настройка «При открытии темы»), а не
+        // сохранённый url прошлого визита: тот указывает на страницу ВХОДА в прошлый раз (в гибриде она
+        // не двигается при прокрутке) и не несёт якорного поста, из-за чего посадка уходит на верх
+        // страницы, а подсветка не запрашивается. См. [OtherViewModel.onContinueClick].
+        if (topicId > 0) {
+            router.navigateTo(Screen.Theme().apply {
+                themeUrl = "$TOPIC_BASE_URL$topicId"
+                topicOpenSource = "history"
+                screenTitle = item.title
+            })
+            return
+        }
         item.url?.let { url ->
             linkHandler.handle(url, router, mapOf(Screen.ARG_TITLE to (item.title ?: "")))
         }
     }
 
+    private companion object {
+        const val TOPIC_BASE_URL = "https://4pda.to/forum/index.php?showtopic="
+    }
 }

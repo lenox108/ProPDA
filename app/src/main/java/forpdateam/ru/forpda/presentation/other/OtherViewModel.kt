@@ -274,6 +274,19 @@ class OtherViewModel @Inject constructor(
             })
             return
         }
+        // Границы нет (тема из старой истории, кэш ещё не прогрет) — открываем ЧИСТЫЙ url темы, чтобы
+        // сработала настройка «При открытии темы». Сохранённый url прошлого визита сюда не годится: это
+        // страница, с которой юзер в прошлый раз ВОШЁЛ (в гибриде она не двигается при прокрутке), то есть
+        // заведомо не «где остановился»; вдобавок у голого постраничного url нет якорного поста, поэтому
+        // посадка уходит на верх страницы и подсветка не запрашивается вовсе.
+        if (topicId > 0) {
+            router.navigateTo(Screen.Theme().apply {
+                themeUrl = "$TOPIC_BASE_URL$topicId"
+                topicOpenSource = "history"
+                screenTitle = item.title
+            })
+            return
+        }
         linkHandler.handle(url, router, mapOf(Screen.ARG_TITLE to item.title.orEmpty()))
     }
 
@@ -426,5 +439,6 @@ class OtherViewModel @Inject constructor(
     private companion object {
         const val HISTORY_PICKER_LIMIT = 50
         const val CONTINUE_LIMIT = 3
+        const val TOPIC_BASE_URL = "https://4pda.to/forum/index.php?showtopic="
     }
 }
