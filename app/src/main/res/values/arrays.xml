@@ -113,12 +113,14 @@
     <!-- Способ доставки уведомлений (как «фоновая активность» у офиц. клиента) -->
     <string-array name="entries_notify_delivery_method">
         <item>Push (Google) — мгновенно, экономно</item>
+        <item>Push (Huawei) — мгновенно, экономно</item>
         <item>Push без Google — мгновенно, для телефонов без GMS</item>
         <item>Опрос — с задержкой, экономно</item>
         <item>Не проверять в фоне</item>
     </string-array>
     <string-array name="entry_values_notify_delivery_method">
         <item>push</item>
+        <item>push_hms</item>
         <item>socket</item>
         <item>poll</item>
         <item>off</item>

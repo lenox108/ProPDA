@@ -48,6 +48,8 @@
         tools:targetApi="34" />
 
     <queries>
+        <!-- HMS Core: нужен для «Push (Huawei)» — без записи в queries пакет не виден на Android 11+. -->
+        <package android:name="com.huawei.hwid" />
         <package android:name="com.android.chrome" />
         <package android:name="org.mozilla.firefox" />
         <package android:name="com.microsoft.emmx" />
@@ -538,6 +540,19 @@
             android:permission="com.google.android.c2dm.permission.SEND">
             <intent-filter>
                 <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          То же самое для Huawei: REGISTRATION приносит выданный токен, RECEIVE — событие.
+          Оба интента шлёт HMS Core; на устройствах без него ресивер просто никогда не сработает.
+        -->
+        <receiver
+            android:name=".notifications.push.HmsPushReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.huawei.android.push.intent.REGISTRATION" />
+                <action android:name="com.huawei.android.push.intent.RECEIVE" />
             </intent-filter>
         </receiver>
     </application>
