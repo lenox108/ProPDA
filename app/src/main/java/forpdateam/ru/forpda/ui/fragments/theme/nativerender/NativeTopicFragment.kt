@@ -30,6 +30,8 @@ import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import forpdateam.ru.forpda.presentation.ILinkHandler
 import forpdateam.ru.forpda.presentation.theme.ThemeToolbarTitlePolicy
+import forpdateam.ru.forpda.presentation.theme.TopicTitleTapAction
+import forpdateam.ru.forpda.presentation.theme.TopicTitleTapPolicy
 import forpdateam.ru.forpda.ui.fragments.RecyclerFragment
 import forpdateam.ru.forpda.R
 import forpdateam.ru.forpda.ui.fragments.TabFragment
@@ -309,17 +311,16 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Тема, к которой относится [pageActiveReaders] — снимок переживает смену страницы, но не темы. */
     private var activeReadersTopicId = 0
 
-    /** Loaded-page flags driving the toolbar poll / hat icon visibility (see [refreshToolbarState]). */
+    /** Loaded-page flag driving the toolbar poll icon visibility (see [refreshToolbarState]). */
     private var pageHasPoll = false
-    private var pageHasHat = false
     /** Post id of the topic hat on the loaded page (rendered as a collapsed inline block on page 1). */
     private var topicHatPostId: Int? = null
     /** The hat post id once learned from page 1 — used to strip the server-repeated copy off deep pages. */
     private var knownHatPostId: Int? = null
     /**
-     * The hat post content for the toolbar «Инфо» popup — captured whenever the hat is seen on ANY page
+     * The hat post content for the title-tap popup — captured whenever the hat is seen on ANY page
      * (page 1 keeps it inline; deep pages strip the echoed copy but we still hold it here). Persisted for
-     * the whole topic so the ⓘ button works on every page, matching the WebView (topic-level hat state).
+     * the whole topic so the tap works on every page, matching the WebView (topic-level hat state).
      */
     private var toolbarHatItem: NativePostItem? = null
     /** Inline hat collapse state. The initial value is resolved once per fresh topic open in
@@ -1248,10 +1249,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /**
      * Native top-toolbar (parity with the WebView theme toolbar): dedicated icon BUTTONS shown
-     * always — «Написать» (pencil, opens the editor), «Опрос» (visible only with a poll), search,
-     * «Обновить» and «Инфо» (topic hat, visible only when a hat exists) — plus an overflow with
-     * page-jump / copy-link / open-forum. Icons match the WebView (ic_toolbar_create / ic_poll_box /
-     * ic_toolbar_search / ic_toolbar_refresh / ic_info). The tab's [toolbar] comes from [TabFragment].
+     * always — «Написать» (pencil, opens the editor), «Опрос» (visible only with a poll) and search —
+     * plus an overflow with «Обновить» / page-jump / copy-link / open-forum. «Шапка темы» has no icon:
+     * it lives on the toolbar title tap ([setupTitleTap]). Icons match the WebView (ic_toolbar_create /
+     * ic_poll_box / ic_toolbar_search). The tab's [toolbar] comes from [TabFragment].
      */
     private fun setupToolbarMenu() {
         // Back navigation to leave the topic (parity with the WebView; system back is reused).
@@ -1280,11 +1281,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // «Обновить» moved into the «Ещё» overflow (see showOverflowMenu): one fewer always-icon frees
         // toolbar width so the «N / M» page counter subtitle shows in full instead of truncating to «N / …».
         // Refresh is still reachable via the overflow, pull-to-refresh (CLASSIC) and the bottom-up gesture.
-        menu.add(0, MENU_HAT, 4, "Шапка темы").apply {
-            setIcon(forpdateam.ru.forpda.R.drawable.ic_info)
-            setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
-            isVisible = false
-        }
+        // «Шапка темы» has NO toolbar button: a tap on the toolbar TITLE opens it (see [setupTitleTap]).
+        // The title is a large, always-present target that already means «this topic», so the ⓘ icon was
+        // pure duplication — dropping it frees toolbar width for the title and the «N / M» page counter.
         // «⋮» opens a compact top-sliding panel of extra actions (see showOverflowMenu) rather than the
         // toolbar's built-in overflow popup, which mis-renders with a transparent background on this theme.
         menu.add(0, MENU_OVERFLOW, 20, "Ещё").apply {
@@ -1304,7 +1303,6 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 MENU_CREATE -> { toggleComposeEditor(); true }
                 MENU_POLL -> { onPollToolbarClick(); true }
                 MENU_SEARCH -> { toggleSearchBar(); true }
-                MENU_HAT -> { onHatToolbarClick(); true }
                 MENU_OVERFLOW -> { showOverflowMenu(); true }
                 else -> false
             }
@@ -1321,21 +1319,30 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // page-search then moves into the «⋮» overflow (see showOverflowMenu). No poll → show search.
         toolbar.menu.findItem(MENU_POLL)?.isVisible = pageHasPoll
         toolbar.menu.findItem(MENU_SEARCH)?.isVisible = !pageHasPoll
-        toolbar.menu.findItem(MENU_HAT)?.isVisible = pageHasHat
+        // The hat has no toolbar icon anymore — the title tap resolves it live (see [setupTitleTap]).
     }
 
     /**
-     * A tap on the toolbar title must show the FULL topic name in a popup (WebView parity) — not toggle
-     * scroll-to-top/bottom. [TabFragment] wires the title strip to [TabTopScroller.toggleScrollTop] for
-     * every tab; here we consume that touch on the wrapper and route the title's own click to the popup,
-     * exactly as [ThemeFragmentWeb.consumeHeaderTouchGaps] does.
+     * The toolbar title is the topic-hat button: a TAP opens «Шапка темы» (the former ⓘ toolbar icon,
+     * removed in [setupToolbarMenu]), and falls back to the full-title popup on topics without a hat.
+     * A LONG press always shows the full title popup, so copying the name stays reachable everywhere.
+     * A tap must never toggle scroll-to-top/bottom: [TabFragment] wires the title strip to
+     * [TabTopScroller.toggleScrollTop] for every tab, so we consume that touch on the wrapper and route
+     * the title's own click here, exactly as [ThemeFragmentWeb.consumeHeaderTouchGaps] does.
      */
     private fun setupTitleTap() {
         titlesWrapper.isClickable = true
         titlesWrapper.setOnTouchListener { _, _ -> true } // swallow the scroll-toggle click on the strip
         toolbarTitleView.apply {
             isClickable = true
-            setOnClickListener { showFullTopicTitle() }
+            isLongClickable = true
+            setOnClickListener {
+                when (TopicTitleTapPolicy.resolve(hatAvailable = resolveHatItem() != null)) {
+                    TopicTitleTapAction.OPEN_HAT -> showTopicHat()
+                    TopicTitleTapAction.SHOW_FULL_TITLE -> showFullTopicTitle()
+                }
+            }
+            setOnLongClickListener { showFullTopicTitle(); true }
         }
     }
 
@@ -1560,7 +1567,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     /**
      * A top-anchored overlay panel showing [content], sliding DOWN from the top over the theme (used by
-     * the «Инфо»/«Опрос» toolbar buttons — parity with the WebView hat/poll overlays, which drop down
+     * the title tap / «Опрос» toolbar button — parity with the WebView hat/poll overlays, which drop down
      * from under the toolbar). Capped to most of the screen height; the [content] scrolls if taller.
      */
     private fun showThemePopup(title: String?, content: View, fillHeight: Boolean = false) {
@@ -1932,15 +1939,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
-    /** Toolbar «Инфо»: show the topic hat in a popup over the theme (parity with the WebView overlay). */
-    private fun onHatToolbarClick() {
-        // Toggle: a second tap on the ⓘ button closes the overlay instead of reopening it.
+    /**
+     * The hat post to show in the overlay, or null when this topic has none. Prefers the live inline hat
+     * post (page 1) and falls back to the captured topic-level hat so it still resolves on deep pages
+     * where the echoed hat was stripped from the list.
+     */
+    private fun resolveHatItem(): NativePostItem? =
+            topicHatPostId?.let { id -> loadedItems.firstOrNull { it.postId == id } } ?: toolbarHatItem
+
+    /** Title tap: show the topic hat in a popup over the theme (parity with the WebView overlay). */
+    private fun showTopicHat() {
+        // Toggle: a second tap on the title closes the overlay instead of reopening it.
         if (dismissThemeOverlay()) return
-        // Prefer the live inline hat post (page 1); fall back to the captured topic-level hat so the popup
-        // still works on deep pages where the echoed hat was stripped from the list.
-        val hatItem = topicHatPostId?.let { id -> loadedItems.firstOrNull { it.postId == id } }
-                ?: toolbarHatItem
-                ?: return
+        val hatItem = resolveHatItem() ?: return
         val ctx = requireContext()
         // A throwaway adapter renders the hat post fully (no hat-collapse in the popup) with all its
         // spoilers/links, reusing the exact post rendering. Links inside the hat go through a wrapper that
@@ -2801,15 +2812,15 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     postsAdapter.setTopicHat(hatId, hatCollapsed)
                 }
                 // Prepending page 1 also brings the poll into view — cache it so the toolbar «Опрос» button
-                // lights up (and the inline poll header appears). The hat button follows toolbarHatItem.
+                // lights up (and the inline poll header appears). The hat needs no toolbar refresh: the
+                // title tap resolves it live from [topicHatPostId] / [toolbarHatItem].
                 if (page.pagination.current <= 1 && page.poll != null && currentPoll == null) {
                     currentPoll = page.poll
                     cachedPollTopicId = page.id
                     pollHeaderAdapter.setPoll(page.poll)
                 }
-                if (hatId != null || toolbarHatItem != null) pageHasHat = true
                 if (currentPoll != null) pageHasPoll = true
-                if (pageHasHat || pageHasPoll) refreshToolbarState()
+                if (pageHasPoll) refreshToolbarState()
                 val newItems = pagination.registerAndFilterNew(
                         filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current)))
                 pagination.onPagePrepended(page.pagination.current)
@@ -4998,9 +5009,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // at the top of EVERY page. Keep it only on the real first page (as a collapsible block);
         // on deep pages strip the repeated copy so it doesn't show again. processHatForPage returns
         // the hat id only for page 1 (inline), but also captures [toolbarHatItem] on ANY page so the
-        // ⓘ toolbar button (and its popup) work even when the topic opens directly on a deep page.
+        // title tap (and its popup) works even when the topic opens directly on a deep page.
         topicHatPostId = processHatForPage(page)
-        pageHasHat = toolbarHatItem != null
         refreshToolbarState()
         applyToolbarTitleFromPage(page) // fill the title from the loaded page (deep-link/deep-page opens)
         val items = filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current))
@@ -6012,7 +6022,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         private const val MENU_REFRESH = 0x4E03
         private const val MENU_CREATE = 0x4E06
         private const val MENU_POLL = 0x4E07
-        private const val MENU_HAT = 0x4E08
+        // 0x4E08 (MENU_HAT) retired: «Шапка темы» is opened by tapping the toolbar title.
         private const val MENU_OVERFLOW = 0x4E0C
 
         /** Сколько ников читателей влезает в тост из меню, дальше — «и ещё N». */
