@@ -458,9 +458,9 @@ class App : Application(), androidx.work.Configuration.Provider {
                 round++
                 runCatching {
                     forpdateam.ru.forpda.notifications.push.AppProtocolClient.connectAny().use { client ->
-                        val ok = client.resume(session.memberId, session.loginKey!!)
+                        // ПРОВЕРКА: подписываемся БЕЗ resume — нужна ли авторизация каналу?
                         val sub = client.subscribeEvents(session.memberId)
-                        Timber.i("PROTOPROBE: раунд %d resume=%s ea-> %s", round, ok, sub)
+                        Timber.i("PROTOPROBE: раунд %d БЕЗ resume, ea-> %s", round, sub)
                         client.listenForEvents(until - System.currentTimeMillis()) { doc ->
                             Timber.i("PROTOPROBE: <- %s", doc.joinToString(prefix = "[", postfix = "]"))
                         }
