@@ -226,11 +226,24 @@ class EventsRepository(
 
     // Idle-disconnect state (foreground WS). idleDisconnected=true означает, что WS сознательно
     // закрыт из-за бездействия, хотя foregroundRealtimeEnabled ещё true — реконнект делает только
-    // notifyUserActive(). lastInteractionAt — монотонная метка последнего касания.
+    // notifyUserActive(). lastInteractionAt — служебный дедлайн сторожа бездействия: его переписывает
+    // не только касание, но и сам сторож, когда откладывает паузу (открытый realtime-экран, идущий
+    // реконнект). Как признак «человек за телефоном» он поэтому НЕ годится — для этого есть
+    // [lastUserTouchAt].
     @Volatile
     private var idleDisconnected = false
     @Volatile
     private var lastInteractionAt = SystemClock.elapsedRealtime()
+
+    /**
+     * Честная метка последнего КАСАНИЯ экрана: пишется только в [notifyUserActive] (его зовёт
+     * `MainActivity.onUserInteraction`). Отдельно от [lastInteractionAt], потому что тот сторож
+     * бездействия обнуляет каждые 5 минут, пока открыт realtime-экран, — и «активность
+     * пользователя» по нему возвращалась сама собой без единого касания (замер 30.07.2026:
+     * частый опрос в диалоге оживал каждые 5 минут).
+     */
+    @Volatile
+    private var lastUserTouchAt = SystemClock.elapsedRealtime()
     private var idleJob: Job? = null
     private var backgroundGraceJob: Job? = null
 
@@ -611,6 +624,7 @@ class EventsRepository(
      */
     fun notifyUserActive() {
         lastInteractionAt = SystemClock.elapsedRealtime()
+        lastUserTouchAt = lastInteractionAt
         if (!foregroundRealtimeEnabled) return
         if (!idleDisconnected) return
         idleDisconnected = false
@@ -620,13 +634,12 @@ class EventsRepository(
     }
 
     /**
-     * Сколько прошло с последнего пользовательского взаимодействия ([notifyUserActive] зовёт
-     * `MainActivity.onUserInteraction` на каждое касание). Экранам нужно, чтобы отличать «человек
-     * сидит в диалоге прямо сейчас» от «экран просто оставлен открытым»: во втором случае частый
-     * опрос — чистый расход батареи (замер 29.07.2026: открытый чат на негаснущем экране дал 679
-     * запросов за час).
+     * Сколько прошло с последнего КАСАНИЯ экрана. Экранам нужно, чтобы отличать «человек сидит в
+     * диалоге прямо сейчас» от «экран просто оставлен открытым»: во втором случае частый опрос —
+     * чистый расход батареи (замер 29.07.2026: открытый чат на негаснущем экране дал 679 запросов
+     * за час). Считается по [lastUserTouchAt], а НЕ по служебному [lastInteractionAt] — см. там.
      */
-    fun msSinceUserInteraction(): Long = SystemClock.elapsedRealtime() - lastInteractionAt
+    fun msSinceUserInteraction(): Long = SystemClock.elapsedRealtime() - lastUserTouchAt
 
     /**
      * Запускает (перезапускает) сторож бездействия. По достижении [FOREGROUND_IDLE_TIMEOUT_MS]
