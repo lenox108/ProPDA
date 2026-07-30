@@ -5073,6 +5073,9 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 runCatching { themeApi.enrichPageMetadata(page, page.url.orEmpty()) }
             }
             if (view == null) return@launch
+            // Счётчик читателей приезжает вместе с десктопным ответом обогащения (в мобильной выдаче
+            // блока нет) — применяем его здесь, а не при рендере страницы.
+            applyActiveReaders(page)
             val enrichedById = mapper.map(page.posts).associateBy { it.postId }
             var changed = false
             for (i in loadedItems.indices) {

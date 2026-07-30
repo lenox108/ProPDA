@@ -29,6 +29,9 @@ class ThemeApi(
         private val blockedTopics: forpdateam.ru.forpda.client.proxy.BlockedTopicRegistry? = null
 ) {
 
+    /** Разбор блока «сейчас эту тему читают» из ДЕСКТОПНОГО ответа (см. fetchAndMergeDesktopTopicMetadata). */
+    private val activeUsersParser = TopicActiveUsersParser()
+
     /**
      * [anchorTrust] — режим доверия к серверной подсказке `view=getnewpost` при выборе якоря. По
      * умолчанию выводится из булева [openFromUnreadListHint] (чейн WebView-пути и prefetch-ключа);
@@ -356,6 +359,11 @@ class ThemeApi(
                     .build()
             val response = webClient.requestWithoutMobileCookie(request)
             val body = response.body
+            // «N чел. читают эту тему» печатает ТОЛЬКО полная версия сайта и только авторизованному —
+            // в мобильной выдаче, по которой рендерится страница, блока нет вовсе. Здесь мы уже держим
+            // десктопный ответ (его тянут ради рейтингов и «💬 N»), так что счётчик достаётся даром,
+            // без единого лишнего запроса.
+            activeUsersParser.parse(body)?.let { page.activeReaders = it }
             val ratingTextCount = ThemeRatingParser.countRatingTextMarkers(body)
             val voteControlCount = ThemeRatingParser.countVoteControlMarkers(body)
             val diag = ThemeRatingParser.countDiagnosticsMarkers(body)
