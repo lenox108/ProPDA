@@ -247,8 +247,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (icon != null) {
             val start = text.length
             text.append(" ") // носитель для ImageSpan
-            text.setSpan(android.text.style.ImageSpan(icon, android.text.style.ImageSpan.ALIGN_BASELINE),
-                    start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            text.setSpan(CenteredImageSpan(icon), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             text.append(" ")
         }
         // Трёхзначные счётчики бывают, но строка от них разъезжается — клампим.
@@ -262,10 +261,41 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val drawable = androidx.appcompat.content.res.AppCompatResources
                 .getDrawable(ctx, forpdateam.ru.forpda.R.drawable.ic_visibility)
                 ?.mutate() ?: return null
-        val size = (toolbarSubtitleView.textSize * 1.05f).toInt().coerceAtLeast(1)
+        val size = toolbarSubtitleView.textSize.toInt().coerceAtLeast(1)
         drawable.setBounds(0, 0, size, size)
         drawable.setTint(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
         return drawable
+    }
+
+    /**
+     * ImageSpan, выровненный по ОПТИЧЕСКОМУ ЦЕНТРУ строки, а не по базовой линии.
+     * Штатные `ALIGN_BASELINE`/`ALIGN_BOTTOM` сажают низ картинки на линию цифр, и квадратный значок
+     * заметно «висит» выше их середины (жалоба «значок стоит несимметрично»); `ALIGN_CENTER` есть
+     * только с API 29. Центруем сами по метрикам шрифта — одинаково на всех версиях.
+     */
+    private class CenteredImageSpan(
+            drawable: android.graphics.drawable.Drawable,
+    ) : android.text.style.ImageSpan(drawable, ALIGN_BOTTOM) {
+
+        override fun draw(
+                canvas: android.graphics.Canvas,
+                text: CharSequence?,
+                start: Int,
+                end: Int,
+                x: Float,
+                top: Int,
+                y: Int,
+                bottom: Int,
+                paint: android.graphics.Paint,
+        ) {
+            val d = drawable
+            val fm = paint.fontMetricsInt
+            val centerY = y + (fm.descent + fm.ascent) / 2
+            canvas.save()
+            canvas.translate(x, (centerY - d.bounds.height() / 2).toFloat())
+            d.draw(canvas)
+            canvas.restore()
+        }
     }
 
     /**
