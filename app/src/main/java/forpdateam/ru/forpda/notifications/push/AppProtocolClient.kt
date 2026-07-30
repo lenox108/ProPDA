@@ -142,6 +142,22 @@ class AppProtocolClient(
         return (r.getOrNull(1) as? Int) == 0
     }
 
+    /**
+     * ВРЕМЕННО (диагностика 30.07.2026): слушает сокет и отдаёт КАЖДЫЙ входящий документ.
+     * Нужно, чтобы выяснить, шлёт ли сервер события авторизованной сессии по этому каналу, или
+     * события существуют только в виде FCM-пуша. Читается тем же путём, что и ответы, поэтому
+     * ping/pong обслуживаются автоматически.
+     */
+    fun listenForEvents(durationMs: Long, onDoc: (List<Any?>) -> Unit) {
+        val deadline = System.currentTimeMillis() + durationMs
+        while (System.currentTimeMillis() < deadline) {
+            val doc = runCatching { readMessage() }.getOrElse {
+                if (it is java.net.SocketTimeoutException) continue else throw it
+            }
+            onDoc(doc)
+        }
+    }
+
     override fun close() {
         runCatching { socket.close() }
     }

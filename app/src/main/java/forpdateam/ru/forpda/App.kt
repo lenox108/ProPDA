@@ -193,6 +193,7 @@ class App : Application(), androidx.work.Configuration.Provider {
         setupBackgroundEventsCheck()
         setupRealtimePushToggle()
         setupPushTokenRefresh()
+        if (BuildConfig.DEBUG) probeAppProtocolEvents()
         setupAppUpdateCheck()
 
         // Ярлык обязан существовать при любом старте процесса — даже если процесс
@@ -446,6 +447,30 @@ class App : Application(), androidx.work.Configuration.Provider {
      * битмаску, поэтому лишний `ai` не шлётся). Также реагирует на изменение семейств уведомлений
      * (меняется битмаск). Требует уже полученной сессии (login_key из настроек) — иначе no-op.
      */
+    /**
+     * ВРЕМЕННО: слушаем app-протокольный сокет авторизованной сессией и логируем всё, что
+     * сервер пришлёт сам. Задача — понять, есть ли у 4PDA канал событий кроме FCM.
+     */
+    private fun probeAppProtocolEvents() {
+        appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val session = forpdateam.ru.forpda.notifications.push.PushSessionStore(this@App)
+                if (!session.hasSession()) {
+                    Timber.i("PROTOPROBE: сессии нет, слушать нечем")
+                    return@runCatching
+                }
+                forpdateam.ru.forpda.notifications.push.AppProtocolClient.connectAny().use { client ->
+                    val ok = client.resume(session.memberId, session.loginKey!!)
+                    Timber.i("PROTOPROBE: resume=%s, слушаю 10 минут", ok)
+                    client.listenForEvents(10 * 60_000L) { doc ->
+                        Timber.i("PROTOPROBE: <- %s", doc.joinToString(prefix = "[", postfix = "]"))
+                    }
+                    Timber.i("PROTOPROBE: окно закрыто")
+                }
+            }.onFailure { Timber.w(it, "PROTOPROBE: упало") }
+        }
+    }
+
     private fun setupPushTokenRefresh() {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         if (prefs.getString("notifications.delivery_method", "poll") != "push") return
