@@ -3839,13 +3839,31 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             setOnClickListener { onClick() }
         }
-        val label = TextView(ctx).apply {
-            textSize = 14f
+        // Ширина центральной ячейки задана весом, а ширина ТЕКСТА зависит от выбранного шрифта
+        // приложения: у широких шрифтов «37499 / 37499» не влезал в 14sp, TextView переносил строку
+        // по «/» — ряд распухал в две строки и вылезал за пределы полосы. Автоподбор кегля
+        // (6…14sp, шаг 1sp) в ОДНУ строку делает ряд независимым и от шрифта, и от числа страниц:
+        // пока текст влезает — те же 14sp, что и раньше.
+        // AppCompatTextView, а не TextView: TextViewCompat включает автоподбор на голом TextView
+        // только с API 27, а minSdk у нас 26.
+        val label = androidx.appcompat.widget.AppCompatTextView(ctx).apply {
             gravity = android.view.Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setTextColor(onSurface)
+            maxLines = 1
+            // Страховка на случай, если места не хватит даже минимальному кеглю: лучше многоточие,
+            // чем обрезанная по краю строка. isSingleLine НЕ ставим — он включает
+            // horizontallyScrolling, при котором автоподбор считает ширину бесконечной и не срабатывает.
+            ellipsize = android.text.TextUtils.TruncateAt.END
             val pv = (8 * dm.density).toInt()
             setPadding(0, pv, 0, pv)
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                    this,
+                    resources.getDimensionPixelSize(R.dimen.pagination_page_autosize_min_text_size),
+                    resources.getDimensionPixelSize(R.dimen.pagination_page_autosize_max_text_size),
+                    resources.getDimensionPixelSize(R.dimen.text_autosize_step_granularity_1sp),
+                    android.util.TypedValue.COMPLEX_UNIT_PX,
+            )
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1.45f)
             background = ctx.obtainStyledAttributes(intArrayOf(
