@@ -21,6 +21,8 @@ class TopicPreferencesHolder(
 
     fun observeHighlightUnreadPostFlow(): Flow<Boolean> = dataStore.observeHighlightUnreadPostFlow()
 
+    fun observeShowSignaturesFlow(): Flow<Boolean> = dataStore.observeShowSignaturesFlow()
+
     fun observeHideLowRatedPostsFlow(): Flow<Boolean> = dataStore.observeHideLowRatedPostsFlow()
 
     fun observeLowRatingThresholdFlow(): Flow<Int> = dataStore.observeLowRatingThresholdFlow()
@@ -38,6 +40,8 @@ class TopicPreferencesHolder(
     fun getModernPostHeader(): Boolean = dataStore.getModernPostHeaderImmediate()
 
     fun getHighlightUnreadPost(): Boolean = dataStore.getHighlightUnreadPostImmediate()
+
+    fun getShowSignatures(): Boolean = dataStore.getShowSignaturesImmediate()
 
     fun getHideLowRatedPosts(): Boolean = dataStore.getHideLowRatedPostsImmediate()
 
@@ -66,6 +70,8 @@ class TopicPreferencesHolder(
     suspend fun setModernPostHeader(value: Boolean) = dataStore.setModernPostHeader(value)
 
     suspend fun setHighlightUnreadPost(value: Boolean) = dataStore.setHighlightUnreadPost(value)
+
+    suspend fun setShowSignatures(value: Boolean) = dataStore.setShowSignatures(value)
 
     suspend fun setHideLowRatedPosts(value: Boolean) = dataStore.setHideLowRatedPosts(value)
 

@@ -1349,6 +1349,28 @@ class BodyBlockViewFactory(
         }
     }
 
+    /**
+     * Личная подпись автора под телом поста («Показывать подписи пользователей»).
+     *
+     * Разметка подписи произвольная, но всегда инлайновая (`span` с цветом/шрифтом, `b`/`i`/`u`, `a`,
+     * `br`, изредка смайл), поэтому это один [textView] — со всей его обработкой серверных цветов
+     * (перекраска нечитаемых на тёмной карточке) и внутриприложенных переходов по ссылкам. Отличия от
+     * тела: кегль 13sp против 16sp и приглушённый цвет — подпись не должна спорить с текстом поста.
+     * Выделение текста выключено: подпись не часть сообщения, её незачем цитировать.
+     */
+    fun signatureView(ctx: Context, html: String, postId: Int): View {
+        val scope = RenderScope(postId, allowQuoteSelection = false, selectableText = false)
+        return textView(ctx, spanned(ctx, html), scope).apply {
+            textSize = scaledSp(13f)
+            setTextColor(ctx.getColorFromAttr(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            setLineSpacing(0f, 1.15f)
+            layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+    }
+
     /** Remove URLSpans (and any colour spans overlapping them) so the text renders as plain, non-clickable
      *  content — used for the «отредактировал N» system note where the nick must NOT be a link. */
     private fun stripLinks(text: CharSequence): CharSequence {

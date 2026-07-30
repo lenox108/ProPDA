@@ -54,6 +54,7 @@ class TopicDataStore(private val context: Context) {
         val FLAT_POSTS = booleanPreferencesKey("flat_posts")
         val MODERN_POST_HEADER = booleanPreferencesKey("modern_post_header")
         val HIGHLIGHT_UNREAD_POST = booleanPreferencesKey("highlight_unread_post")
+        val SHOW_SIGNATURES = booleanPreferencesKey("show_signatures")
         val HIDE_LOW_RATED_POSTS = booleanPreferencesKey("hide_low_rated_posts")
         val LOW_RATING_THRESHOLD = intPreferencesKey("low_rating_threshold")
         val ANCHOR_HISTORY = booleanPreferencesKey("anchor_history")
@@ -104,6 +105,14 @@ class TopicDataStore(private val context: Context) {
                     ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
                         .getBoolean(AppPreferences.Theme.HIGHLIGHT_UNREAD_POST, true)
             }, true)
+
+    /** «Показывать подписи пользователей» — личная подпись автора под текстом сообщения. */
+    fun observeShowSignaturesFlow(): Flow<Boolean> =
+            safeDataStoreFlow(context.topicDataStore.data.map { preferences ->
+                preferences[PreferencesKeys.SHOW_SIGNATURES]
+                    ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                        .getBoolean(AppPreferences.Theme.SHOW_SIGNATURES, false)
+            }, false)
 
     fun observeHideLowRatedPostsFlow(): Flow<Boolean> =
             safeDataStoreFlow(context.topicDataStore.data.map { preferences ->
@@ -183,6 +192,15 @@ class TopicDataStore(private val context: Context) {
     }
 
     fun getHighlightUnreadPostImmediate(): Boolean = mirrorPrefs.getBoolean("highlight_unread_post", true)
+
+    suspend fun setShowSignatures(value: Boolean) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.SHOW_SIGNATURES] = value
+        }
+        mirrorPrefs.edit().putBoolean("show_signatures", value).apply()
+    }
+
+    fun getShowSignaturesImmediate(): Boolean = mirrorPrefs.getBoolean("show_signatures", false)
 
     suspend fun setHideLowRatedPosts(value: Boolean) {
         safeEdit { preferences ->

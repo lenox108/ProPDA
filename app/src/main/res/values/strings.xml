@@ -1054,6 +1054,8 @@
     <string name="pref_summary_modern_post_header">Дата в строку с ником и относительное время («17 ч.») вместо полной даты справа</string>
     <string name="pref_title_highlight_unread_post">Подсветка непрочитанного поста</string>
     <string name="pref_summary_highlight_unread_post">Кратко подсвечивать первый непрочитанный пост при открытии темы</string>
+    <string name="pref_title_show_signatures">Показывать подписи пользователей</string>
+    <string name="pref_summary_show_signatures">Личная подпись автора под текстом сообщения, как на полной версии сайта</string>
     <string name="pref_title_hide_low_rated_posts">Скрывать посты с низким рейтингом</string>
     <string name="pref_summary_hide_low_rated_posts">Сворачивать заминусованные сообщения в одну строку, как на полной версии сайта</string>
     <string name="pref_title_low_rating_threshold">Порог рейтинга</string>

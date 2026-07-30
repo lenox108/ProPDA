@@ -324,6 +324,28 @@
             android:orientation="vertical"
             android:layout_marginTop="8dp" />
 
+        <!-- Личная подпись автора («Показывать подписи пользователей»): тонкая линия-отбивка и мелкий
+             приглушённый текст под телом поста — порт вида полной версии сайта, где подпись отделена
+             строкой дефисов и набрана меньшим кеглем. Сам текст подписи добавляет адаптер (разметка
+             подписи произвольная), поэтому здесь только контейнер и разделитель. GONE, пока подпись
+             не приехала из десктопного обогащения или настройка выключена. -->
+        <LinearLayout
+            android:id="@+id/native_post_signature_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="10dp"
+            android:visibility="gone">
+
+            <View
+                android:id="@+id/native_post_signature_divider"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginBottom="7dp"
+                android:background="?attr/colorOutlineVariant" />
+
+        </LinearLayout>
+
         <TextView
             android:id="@+id/native_post_footer"
             android:layout_width="match_parent"

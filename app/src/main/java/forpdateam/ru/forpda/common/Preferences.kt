@@ -202,6 +202,8 @@ object Preferences {
         const val FLAT_POSTS = FLAT_UI
         const val MODERN_POST_HEADER = PREFIX + "modern_post_header"
         const val HIGHLIGHT_UNREAD_POST = PREFIX + "highlight_unread_post"
+        /** «Показывать подписи пользователей» — личная подпись автора под текстом сообщения. */
+        const val SHOW_SIGNATURES = PREFIX + "show_signatures"
         /** «Скрывать посты с низким рейтингом» — сворачивать заминусованные посты в плашку. */
         const val HIDE_LOW_RATED_POSTS = PREFIX + "hide_low_rated_posts"
         /** Порог рейтинга для сворачивания: «−1 и ниже» … «−10 и ниже». Хранится строкой (ListPreference). */

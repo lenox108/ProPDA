@@ -81,6 +81,13 @@ class ThemeParser(
         val USER_POST_COUNT_NBSP = Regex("""(?i)&nbsp;|&#160;|&#x0?A0;""")
         val USER_POST_COUNT_WHITESPACE = Regex("""\s+""")
         val USER_POST_COUNT_NON_DIGIT = Regex("""[^\d]""")
+
+        /** Личная подпись автора — блок `<div class="signature">` в ПОЛНОЙ версии форума. */
+        val SIGNATURE_OPEN_PATTERN = Regex("""(?is)<div\b[^>]*\bclass\s*=\s*["'][^"']*\bsignature\b[^"']*["'][^>]*>""")
+        /** Любой открывающий/закрывающий `div` — для балансировки при поиске конца подписи. */
+        val SIGNATURE_DIV_TAG_PATTERN = Regex("""(?is)<(/)?div\b[^>]*>""")
+        /** Сервер сам обрезает длинные подписи и дописывает англоязычный маркер — меняем на «…». */
+        val SIGNATURE_TRUNCATED_MARKER = Regex("""(?i)\.{2,}\s*Signature\s+Truncated\s*$""")
     }
 
     private val scope = ParserPatterns.Topic
@@ -370,6 +377,55 @@ class ThemeParser(
             parseUserPostCount(pageHtml.substring(match.range.first, end))?.let { result[postId] = it }
         }
         return result
+    }
+
+    /**
+     * Личные подписи авторов из ПОЛНОЙ версии темы, ключ — id поста.
+     *
+     * В мобильной выдаче (по ней рендерится страница) подписей нет ни одной, поэтому источник только
+     * десктопный ответ отложенного обогащения. Сегментация страницы на посты — та же, что у «💬 N»
+     * ([parseUserPostCountsByPostId]): якорь `entry<id>` и до следующего якоря. Подпись у поста-шапки
+     * сервер не печатает — её здесь и не окажется, паритет с сайтом сохраняется.
+     */
+    fun parseSignaturesByPostId(pageHtml: String): Map<Int, String> {
+        val result = linkedMapOf<Int, String>()
+        val anchors = POST_ENTRY_ANCHOR_PATTERN
+                .findAll(pageHtml)
+                .toList()
+        anchors.forEachIndexed { index, match ->
+            val postId = match.groups[1]?.value?.toIntOrNull() ?: return@forEachIndexed
+            val end = anchors.getOrNull(index + 1)?.range?.first
+                    ?: findTopicPostTailIndex(pageHtml, match.range.last + 1)
+                    ?: pageHtml.length
+            if (end <= match.range.first) return@forEachIndexed
+            parseSignature(pageHtml.substring(match.range.first, end))?.let { result[postId] = it }
+        }
+        return result
+    }
+
+    /**
+     * Содержимое `div.signature` внутри одного поста. Конец блока ищется балансировкой `div`, а не
+     * первым `</div>`: подпись почти всегда инлайновая (`span`/`b`/`i`/`a`/`br`), но вложенный `div`
+     * в ней возможен, и жадно-нежадный regex тогда обрезал бы её на середине.
+     */
+    private fun parseSignature(postHtml: String): String? {
+        val open = SIGNATURE_OPEN_PATTERN.find(postHtml) ?: return null
+        val start = open.range.last + 1
+        var depth = 1
+        var cursor = start
+        while (cursor < postHtml.length) {
+            val tag = SIGNATURE_DIV_TAG_PATTERN.find(postHtml, cursor) ?: return null
+            if (tag.groups[1] != null) depth-- else depth++
+            if (depth == 0) {
+                return postHtml.substring(start, tag.range.first)
+                        .trim()
+                        .replace(SIGNATURE_TRUNCATED_MARKER, "…")
+                        .trim()
+                        .takeIf { it.isNotEmpty() }
+            }
+            cursor = tag.range.last + 1
+        }
+        return null
     }
 
     private fun logUserPostCountSourceDiagnostics(page: ThemePage, response: String) {

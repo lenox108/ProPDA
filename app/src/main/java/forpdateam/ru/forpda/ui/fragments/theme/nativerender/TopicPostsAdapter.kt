@@ -95,6 +95,12 @@ class TopicPostsAdapter(
              * «Добавлено …» timestamps inside the post body.
              */
             val modernHeader: Boolean = false,
+            /**
+             * «Показывать подписи пользователей»: личная подпись автора под текстом сообщения, как в
+             * полной версии сайта. Мобильная выдача подписей не содержит — их подвозит отложенное
+             * десктопное обогащение, поэтому подпись появляется вместе с рейтингами, а не сразу.
+             */
+            val showSignatures: Boolean = false,
             /** «Скрывать посты с низким рейтингом»: сворачивать заминусованные посты в плашку. */
             val hideLowRatedPosts: Boolean = false,
             /** Порог рейтинга для сворачивания («−1 и ниже» … «−10 и ниже»). */
@@ -337,6 +343,8 @@ class TopicPostsAdapter(
         private val menuInline: ImageView = itemView.findViewById(R.id.native_post_menu_inline)
         private val rightColumn: View = itemView.findViewById(R.id.native_post_right_column)
         private val body: LinearLayout = itemView.findViewById(R.id.native_post_body)
+        /** Личная подпись автора: линия-отбивка (в разметке) + текст подписи (добавляет [renderSignature]). */
+        private val signatureContainer: LinearLayout = itemView.findViewById(R.id.native_post_signature_container)
         private val footer: TextView = itemView.findViewById(R.id.native_post_footer)
         private val actions: LinearLayout = itemView.findViewById(R.id.native_post_actions)
         private val hatToggle: LinearLayout = itemView.findViewById(R.id.native_post_hat_toggle)
@@ -522,6 +530,9 @@ class TopicPostsAdapter(
                 footer.visibility = View.GONE
                 actions.visibility = View.GONE
             }
+            // Подпись — часть содержимого карточки: свёрнутая шапка темы и свёрнутый заминусованный
+            // пост прячут её вместе с телом.
+            renderSignature(item, hidden = hatFolded || lowRatedCollapsed)
             if (wantHighlight && !keepHighlight) {
                 highlightingPostId = item.postId
                 if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
@@ -1116,6 +1127,33 @@ class TopicPostsAdapter(
                     item.blocks,
                     BodyBlockViewFactory.RenderScope(item.postId, allowQuoteSelection = item.canQuote),
             )
+        }
+
+        /**
+         * Личная подпись автора под телом поста («Показывать подписи пользователей»).
+         *
+         * Контейнер держит только линию-отбивку из разметки; текст подписи пересоздаётся при каждом
+         * биндинге — разметка подписи произвольная, а сам блок приезжает отложенно (десктопное
+         * обогащение), поэтому переиспользовать одну TextView между переиспользованными холдерами
+         * нельзя. Пока подписи нет или настройка выключена — контейнер GONE и места не занимает.
+         */
+        private fun renderSignature(item: NativePostItem, hidden: Boolean) {
+            // Всё кроме разделителя (первый ребёнок из разметки) — текст прошлой подписи.
+            while (signatureContainer.childCount > 1) signatureContainer.removeViewAt(1)
+            val html = item.signatureHtml?.takeIf { it.isNotBlank() }
+            if (hidden || !settings.showSignatures || html == null) {
+                signatureContainer.visibility = View.GONE
+                return
+            }
+            signatureContainer.visibility = View.VISIBLE
+            blockFactory.textScale = settings.textScale
+            blockFactory.animatedSmiles = settings.animatedSmiles
+            // Поиск по странице считает вхождения по блокам ТЕЛА ([TopicSearchScan]); подсветь мы ещё и
+            // подпись — нумерация «N из M» разъехалась бы с тем, к чему листает «дальше». renderBody
+            // выставляет запрос заново на каждом холдере, так что обнуление здесь ничего не ломает.
+            blockFactory.searchQuery = ""
+            blockFactory.activeMatch = null
+            signatureContainer.addView(blockFactory.signatureView(itemView.context, html, item.postId))
         }
 
         /** Fill [container] with a tappable «ШАПКА ТЕМЫ  ▾/▴» row that toggles the hat (WebView parity:

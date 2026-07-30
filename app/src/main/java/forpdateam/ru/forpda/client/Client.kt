@@ -107,6 +107,13 @@ class Client(
         private const val DESKTOP_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         private const val MOBILE_COOKIE_NAME = "ngx_mb"
         private const val DESKTOP_MOBILE_COOKIE_VALUE = "0"
+        // Одного `ngx_mb=0` мало: форум отдаёт ПОЛНУЮ версию темы (рейтинги постов, «💬 N»,
+        // «N чел. читают», подписи авторов) только при `deskver=1` — эту куку на сайте ставит
+        // JS десктопного браузера. Без неё ответ приходит мобильный, и весь desktop-merge
+        // молча разбирает пустоту (проверено живьём: тот же URL, len 277k/0 подписей против
+        // 167k/19 подписей с кукой).
+        private const val DESKTOP_VERSION_COOKIE_NAME = "deskver"
+        private const val DESKTOP_VERSION_COOKIE_VALUE = "1"
         // Realtime-эндпоинт 4PDA: app.4pda.to:993 — НЕСТАНДАРТНЫЙ WebSocket: голый TCP,
         // БЕЗ TLS и БЕЗ HTTP-рукопожатия, сырые WS-фреймы сразу (сервер отвечает pong на ping
         // и `[0,2]` на текст; проверено 20.07.2026). Порты 80/443 мертвы (timeout). Поэтому
@@ -414,12 +421,19 @@ class Client(
                 override fun loadForRequest(url: HttpUrl): List<Cookie> {
                     val cookies = cookieJar.loadForRequest(url)
                         .filterNot { it.name.equals(MOBILE_COOKIE_NAME, ignoreCase = true) }
+                        .filterNot { it.name.equals(DESKTOP_VERSION_COOKIE_NAME, ignoreCase = true) }
                         .toMutableList()
                     if (url.host.contains("4pda", ignoreCase = true)) {
                         cookies += Cookie.Builder()
                             .name(MOBILE_COOKIE_NAME)
                             .value(DESKTOP_MOBILE_COOKIE_VALUE)
                             // OkHttp 4+ rejects domains with a leading dot (IllegalArgumentException)
+                            .domain("4pda.to")
+                            .path("/")
+                            .build()
+                        cookies += Cookie.Builder()
+                            .name(DESKTOP_VERSION_COOKIE_NAME)
+                            .value(DESKTOP_VERSION_COOKIE_VALUE)
                             .domain("4pda.to")
                             .path("/")
                             .build()

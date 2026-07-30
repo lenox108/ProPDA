@@ -373,6 +373,9 @@ class ThemeApi(
             val postVoteControls = ThemeRatingParser.parsePostVoteControls(body)
             val mergedUserPostCounts = mergeUserPostCounts(page, userPostCounts)
             val propagatedUserPostCounts = propagateUserPostCountsByAuthor(page)
+            // Личные подписи авторов печатает только полная версия — здесь она уже в руках, так что
+            // настройка «Показывать подписи пользователей» не стоит ни одного лишнего запроса.
+            mergeSignatures(page, themeParser.parseSignaturesByPostId(body))
             val merged = mergePostRatings(page, ratings)
             val mergedControls = mergePostVoteControls(page, postVoteControls)
             logUserPostCountDesktopDiagnostics(
@@ -571,6 +574,26 @@ class ThemeApi(
             if (post.userPostCount?.let { it > 0 } == true) return@forEach
             if (post.userPostCount != count) {
                 post.userPostCount = count
+                merged++
+            }
+        }
+        return merged
+    }
+
+    /**
+     * Раскладывает подписи из десктопного ответа по постам страницы.
+     *
+     * Разносить подпись по ДРУГИМ постам того же автора (как это делает [propagateUserPostCountsByAuthor]
+     * для «💬 N») нельзя: полная версия сама решает, где подпись печатать, а где нет — у поста-шапки её,
+     * например, не бывает. Берём ровно то, что сервер отдал по каждому посту.
+     */
+    private fun mergeSignatures(page: ThemePage, signatures: Map<Int, String>): Int {
+        if (signatures.isEmpty()) return 0
+        var merged = 0
+        page.posts.forEach { post ->
+            val signature = signatures[post.id]?.takeIf { it.isNotBlank() } ?: return@forEach
+            if (post.signatureHtml != signature) {
+                post.signatureHtml = signature
                 merged++
             }
         }
