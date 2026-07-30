@@ -24,6 +24,8 @@ class MainPreferencesHolder(
 
     fun observeTopicPostDensityFlow(): Flow<AppPreferences.Main.TopicPostDensity> = dataStore.observeTopicPostDensityFlow()
 
+    fun observeTopicFastScrollFlow(): Flow<AppPreferences.Main.TopicFastScroll> = dataStore.observeTopicFastScrollFlow()
+
     fun observeTopicToolbarBehaviorFlow(): Flow<AppPreferences.Main.TopicToolbarBehavior> = dataStore.observeTopicToolbarBehaviorFlow()
 
     fun observeTopicPageSwipeEnabledFlow(): Flow<Boolean> = dataStore.observeTopicPageSwipeEnabledFlow()
@@ -97,6 +99,8 @@ class MainPreferencesHolder(
     fun getTopicPostDensity(): AppPreferences.Main.TopicPostDensity = dataStore.getTopicPostDensityImmediate()
 
     fun getTopicToolbarBehavior(): AppPreferences.Main.TopicToolbarBehavior = dataStore.getTopicToolbarBehaviorImmediate()
+
+    fun getTopicFastScroll(): AppPreferences.Main.TopicFastScroll = dataStore.getTopicFastScrollImmediate()
 
     fun getTopicPageSwipeEnabled(): Boolean = dataStore.getTopicPageSwipeEnabledImmediate()
 
@@ -173,6 +177,8 @@ class MainPreferencesHolder(
     suspend fun setTopicPostDensity(value: AppPreferences.Main.TopicPostDensity) = dataStore.setTopicPostDensity(value)
 
     suspend fun setTopicToolbarBehavior(value: AppPreferences.Main.TopicToolbarBehavior) = dataStore.setTopicToolbarBehavior(value)
+
+    suspend fun setTopicFastScroll(value: AppPreferences.Main.TopicFastScroll) = dataStore.setTopicFastScroll(value)
 
     suspend fun setTopicPageSwipeEnabled(value: Boolean) = dataStore.setTopicPageSwipeEnabled(value)
 

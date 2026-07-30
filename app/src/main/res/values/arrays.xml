@@ -62,6 +62,17 @@
         <item>HIDE_ON_SCROLL</item>
     </string-array>
 
+    <string-array name="entries_topic_fast_scroll">
+        <item>@string/pref_topic_fast_scroll_right</item>
+        <item>@string/pref_topic_fast_scroll_left</item>
+        <item>@string/pref_topic_fast_scroll_off</item>
+    </string-array>
+    <string-array name="entry_values_topic_fast_scroll">
+        <item>RIGHT</item>
+        <item>LEFT</item>
+        <item>OFF</item>
+    </string-array>
+
     <string-array name="entries_topic_back_behavior">
         <item>@string/pref_value_topic_back_behavior_history</item>
         <item>@string/pref_value_topic_back_behavior_origin</item>

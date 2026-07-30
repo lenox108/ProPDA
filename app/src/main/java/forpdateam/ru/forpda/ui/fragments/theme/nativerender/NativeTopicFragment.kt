@@ -552,6 +552,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
      */
     private var userDraggedListThisSession: Boolean = false
 
+    /** Ползунок быстрой прокрутки — пересоздаётся при смене стороны, снимается при «Выключен». */
+    private var fastScroller: TopicFastScroller? = null
+    private var appliedFastScrollMode: forpdateam.ru.forpda.common.Preferences.Main.TopicFastScroll? = null
+
     /**
      * Момент ([android.os.SystemClock.elapsedRealtime]) последнего первичного рендера темы — начало
      * текущей сессии просмотра. Питает dwell-гейт [TopicNoGestureDwellReadPolicy]: сессия без жеста
@@ -863,15 +867,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
              */
             override fun onScrollStateChanged(rv: androidx.recyclerview.widget.RecyclerView, newState: Int) {
                 if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_DRAGGING) {
-                    if (forpdateam.ru.forpda.BuildConfig.DEBUG && anchoredBottomPostId != null) android.util.Log.i("FPDA_CLEAR", "anchor CLEARED (user drag)")
-                    anchoredBottomPostId = null
-                    pendingDeepLinkReanchorPostId = null
-                    // The user is scrolling away from a deep-link/quote landing → give back the transient
-                    // top-align bottom room so the topic end no longer carries phantom empty space.
-                    if (deepLinkAnchorExtraBottomPad != 0) {
-                        deepLinkAnchorExtraBottomPad = 0
-                        applyListBottomPadding()
-                    }
+                    onUserScrollGestureStarted()
                 }
                 // Жест пользователя (drag; SETTLING без drag'а = единственный smoothScroll — FAB-пейджинг,
                 // тоже действие юзера; программные коррекции идут через мгновенный scrollBy и state не меняют)
@@ -882,31 +878,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                     suppressEndMarkReadForMissedBackRestore = false
                     userScrollGestureThisSession = true
                 }
-                // Границу прочитанного двигаем ТОЛЬКО по устоявшемуся вьюпорту: покадровая запись из
-                // onScrolled на флинге «вниз глянуть и назад» монотонно сжигала всё до самой глубокой
-                // мелькнувшей точки (recordSeen назад не откатывается) — источник «пропускаются непрочитанные».
                 if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
-                    recordReadBoundaryAtRest()
-                    // Settled past the content end (post heights changed under the fling)? Pull the list back
-                    // onto its last post — see [healBottomEndGap]. A fling can settle without any further
-                    // layout pass, so the layout listener alone would not catch it.
-                    healBottomEndGap()
-                    // Settled: re-check «низ ли это» (a fling can stop without a final onScrolled frame).
-                    updateBottomPaginationBarOffset()
-                    // ...и по той же причине пере-проверить mark-read-в-конце. onScrolled метит тему
-                    // прочитанной покадрово, но флинг к концу может осесть без финального onScrolled-кадра,
-                    // в котором последний пост уже полностью на экране (или его съел healing-guard) — тогда
-                    // тема так и оставалась непрочитанной в избранном до следующего касания. Проверка
-                    // идемпотентна (markedTopicReadAtEnd) и полностью защищена своими гейтами, поэтому
-                    // безопасна в покое. Вызываем ПОСЛЕ healBottomEndGap — на исправленной позиции.
-                    maybeMarkTopicReadAtEnd()
-                    // ...и по той же причине — перевзвести подгрузку соседних страниц. Флинг может осесть
-                    // ровно у края, не прислав финального onScrolled-кадра в зоне порога (или его съел
-                    // healing-guard на dy<0), из-за чего след./пред. страница не грузилась, пока юзер не
-                    // «поёрзает» пальцем. Обе проверки позиционные (абсолютный край, не dy) и защищены
-                    // isLoading*-флагами, так что вызвать их в покое безопасно и идемпотентно.
-                    maybeLoadNextPage()
-                    maybeLoadPrevPage()
+                    onScrollSettled()
                 }
             }
         })
@@ -953,6 +926,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (anchoredBottomPostId != null) recyclerView.post { reanchorBottomAfterGrowth() }
             }
         }
+        setupFastScroller()
         val auth = authHolder.get()
         postsAdapter.setAuthContext(authorized = auth.isAuth(), memberId = auth.userId)
         installPageSwipeDetector()
@@ -1020,6 +994,105 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 if (view != null && pagination.isInitialised) updatePaginationBar()
             }
         }
+    }
+
+    /**
+     * Юзер САМ взялся за список — пальцем по нему ([RecyclerView.SCROLL_STATE_DRAGGING]) или за
+     * ползунок быстрой прокрутки ([TopicFastScroller]). Второй путь отдельный потому, что тянет он
+     * список программным `scrollBy`, а тот состояние прокрутки не меняет и до `DRAGGING` не доходит.
+     */
+    private fun onUserScrollGestureStarted() {
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG && anchoredBottomPostId != null) android.util.Log.i("FPDA_CLEAR", "anchor CLEARED (user drag)")
+        anchoredBottomPostId = null
+        pendingDeepLinkReanchorPostId = null
+        // The user is scrolling away from a deep-link/quote landing → give back the transient
+        // top-align bottom room so the topic end no longer carries phantom empty space.
+        if (deepLinkAnchorExtraBottomPad != 0) {
+            deepLinkAnchorExtraBottomPad = 0
+            applyListBottomPadding()
+        }
+    }
+
+    /**
+     * Прокрутка устоялась ([RecyclerView.SCROLL_STATE_IDLE] или отпущенный ползунок быстрой прокрутки).
+     *
+     * Границу прочитанного двигаем ТОЛЬКО по устоявшемуся вьюпорту: покадровая запись из `onScrolled`
+     * на флинге «вниз глянуть и назад» монотонно сжигала всё до самой глубокой мелькнувшей точки
+     * (recordSeen назад не откатывается) — источник «пропускаются непрочитанные».
+     */
+    private fun onScrollSettled() {
+        recordReadBoundaryAtRest()
+        // Settled past the content end (post heights changed under the fling)? Pull the list back
+        // onto its last post — see [healBottomEndGap]. A fling can settle without any further
+        // layout pass, so the layout listener alone would not catch it.
+        healBottomEndGap()
+        // Settled: re-check «низ ли это» (a fling can stop without a final onScrolled frame).
+        updateBottomPaginationBarOffset()
+        // ...и по той же причине пере-проверить mark-read-в-конце. onScrolled метит тему
+        // прочитанной покадрово, но флинг к концу может осесть без финального onScrolled-кадра,
+        // в котором последний пост уже полностью на экране (или его съел healing-guard) — тогда
+        // тема так и оставалась непрочитанной в избранном до следующего касания. Проверка
+        // идемпотентна (markedTopicReadAtEnd) и полностью защищена своими гейтами, поэтому
+        // безопасна в покое. Вызываем ПОСЛЕ healBottomEndGap — на исправленной позиции.
+        maybeMarkTopicReadAtEnd()
+        // ...и по той же причине — перевзвести подгрузку соседних страниц. Флинг может осесть
+        // ровно у края, не прислав финального onScrolled-кадра в зоне порога (или его съел
+        // healing-guard на dy<0), из-за чего след./пред. страница не грузилась, пока юзер не
+        // «поёрзает» пальцем. Обе проверки позиционные (абсолютный край, не dy) и защищены
+        // isLoading*-флагами, так что вызвать их в покое безопасно и идемпотентно.
+        maybeLoadNextPage()
+        maybeLoadPrevPage()
+    }
+
+    /**
+     * Ползунок быстрой прокрутки: толстая пилюля с зоной захвата в 44dp вместо системной волосяной
+     * полоски, которую невозможно зацепить пальцем (она вообще не перетаскивается — только индикатор).
+     * Плашка при перетаскивании показывает страницу и дату поста под бегунком: без неё быстрый скролл
+     * по теме в тысячи постов слепой.
+     *
+     * Перетаскивание отдаёт те же сигналы, что и обычный жест по списку ([onUserScrollGestureStarted] /
+     * [onScrollSettled]) — иначе якорь на последнем посте, граница прочитанного и подгрузка соседних
+     * страниц вели бы себя после быстрой прокрутки иначе, чем после пальца.
+     */
+    private fun setupFastScroller() {
+        // Настройка «Ползунок прокрутки в теме» (выкл / справа / слева) применяется на лету: вкладка
+        // темы переживает поход в настройки в фоновом стеке, пересоздания фрагмента не будет.
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainPreferencesHolder.observeTopicFastScrollFlow().collect { mode ->
+                if (view == null) return@collect
+                applyFastScrollMode(mode)
+            }
+        }
+    }
+
+    private fun applyFastScrollMode(mode: forpdateam.ru.forpda.common.Preferences.Main.TopicFastScroll) {
+        if (mode == appliedFastScrollMode) return
+        appliedFastScrollMode = mode
+        fastScroller?.detach()
+        fastScroller = null
+        if (mode == forpdateam.ru.forpda.common.Preferences.Main.TopicFastScroll.OFF) return
+        fastScroller = TopicFastScroller.attach(
+                rv = recyclerView,
+                onLeft = mode == forpdateam.ru.forpda.common.Preferences.Main.TopicFastScroll.LEFT,
+                labelProvider = { position -> fastScrollLabel(position) },
+                onDragStart = {
+                    onUserScrollGestureStarted()
+                    suppressEndMarkReadUntilUserScroll = false
+                    suppressEndMarkReadForMissedBackRestore = false
+                    userScrollGestureThisSession = true
+                    userDraggedListThisSession = true
+                },
+                onDragEnd = { if (view != null) onScrollSettled() },
+        )
+    }
+
+    /** «Стр. 42 · Вчера, 21:15» для поста в адаптерной позиции [position] — текст плашки ползунка. */
+    private fun fastScrollLabel(position: Int): String? {
+        val item = loadedItems.getOrNull(position - headerOffset()) ?: return null
+        val page = item.pageNumber.takeIf { it > 0 } ?: barCurrentPage
+        val date = item.date?.trim()?.takeIf { it.isNotEmpty() }
+        val pageLabel = getString(R.string.fast_scroll_page, page)
+        return if (date == null) pageLabel else "$pageLabel · $date"
     }
 
     /**
@@ -3232,6 +3305,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
 
     override fun onDestroyView() {
         recyclerView.viewTreeObserver.removeOnGlobalLayoutListener(bottomPinLayoutListener)
+        // Ползунок живёт на КОНКРЕТНОМ RecyclerView; фрагмент переживает пересоздание вью, поэтому
+        // забываем и сам ползунок, и применённый режим — иначе на новом списке он не поднимется.
+        fastScroller?.detach()
+        fastScroller = null
+        appliedFastScrollMode = null
         messagePanel?.onDestroy()
         messagePanel = null
         attachmentsPopup = null

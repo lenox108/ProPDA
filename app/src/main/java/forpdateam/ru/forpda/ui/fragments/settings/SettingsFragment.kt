@@ -221,6 +221,15 @@ class SettingsFragment : BaseSettingFragment() {
             }
             updateTopicToolbarBehaviorSummary(behavior)
         }
+        if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_FAST_SCROLL) {
+            val mode = SettingsPreferenceParsers.parseTopicFastScroll(sharedPrefs.getString(key, Preferences.Main.TopicFastScroll.RIGHT.name))
+            if (isAdded) {
+                lifecycleScope.launch {
+                    mainPreferencesHolder.setTopicFastScroll(mode)
+                }
+            }
+            updateTopicFastScrollSummary(mode)
+        }
         if (key == forpdateam.ru.forpda.common.Preferences.Main.TOPIC_PAGE_SWIPE_ENABLE) {
             val value = sharedPrefs.getBoolean(key, false)
             if (isAdded) {
@@ -456,6 +465,12 @@ class SettingsFragment : BaseSettingFragment() {
                     val behavior = mainPreferencesHolder.observeTopicToolbarBehaviorFlow().first()
                     it.value = behavior.name
                     updateTopicToolbarBehaviorSummary(behavior)
+                }
+            findPreference<ListPreference>(Preferences.Main.TOPIC_FAST_SCROLL)
+                ?.let {
+                    val mode = mainPreferencesHolder.observeTopicFastScrollFlow().first()
+                    it.value = mode.name
+                    updateTopicFastScrollSummary(mode)
                 }
             findPreference<androidx.preference.SwitchPreferenceCompat>(Preferences.Main.TOPIC_PAGE_SWIPE_ENABLE)
                 ?.isChecked = mainPreferencesHolder.observeTopicPageSwipeEnabledFlow().first()
@@ -921,6 +936,15 @@ class SettingsFragment : BaseSettingFragment() {
             updateTopicToolbarBehaviorSummary(behavior)
             lifecycleScope.launch {
                 mainPreferencesHolder.setTopicToolbarBehavior(behavior)
+            }
+            true
+        }
+
+        findPreference<ListPreference>(Preferences.Main.TOPIC_FAST_SCROLL)?.setOnPreferenceChangeListener { _, newValue ->
+            val mode = SettingsPreferenceParsers.parseTopicFastScroll(newValue as? String)
+            updateTopicFastScrollSummary(mode)
+            lifecycleScope.launch {
+                mainPreferencesHolder.setTopicFastScroll(mode)
             }
             true
         }
@@ -1576,6 +1600,16 @@ class SettingsFragment : BaseSettingFragment() {
                 when (behavior) {
                     Preferences.Main.TopicToolbarBehavior.HIDE_ON_SCROLL -> R.string.pref_topic_toolbar_behavior_hide_on_scroll
                     else -> R.string.pref_topic_toolbar_behavior_pinned
+                }
+        )
+    }
+
+    private fun updateTopicFastScrollSummary(mode: Preferences.Main.TopicFastScroll) {
+        findPreference<ListPreference>(Preferences.Main.TOPIC_FAST_SCROLL)?.setSummary(
+                when (mode) {
+                    Preferences.Main.TopicFastScroll.OFF -> R.string.pref_topic_fast_scroll_off
+                    Preferences.Main.TopicFastScroll.LEFT -> R.string.pref_topic_fast_scroll_left
+                    else -> R.string.pref_topic_fast_scroll_right
                 }
         )
     }

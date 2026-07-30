@@ -46,6 +46,8 @@ object Preferences {
         const val TOPIC_TOOLBAR_BEHAVIOR = PREFIX + "topic_toolbar_behavior"
         const val TOPIC_PAGE_SWIPE_ENABLE = PREFIX + "topic_page_swipe.enable"
         const val TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE = PREFIX + "topic_bottom_refresh_gesture.enable"
+        /** Перетаскиваемый ползунок быстрой прокрутки в теме: выключен / справа / слева. */
+        const val TOPIC_FAST_SCROLL = PREFIX + "topic_fast_scroll"
         /** Показывать ли под последним постом плашку «Сейчас читают тему» (только классический режим). */
         const val TOPIC_ACTIVE_READERS_ENABLE = PREFIX + "topic_active_readers.enable"
         const val TOPIC_BACK_BEHAVIOR = PREFIX + "topic_back_behavior"
@@ -146,6 +148,12 @@ object Preferences {
         }
         enum class TopicPostDensity { COMFORTABLE, COMPACT, SUPER_COMPACT }
         enum class TopicToolbarBehavior { PINNED, HIDE_ON_SCROLL }
+
+        /**
+         * Ползунок быстрой прокрутки в теме. Сторона — под руку: правше удобнее правый край, левше
+         * левый (и там же он не спорит с кнопкой «⋮» в шапке поста).
+         */
+        enum class TopicFastScroll { OFF, RIGHT, LEFT }
         enum class TopicBackBehavior { HISTORY, ORIGIN }
         /**
          * Куда садиться при открытии темы из списка.
