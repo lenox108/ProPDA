@@ -142,7 +142,7 @@ object ProDialog {
         if (ProLicense.isUnlocked(context)) return
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val hasSomethingToTurnOff = prefs.getBoolean(ProxySettings.KEY_ENABLED, false) ||
-                prefs.getString(KEY_DELIVERY_METHOD, DELIVERY_POLL) == DELIVERY_PUSH
+                prefs.getString(KEY_DELIVERY_METHOD, DELIVERY_POLL) in setOf(DELIVERY_PUSH, DELIVERY_PUSH_HMS, DELIVERY_SOCKET)
         if (!hasSomethingToTurnOff) return
         prefs.edit()
                 .putBoolean(ProxySettings.KEY_ENABLED, false)
@@ -193,6 +193,8 @@ object ProDialog {
     private const val KEY_DELIVERY_METHOD = "notifications.delivery_method"
     private const val DELIVERY_POLL = "poll"
     private const val DELIVERY_PUSH = "push"
+    private const val DELIVERY_PUSH_HMS = "push_hms"
+    private const val DELIVERY_SOCKET = "socket"
     private const val KEY_BG_ENABLED = "notifications.bg.enabled"
     private const val KEY_PERSISTENT_WS = "notifications.bg.persistent_ws"
 }

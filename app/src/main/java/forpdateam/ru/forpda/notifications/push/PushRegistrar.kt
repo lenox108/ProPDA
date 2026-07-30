@@ -27,6 +27,7 @@ class PushRegistrar(
         object Success : Result()
         object NoSession : Result()      // нет login_key — нужен разовый логин в настройках
         object NoGms : Result()          // нет Google Play Services
+        object NoHms : Result()          // нет сервисов Huawei / токен ещё не выдан
         object NotPro : Result()         // нет действующего ключа активации Pro
         data class Error(val reason: String) : Result()
     }
@@ -56,7 +57,12 @@ class PushRegistrar(
             return@withContext Result.NoSession
         }
 
-        val token = obtainToken() ?: return@withContext Result.NoGms
+        // Провайдер выбирает пользователь способом доставки: Google (FCM) или Huawei (HCM).
+        // Huawei нужен там, где нет сервисов Google, — их сервер принимает оба, поле `provider`
+        // в опкоде `ai` для того и есть.
+        val huawei = isHuaweiMode()
+        val token = if (huawei) huaweiToken() else obtainToken()
+        if (token == null) return@withContext if (huawei) Result.NoHms else Result.NoGms
         val bitmask = computeBitmask()
 
         if (!force && token == session.lastRegisteredToken && bitmask == session.lastRegisteredBitmask) {
@@ -72,7 +78,7 @@ class PushRegistrar(
                     session.loginKey = null
                     return@withContext Result.NoSession
                 }
-                if (!client.registerToken(token, bitmask, PROVIDER_GOOGLE)) {
+                if (!client.registerToken(token, bitmask, if (huawei) PROVIDER_HUAWEI else PROVIDER_GOOGLE)) {
                     return@withContext Result.Error("server rejected token")
                 }
             }
@@ -119,6 +125,25 @@ class PushRegistrar(
         return mask
     }
 
+    /** Выбран ли способ доставки «Push (Huawei)». */
+    private fun isHuaweiMode(): Boolean = runCatching {
+        androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+                .getString(KEY_DELIVERY_METHOD, null) == DELIVERY_PUSH_HMS
+    }.getOrDefault(false)
+
+    /**
+     * Токен Huawei приходит бродкастом, а не в ответе на запрос ([PicoHms]). Поэтому: есть
+     * сохранённый — берём; нет — просим выдать и выходим, регистрацию доделает
+     * [PushTokenRefreshWorker], которого разбудит [HmsPushReceiver].
+     */
+    private fun huaweiToken(): String? {
+        HmsTokenStore.get(context)?.let { return it }
+        if (!PicoHms.isAvailable(context)) return null
+        Timber.i("PushRegistrar: запрашиваем токен HMS")
+        PicoHms(context).requestToken()
+        return null
+    }
+
     private suspend fun obtainToken(): String? = withTimeoutOrNull(TOKEN_TIMEOUT_MS) {
         suspendCancellableCoroutine { cont ->
             PicoFcm(context, FOURPDA_GMP_APP_ID).getToken { _, result ->
@@ -132,6 +157,10 @@ class PushRegistrar(
         /** Firebase-приложение 4PDA (открыто лежит в их APK; используется с разрешения владельца). */
         const val FOURPDA_GMP_APP_ID = "1:1043483203481:android:43c96e036dc3fe54"
         const val PROVIDER_GOOGLE = 0
+        /** Провайдер Huawei в опкоде `ai` (их же нумерация: 0 = Google, 1 = Huawei). */
+        const val PROVIDER_HUAWEI = 1
+        const val KEY_DELIVERY_METHOD = "notifications.delivery_method"
+        const val DELIVERY_PUSH_HMS = "push_hms"
         private const val TOKEN_TIMEOUT_MS = 20_000L
     }
 }
