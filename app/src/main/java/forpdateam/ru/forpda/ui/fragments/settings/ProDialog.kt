@@ -155,6 +155,12 @@ object ProDialog {
         // Токен снимаем в фоне: сеть может быть недоступна, но локально push уже выключен.
         pushCleanupScope.launch {
             runCatching { PushSetupController(context).disablePush() }
+            // Ключа больше нет — значит мгновенной доставки быть не должно НИ по одному каналу.
+            // Сессию стираем здесь явно: сам disablePush её сохраняет (на ней держится живой
+            // канал событий, нужный тем, кто отказался от push, но ключ имеет).
+            runCatching {
+                forpdateam.ru.forpda.notifications.push.PushSessionStore(context).clear()
+            }
         }
     }
 

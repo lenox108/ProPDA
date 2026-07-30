@@ -142,6 +142,33 @@ class AppProtocolClient(
         return (r.getOrNull(1) as? Int) == 0
     }
 
+    /**
+     * Подписка на поток событий этого аккаунта. Опкод `ea` и тело `"u<memberId>"` взяты один
+     * в один из офиц. клиента (класс `v.m`: `super(z ? 24933 : 25701)`, тело `"u" + id`).
+     *
+     * ⚠️ Кормится ТОЛЬКО авторизованная подписка: сервер отвечает `0` и без [resume], но событий
+     * в такой канал не шлёт (замер 30.07.2026). Поэтому звать строго после успешного `ma`.
+     * @return true, если сервер принял подписку.
+     */
+    fun subscribeEvents(memberId: Int): Boolean =
+            (call(listOf("ea", "u$memberId")).getOrNull(1) as? Int) == 0
+
+    /** Отписка (`ed`) — симметрична [subscribeEvents]. */
+    fun unsubscribeEvents(memberId: Int): Boolean =
+            (call(listOf("ed", "u$memberId")).getOrNull(1) as? Int) == 0
+
+    /**
+     * Читает следующий документ, присланный сервером (ответ или событие). Блокирует до кадра
+     * либо до [readTimeoutMs]; ping/pong обслуживаются внутри.
+     */
+    fun readNextDoc(): List<Any?> = readMessage()
+
+    /**
+     * Ping. Обязателен для событийного канала: сервер закрывает соединение ровно через 60с
+     * тишины (замер: `EOFException` секунда в секунду), а событий может не быть часами.
+     */
+    fun ping() = writeFrame(ByteArray(0), compress = false, opcode = OPCODE_PING)
+
     override fun close() {
         runCatching { socket.close() }
     }
