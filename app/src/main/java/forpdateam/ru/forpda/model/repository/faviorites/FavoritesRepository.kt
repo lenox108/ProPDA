@@ -323,16 +323,34 @@ class FavoritesRepository(
             successTopicIds.forEach { readBoundaryStore.clear(it) }
             cacheMutex.withLock {
                 val items = favoritesCache.getItems()
+                val markedTopicIds = mutableSetOf<Int>()
                 items.forEach {
-                    if (it.topicId in successTopicIds && it.isNew && !it.isForum) {
+                    if (it.topicId in successTopicIds && !it.isForum) {
+                        markedTopicIds.add(it.topicId)
                         it.isNew = false
                         it.readState = FavoriteReadState.READ
                         it.unreadPostCount = 0
+                        it.listingHref = null
                         // Намеренно сбрасываем inspectorMarkedUnread здесь: при markAllFavoritesRead
                         // пользователь явно потребовал считать тему прочитанной — последующий merge
                         // не должен заново поднять бейдж до прихода нового инспектора.
                         it.inspectorMarkedUnread = false
+                        // Взводим маркеры локального прочтения ровно как одиночный [markReadLocked].
+                        // Без них ПАКЕТНАЯ отметка оставалась незащищённой: сервер обрабатывает
+                        // `view=getlastpost` с задержкой, поэтому первый же ручной рефреш приносил и
+                        // HTML со «+N», и инспектор с last_post_ts > last_read_ts, а все анти-relight
+                        // гейты (`local_read_over_stale_unread`, `cached_read_over_inspector`,
+                        // [localReadDefeatsStaleInspector]) требуют localReadPostId/…DateMillis > 0 —
+                        // и молча пропускали перезажигание ВСЕХ только что отмеченных тем.
+                        it.localReadPostId = it.topicId
+                        it.localReadPostDateMillis = localReadWatermarkMillis(it)
                     }
+                }
+                // Отмеченные темы, которых в кэше не оказалось (список ещё не загружен целиком,
+                // отметка из результатов поиска): применим отметку при следующем loadFavorites.
+                val readAtMillis = System.currentTimeMillis()
+                successTopicIds.forEach { topicId ->
+                    if (topicId !in markedTopicIds) pendingLocalReadTopics[topicId] = readAtMillis
                 }
                 favoritesCache.saveFavorites(items)
                 countersHolder.set(countersHolder.get().apply {
