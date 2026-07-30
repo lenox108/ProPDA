@@ -204,8 +204,40 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             },
     )
 
+    /**
+     * Подвал «Сейчас читают тему: N» под последним постом — только в КЛАССИЧЕСКОМ режиме (в гибриде
+     * страницы склеены в ленту, и место для такого блока там одно — меню темы). Живёт ПОСЛЕ постов,
+     * поэтому индексы постов (и [headerOffset]) не сдвигает, но делает последнюю позицию списка
+     * непостовой — см. [lastPostAdapterPosition].
+     */
+    private val readersFooterAdapter = TopicReadersFooterAdapter { userId ->
+        navigationUseCase.openProfile(userId)
+    }
+
     /** Adapter positions are shifted by the poll header (0 or 1) — offset scroll targets by this. */
     private fun headerOffset(): Int = pollHeaderAdapter.itemCount
+
+    /** Позиция ПОСЛЕДНЕГО ПОСТА в списке — не то же самое, что последняя позиция адаптера: под постами
+     *  может стоять подвал читателей. Проверки «долистал до конца» должны сравниваться с ней. */
+    private fun lastPostAdapterPosition(): Int = headerOffset() + loadedItems.size - 1
+
+    /**
+     * Принять снимок «сейчас читают тему» из свежего ответа сервера и переприменить подвал.
+     *
+     * @param reset полная (пере)загрузка темы: снимок предыдущей темы/страницы больше не наш, даже
+     * если новая страница блок не принесла (разлогинились / другой скин).
+     */
+    private fun applyActiveReaders(page: ThemePage, reset: Boolean = false) {
+        if (reset) pageActiveReaders = page.activeReaders
+        else page.activeReaders?.let { pageActiveReaders = it }
+        readersFooterAdapter.setReaders(pageActiveReaders, enabled = isClassicMode())
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            // Блока нет у гостя — без этого лога «счётчик не появился» не отличить от ошибки парсера.
+            android.util.Log.i("FPDA_READERS", "topic=${page.id} total=${pageActiveReaders?.total ?: -1} " +
+                    "members=${pageActiveReaders?.members?.size ?: 0} guests=${pageActiveReaders?.guests ?: 0} " +
+                    "classic=${isClassicMode()}")
+        }
+    }
 
     /** The accumulated posts across all loaded pages (source of truth for the adapter). */
     private val loadedItems = ArrayList<NativePostItem>()
@@ -256,6 +288,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Favorites state of the loaded topic, driving the overflow «Добавить/Убрать из избранного» item. */
     private var pageIsInFavorite = false
     private var pageFavId = 0
+
+    /**
+     * «Сейчас эту тему читают» с ПОСЛЕДНЕГО успешно разобранного ответа сервера — снимок на момент
+     * загрузки, живым не тикает. Берём именно последний ответ, а не хвостовую страницу ленты: при
+     * скролле вверх догружаются предыдущие страницы, и их счётчик свежее. null у гостя (сервер не
+     * печатает блок) — тогда счётчик нигде не показывается.
+     */
+    private var pageActiveReaders: forpdateam.ru.forpda.entity.remote.theme.TopicActiveReaders? = null
 
     /** Loaded-page flags driving the toolbar poll / hat icon visibility (see [refreshToolbarState]). */
     private var pageHasPoll = false
@@ -666,7 +706,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Inside a nested quote that relayout can cancel the just-created selection; suppress only
         // those focus requests while leaving normal finger/programmatic scrolling untouched.
         recyclerView.layoutManager = TopicSelectionLayoutManager(requireContext())
-        recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(pollHeaderAdapter, postsAdapter)
+        recyclerView.adapter = androidx.recyclerview.widget.ConcatAdapter(
+                pollHeaderAdapter, postsAdapter, readersFooterAdapter)
         // Bottom room for the CLASSIC-mode pagination bar is managed in updatePaginationBar().
         recyclerView.clipToPadding = false
         // Page tone UNDER the post cards = полотно ChromeCanvas (под Material You — динамический
@@ -1664,6 +1705,22 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     private fun showOverflowMenu() {
         val ctx = requireContext()
         val actions = buildList<Pair<String, () -> Unit>> {
+            // «Сейчас читают тему» — счётчик из последней загруженной страницы (снимок, не живой тик).
+            // Первым пунктом и без действия: это справка, а не команда. У гостя блока в HTML нет → пункта
+            // тоже нет. Тап показывает ники видимых читателей, если сервер их прислал.
+            pageActiveReaders?.let { readers ->
+                add("Читают тему: ${readers.total}" to {
+                    val nicks = readers.members.joinToString(", ") { it.nick }
+                    val details = buildList {
+                        if (nicks.isNotEmpty()) add(nicks)
+                        if (readers.guests > 0) add("гостей: ${readers.guests}")
+                        if (readers.hidden > 0) add("скрытых: ${readers.hidden}")
+                    }
+                    if (details.isNotEmpty()) {
+                        Toast.makeText(ctx, details.joinToString(" · "), Toast.LENGTH_LONG).show()
+                    }
+                })
+            }
             add("Обновить" to { refreshInPlace() })
             // Add/remove from favorites (parity with the WebView fav menu). Visible once a topic id is known.
             if (pageTopicId > 0) {
@@ -2582,6 +2639,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             result.onSuccess { page ->
                 processHatForPage(page) // strip the repeated hat 4pda echoes onto this deeper page
                 recordMaxLoaded(page) // догрузка вниз углубляет трек «докуда грузили» (кросс-девайс детект)
+                applyActiveReaders(page) // счётчик читателей — из самого свежего ответа
                 val newItems = pagination.registerAndFilterNew(
                         filterBlacklisted(tagPage(mapper.map(page.posts), page.pagination.current)))
                 pagination.onPageAppended(page.pagination.current, page.pagination)
@@ -2713,6 +2771,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             var prepended = false
             result.onSuccess { page ->
                 recordMaxLoaded(page) // монотонно — догрузка ВВЕРХ трек не понижает, но фиксирует факт загрузки
+                applyActiveReaders(page) // ответ свежее хвостового — счётчик читателей обновляем и отсюда
                 // Prepending page 1 brings the real hat into view — keep it and light the toolbar ⓘ; a
                 // deeper page's repeated hat is stripped instead.
                 val hatId = processHatForPage(page)
@@ -2988,8 +3047,11 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                         hadUserGesture = userScrollGestureThisSession,
                         dwellMs = android.os.SystemClock.elapsedRealtime() - sessionRenderedAtMs,
                         hasNextPage = pagination.hasNextPage(),
-                        lastItemFullyVisible = (recyclerView.layoutManager as? LinearLayoutManager)
-                                ?.findLastCompletelyVisibleItemPosition() == headerOffset() + loadedItems.size - 1,
+                        // «Виден последний ПОСТ», а не последний элемент адаптера: в классическом режиме
+                        // под постами стоит подвал читателей, и сравнение с последней позицией списка
+                        // навсегда давало бы false (dwell-дочитка перестала бы срабатывать).
+                        lastItemFullyVisible = ((recyclerView.layoutManager as? LinearLayoutManager)
+                                ?.findLastCompletelyVisibleItemPosition() ?: -1) >= lastPostAdapterPosition(),
                 )) {
             if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
                 android.util.Log.i("FPDA_READ_BOUNDARY", "dwell_read_no_gesture topic=$pageTopicId " +
@@ -4889,6 +4951,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // с нулём. Обновляем метку «тема на экране» здесь, если вкладка сейчас видима.
         if (isResumed && pageTopicId > 0) eventsRepository.setViewedTopic(pageTopicId)
         pageSt = page.st
+        applyActiveReaders(page, reset = true)
         pageIsInFavorite = page.isInFavorite
         pageFavId = page.favId
         recordMaxLoaded(page) // трек «докуда это устройство грузило» для кросс-девайс детекта
@@ -5062,8 +5125,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         val anchorId = anchoredBottomPostId ?: return
         if (anchorId != loadedItems.lastOrNull()?.postId) { anchoredBottomPostId = null; return }
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        val itemCount = recyclerView.adapter?.itemCount ?: return
-        val lastPos = itemCount - 1
+        if ((recyclerView.adapter?.itemCount ?: 0) <= 0) return
+        // Последний ПОСТ (подвал читателей под ним — не якорь пина), см. [lastPostAdapterPosition].
+        val lastPos = lastPostAdapterPosition()
+        if (lastPos < 0) return
         // Still parked at the end (last item at least partially visible) → re-pin it to the bottom.
         if (lm.findLastVisibleItemPosition() >= lastPos) {
             val lastView = recyclerView.findViewHolderForAdapterPosition(lastPos)?.itemView
@@ -5362,7 +5427,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         if (recyclerView.isComputingLayout) return
         if (recyclerView.scrollState != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
-        val lastPos = (recyclerView.adapter?.itemCount ?: 0) - 1
+        // Пин держит ПОСЛЕДНИЙ ПОСТ, а не последний элемент списка: в классическом режиме под постами
+        // стоит подвал читателей, и `itemCount - 1` мерил бы его — высокий последний пост тогда терял
+        // бы защиту «выше экрана → выравнивать по верху».
+        val lastPos = lastPostAdapterPosition()
         if (lastPos < 0) return
         val lastView = recyclerView.findViewHolderForAdapterPosition(lastPos)?.itemView ?: return
         val visible = recyclerView.height - recyclerView.paddingTop - recyclerView.paddingBottom

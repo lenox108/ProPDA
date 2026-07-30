@@ -86,6 +86,12 @@ class ThemePage {
     var pagination = Pagination()
     var poll: Poll? = null
 
+    /**
+     * «Сейчас эту тему читают» — снимок на момент загрузки ЭТОЙ страницы (см. [TopicActiveReaders]).
+     * null, если сервер блок не отдал: у гостя его в разметке нет.
+     */
+    var activeReaders: TopicActiveReaders? = null
+
     val anchor: String?
         get() = if (anchors.isEmpty()) null else anchors[anchors.size - 1]
 

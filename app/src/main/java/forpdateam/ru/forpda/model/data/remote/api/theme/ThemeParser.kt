@@ -85,6 +85,7 @@ class ThemeParser(
 
     private val scope = ParserPatterns.Topic
     private val metadataParser = ThemePageMetadataParser()
+    private val activeUsersParser = TopicActiveUsersParser()
 
     /**
      * @param initialRequestUrl исходный URL запроса (до редиректа). Нужен для view=getnewpost: в Location нет #entry,
@@ -109,6 +110,12 @@ class ThemeParser(
         page.isHatOpen = hatOpen
         page.isPollOpen = pollOpen
         page.url = argUrl
+        // «Сейчас эту тему читают»: блок печатается под последним постом той же страницы, лишнего
+        // запроса не нужно. Для гостя блока нет → null, и счётчик просто не показывается.
+        // Обычная выдача, которую получает приложение, блок НЕ содержит: «N чел. читают эту тему»
+        // печатает только полная версия сайта (кука `deskver=1`) и только авторизованному. Разбор
+        // здесь оставлен как бесплатный путь — если сессия отдаст полный скин, счётчик приедет сам.
+        page.activeReaders = activeUsersParser.parse(response)
 
         // findpost / act=findpost: id поста только в исходном URL; редирект даёт #entry… или &p= не того поста —
         // раньше scroll_anchor по argUrl заполнял anchors первым, addEntry…(initial) не вызывался, а anchor = последний в списке.
