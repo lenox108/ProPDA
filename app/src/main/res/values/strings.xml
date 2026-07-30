@@ -1113,7 +1113,7 @@
     <string name="pref_title_delivery_method">Способ доставки</string>
     <string name="pref_summary_delivery_poll">Опрос: приложение само проверяет форум раз в интервал. Экономно, но уведомления приходят с задержкой.</string>
     <string name="pref_summary_delivery_push">Push: события приходят мгновенно, даже в спящем режиме, и почти не расходуют батарею. Рекомендуется.</string>
-    <string name="pref_summary_delivery_socket">То же мгновенное получение сообщений, что и обычный push, только без сервисов Google: приложение само держит соединение с 4PDA. Для Huawei и прошивок без Google Play. Нужен разовый вход в аккаунт 4PDA. Батарею расходует заметнее обычного push и держит значок в шторке.</string>
+    <string name="pref_summary_delivery_socket">Мгновенно, как push, но без сервисов Google — для Huawei и прошивок без Google Play. Нужен разовый вход в аккаунт; батареи тратит больше, в шторке висит значок.</string>
     <string name="pref_summary_delivery_off">В фоне ничего не проверяется. Уведомления приходят, только когда приложение открыто.</string>
     <string name="pref_title_pro_section">Дополнительные функции</string>
     <string name="settings_section_pro_summary">Push-уведомления, прокси, ключ активации</string>
