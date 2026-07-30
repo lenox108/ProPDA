@@ -96,13 +96,11 @@ class QmsChatViewModelLoadTest {
     private fun mockEventsRepository(
             webSocketConnected: Boolean = false,
             threadActivity: Flow<Int> = flowOf(),
-            msSinceUserInteraction: Long = 0L,
     ): EventsRepository {
         val events = mockk<EventsRepository>(relaxed = true)
         every { events.observeEventsTab() } returns flowOf()
         every { events.observeQmsThreadActivity() } returns threadActivity
         every { events.isWebSocketConnected() } returns webSocketConnected
-        every { events.msSinceUserInteraction() } returns msSinceUserInteraction
         return events
     }
 
@@ -305,48 +303,20 @@ class QmsChatViewModelLoadTest {
     }
 
     /**
-     * Диалог, просто оставленный открытым (никто не касается экрана, сообщений нет), не должен
-     * опрашиваться в частом темпе: живой замер дал 679 запросов за час на негаснущем экране.
+     * Открытый чат = активная переписка, поэтому частый тик держится всё время, пока экран виден, —
+     * без всяких окон активности: ПЕРВОЕ сообщение после тишины должно приходить так же быстро, как
+     * остальные (прямое решение владельца, 30.07.2026). Ограничитель — жизненный цикл: с погасшим
+     * экраном цикл опроса не работает вовсе.
      */
     @Test
-    fun `abandoned open dialog falls back to the idle cadence`() = runTest {
+    fun `silent socket keeps the fast cadence with no user activity at all`() = runTest {
         val interactor = mockk<QmsInteractor>()
         val initial = chatWithMessages()
         coEvery {
             interactor.loadChatThread(any(), any(), any(), any(), any(), any())
         } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
-        val idle = mockEventsRepository(msSinceUserInteraction = 10 * 60_000L)
-        val vm = viewModel(interactor, idle)
+        val vm = viewModel(interactor, mockEventsRepository(webSocketConnected = true))
         vm.start()
-        advanceUntilIdle()
-
-        assertEquals(QmsChatViewModel.AUTO_REFRESH_IDLE_MS, vm.autoRefreshDelayMs())
-    }
-
-    /** Пришло сообщение — переписка живая, следующее ждём в частом темпе даже без касаний. */
-    @Test
-    fun `incoming message re-arms the fast cadence without touches`() = runTest {
-        val interactor = mockk<QmsInteractor>()
-        val initial = chatWithMessages()
-        val appended = QmsMessage().apply {
-            id = 2
-            content = "ответ собеседника"
-            isMyMessage = false
-        }
-        coEvery {
-            interactor.loadChatThread(any(), any(), any(), any(), any(), any())
-        } returns QmsChatLoadOutcome.Content(initial, fromCache = false, pageKind = mockk(relaxed = true))
-        coEvery { interactor.getMessagesAfter(1, 2, 1) } returns listOf(appended)
-        val activity = MutableSharedFlow<Int>(extraBufferCapacity = 8)
-        val vm = viewModel(
-                interactor,
-                mockEventsRepository(threadActivity = activity, msSinceUserInteraction = 10 * 60_000L)
-        )
-        vm.start()
-        advanceUntilIdle()
-        assertEquals(QmsChatViewModel.AUTO_REFRESH_IDLE_MS, vm.autoRefreshDelayMs())
-
-        activity.emit(2)
         advanceUntilIdle()
 
         assertEquals(QmsChatViewModel.AUTO_REFRESH_ACTIVE_MS, vm.autoRefreshDelayMs())
