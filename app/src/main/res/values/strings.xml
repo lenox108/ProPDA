@@ -1023,8 +1023,8 @@
     <string name="pref_title_topic_back_behavior">Поведение кнопки \"Назад\" в темах</string>
     <string name="pref_value_topic_back_behavior_history">По истории переходов</string>
     <string name="pref_value_topic_back_behavior_origin">К исходному разделу</string>
-    <string name="pref_summary_topic_back_behavior_history">Back закрывает темы по одной: связанная тема возвращает к предыдущей теме.</string>
-    <string name="pref_summary_topic_back_behavior_origin">Back из цепочки связанных тем сразу возвращает к разделу, откуда была открыта первая тема.</string>
+    <string name="pref_summary_topic_back_behavior_history">Системная кнопка \"Назад\" закрывает темы по одной: связанная тема возвращает к предыдущей. Стрелка в шапке темы всегда выходит к разделу.</string>
+    <string name="pref_summary_topic_back_behavior_origin">Системная кнопка \"Назад\" из цепочки связанных тем сразу возвращает к разделу, откуда была открыта первая. Стрелка в шапке темы делает это всегда.</string>
     <string name="pref_title_topic_open_target">При открытии темы</string>
     <string name="pref_value_topic_open_target_first_page">Первая страница</string>
     <string name="pref_value_topic_open_target_last_unread">Первое непрочитанное</string>
