@@ -5,20 +5,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Разметка снята с живой страницы темы 4PDA (topic 1103268, 30.07.2026): `div.navstrip` со ссылками
- * от корня к разделу темы, разделитель — `&gt;`, самой темы в строке нет.
+ * Разметка снята с ЖИВОЙ выдачи, которую получает приложение (topic 1103268, 30.07.2026): строка
+ * помечена через `id="navstrip"`, ссылки идут от корня к разделу темы, разделитель — `&nbsp;&gt;`,
+ * самой темы в строке нет. Полный скин сайта помечает ту же строку через `class` — покрыто отдельным
+ * тестом, парсер принимает оба варианта.
  */
 class TopicForumPathParserTest {
 
-    private val navstrip = """
-        <div class="navstrip">
-          <img src="style_images/1/nav_m.gif" border="0" alt="&gt;">
-          <a href="index.php?act=idx">4PDA</a> &gt;
-          <a href="index.php?showforum=281">Android</a> &gt;
-          <a href="index.php?showforum=269">Android - Устройства</a> &gt;
-          <a href="index.php?showforum=1061">OnePlus</a>
-        </div>
-    """.trimIndent()
+    private val navstrip =
+            """<div id="navstrip">&gt;&nbsp;<a href="https://4pda.to/forum/index.php?act=idx">4PDA</a>""" +
+            """&nbsp;&gt; <a href="https://4pda.to/forum/index.php?showforum=281">Android</a>""" +
+            """&nbsp;&gt; <a href="https://4pda.to/forum/index.php?showforum=269">Android - Устройства</a>""" +
+            """&nbsp;&gt; <a href="https://4pda.to/forum/index.php?showforum=1061">OnePlus</a></div>"""
+
+    /** Полный скин сайта помечает ту же строку классом — путь должен разбираться одинаково. */
+    @Test
+    fun parsesClassMarkedNavstripToo() {
+        val html = """
+            <div class="navstrip">
+              <a href="index.php?act=idx">4PDA</a> &gt;
+              <a href="index.php?showforum=281">Android</a>
+            </div>
+        """.trimIndent()
+        assertEquals(listOf("4PDA", "Android"), TopicForumPathParser.parse(html).map { it.title })
+    }
 
     @Test
     fun parsesFullChainFromRootToTopicForum() {

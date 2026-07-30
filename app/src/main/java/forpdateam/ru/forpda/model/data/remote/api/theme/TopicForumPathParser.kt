@@ -16,7 +16,9 @@ import forpdateam.ru.forpda.entity.remote.theme.TopicForumPathItem
  */
 object TopicForumPathParser {
 
-    private val NAVSTRIP = Regex("""(?is)<div[^>]*\bclass\s*=\s*["'][^"']*\bnavstrip\b[^"']*["'][^>]*>(.*?)</div>""")
+    // Выдача, которую получает приложение, помечает строку через id (`<div id="navstrip">`), а полный
+    // скин сайта — через class. Принимаем оба: атрибут различается по версии вёрстки, смысл один.
+    private val NAVSTRIP = Regex("""(?is)<div[^>]*\b(?:id|class)\s*=\s*["'][^"']*\bnavstrip\b[^"']*["'][^>]*>(.*?)</div>""")
     private val ANCHOR = Regex("""(?is)<a\b([^>]*)>(.*?)</a>""")
     private val HREF = Regex("""(?i)href\s*=\s*["']([^"']*)["']""")
     private val SHOWFORUM = Regex("""(?i)showforum=(\d+)""")
