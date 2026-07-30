@@ -3,6 +3,7 @@ package forpdateam.ru.forpda.model.repository.theme
 import forpdateam.ru.forpda.common.di.AppScope
 import forpdateam.ru.forpda.entity.db.readboundary.TopicReadBoundaryDao
 import forpdateam.ru.forpda.entity.db.readboundary.TopicReadBoundaryRoom
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -33,8 +34,27 @@ class TopicReadBoundaryStore @Inject constructor(
 
     private val cache: MutableMap<Int, TopicReadBoundaryRoom> = ConcurrentHashMap()
 
+    /**
+     * Сигнал «прогрев из Room закончен». Нужен точкам, которые РЕШАЮТ по границе прямо в момент тапа —
+     * «Продолжить чтение» и «История» (см. [isHydrated]/[awaitHydrated]). Они читают [lastSeenPostId]
+     * синхронно, и на холодном старте кэш мог быть ещё пуст: границы «нет» → открытие уходило в фолбэк
+     * (чистый url + настройка) вместо резюма на место остановки. Открывалось то там, то тут —
+     * ровно жалоба «периодически открывает неправильный якорь, подсветки нет» (у голого постраничного
+     * url нет якорного поста → [applyInitialAnchor] садится на верх страницы и вспышку не запрашивает).
+     */
+    @Volatile
+    private var hydration: CompletableDeferred<Unit> = CompletableDeferred()
+
     init {
         hydrateAsync()
+    }
+
+    /** true, когда прогрев из Room уже завершён — синхронное чтение границы достоверно. */
+    val isHydrated: Boolean get() = hydration.isCompleted
+
+    /** Дождаться прогрева кэша. Мгновенно возвращается, если он уже прошёл. */
+    suspend fun awaitHydrated() {
+        hydration.await()
     }
 
     /**
@@ -47,18 +67,25 @@ class TopicReadBoundaryStore @Inject constructor(
      * доливаем мерж обратно в Room.
      */
     private fun hydrateAsync() {
+        val signal = hydration
         appScope.launch(Dispatchers.IO) {
-            runCatching { dao.getAll() }.getOrNull()?.forEach { db ->
-                val merged = cache.merge(db.topicId, db) { mem, dbRow -> mergeRows(mem, dbRow) }
-                if (merged != null && merged != db) {
-                    runCatching { dao.upsert(merged) }
+            try {
+                runCatching { dao.getAll() }.getOrNull()?.forEach { db ->
+                    val merged = cache.merge(db.topicId, db) { mem, dbRow -> mergeRows(mem, dbRow) }
+                    if (merged != null && merged != db) {
+                        runCatching { dao.upsert(merged) }
+                    }
                 }
+            } finally {
+                // Даже при ошибке БД снимаем ожидание: ждущие получат честный cold-miss, а не зависнут.
+                signal.complete(Unit)
             }
         }
     }
 
     /** Бэкап восстановил таблицу под живым процессом — перечитать её в кэш (мерж тот же). */
     fun rehydrateAfterRestore() {
+        hydration = CompletableDeferred()
         cache.clear()
         hydrateAsync()
     }

@@ -263,6 +263,41 @@ class TopicPostsAdapter(
     }
 
     /**
+     * Перевзвести окно вспышки для УЖЕ запрошенной цели: отсчёт снова «взведён, но не начат», и первая
+     * следующая привязка поста запустит полные [HIGHLIGHT_TOTAL_MS].
+     *
+     * Зачем: между запросом и моментом, когда пост реально виден, список может быть СКРЫТ. Так работает
+     * дозаполнение короткой последней страницы ([NativeTopicFragment.maybeFillLastPage]): оно прячет
+     * RecyclerView (alpha=0) и уходит в сеть за предыдущими страницами. Окно при этом стартовало на
+     * привязке под невидимым списком и догорало вхолостую — открытие в конце темы (а это ровно
+     * «Продолжить чтение», «История», дочитанная тема) оставалось БЕЗ вспышки. Для пользователя —
+     * «подсветка срабатывает через раз».
+     *
+     * No-op, если подсветку не запрашивали (настройка выключена) — выключенная остаётся выключенной.
+     */
+    fun rearmHighlightWindow() {
+        val postId = highlightTargetPostId
+        if (postId <= 0) return
+        highlightDeadlineUptime = 0L
+        highlightArmedAtUptime = android.os.SystemClock.uptimeMillis()
+        val pos = currentList.indexOfFirst { it.postId == postId }
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_HIGHLIGHT", "rearm post=$postId pos=$pos")
+        }
+        if (pos >= 0) notifyItemChanged(pos)
+    }
+
+    /**
+     * Снять взвод подсветки. Зовётся на КАЖДОМ свежем рендере страницы темы, до посадки якоря: цель
+     * прошлого открытия не должна пережить его и вспыхнуть заново (правило «одна вспышка на открытие»).
+     */
+    fun clearHighlight() {
+        highlightTargetPostId = 0
+        highlightDeadlineUptime = 0L
+        highlightArmedAtUptime = 0L
+    }
+
+    /**
      * Remaining flash time (ms) for [postId], or 0 when it is not the (still-active) highlight target.
      * Первый вызов для взведённой цели ЗАПУСКАЕТ окно (см. [highlightDeadlineUptime]) — то есть отсчёт
      * идёт от появления поста на экране, а не от запроса подсветки.

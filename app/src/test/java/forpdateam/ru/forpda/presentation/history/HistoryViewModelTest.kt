@@ -71,6 +71,8 @@ class HistoryViewModelTest {
         every { historyRepository.observeItems() } returns itemsFlow
         // По умолчанию границы прочитанного нет → путь фолбэка (старое поведение через linkHandler).
         every { readBoundaryStore.lastSeenPostId(any()) } returns 0
+        // Кэш границ прогрет: тап решает синхронно, без ожидания Room (холодный кэш — отдельный тест).
+        every { readBoundaryStore.isHydrated } returns true
         // combine() в VM ждёт эмиссию всех источников; отдаём стартовые значения, иначе items не соберутся.
         every { favoritesCache.observeItems() } returns MutableStateFlow(emptyList<FavItem>())
         every { listsPrefs.observeShowDotFlow() } returns flowOf(false)
@@ -269,6 +271,34 @@ class HistoryViewModelTest {
         assertEquals("history", theme.topicOpenSource)
         assertEquals("Test Topic", theme.screenTitle)
         verify(exactly = 0) { linkHandler.handle(any(), any(), any()) }
+    }
+
+    /**
+     * Холодный старт: тап опережает прогрев кэша границ из Room. Раньше синхронное чтение отдавало 0 —
+     * «границы нет» → фолбэк на чистый url, то есть открытие по настройке вместо продолжения чтения, да
+     * ещё и без якорного поста (значит без подсветки). Ровно жалоба «периодически открывает не туда».
+     * Теперь тап дожидается прогрева и всё-таки садится на границу.
+     */
+    @Test
+    fun `onItemClick waits for cold boundary cache before deciding`() = runTest {
+        coEvery { historyRepository.getHistory() } returns emptyList()
+        var hydrated = false
+        every { readBoundaryStore.isHydrated } answers { hydrated }
+        every { readBoundaryStore.lastSeenPostId(42) } answers { if (hydrated) 143987654 else 0 }
+        coEvery { readBoundaryStore.awaitHydrated() } answers { hydrated = true }
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        vm.onItemClick(makeItem(42, "https://4pda.to/forum/index.php?showtopic=42&st=1240", "Test Topic"))
+        advanceUntilIdle()
+
+        val screen = slot<Screen>()
+        verify { router.navigateTo(capture(screen)) }
+        assertEquals(
+                "https://4pda.to/forum/index.php?showtopic=42&view=findpost&p=143987654",
+                (screen.captured as Screen.Theme).themeUrl
+        )
     }
 
     @Test

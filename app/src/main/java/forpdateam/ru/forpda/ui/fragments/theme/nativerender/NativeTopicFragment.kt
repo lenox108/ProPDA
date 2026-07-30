@@ -2859,6 +2859,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (forpdateam.ru.forpda.BuildConfig.DEBUG) android.util.Log.i("FPDA_CLEAR", "anchor SET(fillLastPage)=$anchoredBottomPostId")
         }
         recyclerView.alpha = 1f
+        // Всё время дозаполнения список был НЕВИДИМ, а окно вспышки уже тикало (оно стартует на первой
+        // привязке целевого поста — та случилась под alpha=0 сразу после [applyInitialAnchor]). За
+        // сетевой поход за предыдущими страницами 1300 мс сгорали вхолостую, и открытие в конце темы
+        // («Продолжить чтение», «История», дочитанная тема — самые частые случаи короткой последней
+        // страницы) оставалось без подсветки: «срабатывает через раз». Перевзводим окно на момент
+        // ПОКАЗА — пост получает полные 1300 мс уже на глазах у пользователя. No-op, если подсветку не
+        // запрашивали (настройка выключена).
+        postsAdapter.rearmHighlightWindow()
     }
 
     /**
@@ -5167,6 +5175,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         updatePaginationBar()
         applyInitialHatCollapsedState(topicHatPostId)
         postsAdapter.setTopicHat(topicHatPostId, hatCollapsed)
+        // Свежий рендер = новое открытие: цель подсветки прошлого открытия снимается, иначе перевзвод
+        // после дозаполнения последней страницы мог бы вспыхнуть по стухшей цели. Ставится заново в
+        // [applyInitialAnchor] (внутри коммита ниже), по настройке.
+        postsAdapter.clearHighlight()
         submitPosts {
             if (view != null) {
                 applyInitialAnchor(page.anchorPostId, page.hasUnreadTarget, items)
@@ -5681,6 +5693,31 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
+    /**
+     * Якорный пост мог не дожить до списка. Цель приходит из РАЗБОРА страницы (`page.anchorPostId`), а в
+     * список попадает уже отфильтрованный набор: [filterBlacklisted] выкидывает посты авторов из ЧС, а на
+     * глубокой странице снимается ведущая копия шапки ([processHatForPage]). Тогда резолвер отдавал
+     * [AnchorResolution.PostNotLoaded], ветка «нечего делать» не двигала список и НЕ запрашивала вспышку —
+     * тема показывалась с верха страницы. Для пользователя это ровно «открылся не тот пост и подсветки
+     * нет», причём «периодически»: зависит от того, кто написал первый непрочитанный.
+     *
+     * Подменяем цель ближайшим уцелевшим постом: сначала СЛЕДУЮЩИМ (id постов 4PDA монотонно растут, так
+     * что это буквально соседний пост — ничего не проглочено), иначе ближайшим предыдущим. Не нашли ни
+     * того ни другого — оставляем запрос как есть (сработает прежнее поведение).
+     */
+    private fun substituteMissingAnchorTarget(ids: List<Int>, request: AnchorRequest): AnchorRequest {
+        if (request !is AnchorRequest.Post) return request
+        if (ids.isEmpty() || ids.contains(request.postId)) return request
+        val fallbackId = ids.firstOrNull { it > request.postId }
+                ?: ids.lastOrNull { it < request.postId }
+                ?: return request
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            android.util.Log.i("FPDA_CLEAR",
+                    "anchor target ${request.postId} missing from list (ЧС/шапка) → nearest $fallbackId")
+        }
+        return request.copy(postId = fallbackId)
+    }
+
     private fun applyInitialAnchor(
             anchorPostId: String?,
             hasUnreadTarget: Boolean,
@@ -5823,14 +5860,14 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // unread/find anchor (cf. «go to page N lands on last post» — we force the page top).
         val jumpToTop = pendingJumpToTop
         pendingJumpToTop = false
-        val request = when {
+        val request = substituteMissingAnchorTarget(ids, when {
             jumpToTop -> AnchorRequest.Top
             hasUnreadTarget && targetId != null ->
                 AnchorRequest.Post(targetId, AnchorRequest.Post.Reason.FIRST_UNREAD)
             targetId != null ->
                 AnchorRequest.Post(targetId, AnchorRequest.Post.Reason.FIND_POST)
             else -> AnchorRequest.Top
-        }
+        })
         when (val resolution = anchorResolver.resolve(ids, request)) {
             is AnchorResolution.Position -> {
                 // For a fresh "to top" open, land on the very top (the poll header, if any, then #1),
@@ -6075,6 +6112,10 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 "tracker", "tracking",
                 "news", "article", "announce",
                 "profile", "topics", "forum", "forum_list",
+                // «История» и строка «Продолжить чтение» в «Ещё» открывают тему с этим source. Это тоже
+                // вход ИЗ списка: при реюзе живого таба «Назад» должен выйти в список, а не отыгрывать
+                // внутритемную историю прошлого захода.
+                "history",
         )
 
         /** Arm hybrid page prefetch when scrolled within this fraction of a viewport from an edge

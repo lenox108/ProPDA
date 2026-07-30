@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * История посещений без Moxy.
@@ -180,6 +181,21 @@ class HistoryViewModel @Inject constructor(
      * честный фолбэк на прежнее поведение.
      */
     fun onItemClick(item: HistoryItem) {
+        // Кэш границ прогревается из Room асинхронно ([TopicReadBoundaryStore.awaitHydrated]). Тап на
+        // холодном старте мог опередить прогрев: граница «отсутствует» → фолбэк на чистый url, то есть
+        // не резюм, а обычное открытие по настройке — и без якорного поста, а значит без подсветки.
+        // Ждём прогрев ограниченное время; на прогретом кэше ветка синхронна (задержки нет).
+        if (item.id > 0 && !readBoundaryStore.isHydrated) {
+            scope.launch {
+                withTimeoutOrNull(BOUNDARY_HYDRATION_WAIT_MS) { readBoundaryStore.awaitHydrated() }
+                openHistoryItem(item)
+            }
+            return
+        }
+        openHistoryItem(item)
+    }
+
+    private fun openHistoryItem(item: HistoryItem) {
         val topicId = item.id
         val boundaryPostId = if (topicId > 0) readBoundaryStore.lastSeenPostId(topicId) else 0
         if (topicId > 0 && boundaryPostId > 0) {
@@ -209,5 +225,8 @@ class HistoryViewModel @Inject constructor(
 
     private companion object {
         const val TOPIC_BASE_URL = "https://4pda.to/forum/index.php?showtopic="
+
+        /** Потолок ожидания прогрева границ прочитанного при тапе (см. [onItemClick]). */
+        const val BOUNDARY_HYDRATION_WAIT_MS = 1_500L
     }
 }
