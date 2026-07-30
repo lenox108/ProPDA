@@ -223,23 +223,28 @@ class HistoryViewModelTest {
         verify { errorHandler.handle(error, null) }
     }
 
+    /**
+     * Границы нет → открываем ЧИСТЫЙ url темы, чтобы сработала настройка «При открытии темы».
+     * Сохранённый url прошлого визита сюда не годится: он указывает на страницу ВХОДА в прошлый раз
+     * (в гибриде она не двигается при прокрутке) и не несёт якорного поста — посадка ушла бы на верх
+     * страницы, а подсветка не запросилась бы вовсе.
+     */
     @Test
-    fun `onItemClick without read boundary falls back to linkHandler`() = runTest {
+    fun `onItemClick without read boundary opens clean topic url by setting`() = runTest {
         coEvery { historyRepository.getHistory() } returns emptyList()
 
         val vm = createViewModel()
         advanceUntilIdle()
 
-        val item = makeItem(42, "https://4pda.to/topic/42", "Test Topic")
+        val item = makeItem(42, "https://4pda.to/forum/index.php?showtopic=42&st=1240", "Test Topic")
         vm.onItemClick(item)
 
-        verify {
-            linkHandler.handle(
-                    "https://4pda.to/topic/42",
-                    router,
-                    mapOf(Screen.ARG_TITLE to "Test Topic")
-            )
-        }
+        val screen = slot<Screen>()
+        verify { router.navigateTo(capture(screen)) }
+        val theme = screen.captured as Screen.Theme
+        assertEquals("https://4pda.to/forum/index.php?showtopic=42", theme.themeUrl)
+        assertEquals("history", theme.topicOpenSource)
+        verify(exactly = 0) { linkHandler.handle(any(), any(), any()) }
     }
 
     @Test

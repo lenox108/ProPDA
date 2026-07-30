@@ -110,7 +110,8 @@ class ThemeUseCaseTest {
 
         verify(exactly = 1) { crossScreenInteractor.onLoadTopic(903891) }
         verify(exactly = 1) { eventsRepository.onTopicRead(903891) }
-        coVerify(atLeast = 1) { favoritesRepository.markRead(903891) }
+        // clearReadBoundary=false: дочитанная тема сохраняет границу «где закончил» для «Продолжить чтение».
+        coVerify(atLeast = 1) { favoritesRepository.markRead(903891, clearReadBoundary = false) }
     }
 
     @Test
@@ -122,7 +123,7 @@ class ThemeUseCaseTest {
 
         // Regression: the only old local path was a replay=0 CrossScreenInteractor event consumed
         // by FavoritesViewModel.  Marking from onPause could race with screen navigation and vanish.
-        coVerify(exactly = 1) { favoritesRepository.markRead(topicId) }
+        coVerify(exactly = 1) { favoritesRepository.markRead(topicId, clearReadBoundary = false) }
         verify(exactly = 1) { crossScreenInteractor.onLoadTopic(topicId) }
     }
 

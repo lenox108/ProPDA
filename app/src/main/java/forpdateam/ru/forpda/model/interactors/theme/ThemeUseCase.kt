@@ -352,7 +352,12 @@ class ThemeUseCase @Inject constructor(
         // any current or subsequently recreated Favorites screen.  markRead is idempotent; the
         // legacy cross-screen notification below remains for the Topics screen and older callers.
         appScope.launch(Dispatchers.IO) {
-            runCatching { favoritesRepository.markRead(topicId) }
+            // clearReadBoundary=false: тему ДОЧИТАЛИ на экране темы, и граница там уже зафиксирована на
+            // последнем посте — это «где закончил» для «Продолжить чтение»/«Истории». Снести её здесь
+            // значило бы отправить обе точки на сохранённый url прошлого визита (страницу ВХОДА), что и
+            // давало «открываю продолжить чтение, а там прошлая страница». Явную отметку «прочитано» из
+            // списка избранного это не затрагивает — она чистит границу как раньше.
+            runCatching { favoritesRepository.markRead(topicId, clearReadBoundary = false) }
                     .onFailure { errorHandler.handle(it) }
         }
         crossScreenInteractor.onLoadTopic(topicId)
