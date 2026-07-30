@@ -109,6 +109,9 @@ class NotificationPreferencesHolder(
     fun getQmsEnabled(): Boolean = dataStore.getQmsEnabledSync()
 
     // --- Текст сообщения QMS в уведомлении (дозагрузка отдельным запросом) ---
+    /** Системные события QMS (репутация, состояние аккаунта) — независимо от обычной переписки. */
+    fun getQmsSystemEnabled(): Boolean = dataStore.getQmsSystemEnabledSync()
+
     fun getQmsPreviewEnabled(): Boolean = dataStore.getQmsPreviewEnabledSync()
 
     fun getQmsPreviewAnchor(themeId: Int): Int = dataStore.getQmsPreviewAnchorSync(themeId)

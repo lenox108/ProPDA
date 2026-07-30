@@ -197,7 +197,7 @@ class NotificationsService : Service() {
 
         // Возврат приложения на передний план: FGS больше не нужен (процесс держит UI),
         // снимаем «служебное» уведомление. При следующем уходе в фон App поднимет его снова
-        // (режим «Постоянное соединение») — симметрично и без залипших уведомлений.
+        // (режим «Push без Google») — симметрично и без залипших уведомлений.
         val uiForeground = androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentState
                 .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
         if (uiForeground && intent?.getBooleanExtra(EXTRA_STARTED_AS_FGS, false) != true) {
@@ -217,7 +217,7 @@ class NotificationsService : Service() {
         }
         eventsRepository.externalStart(checkEvents)
 
-        // Режим «Постоянное соединение» в фоне: держим FGS и живой realtime. Ветка покрывает
+        // Режим «Push без Google» в фоне: держим FGS и живой realtime. Ветка покрывает
         // и воскрешение по START_STICKY после убийства процесса (intent=null, extra потерян,
         // а в свежем процессе foregroundRealtime по умолчанию выключен — включаем явно).
         // НО: если WS в кулдауне circuit breaker'а и не подключён — держать FGS ради мёртвого
@@ -250,7 +250,7 @@ class NotificationsService : Service() {
                 (notificationPreferencesHolder.getBgPersistentWs() && !uiForeground && !wsUsable)) {
             detachForegroundIfPromoted("no_realtime_work")
         }
-        // «Постоянное соединение»: сервис переживает смерть UI-задачи (START_STICKY), но ТОЛЬКО
+        // «Push без Google»: сервис переживает смерть UI-задачи (START_STICKY), но ТОЛЬКО
         // пока сокет полезен. В кулдауне — START_NOT_STICKY: убьют → не воскрешаем ради мёртвого
         // сокета (иначе churn: рестарт → кулдаун → детач → смерть → рестарт…). Воркер держит доставку.
         return if (notificationPreferencesHolder.getBgPersistentWs() && wsUsable) START_STICKY else START_NOT_STICKY
@@ -321,7 +321,7 @@ class NotificationsService : Service() {
                 .setSilent(true)
                 .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // «Постоянное соединение» живёт под specialUse: у dataSync на Android 15 суммарный
+            // «Push без Google» живёт под specialUse: у dataSync на Android 15 суммарный
             // лимит ~6 ч/сутки (onTimeout), а постоянный сокет должен жить сутками.
             val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
                     && notificationPreferencesHolder.getBgPersistentWs()) {
@@ -353,7 +353,7 @@ class NotificationsService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         Timber.i("onTaskRemoved")
-        // Режим «Постоянное соединение»: свайп из Recents НЕ должен убивать пуши — в этом
+        // Режим «Push без Google»: свайп из Recents НЕ должен убивать пуши — в этом
         // весь смысл режима (как у Telegram). Сервис и сокет продолжают жить.
         if (notificationPreferencesHolder.getBgPersistentWs()
                 && notificationPreferencesHolder.wantsPushNotifications()
@@ -587,7 +587,7 @@ class NotificationsService : Service() {
         }
 
         /**
-         * Режим «Постоянное соединение»: поднять сервис как FGS при уходе приложения в фон,
+         * Режим «Push без Google»: поднять сервис как FGS при уходе приложения в фон,
          * чтобы процесс и WebSocket пережили потерю foreground-приоритета. Вызывается из
          * App.onStop — в окне после ухода с переднего плана старт FGS ещё разрешён.
          */

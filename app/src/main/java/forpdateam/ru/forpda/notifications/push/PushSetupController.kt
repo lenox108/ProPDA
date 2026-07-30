@@ -39,6 +39,17 @@ class PushSetupController(private val context: Context) {
         data class Failed(val message: String) : Outcome()
     }
 
+    /**
+     * Только сессия, без регистрации FCM-токена: нужна «Прямому каналу 4PDA»
+     * ([forpdateam.ru.forpda.model.repository.events.RealtimeEventClient]) — он живёт на той же
+     * `ma`-сессии, но событий ждёт по сокету, а не через Google. Если сессия уже есть (например,
+     * заводилась под push), вход не спрашиваем.
+     */
+    suspend fun ensureSession(defaultLogin: String? = null): Outcome {
+        if (session.hasSession()) return Outcome.Registered
+        return loginThenSave(defaultLogin) { Outcome.Registered }
+    }
+
     /** Включение push: если сессия есть — просто регистрируем токен, иначе логин → регистрация. */
     suspend fun enablePush(defaultLogin: String? = null): Outcome {
         if (session.hasSession()) {
@@ -67,7 +78,23 @@ class PushSetupController(private val context: Context) {
         runCatching { registrar.unregister() }
     }
 
-    private suspend fun loginThenRegister(defaultLogin: String?): Outcome {
+    private suspend fun loginThenRegister(defaultLogin: String?): Outcome =
+            loginThenSave(defaultLogin) {
+                when (val r = registrar.register(force = true)) {
+                    is PushRegistrar.Result.Success -> Outcome.Registered
+                    is PushRegistrar.Result.NoGms -> Outcome.Failed(NO_GMS)
+                    is PushRegistrar.Result.NoSession -> Outcome.Failed("session lost")
+                    is PushRegistrar.Result.NotPro -> Outcome.Failed(NOT_PRO)
+                    is PushRegistrar.Result.Error -> Outcome.Failed(r.reason)
+                }
+            }
+
+    /**
+     * Разовый вход в app-протокол: логин + капча + сохранение сессии. [afterSaved] — что делать
+     * дальше (push регистрирует токен, «Push без Google» ничего не регистрирует: ему хватает
+     * самой сессии).
+     */
+    private suspend fun loginThenSave(defaultLogin: String?, afterSaved: suspend () -> Outcome): Outcome {
         val creds = askCredentials(defaultLogin) ?: return Outcome.Cancelled
         val loginOk = withContext(Dispatchers.IO) {
             runCatching {
@@ -106,13 +133,7 @@ class PushSetupController(private val context: Context) {
                     return Outcome.Failed(ACCOUNT_MISMATCH)
                 }
                 session.saveSession(loginOk.memberId, loginOk.loginKey)
-                when (val r = registrar.register(force = true)) {
-                    is PushRegistrar.Result.Success -> Outcome.Registered
-                    is PushRegistrar.Result.NoGms -> Outcome.Failed(NO_GMS)
-                    is PushRegistrar.Result.NoSession -> Outcome.Failed("session lost")
-                    is PushRegistrar.Result.NotPro -> Outcome.Failed(NOT_PRO)
-                    is PushRegistrar.Result.Error -> Outcome.Failed(r.reason)
-                }
+                afterSaved()
             }
             is AppProtocolClient.LoginResult.Captcha -> Outcome.Failed("captcha")
             is AppProtocolClient.LoginResult.Failed -> when {

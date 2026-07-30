@@ -5,6 +5,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.Color
 import android.graphics.Typeface
 import android.text.InputType
+import android.text.TextPaint
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -176,15 +177,62 @@ class PaginationHelper(private val context: androidx.fragment.app.FragmentActivi
             view.ellipsize = null
             view.includeFontPadding = false
             TextViewCompat.setAutoSizeTextTypeWithDefaults(view, TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE)
-            view.setTextSize(
-                    TypedValue.COMPLEX_UNIT_PX,
-                    view.resources.getDimension(R.dimen.pagination_page_autosize_max_text_size),
-            )
+            fitSelectTabTextSize(view)
             return
         }
         if (view is ViewGroup) {
             for (i in 0 until view.childCount) {
                 applySelectTabPresentationToView(view.getChildAt(i))
+            }
+        }
+    }
+
+    /**
+     * Кегль «N/M» подгоняется под ширину центральной вкладки: ширина ячейки задана весом, а ширина
+     * ТЕКСТА зависит от выбранного шрифта приложения — у широких шрифтов «18566/18566» не влезал в
+     * 14sp и обрезался краем ячейки. Штатный автоподбор androidx тут не годится: TabLayout сам
+     * дёргает setTextSize/setMaxLines в TabView.onMeasure, поэтому считаем сами и ставим наибольший
+     * влезающий кегль (он же гасит попытку TabLayout вернуть 14sp — см. approximateLineWidth там же).
+     */
+    private fun fitSelectTabTextSize(view: TextView) {
+        val res = view.resources
+        val maxPx = res.getDimension(R.dimen.pagination_page_autosize_max_text_size)
+        val minPx = res.getDimension(R.dimen.pagination_page_autosize_min_text_size)
+        val stepPx = res.getDimension(R.dimen.text_autosize_step_granularity_1sp).coerceAtLeast(1f)
+        val text = view.text?.toString().orEmpty()
+        val available = view.width - view.paddingLeft - view.paddingRight
+        var target = maxPx
+        if (available > 0 && text.isNotEmpty()) {
+            val paint = TextPaint(view.paint)
+            while (target > minPx) {
+                paint.textSize = target
+                if (paint.measureText(text) <= available) break
+                target -= stepPx
+            }
+            target = target.coerceAtLeast(minPx)
+        }
+        // Без порога setTextSize на каждом layout-проходе звал бы requestLayout → бесконечный цикл.
+        if (kotlin.math.abs(view.textSize - target) > 0.5f) {
+            view.setTextSize(TypedValue.COMPLEX_UNIT_PX, target)
+        }
+    }
+
+    private fun fitSelectTabsTextSize(tabLayout: TabLayout) {
+        for (i in 0 until tabLayout.tabCount) {
+            val tab = tabLayout.getTabAt(i) ?: continue
+            if (tab.tag != TAG_SELECT) continue
+            fitTextSizeInSubtree(tab.view)
+        }
+    }
+
+    private fun fitTextSizeInSubtree(view: View) {
+        if (view is TextView) {
+            fitSelectTabTextSize(view)
+            return
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                fitTextSizeInSubtree(view.getChildAt(i))
             }
         }
     }
@@ -197,6 +245,9 @@ class PaginationHelper(private val context: androidx.fragment.app.FragmentActivi
         if (!tabLayoutsWithWeightsListener.add(tabLayout)) return
         tabLayout.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             applyPaginationTabWeights(tabLayout)
+            // Ширина вкладки известна только после layout, а TabLayout возвращает свой кегль в
+            // onMeasure — подгонять приходится на каждом проходе (внутри стоит порог, см. метод).
+            fitSelectTabsTextSize(tabLayout)
         }
     }
 

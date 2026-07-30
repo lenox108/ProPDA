@@ -723,24 +723,46 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                             forpdateam.ru.forpda.common.Preferences.Main.TopicBackBehavior.HISTORY &&
                             themeBackStack.isNotEmpty())
 
-    override fun onBackPressed(): Boolean {
-        // Режим переноса умной кнопки — модальный оверлей поверх всего, «назад» выходит из него первым.
+    /**
+     * Закрыть то, что открыто ПОВЕРХ темы: режим переноса умной кнопки, оверлей шапки/опроса, строку
+     * поиска, панель ответа. Общая «прихожая» для системной «Назад» и для стрелки Up ([exitTopicUp]) —
+     * ни одна из них не должна выкидывать из темы, пока у пользователя открыт редактор или поиск.
+     *
+     * @return true, если что-то закрыли и наружу выходить не нужно.
+     */
+    private fun dismissTransientUi(): Boolean {
         fabPlacement?.takeIf { it.isMoveModeActive }?.let {
             it.stopMoveMode()
             return true
         }
-        // Back closes the hat/poll overlay first, then the find-on-page bar / reply editor, before leaving.
         if (dismissThemeOverlay()) return true
         if (searchBar?.visibility == View.VISIBLE) {
             closeSearch()
             return true
         }
-        // Let the panel dismiss its own BBCode/smiles popup before it hides entirely.
+        // Панель сама гасит свой BBCode/смайлы-попап прежде, чем скрыться целиком.
         if (messagePanel?.onBackPressed() == true) return true
         if (messagePanel?.visibility == View.VISIBLE) {
             hideMessagePanel()
             return true
         }
+        return false
+    }
+
+    /**
+     * Стрелка в тулбаре = навигация Up: выйти из темы к источнику, независимо от «Поведения кнопки
+     * Назад в темах» (та настройка описывает системную «Назад»). Если выходить некуда — тема открыта
+     * самостоятельной вкладкой, — падаем на обычную «Назад», чтобы стрелка не оказалась мёртвой.
+     */
+    private fun exitTopicUp() {
+        if (dismissTransientUi()) return
+        val activity = activity as? forpdateam.ru.forpda.ui.activities.MainActivity
+        if (activity?.exitTopicToOrigin(tag) == true) return
+        requireActivity().onBackPressedDispatcher.onBackPressed()
+    }
+
+    override fun onBackPressed(): Boolean {
+        if (dismissTransientUi()) return true
         // «Поведение кнопки Назад в темах» = HISTORY (по умолчанию): пройтись по истории переходов внутри
         // вкладки (ссылки на посты/темы) прежде чем закрыть вкладку. ORIGIN — сразу закрыть (как раньше).
         if (mainPreferencesHolder.getTopicBackBehavior() ==
@@ -1339,9 +1361,7 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         // Back navigation to leave the topic (parity with the WebView; system back is reused).
         toolbar.setNavigationIcon(forpdateam.ru.forpda.R.drawable.ic_toolbar_arrow_back)
         toolbar.navigationContentDescription = getString(forpdateam.ru.forpda.R.string.close_tab)
-        toolbar.setNavigationOnClickListener {
-            requireActivity().onBackPressedDispatcher.onBackPressed()
-        }
+        toolbar.setNavigationOnClickListener { exitTopicUp() }
         // Overflow popup theme comes from the toolbar's app:popupTheme="?attr/popup_overlay" (fragment_base),
         // which resolves to a readable per-palette dropdown — no manual override needed.
         val menu = toolbar.menu
@@ -3827,13 +3847,31 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             }
             setOnClickListener { onClick() }
         }
-        val label = TextView(ctx).apply {
-            textSize = 14f
+        // Ширина центральной ячейки задана весом, а ширина ТЕКСТА зависит от выбранного шрифта
+        // приложения: у широких шрифтов «37499 / 37499» не влезал в 14sp, TextView переносил строку
+        // по «/» — ряд распухал в две строки и вылезал за пределы полосы. Автоподбор кегля
+        // (6…14sp, шаг 1sp) в ОДНУ строку делает ряд независимым и от шрифта, и от числа страниц:
+        // пока текст влезает — те же 14sp, что и раньше.
+        // AppCompatTextView, а не TextView: TextViewCompat включает автоподбор на голом TextView
+        // только с API 27, а minSdk у нас 26.
+        val label = androidx.appcompat.widget.AppCompatTextView(ctx).apply {
             gravity = android.view.Gravity.CENTER
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setTextColor(onSurface)
+            maxLines = 1
+            // Страховка на случай, если места не хватит даже минимальному кеглю: лучше многоточие,
+            // чем обрезанная по краю строка. isSingleLine НЕ ставим — он включает
+            // horizontallyScrolling, при котором автоподбор считает ширину бесконечной и не срабатывает.
+            ellipsize = android.text.TextUtils.TruncateAt.END
             val pv = (8 * dm.density).toInt()
             setPadding(0, pv, 0, pv)
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                    this,
+                    resources.getDimensionPixelSize(R.dimen.pagination_page_autosize_min_text_size),
+                    resources.getDimensionPixelSize(R.dimen.pagination_page_autosize_max_text_size),
+                    resources.getDimensionPixelSize(R.dimen.text_autosize_step_granularity_1sp),
+                    android.util.TypedValue.COMPLEX_UNIT_PX,
+            )
             layoutParams = android.widget.LinearLayout.LayoutParams(0,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1.45f)
             background = ctx.obtainStyledAttributes(intArrayOf(

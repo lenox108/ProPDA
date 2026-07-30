@@ -697,6 +697,22 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
         return tabNavigator.closeThemeChainToOrigin(tag)
     }
 
+    /**
+     * Стрелка «вверх» в тулбаре темы — навигация Up по Material: ВСЕГДА уводит к источнику (раздел или
+     * список, из которого тему открыли), закрывая по пути цепочку связанных тем. Настройка «Поведение
+     * кнопки Назад в темах» на неё НЕ влияет: та описывает системную «Назад» («шаг назад по истории»),
+     * а Up — это «на уровень выше» независимо от того, как пользователь сюда попал. Раньше стрелка
+     * просто дублировала «Назад», и предсказуемого «выйти отсюда» в интерфейсе не было вовсе.
+     *
+     * @return false, если выходить некуда (тема открыта самостоятельной вкладкой, без родителя) —
+     * вызывающий тогда падает на обычную «Назад».
+     */
+    fun exitTopicToOrigin(tag: String?): Boolean {
+        if (tag == null) return false
+        if (tabNavigator.closeThemeChainToOrigin(tag)) return true
+        return tabNavigator.selectParentOf(tag)
+    }
+
     fun selectTopicOriginOrParent(tag: String?): Boolean {
         if (tag == null) return false
         if (mainPreferencesHolder.getTopicBackBehavior() == Preferences.Main.TopicBackBehavior.ORIGIN &&
