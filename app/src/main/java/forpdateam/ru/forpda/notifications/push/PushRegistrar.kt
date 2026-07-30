@@ -138,7 +138,9 @@ class PushRegistrar(
      */
     private fun huaweiToken(): String? {
         HmsTokenStore.get(context)?.let { return it }
-        if (!PicoHms.isAvailable(context)) return null
+        // Проверку наличия HMS сознательно не ставим условием: она смотрит версию и отпечаток
+        // сертификата и легко даёт ложное «нет сервисов» на Honor и свежих прошивках. Просто
+        // просим токен: нет сервисов — привязка не удастся, это видно в логе и в подписи пункта.
         Timber.i("PushRegistrar: запрашиваем токен HMS")
         PicoHms(context).requestToken()
         return null

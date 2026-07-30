@@ -295,7 +295,6 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                 ?: return
         // Приводим список в соответствие с реальными флагами (миграция старых установок, где
         // способ выбирался двумя отдельными тумблерами).
-        filterHuaweiEntry(pref)
         val current = resolveCurrentMethod(pref.value)
         if (pref.value != current) pref.value = current
         applyDeliveryMethod(current)
@@ -337,10 +336,10 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
                     openProScreen()
                     return@OnPreferenceChangeListener false
                 }
-                if (!forpdateam.ru.forpda.notifications.push.PicoHms.isAvailable(requireContext())) {
-                    toast(getString(R.string.push_setup_no_hms))
-                    return@OnPreferenceChangeListener false
-                }
+                // Проверку наличия HMS намеренно НЕ делаем гейтом: она смотрит на пакет, версию и
+                // отпечаток сертификата, а на Honor и свежих прошивках Huawei это легко даёт ложное
+                // «недоступно». Пусть выбор будет всегда, а правду о том, найдены ли сервисы,
+                // говорит подпись пункта (см. updateDeliveryMethodSummary).
                 startPushSetup(pref, method = "push_hms")
                 false
             } else if (value == "socket") {
@@ -455,6 +454,14 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
         // регистрацию никто не проверял. Живой случай — способ доставки «Push», а сессии нет
         // (login_key протух, сменился аккаунт, чистились данные): пуши не приходят, а экран
         // уверенно показывает push. Поэтому спрашиваем реальное состояние и говорим правду.
+        if (value == "push_hms") {
+            val ctx = context
+            val hmsFound = ctx != null &&
+                    forpdateam.ru.forpda.notifications.push.PicoHms.isAvailable(ctx)
+            pref.summary = getString(R.string.pref_summary_delivery_push_hms) +
+                    if (hmsFound) "" else "\n" + getString(R.string.pref_summary_delivery_push_hms_missing)
+            return
+        }
         if (isPushMethod(value) && !hasPushSession()) {
             pref.summary = getString(R.string.pref_summary_delivery_push_inactive)
             return
@@ -472,21 +479,6 @@ class NotificationsSettingsFragment : BaseSettingFragment() {
 
     /** Оба push-режима (Google и Huawei) ведут себя одинаково во всём, кроме источника токена. */
     private fun isPushMethod(method: String?): Boolean = method == "push" || method == "push_hms"
-
-    /**
-     * Пункт «Push (Huawei)» показываем только там, где есть HMS Core — ровно как офиц. клиент,
-     * который рисует свою радиокнопку по той же проверке. Предлагать доставку, которой на
-     * устройстве неоткуда взяться, — обман.
-     */
-    private fun filterHuaweiEntry(pref: androidx.preference.ListPreference) {
-        val ctx = context ?: return
-        if (forpdateam.ru.forpda.notifications.push.PicoHms.isAvailable(ctx)) return
-        val entries = pref.entries ?: return
-        val values = pref.entryValues ?: return
-        val keep = values.indices.filter { values[it] != "push_hms" }
-        pref.entries = keep.map { entries[it] }.toTypedArray()
-        pref.entryValues = keep.map { values[it] }.toTypedArray()
-    }
 
     /** Есть ли app-протокольная сессия, без которой FCM-токен на сервер не уходит. */
     private fun hasPushSession(): Boolean {

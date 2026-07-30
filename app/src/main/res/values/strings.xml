@@ -1155,7 +1155,8 @@
     <string name="pro_remove_key_done">Ключ удалён</string>
     <string name="pref_summary_delivery_push_inactive">Push выбран, но НЕ активирован: вход не выполнен или ключ сессии устарел, поэтому события не приходят. Нажмите и выберите «Push (Google)», чтобы войти заново.</string>
     <string name="pro_required">Push доступен после активации</string>
-    <string name="pref_summary_delivery_push_hms">Push через сервисы Huawei — мгновенно и экономно, как обычный push, но для телефонов Huawei. Нужен разовый вход в аккаунт 4PDA.</string>
+    <string name="pref_summary_delivery_push_hms">Мгновенно и экономно, как обычный push, но через сервисы Huawei (HMS) — для Huawei и Honor. Нужен разовый вход в аккаунт 4PDA.</string>
+    <string name="pref_summary_delivery_push_hms_missing">Сервисы Huawei на этом устройстве не найдены — уведомления, скорее всего, приходить не будут. Тогда выберите «Push без Google».</string>
     <string name="push_setup_no_hms">Сервисы Huawei недоступны на этом устройстве</string>
     <string name="pro_required_push_hms">Push (Huawei) доступен после активации</string>
     <string name="pro_required_socket">Push без Google доступен после активации</string>
