@@ -142,6 +142,28 @@ class AppProtocolClient(
         return (r.getOrNull(1) as? Int) == 0
     }
 
+    /**
+     * ВРЕМЕННО (разбор протокола 30.07.2026): подписка на события и слушание канала.
+     * Опкоды взяты из офиц. клиента (v.java): `ea`=подписка (тело "u<memberId>"), `ed`=отписка,
+     * входящее событие приходит с полем 0 == "ev" и телом ["<тип><id>", код, messageId].
+     */
+    fun subscribeEvents(memberId: Int): List<Any?> = call(listOf("ea", "u$memberId"))
+
+    fun listenForEvents(durationMs: Long, onDoc: (List<Any?>) -> Unit) {
+        val deadline = System.currentTimeMillis() + durationMs
+        var lastPing = System.currentTimeMillis()
+        while (System.currentTimeMillis() < deadline) {
+            if (System.currentTimeMillis() - lastPing > 20_000L) {
+                lastPing = System.currentTimeMillis()
+                runCatching { writeFrame(ByteArray(0), compress = false, opcode = OPCODE_PING) }
+            }
+            val doc = runCatching { readMessage() }.getOrElse {
+                if (it is java.net.SocketTimeoutException) continue else throw it
+            }
+            onDoc(doc)
+        }
+    }
+
     override fun close() {
         runCatching { socket.close() }
     }
