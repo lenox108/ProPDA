@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="24dp"
+        android:height="24dp"
+        android:viewportWidth="24.0"
+        android:viewportHeight="24.0">
+    <!-- Вкладка позади: видно только её край, чтобы читалось «вкладок несколько» -->
+    <path
+        android:fillColor="?icon_base"
+        android:fillType="evenOdd"
+        android:pathData="M6,3h15v15h-1.6v-13.4h-13.4z" />
+    <!-- Передняя вкладка: рамка (внешний прямоугольник минус внутренний) -->
+    <path
+        android:fillColor="?icon_base"
+        android:fillType="evenOdd"
+        android:pathData="M3,6h15v15h-15zM4.6,7.6h11.8v11.8h-11.8z" />
+    <!-- Крестик по центру передней вкладки -->
+    <path
+        android:fillColor="?icon_base"
+        android:pathData="M13.7,9.6l-1.2,-1.2l-2,2l-2,-2l-1.2,1.2l2,2l-2,2l1.2,1.2l2,-2l2,2l1.2,-1.2l-2,-2z" />
+</vector>

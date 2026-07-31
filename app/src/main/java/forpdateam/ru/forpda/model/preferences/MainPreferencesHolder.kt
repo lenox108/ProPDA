@@ -54,6 +54,8 @@ class MainPreferencesHolder(
 
     fun observeBottomNavColumnsFlow(): Flow<Int> = dataStore.observeBottomNavColumnsFlow()
 
+    fun observeTabsTreeViewFlow(): Flow<Boolean> = dataStore.observeTabsTreeViewFlow()
+
     fun observeUseSystemFontFlow(): Flow<Boolean> = dataStore.observeUseSystemFontFlow()
 
     fun observeAppFontModeFlow(): Flow<AppFontMode> = dataStore.observeAppFontModeFlow()
@@ -124,6 +126,8 @@ class MainPreferencesHolder(
 
     fun getShowBottomArrow(): Boolean = dataStore.getShowBottomArrowImmediate()
 
+    fun getTabsTreeView(): Boolean = dataStore.getTabsTreeViewImmediate()
+
     fun getUiPalette(): AppPreferences.Main.UiPalette = dataStore.getUiPaletteImmediate()
 
     fun getAccentPalette(): AppPreferences.Main.AccentPalette = dataStore.getAccentPaletteImmediate()
@@ -161,6 +165,8 @@ class MainPreferencesHolder(
         dataStore.setAccentStyle(value)
 
     suspend fun setShowBottomArrow(value: Boolean) = dataStore.setShowBottomArrow(value)
+
+    suspend fun setTabsTreeView(value: Boolean) = dataStore.setTabsTreeView(value)
 
     suspend fun setScrollButtonEnabled(value: Boolean) = dataStore.setScrollButtonEnabled(value)
 

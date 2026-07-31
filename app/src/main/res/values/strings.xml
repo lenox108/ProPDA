@@ -234,6 +234,33 @@
     <string name="updater_notification_content_VerName">Новая версия: %s</string>
     <string name="close_other_tabs">Закрыть остальные</string>
     <string name="bottom_nav_open_tabs_section">Открытые вкладки</string>
+    <!-- Список открытых вкладок: заголовок секции со счётчиком и контекстное меню строки -->
+    <string name="bottom_nav_open_tabs_section_count" formatted="false">Открытые вкладки · %d</string>
+    <string name="tab_title_unknown">Вкладка</string>
+    <string name="tab_action_new">Новая вкладка</string>
+    <string name="ask_close_tabs">Закрыть вкладки? Закреплённые останутся</string>
+    <string name="close_other_tabs_short">Остальные</string>
+    <string name="close_all_tabs_short">Все</string>
+    <string name="tab_search_hint">Найти среди вкладок</string>
+    <string name="tab_recently_closed">Недавно закрытые</string>
+    <string name="tab_restored_message">Вкладка восстановлена</string>
+    <string name="tab_menu_pin">Закрепить</string>
+    <string name="tab_menu_unpin">Открепить</string>
+    <string name="tab_menu_reorder">Переместить</string>
+    <string name="tab_reorder_done">Готово</string>
+    <string name="tab_menu_close">Закрыть вкладку</string>
+    <string name="tab_menu_close_below">Закрыть вкладки ниже</string>
+    <string name="tab_menu_close_branch">Закрыть ветку темы</string>
+    <string name="tab_menu_copy_link">Копировать ссылку</string>
+    <string name="tab_closed_message">Вкладка закрыта</string>
+    <string name="tab_menu_open">Меню вкладки</string>
+    <string name="tab_kind_topic">Тема</string>
+    <string name="tab_kind_article">Статья</string>
+    <string name="tab_kind_profile">Профиль</string>
+    <string name="tab_kind_announce">Объявление</string>
+    <string name="tab_kind_attachments">Вложения темы</string>
+    <string name="tab_kind_edit_post">Редактирование</string>
+    <string name="tab_kind_site_content">Сообщения пользователя</string>
     <string name="your_profile">Ваш профиль</string>
     <string name="open_link">Открыть ссылку</string>
     <string name="apply">Применить</string>
@@ -946,6 +973,8 @@
 
     <string name="pref_title_show_bottom_arrow">Кнопка открытия нижнего меню</string>
     <string name="pref_summary_show_bottom_arrow">Включить, если в системе есть жесты снизу экрана</string>
+    <string name="pref_title_tabs_tree_view">Вкладки деревом переходов</string>
+    <string name="pref_summary_tabs_tree_view">Видно, из чего открыта вкладка. Свой порядок перетаскиванием при этом недоступен</string>
     <string name="pref_title_webview_compatibility_mode">Режим совместимости WebView</string>
     <string name="pref_summary_webview_compatibility_mode">Для слабых устройств или проблемного системного WebView: повышает стабильность за счёт менее агрессивной отрисовки</string>
 

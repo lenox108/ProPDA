@@ -21,9 +21,10 @@ import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.qms.chat.QmsChatFragment
 import forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import org.json.JSONObject
 import com.github.terrakok.cicerone.Back
 import com.github.terrakok.cicerone.BackTo
@@ -56,11 +57,37 @@ class TabNavigator(
     val tabController by lazy { TabController() }
 
     private val subscribersMap = mutableMapOf<String, TabFragment>()
-    private val _subscribersFlow = MutableStateFlow<List<TabFragment>>(emptyList())
-    val subscribersFlow: StateFlow<List<TabFragment>> = _subscribersFlow.asStateFlow()
-    
+
+    /**
+     * Именно SharedFlow, а НЕ StateFlow: список состоит из тех же экземпляров фрагментов, и когда
+     * у вкладки меняется только заголовок или подзаголовок ([notifyUpdate]), новый список равен
+     * старому — StateFlow такое значение просто проглатывает (конфлейт по equals). Из-за этого
+     * список открытых вкладок не узнавал о загрузившемся названии темы: вкладка, открытая по ссылке
+     * «в новой вкладке» (без названия в аргументах), оставалась пустой строкой до тех пор, пока
+     * набор вкладок не менялся. replay = 1 сохраняет поведение StateFlow для новых подписчиков.
+     */
+    private val _subscribersFlow = MutableSharedFlow<List<TabFragment>>(
+            replay = 1,
+            extraBufferCapacity = 8,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val subscribersFlow: SharedFlow<List<TabFragment>> = _subscribersFlow.asSharedFlow()
+
+    /** Последний отданный список — для тех, кому нужно текущее значение без подписки. */
+    var currentTabs: List<TabFragment> = emptyList()
+        private set
+
+    /**
+     * Порядок списка задаёт [TabController.getDisplayList] (дерево + пользовательская сортировка).
+     * Фрагменты, которых нет в дереве (рассинхрон после restore), не теряем — они идут в хвост.
+     */
     private fun updateSubscribersFlow() {
-        _subscribersFlow.value = subscribersMap.values.toList()
+        val orderedTags = tabController.getDisplayList().map { it.tag }
+        val ordered = orderedTags.mapNotNull { subscribersMap[it] }
+        val knownTags = orderedTags.toHashSet()
+        val rest = subscribersMap.filterKeys { it !in knownTags }.values
+        currentTabs = ordered + rest
+        _subscribersFlow.tryEmit(currentTabs)
     }
 
     init {
@@ -148,12 +175,17 @@ class TabNavigator(
         return true
     }
 
-    fun close(tabTag: String?) {
-        if (tabTag == null) return
+    /**
+     * @return [Screen], которым вкладка была открыта — для «Отменить» в снэкбаре. null, если
+     * закрытия не было либо экран не сохранился (пересоздание процесса, см. [TabItem.origin]).
+     */
+    fun close(tabTag: String?): Screen? {
+        if (tabTag == null) return null
         val fragment = getByTag(tabTag)
         if (tabController.getList().size <= 1) {
             exit()
         } else if (fragment != null && fragment.isAdded) {
+            val origin = tabController.getOrigin(tabTag)
             fragmentManager
                     .beginTransaction()
                     .remove(fragment)
@@ -164,7 +196,72 @@ class TabNavigator(
             updateSubscribersFlow()
             updateFragmentsState()
             notifyThemeFragmentAfterChildRemoved()
+            return origin
         }
+        return null
+    }
+
+    /**
+     * Закрыть перечисленные вкладки одной транзакцией («закрыть ниже» из контекстного меню).
+     * Последнюю вкладку не закрываем — из списка это выглядело бы как выход из приложения.
+     */
+    fun closeTabs(tabTags: List<String>) {
+        val closing = tabTags.filterNot { tabController.isPinned(it) }.toHashSet()
+        if (closing.isEmpty()) return
+        if (tabController.getList().none { it.tag !in closing }) return
+
+        val transaction = fragmentManager.beginTransaction()
+        closing.forEach { tag ->
+            getByTag(tag)?.also { transaction.remove(it) }
+            tabController.remove(tag)
+            subscribersMap.remove(tag)
+        }
+        transaction.commit()
+        updateSubscribersFlow()
+        updateFragmentsState()
+        notifyThemeFragmentAfterChildRemoved()
+    }
+
+    /**
+     * Закрыть ВСЕ вкладки, включая текущую; закреплённые остаются. В отличие от [closeTabs] не
+     * бережёт последнюю: вызывающий код обязан открыть новый экран, иначе показывать будет нечего.
+     *
+     * @return true, если открытых вкладок не осталось совсем.
+     */
+    fun closeAllTabs(): Boolean {
+        val closing = tabController.getList()
+                .map { it.tag }
+                .filterNot { tabController.isPinned(it) }
+        if (closing.isEmpty()) return tabController.getList().isEmpty()
+
+        val transaction = fragmentManager.beginTransaction()
+        closing.forEach { tag ->
+            getByTag(tag)?.also { transaction.remove(it) }
+            tabController.remove(tag)
+            subscribersMap.remove(tag)
+        }
+        transaction.commitNow()
+        updateSubscribersFlow()
+        val empty = tabController.getList().isEmpty()
+        // Пустое дерево: обновлять «текущий» фрагмент нечего и опасно — экран откроет вызывающий код.
+        if (!empty) updateFragmentsState()
+        return empty
+    }
+
+    fun isTabOpen(tabTag: String): Boolean = tabController.getList().any { it.tag == tabTag }
+
+    fun isTabPinned(tabTag: String): Boolean = tabController.isPinned(tabTag)
+
+    /** Закреплённая вкладка идёт первой в списке и переживает «Закрыть остальные»/«ниже». */
+    fun setTabPinned(tabTag: String, pinned: Boolean) {
+        tabController.setPinned(tabTag, pinned)
+        updateSubscribersFlow()
+    }
+
+    /** Порядок строк после ручной сортировки: дерево переходов не меняется. */
+    fun setTabOrder(tags: List<String>) {
+        tabController.setDisplayOrder(tags)
+        updateSubscribersFlow()
     }
 
     fun closeThemeChainToOrigin(tabTag: String?): Boolean {
@@ -188,9 +285,12 @@ class TabNavigator(
     fun canCloseThemeChainToOrigin(tabTag: String?): Boolean =
             tabController.getThemeChainTagsToOrigin(tabTag).isNotEmpty()
 
+    /** Закреплённые вкладки и текущая остаются. */
     fun closeOthers() {
         val transaction = fragmentManager.beginTransaction()
-        val itemTags = tabController.getList().map { it.tag }.filter { it != tabController.getCurrent()?.tag }
+        val itemTags = tabController.getList()
+                .map { it.tag }
+                .filter { it != tabController.getCurrent()?.tag && !tabController.isPinned(it) }
         itemTags.forEach { itemTag ->
             getByTag(itemTag)?.also { fragment ->
                 transaction.remove(fragment)
