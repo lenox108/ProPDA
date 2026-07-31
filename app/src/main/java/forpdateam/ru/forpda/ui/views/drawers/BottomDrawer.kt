@@ -333,7 +333,7 @@ class BottomDrawer(
                 mainPreferencesHolder.observeTabsTreeViewFlow().collect { enabled ->
                     if (treeView == enabled) return@collect
                     treeView = enabled
-                    submitTabs(tabNavigator.subscribersFlow.value)
+                    submitTabs(tabNavigator.currentTabs)
                 }
             }
 
@@ -481,7 +481,7 @@ class BottomDrawer(
         tabsAdapter.reorderMode = enabled
         binding.bottomCloseAllTabs.setText(
                 if (enabled) R.string.tab_reorder_done else R.string.close_other_tabs)
-        submitTabs(tabNavigator.subscribersFlow.value)
+        submitTabs(tabNavigator.currentTabs)
     }
 
     fun toggle() {
@@ -556,14 +556,18 @@ class BottomDrawer(
         return ordered.mapNotNull { fragment ->
             val tag = fragment.tag ?: return@mapNotNull null
             val screenKey = controller.getScreenKey(tag)
-            val title = fragment.getTabTitle()
             val sectionRes = TabScreenIcons.sectionTitleFor(screenKey)
+            val section = if (sectionRes != 0) activity.getString(sectionRes) else null
+            // Заголовок приезжает вместе с загруженной страницей; пока его нет (вкладка открыта по
+            // ссылке «в новой вкладке»), строка не должна быть пустой — показываем раздел.
+            val title = fragment.getTabTitle().asRowText()
+                    .ifBlank { section ?: activity.getString(R.string.tab_title_unknown) }
             TabRowItem(
                     tag = tag,
                     title = title,
                     subtitle = buildSubtitle(
-                            section = if (sectionRes != 0) activity.getString(sectionRes) else null,
-                            detail = fragment.getTabSubtitle()?.takeIf { it.isNotBlank() },
+                            section = section,
+                            detail = fragment.getTabSubtitle()?.asRowText()?.takeIf { it.isNotBlank() },
                             title = title,
                     ),
                     iconRes = TabScreenIcons.iconFor(screenKey),
@@ -583,6 +587,13 @@ class BottomDrawer(
         val known = treeTags.toHashSet()
         return ordered + tabs.filter { it.tag !in known }
     }
+
+    /**
+     * Текст фрагмента как строка списка: подзаголовок темы содержит `ImageSpan` (значок-глаз счётчика
+     * читающих), и в plain-тексте от него остаётся служебный символ-заполнитель с лишними пробелами.
+     */
+    private fun String.asRowText(): String =
+            replace('￼', ' ').replace(Regex("\\s+"), " ").trim()
 
     /** «Раздел · подробности». Раздел не повторяем, если он и так стоит заголовком строки. */
     private fun buildSubtitle(section: String?, detail: String?, title: String): String? {

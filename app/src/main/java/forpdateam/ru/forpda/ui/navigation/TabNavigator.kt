@@ -21,9 +21,10 @@ import forpdateam.ru.forpda.ui.fragments.TabFragment
 import forpdateam.ru.forpda.ui.fragments.qms.chat.QmsChatFragment
 import forpdateam.ru.forpda.ui.fragments.theme.nativerender.NativeTopicFragment
 import forpdateam.ru.forpda.ui.fragments.theme.ThemeTabHost
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import org.json.JSONObject
 import com.github.terrakok.cicerone.Back
 import com.github.terrakok.cicerone.BackTo
@@ -56,9 +57,26 @@ class TabNavigator(
     val tabController by lazy { TabController() }
 
     private val subscribersMap = mutableMapOf<String, TabFragment>()
-    private val _subscribersFlow = MutableStateFlow<List<TabFragment>>(emptyList())
-    val subscribersFlow: StateFlow<List<TabFragment>> = _subscribersFlow.asStateFlow()
-    
+
+    /**
+     * Именно SharedFlow, а НЕ StateFlow: список состоит из тех же экземпляров фрагментов, и когда
+     * у вкладки меняется только заголовок или подзаголовок ([notifyUpdate]), новый список равен
+     * старому — StateFlow такое значение просто проглатывает (конфлейт по equals). Из-за этого
+     * список открытых вкладок не узнавал о загрузившемся названии темы: вкладка, открытая по ссылке
+     * «в новой вкладке» (без названия в аргументах), оставалась пустой строкой до тех пор, пока
+     * набор вкладок не менялся. replay = 1 сохраняет поведение StateFlow для новых подписчиков.
+     */
+    private val _subscribersFlow = MutableSharedFlow<List<TabFragment>>(
+            replay = 1,
+            extraBufferCapacity = 8,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val subscribersFlow: SharedFlow<List<TabFragment>> = _subscribersFlow.asSharedFlow()
+
+    /** Последний отданный список — для тех, кому нужно текущее значение без подписки. */
+    var currentTabs: List<TabFragment> = emptyList()
+        private set
+
     /**
      * Порядок списка задаёт [TabController.getDisplayList] (дерево + пользовательская сортировка).
      * Фрагменты, которых нет в дереве (рассинхрон после restore), не теряем — они идут в хвост.
@@ -68,7 +86,8 @@ class TabNavigator(
         val ordered = orderedTags.mapNotNull { subscribersMap[it] }
         val knownTags = orderedTags.toHashSet()
         val rest = subscribersMap.filterKeys { it !in knownTags }.values
-        _subscribersFlow.value = ordered + rest
+        currentTabs = ordered + rest
+        _subscribersFlow.tryEmit(currentTabs)
     }
 
     init {

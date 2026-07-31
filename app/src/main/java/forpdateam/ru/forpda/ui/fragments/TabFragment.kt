@@ -292,7 +292,7 @@ open class TabFragment : Fragment() {
             val msg = "TabFragment.onCreate: subscribing ${this.javaClass.simpleName}, tag=${this.tag}"
             Timber.d(msg)
             mainActivity.tabNavigator.subscribe(this)
-            val msg2 = "TabFragment.onCreate: subscribed, tabs count=${mainActivity.tabNavigator.subscribersFlow.value.size}"
+            val msg2 = "TabFragment.onCreate: subscribed, tabs count=${mainActivity.tabNavigator.currentTabs.size}"
             Timber.d(msg2)
             Timber.d("onCreate %s", this)
         } else {
