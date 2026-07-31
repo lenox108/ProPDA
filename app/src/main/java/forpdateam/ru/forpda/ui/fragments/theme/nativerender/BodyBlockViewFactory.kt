@@ -1513,11 +1513,27 @@ class BodyBlockViewFactory(
         val out = SpannableStringBuilder(text)
         for (fg in out.getSpans(0, out.length, android.text.style.ForegroundColorSpan::class.java)) {
             val fs = out.getSpanStart(fg); val fe = out.getSpanEnd(fg)
-            val overlapsLink = urls.any { u ->
-                val us = text.getSpanStart(u); val ue = text.getSpanEnd(u)
-                fs < ue && us < fe
+            // Ranges of this colour span that sit ON a link, clipped to the span and sorted.
+            val linkRanges = urls
+                .map { maxOf(fs, text.getSpanStart(it)) to minOf(fe, text.getSpanEnd(it)) }
+                .filter { it.first < it.second }
+                .sortedBy { it.first }
+            if (linkRanges.isEmpty()) continue
+            // A server colour must not tint a link (links use the app accent). But a colour span often
+            // ALSO covers non-link text — e.g. an [offtop] whose grey wraps BOTH the reply-to nick link
+            // AND the note text. Removing the WHOLE span dropped the note's grey too, so offtop that
+            // followed a reply-nick rendered as ordinary body text while the same offtop in a quote looked
+            // right (user report). Clip the colour to the gaps AROUND the links instead of deleting it, so
+            // the non-link text keeps its colour and only the link itself falls back to the accent.
+            val color = fg.foregroundColor
+            val flags = out.getSpanFlags(fg)
+            out.removeSpan(fg)
+            var cursor = fs
+            for ((ls, le) in linkRanges) {
+                if (cursor < ls) out.setSpan(android.text.style.ForegroundColorSpan(color), cursor, ls, flags)
+                cursor = maxOf(cursor, le)
             }
-            if (overlapsLink) out.removeSpan(fg)
+            if (cursor < fe) out.setSpan(android.text.style.ForegroundColorSpan(color), cursor, fe, flags)
         }
         return out
     }
