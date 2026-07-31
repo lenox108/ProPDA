@@ -120,6 +120,13 @@ object NotificationPublisher {
         val notifyId = event.notifyId()
         manager.notify(notifyId, builder.build())
         Log.i(NOTIFICATIONS_LOG_TAG, "Published ${event.notificationLogCategory()} notification")
+        if (forpdateam.ru.forpda.BuildConfig.DEBUG) {
+            // Цель тапа — то, что чаще всего и оказывается «не тем постом». В release не пишем:
+            // в url виден id темы/поста, а лог шторки читают не только разработчики.
+            Log.i(NOTIFICATIONS_LOG_TAG, "notify_target id=$notifyId category=${event.notificationLogCategory()}" +
+                    " source=${event.sourceId} message=${event.messageId} url=$intentUrl" +
+                    " override=${intentUrlOverride != null}")
+        }
         // Запоминаем ДО refresh: шторка своего же уведомления сейчас ещё не отдаёт.
         rememberChild(summaryChild(context, event))
         if (refreshSummary) refreshGroupSummaries(context)

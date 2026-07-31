@@ -38,7 +38,10 @@ object ForegroundMentionEnrichPolicy {
                 .filter { it.fromTheme() && it.isMention && it.sourceId == event.sourceId }
 
         candidates.firstOrNull { it.messageId == event.messageId && it.messageId > 0 }
-                ?.let { return it }
+                ?.let {
+                    log(event, candidates, reason = "exact_row", result = it)
+                    return it
+                }
 
         // Точного совпадения нет. Пока известен пост из события — он и есть якорь.
         if (event.messageId > 0) {
@@ -46,11 +49,31 @@ object ForegroundMentionEnrichPolicy {
             if (event.sourceTitle.isBlank() && topicTitle != null) {
                 event.sourceTitle = topicTitle
             }
+            log(event, candidates, reason = "event_post_kept", result = event)
             return event
         }
 
         // Событие без поста (испорченный/усечённый пакет) — лучше свежая строка списка, чем
         // `view=findpost&p=0`.
-        return candidates.firstOrNull() ?: event
+        val fallback = candidates.firstOrNull() ?: event
+        log(event, candidates, reason = "no_event_post_freshest_row", result = fallback)
+        return fallback
+    }
+
+    /**
+     * Разбор именно этого решения — единственный способ отличить «уведомление увело не туда» от
+     * «сервер прислал не тот пост»: в логе видно, что было в событии и что предлагал список.
+     */
+    private fun log(
+            event: NotificationEvent,
+            candidates: List<NotificationEvent>,
+            reason: String,
+            result: NotificationEvent,
+    ) {
+        if (!forpdateam.ru.forpda.BuildConfig.DEBUG) return
+        android.util.Log.i("FPDA_MENTION_ENRICH",
+                "topic=${event.sourceId} wsPost=${event.messageId} reason=$reason" +
+                        " anchorPost=${result.messageId} nick=${result.userNick}" +
+                        " rows=${candidates.map { it.messageId }}")
     }
 }
