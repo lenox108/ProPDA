@@ -73,6 +73,8 @@ class MainDataStore(private val context: Context) {
         val TOPIC_TOOLBAR_BEHAVIOR = stringPreferencesKey("topic_toolbar_behavior")
         val TOPIC_PAGE_SWIPE_ENABLE = booleanPreferencesKey("topic_page_swipe_enable")
         val TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE = booleanPreferencesKey("topic_bottom_refresh_gesture_enable")
+        val TOPIC_FAST_SCROLL = stringPreferencesKey("topic_fast_scroll")
+        val TOPIC_FAST_SCROLL_SCALE = stringPreferencesKey("topic_fast_scroll_scale")
         val TOPIC_ACTIVE_READERS_ENABLE = booleanPreferencesKey("topic_active_readers_enable")
         val TOPIC_BACK_BEHAVIOR = stringPreferencesKey("topic_back_behavior")
         val TOPIC_OPEN_TARGET = stringPreferencesKey("topic_open_target")
@@ -152,6 +154,24 @@ class MainDataStore(private val context: Context) {
                             .getString(AppPreferences.Main.TOPIC_SCROLL_MODE, null)
                 )
             }, AppPreferences.Main.TopicScrollMode.HYBRID)
+
+    fun observeTopicFastScrollFlow(): Flow<AppPreferences.Main.TopicFastScroll> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                parseTopicFastScroll(
+                    preferences[PreferencesKeys.TOPIC_FAST_SCROLL]
+                        ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                            .getString(AppPreferences.Main.TOPIC_FAST_SCROLL, null)
+                )
+            }, AppPreferences.Main.TopicFastScroll.RIGHT)
+
+    fun observeTopicFastScrollScaleFlow(): Flow<AppPreferences.Main.TopicFastScrollScale> =
+            safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
+                parseTopicFastScrollScale(
+                    preferences[PreferencesKeys.TOPIC_FAST_SCROLL_SCALE]
+                        ?: context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+                            .getString(AppPreferences.Main.TOPIC_FAST_SCROLL_SCALE, null)
+                )
+            }, AppPreferences.Main.TopicFastScrollScale.LOADED)
 
     fun observeTopicPostDensityFlow(): Flow<AppPreferences.Main.TopicPostDensity> =
             safeDataStoreFlow(context.mainDataStore.data.map { preferences ->
@@ -424,6 +444,34 @@ class MainDataStore(private val context: Context) {
     fun getTopicScrollModeImmediate(): AppPreferences.Main.TopicScrollMode {
         val mirrored = mirrorPrefs.getString("topic_scroll_mode", null)
         return parseTopicScrollMode(mirrored)
+    }
+
+    suspend fun setTopicFastScroll(value: AppPreferences.Main.TopicFastScroll) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.TOPIC_FAST_SCROLL] = value.name
+        }
+        mirrorPrefs.edit().putString("topic_fast_scroll", value.name).apply()
+    }
+
+    fun getTopicFastScrollImmediate(): AppPreferences.Main.TopicFastScroll {
+        val mirrored = mirrorPrefs.getString("topic_fast_scroll", null)
+        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+            .getString(AppPreferences.Main.TOPIC_FAST_SCROLL, null)
+        return parseTopicFastScroll(mirrored ?: legacy)
+    }
+
+    suspend fun setTopicFastScrollScale(value: AppPreferences.Main.TopicFastScrollScale) {
+        safeEdit { preferences ->
+            preferences[PreferencesKeys.TOPIC_FAST_SCROLL_SCALE] = value.name
+        }
+        mirrorPrefs.edit().putString("topic_fast_scroll_scale", value.name).apply()
+    }
+
+    fun getTopicFastScrollScaleImmediate(): AppPreferences.Main.TopicFastScrollScale {
+        val mirrored = mirrorPrefs.getString("topic_fast_scroll_scale", null)
+        val legacy = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+            .getString(AppPreferences.Main.TOPIC_FAST_SCROLL_SCALE, null)
+        return parseTopicFastScrollScale(mirrored ?: legacy)
     }
 
     suspend fun setTopicPostDensity(value: AppPreferences.Main.TopicPostDensity) {
@@ -1097,6 +1145,26 @@ class MainDataStore(private val context: Context) {
         }
     } catch (_: IllegalArgumentException) {
         AppPreferences.Main.TopicPostDensity.COMFORTABLE
+    }
+
+    private fun parseTopicFastScroll(value: String?): AppPreferences.Main.TopicFastScroll = try {
+        if (value.isNullOrBlank()) {
+            AppPreferences.Main.TopicFastScroll.RIGHT
+        } else {
+            AppPreferences.Main.TopicFastScroll.valueOf(value.uppercase())
+        }
+    } catch (_: IllegalArgumentException) {
+        AppPreferences.Main.TopicFastScroll.RIGHT
+    }
+
+    private fun parseTopicFastScrollScale(value: String?): AppPreferences.Main.TopicFastScrollScale = try {
+        if (value.isNullOrBlank()) {
+            AppPreferences.Main.TopicFastScrollScale.LOADED
+        } else {
+            AppPreferences.Main.TopicFastScrollScale.valueOf(value.uppercase())
+        }
+    } catch (_: IllegalArgumentException) {
+        AppPreferences.Main.TopicFastScrollScale.LOADED
     }
 
     private fun parseTopicToolbarBehavior(value: String?): AppPreferences.Main.TopicToolbarBehavior = try {

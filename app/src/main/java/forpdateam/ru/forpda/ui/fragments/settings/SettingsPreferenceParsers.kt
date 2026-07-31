@@ -29,6 +29,18 @@ object SettingsPreferenceParsers {
         Preferences.Main.TopicToolbarBehavior.PINNED
     }
 
+    fun parseTopicFastScroll(value: String?): Preferences.Main.TopicFastScroll = try {
+        Preferences.Main.TopicFastScroll.valueOf(value?.uppercase() ?: Preferences.Main.TopicFastScroll.RIGHT.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.TopicFastScroll.RIGHT
+    }
+
+    fun parseTopicFastScrollScale(value: String?): Preferences.Main.TopicFastScrollScale = try {
+        Preferences.Main.TopicFastScrollScale.valueOf(value?.uppercase() ?: Preferences.Main.TopicFastScrollScale.LOADED.name)
+    } catch (_: IllegalArgumentException) {
+        Preferences.Main.TopicFastScrollScale.LOADED
+    }
+
     fun parseTopicBackBehavior(value: String?): Preferences.Main.TopicBackBehavior = try {
         Preferences.Main.TopicBackBehavior.valueOf(value ?: Preferences.Main.TopicBackBehavior.HISTORY.name)
     } catch (_: IllegalArgumentException) {

@@ -81,6 +81,28 @@
             android:title="@string/pref_topic_toolbar_behavior_title"
             app:iconSpaceReserved="false" />
 
+        <ListPreference
+            android:defaultValue="RIGHT"
+            android:dialogTitle="@string/pref_title_topic_fast_scroll"
+            android:entries="@array/entries_topic_fast_scroll"
+            android:entryValues="@array/entry_values_topic_fast_scroll"
+            android:key="main.topic_fast_scroll"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_topic_fast_scroll_right"
+            android:title="@string/pref_title_topic_fast_scroll"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:defaultValue="LOADED"
+            android:dialogTitle="@string/pref_title_topic_fast_scroll_scale"
+            android:entries="@array/entries_topic_fast_scroll_scale"
+            android:entryValues="@array/entry_values_topic_fast_scroll_scale"
+            android:key="main.topic_fast_scroll_scale"
+            android:layout="@layout/preference_custom"
+            android:summary="@string/pref_topic_fast_scroll_scale_loaded"
+            android:title="@string/pref_title_topic_fast_scroll_scale"
+            app:iconSpaceReserved="false" />
+
         <forpdateam.ru.forpda.ui.views.SwitchPreference
             android:defaultValue="false"
             android:key="main.topic_page_swipe.enable"
