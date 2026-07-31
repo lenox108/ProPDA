@@ -244,6 +244,20 @@
                     app:tint="?attr/colorOnSurfaceVariant" />
 
                 <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/bottomTabsRecent"
+                    android:layout_width="@dimen/dp48"
+                    android:layout_height="@dimen/dp48"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="@string/tab_recently_closed"
+                    android:focusable="true"
+                    android:padding="@dimen/dp12"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/ic_history"
+                    app:tint="?attr/colorOnSurfaceVariant"
+                    tools:visibility="visible" />
+
+                <androidx.appcompat.widget.AppCompatImageView
                     android:id="@+id/bottomTabsSearch"
                     android:layout_width="@dimen/dp48"
                     android:layout_height="@dimen/dp48"

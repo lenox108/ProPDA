@@ -286,7 +286,8 @@ class BottomDrawer(
             bottomTabsCloseOthers.setOnClickListener { removeAllTabs() }
             bottomTabsDone.setOnClickListener { setReorderMode(false) }
             bottomTabsReorder.setOnClickListener { setReorderMode(true) }
-            bottomTabsNew.setOnClickListener { anchor -> showNewTabMenu(anchor) }
+            bottomTabsNew.setOnClickListener { openNewTab() }
+            bottomTabsRecent.setOnClickListener { anchor -> showRecentlyClosedMenu(anchor) }
             bottomTabsSearch.setOnClickListener { setSearchMode(!searchMode) }
             bottomTabsSearchInput.addTextChangedListener(
                     onTextChanged = { text, _, _, _ ->
@@ -535,6 +536,7 @@ class BottomDrawer(
             bottomTabsNew.visibility = if (enabled) View.GONE else View.VISIBLE
             bottomTabsReorder.visibility = if (enabled) View.GONE else View.VISIBLE
             bottomTabsCloseOthers.visibility = if (enabled) View.GONE else View.VISIBLE
+            if (enabled) bottomTabsRecent.visibility = View.GONE
         }
         submitTabs(tabNavigator.currentTabs)
     }
@@ -642,6 +644,9 @@ class BottomDrawer(
         // Искать в списке из трёх строк незачем — кнопка появляется, когда вкладок реально много.
         binding.bottomTabsSearch.visibility =
                 if (!reorderMode && (rows.size > SEARCH_THRESHOLD || searchMode)) View.VISIBLE else View.GONE
+        // Восстанавливать нечего — кнопки нет.
+        binding.bottomTabsRecent.visibility =
+                if (!reorderMode && recentlyClosed.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun TabRowItem.matches(query: String): Boolean =
@@ -686,25 +691,21 @@ class BottomDrawer(
         tabsTouchHelper?.attachToRecyclerView(binding.bottomTabsRecycler)
     }
 
-    /** Кнопка «+»: новая вкладка и восстановление недавно закрытых. */
-    private fun showNewTabMenu(anchor: View) {
+    /** Кнопка «+»: новая вкладка с экраном разделов — единой точкой входа куда угодно. */
+    private fun openNewTab() {
+        router.navigateTo(Screen.OtherMenu().apply { forceNewTab = true })
+        hide()
+    }
+
+    /** Кнопка «часы»: список недавно закрытых вкладок, тап по строке возвращает вкладку. */
+    private fun showRecentlyClosedMenu(anchor: View) {
+        if (recentlyClosed.isEmpty()) return
         val popup = PopupMenu(anchor.context, anchor)
-        popup.menu.add(R.string.tab_action_new).setOnMenuItemClickListener {
-            // Экран разделов — единая точка входа: из него открывается что угодно.
-            router.navigateTo(Screen.OtherMenu().apply { forceNewTab = true })
-            hide()
-            true
-        }
-        if (recentlyClosed.isNotEmpty()) {
-            popup.menu.add(R.string.tab_recently_closed).apply {
-                isEnabled = false
-            }
-            recentlyClosed.reversed().forEach { (title, screen) ->
-                popup.menu.add(title).setOnMenuItemClickListener {
-                    recentlyClosed.removeAll { it.second === screen }
-                    restoreTab(screen)
-                    true
-                }
+        recentlyClosed.reversed().forEach { (title, screen) ->
+            popup.menu.add(title).setOnMenuItemClickListener {
+                recentlyClosed.removeAll { it.second === screen }
+                restoreTab(screen)
+                true
             }
         }
         popup.show()
