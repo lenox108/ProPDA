@@ -222,6 +222,32 @@ class TabNavigator(
         notifyThemeFragmentAfterChildRemoved()
     }
 
+    /**
+     * Закрыть ВСЕ вкладки, включая текущую; закреплённые остаются. В отличие от [closeTabs] не
+     * бережёт последнюю: вызывающий код обязан открыть новый экран, иначе показывать будет нечего.
+     *
+     * @return true, если открытых вкладок не осталось совсем.
+     */
+    fun closeAllTabs(): Boolean {
+        val closing = tabController.getList()
+                .map { it.tag }
+                .filterNot { tabController.isPinned(it) }
+        if (closing.isEmpty()) return tabController.getList().isEmpty()
+
+        val transaction = fragmentManager.beginTransaction()
+        closing.forEach { tag ->
+            getByTag(tag)?.also { transaction.remove(it) }
+            tabController.remove(tag)
+            subscribersMap.remove(tag)
+        }
+        transaction.commitNow()
+        updateSubscribersFlow()
+        val empty = tabController.getList().isEmpty()
+        // Пустое дерево: обновлять «текущий» фрагмент нечего и опасно — экран откроет вызывающий код.
+        if (!empty) updateFragmentsState()
+        return empty
+    }
+
     fun isTabOpen(tabTag: String): Boolean = tabController.getList().any { it.tag == tabTag }
 
     fun isTabPinned(tabTag: String): Boolean = tabController.isPinned(tabTag)

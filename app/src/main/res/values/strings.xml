@@ -237,6 +237,9 @@
     <string name="bottom_nav_open_tabs_section_count" formatted="false">Открытые вкладки · %d</string>
     <string name="tab_title_unknown">Вкладка</string>
     <string name="tab_action_new">Новая вкладка</string>
+    <string name="ask_close_tabs">Закрыть вкладки? Закреплённые останутся</string>
+    <string name="close_other_tabs_short">Остальные</string>
+    <string name="close_all_tabs_short">Все</string>
     <string name="tab_search_hint">Найти среди вкладок</string>
     <string name="tab_recently_closed">Недавно закрытые</string>
     <string name="tab_restored_message">Вкладка восстановлена</string>

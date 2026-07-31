@@ -55,6 +55,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
 import androidx.core.widget.addTextChangedListener
+import forpdateam.ru.forpda.common.Preferences as AppPreferences
 import forpdateam.ru.forpda.databinding.ActivityMainBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -580,15 +581,52 @@ class BottomDrawer(
         return null
     }
 
+    /**
+     * Одна кнопка на два массовых действия: закрыть остальные или закрыть вообще все. Отдельной
+     * иконки под «все» в ряду нет — да и спрашивать подтверждение всё равно нужно, так что выбор
+     * живёт прямо в диалоге. Закреплённые вкладки переживают оба варианта.
+     */
     private fun removeAllTabs() {
         MaterialAlertDialogBuilder(activity)
-                .setMessage(R.string.ask_close_other_tabs)
-                .setPositiveButton(R.string.ok) { _, _ ->
+                .setMessage(R.string.ask_close_tabs)
+                .setNeutralButton(R.string.close_other_tabs_short) { _, _ ->
                     tabNavigator.closeOthers()
                     hide()
                 }
-                .setNegativeButton(R.string.no, null)
+                .setPositiveButton(R.string.close_all_tabs_short) { _, _ ->
+                    closeAllTabs()
+                }
+                .setNegativeButton(R.string.cancel, null)
                 .showWithStyledButtons()
+    }
+
+    /** После закрытия всего показывать нечего — открываем стартовый экран новой вкладкой. */
+    private fun closeAllTabs() {
+        val empty = tabNavigator.closeAllTabs()
+        if (empty) router.navigateTo(startupScreen())
+        hide()
+    }
+
+    /** Тот же экран, что и при запуске приложения; без авторизации личные разделы недоступны. */
+    private fun startupScreen(): Screen {
+        val startup = mainPreferencesHolder.getStartupScreen()
+        val requiresAuth = startup == AppPreferences.Main.StartupScreen.FAVORITES ||
+                startup == AppPreferences.Main.StartupScreen.REPLIES ||
+                startup == AppPreferences.Main.StartupScreen.QMS
+        val screen = if (requiresAuth && !authHolder.get().isAuth()) {
+            Screen.ArticleList()
+        } else {
+            when (startup) {
+                AppPreferences.Main.StartupScreen.NEWS -> Screen.ArticleList()
+                AppPreferences.Main.StartupScreen.FAVORITES -> Screen.Favorites()
+                AppPreferences.Main.StartupScreen.FORUM -> Screen.Forum()
+                AppPreferences.Main.StartupScreen.REPLIES -> Screen.Mentions()
+                AppPreferences.Main.StartupScreen.QMS -> Screen.QmsContacts()
+                AppPreferences.Main.StartupScreen.HISTORY -> Screen.History()
+                AppPreferences.Main.StartupScreen.MENU -> Screen.OtherMenu()
+            }
+        }
+        return screen.apply { fromMenu = true }
     }
 
     /** Строки списка вкладок + счётчик в заголовке секции. */
