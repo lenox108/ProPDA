@@ -98,7 +98,7 @@
                 android:paddingStart="@dimen/bottom_nav_recycler_padding_horizontal"
                 android:paddingEnd="@dimen/bottom_nav_recycler_padding_horizontal"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/bottomCloseAllTabs"
+                app:layout_constraintTop_toBottomOf="@id/bottomTabsActions"
                 tools:layoutManager="GridLayoutManager"
                 tools:listitem="@layout/item_bottom_tab"
                 tools:spanCount="5" />
@@ -161,6 +161,28 @@
                 android:visibility="gone"
                 app:layout_constraintTop_toBottomOf="@id/bottomMenuLinkContainer" />
 
+            <!-- Поиск по открытым вкладкам: подменяет заголовок секции, поэтому лежит поверх него. -->
+            <EditText
+                android:id="@+id/bottomTabsSearchInput"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:background="@android:color/transparent"
+                android:hint="@string/tab_search_hint"
+                android:imeOptions="actionSearch|flagNoExtractUi"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:maxLines="1"
+                android:paddingStart="@dimen/list_row_padding_horizontal"
+                android:paddingEnd="@dimen/list_row_padding_horizontal"
+                android:textColor="?attr/colorOnSurface"
+                android:textColorHint="?attr/colorOnSurfaceVariant"
+                android:textSize="@dimen/list_topic_meta_text_size"
+                android:visibility="gone"
+                app:layout_constraintBottom_toBottomOf="@id/bottomMenu_view_tabs"
+                app:layout_constraintEnd_toEndOf="@id/bottomMenu_view_tabs"
+                app:layout_constraintStart_toStartOf="@id/bottomMenu_view_tabs"
+                app:layout_constraintTop_toTopOf="@id/bottomMenu_view_tabs" />
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/bottomTabsRecycler"
                 android:layout_width="0dp"
@@ -170,7 +192,7 @@
                 android:paddingBottom="@dimen/content_spacing"
                 android:visibility="gone"
                 app:layout_constrainedHeight="true"
-                app:layout_constraintBottom_toTopOf="@id/bottomCloseAllTabs"
+                app:layout_constraintBottom_toTopOf="@id/bottomTabsActions"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintHeight_default="wrap"
                 app:layout_constraintStart_toStartOf="parent"
@@ -178,21 +200,88 @@
                 tools:itemCount="1"
                 tools:listitem="@layout/drawer_tab_item" />
 
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/bottomCloseAllTabs"
-                style="@style/Widget.AppCompat.Button.Borderless"
+            <!-- Действия над списком вкладок: иконки без подписей, слева созидательные, справа разрушительное. -->
+            <LinearLayout
+                android:id="@+id/bottomTabsActions"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@android:color/transparent"
-                android:foreground="?selectableItemBackground"
-                android:gravity="end|center_vertical"
-                android:paddingStart="@dimen/list_row_padding_horizontal"
-                android:paddingEnd="@dimen/list_row_padding_horizontal"
-                android:text="@string/close_other_tabs"
-                android:textColor="?attr/colorOnSurface"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/dp8"
+                android:paddingEnd="@dimen/dp8"
                 android:visibility="gone"
                 app:layout_constraintBottom_toTopOf="@id/bottomMenuRecycler"
-                app:layout_constraintTop_toBottomOf="@id/bottomTabsRecycler" />
+                app:layout_constraintTop_toBottomOf="@id/bottomTabsRecycler">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/bottomTabsNew"
+                    android:layout_width="@dimen/dp48"
+                    android:layout_height="@dimen/dp48"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="@string/tab_action_new"
+                    android:focusable="true"
+                    android:padding="@dimen/dp12"
+                    app:srcCompat="@drawable/ic_add"
+                    app:tint="?attr/colorOnSurfaceVariant" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/bottomTabsReorder"
+                    android:layout_width="@dimen/dp48"
+                    android:layout_height="@dimen/dp48"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="@string/tab_menu_reorder"
+                    android:focusable="true"
+                    android:padding="@dimen/dp12"
+                    app:srcCompat="@drawable/ic_sort"
+                    app:tint="?attr/colorOnSurfaceVariant" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/bottomTabsSearch"
+                    android:layout_width="@dimen/dp48"
+                    android:layout_height="@dimen/dp48"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="@string/tab_search_hint"
+                    android:focusable="true"
+                    android:padding="@dimen/dp12"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/ic_search"
+                    app:tint="?attr/colorOnSurfaceVariant"
+                    tools:visibility="visible" />
+
+                <Space
+                    android:layout_width="@dimen/dp0"
+                    android:layout_height="@dimen/dp1"
+                    android:layout_weight="1" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/bottomTabsCloseOthers"
+                    android:layout_width="@dimen/dp48"
+                    android:layout_height="@dimen/dp48"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="@string/close_other_tabs"
+                    android:focusable="true"
+                    android:padding="@dimen/dp12"
+                    app:srcCompat="@drawable/ic_clear_all"
+                    app:tint="?attr/item_tab_close_color" />
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/bottomTabsDone"
+                    android:layout_width="@dimen/dp48"
+                    android:layout_height="@dimen/dp48"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="@string/tab_reorder_done"
+                    android:focusable="true"
+                    android:padding="@dimen/dp12"
+                    android:visibility="gone"
+                    app:srcCompat="@drawable/ic_toolbar_done"
+                    app:tint="?attr/colorPrimary"
+                    tools:visibility="visible" />
+            </LinearLayout>
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.coordinatorlayout.widget.CoordinatorLayout>

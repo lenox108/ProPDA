@@ -236,6 +236,10 @@
     <!-- Список открытых вкладок: заголовок секции со счётчиком и контекстное меню строки -->
     <string name="bottom_nav_open_tabs_section_count" formatted="false">Открытые вкладки · %d</string>
     <string name="tab_title_unknown">Вкладка</string>
+    <string name="tab_action_new">Новая вкладка</string>
+    <string name="tab_search_hint">Найти среди вкладок</string>
+    <string name="tab_recently_closed">Недавно закрытые</string>
+    <string name="tab_restored_message">Вкладка восстановлена</string>
     <string name="tab_menu_pin">Закрепить</string>
     <string name="tab_menu_unpin">Открепить</string>
     <string name="tab_menu_reorder">Переместить</string>

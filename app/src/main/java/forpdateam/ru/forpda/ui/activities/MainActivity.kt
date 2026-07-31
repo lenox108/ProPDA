@@ -300,7 +300,8 @@ class MainActivity : AppCompatActivity(), MainActivityCallbacks {
                 mainPreferencesHolder,
                 listsPreferencesHolder,
                 authHolder,
-                userHolder
+                userHolder,
+                favoritesCacheRoom
         )
         bottomDrawer.setListener(object : BottomDrawer.DrawerListener {
             override fun onHide() {

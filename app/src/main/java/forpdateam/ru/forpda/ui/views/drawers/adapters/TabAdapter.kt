@@ -31,6 +31,8 @@ data class TabRowItem(
         @DrawableRes val iconRes: Int,
         val isActive: Boolean,
         val isPinned: Boolean = false,
+        /** Новых сообщений в теме (0 — метки нет, 1 — просто точка). */
+        val unreadCount: Int = 0,
         /** Уровень вложенности в дереве переходов; учитывается только при [showTree]. */
         val depth: Int = 0,
         val showTree: Boolean = false,
@@ -192,6 +194,10 @@ class TabAdapter(
             }
             binding.drawerItemIcon.setImageResource(item.iconRes)
             binding.drawerItemPin.visibility = if (item.isPinned) View.VISIBLE else View.GONE
+            binding.drawerItemUnread.apply {
+                text = if (item.unreadCount > 1) item.unreadCount.toString() else ""
+                visibility = if (item.unreadCount > 0) View.VISIBLE else View.GONE
+            }
 
             // В режиме сортировки крестик уступает место ручке: закрывать вкладки на ходу
             // всё равно нельзя (порядок строк меняется под пальцем).
