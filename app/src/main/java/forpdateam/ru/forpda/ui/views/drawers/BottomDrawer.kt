@@ -180,8 +180,7 @@ class BottomDrawer(
     /** Секция «Открытые вкладки» не должна участвовать в высоте COLLAPSED (peek = панель + inset навбара). */
     private fun setOpenTabsSectionVisible(expanded: Boolean) {
         val v = if (expanded) View.VISIBLE else View.GONE
-        binding.bottomMenuViewTabs.visibility = if (expanded && !searchMode) View.VISIBLE else View.GONE
-        binding.bottomTabsSearchInput.visibility = if (expanded && searchMode) View.VISIBLE else View.GONE
+        binding.bottomTabsHeader.visibility = v
         binding.bottomTabsRecycler.visibility = v
         binding.bottomTabsActions.visibility = v
     }

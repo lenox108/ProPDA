@@ -143,45 +143,51 @@
                     app:srcCompat="@drawable/ic_open_in_new" />
             </androidx.constraintlayout.widget.ConstraintLayout>
 
-            <!-- В COLLAPSED peek = высота панели + inset навбара; без gone эта секция «просвечивает» под иконками (HyperOS и др.). -->
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/bottomMenu_view_tabs"
+            <!-- В COLLAPSED peek = высота панели + inset навбара; без gone эта секция «просвечивает» под иконками (HyperOS и др.).
+                 Заголовок и поле поиска лежат в одном контейнере и подменяют друг друга: если бы поле
+                 крепилось к заголовку, при скрытии заголовка оно схлопывалось бы в нулевую высоту. -->
+            <FrameLayout
+                android:id="@+id/bottomTabsHeader"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/content_spacing"
-                android:gravity="center_vertical"
-                android:paddingStart="@dimen/list_row_padding_horizontal"
-                android:paddingTop="@dimen/content_block_padding_vertical"
-                android:paddingEnd="@dimen/list_row_padding_horizontal"
-                android:paddingBottom="@dimen/content_block_padding_vertical"
-                android:text="@string/bottom_nav_open_tabs_section"
-                android:textColor="?attr/colorOnSurface"
-                android:textSize="@dimen/list_topic_meta_text_size"
-                android:textStyle="bold"
                 android:visibility="gone"
-                app:layout_constraintTop_toBottomOf="@id/bottomMenuLinkContainer" />
+                app:layout_constraintTop_toBottomOf="@id/bottomMenuLinkContainer">
 
-            <!-- Поиск по открытым вкладкам: подменяет заголовок секции, поэтому лежит поверх него. -->
-            <EditText
-                android:id="@+id/bottomTabsSearchInput"
-                android:layout_width="0dp"
-                android:layout_height="0dp"
-                android:background="@android:color/transparent"
-                android:hint="@string/tab_search_hint"
-                android:imeOptions="actionSearch|flagNoExtractUi"
-                android:importantForAutofill="no"
-                android:inputType="text"
-                android:maxLines="1"
-                android:paddingStart="@dimen/list_row_padding_horizontal"
-                android:paddingEnd="@dimen/list_row_padding_horizontal"
-                android:textColor="?attr/colorOnSurface"
-                android:textColorHint="?attr/colorOnSurfaceVariant"
-                android:textSize="@dimen/list_topic_meta_text_size"
-                android:visibility="gone"
-                app:layout_constraintBottom_toBottomOf="@id/bottomMenu_view_tabs"
-                app:layout_constraintEnd_toEndOf="@id/bottomMenu_view_tabs"
-                app:layout_constraintStart_toStartOf="@id/bottomMenu_view_tabs"
-                app:layout_constraintTop_toTopOf="@id/bottomMenu_view_tabs" />
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/bottomMenu_view_tabs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="@dimen/dp48"
+                    android:paddingStart="@dimen/list_row_padding_horizontal"
+                    android:paddingTop="@dimen/content_block_padding_vertical"
+                    android:paddingEnd="@dimen/list_row_padding_horizontal"
+                    android:paddingBottom="@dimen/content_block_padding_vertical"
+                    android:text="@string/bottom_nav_open_tabs_section"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="@dimen/list_topic_meta_text_size"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/bottomTabsSearchInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@android:color/transparent"
+                    android:hint="@string/tab_search_hint"
+                    android:imeOptions="actionSearch|flagNoExtractUi"
+                    android:importantForAutofill="no"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:minHeight="@dimen/dp48"
+                    android:paddingStart="@dimen/list_row_padding_horizontal"
+                    android:paddingEnd="@dimen/list_row_padding_horizontal"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textColorHint="?attr/colorOnSurfaceVariant"
+                    android:textSize="@dimen/list_topic_meta_text_size"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+            </FrameLayout>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/bottomTabsRecycler"
@@ -196,7 +202,7 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintHeight_default="wrap"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/bottomMenu_view_tabs"
+                app:layout_constraintTop_toBottomOf="@id/bottomTabsHeader"
                 tools:itemCount="1"
                 tools:listitem="@layout/drawer_tab_item" />
 
@@ -265,7 +271,7 @@
                     android:contentDescription="@string/close_other_tabs"
                     android:focusable="true"
                     android:padding="@dimen/dp12"
-                    app:srcCompat="@drawable/ic_clear_all"
+                    app:srcCompat="@drawable/ic_tabs_close"
                     app:tint="?attr/item_tab_close_color" />
 
                 <androidx.appcompat.widget.AppCompatImageView
