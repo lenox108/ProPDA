@@ -29,6 +29,10 @@ class ChatThemeCreator(
     /** Ранее введённые ники — подсказки для нового диалога. */
     private val recentNicks: List<String> = presenter.recentNicks()
     private val basePaddingTop: Int
+    /** Ввод из [applyIdentity] не должен считаться правкой пользователя (поиск по нику, заголовок). */
+    private var bindingIdentity = false
+    /** Штатный keyListener поля: при известном нике его снимают, при неизвестном — возвращают. */
+    private val defaultNickKeyListener: android.text.method.KeyListener?
 
     init {
         viewStub = fragment.findViewById(R.id.toolbar_content) as ViewStub
@@ -45,6 +49,7 @@ class ChatThemeCreator(
         nickBlock = fragment.findViewById(R.id.qms_theme_nick_block) as TextInputLayout
         nickField = fragment.findViewById(R.id.qms_theme_nick_field) as MaterialAutoCompleteTextView
         titleField = fragment.findViewById(R.id.qms_theme_title_field) as TextInputEditText
+        defaultNickKeyListener = nickField.keyListener
         applyDynamicTopInset()
         initCreatorViews()
     }
@@ -90,10 +95,62 @@ class ChatThemeCreator(
     }
 
     private fun initCreatorViews() {
-        val hasNick = !userNick.isNullOrBlank()
+        nickField.visibility = View.VISIBLE
+        if (recentNicks.isNotEmpty()) {
+            // Стрелка справа раскрывает историю ников, даже когда поле пустое
+            // (autocomplete сам по себе срабатывает только на ввод).
+            setSuggestions(recentNicks)
+            nickField.setOnClickListener { showHistoryDropdown() }
+            nickField.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) showHistoryDropdown()
+            }
+        }
+        nickField.addTextChangedListener(object : SimpleTextWatcher() {
+            override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+                if (bindingIdentity) return
+                userNick = s.toString()
+                if (s.isBlank()) {
+                    setSuggestions(recentNicks)
+                } else {
+                    searchUser(s.toString())
+                }
+                fragment.setSubtitle(userNick)
+            }
+        })
+        titleField.addTextChangedListener(object : SimpleTextWatcher() {
+            override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
+                if (bindingIdentity) return
+                themeTitle = s.toString()
+                fragment.setTitle(themeTitle)
+            }
+        })
+        applyIdentity(userNick, themeTitle)
+    }
+
+    /**
+     * Переиспользуемая вкладка QMS-чата одна на всё приложение, а форма создания диалога живёт
+     * ровно один инфлейт ViewStub'а. Если её не перепривязывать, «новый диалог с B», открытый
+     * после экрана A, показывал бы ник A — и сообщение ушло бы А, ведь [sendNewTheme] берёт ник
+     * из этого поля. Зовётся только при реальной смене экрана (см. `creatorBoundKey` в
+     * [QmsChatFragment]): обычный возврат на ту же форму не должен стирать введённое.
+     */
+    fun rebindIdentity(nick: String?, title: String?) {
+        applyIdentity(nick, title)
+    }
+
+    private fun applyIdentity(nick: String?, title: String?) {
+        userNick = nick
+        themeTitle = title
+        bindingIdentity = true
+        try {
+            nickField.setText(nick.orEmpty())
+            titleField.setText(title.orEmpty())
+        } finally {
+            bindingIdentity = false
+        }
+
+        val hasNick = !nick.isNullOrBlank()
         if (hasNick) {
-            nickField.visibility = View.VISIBLE
-            nickField.setText(userNick)
             // Собеседник уже известен — поле только для чтения. isEnabled=false гасило бы его
             // до 38% альфы (M3 disabled), поэтому снимаем ввод, а вид оставляем обычным;
             // замок на конце поля объясняет, почему ник не редактируется.
@@ -108,47 +165,22 @@ class ChatThemeCreator(
             nickBlock.setEndIconOnClickListener(null)
             nickBlock.isEndIconVisible = true
             titleField.requestFocus()
-            fragment.setSubtitle(userNick)
         } else {
-            nickField.visibility = View.VISIBLE
+            nickField.keyListener = defaultNickKeyListener
+            nickField.isCursorVisible = true
             nickField.isEnabled = true
             nickField.isFocusable = true
             nickField.isFocusableInTouchMode = true
             nickField.isClickable = true
-            if (recentNicks.isNotEmpty()) {
-                // Стрелка справа раскрывает историю ников, даже когда поле пустое
-                // (autocomplete сам по себе срабатывает только на ввод).
-                nickBlock.endIconMode = TextInputLayout.END_ICON_DROPDOWN_MENU
+            nickBlock.endIconMode = if (recentNicks.isNotEmpty()) {
                 nickBlock.setEndIconContentDescription(R.string.qms_recent_nicks)
-                setSuggestions(recentNicks)
-                nickField.setOnClickListener { showHistoryDropdown() }
-                nickField.setOnFocusChangeListener { _, hasFocus ->
-                    if (hasFocus) showHistoryDropdown()
-                }
+                TextInputLayout.END_ICON_DROPDOWN_MENU
+            } else {
+                TextInputLayout.END_ICON_NONE
             }
-            nickField.addTextChangedListener(object : SimpleTextWatcher() {
-                override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-                    userNick = s.toString()
-                    if (s.isBlank()) {
-                        setSuggestions(recentNicks)
-                    } else {
-                        searchUser(s.toString())
-                    }
-                    fragment.setSubtitle(userNick)
-                }
-            })
         }
-
-        if (!themeTitle.isNullOrBlank()) {
-            titleField.setText(themeTitle)
-            fragment.setTitle(themeTitle)
-        }
-        titleField.addTextChangedListener(object : SimpleTextWatcher() {
-            override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-                themeTitle = s.toString()
-                fragment.setTitle(themeTitle)
-            }
-        })
+        fragment.setSubtitle(userNick)
+        fragment.setTitle(themeTitle)
     }
 
     fun sendNewTheme() {

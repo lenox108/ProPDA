@@ -133,6 +133,12 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     private var uploadInProgress = false
     private var visibleFrameLayoutObserver: ViewTreeObserver? = null
     private var isNetworkRefreshing = false
+
+    /** Аватар, реально стоящий в тулбаре: смена URL обязана сначала стереть прошлое лицо. */
+    private var shownAvatarUrl: String? = null
+
+    /** Экран (`userId:themeId`), под который заполнена форма создания диалога. */
+    private var creatorBoundKey: String? = null
     private val imeInsetsController: QmsChatImeInsetsController by lazy {
         QmsChatImeInsetsController(
                 messagePanelHost = messagePanelHost,
@@ -558,6 +564,11 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
         if (::messagePanel.isInitialized) {
             messagePanel.onDestroy()
         }
+        // Форма создания диалога держит вью убитой иерархии (ViewStub инфлейтится один раз на
+        // разметку), аватар — картинку убитого ImageView. При пересоздании вью их строим заново.
+        themeCreator = null
+        creatorBoundKey = null
+        shownAvatarUrl = null
         _chatBinding = null
         super.onDestroyView()
     }
@@ -827,6 +838,7 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
             is QmsChatUiEvent.OnMessagesDeleted -> showSnackbar(R.string.qms_message_deleted)
             is QmsChatUiEvent.OnBlockUser -> onBlockUser(event.isBlocked)
             is QmsChatUiEvent.ShowAvatar -> showAvatar(event.url)
+            is QmsChatUiEvent.HideAvatar -> hideAvatar()
             is QmsChatUiEvent.OnUploadFiles -> onUploadFiles(event.files)
             is QmsChatUiEvent.ShowCreateNote -> showCreateNote(event.title, event.nick, event.url)
             is QmsChatUiEvent.TempSendNewTheme -> temp_sendNewTheme()
@@ -1027,9 +1039,17 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
             clearToolbarScrollFlags()
             appBarLayout.setExpanded(true, false)
         } else if (mode == QmsChatViewModel.MODE_CREATING) {
-            if (themeCreator == null) {
+            val key = qmsChatKey(presenter.userId, presenter.themeId)
+            val creator = themeCreator
+            if (creator == null) {
                 themeCreator = ChatThemeCreator(this, presenter)
+            } else if (creatorBoundKey != key) {
+                // Вкладка чата одна на всё приложение: форма могла остаться от создания диалога
+                // с прошлым собеседником — иначе в ней висел бы его ник, и письмо ушло бы ему.
+                // Сверяем именно ключ экрана: возврат на ту же форму не должен стирать ввод.
+                creator.rebindIdentity(presenter.nick, presenter.title)
             }
+            creatorBoundKey = key
             themeCreator?.setVisible(true)
             // В режиме создания чата AppBar не должен схлопываться/наезжать на поля ввода.
             clearToolbarScrollFlags()
@@ -1132,8 +1152,23 @@ class QmsChatFragment : TabFragment(), ChatThemeCreator.ThemeCreatorInterface, T
     private fun showAvatar(avatarUrl: String) {
         toolbarImageView.contentDescription = getString(R.string.user_avatar)
         toolbarImageView.setOnClickListener { presenter.openProfile() }
+        // Вкладка QMS-чата одна на всё приложение, ImageView у нового собеседника тот же самый.
+        // coil рисует поверх, поэтому без явного сброса прошлое лицо висит до конца загрузки,
+        // а при промахе — до самого ухода с экрана.
+        if (shownAvatarUrl != avatarUrl) {
+            ForPdaCoil.clearImage(toolbarImageView)
+            shownAvatarUrl = avatarUrl
+        }
         ForPdaCoil.loadInto(toolbarImageView, avatarUrl)
         toolbarImageView.visibility = View.VISIBLE
+    }
+
+    private fun hideAvatar() {
+        shownAvatarUrl = null
+        ForPdaCoil.clearImage(toolbarImageView)
+        toolbarImageView.setOnClickListener(null)
+        toolbarImageView.contentDescription = null
+        toolbarImageView.visibility = View.GONE
     }
 
     private fun onBlockUser(res: Boolean) {

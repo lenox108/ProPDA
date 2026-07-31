@@ -128,6 +128,18 @@ object ForPdaCoil {
         return t
     }
 
+    /**
+     * Отменяет висящий запрос на [imageView] и стирает картинку. Нужен там, где один и тот же
+     * ImageView переиспользуется под разные сущности (аватар в тулбаре переиспользуемой вкладки,
+     * ячейки списков): coil рисует поверх, поэтому без явного сброса до следующей удачной загрузки
+     * — а при промахе и вовсе бессрочно — в нём остаётся прошлое изображение.
+     */
+    @JvmStatic
+    fun clearImage(imageView: ImageView) {
+        imageView.dispose()
+        imageView.setImageDrawable(null)
+    }
+
     @JvmStatic
     fun loadInto(imageView: ImageView, url: String?) {
         if (url.isNullOrBlank()) return
