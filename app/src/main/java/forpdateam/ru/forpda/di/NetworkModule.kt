@@ -14,6 +14,8 @@ import forpdateam.ru.forpda.model.AuthHolder
 import forpdateam.ru.forpda.model.CountersHolder
 import kotlinx.coroutines.CoroutineScope
 import forpdateam.ru.forpda.model.data.remote.IWebClient
+import forpdateam.ru.forpda.common.animation.AnimatedAttachmentConverter
+import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentFileConverter
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsApi
 import forpdateam.ru.forpda.model.data.remote.api.attachments.AttachmentsParser
 import forpdateam.ru.forpda.model.data.remote.api.attachments.TopicAttachmentsApi
@@ -125,7 +127,16 @@ object NetworkModule {
     @Provides @Singleton fun provideReputationApi(wc: IWebClient, p: ReputationParser) = ReputationApi(wc, p)
     @Provides @Singleton fun provideSearchApi(wc: IWebClient, p: SearchParser) = SearchApi(wc, p)
     @Provides @Singleton fun provideTopicsApi(wc: IWebClient, p: TopicsParser) = TopicsApi(wc, p)
-    @Provides @Singleton fun provideAttachmentsApi(wc: IWebClient, p: AttachmentsParser) = AttachmentsApi(wc, p)
+    /** Конвертация вложений в принимаемые форумом форматы (animated WebP/APNG → gif). */
+    @Provides @Singleton fun provideAttachmentFileConverter(
+            @ApplicationContext context: Context,
+    ): AttachmentFileConverter = AnimatedAttachmentConverter(context)
+
+    @Provides @Singleton fun provideAttachmentsApi(
+            wc: IWebClient,
+            p: AttachmentsParser,
+            converter: AttachmentFileConverter,
+    ) = AttachmentsApi(wc, p, converter)
     @Provides @Singleton fun provideTopicAttachmentsParser() = TopicAttachmentsParser()
     @Provides @Singleton fun provideTopicAttachmentsApi(wc: IWebClient, p: TopicAttachmentsParser) = TopicAttachmentsApi(wc, p)
     @Provides @Singleton fun provideSiteCommentsParser() =
