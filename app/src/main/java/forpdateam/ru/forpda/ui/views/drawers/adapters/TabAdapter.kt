@@ -1,8 +1,11 @@
 package forpdateam.ru.forpda.ui.views.drawers.adapters
 
+import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.graphics.Typeface
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.DrawableRes
@@ -27,6 +30,7 @@ data class TabRowItem(
         val subtitle: String?,
         @DrawableRes val iconRes: Int,
         val isActive: Boolean,
+        val isPinned: Boolean = false,
         /** Уровень вложенности в дереве переходов; учитывается только при [showTree]. */
         val depth: Int = 0,
         val showTree: Boolean = false,
@@ -35,14 +39,14 @@ data class TabRowItem(
 /**
  * Адаптер для вкладок в drawer.
  *
- * Жесты строки: тап — перейти на вкладку, свайп вбок — закрыть, долгое нажатие — перетаскивание,
- * тап по иконке типа — контекстное меню.
+ * Обычный режим: тап — перейти на вкладку, свайп вбок — закрыть, крестик — закрыть,
+ * долгое нажатие — меню вкладки.
  *
- * Почему меню именно на иконке, а не на долгом нажатии: список живёт внутри нижнего листа
- * (BottomSheetBehavior), и перетаскивание обязано стартовать штатным длинным нажатием
- * [ItemTouchHelper] — только тогда он успевает запретить перехват вертикального жеста листом.
- * Самодельная «ручка» с собственным детектором долгого нажатия проигрывала гонку: шторка уезжала
- * вниз вместо перетаскивания строки.
+ * Режим сортировки ([reorderMode], пункт меню «Переместить»): вместо крестика — ручка, строка
+ * тащится с касания по ручке. Именно с касания, а не по долгому нажатию: список лежит внутри
+ * нижнего листа (BottomSheetBehavior), и на удержании лист успевает увести вертикальный жест
+ * себе — вместо строки уезжала вся шторка. Старт по ACTION_DOWN гонку убирает: [ItemTouchHelper]
+ * забирает жест сразу и сам запрещает перехват выше по иерархии.
  */
 class TabAdapter(
         private val listener: Listener
@@ -52,9 +56,17 @@ class TabAdapter(
         fun onTabClick(tag: String)
         fun onTabClose(tag: String)
         fun onTabMenu(tag: String, anchor: View)
+        fun onTabDragStart(holder: RecyclerView.ViewHolder)
     }
 
     private val items = mutableListOf<TabRowItem>()
+
+    var reorderMode: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            notifyItemRangeChanged(0, items.size)
+        }
 
     fun submitRows(rows: List<TabRowItem>) {
         val old = ArrayList(items)
@@ -64,9 +76,13 @@ class TabAdapter(
             override fun areItemsTheSame(oldPos: Int, newPos: Int) = old[oldPos].tag == rows[newPos].tag
             override fun areContentsTheSame(oldPos: Int, newPos: Int) = old[oldPos] == rows[newPos]
         })
+        val orderChanged = old.map { it.tag } != rows.map { it.tag }
         items.clear()
         items.addAll(rows)
         diff.dispatchUpdatesTo(this)
+        // Строки могли переехать (закрепление, закрытие) — DiffUtil двигает их без ре-байнда,
+        // а форма плашки зависит от позиции.
+        if (orderChanged) refreshRowPlates()
     }
 
     fun getItem(position: Int): TabRowItem? = items.getOrNull(position)
@@ -103,17 +119,32 @@ class TabAdapter(
     inner class TabHolder(private val binding: DrawerTabItemBinding) : RecyclerView.ViewHolder(binding.root) {
         private var currentItem: TabRowItem? = null
 
-        init {
+        @SuppressLint("ClickableViewAccessibility")
+        private fun bindGestures() {
             binding.root.setOnClickListener {
+                if (reorderMode) return@setOnClickListener
                 currentItem?.also { listener.onTabClick(it.tag) }
+            }
+            binding.root.setOnLongClickListener { view ->
+                if (reorderMode) return@setOnLongClickListener false
+                val item = currentItem ?: return@setOnLongClickListener false
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                listener.onTabMenu(item.tag, view)
+                true
             }
             binding.drawerItemClose.setOnClickListener {
                 currentItem?.also { listener.onTabClose(it.tag) }
             }
-            // Тап по иконке типа — меню вкладки (долгое нажатие занято перетаскиванием).
-            binding.drawerItemIcon.setOnClickListener { anchor ->
-                currentItem?.also { listener.onTabMenu(it.tag, anchor) }
+            binding.drawerItemDrag.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    listener.onTabDragStart(this@TabHolder)
+                }
+                false
             }
+        }
+
+        init {
+            bindGestures()
         }
 
         fun bind(item: TabRowItem, position: Int) {
@@ -160,6 +191,12 @@ class TabAdapter(
                 visibility = if (item.subtitle.isNullOrEmpty()) View.GONE else View.VISIBLE
             }
             binding.drawerItemIcon.setImageResource(item.iconRes)
+            binding.drawerItemPin.visibility = if (item.isPinned) View.VISIBLE else View.GONE
+
+            // В режиме сортировки крестик уступает место ручке: закрывать вкладки на ходу
+            // всё равно нельзя (порядок строк меняется под пальцем).
+            binding.drawerItemClose.visibility = if (reorderMode) View.GONE else View.VISIBLE
+            binding.drawerItemDrag.visibility = if (reorderMode) View.VISIBLE else View.GONE
 
             val indentStep = res.getDimensionPixelSize(R.dimen.dp16)
             val indent = if (item.showTree) indentStep * item.depth.coerceAtMost(MAX_TREE_DEPTH) else 0

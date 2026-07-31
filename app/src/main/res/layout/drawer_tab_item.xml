@@ -12,7 +12,7 @@
         android:gravity="center_vertical"
         android:minHeight="@dimen/dp56"
         android:orientation="horizontal"
-        android:paddingStart="@dimen/dp4"
+        android:paddingStart="@dimen/dp12"
         android:paddingEnd="@dimen/dp0">
 
         <!-- Отступ уровня и линия связи — режим дерева переходов; в плоском списке скрыты. -->
@@ -32,14 +32,10 @@
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/drawer_item_icon"
-            android:layout_width="@dimen/dp48"
-            android:layout_height="@dimen/dp48"
-            android:layout_marginEnd="@dimen/dp4"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:contentDescription="@string/tab_menu_open"
-            android:focusable="true"
-            android:padding="@dimen/dp12"
+            android:layout_width="@dimen/dp24"
+            android:layout_height="@dimen/dp24"
+            android:layout_marginEnd="@dimen/dp12"
+            android:importantForAccessibility="no"
             app:srcCompat="@drawable/ic_forum"
             app:tint="?attr/colorOnSurfaceVariant" />
 
@@ -75,6 +71,17 @@
         </LinearLayout>
 
         <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/drawer_item_pin"
+            android:layout_width="@dimen/dp16"
+            android:layout_height="@dimen/dp16"
+            android:layout_marginEnd="@dimen/dp8"
+            android:contentDescription="@string/tab_menu_pin"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_pin"
+            app:tint="?attr/colorOnSurfaceVariant"
+            tools:visibility="visible" />
+
+        <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/drawer_item_close"
             android:layout_width="@dimen/dp48"
             android:layout_height="@dimen/dp48"
@@ -85,5 +92,17 @@
             android:padding="@dimen/dp12"
             app:srcCompat="@drawable/ic_clear"
             app:tint="?attr/colorOnSurfaceVariant" />
+
+        <!-- Ручка ручной сортировки: видна только в режиме «Переместить», вместо крестика. -->
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/drawer_item_drag"
+            android:layout_width="@dimen/dp48"
+            android:layout_height="@dimen/dp48"
+            android:contentDescription="@string/tab_menu_reorder"
+            android:padding="@dimen/dp12"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_drag_handle"
+            app:tint="?attr/colorOnSurfaceVariant"
+            tools:visibility="visible" />
     </LinearLayout>
 </FrameLayout>

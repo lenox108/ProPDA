@@ -235,6 +235,10 @@
     <string name="bottom_nav_open_tabs_section">Открытые вкладки</string>
     <!-- Список открытых вкладок: заголовок секции со счётчиком и контекстное меню строки -->
     <string name="bottom_nav_open_tabs_section_count" formatted="false">Открытые вкладки · %d</string>
+    <string name="tab_menu_pin">Закрепить</string>
+    <string name="tab_menu_unpin">Открепить</string>
+    <string name="tab_menu_reorder">Переместить</string>
+    <string name="tab_reorder_done">Готово</string>
     <string name="tab_menu_close">Закрыть вкладку</string>
     <string name="tab_menu_close_below">Закрыть вкладки ниже</string>
     <string name="tab_menu_close_branch">Закрыть ветку темы</string>

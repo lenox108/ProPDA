@@ -187,8 +187,8 @@ class TabNavigator(
      * Последнюю вкладку не закрываем — из списка это выглядело бы как выход из приложения.
      */
     fun closeTabs(tabTags: List<String>) {
-        if (tabTags.isEmpty()) return
-        val closing = tabTags.toHashSet()
+        val closing = tabTags.filterNot { tabController.isPinned(it) }.toHashSet()
+        if (closing.isEmpty()) return
         if (tabController.getList().none { it.tag !in closing }) return
 
         val transaction = fragmentManager.beginTransaction()
@@ -205,7 +205,15 @@ class TabNavigator(
 
     fun isTabOpen(tabTag: String): Boolean = tabController.getList().any { it.tag == tabTag }
 
-    /** Порядок строк после перетаскивания в списке вкладок: дерево переходов не меняется. */
+    fun isTabPinned(tabTag: String): Boolean = tabController.isPinned(tabTag)
+
+    /** Закреплённая вкладка идёт первой в списке и переживает «Закрыть остальные»/«ниже». */
+    fun setTabPinned(tabTag: String, pinned: Boolean) {
+        tabController.setPinned(tabTag, pinned)
+        updateSubscribersFlow()
+    }
+
+    /** Порядок строк после ручной сортировки: дерево переходов не меняется. */
     fun setTabOrder(tags: List<String>) {
         tabController.setDisplayOrder(tags)
         updateSubscribersFlow()
@@ -232,9 +240,12 @@ class TabNavigator(
     fun canCloseThemeChainToOrigin(tabTag: String?): Boolean =
             tabController.getThemeChainTagsToOrigin(tabTag).isNotEmpty()
 
+    /** Закреплённые вкладки и текущая остаются. */
     fun closeOthers() {
         val transaction = fragmentManager.beginTransaction()
-        val itemTags = tabController.getList().map { it.tag }.filter { it != tabController.getCurrent()?.tag }
+        val itemTags = tabController.getList()
+                .map { it.tag }
+                .filter { it != tabController.getCurrent()?.tag && !tabController.isPinned(it) }
         itemTags.forEach { itemTag ->
             getByTag(itemTag)?.also { fragment ->
                 transaction.remove(fragment)

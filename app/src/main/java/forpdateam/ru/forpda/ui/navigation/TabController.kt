@@ -17,11 +17,16 @@ class TabController {
     private val tabs = mutableListOf<TabItem>()
 
     /**
-     * Порядок строк в списке открытых вкладок — отдельно от дерева навигации.
-     * Пользователь может перетащить строки как ему удобно, и это НЕ должно менять
-     * parent/children (от них зависят «назад», закрытие ветки и выбор вкладки после закрытия).
-     * Список самоочищается и дополняется в [getDisplayList]; новые вкладки попадают в конец,
-     * как и раньше (список брался в порядке появления фрагментов).
+     * Закреплённые вкладки: показываются первыми и не сносятся «Закрыть остальные».
+     * Хранятся тегами отдельно от дерева навигации — parent/children трогать нельзя,
+     * от них зависят «назад», закрытие ветки и выбор вкладки после закрытия.
+     */
+    private val pinnedTags = mutableSetOf<String>()
+
+    /**
+     * Ручной порядок строк из режима сортировки. Тоже только про показ: parent/children
+     * не трогаем. Список самоочищается и дополняется в [getDisplayList], новые вкладки
+     * попадают в конец — как и раньше, когда порядок брался из появления фрагментов.
      */
     private val displayOrder = mutableListOf<String>()
 
@@ -31,8 +36,15 @@ class TabController {
         val jsonTabs = savedInstanceState.getJSONArray("tabs")
         restoreFromInstance(tabs, jsonTabs)
 
+        // Ключей нет в состоянии, сохранённом прошлыми версиями — ничего не закреплено,
+        // порядок соберётся из дерева.
+        pinnedTags.clear()
+        savedInstanceState.optJSONArray("pinnedTags")?.also { jsonPinned ->
+            (0 until jsonPinned.length()).forEach { index ->
+                pinnedTags.add(jsonPinned.getString(index))
+            }
+        }
         displayOrder.clear()
-        // Ключа нет в состоянии, сохранённом прошлыми версиями — порядок просто соберётся из дерева.
         savedInstanceState.optJSONArray("displayOrder")?.also { jsonOrder ->
             (0 until jsonOrder.length()).forEach { index ->
                 displayOrder.add(jsonOrder.getString(index))
@@ -44,6 +56,7 @@ class TabController {
         return JSONObject().apply {
             put("currentTag", currentTag)
             put("tabs", getListForSave(tabs))
+            put("pinnedTags", JSONArray().apply { pinnedTags.forEach { put(it) } })
             put("displayOrder", JSONArray().apply { displayOrder.forEach { put(it) } })
         }
     }
@@ -153,28 +166,37 @@ class TabController {
     }
 
     /**
-     * Список вкладок в порядке показа: сначала то, что пользователь расставил сам
-     * ([displayOrder]), затем всё новое в порядке обхода дерева. Побочно чистит порядок
-     * от закрытых вкладок — иначе он бы рос до конца сессии.
+     * Список вкладок в порядке показа: сначала закреплённые, дальше остальные; внутри каждой
+     * группы — ручной порядок ([sortedByDescending] стабильна и его не ломает), а всё, чего в
+     * ручном порядке ещё нет, идёт следом в порядке обхода дерева. Побочно чистит порядок от
+     * закрытых вкладок — иначе он бы рос до конца сессии.
      */
     fun getDisplayList(): List<TabItem> {
         val rest = LinkedHashMap<String, TabItem>()
         getList().forEach { rest[it.tag] = it }
 
-        val result = mutableListOf<TabItem>()
-        displayOrder.forEach { tag -> rest.remove(tag)?.also { result.add(it) } }
-        result.addAll(rest.values)
+        val ordered = mutableListOf<TabItem>()
+        displayOrder.forEach { tag -> rest.remove(tag)?.also { ordered.add(it) } }
+        ordered.addAll(rest.values)
 
         displayOrder.clear()
-        result.forEach { displayOrder.add(it.tag) }
-        return result
+        ordered.forEach { displayOrder.add(it.tag) }
+        return ordered.sortedByDescending { isPinned(it.tag) }
     }
 
-    /** Перетаскивание строк: меняется только порядок показа, дерево навигации не трогаем. */
+    /** Ручная сортировка: меняется только порядок показа, дерево навигации не трогаем. */
     fun setDisplayOrder(tags: List<String>) {
         displayOrder.clear()
         displayOrder.addAll(tags)
     }
+
+    fun isPinned(tag: String?): Boolean = tag != null && pinnedTags.contains(tag)
+
+    fun setPinned(tag: String, pinned: Boolean) {
+        if (pinned) pinnedTags.add(tag) else pinnedTags.remove(tag)
+    }
+
+    fun getPinnedTags(): Set<String> = pinnedTags.toSet()
 
     /** Глубина вложенности вкладки в дереве переходов (0 — корневая). */
     fun getDepth(tag: String?): Int {
@@ -231,6 +253,7 @@ class TabController {
     }
 
     fun remove(tag: String, print: Boolean = true) {
+        pinnedTags.remove(tag)
         findTabItem(tag)?.also { item ->
             val parentList = item.parent?.children ?: tabs
             val index = parentList.indexOf(item)

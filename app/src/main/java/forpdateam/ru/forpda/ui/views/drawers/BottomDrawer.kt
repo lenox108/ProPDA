@@ -135,7 +135,16 @@ class BottomDrawer(
         override fun onTabMenu(tag: String, anchor: View) {
             showTabMenu(tag, anchor)
         }
+
+        override fun onTabDragStart(holder: RecyclerView.ViewHolder) {
+            tabsTouchHelper?.startDrag(holder)
+        }
     })
+
+    private var tabsTouchHelper: ItemTouchHelper? = null
+
+    /** Режим ручной сортировки («Переместить» в меню вкладки): вместо крестиков — ручки. */
+    private var reorderMode = false
 
     /**
      * Список вкладок деревом переходов вместо плоского («Вкладки деревом переходов» в настройках).
@@ -260,7 +269,7 @@ class BottomDrawer(
             manager.create()
 
             bottomCloseAllTabs.setOnClickListener {
-                removeAllTabs()
+                if (reorderMode) setReorderMode(false) else removeAllTabs()
             }
 
             bottomTabsRecycler.apply {
@@ -282,10 +291,16 @@ class BottomDrawer(
                     override fun getDragDirs(
                             recyclerView: androidx.recyclerview.widget.RecyclerView,
                             viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder,
-                    ): Int = if (treeView) 0 else ItemTouchHelper.UP or ItemTouchHelper.DOWN
+                    ): Int = if (reorderMode) ItemTouchHelper.UP or ItemTouchHelper.DOWN else 0
+
+                    /** В режиме сортировки строка не должна закрываться свайпом из-под пальца. */
+                    override fun getSwipeDirs(
+                            recyclerView: androidx.recyclerview.widget.RecyclerView,
+                            viewHolder: androidx.recyclerview.widget.RecyclerView.ViewHolder,
+                    ): Int = if (reorderMode) 0 else ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
 
                     override fun onRowMoved(from: Int, to: Int): Boolean {
-                        if (treeView) return false
+                        if (!reorderMode) return false
                         tabsAdapter.moveRow(from, to)
                         return true
                     }
@@ -295,7 +310,7 @@ class BottomDrawer(
                         tabsAdapter.refreshRowPlates()
                     }
                 }
-                ItemTouchHelper(touchCallback).attachToRecyclerView(this)
+                tabsTouchHelper = ItemTouchHelper(touchCallback).also { it.attachToRecyclerView(this) }
             }
 
             // Force refresh tabs when drawer opens
@@ -452,7 +467,21 @@ class BottomDrawer(
     }
 
     fun hide() {
+        setReorderMode(false)
         bottomSheetBehavior.setState(BottomSheetBehaviorFixed.STATE_COLLAPSED)
+    }
+
+    /**
+     * Режим ручной сортировки. Кнопка внизу превращается в «Готово», крестики — в ручки;
+     * выход из режима — по кнопке или при закрытии шторки.
+     */
+    private fun setReorderMode(enabled: Boolean) {
+        if (reorderMode == enabled) return
+        reorderMode = enabled
+        tabsAdapter.reorderMode = enabled
+        binding.bottomCloseAllTabs.setText(
+                if (enabled) R.string.tab_reorder_done else R.string.close_other_tabs)
+        submitTabs(tabNavigator.subscribersFlow.value)
     }
 
     fun toggle() {
@@ -539,6 +568,7 @@ class BottomDrawer(
                     ),
                     iconRes = TabScreenIcons.iconFor(screenKey),
                     isActive = tag == currentTag,
+                    isPinned = controller.isPinned(tag),
                     depth = controller.getDepth(tag),
                     showTree = treeView,
             )
@@ -592,6 +622,21 @@ class BottomDrawer(
         val rows = tabsAdapter.currentRows()
         val index = rows.indexOfFirst { it.tag == tag }
         val popup = PopupMenu(anchor.context, anchor)
+
+        val pinned = tabNavigator.isTabPinned(tag)
+        popup.menu.add(if (pinned) R.string.tab_menu_unpin else R.string.tab_menu_pin)
+                .setOnMenuItemClickListener {
+                    tabNavigator.setTabPinned(tag, !pinned)
+                    true
+                }
+
+        // Порядок в дереве задаёт само дерево, руками его двигать нечего.
+        if (!treeView && rows.size > 1) {
+            popup.menu.add(R.string.tab_menu_reorder).setOnMenuItemClickListener {
+                setReorderMode(true)
+                true
+            }
+        }
 
         tabNavigator.tabController.getOrigin(tag)?.tabUrl()?.also { url ->
             popup.menu.add(R.string.tab_menu_copy_link).setOnMenuItemClickListener {
