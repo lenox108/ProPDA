@@ -13,7 +13,12 @@ import java.util.Locale
 
 class AttachmentsApi(
         private val webClient: IWebClient,
-        private val attachmentsParser: AttachmentsParser
+        private val attachmentsParser: AttachmentsParser,
+        /**
+         * Приводит вложение к принимаемому форумом формату (animated WebP → gif и т.п.).
+         * null — конвертация выключена (юнит-тесты).
+         */
+        private val fileConverter: AttachmentFileConverter? = null,
 ) {
 
     fun uploadQmsFiles(files: List<RequestFile>, pending: List<AttachmentItem>) =
@@ -48,7 +53,14 @@ class AttachmentsApi(
             builder.formHeader("relId", postId.toString())
         }
         for (i in files.indices) {
-            val file = files[i]
+            // Форум из анимированного принимает только gif: animated WebP он отклоняет,
+            // APNG пережимает в один кадр. Подменяем файл ДО подсчёта md5 и code=check,
+            // иначе сервер отвечает отказом на исходный формат.
+            val file = fileConverter?.let { converter ->
+                runCatching { converter.convert(files[i]) }
+                    .onFailure { timber.log.Timber.w(it, "attach convert failed") }
+                    .getOrNull()
+            } ?: files[i]
             val item = pending[i]
 
             file.requestName = "FILE_UPLOAD[]"
@@ -86,7 +98,7 @@ class AttachmentsApi(
 
                 response = webClient.request(uploadRequest.build(), item.progressListener)
             }
-            attachmentsParser.parseAttachment(response.body, item)
+            attachmentsParser.parseAttachment(response.body, item, file.fileName)
             item.status = AttachmentItem.STATUS_UPLOADED
         }
         return pending

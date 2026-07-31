@@ -107,7 +107,17 @@ class AttachmentsParser(
      * Parses the per-file upload response. Same STX/ETX tokenised
      * format as [parseAttachments] — see the class-level KDoc.
      */
-    fun parseAttachment(response: String, item: AttachmentItem?): AttachmentItem {
+    /**
+     * @param sentFileName имя файла, который РЕАЛЬНО ушёл на сервер (после конвертации
+     *        вложения оно отличается от [AttachmentItem.name]) — нужно, чтобы текст ошибки
+     *        называл формат, который форум отклонил на самом деле.
+     */
+    @JvmOverloads
+    fun parseAttachment(
+        response: String,
+        item: AttachmentItem?,
+        sentFileName: String? = null,
+    ): AttachmentItem {
         val result = item ?: AttachmentItem()
         val filled = patternProvider
             .getPattern(scope.scope, scope.attachments)
@@ -116,15 +126,11 @@ class AttachmentsParser(
                 fillAttachment(result, it)
             }
         if (filled == null) {
-            // Сервер вернул не разметку вложения (ошибка/пусто)
+            // Сервер вернул не разметку вложения. На отказ он отвечает односимвольным телом
+            // («1»), поэтому вместо сырого ответа показываем объяснение по формату файла.
             result.loadState = AttachmentItem.STATE_NOT_LOADED
             result.isError = true
-            result.errorText = response
-                .replace(Regex("<[^>]*>"), " ")
-                .replace(Regex("\\s+"), " ")
-                .trim()
-                .take(200)
-                .ifBlank { "Не удалось загрузить файл" }
+            result.errorText = AttachmentUploadError.describe(response, sentFileName ?: result.name)
         }
         return result
     }
