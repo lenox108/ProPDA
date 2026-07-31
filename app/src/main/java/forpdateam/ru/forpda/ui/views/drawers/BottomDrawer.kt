@@ -135,14 +135,7 @@ class BottomDrawer(
         override fun onTabMenu(tag: String, anchor: View) {
             showTabMenu(tag, anchor)
         }
-
-        override fun onTabDragStart(holder: RecyclerView.ViewHolder) {
-            if (treeView) return
-            tabsTouchHelper?.startDrag(holder)
-        }
     })
-
-    private var tabsTouchHelper: ItemTouchHelper? = null
 
     /**
      * Список вкладок деревом переходов вместо плоского («Вкладки деревом переходов» в настройках).
@@ -299,9 +292,10 @@ class BottomDrawer(
 
                     override fun onRowMoveFinished() {
                         tabNavigator.setTabOrder(tabsAdapter.currentRows().map { it.tag })
+                        tabsAdapter.refreshRowPlates()
                     }
                 }
-                tabsTouchHelper = ItemTouchHelper(touchCallback).also { it.attachToRecyclerView(this) }
+                ItemTouchHelper(touchCallback).attachToRecyclerView(this)
             }
 
             // Force refresh tabs when drawer opens

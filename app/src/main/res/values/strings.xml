@@ -240,7 +240,7 @@
     <string name="tab_menu_close_branch">Закрыть ветку темы</string>
     <string name="tab_menu_copy_link">Копировать ссылку</string>
     <string name="tab_closed_message">Вкладка закрыта</string>
-    <string name="tab_reorder_handle">Перетащите, чтобы изменить порядок</string>
+    <string name="tab_menu_open">Меню вкладки</string>
     <string name="tab_kind_topic">Тема</string>
     <string name="tab_kind_article">Статья</string>
     <string name="tab_kind_profile">Профиль</string>

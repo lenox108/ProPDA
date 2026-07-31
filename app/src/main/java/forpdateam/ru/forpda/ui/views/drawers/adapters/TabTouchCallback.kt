@@ -16,9 +16,9 @@ import kotlin.math.min
 /**
  * Жесты списка открытых вкладок: свайп вбок — закрыть, перетаскивание вверх/вниз — свой порядок.
  *
- * Перетаскивание НЕ стартует по долгому нажатию ([isLongPressDragEnabled] = false): долгое нажатие
- * по строке открывает контекстное меню, поэтому ручкой служит иконка типа вкладки
- * ([TabAdapter.Listener.onTabDragStart] → [ItemTouchHelper.startDrag]).
+ * Перетаскивание стартует штатным долгим нажатием [ItemTouchHelper]: только так он успевает
+ * запретить перехват вертикального жеста нижним листом, внутри которого лежит список
+ * (самодельная «ручка» с собственным детектором эту гонку проигрывала — уезжала вся шторка).
  *
  * Свайп рисует подложку по форме плашки строки (тот же радиус, что у [forpdateam.ru.forpda.ui.applyListRowPlate]),
  * значок закрытия у открывшегося края и подтапливает саму строку — чтобы жест читался ещё до порога.
@@ -47,7 +47,7 @@ abstract class TabTouchCallback(
     /** Перетаскивание завершено — можно зафиксировать порядок в модели. */
     abstract fun onRowMoveFinished()
 
-    override fun isLongPressDragEnabled(): Boolean = false
+    override fun isLongPressDragEnabled(): Boolean = true
 
     override fun onMove(
             recyclerView: RecyclerView,

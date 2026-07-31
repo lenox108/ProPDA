@@ -1,12 +1,8 @@
 package forpdateam.ru.forpda.ui.views.drawers.adapters
 
-import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.graphics.Typeface
-import android.view.GestureDetector
-import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.DrawableRes
@@ -39,9 +35,14 @@ data class TabRowItem(
 /**
  * Адаптер для вкладок в drawer.
  *
- * Жесты строки: тап — перейти на вкладку, свайп вбок — закрыть, долгое нажатие — контекстное меню,
- * долгое нажатие НА ИКОНКЕ — перетаскивание (иконка работает ручкой, потому что долгое нажатие
- * по самой строке уже занято меню).
+ * Жесты строки: тап — перейти на вкладку, свайп вбок — закрыть, долгое нажатие — перетаскивание,
+ * тап по иконке типа — контекстное меню.
+ *
+ * Почему меню именно на иконке, а не на долгом нажатии: список живёт внутри нижнего листа
+ * (BottomSheetBehavior), и перетаскивание обязано стартовать штатным длинным нажатием
+ * [ItemTouchHelper] — только тогда он успевает запретить перехват вертикального жеста листом.
+ * Самодельная «ручка» с собственным детектором долгого нажатия проигрывала гонку: шторка уезжала
+ * вниз вместо перетаскивания строки.
  */
 class TabAdapter(
         private val listener: Listener
@@ -51,7 +52,6 @@ class TabAdapter(
         fun onTabClick(tag: String)
         fun onTabClose(tag: String)
         fun onTabMenu(tag: String, anchor: View)
-        fun onTabDragStart(holder: RecyclerView.ViewHolder)
     }
 
     private val items = mutableListOf<TabRowItem>()
@@ -80,6 +80,15 @@ class TabAdapter(
         notifyItemMoved(from, to)
     }
 
+    /**
+     * Пересчёт скруглений плашки (первая/средняя/последняя строка) после перестановки:
+     * [notifyItemMoved] строки не перепривязывает, а форма зависит от позиции — иначе список
+     * распадается на отдельные скруглённые карточки.
+     */
+    fun refreshRowPlates() {
+        if (items.isNotEmpty()) notifyItemRangeChanged(0, items.size)
+    }
+
     override fun getItemCount(): Int = items.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TabHolder {
@@ -94,40 +103,17 @@ class TabAdapter(
     inner class TabHolder(private val binding: DrawerTabItemBinding) : RecyclerView.ViewHolder(binding.root) {
         private var currentItem: TabRowItem? = null
 
-        private val iconGestures = GestureDetector(binding.root.context, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean = true
-
-            override fun onSingleTapUp(e: MotionEvent): Boolean {
-                currentItem?.also { listener.onTabClick(it.tag) }
-                return true
-            }
-
-            override fun onLongPress(e: MotionEvent) {
-                binding.drawerItemIcon.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                listener.onTabDragStart(this@TabHolder)
-            }
-        })
-
-        @SuppressLint("ClickableViewAccessibility")
-        private fun bindGestures() {
+        init {
             binding.root.setOnClickListener {
                 currentItem?.also { listener.onTabClick(it.tag) }
-            }
-            binding.root.setOnLongClickListener { view ->
-                val item = currentItem ?: return@setOnLongClickListener false
-                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                listener.onTabMenu(item.tag, view)
-                true
             }
             binding.drawerItemClose.setOnClickListener {
                 currentItem?.also { listener.onTabClose(it.tag) }
             }
-            // Иконка — ручка перетаскивания: обычный тап по ней открывает вкладку, как и вся строка.
-            binding.drawerItemIcon.setOnTouchListener { _, event -> iconGestures.onTouchEvent(event) }
-        }
-
-        init {
-            bindGestures()
+            // Тап по иконке типа — меню вкладки (долгое нажатие занято перетаскиванием).
+            binding.drawerItemIcon.setOnClickListener { anchor ->
+                currentItem?.also { listener.onTabMenu(it.tag, anchor) }
+            }
         }
 
         fun bind(item: TabRowItem, position: Int) {
