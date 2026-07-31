@@ -2700,16 +2700,28 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         loadTopic(url, preserveRefreshIntent = true)
     }
 
-    /** Первый видимый пост и его пиксельный offset — точка, куда обновление обязано вернуть. */
-    private fun captureInPlaceRefreshAnchor() {
+    /**
+     * Первый видимый пост и его пиксельный offset — точка, куда обновление обязано вернуть.
+     *
+     * @param skipPostId пост, которого на перезагруженной странице УЖЕ НЕ БУДЕТ (удалённый): якорем он не
+     * годится — restore промахнётся, и [applyInitialAnchor] свалится в Top. Тогда берём следующий за ним
+     * пост и выравниваем по верху (0 — своего offset'а у него нет).
+     */
+    private fun captureInPlaceRefreshAnchor(skipPostId: Int = 0) {
         if (loadedItems.isEmpty()) return
         val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
         val firstPos = lm.findFirstVisibleItemPosition()
         if (firstPos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return
-        val item = loadedItems.getOrNull(firstPos - headerOffset()) ?: return
-        if (item.postId <= 0) return
-        pendingRestorePostId = item.postId
-        pendingRestoreOffset = lm.findViewByPosition(firstPos)?.top ?: 0
+        var pos = firstPos
+        while (true) {
+            val item = loadedItems.getOrNull(pos - headerOffset()) ?: return
+            if (item.postId > 0 && item.postId != skipPostId) {
+                pendingRestorePostId = item.postId
+                pendingRestoreOffset = if (pos == firstPos) (lm.findViewByPosition(pos)?.top ?: 0) else 0
+                return
+            }
+            pos++
+        }
     }
 
     /**
@@ -3829,6 +3841,19 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
         }
     }
 
+    /**
+     * Удаление своего поста. Раньше в успешной ветке стоял голый `loadTopic(loadedUrl)`, и он врал дважды:
+     *  - [loadedUrl] — url ОТКРЫТИЯ темы, infinite-scroll его не двигает: перезагружалась не та страница,
+     *    которую читают, и всё догруженное окно выбрасывалось;
+     *  - якорного намерения никто не взводил, а у обычного постраничного url серверного якоря нет →
+     *    [applyInitialAnchor] падал в [AnchorRequest.Top]. Отсюда репорт «после удаления кидает на первый
+     *    пост последней страницы» (свой пост удаляют обычно в конце темы).
+     *
+     * Сервер удаление уже подтвердил, поэтому убираем пост ИЗ СПИСКА НА МЕСТЕ (как это делает добавление
+     * в ЧС): DiffUtil снимает карточку, соседи остаются ровно там, где были, экран не гаснет и не мигает.
+     * Фолбэк-reload ([reloadAfterDelete]) грузит РЕАЛЬНО читаемую страницу и садится обратно на первый
+     * видимый пост — как «Обновить» ([refreshInPlace]).
+     */
     private fun performDelete(item: NativePostItem) {
         viewLifecycleOwner.lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
@@ -3837,11 +3862,44 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
             if (view == null) return@launch
             if (ok) {
                 Toast.makeText(requireContext(), "Удалено", Toast.LENGTH_SHORT).show()
-                loadedUrl?.let { loadTopic(it) }
+                if (!applyDeletedPostInPlace(item.postId)) reloadAfterDelete(item.postId)
             } else {
                 Toast.makeText(requireContext(), "Не удалось удалить", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    /**
+     * Снять удалённый пост с загруженного списка без перезагрузки страницы. false — на месте не вышло,
+     * нужен полноценный reload:
+     *  - поста нет в окне (меню строится по загруженной карточке, так что это защита от гонки);
+     *  - он был последним в окне — пустой список показывать нельзя;
+     *  - это пост-шапка: 4pda эхом печатает её на КАЖДОЙ странице, устройство страницы меняется целиком.
+     */
+    private fun applyDeletedPostInPlace(deletedPostId: Int): Boolean {
+        if (view == null || deletedPostId <= 0) return false
+        if (deletedPostId == topicHatPostId || deletedPostId == knownHatPostId) return false
+        val idx = loadedItems.indexOfFirst { it.postId == deletedPostId }
+        if (idx < 0 || loadedItems.size <= 1) return false
+        loadedItems.removeAt(idx)
+        // Якорь «низ темы» держит id ПОСЛЕДНЕГО поста; удалили именно его — ссылка протухла и
+        // ре-якорение по ней (см. [reanchorBottomAfterGrowth]) промахнулось бы.
+        if (anchoredBottomPostId == deletedPostId) anchoredBottomPostId = null
+        submitPosts()
+        return true
+    }
+
+    /**
+     * Фолбэк, когда пост нельзя снять на месте: перечитать страницу, которую юзер РЕАЛЬНО читает
+     * ([barCurrentPage]), и вернуться на то же место. Якорь берём мимо удалённого поста — после
+     * перезагрузки его на странице не будет, restore промахнулся бы и [applyInitialAnchor] снова свалился
+     * бы в Top, то есть ровно в тот баг, от которого уходим.
+     */
+    private fun reloadAfterDelete(deletedPostId: Int) {
+        val url = if (pagination.isInitialised) pagination.pageUrl(barCurrentPage) else (loadedUrl ?: topicUrl)
+        boundaryResumeArmed = false // не свежее открытие — резюм к границе прочитанного здесь не при чём
+        captureInPlaceRefreshAnchor(skipPostId = deletedPostId)
+        loadTopic(url)
     }
 
     // region attachments — reuse the WebView editor's upload/delete pipeline via ThemeEditorUseCase
