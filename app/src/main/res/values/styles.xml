@@ -641,6 +641,11 @@
         <item name="textAppearanceLabelLarge">@style/TextAppearance.ForPDA.Flat.LabelLarge</item>
         <item name="textAppearanceLabelMedium">@style/TextAppearance.ForPDA.Flat.LabelMedium</item>
         <item name="textAppearanceLabelSmall">@style/TextAppearance.ForPDA.Flat.LabelSmall</item>
+        <!-- Маркеры выделения текста (bottom sheet — отдельная ветка Material3, DayNightAppTheme сюда не наследуется). -->
+        <item name="android:textSelectHandle">@drawable/text_select_handle</item>
+        <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left</item>
+        <item name="android:textSelectHandleRight">@drawable/text_select_handle_right</item>
+        <item name="android:textSelectHandleWindowStyle">@style/Widget.ForPDA.TextSelectHandleWindow</item>
     </style>
 
     <style name="DayNightAppTheme" parent="Base.ForPDA.FlatType">
@@ -779,6 +784,11 @@
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.ForPDA.Dialog</item>
         <item name="buttonBarButtonStyle">@style/Widget.ForPDA.DialogButton</item>
         <item name="textInputStyle">@style/DialogTextInputStyle</item>
+        <!-- Маркеры выделения текста (диалоги — отдельная ветка Material3, DayNightAppTheme сюда не наследуется). -->
+        <item name="android:textSelectHandle">@drawable/text_select_handle</item>
+        <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left</item>
+        <item name="android:textSelectHandleRight">@drawable/text_select_handle_right</item>
+        <item name="android:textSelectHandleWindowStyle">@style/Widget.ForPDA.TextSelectHandleWindow</item>
     </style>
 
     <style name="ShapeAppearance.ForPDA.Dialog" parent="ShapeAppearance.Material3.LargeComponent">
@@ -1135,6 +1145,11 @@
         <item name="textAppearanceLabelLarge">@style/TextAppearance.ForPDA.Flat.LabelLarge</item>
         <item name="textAppearanceLabelMedium">@style/TextAppearance.ForPDA.Flat.LabelMedium</item>
         <item name="textAppearanceLabelSmall">@style/TextAppearance.ForPDA.Flat.LabelSmall</item>
+        <!-- Маркеры выделения текста (просмотрщик — отдельная NoActionBar-ветка Material3). -->
+        <item name="android:textSelectHandle">@drawable/text_select_handle</item>
+        <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left</item>
+        <item name="android:textSelectHandleRight">@drawable/text_select_handle_right</item>
+        <item name="android:textSelectHandleWindowStyle">@style/Widget.ForPDA.TextSelectHandleWindow</item>
     </style>
 
     <style name="ImageViewTheme.AppBarOverlay" parent="ThemeOverlay.Material3.Dark.ActionBar">

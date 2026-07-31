@@ -89,6 +89,11 @@
         <item name="colorOnSurfaceVariant">@color/sepia_blue_second_text_color</item>
         <item name="textInputStyle">@style/DialogTextInputStyle</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.ForPDA.BottomSheet</item>
+        <!-- Маркеры выделения текста (bottom sheet — отдельная ветка Material3, DayNightAppTheme сюда не наследуется). -->
+        <item name="android:textSelectHandle">@drawable/text_select_handle</item>
+        <item name="android:textSelectHandleLeft">@drawable/text_select_handle_left</item>
+        <item name="android:textSelectHandleRight">@drawable/text_select_handle_right</item>
+        <item name="android:textSelectHandleWindowStyle">@style/Widget.ForPDA.TextSelectHandleWindow</item>
     </style>
 
     <style name="DayNightAppTheme.SepiaBlue.NoActionBarBase" parent="DayNightAppTheme.SepiaBlue">
