@@ -73,6 +73,15 @@
         <item>OFF</item>
     </string-array>
 
+    <string-array name="entries_topic_fast_scroll_scale">
+        <item>@string/pref_topic_fast_scroll_scale_loaded_entry</item>
+        <item>@string/pref_topic_fast_scroll_scale_topic_entry</item>
+    </string-array>
+    <string-array name="entry_values_topic_fast_scroll_scale">
+        <item>LOADED</item>
+        <item>TOPIC</item>
+    </string-array>
+
     <string-array name="entries_topic_back_behavior">
         <item>@string/pref_value_topic_back_behavior_history</item>
         <item>@string/pref_value_topic_back_behavior_origin</item>

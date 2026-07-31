@@ -48,6 +48,8 @@ object Preferences {
         const val TOPIC_BOTTOM_REFRESH_GESTURE_ENABLE = PREFIX + "topic_bottom_refresh_gesture.enable"
         /** Перетаскиваемый ползунок быстрой прокрутки в теме: выключен / справа / слева. */
         const val TOPIC_FAST_SCROLL = PREFIX + "topic_fast_scroll"
+        /** Шкала ползунка: по загруженному куску или по всем страницам темы. */
+        const val TOPIC_FAST_SCROLL_SCALE = PREFIX + "topic_fast_scroll_scale"
         /** Показывать ли под последним постом плашку «Сейчас читают тему» (только классический режим). */
         const val TOPIC_ACTIVE_READERS_ENABLE = PREFIX + "topic_active_readers.enable"
         const val TOPIC_BACK_BEHAVIOR = PREFIX + "topic_back_behavior"
@@ -154,6 +156,12 @@ object Preferences {
          * левый (и там же он не спорит с кнопкой «⋮» в шапке поста).
          */
         enum class TopicFastScroll { OFF, RIGHT, LEFT }
+
+        /**
+         * Что означает дорожка ползунка. [LOADED] — загруженные страницы (плавная прокрутка),
+         * [TOPIC] — вся тема: бегунок выбирает страницу, отпускание вне загруженного её открывает.
+         */
+        enum class TopicFastScrollScale { LOADED, TOPIC }
         enum class TopicBackBehavior { HISTORY, ORIGIN }
         /**
          * Куда садиться при открытии темы из списка.

@@ -555,6 +555,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
     /** Ползунок быстрой прокрутки — пересоздаётся при смене стороны, снимается при «Выключен». */
     private var fastScroller: TopicFastScroller? = null
     private var appliedFastScrollMode: forpdateam.ru.forpda.common.Preferences.Main.TopicFastScroll? = null
+    /** Настройка «Шкала ползунка» = по всей теме (вариант со страницами), а не по загруженному куску. */
+    private var fastScrollWholeTopic = false
 
     /**
      * Момент ([android.os.SystemClock.elapsedRealtime]) последнего первичного рендера темы — начало
@@ -1063,6 +1065,27 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 applyFastScrollMode(mode)
             }
         }
+        // Шкала читается лямбдой на каждом кадре, поэтому её смена ползунок не пересоздаёт —
+        // достаточно перерисовать список.
+        viewLifecycleOwner.lifecycleScope.launch {
+            mainPreferencesHolder.observeTopicFastScrollScaleFlow().collect { scale ->
+                fastScrollWholeTopic =
+                        scale == forpdateam.ru.forpda.common.Preferences.Main.TopicFastScrollScale.TOPIC
+                if (view != null) recyclerView.invalidate()
+            }
+        }
+    }
+
+    /**
+     * Геометрия темы для шкалы «по всей теме»: всего страниц и загруженное окно. `null` — шкала
+     * выключена настройкой или тема ещё не загружена, тогда дорожка отражает загруженный кусок.
+     */
+    private fun fastScrollTopicScale(): TopicFastScroller.TopicScale? {
+        if (!fastScrollWholeTopic || !pagination.isInitialised) return null
+        return TopicFastScroller.TopicScale(
+                totalPages = pagination.totalPages,
+                firstLoadedPage = pagination.firstLoadedPage,
+                lastLoadedPage = pagination.loadedPage)
     }
 
     private fun applyFastScrollMode(mode: forpdateam.ru.forpda.common.Preferences.Main.TopicFastScroll) {
@@ -1075,6 +1098,8 @@ class NativeTopicFragment : RecyclerFragment(), ThemeTabHost, TopicPostsAdapter.
                 rv = recyclerView,
                 onLeft = mode == forpdateam.ru.forpda.common.Preferences.Main.TopicFastScroll.LEFT,
                 labelProvider = { position -> fastScrollLabel(position) },
+                scaleProvider = { fastScrollTopicScale() },
+                onPageJump = { page -> if (view != null) jumpToPage(page) },
                 onDragStart = {
                     onUserScrollGestureStarted()
                     suppressEndMarkReadUntilUserScroll = false
