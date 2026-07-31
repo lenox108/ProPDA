@@ -112,6 +112,9 @@ class QmsChatViewModel @Inject constructor(
 
     private var currentMode = MODE_CHAT
 
+    /** Поколение запроса аватара: ответ поиска по нику от прошлого собеседника игнорируется. */
+    private var avatarRequestId = 0
+
     private val _chatMode = MutableStateFlow(MODE_CHAT)
     val chatMode: StateFlow<String> = _chatMode.asStateFlow()
 
@@ -182,6 +185,9 @@ class QmsChatViewModel @Inject constructor(
     fun start() {
         val key = chatKey(userId, themeId)
         if (subscriptionsStarted) {
+            // Вью могло пересоздаться (поворот, возврат на вкладку) — ImageView тулбара уже пуст,
+            // а перезагрузки чата на этом пути нет, поэтому аватар ставим заново сами.
+            tryShowAvatar()
             if (key == loadedChatKey && currentData != null) {
                 publishVisibleMessages(scrollToBottom = true)
                 return
@@ -225,8 +231,9 @@ class QmsChatViewModel @Inject constructor(
         nick?.let { n -> title?.let { t -> scope.launch { _uiEvents.emit(QmsChatUiEvent.SetTitles(t, n)) } } }
 
         updateMode()
+        // Аватар нужен в обоих режимах: в MODE_CREATING шапка тоже показывает собеседника.
+        tryShowAvatar()
         if (currentMode == MODE_CHAT) {
-            tryShowAvatar()
             if (!isLoadInFlightFor(key) && !(key == loadedChatKey && currentData != null)) {
                 loadChat()
             }
@@ -336,8 +343,9 @@ class QmsChatViewModel @Inject constructor(
         openTraceId = FpdaDebugLog.newTraceId()
         transitionThreadState(QmsThreadUiState.Idle, "identity_reset")
         updateMode()
+        // Прежде чем что-то грузить, снимаем аватар прошлого собеседника с переиспользуемой вкладки.
+        tryShowAvatar()
         if (currentMode == MODE_CHAT) {
-            tryShowAvatar()
             loadChat()
         }
     }
@@ -837,18 +845,56 @@ class QmsChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Аватар собеседника в тулбаре.
+     *
+     * Вкладка QMS-чата одна на всё приложение (см. [Screen.QmsChat] `isAlone` и
+     * `TabNavigator.activateAloneQmsChatTabIfPresent`): переход «диалог с A» → «новый диалог с B»
+     * переиспользует тот же фрагмент и тот же ImageView. Раньше в режиме создания аватар не трогали
+     * вовсе, поэтому в шапке экрана создания оставалось лицо прошлого собеседника — новому
+     * пользователю подставлялся чужой аватар. Теперь аватар пересчитывается при любой смене
+     * личности: известен URL — показываем его, известен только ник — ищем по нику, ничего не
+     * известно — гасим, но НЕ оставляем прежний.
+     *
+     * [avatarRequestId] отсекает опоздавший ответ поиска по нику: пока он шёл, пользователь мог
+     * переключиться на другой диалог, и старый URL снова поставил бы чужое лицо.
+     */
     private fun tryShowAvatar() {
-        val result = avatarUrl?.let { it } ?: currentData?.avatarUrl?.let { it }
-        if (result != null) {
-            scope.launch { _uiEvents.emit(QmsChatUiEvent.ShowAvatar(result)) }
-        } else {
-            currentData?.let {
-                scope.launch {
-                    runCatching { avatarRepository.getAvatar(it.nick.orEmpty()) }
-                            .onSuccess { url -> scope.launch { _uiEvents.emit(QmsChatUiEvent.ShowAvatar(url)) } }
-                            .onFailure { e -> errorHandler.handle(e) }
-                }
-            }
+        val requestId = ++avatarRequestId
+        logChat(
+                "avatar_try",
+                mapOf(
+                        "hasArgUrl" to !avatarUrl.isNullOrBlank(),
+                        "hasDataUrl" to !currentData?.avatarUrl.isNullOrBlank(),
+                        "nick" to (currentData?.nick ?: nick)
+                )
+        )
+        val known = avatarUrl?.takeIf { it.isNotBlank() }
+                ?: currentData?.avatarUrl?.takeIf { it.isNotBlank() }
+        if (known != null) {
+            scope.launch { _uiEvents.emit(QmsChatUiEvent.ShowAvatar(known)) }
+            return
+        }
+        val lookupNick = (currentData?.nick ?: nick)?.takeIf { it.isNotBlank() }
+        if (lookupNick == null) {
+            scope.launch { _uiEvents.emit(QmsChatUiEvent.HideAvatar) }
+            return
+        }
+        scope.launch {
+            // Гасим сразу: поиск по нику ходит в кэш/сеть, и всё это время в тулбаре висело бы
+            // лицо предыдущего собеседника.
+            _uiEvents.emit(QmsChatUiEvent.HideAvatar)
+            runCatching { avatarRepository.getAvatar(lookupNick) }
+                    .onSuccess { url ->
+                        if (requestId == avatarRequestId && url.isNotBlank()) {
+                            _uiEvents.emit(QmsChatUiEvent.ShowAvatar(url))
+                        }
+                    }
+                    .onFailure { e ->
+                        // Промах кэша аватарок — обычное дело для собеседника без аватара:
+                        // экран уже без картинки, шуметь снекбаром незачем.
+                        Timber.d(e, "QMS: аватар для «%s» не найден", lookupNick)
+                    }
         }
     }
 
@@ -1175,6 +1221,9 @@ sealed class QmsChatUiEvent {
     data class OnMessagesDeleted(val count: Int) : QmsChatUiEvent()
     data class OnBlockUser(val isBlocked: Boolean) : QmsChatUiEvent()
     data class ShowAvatar(val url: String) : QmsChatUiEvent()
+
+    /** Собеседник неизвестен или сменился — тулбар обязан забыть прошлый аватар. */
+    object HideAvatar : QmsChatUiEvent()
     data class OnUploadFiles(val files: List<AttachmentItem>) : QmsChatUiEvent()
     data class ShowCreateNote(val title: String, val nick: String, val url: String) : QmsChatUiEvent()
     object TempSendNewTheme : QmsChatUiEvent()
