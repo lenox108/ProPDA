@@ -1331,20 +1331,24 @@ class EventsRepository(
     /**
      * Публикует foreground-уведомление о forum-упоминании для ЛЮБОЙ темы (не только избранной).
      * WS-событие несёт лишь sourceId/messageId, поэтому ник и заголовок дообогащаем из
-     * act=mentions (тот же источник, что у фонового воркера). Матчим по теме (sourceId): у
-     * упоминания notifyId не зависит от messageId, в шторке оно одно на тему, а самый свежий
-     * item темы в списке — первый. Не удалось дообогатить — публикуем как есть: уведомление без
-     * имени автора лучше, чем его отсутствие. [sendNotification] сам применит все гейты
-     * (главный тумблер, own-user, per-topic mute, категория «упоминания»).
+     * act=mentions (тот же источник, что у фонового воркера).
+     *
+     * Матч строки списка — по ПОСТУ, а не по теме: `messageId` события уходит в
+     * `view=findpost&p=` контент-интента, и подмена его «самой свежей строкой темы» из отставшего
+     * списка открывала тапом предыдущее упоминание вместо нового (см.
+     * [forpdateam.ru.forpda.notifications.ForegroundMentionEnrichPolicy]).
+     *
+     * Не удалось дообогатить — публикуем как есть: уведомление без имени автора лучше, чем его
+     * отсутствие. [sendNotification] сам применит все гейты (главный тумблер, own-user,
+     * per-topic mute, категория «упоминания»).
      */
     private fun publishForegroundMention(event: NotificationEvent) {
         repoScope.launch(ioDispatcher) {
-            val enriched = runCatching {
-                mentionsRepository.getMentions(0).items.asSequence()
-                        .mapNotNull { forpdateam.ru.forpda.notifications.MentionNotificationMapper.toNotificationEvent(it) }
-                        .firstOrNull { it.fromTheme() && it.isMention && it.sourceId == event.sourceId }
-            }.getOrNull() ?: event
-            sendNotification(enriched)
+            val items = runCatching { mentionsRepository.getMentions(0).items }
+                    .onFailure { Timber.w(it, "publishForegroundMention: mentions enrich failed") }
+                    .getOrNull()
+                    .orEmpty()
+            sendNotification(forpdateam.ru.forpda.notifications.ForegroundMentionEnrichPolicy.enrich(event, items))
         }
     }
 
