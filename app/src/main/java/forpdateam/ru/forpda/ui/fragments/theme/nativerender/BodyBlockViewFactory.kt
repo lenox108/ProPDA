@@ -105,6 +105,10 @@ class BodyBlockViewFactory(
          *  keys the collapse state of long quotes in [spoilerStates] as `"scopeId:q<seq>"`. */
         var quoteSeq: Int = 0
 
+        /** Counter of code blocks within the body, in document order — keys the collapse state of
+         *  long code blocks in [spoilerStates] as `"scopeId:c<seq>"`. */
+        var codeSeq: Int = 0
+
         /** How many quote cards enclose the block being rendered — feeds the pre-measure width
          *  estimate that decides whether a long quote collapses. */
         var quoteDepth: Int = 0
@@ -237,7 +241,7 @@ class BodyBlockViewFactory(
                 is BodyBlock.Quote -> quoteView(ctx, block, scope)
                 is BodyBlock.Spoiler -> spoilerView(ctx, block, scope)
                 is BodyBlock.Hidden -> hiddenView(ctx, block, scope)
-                is BodyBlock.Code -> codeView(ctx, block)
+                is BodyBlock.Code -> codeView(ctx, block, scope)
                 is BodyBlock.FileAttachment -> fileAttachmentView(ctx, block)
                 is BodyBlock.Table -> tableView(ctx, block)
                 is BodyBlock.WebFallback -> bindFallback(ctx, block, scope)
@@ -975,10 +979,18 @@ class BodyBlockViewFactory(
     /**
      * Native code block: monospace text in a horizontal scroller (long lines don't wrap) on a
      * distinct panel, with a "Копировать" action that puts the raw code on the clipboard.
+     *
+     * Like a long quote, a code block taller than [CODE_COLLAPSE_TRIGGER_DP] (pre-measured at bind
+     * time — lines never wrap, so the height doesn't depend on the column width) collapses to
+     * [CODE_COLLAPSED_HEIGHT_DP] with a bottom fade and a ▾/▴ chevron (same control as a quote). Expand state
+     * survives recycling via [spoilerStates] under the `"scopeId:c<seq>"` key.
      */
-    private fun codeView(ctx: Context, block: BodyBlock.Code): View {
+    private fun codeView(ctx: Context, block: BodyBlock.Code, scope: RenderScope): View {
         val dm = ctx.resources.displayMetrics
-        val pad = (8 * dm.density).toInt()
+        fun dp(v: Float): Int = (v * dm.density).toInt()
+        val pad = dp(8f)
+        val accent = ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent)
+        val key = "${scope.scopeId}:c${scope.codeSeq++}"
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = m3BlockBackground(ctx)
@@ -992,7 +1004,7 @@ class BodyBlockViewFactory(
             text = block.title?.takeIf { it.isNotBlank() }?.let { "$it · Копировать" } ?: "Копировать"
             setTypeface(typeface, Typeface.BOLD)
             textSize = scaledSp(12f)
-            setTextColor(ctx.getColorFromAttr(androidx.appcompat.R.attr.colorAccent))
+            setTextColor(accent)
             setPadding(pad, pad, pad, pad / 2)
             setOnClickListener {
                 val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
@@ -1013,7 +1025,67 @@ class BodyBlockViewFactory(
         }
         scroller.addView(code)
         card.addView(copyBtn)
-        card.addView(scroller)
+
+        code.measure(
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        )
+        if (code.measuredHeight <= dp(CODE_COLLAPSE_TRIGGER_DP)) {
+            card.addView(scroller)
+            return card
+        }
+
+        var open = spoilerStates[key] ?: false
+        val fill = blockFillColor(ctx)
+        // Fixed-height frame clipping the overflowing code; the fade dissolves the cut line into the
+        // panel fill so the clip reads as "continues below", same as a collapsed quote.
+        val clip = android.widget.FrameLayout(ctx)
+        clip.addView(scroller, android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+        ))
+        val fade = View(ctx).apply {
+            background = android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(androidx.core.graphics.ColorUtils.setAlphaComponent(fill, 0), fill),
+            )
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    dp(QUOTE_FADE_HEIGHT_DP),
+                    android.view.Gravity.BOTTOM,
+            )
+        }
+        clip.addView(fade)
+        val toggleBtn = TextView(ctx).apply {
+            textSize = scaledSp(13f)
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(accent)
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setPadding(0, 0, 0, dp(4f))
+            layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+        card.addView(clip, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+        ))
+        card.addView(toggleBtn)
+        fun applyState() {
+            clip.layoutParams = clip.layoutParams.apply {
+                height = if (open) LinearLayout.LayoutParams.WRAP_CONTENT
+                else dp(CODE_COLLAPSED_HEIGHT_DP)
+            }
+            fade.visibility = if (open) View.GONE else View.VISIBLE
+            toggleBtn.text = if (open) "▴" else "▾"
+        }
+        applyState()
+        toggleBtn.setOnClickListener {
+            open = !open
+            spoilerStates[key] = open
+            applyState()
+        }
         return card
     }
 
@@ -1637,5 +1709,12 @@ class BodyBlockViewFactory(
         /** Horizontal chrome one quote level adds around its content (bar + paddings), used by the
          *  pre-measure width estimate for NESTED quotes. */
         const val QUOTE_LEVEL_CHROME_DP = 25f
+
+        /** A code block whose text pre-measures taller than this collapses (hysteresis vs.
+         *  [CODE_COLLAPSED_HEIGHT_DP], same reasoning as [QUOTE_COLLAPSE_TRIGGER_DP]). */
+        const val CODE_COLLAPSE_TRIGGER_DP = 220f
+
+        /** Visible code height of a collapsed code block (~8 lines of monospace text). */
+        const val CODE_COLLAPSED_HEIGHT_DP = 150f
     }
 }
