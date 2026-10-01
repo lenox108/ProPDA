@@ -10,7 +10,9 @@ import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.Space
 import android.widget.TextView
 import androidx.annotation.AttrRes
 import androidx.appcompat.app.AlertDialog
@@ -42,6 +44,7 @@ fun MaterialAlertDialogBuilder.showWithStyledButtons(
     dialog.setOnShowListener {
         dialog.applyForPdaMaterialStyle(applyAppFont)
         if (compact) dialog.applyCompactWidthAnimated(minWidthDp)
+        dialog.stackButtonsWhenOverflowing()
     }
     dialog.show()
     return dialog
@@ -138,6 +141,85 @@ private fun AlertDialog.shrinkWidthToContent(minWidthDp: Int = DIALOG_MIN_WIDTH_
         height = ViewGroup.LayoutParams.WRAP_CONTENT
         gravity = Gravity.CENTER
     }
+}
+
+/**
+ * Длинные подписи трёх кнопок («Открыть тему» / «Закрыть» / «Установить») на узких экранах или при
+ * крупном шрифте не влезают в один ряд: ButtonBarLayout стекает их только при allowStacking, который
+ * в теме выключен, — и последняя кнопка просто обрезалась краем диалога («Уста»). Следим за раскладкой
+ * панели кнопок и, если суммарная натуральная ширина кнопок больше доступной, перестраиваем их
+ * столбиком справа (сверху основное действие, как в Material stacked-раскладке).
+ */
+fun AlertDialog.stackButtonsWhenOverflowing() {
+    val bar = (getButton(AlertDialog.BUTTON_POSITIVE)?.parent
+        ?: getButton(AlertDialog.BUTTON_NEGATIVE)?.parent) as? LinearLayout ?: return
+    val check = object : View.OnLayoutChangeListener {
+        override fun onLayoutChange(
+            v: View, left: Int, top: Int, right: Int, bottom: Int,
+            oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int
+        ) {
+            if (bar.orientation == LinearLayout.VERTICAL) {
+                bar.removeOnLayoutChangeListener(this)
+                return
+            }
+            if (buttonsOverflow(bar)) {
+                bar.removeOnLayoutChangeListener(this)
+                // Перестраивать view прямо внутри layout-прохода нельзя — откладываем на следующий кадр.
+                bar.post { stackButtons(bar) }
+            }
+        }
+    }
+    bar.addOnLayoutChangeListener(check)
+    if (bar.isLaidOut && buttonsOverflow(bar)) {
+        bar.removeOnLayoutChangeListener(check)
+        bar.post { stackButtons(bar) }
+    }
+}
+
+private fun AlertDialog.visibleButtons(): List<TextView> =
+    listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL)
+        .mapNotNull { getButton(it) }
+        .filter { it.visibility != View.GONE }
+
+private fun AlertDialog.buttonsOverflow(bar: LinearLayout): Boolean {
+    val available = bar.width - bar.paddingLeft - bar.paddingRight
+    if (available <= 0) return false
+    val buttons = visibleButtons()
+    if (buttons.size < 2) return false
+    val unspecified = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+    val required = buttons.sumOf { button ->
+        val lp = button.layoutParams as? ViewGroup.MarginLayoutParams
+        button.measure(unspecified, unspecified)
+        button.measuredWidth + (lp?.leftMargin ?: 0) + (lp?.rightMargin ?: 0)
+    }
+    return required > available
+}
+
+private fun AlertDialog.stackButtons(bar: LinearLayout) {
+    if (bar.orientation == LinearLayout.VERTICAL) return
+    val buttons = visibleButtons()
+    if (buttons.isEmpty()) return
+    for (i in 0 until bar.childCount) {
+        val child = bar.getChildAt(i)
+        if (child is Space) child.visibility = View.GONE
+    }
+    buttons.forEach { bar.removeView(it) }
+    bar.orientation = LinearLayout.VERTICAL
+    bar.gravity = Gravity.END
+    // Порядок сверху вниз: основное действие, отмена, нейтральное — как в Material stacked-диалогах.
+    buttons.forEach { button ->
+        val old = button.layoutParams as? ViewGroup.MarginLayoutParams
+        val lp = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.END
+            if (old != null) setMargins(old.leftMargin, old.topMargin, old.rightMargin, old.bottomMargin)
+        }
+        button.maxLines = 2
+        bar.addView(button, lp)
+    }
+    bar.requestLayout()
 }
 
 fun AlertDialog.applyForPdaMaterialStyle(applyAppFont: Boolean = true) {
