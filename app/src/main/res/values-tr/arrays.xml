@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="entries_notify_bg_interval">
+        <item>15 dakika</item>
+        <item>30 dakika</item>
+        <item>1 saat</item>
+        <item>2 saat</item>
+        <item>4 saat</item>
+    </string-array>
+
+    <string-array name="entries_forum_track_choice">
+        <item>Bildirim gönderme</item>
+        <item>Gecikmeli (günde bir e-posta)</item>
+        <item>Yeni gönderide hemen</item>
+        <item>Günlük özet</item>
+        <item>Haftalık özet</item>
+    </string-array>
+
+    <string-array name="entries_forum_time_offset">
+        <item>(GMT - 12:00) Baker Adası, Howland Adası</item>
+        <item>(GMT - 11:00) Midway Adaları, Samoa</item>
+        <item>(GMT - 10:00) Hawaii</item>
+        <item>(GMT - 9:00) Alaska</item>
+        <item>(GMT - 8:00) Pasifik saati (ABD ve Kanada), Tijuana</item>
+        <item>(GMT - 7:00) Dağ saati (ABD ve Kanada), Arizona</item>
+        <item>(GMT - 6:00) Merkez saati (ABD ve Kanada), Meksiko</item>
+        <item>(GMT - 5:00) Doğu saati (ABD ve Kanada), Bogota, Lima, Quito</item>
+        <item>(GMT - 4:00) Atlantik saati (Kanada), Karakas, La Paz, Santiago</item>
+        <item>(GMT - 3:30) Newfoundland</item>
+        <item>(GMT - 3:00) Brezilya, Buenos Aires, Georgetown, Grönland</item>
+        <item>(GMT - 2:00) Orta Atlantik saati</item>
+        <item>(GMT - 1:00) Yeşil Burun Adaları, Azor Adaları</item>
+        <item>(GMT) Kazablanka, Dublin, Edinburgh, Lizbon, Londra, Monrovia</item>
+        <item>(GMT + 1:00) Amsterdam, Berlin, Brüksel, Madrid, Paris, Roma</item>
+        <item>(GMT + 2:00) Kahire, Helsinki, Kaliningrad, Güney Afrika, Kiev</item>
+        <item>(GMT + 3:00) Moskova, Bağdat, Riyad, Nairobi</item>
+        <item>(GMT + 3:30) Tahran</item>
+        <item>(GMT + 4:00) Samara, Abu Dabi, Bakü, Tiflis</item>
+        <item>(GMT + 4:30) Kabil</item>
+        <item>(GMT + 5:00) Yekaterinburg, Almatı, İslamabad, Taşkent</item>
+        <item>(GMT + 5:30) Mumbai, Kalküta, Chennai, Yeni Delhi</item>
+        <item>(GMT + 6:00) Omsk, Dakka, Butan</item>
+        <item>(GMT + 7:00) Krasnoyarsk, Novosibirsk, Bangkok, Hanoi, Cakarta</item>
+        <item>(GMT + 8:00) İrkutsk, Pekin, Hong Kong, Singapur, Taipei</item>
+        <item>(GMT + 9:00) Yakutsk, Tokyo, Seul, Pyongyang</item>
+        <item>(GMT + 9:30) Adelaide, Darwin</item>
+        <item>(GMT + 10:00) Vladivostok, Sidney, Brisbane, Guam</item>
+        <item>(GMT + 11:00) Magadan, Yeni Kaledonya, Solomon Adaları</item>
+        <item>(GMT + 12:00) Kamçatka, Auckland, Fiji</item>
+        <item>(GMT + 13:00) Wellington, Tonga Adası</item>
+        <item>(GMT + 14:00) Kiritimati (Christmas Adası)</item>
+    </string-array>
+</resources>
