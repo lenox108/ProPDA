@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="notification_content_qms_count">
+        <item quantity="one">%d okunmamış mesaj</item>
+        <item quantity="other">%d okunmamış mesaj</item>
+    </plurals>
+    <plurals name="note_bookmarks_count">
+        <item quantity="one">%d yer imi</item>
+        <item quantity="other">%d yer imi</item>
+    </plurals>
+</resources>
